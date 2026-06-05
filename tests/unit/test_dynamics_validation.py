@@ -209,6 +209,24 @@ def test_read_restart_last_step_prefers_jhstrt_over_segment_nstep(tmp_path):
     assert read_restart_last_step(res) == 8000
 
 
+def test_patch_restart_global_step_updates_jhstrt(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        patch_restart_global_step,
+        read_restart_last_step,
+    )
+
+    res = tmp_path / "heat.res"
+    res.write_text(
+        "REST    48     0\n"
+        "\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        "          25        8000         500         500          10           0\n",
+        encoding="utf-8",
+    )
+    assert patch_restart_global_step(res, 1500)
+    assert read_restart_last_step(res) == 1500
+
+
 def test_read_restart_last_step_real_fixture():
     stub = (
         Path(__file__).resolve().parents[1]

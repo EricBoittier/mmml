@@ -614,16 +614,16 @@ def _run_geometry_guard(
     label: str,
     mlpot_ctx: "MlpotContext | None",
     inter_monomer: bool,
-) -> float:
+) -> tuple[float, bool]:
     if config.action == "error":
-        return check_fn(label)
+        return check_fn(label), False
 
     try:
-        return check_fn(label)
+        return check_fn(label), False
     except RuntimeError as exc:
         if config.action == "warn":
             print(f"WARNING: {exc}", flush=True)
-            return float("nan")
+            return float("nan"), False
         if config.action != "rescue":
             raise
         if mlpot_ctx is None:
@@ -631,11 +631,17 @@ def _run_geometry_guard(
                 f"{exc}; geometry rescue requires MlpotContext"
             ) from exc
         if inter_monomer:
-            return _handle_inter_monomer_rescue(
-                config, label=label, exc=exc, mlpot_ctx=mlpot_ctx
+            return (
+                _handle_inter_monomer_rescue(
+                    config, label=label, exc=exc, mlpot_ctx=mlpot_ctx
+                ),
+                True,
             )
-        return _handle_intramonomer_rescue(
-            config, label=label, exc=exc, mlpot_ctx=mlpot_ctx
+        return (
+            _handle_intramonomer_rescue(
+                config, label=label, exc=exc, mlpot_ctx=mlpot_ctx
+            ),
+            True,
         )
 
 
@@ -645,34 +651,41 @@ def check_dynamics_overlap(
     context: str,
     step: int | None = None,
     mlpot_ctx: "MlpotContext | None" = None,
-) -> float:
-    """Check inter- and intra-monomer geometry; raise, warn, or rescue per action."""
+) -> tuple[float, bool]:
+    """Check inter- and intra-monomer geometry; raise, warn, or rescue per action.
+
+    Returns ``(min_distance, rescued)`` where ``rescued`` is true when bonded-MM
+    recovery rewrote coordinates (PSF reload invalidates in-memory dyna state).
+    """
     if not config.enabled and not config.intra_enabled:
-        return float("inf")
+        return float("inf"), False
 
     label = context if step is None else f"{context} at step {step}"
     best = float("inf")
+    rescued = False
 
     if config.enabled:
-        dist = _run_geometry_guard(
+        dist, did_rescue = _run_geometry_guard(
             lambda ctx: _overlap_check(config, context=ctx),
             config=config,
             label=label,
             mlpot_ctx=mlpot_ctx,
             inter_monomer=True,
         )
+        rescued = rescued or did_rescue
         if np.isfinite(dist):
             best = min(best, dist)
 
     if config.intra_enabled:
-        dist = _run_geometry_guard(
+        dist, did_rescue = _run_geometry_guard(
             lambda ctx: _intramonomer_check(config, context=ctx),
             config=config,
             label=label,
             mlpot_ctx=mlpot_ctx,
             inter_monomer=False,
         )
+        rescued = rescued or did_rescue
         if np.isfinite(dist):
             best = min(best, dist)
 
-    return best
+    return best, rescued

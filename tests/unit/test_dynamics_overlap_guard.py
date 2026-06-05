@@ -124,7 +124,7 @@ def test_overlap_cell_uses_fallback_when_pbound_zero():
             "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
             return_value=pos,
         ):
-            dmin = check_dynamics_overlap(cfg, context="test", step=0)
+            dmin, _ = check_dynamics_overlap(cfg, context="test", step=0)
     assert dmin > 1.5
 
 
@@ -222,8 +222,9 @@ def test_check_intra_monomer_rescue_runs_bonded_mini():
         "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard._run_intramonomer_bonded_rescue",
         side_effect=lambda _ctx, _cfg: positions.update(current=pos_ok),
     ) as rescue:
-        dmin = check_dynamics_overlap(cfg, context="heat", step=500, mlpot_ctx=ctx)
+        dmin, rescued = check_dynamics_overlap(cfg, context="heat", step=500, mlpot_ctx=ctx)
         rescue.assert_called_once()
+    assert rescued
     assert dmin >= 1.0
 
 
@@ -267,10 +268,11 @@ def test_check_overlap_rescue_runs_minimize_and_rechecks():
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.run_inter_monomer_overlap_rescue",
     ) as rescue:
-        dmin = check_dynamics_overlap(
+        dmin, rescued = check_dynamics_overlap(
             cfg, context="test", step=50, mlpot_ctx=ctx
         )
         rescue.assert_called_once_with(ctx, cfg)
+    assert rescued
     assert dmin > 1.5
 
 
@@ -320,11 +322,12 @@ def test_check_overlap_rescue_applies_separation_last_resort():
     ) as sync_pos, mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_overlap_rescue",
     ) as rescue:
-        dmin = check_dynamics_overlap(
+        dmin, rescued = check_dynamics_overlap(
             cfg, context="test", step=50, mlpot_ctx=ctx
         )
         rescue.assert_called_once_with(ctx, cfg.rescue)
         sync_pos.assert_called_once()
+    assert rescued
     assert dmin > 1.5
 
 
@@ -422,7 +425,7 @@ def test_overlap_checks_run_after_each_successful_chunk(tmp_path):
 
     def track_overlap(_cfg, *, context, step, mlpot_ctx=None):
         overlap_calls.append(int(step))
-        return 5.0
+        return 5.0, False
 
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
@@ -468,7 +471,7 @@ def test_overlap_checks_run_when_restart_reports_segment_nstep_only(tmp_path):
 
     def track_overlap(_cfg, *, context, step, mlpot_ctx=None):
         overlap_calls.append(int(step))
-        return 5.0
+        return 5.0, False
 
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
@@ -536,6 +539,62 @@ def test_overlap_skips_check_when_chunk_aborts_early(tmp_path, capsys):
     assert "echeck or CHARMM abort likely" in capsys.readouterr().out
 
 
+def test_overlap_post_rescue_forces_readyn_next_chunk(tmp_path, capsys):
+    """PSF reload during rescue must not leave the next chunk at dyna step 0."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        min_distance_A=0.5,
+        check_interval=500,
+        n_monomers=2,
+        use_pbc=False,
+    )
+    calls: list[tuple[dict, object]] = []
+    mlpot_ctx = mock.Mock()
+
+    def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
+        calls.append((dict(kw), _io))
+        if _io is not None and _io.restart_write is not None:
+            Path(_io.restart_write).write_text("REST 500 0\n", encoding="utf-8")
+        return mock.Mock()
+
+    def track_overlap(_cfg, *, context, step, mlpot_ctx=None):
+        return (5.0, int(step) == 500)
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        side_effect=fake_chunk,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+        side_effect=track_overlap,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_restart_write_after_chunk",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.patch_restart_global_step",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
+        side_effect=lambda path: 500 * len(calls),
+    ):
+        run_dynamics_with_io(
+            {"nstep": 1500},
+            CharmmTrajectoryFiles(restart_write=tmp_path / "heat.res"),
+            overlap=cfg,
+            overlap_context="heat segment 1/8",
+            mlpot_ctx=mlpot_ctx,
+        )
+
+    assert len(calls) == 3
+    assert calls[0][0]["restart"] is False
+    assert calls[1][0]["restart"] is True
+    assert calls[1][1] is not None and calls[1][1].restart_read is not None
+    assert calls[2][0]["restart"] is False
+    assert "post-rescue READYN handoff at global step 500" in capsys.readouterr().out
+
+
 def test_mlpot_overlap_chunks_continue_in_memory_without_readyn(tmp_path):
     """MLpot runs must not READYN scratch restarts between overlap chunks."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
@@ -572,7 +631,7 @@ def test_mlpot_overlap_chunks_continue_in_memory_without_readyn(tmp_path):
         side_effect=fake_chunk,
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
-        return_value=5.0,
+        return_value=(5.0, False),
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
@@ -995,7 +1054,7 @@ def test_overlap_chunk_continues_velocity_scaling_heat_ramp(tmp_path):
         side_effect=fake_chunk,
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
-        return_value=5.0,
+        return_value=(5.0, False),
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
