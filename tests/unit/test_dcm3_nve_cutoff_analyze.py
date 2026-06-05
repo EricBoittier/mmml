@@ -64,3 +64,16 @@ def test_cutoff_lib_preset_geometry_keys() -> None:
     assert "mid" in geometry_ids(cfg)
     assert len(preset_ids(cfg)) == 4
     assert len(geometry_ids(cfg)) == 4
+
+
+def test_prepare_geometry_shell_runs_python_script_directly() -> None:
+    sh = (
+        _REPO
+        / "workflows"
+        / "dcm3_nve_cutoff_sweep"
+        / "scripts"
+        / "prepare_geometry_shell.sh"
+    )
+    text = sh.read_text(encoding="utf-8")
+    assert 'exec "$PY" "$WORKFLOW_ROOT/scripts/prepare_geometry.py"' in text
+    assert '"$MPIRUN" "$PY"' not in text
