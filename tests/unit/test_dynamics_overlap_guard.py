@@ -593,13 +593,14 @@ def test_overlap_post_rescue_handoff_continues_in_memory(tmp_path, capsys):
     assert calls[0][0]["restart"] is False
     assert calls[1][0]["restart"] is False
     assert calls[1][1] is not None and calls[1][1].restart_read is None
-    assert calls[2][0]["restart"] is False
+    assert calls[2][0]["restart"] is True
+    assert calls[2][0]["iasvel"] == 0
     post_rescue.assert_called_once()
     assert "post-rescue in-memory handoff at global step 500" in capsys.readouterr().out
 
 
 def test_mlpot_overlap_chunks_continue_in_memory_without_readyn(tmp_path):
-    """MLpot runs must not READYN scratch restarts between overlap chunks."""
+    """Legacy --dynamics-overlap-memory-handoff skips READYN between chunks."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
     cfg = DynamicsOverlapConfig(
@@ -608,6 +609,7 @@ def test_mlpot_overlap_chunks_continue_in_memory_without_readyn(tmp_path):
         check_interval=2,
         n_monomers=2,
         use_pbc=False,
+        memory_handoff=True,
     )
     pos_ok = np.array(
         [
@@ -654,6 +656,72 @@ def test_mlpot_overlap_chunks_continue_in_memory_without_readyn(tmp_path):
     assert calls[1]["restart"] is False
     assert calls[1].get("iunrea") == -1
     assert calls[2]["restart"] is False
+
+
+def test_mlpot_overlap_chunks_use_scratch_restart_handoff(tmp_path):
+    """Default MLpot overlap uses dyna restart on alternating scratch .res files."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+
+    cfg = DynamicsOverlapConfig(
+        action="error",
+        min_distance_A=0.5,
+        check_interval=2,
+        n_monomers=2,
+        use_pbc=False,
+    )
+    pos_ok = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [5.0, 0.0, 0.0],
+            [6.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    res_path = tmp_path / "heat.res"
+    io = CharmmTrajectoryFiles(restart_write=res_path)
+    calls: list[dict] = []
+    mlpot_ctx = mock.Mock()
+    valid_restart = (
+        "REST     1     500\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        "   10     0       2       1      10     500     297       0       0\n"
+    )
+
+    def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
+        calls.append(dict(kw))
+        if _io is not None and _io.restart_write is not None:
+            Path(_io.restart_write).write_text(valid_restart, encoding="utf-8")
+        return mock.Mock()
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        side_effect=fake_chunk,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+        return_value=(5.0, False),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_restart_write_after_chunk",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
+        return_value=2,
+    ):
+        run_dynamics_with_io(
+            {"nstep": 6, "new": False, "start": False, "restart": False},
+            io,
+            overlap=cfg,
+            overlap_context="HEAT",
+            mlpot_ctx=mlpot_ctx,
+        )
+
+    assert [c["nstep"] for c in calls] == [2, 2, 2]
+    assert calls[0]["restart"] is False
+    assert calls[1]["restart"] is True
+    assert calls[1]["iasvel"] == 0
+    assert calls[2]["restart"] is True
+    assert calls[2]["iasvel"] == 0
 
 
 def test_overlap_memory_handoff_chunks_scratch_restart_handoff(tmp_path):
@@ -1047,11 +1115,16 @@ def test_overlap_chunk_continues_velocity_scaling_heat_ramp(tmp_path):
     )
     calls: list[dict] = []
     mlpot_ctx = mock.Mock()
+    valid_restart = (
+        "REST     1     500\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        "   10     0     500       1      10    2000     297       0       0\n"
+    )
 
     def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
         calls.append(dict(kw))
         if _io is not None and _io.restart_write is not None:
-            Path(_io.restart_write).write_text("REST 2000 -1\n", encoding="utf-8")
+            Path(_io.restart_write).write_text(valid_restart, encoding="utf-8")
         return mock.Mock()
 
     with mock.patch(
@@ -1062,6 +1135,8 @@ def test_overlap_chunk_continues_velocity_scaling_heat_ramp(tmp_path):
         return_value=(5.0, False),
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_restart_write_after_chunk",
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
         side_effect=lambda path: 500 * len(calls),
@@ -1083,6 +1158,8 @@ def test_overlap_chunk_continues_velocity_scaling_heat_ramp(tmp_path):
 
     assert len(calls) == 4
     assert calls[0]["firstt"] == 0.0
+    assert calls[1]["restart"] is True
+    assert calls[1]["iasvel"] == 0
     assert calls[1]["firstt"] == pytest.approx(0.6)
     assert calls[2]["firstt"] == pytest.approx(1.2)
     assert calls[3]["firstt"] == pytest.approx(1.8)

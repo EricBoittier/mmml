@@ -52,6 +52,9 @@ class DynamicsOverlapConfig:
     mlpot_rescue_mini_nstep: int = 25
     pyCModel: Any = field(default=None, compare=False, hash=False)
     artifact_registry: Any = field(default=None, compare=False, hash=False)
+    # When False (default), overlap chunks hand off via alternating scratch ``.res``
+    # files and ``dyna restart``.  True keeps coords/vel in RAM (legacy MLpot path).
+    memory_handoff: bool = False
 
     @property
     def enabled(self) -> bool:
@@ -132,6 +135,15 @@ def add_dynamics_overlap_args(parser: argparse.ArgumentParser) -> None:
             "Integration steps between overlap checks (default: 500). "
             "Per stage, the effective interval is the largest divisor of the stage "
             "step count not exceeding this value (and at least dcd-nsavc + 1 when set)."
+        ),
+    )
+    group.add_argument(
+        "--dynamics-overlap-memory-handoff",
+        action="store_true",
+        help=(
+            "Continue overlap chunks in-process without READYN on scratch restarts "
+            "(legacy MLpot default). Default: alternate .overlap_a/.b.res files "
+            "with dyna restart between chunks."
         ),
     )
     group.add_argument(
@@ -234,6 +246,7 @@ def resolve_dynamics_overlap_config(
             getattr(args, "no_dynamics_overlap_separate", False)
         ),
         separate_margin_A=float(getattr(args, "dynamics_overlap_separate_margin", 0.2)),
+        memory_handoff=bool(getattr(args, "dynamics_overlap_memory_handoff", False)),
     )
 
 

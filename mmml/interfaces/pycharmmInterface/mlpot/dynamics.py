@@ -781,7 +781,12 @@ def apply_hoover_cpt_heat_ramp_overlap_chunk(
     chunk_kw["firstt"] = target
     chunk_kw["finalt"] = float(ramp_spec["finalt"])
     chunk_kw["tbath"] = float(ramp_spec["finalt"])
-    chunk_kw["iasvel"] = 1
+    if "hoover reft" in chunk_kw:
+        chunk_kw["hoover reft"] = target
+    if bool(chunk_kw.get("restart")):
+        chunk_kw["iasvel"] = 0
+    else:
+        chunk_kw["iasvel"] = 1
     chunk_kw["start"] = False
 
 
@@ -821,7 +826,10 @@ def apply_heat_ramp_overlap_chunk(
     chunk_kw["finalt"] = float(ramp_spec["finalt"])
     chunk_kw["TEMINC"] = float(ramp_spec["teminc"])
     chunk_kw["ihtfrq"] = int(ramp_spec["ihtfrq"])
-    chunk_kw["iasvel"] = 1
+    if bool(chunk_kw.get("restart")):
+        chunk_kw["iasvel"] = 0
+    else:
+        chunk_kw["iasvel"] = 1
     chunk_kw["iasors"] = 0
     chunk_kw["start"] = False
 
@@ -1582,13 +1590,10 @@ def _overlap_refresh_or_validate_scratch_restart(
     n_chunks: int,
     overlap_context: str,
     mlpot_ctx: Optional["MlpotContext"],
+    memory_handoff: bool = False,
 ) -> None:
     """Refresh scratch restart; validate only when the next chunk will ``READYN`` it."""
-    if (
-        mlpot_ctx is not None
-        and n_chunks > 1
-        and _is_overlap_scratch_restart(write_path, final_restart)
-    ):
+    if memory_handoff and mlpot_ctx is not None and n_chunks > 1:
         return
     _ensure_valid_overlap_scratch_restart(
         write_path,
@@ -1667,9 +1672,14 @@ def _overlap_chunk_uses_memory_handoff(
     *,
     chunk_index: int,
     n_chunks: int,
+    overlap: Optional["DynamicsOverlapConfig"] = None,
 ) -> bool:
     """Continue overlap segments in-process (no ``READYN`` on scratch between chunks)."""
-    return mlpot_ctx is not None and n_chunks > 1 and chunk_index > 0
+    if mlpot_ctx is None or n_chunks <= 1 or chunk_index <= 0:
+        return False
+    if overlap is not None and overlap.memory_handoff:
+        return True
+    return False
 
 
 def _overlap_chunk_io(
@@ -1679,7 +1689,7 @@ def _overlap_chunk_io(
     n_chunks: int,
     split_trajectory: bool = True,
     mlpot_ctx: Optional["MlpotContext"] = None,
-    use_memory_handoff: bool = True,
+    use_memory_handoff: bool = False,
 ) -> CharmmTrajectoryFiles:
     """Restart I/O for overlap chunking via alternating scratch restarts.
 
@@ -1689,9 +1699,7 @@ def _overlap_chunk_io(
     rread, rwri = _overlap_chunk_restart_paths(
         io, chunk_index=chunk_index, n_chunks=n_chunks
     )
-    if use_memory_handoff and _overlap_chunk_uses_memory_handoff(
-        mlpot_ctx, chunk_index=chunk_index, n_chunks=n_chunks
-    ):
+    if use_memory_handoff:
         rread = None
     traj: Path | None = None
     if io.trajectory is not None:
@@ -1910,6 +1918,15 @@ def _apply_overlap_chunk_dynamics_kw(
     has_restart_read: bool,
 ) -> None:
     """Set ``restart`` / ``new`` / ``start`` for one overlap chunk (in-place)."""
+    if has_restart_read:
+        chunk_kw["new"] = False
+        chunk_kw["start"] = False
+        chunk_kw["restart"] = True
+        chunk_kw["iasvel"] = 0
+        if chunk_index > 0:
+            chunk_kw.pop("firstt", None)
+        return
+
     preserve_ihtfrq_heat_ramp = (
         chunk_index == 0
         and not has_restart_read
@@ -2154,6 +2171,9 @@ def run_dynamics_with_io(
         )
     heat_ramp_spec = heat_ramp_spec_from_kw(kw)
     hoover_heat_ramp_spec = hoover_cpt_heat_ramp_spec_from_kw(kw)
+    overlap_memory_handoff = bool(
+        overlap is not None and getattr(overlap, "memory_handoff", False)
+    )
     final_restart = Path(io.restart_write) if io is not None and io.restart_write else None
     last_dyn: Any = None
     steps_done = 0
@@ -2214,6 +2234,7 @@ def run_dynamics_with_io(
                             mlpot_ctx,
                             chunk_index=chunk_index,
                             n_chunks=n_chunks,
+                            overlap=overlap,
                         )
                     ),
                 )
@@ -2226,7 +2247,10 @@ def run_dynamics_with_io(
             mem_handoff = (
                 pending_post_rescue_handoff
                 or _overlap_chunk_uses_memory_handoff(
-                    mlpot_ctx, chunk_index=chunk_index, n_chunks=n_chunks
+                    mlpot_ctx,
+                    chunk_index=chunk_index,
+                    n_chunks=n_chunks,
+                    overlap=overlap,
                 )
             )
             has_restart_read = (
@@ -2238,6 +2262,19 @@ def run_dynamics_with_io(
                 print(
                     f"overlap ({overlap_context}): in-memory handoff between "
                     f"{n_chunks} chunks (no READYN on scratch restarts)",
+                    flush=True,
+                )
+                logged_mem_handoff = True
+            elif (
+                not mem_handoff
+                and chunk_index == 1
+                and n_chunks > 1
+                and mlpot_ctx is not None
+                and not logged_mem_handoff
+            ):
+                print(
+                    f"overlap ({overlap_context}): scratch restart handoff between "
+                    f"{n_chunks} chunks (dyna restart on .overlap_a/.b.res)",
                     flush=True,
                 )
                 logged_mem_handoff = True
@@ -2335,6 +2372,7 @@ def run_dynamics_with_io(
                     n_chunks=n_chunks,
                     overlap_context=overlap_context,
                     mlpot_ctx=mlpot_ctx,
+                    memory_handoff=overlap_memory_handoff,
                 )
             if steps_done < steps_before_chunk + chunk_nstep - 1:
                 print(
@@ -2387,6 +2425,7 @@ def run_dynamics_with_io(
                     n_chunks=n_chunks,
                     overlap_context=overlap_context,
                     mlpot_ctx=mlpot_ctx,
+                    memory_handoff=overlap_memory_handoff,
                 )
         completed = True
         if split_trajectory and chunk_dcd_paths:
