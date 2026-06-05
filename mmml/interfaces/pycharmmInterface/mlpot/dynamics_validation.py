@@ -96,12 +96,59 @@ def read_restart_last_step(path: Path) -> int | None:
     return None
 
 
+def _field_span(line: str, index: int) -> tuple[int, int] | None:
+    """Character span ``(start, end)`` of the ``index``-th whitespace-delimited field."""
+    field = -1
+    i = 0
+    n = len(line)
+    while i < n:
+        while i < n and line[i].isspace():
+            i += 1
+        if i >= n:
+            return None
+        start = i
+        while i < n and not line[i].isspace():
+            i += 1
+        field += 1
+        if field == index:
+            return start, i
+    return None
+
+
+def _replace_field_preserve_width(
+    line: str, index: int, value: int, *, min_width: int = 1
+) -> str:
+    """Replace one field in-place, keeping its original column width."""
+    span = _field_span(line, index)
+    if span is None:
+        return line
+    start, end = span
+    width = max(min_width, end - start)
+    new = f"{int(value):>{width}d}"
+    if len(new) > width:
+        new = new[-width:]
+    return line[:start] + new + line[end:]
+
+
+def _replace_i10_field(line: str, index: int, value: int) -> str:
+    """Replace one Fortran ``I10`` field without disturbing trailing formatted data."""
+    start = index * 10
+    end = start + 10
+    if len(line) < end:
+        line = line.ljust(end)
+    return line[:start] + f"{int(value):>10d}" + line[end:]
+
+
 def patch_restart_global_step(path: Path, global_step: int) -> bool:
     """Set ``JHSTRT`` (and legacy ``REST`` header) to the integrated dynamics step.
 
     Intra overlap rescue reloads the PSF and clears CHARMM's in-memory step
     counter; ``WRITe restart`` then leaves ``JHSTRT=0``.  Patching restores
     correct global step accounting on the next ``READYN`` handoff.
+
+    CHARMM restart files use fixed-width Fortran integers; never rewrite lines
+    with ``" ".join(fields)`` or ``READYN`` fails with "Bad value during
+    integer read".
     """
     p = Path(path)
     step = max(0, int(global_step))
@@ -116,11 +163,13 @@ def patch_restart_global_step(path: Path, global_step: int) -> bool:
 
     patched = False
     if lines[0].strip().upper().startswith("REST"):
-        header = lines[0].split()
-        if len(header) >= 3:
-            header[2] = str(step)
-            lines[0] = " ".join(header)
-            patched = True
+        # CHARMM REST line: A4 title + I10 step counter at column 11 (0-based offset 10).
+        rest = lines[0]
+        if len(rest) >= 20:
+            lines[0] = _replace_i10_field(rest, 1, step)
+        else:
+            lines[0] = _replace_field_preserve_width(rest, 2, step, min_width=10)
+        patched = True
 
     for i, raw in enumerate(lines):
         tag = raw.strip().split()[0] if raw.strip() else ""
@@ -128,11 +177,7 @@ def patch_restart_global_step(path: Path, global_step: int) -> bool:
             continue
         if i + 1 >= len(lines):
             break
-        fields = lines[i + 1].split()
-        if len(fields) < 6:
-            break
-        fields[5] = str(step)
-        lines[i + 1] = " ".join(fields)
+        lines[i + 1] = _replace_i10_field(lines[i + 1], 5, step)
         patched = True
         break
 
