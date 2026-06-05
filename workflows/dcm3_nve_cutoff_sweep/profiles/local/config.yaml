@@ -1,0 +1,6 @@
+executor: local
+jobs: 3
+default-resources:
+  - gpu=1
+  - mpi=1
+  - runtime=60

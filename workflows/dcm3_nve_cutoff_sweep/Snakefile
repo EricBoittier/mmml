@@ -1,0 +1,117 @@
+configfile: "config.yaml"
+
+import os
+from pathlib import Path
+
+
+def _repo_python() -> str:
+    repo = Path(workflow.basedir).resolve().parents[1]
+    env_py = os.environ.get("MMML_PYTHON", "").strip()
+    if env_py:
+        return env_py
+    venv = repo / ".venv" / "bin" / "python"
+    if venv.is_file():
+        return str(venv)
+    conda_prefix = os.environ.get("CONDA_PREFIX", "").strip()
+    if conda_prefix:
+        conda_py = Path(conda_prefix) / "bin" / "python"
+        if conda_py.is_file():
+            return str(conda_py)
+    return "python3"
+
+
+_REPO_PYTHON = _repo_python()
+_OUTPUT_ROOT = str(config.get("output_root", "results"))
+_PRESETS = sorted((config.get("cutoff_presets") or {}).keys())
+_GEOMS = sorted((config.get("geometry_variants") or {}).keys())
+_TAG = "dcm_3"
+
+
+rule all:
+    input:
+        f"{_OUTPUT_ROOT}/cutoff_sweep_summary.csv",
+        f"{_OUTPUT_ROOT}/cutoff_sweep_report.md",
+
+
+rule prepare_geometry:
+    output:
+        psf=f"{_OUTPUT_ROOT}/geometries/{{geom}}/cluster_for_vmd_{_TAG}.psf",
+        crd=f"{_OUTPUT_ROOT}/geometries/{{geom}}/initial.crd",
+        meta=f"{_OUTPUT_ROOT}/geometries/{{geom}}/geometry.json",
+    log:
+        f"{_OUTPUT_ROOT}/geometries/{{geom}}/prepare.log",
+    params:
+        workflow_dir=workflow.basedir,
+    resources:
+        mpi=1,
+        runtime=30,
+    shell:
+        """
+        mkdir -p {_OUTPUT_ROOT}/geometries/{wildcards.geom}
+        bash {params.workflow_dir}/scripts/prepare_geometry_shell.sh {wildcards.geom} \
+            > {log} 2>&1
+        test -s {output.psf}
+        test -s {output.crd}
+        """
+
+
+rule run_nve:
+    input:
+        psf=f"{_OUTPUT_ROOT}/geometries/{{geom}}/cluster_for_vmd_{_TAG}.psf",
+        crd=f"{_OUTPUT_ROOT}/geometries/{{geom}}/initial.crd",
+        meta=f"{_OUTPUT_ROOT}/geometries/{{geom}}/geometry.json",
+    output:
+        touch(f"{_OUTPUT_ROOT}/runs/{{preset}}/{{geom}}/done.txt"),
+    log:
+        stdout=f"{_OUTPUT_ROOT}/runs/{{preset}}/{{geom}}/stdout.log",
+    params:
+        workflow_dir=workflow.basedir,
+    resources:
+        gpu=1,
+        mpi=1,
+        runtime=60,
+    shell:
+        """
+        mkdir -p {_OUTPUT_ROOT}/runs/{wildcards.preset}/{wildcards.geom}
+        bash {params.workflow_dir}/scripts/job_shell.sh {wildcards.preset} {wildcards.geom} \
+            > {log.stdout} 2>&1
+        test -s {_OUTPUT_ROOT}/runs/{wildcards.preset}/{wildcards.geom}/nve_{_TAG}.dcd
+        touch {output}
+        """
+
+
+rule analyze_nve:
+    input:
+        f"{_OUTPUT_ROOT}/runs/{{preset}}/{{geom}}/done.txt",
+    output:
+        metrics=f"{_OUTPUT_ROOT}/runs/{{preset}}/{{geom}}/nve_metrics.json",
+        npz=f"{_OUTPUT_ROOT}/runs/{{preset}}/{{geom}}/nve_energy.npz",
+    params:
+        repo=workflow.basedir + "/../..",
+        python=_REPO_PYTHON,
+    shell:
+        """
+        {params.python} {params.repo}/workflows/dcm3_nve_cutoff_sweep/scripts/analyze_nve_energy.py \
+            --log {_OUTPUT_ROOT}/runs/{wildcards.preset}/{wildcards.geom}/stdout.log \
+            -o {output.metrics} \
+            --npz {output.npz} || true
+        test -s {output.metrics}
+        """
+
+
+rule collect:
+    input:
+        expand(
+            f"{_OUTPUT_ROOT}/runs/{{preset}}/{{geom}}/nve_metrics.json",
+            preset=_PRESETS,
+            geom=_GEOMS,
+        ),
+    output:
+        csv=f"{_OUTPUT_ROOT}/cutoff_sweep_summary.csv",
+        md=f"{_OUTPUT_ROOT}/cutoff_sweep_report.md",
+    params:
+        workflow_dir=workflow.basedir,
+    shell:
+        """
+        bash {params.workflow_dir}/scripts/collect_shell.sh
+        """

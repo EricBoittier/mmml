@@ -1,0 +1,8 @@
+executor: slurm
+jobs: 8
+default-resources:
+  - gpu=1
+  - mpi=1
+  - runtime=120
+  - mem_mb=16000
+  - partition=gpu
