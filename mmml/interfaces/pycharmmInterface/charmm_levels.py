@@ -24,6 +24,25 @@ def run_charmm_script_quiet(script: str) -> None:
 
 
 @contextmanager
+def charmm_quiet_output():
+    """Temporarily set PRNLev/WRNLev 0 (e.g. SD mini, overlap rescue)."""
+    import pycharmm
+    import pycharmm.settings as settings
+
+    old_prn = settings.set_verbosity(0)
+    old_wrn = settings.set_warn_level(0)
+    pycharmm.lingo.charmm_script("PRNLev 0\nWRNLev 0")
+    try:
+        yield
+    finally:
+        settings.set_verbosity(old_prn)
+        settings.set_warn_level(old_wrn)
+        pycharmm.lingo.charmm_script(
+            f"PRNLev {int(old_prn)}\nWRNLev {int(old_wrn)}"
+        )
+
+
+@contextmanager
 def charmm_relaxed_bomlev(level: int = -2):
     """Relax BOMBlev/WRNLev for RTF/PRM/PSF/CARD reads; restore on exit.
 

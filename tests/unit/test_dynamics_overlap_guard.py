@@ -599,6 +599,60 @@ def test_overlap_post_rescue_handoff_continues_in_memory(tmp_path, capsys):
     assert "post-rescue in-memory handoff at global step 500" in capsys.readouterr().out
 
 
+def test_overlap_post_rescue_single_chunk_patches_without_extra_dyna(tmp_path, capsys):
+    """Segment-boundary rescue with one overlap chunk must not require another dyna leg."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        min_distance_A=0.5,
+        check_interval=2500,
+        n_monomers=2,
+        use_pbc=False,
+    )
+    calls: list[dict] = []
+
+    def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
+        calls.append(dict(kw))
+        if _io is not None and _io.restart_write is not None:
+            Path(_io.restart_write).write_text(
+                "REST    48     0\n"
+                "\n"
+                " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+                "          25         500         500         500          10           0\n",
+                encoding="utf-8",
+            )
+        return mock.Mock()
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        side_effect=fake_chunk,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+        side_effect=lambda *_a, **kw: (5.0, int(kw.get("step", 0)) == 2500),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_restart_write_after_chunk",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.patch_restart_global_step",
+        return_value=True,
+    ) as patch_step, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_post_rescue_overlap_handoff",
+    ) as post_rescue:
+        run_dynamics_with_io(
+            {"nstep": 2500},
+            CharmmTrajectoryFiles(restart_write=tmp_path / "heat.res"),
+            overlap=cfg,
+            overlap_context="heat segment 1/8",
+        )
+
+    assert len(calls) == 1
+    post_rescue.assert_not_called()
+    patch_step.assert_called()
+    out = capsys.readouterr().out
+    assert "segment complete; no extra dyna" in out
+    assert "in-memory handoff" not in out
+
+
 def test_mlpot_overlap_chunks_continue_in_memory_without_readyn(tmp_path):
     """Legacy --dynamics-overlap-memory-handoff skips READYN between chunks."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles

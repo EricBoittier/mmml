@@ -186,16 +186,22 @@ def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
         if config.nstep_sd > 0:
             if config.verbose:
                 print(f"CHARMM MM SD: nstep={config.nstep_sd}", flush=True)
-            minimize.run_sd(**sd_kw)
+            from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_quiet_output
+
+            with charmm_quiet_output():
+                minimize.run_sd(**sd_kw)
         if config.nstep_abnr > 0:
             if config.verbose:
                 print(f"CHARMM MM ABNR: nstep={config.nstep_abnr}", flush=True)
-            minimize.run_abnr(
-                nstep=int(config.nstep_abnr),
-                tolenr=float(config.tolenr),
-                tolgrd=float(config.tolgrd),
-                **dcd_kw,
-            )
+            from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_quiet_output
+
+            with charmm_quiet_output():
+                minimize.run_abnr(
+                    nstep=int(config.nstep_abnr),
+                    tolenr=float(config.tolenr),
+                    tolgrd=float(config.tolgrd),
+                    **dcd_kw,
+                )
         pycharmm.lingo.charmm_script("ENER")
         if config.verbose:
             from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
@@ -446,9 +452,13 @@ def minimize_bonded_mm_recovery(
         sd_kw = _bonded_recovery_sd_kwargs(ctx, config)
         if config.verbose and config.show_energy:
             _maybe_show_energy(True)
-        from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
+        from mmml.interfaces.pycharmmInterface.charmm_levels import (
+            charmm_quiet_output,
+            run_charmm_script_quiet,
+        )
 
-        minimize.run_sd(**sd_kw)
+        with charmm_quiet_output():
+            minimize.run_sd(**sd_kw)
         run_charmm_script_quiet("ENER")
         grms = float(charmm_grms())
         angl_after = charmm_bonded_term_kcalmol("ANGL")
@@ -534,13 +544,23 @@ def minimize_overlap_rescue(
                 ),
             )
             if config.nstep_sd > 0:
-                minimize.run_sd(**sd_kw)
-            if config.nstep_abnr > 0:
-                minimize.run_abnr(
-                    nstep=int(config.nstep_abnr),
-                    tolenr=float(config.tolenr),
-                    tolgrd=float(config.tolgrd),
+                from mmml.interfaces.pycharmmInterface.charmm_levels import (
+                    charmm_quiet_output,
                 )
+
+                with charmm_quiet_output():
+                    minimize.run_sd(**sd_kw)
+            if config.nstep_abnr > 0:
+                from mmml.interfaces.pycharmmInterface.charmm_levels import (
+                    charmm_quiet_output,
+                )
+
+                with charmm_quiet_output():
+                    minimize.run_abnr(
+                        nstep=int(config.nstep_abnr),
+                        tolenr=float(config.tolenr),
+                        tolgrd=float(config.tolgrd),
+                    )
             # Do not call ENER here: on overlapped PBC clusters it recenters images
             # and can stack atoms (GRMS/energy blow up) while leaving bad coordinates.
             grms = float(charmm_grms())
@@ -2433,13 +2453,20 @@ def run_dynamics_with_io(
                         Path(chunk_io.restart_write),
                         steps_done,
                     )
-                    pending_post_rescue_handoff = True
-                    print(
-                        f"overlap ({overlap_context}): post-rescue in-memory handoff "
-                        f"at global step {steps_done} (fresh velocities; avoiding "
-                        f"stale CPT READYN after PSF reload)",
-                        flush=True,
-                    )
+                    if chunk_index + 1 < n_chunks:
+                        pending_post_rescue_handoff = True
+                        print(
+                            f"overlap ({overlap_context}): post-rescue in-memory handoff "
+                            f"at global step {steps_done} (fresh velocities; avoiding "
+                            f"stale CPT READYN after PSF reload)",
+                            flush=True,
+                        )
+                    else:
+                        print(
+                            f"overlap ({overlap_context}): post-rescue restart patched "
+                            f"at global step {steps_done} (segment complete; no extra dyna)",
+                            flush=True,
+                        )
             ml_f = None
             if mlpot_ctx is not None:
                 py_model = getattr(mlpot_ctx, "pyCModel", None)
@@ -2460,6 +2487,26 @@ def run_dynamics_with_io(
                     memory_handoff=overlap_memory_handoff,
                 )
         completed = True
+        if (
+            io is not None
+            and io.restart_write is not None
+            and steps_done >= total_nstep - 1
+        ):
+            from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+                patch_restart_global_step,
+                read_restart_last_step,
+                resolve_integrated_restart_step,
+            )
+
+            restart_path = Path(io.restart_write)
+            header_step = read_restart_last_step(restart_path)
+            effective_step = resolve_integrated_restart_step(
+                restart_path,
+                expected_nstep=total_nstep,
+            )
+            if effective_step is not None and effective_step >= total_nstep - 1:
+                if header_step is None or header_step < total_nstep - 1:
+                    patch_restart_global_step(restart_path, steps_done)
         if split_trajectory and chunk_dcd_paths:
             print(
                 f"overlap ({overlap_context}): kept {len(chunk_dcd_paths)} "
@@ -2575,7 +2622,10 @@ def minimize_with_mlpot(
                 f"SD pass 1 (free, all atoms): nstep={config.nstep} nprint={config.nprint}"
             )
         _prepare_mlpot_sd_list_frequencies(pycharmm, sd_kw=sd_kw)
-        minimize.run_sd(**sd_kw)
+        from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_quiet_output
+
+        with charmm_quiet_output():
+            minimize.run_sd(**sd_kw)
         if config.verbose and config.show_energy:
             print("CHARMM energy after SD pass 1 (free):")
             _maybe_show_energy(True)
@@ -2589,7 +2639,8 @@ def minimize_with_mlpot(
                     f"nstep={config.nstep} nprint={config.nprint}"
                 )
             _prepare_mlpot_sd_list_frequencies(pycharmm, sd_kw=sd_kw)
-            minimize.run_sd(**sd_kw)
+            with charmm_quiet_output():
+                minimize.run_sd(**sd_kw)
             if config.verbose and config.show_energy:
                 print("CHARMM energy after SD pass 2 (constrained):")
                 _maybe_show_energy(True)

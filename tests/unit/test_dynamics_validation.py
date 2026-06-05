@@ -313,3 +313,42 @@ def test_assert_stage_dynamics_completed_fails_truncated(tmp_path):
             dcd_path=dcd,
             restart_path=res,
         )
+
+
+def test_resolve_integrated_restart_step_stale_subchunk_header(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        resolve_integrated_restart_step,
+    )
+
+    res = tmp_path / "heat.res"
+    res.write_text(
+        "REST    48     0\n"
+        "\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        "          25         500         500         500          10           0\n",
+        encoding="utf-8",
+    )
+    assert resolve_integrated_restart_step(res, expected_nstep=2500) == 2500
+
+
+def test_assert_stage_dynamics_completed_accepts_stale_restart_after_rescue(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        assert_stage_dynamics_completed,
+    )
+
+    res = tmp_path / "heat.res"
+    res.write_text(
+        "REST    48     0\n"
+        "\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        "          25         500         500         500          10           0\n",
+        encoding="utf-8",
+    )
+
+    assert_stage_dynamics_completed(
+        stage="heat",
+        expected_nstep=2500,
+        nsavc=100,
+        dcd_path=None,
+        restart_path=res,
+    )
