@@ -1388,6 +1388,8 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     )
     if getattr(args, "no_dynamics_overlap_separate", False):
         cmd.append("--no-dynamics-overlap-separate")
+    if getattr(args, "dynamics_overlap_memory_handoff", False):
+        cmd.append("--dynamics-overlap-memory-handoff")
     cmd.extend(
         [
             "--dynamics-overlap-separate-margin",
