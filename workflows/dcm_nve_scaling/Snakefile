@@ -1,5 +1,22 @@
 configfile: "config.yaml"
 
+import os
+from pathlib import Path
+
+
+def _repo_python() -> str:
+    """Match job_shell.sh: prefer repo .venv (JAX) over bare ``python`` on PATH."""
+    repo = Path(workflow.basedir).resolve().parents[1]
+    venv = repo / ".venv" / "bin" / "python"
+    if venv.is_file():
+        return str(venv)
+    env_py = os.environ.get("MMML_PYTHON", "").strip()
+    if env_py:
+        return env_py
+    return "python3"
+
+
+_REPO_PYTHON = _repo_python()
 _CLUSTER_SIZES = [int(n) for n in config["cluster_sizes"]]
 _OUTPUT_ROOT = str(config.get("output_root", "results"))
 _PREFIX = str(config.get("composition_prefix", "DCM")).lower()
@@ -62,9 +79,10 @@ rule audit_post_mini:
     params:
         n=lambda wildcards: _n_from_tag(wildcards.tag),
         repo=workflow.basedir + "/../..",
+        python=_REPO_PYTHON,
     shell:
         """
-        python {params.repo}/scripts/audit_mlpot_cluster.py \
+        {params.python} {params.repo}/scripts/audit_mlpot_cluster.py \
             --output-dir {workflow.basedir}/{_OUTPUT_ROOT}/{wildcards.tag}_nve/inbfrq_{wildcards.inbfrq_slug} \
             --composition DCM:{params.n} \
             --atoms-per-monomer {config[atoms_per_monomer]} \
@@ -101,9 +119,10 @@ rule com_analysis:
         n=lambda wildcards: _n_from_tag(wildcards.tag),
         repo=workflow.basedir + "/../..",
         com_extra=_com_analysis_args,
+        python=_REPO_PYTHON,
     shell:
         """
-        python {params.repo}/scripts/analyze_monomer_com_dcd.py \
+        {params.python} {params.repo}/scripts/analyze_monomer_com_dcd.py \
             --dcd {workflow.basedir}/{_OUTPUT_ROOT}/{wildcards.tag}_nve/inbfrq_{wildcards.inbfrq_slug}/nve_{wildcards.tag}.dcd \
             --n-monomers {params.n} \
             --atoms-per-monomer {config[atoms_per_monomer]} \
