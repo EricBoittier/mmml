@@ -3,8 +3,11 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=resolve_mmml_env.sh
+source "$ROOT/scripts/resolve_mmml_env.sh"
+mmml_resolve_env "$ROOT"
 
-PY="${MMML_PYTHON:-python}"
+PY="${MMML_PYTHON}"
 while IFS= read -r line; do
   [[ -n "$line" ]] && eval "$line"
 done < <("$PY" - <<'PY'
@@ -38,10 +41,8 @@ if mpirun is None:
 PY
 )
 
-MMML="${MMML_BIN:-$ROOT/.venv/bin/mmml}"
-if [[ ! -x "$MMML" ]]; then
-  MMML="$(command -v mmml)"
-fi
-
 MPIRUN="${MMML_MPIRUN:-mpirun}"
-exec "$MPIRUN" -np 1 "$MMML" "$@"
+if [[ -n "${MMML_BIN:-}" && -x "${MMML_BIN}" ]]; then
+  exec "$MPIRUN" -np 1 "$MMML_BIN" "$@"
+fi
+exec "$MPIRUN" -np 1 "$PY" -m mmml.cli.__main__ "$@"
