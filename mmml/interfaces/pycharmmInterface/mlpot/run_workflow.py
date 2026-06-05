@@ -324,6 +324,7 @@ def _register_mlpot_context(
     n_atoms: int,
     n_monomers: int,
     *,
+    atoms_per_monomer: list[int] | None = None,
     ml_batch_size: int | None = None,
     ml_gpu_count: int | None = None,
     ml_max_active_dimers: int | None = None,
@@ -347,12 +348,17 @@ def _register_mlpot_context(
         )
 
     atoms = ase.Atoms(numbers=z, positions=r)
+    apm = (
+        list(atoms_per_monomer)
+        if atoms_per_monomer is not None
+        else _atoms_per_monomer_list(z, n_monomers)
+    )
     _, _, pyCModel = load_physnet_mlpot_bundle(
         ckpt,
         n_atoms,
         atoms,
         n_monomers=n_monomers,
-        atoms_per_monomer=_atoms_per_monomer_list(z, n_monomers),
+        atoms_per_monomer=apm,
         ml_batch_size=ml_batch_size,
         ml_gpu_count=ml_gpu_count,
         ml_max_active_dimers=ml_max_active_dimers,
