@@ -2,6 +2,8 @@
 
 Helpers for **PhysNet + CHARMM MLpot**, based on the validated scripts in `tests/functionality/mlpot/`.
 
+**Nonbond lists:** how CHARMM and MMML neighbor lists interact, update frequencies, and NVE stability — see [NONBOND_LISTS.md](NONBOND_LISTS.md).
+
 ## Quick start (energy only)
 
 ```python
