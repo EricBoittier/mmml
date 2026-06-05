@@ -35,6 +35,10 @@ def _pycharmm_args(**overrides) -> argparse.Namespace:
         echeck=100.0,
         ps_heat=2.0,
         ps_equi=2.0,
+        npt_thermostat="hoover",
+        npt_pressure=1.0,
+        npt_pgamma=5.0,
+        n_equi_segments=1,
         n_prod_segments=1,
         composition="DCM:20",
         n_molecules=10,
@@ -145,6 +149,18 @@ def test_build_pycharmm_command_forwards_heat_thermostat():
     cmd = build_pycharmm_command(_pycharmm_args(heat_thermostat="hoover"))
     idx = cmd.index("--heat-thermostat")
     assert cmd[idx + 1] == "hoover"
+
+
+def test_build_pycharmm_command_forwards_npt_cpt_flags():
+    cmd = build_pycharmm_command(
+        _pycharmm_args(npt_thermostat="berendsen", npt_pressure=2.5, npt_pgamma=0.0)
+    )
+    idx = cmd.index("--npt-thermostat")
+    assert cmd[idx + 1] == "berendsen"
+    idx = cmd.index("--npt-pressure")
+    assert cmd[idx + 1] == "2.5"
+    idx = cmd.index("--npt-pgamma")
+    assert cmd[idx + 1] == "0.0"
 
 
 def test_build_pycharmm_command_includes_ml_switch_width_default():

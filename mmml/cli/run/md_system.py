@@ -568,6 +568,34 @@ def parse_args() -> argparse.Namespace:
         help="pycharmm: production length in ps (default: --ps)",
     )
     parser.add_argument(
+        "--npt-thermostat",
+        type=str,
+        choices=["hoover", "berendsen"],
+        default="hoover",
+        help="pycharmm: NPT temperature control for equi/prod (default: hoover)",
+    )
+    parser.add_argument(
+        "--npt-pressure",
+        type=float,
+        default=1.0,
+        help="pycharmm: NPT reference pressure in atm for equi/prod (default: 1.0)",
+    )
+    parser.add_argument(
+        "--npt-pgamma",
+        type=float,
+        default=5.0,
+        help=(
+            "pycharmm: CPT barostat Langevin collision frequency in 1/ps "
+            "(default: 5; 0 disables barostat coupling)"
+        ),
+    )
+    parser.add_argument(
+        "--n-equi-segments",
+        type=int,
+        default=1,
+        help="pycharmm: split NPT equilibration into chained restart segments",
+    )
+    parser.add_argument(
         "--n-prod-segments",
         type=int,
         default=1,
@@ -1212,6 +1240,14 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         str(args.ps_heat),
         "--ps-equi",
         str(args.ps_equi),
+        "--npt-thermostat",
+        str(getattr(args, "npt_thermostat", "hoover")),
+        "--npt-pressure",
+        str(getattr(args, "npt_pressure", 1.0)),
+        "--npt-pgamma",
+        str(getattr(args, "npt_pgamma", 5.0)),
+        "--n-equi-segments",
+        str(getattr(args, "n_equi_segments", 1)),
         "--n-prod-segments",
         str(args.n_prod_segments),
         ]
