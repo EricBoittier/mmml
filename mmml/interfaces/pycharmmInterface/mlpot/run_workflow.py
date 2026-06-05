@@ -33,6 +33,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_show_energy,
     resolve_test_first_config,
     resolve_charmm_use_pbc,
+    resolve_loose_pbc,
     resolve_mlpot_use_pbc,
     resolve_use_pbc,
     setup_cons_fix_for_resids,
@@ -623,6 +624,7 @@ def run_dynamics_workflow(
     mini_dcd_nsavc = resolve_dcd_nsavc(dcd_nsavc=args.dcd_nsavc, nstep=mini_nstep)
     charmm_pbc = resolve_charmm_use_pbc(args)
     mlpot_pbc = resolve_mlpot_use_pbc(args)
+    loose_pbc = resolve_loose_pbc(charmm_pbc, mlpot_pbc)
     box_side = _setup_charmm_nbonds_for_args(args, r)
     overlap_cfg = resolve_dynamics_overlap_config(
         args,
@@ -799,6 +801,7 @@ def run_dynamics_workflow(
             overlap_context=label,
             mlpot_ctx=ctx,
             rng_base=getattr(args, "seed", None),
+            loose_pbc=loose_pbc,
         )
         if show_energy:
             from mmml.interfaces.pycharmmInterface.import_pycharmm import (

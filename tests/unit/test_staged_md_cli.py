@@ -11,6 +11,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_charmm_use_pbc,
     resolve_echeck_for_cluster,
     resolve_flat_bottom_selection,
+    resolve_loose_pbc,
     resolve_md_stages,
     resolve_mlpot_use_pbc,
     resolve_use_pbc,
@@ -79,6 +80,15 @@ def test_loose_pbc_charmm_on_mlpot_off_for_free_setup_with_box():
     )
     assert resolve_charmm_use_pbc(args) is True
     assert resolve_mlpot_use_pbc(args) is False
+    assert resolve_loose_pbc(True, False) is True
+    assert resolve_loose_pbc(True, True) is False
+    assert resolve_loose_pbc(False, False) is False
+
+
+def test_resolve_loose_pbc():
+    assert resolve_loose_pbc(True, False) is True
+    assert resolve_loose_pbc(True, True) is False
+    assert resolve_loose_pbc(False, False) is False
 
 
 def test_mlpot_pbc_flag_enables_mic_on_free_setup_with_box():
