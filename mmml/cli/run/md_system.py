@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from mmml.interfaces.pycharmmInterface.cutoffs import (
+    DEFAULT_ML_SWITCH_WIDTH,
     DEFAULT_MM_SWITCH_ON,
     DEFAULT_MM_SWITCH_WIDTH,
 )
@@ -843,10 +844,10 @@ def parse_args() -> argparse.Namespace:
         "--ml-cutoff-distance",
         dest="ml_switch_width",
         type=float,
-        default=0.1,
+        default=DEFAULT_ML_SWITCH_WIDTH,
         help=(
             "ML taper width (Å) over [mm_switch_on - width, mm_switch_on] for pycharmm/MMML handoff "
-            "(default: 0.1). Does not affect lambda_ti (see --ml-cutoff)."
+            f"(default: {DEFAULT_ML_SWITCH_WIDTH:g}). Does not affect lambda_ti (see --ml-cutoff)."
         ),
     )
     parser.add_argument(
@@ -1423,7 +1424,7 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         ]
     )
     cmd.extend(
-        ["--ml-switch-width", str(getattr(args, "ml_switch_width", 0.1))]
+        ["--ml-switch-width", str(getattr(args, "ml_switch_width", DEFAULT_ML_SWITCH_WIDTH))]
     )
     scale = float(getattr(args, "mlpot_mm_internal_scale", 0.0) or 0.0)
     if scale > 0.0:

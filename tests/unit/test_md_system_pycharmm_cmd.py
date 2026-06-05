@@ -93,9 +93,9 @@ def _pycharmm_args(**overrides) -> argparse.Namespace:
         dynamics_overlap_action="rescue",
         dynamics_overlap_min_distance=1.5,
         dynamics_overlap_check_interval=50,
-        mm_switch_on=7.0,
+        mm_switch_on=8.0,
         mm_switch_width=5.0,
-        ml_switch_width=0.1,
+        ml_switch_width=1.5,
         reuse_packmol_cache=True,
         rebuild_packmol=False,
         packmol_cache_dir=None,
@@ -166,7 +166,7 @@ def test_build_pycharmm_command_forwards_npt_cpt_flags():
 def test_build_pycharmm_command_includes_ml_switch_width_default():
     cmd = build_pycharmm_command(_pycharmm_args())
     idx = cmd.index("--ml-switch-width")
-    assert cmd[idx + 1] == "0.1"
+    assert cmd[idx + 1] == "1.5"
 
 
 def test_build_pycharmm_command_includes_ml_gpu_count_when_set():

@@ -12,6 +12,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = REPO_ROOT / "docs" / "images" / "mlpot-settings"
 
 from mmml.interfaces.pycharmmInterface.cutoffs import (  # noqa: E402
+    DEFAULT_ML_SWITCH_WIDTH,
+    DEFAULT_MM_SWITCH_ON,
+    DEFAULT_MM_SWITCH_WIDTH,
     GAMMA_OFF,
     GAMMA_ON,
     CutoffParameters,
@@ -20,12 +23,12 @@ from mmml.interfaces.pycharmmInterface.cutoffs import (  # noqa: E402
 CUTOFF_PRESETS: list[tuple[str, str, CutoffParameters]] = [
     (
         "code-default",
-        "Code default (7 / 5 / 0.1 Å)",
-        CutoffParameters(ml_switch_width=0.1, mm_switch_on=7.0, mm_switch_width=5.0),
+        f"Code default ({DEFAULT_MM_SWITCH_ON:g} / {DEFAULT_MM_SWITCH_WIDTH:g} / {DEFAULT_ML_SWITCH_WIDTH:g} Å)",
+        CutoffParameters(),
     ),
     (
         "dcm9-stability",
-        "DCM:9 stability script (7 / 5 / 0.1 Å)",
+        "Legacy narrow ML (7 / 5 / 0.1 Å)",
         CutoffParameters(ml_switch_width=0.1, mm_switch_on=7.0, mm_switch_width=5.0),
     ),
     (
@@ -142,15 +145,15 @@ def plot_cutoff_comparison() -> Path:
 
 
 def plot_legacy_vs_complementary() -> Path:
-    cp = CutoffParameters(ml_switch_width=0.1, mm_switch_on=7.0, mm_switch_width=5.0)
+    cp = CutoffParameters()
     r = _r_grid(cp, pad=3.0)
     s_ml = cp.ml_scale(r, gamma_ml=GAMMA_ON)
     mm_comp = cp.mm_scale_complementary(r, gamma_ml=GAMMA_ON, gamma_mm_off=GAMMA_OFF)
 
     cp_legacy = CutoffParameters(
-        ml_switch_width=0.1,
-        mm_switch_on=7.0,
-        mm_switch_width=5.0,
+        ml_switch_width=DEFAULT_ML_SWITCH_WIDTH,
+        mm_switch_on=DEFAULT_MM_SWITCH_ON,
+        mm_switch_width=DEFAULT_MM_SWITCH_WIDTH,
         complementary_handoff=False,
     )
     mm_legacy = cp_legacy.mm_scale(r, gamma_on=GAMMA_ON, gamma_off=GAMMA_OFF)
@@ -161,7 +164,10 @@ def plot_legacy_vs_complementary() -> Path:
     ax.plot(r, mm_legacy, lw=2, ls=":", color="C3", label=r"$s_{\mathrm{MM}}$ legacy window")
     ax.set_xlabel("Dimer COM distance r (Å)")
     ax.set_ylabel("Scale factor")
-    ax.set_title("DCM:9 cutoffs (7 / 5 / 0.1 Å): complementary vs legacy MM window")
+    ax.set_title(
+        f"Default cutoffs ({DEFAULT_MM_SWITCH_ON:g} / {DEFAULT_MM_SWITCH_WIDTH:g} / "
+        f"{DEFAULT_ML_SWITCH_WIDTH:g} Å): complementary vs legacy MM window"
+    )
     ax.set_ylim(-0.05, 1.2)
     ax.legend(loc="best", fontsize=9)
     ax.grid(alpha=0.3)
