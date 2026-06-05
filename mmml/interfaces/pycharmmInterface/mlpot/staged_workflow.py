@@ -1483,6 +1483,22 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     "geometry check after heat completes",
                     flush=True,
                 )
+            if stage == "heat" and int(kw.get("ihtfrq", 0) or 0) > 0:
+                from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+                    finalize_heat_dynamics_frequencies,
+                )
+
+                freq_changes = finalize_heat_dynamics_frequencies(kw)
+                if freq_changes and not args.quiet:
+                    parts = ", ".join(
+                        f"{key} {old}->{new}"
+                        for key, (old, new) in sorted(freq_changes.items())
+                    )
+                    print(
+                        f"HEAT: harmonized dynamics frequencies for nstep={nstep} "
+                        f"({parts}); TEMINC={float(kw.get('TEMINC', 0)):.6g} K",
+                        flush=True,
+                    )
             run_dynamics_with_io(
                 kw,
                 io,
