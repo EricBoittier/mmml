@@ -70,6 +70,22 @@ Edit [config.yaml](config.yaml):
 - `cutoff_presets` — add or adjust switch widths
 - `no_echeck: true` — avoid early abort on ML USER energy spikes during comparison
 
+## Troubleshooting
+
+### NVE stops at restart step 2 / 2 DCD frames
+
+Usually `dynamics_overlap_check_interval` is too small for `dcd_nsavc: 1`. With
+`interval: 1`, overlap chunking uses 2-step chunks (`nsavc + 1`), and scratch
+restart handoffs fail after the first chunk. Set the interval to the full NVE
+step count (default **4000** for `ps_nve: 1.0`, `dt_fs: 0.25`).
+
+```bash
+grep -E 'overlap \(NVE\)|integrated |incomplete|restart step' \
+  results/runs/extended_handoff/mid/stdout.log | tail -20
+rm -f results/runs/extended_handoff/mid/done.txt
+snakemake results/runs/extended_handoff/mid/done.txt -j1 --resources gpu=1 mpi=1
+```
+
 ## Do not commit run outputs
 
 `results/` and `.snakemake/` are gitignored.

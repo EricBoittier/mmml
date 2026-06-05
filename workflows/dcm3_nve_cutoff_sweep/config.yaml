@@ -34,7 +34,9 @@ charmm_sd_steps: 50
 charmm_abnr_steps: 100
 dynamics_overlap_action: rescue
 dynamics_overlap_min_distance: 0.4
-dynamics_overlap_check_interval: 1
+# One overlap chunk for the full NVE leg (1 ps @ 0.25 fs → 4000 steps).
+# interval=1 + dcd_nsavc=1 forces 2-step chunks and NVE stops after ~2 steps.
+dynamics_overlap_check_interval: 4000
 no_echeck: true
 ml_gpu_count: 1
 
