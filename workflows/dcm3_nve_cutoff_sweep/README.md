@@ -10,16 +10,22 @@ Sibling workflows: [dcm_nve_scaling](../dcm_nve_scaling/) (cluster size), [dcm5_
 
 | Cutoff preset | mm_on / mm_w / ml_w (Å) | Role |
 |---------------|-------------------------|------|
+| `dcm9_stability` | 7 / 5 / **0.1** | ML taper baseline [6.9, 7.0] Å |
+| `dcm9_ml01` | 7 / 5 / **0.01** | Sharper ML taper [6.99, 7.0] Å |
+| `dcm9_ml001` | 7 / 5 / **0.001** | Near-step ML taper [6.999, 7.0] Å |
 | `extended_mm5` | 8 / 5 / 1.5 | Round-2 winner; primary candidate |
-| `dcm9_stability` | 7 / 5 / 0.1 | Conservative fallback |
-| `handoff_7p5` | 7.5 / 5 / 0.1 | Close-geometry baseline (far unstable at 1 ps) |
+| `handoff_7p5` | 7.5 / 5 / 0.1 | Close baseline (far unstable at 1 ps) |
 | `extended_mm5_ml05` | 8 / 5 / 0.5 | Hybrid: extended MM + narrower ML |
 | `handoff_7p5_ml15` | 7.5 / 5 / 1.5 | Hybrid: 7.5 Å on + extended ML taper |
 
 COM geometries (all presets × each): `close` (4.0 × 4.5 Å), `mid` (6.0 × 7.0 Å),
 `far` (8.0 × 9.0 Å), `asymmetric` (5.0 × 9.0 Å, 90°).
 
-**20 NVE jobs** (5×4) plus 4 geometry-prep jobs. Default leg: **5.0 ps @ 0.25 fs** (20 000 steps).
+**28 NVE jobs** (7×4) plus 4 geometry-prep jobs. Default leg: **5.0 ps @ 0.25 fs** (20 000 steps).
+
+Compare **`dcm9_stability` vs `dcm9_ml01` vs `dcm9_ml001`** (same 7 / 5 mm handoff) before
+choosing whether to sharpen the production default. **`extended_mm5`** is the extended-family
+benchmark.
 
 Runs with `smoothness_score` > `energy_catastrophe_score` (default **10 000**) are flagged
 `fail_energy` and excluded from the **sane mean** in the report.
