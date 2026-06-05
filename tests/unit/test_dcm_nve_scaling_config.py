@@ -106,3 +106,10 @@ def test_paths_for_size(cfg: dict) -> None:
     p = paths_for_size(cfg, 9)
     assert p["nve_dcd"].name == "nve_dcm_9.dcd"
     assert p["mini_crd"].name == "mini_full_mlpot_dcm_9.crd"
+
+
+def test_snakefile_avoids_reserved_conda_keyword() -> None:
+    """Snakemake >=9 treats line-start ``conda`` as global_conda (expects ``conda:``)."""
+    text = (WORKFLOW_ROOT / "Snakefile").read_text()
+    assert "conda = " not in text
+    assert "if conda:" not in text

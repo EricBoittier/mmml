@@ -13,9 +13,9 @@ def _repo_python() -> str:
     venv = repo / ".venv" / "bin" / "python"
     if venv.is_file():
         return str(venv)
-    conda = os.environ.get("CONDA_PREFIX", "").strip()
-    if conda:
-        conda_py = Path(conda) / "bin" / "python"
+    conda_prefix = os.environ.get("CONDA_PREFIX", "").strip()
+    if conda_prefix:
+        conda_py = Path(conda_prefix) / "bin" / "python"
         if conda_py.is_file():
             return str(conda_py)
     return "python3"
