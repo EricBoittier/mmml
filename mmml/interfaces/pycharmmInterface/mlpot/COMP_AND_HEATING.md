@@ -64,8 +64,13 @@ GAUSSIAN OPTION ... VELOCITIES ASSIGNED AT TEMPERATURE
   **Do not use this path in mmml**: `sync_charmm_positions` writes **coordinates** into COMP,
   so `iasvel=0` + `start=True` produces absurd kinetic energy (e.g. T≫target at step 0).
 - **`IASVEL = 1` + `START`**: Gaussian Maxwell–Boltzmann assignment (default cold start).
-- **`START` false**: continue velocities already in CHARMM memory or on the restart file;
-  `iasvel` is ignored for the initial assignment.
+- **`START` omitted** (`start=False` in PyCHARMM): the `start` keyword is **not** sent to
+  CHARMM. START may **linger** from a prior `dyna` in the same session (e.g. the
+  `nstep=0` Boltzmann assign). With lingering START + `iasvel=0`, CHARMM still reads
+  comparison **coordinates** as velocities.
+- **mmml mitigation**: do not copy main coords into COMP (`sync_charmm_positions`);
+  zero comparison coordinates before dynamics; use `iasvel=1` on post-assign `dyna`
+  so lingering START falls back to Boltzmann, not COMP.
 - **`IASORS = 0`**: at each `ihtfrq` / `ieqfrq`, **scale** existing velocities toward the target temperature.
 - **`IASORS ≠ 0`**: **assign** new velocities at each `ihtfrq` (uses `IASVEL`).
 
@@ -133,9 +138,12 @@ Do **not** combine these in one run until each is understood.
 4. **Diagnostic** — `--no-echeck` once to see if run completes (does not fix physics).
 5. **COMP (experimental)** — `--heat-comp-damp` only after reading this doc; compare log for `HEAT COMP:` line; expect **no** improvement unless COMP-velocity is implemented properly.
 
-Avoid **`iasvel=0` + `start=True`** on any `dyna` unless COMP holds real velocity components.
-After a Boltzmann pre-step or restart handoff, use **`start=False`** (Hoover CPT heat,
-NVE, overlap chunk 0). COMP is **cleared before heat** by default.
+Avoid **`iasvel=0`** on post-assign / overlap-continuation `dyna` unless COMP holds real
+velocity components and you explicitly want that path. After Boltzmann assign,
+rescue `sync_charmm_positions`, or CRD reload, use **`start=False`** and
+**`iasvel=1`** so lingering START cannot read comparison coordinates as velocities.
+`sync_charmm_positions` zeros COMP; overlap Hoover/scale heat chunks set
+`iasvel=1` after chunk 0.
 
 Avoid **`iasors=1`** with short `ihtfrq` on all-ML clusters unless you accept Gaussian spikes (219 K before rescale to 66 K in earlier logs).
 

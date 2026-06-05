@@ -1024,6 +1024,23 @@ def test_overlap_chunk_continues_velocity_scaling_heat_ramp(tmp_path):
     assert calls[3]["firstt"] == pytest.approx(1.8)
 
 
+def test_apply_overlap_chunk_hoover_chunk0_omits_start_and_iasvel_one():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
+
+    kw = {
+        "start": False,
+        "firstt": 0.0,
+        "finalt": 240.0,
+        "cpt": True,
+        "hoover reft": 240.0,
+        "iasvel": 0,
+    }
+    _apply_overlap_chunk_dynamics_kw(kw, chunk_index=0, has_restart_read=False)
+    assert kw["start"] is False
+    assert kw["iasvel"] == 1
+    assert kw["restart"] is False
+
+
 def test_apply_overlap_chunk_preserves_heat_cold_start_kw():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
 
@@ -1041,7 +1058,7 @@ def test_apply_overlap_chunk_preserves_heat_cold_start_kw():
     assert kw["firstt"] == 48.0
     assert kw["finalt"] == 240.0
     assert kw["iasors"] == 0
-    assert kw["iasvel"] == 0
+    assert kw["iasvel"] == 1
     assert kw["ihtfrq"] == 1000
     assert kw["TEMINC"] == 48.0
     assert kw["iunrea"] == -1
@@ -1050,7 +1067,7 @@ def test_apply_overlap_chunk_preserves_heat_cold_start_kw():
     kw2 = {"start": False, "firstt": 48.0, "iasvel": 1}
     _apply_overlap_chunk_dynamics_kw(kw2, chunk_index=0, has_restart_read=False)
     assert kw2["firstt"] == 48.0
-    assert kw2["iasvel"] == 0
+    assert kw2["iasvel"] == 1
 
     kw3 = {
         "start": False,
@@ -1066,7 +1083,7 @@ def test_apply_overlap_chunk_preserves_heat_cold_start_kw():
     assert kw3["firstt"] == 48.0
     assert kw3["finalt"] == 240.0
     assert kw3["iasors"] == 0
-    assert kw3["iasvel"] == 0
+    assert kw3["iasvel"] == 1
     assert kw3["ihtfrq"] == 1000
     assert kw3["TEMINC"] == 48.0
 

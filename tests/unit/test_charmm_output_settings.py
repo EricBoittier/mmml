@@ -92,7 +92,8 @@ def test_apply_heat_ramp_overlap_chunk_continues_ramp():
     assert chunk_kw["finalt"] == 240.0
     assert chunk_kw["TEMINC"] == 0.12
     assert chunk_kw["iasors"] == 0
-    assert chunk_kw["iasvel"] == 0
+    assert chunk_kw["iasvel"] == 1
+    assert chunk_kw["start"] is False
 
 
 def test_hoover_cpt_heat_ramp_target_and_overlap_chunk():
@@ -128,7 +129,8 @@ def test_hoover_cpt_heat_ramp_target_and_overlap_chunk():
     assert chunk_kw["firstt"] == pytest.approx(0.6)
     assert chunk_kw["finalt"] == 30.0
     assert chunk_kw["tbath"] == 30.0
-    assert chunk_kw["iasvel"] == 0
+    assert chunk_kw["iasvel"] == 1
+    assert chunk_kw["start"] is False
 
 
 def test_apply_heat_segment_ramp_kwargs_splits_ramp():

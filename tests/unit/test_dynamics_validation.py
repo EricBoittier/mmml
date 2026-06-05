@@ -91,6 +91,25 @@ def test_count_dcd_frames(tmp_path):
     assert count_dcd_frames(path) == 3
 
 
+def test_run_dynamics_clears_comparison_coords_when_iasvel_zero_no_start():
+    import sys
+    from unittest.mock import MagicMock, patch
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics
+
+    fake_pycharmm = MagicMock()
+    dyn = MagicMock()
+    fake_pycharmm.DynamicsScript.return_value = dyn
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.clear_comparison_coordinates"
+    ) as clear_comp, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.disable_charmm_domdec"
+    ), patch.dict(sys.modules, {"pycharmm": fake_pycharmm}):
+        run_dynamics({"iasvel": 0, "start": False, "nstep": 10})
+    clear_comp.assert_called_once()
+    dyn.run.assert_called_once()
+
+
 def test_build_nve_dynamics_restart_uses_iasvel_zero():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import build_nve_dynamics
 

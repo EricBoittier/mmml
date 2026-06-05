@@ -344,7 +344,7 @@ def test_configure_heat_dynamics_start_hoover_memory_handoff_no_comp_velocities(
     assign.assert_called_once()
     assert kw["restart"] is False
     assert kw["start"] is False
-    assert kw["iasvel"] == 0
+    assert kw["iasvel"] == 1
 
 
 def test_configure_nve_dynamics_start_memory_handoff_no_readyn(tmp_path):
@@ -375,5 +375,5 @@ def test_configure_nve_dynamics_start_memory_handoff_no_readyn(tmp_path):
     rewrite.assert_not_called()
     assert kw["restart"] is False
     assert kw["start"] is False
-    assert kw["iasvel"] == 0
+    assert kw["iasvel"] == 1
     assert io.restart_read is None
