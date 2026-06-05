@@ -361,10 +361,11 @@ def measure_mm_grms_with_full_block(ctx: "MlpotContext") -> float:
     from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
 
+    from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
+
     def _measure() -> float:
         apply_charmm_mm_block()
-        pycharmm, *_ = _import_pycharmm_modules()
-        pycharmm.lingo.charmm_script("ENER")
+        run_charmm_script_quiet("ENER")
         return float(charmm_grms())
 
     return _with_mlpot_block_restored(ctx, _measure)
@@ -445,8 +446,10 @@ def minimize_bonded_mm_recovery(
         sd_kw = _bonded_recovery_sd_kwargs(ctx, config)
         if config.verbose and config.show_energy:
             _maybe_show_energy(True)
+        from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
+
         minimize.run_sd(**sd_kw)
-        pycharmm.lingo.charmm_script("ENER")
+        run_charmm_script_quiet("ENER")
         grms = float(charmm_grms())
         angl_after = charmm_bonded_term_kcalmol("ANGL")
         if config.verbose:

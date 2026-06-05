@@ -71,13 +71,16 @@ END
 """
     return block
 
-def reset_block():
+def reset_block() -> None:
     block = """BLOCK 
         CALL 1 SELE ALL END
           COEFF 1 1 1.0 
         END
         """
-    _ = pycharmm.lingo.charmm_script(block)
+    from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
+
+    run_charmm_script_quiet(block)
+    print("CHARMM BLOCK: full MM (all atoms, COEFF 1.0)", flush=True)
 
 
 def should_skip_charmm_energy_show() -> bool:

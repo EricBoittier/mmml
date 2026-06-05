@@ -107,7 +107,9 @@ def _current_charmm_energy_kcalmol() -> float | None:
         import pycharmm
         import pycharmm.energy as energy
 
-        pycharmm.lingo.charmm_script("ENER")
+        from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
+
+        run_charmm_script_quiet("ENER")
         row = energy.get_energy().iloc[0].to_dict()
         for key in ("ENER", "ENERgy", "ENERGY"):
             if key in row:

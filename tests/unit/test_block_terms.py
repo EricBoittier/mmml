@@ -22,13 +22,16 @@ def test_mlpot_block_all_atoms_zeros_elec_vdw_no_impr():
     sel = mock.Mock()
     sel.get_atom_indexes.return_value = list(range(10))
     sel.store = mock.Mock()
+    scripts: list[str] = []
 
-    with mock.patch.object(block_terms, "_import_pycharmm") as imp:
+    with mock.patch.object(block_terms, "_import_pycharmm") as imp, mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
+        side_effect=scripts.append,
+    ):
         imp.return_value.coor.get_natom.return_value = 10
-        imp.return_value.lingo.charmm_script = mock.Mock()
         block_terms.apply_mlpot_energy_block(sel)
 
-    script = imp.return_value.lingo.charmm_script.call_args[0][0]
+    script = scripts[0]
     assert "IMPr" not in script and "IMPR" not in script
     assert "ELEC 0.0" in script
     assert "VDW 0.0" in script
@@ -45,12 +48,16 @@ def test_mlpot_block_partial_ml_zeros_ml_block_elec_vdw():
     sel.get_atom_indexes.return_value = [0, 1, 2]
     sel.store.return_value = "mmml_ml"
 
-    with mock.patch.object(block_terms, "_import_pycharmm") as imp:
+    scripts: list[str] = []
+
+    with mock.patch.object(block_terms, "_import_pycharmm") as imp, mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
+        side_effect=scripts.append,
+    ):
         imp.return_value.coor.get_natom.return_value = 10
-        imp.return_value.lingo.charmm_script = mock.Mock()
         tag = block_terms.apply_mlpot_energy_block(sel)
 
     assert tag == "mmml_ml"
-    script = imp.return_value.lingo.charmm_script.call_args[0][0]
+    script = scripts[0]
     assert "COEFF 2 2 0.0 BOND 0.0 ANGL 0.0 DIHEdral 0.0 ELEC 0.0 VDW 0.0" in script
     assert "COEFF 1 2 0.0" in script
