@@ -28,7 +28,7 @@ CLI flags live in `cli_common.add_charmm_output_args()`; stage builders in `dyna
 
 **Staged heating:** `--n-heat-segments N` splits `--ps-heat` into short chained restarts (`heat_{tag}.0.res`, …) with overlap rescue between segments. Default DCM:9 script uses `N_HEAT_SEGMENTS=4` (5 ps per segment for 20 ps total). Each segment gets a linear slice of `--heat-firstt`→`--heat-finalt`. With `n_heat_segments=1`, heat stays one overlap segment (`check_interval = nstep`). Before each heat `dyna`, `finalize_heat_dynamics_frequencies()` harmonizes `ihtfrq` / `iprfrq` with `nstep` and recomputes `TEMINC`.
 
-**ML/MM cutoffs (DCM:9 script defaults):** `--mm-switch-on 7` (ML handoff / sparse-dimer radius), `--mm-switch-width 5` (MM outer taper). Override with `MM_SWITCH_ON` / `MM_SWITCH_WIDTH` env vars. Plots: [`docs/mlpot-settings.md`](../../../../docs/mlpot-settings.md) (regenerate with `uv run python scripts/plot_mlpot_settings.py`).
+**ML/MM cutoffs (code defaults):** `--mm-switch-on 7` (ML handoff / sparse-dimer radius), `--mm-switch-width 5` (MM outer taper). `run_dcm9_stability.sh` passes the same values explicitly via `MM_SWITCH_ON` / `MM_SWITCH_WIDTH`. Plots: [`docs/mlpot-settings.md`](../../../../docs/mlpot-settings.md) (regenerate with `uv run python scripts/plot_mlpot_settings.py`).
 
 Example for rare heating banners:
 
@@ -92,7 +92,7 @@ Full technical reference for CHARMM vs Python neighbor lists and `inbfrq` behavi
 | **MM weight `s_MM(r)`** | Goes to **0** when dimer COM is in the pure-ML zone (complementary handoff) |
 | **`mm_r_min`** | Extra inner rule on **MM only**: scale MM to zero when dimer COM &lt; `mm_r_min` (~6.2 Å with default handoff). Does **not** remove atoms or monomers |
 
-Neighbor lists for large PBC systems use an outer cutoff **`mm_switch_on + mm_switch_width` (7 Å with defaults 5.5 + 1.5)** plus optional jax-md skin — pairs near that cutoff stay listed so they can enter range later. That is separate from `mm_r_min`.
+Neighbor lists for large PBC systems use an outer cutoff **`mm_switch_on + mm_switch_width` (12 Å with defaults 7 + 5)** plus optional jax-md skin — pairs near that cutoff stay listed so they can enter range later. That is separate from `mm_r_min`.
 
 ## Trajectory files
 

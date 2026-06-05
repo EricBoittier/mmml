@@ -129,7 +129,7 @@ def main() -> int:
     parser.add_argument(
         "--mm-switch-on",
         type=float,
-        default=5.5,
+        default=7.0,
         help="COM distance cutoff (Å), must match CutoffParameters.mm_switch_on",
     )
     parser.add_argument("--box-size", type=float, default=None, help="Cubic PBC side (Å)")

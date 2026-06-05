@@ -37,16 +37,20 @@ import numpy as np
 GAMMA_ON: float = 1.0
 GAMMA_OFF: float = 3.0
 
+# Default ML/MM handoff widths (Å); used by md-system, PyCHARMM MLpot, and calculators.
+DEFAULT_MM_SWITCH_ON: float = 7.0
+DEFAULT_MM_SWITCH_WIDTH: float = 5.0
+
 
 def handoff_widths_from_args(args) -> tuple[float, float, float]:
     """Return (ml_switch_width, mm_switch_on, mm_switch_width) from CLI/config namespace."""
     ml_w = getattr(args, "ml_switch_width", None)
     if ml_w is None:
         ml_w = getattr(args, "ml_cutoff", 0.1)
-    mm_on = float(getattr(args, "mm_switch_on", 5.5))
+    mm_on = float(getattr(args, "mm_switch_on", DEFAULT_MM_SWITCH_ON))
     mm_w = getattr(args, "mm_switch_width", None)
     if mm_w is None:
-        mm_w = getattr(args, "mm_cutoff", 1.5)
+        mm_w = getattr(args, "mm_cutoff", DEFAULT_MM_SWITCH_WIDTH)
     return float(ml_w), mm_on, float(mm_w)
 
 
@@ -75,16 +79,16 @@ def add_handoff_cutoff_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--mm-switch-on",
         type=float,
-        default=5.5,
-        help="Distance (Å) where ML→0 and MM→1 in complementary handoff (default: 5.5).",
+        default=DEFAULT_MM_SWITCH_ON,
+        help=f"Distance (Å) where ML→0 and MM→1 in complementary handoff (default: {DEFAULT_MM_SWITCH_ON:g}).",
     )
     parser.add_argument(
         "--mm-switch-width",
         "--mm-cutoff",
         dest="mm_switch_width",
         type=float,
-        default=1.5,
-        help="MM outer taper width in Å past mm_switch_on (default: 1.5).",
+        default=DEFAULT_MM_SWITCH_WIDTH,
+        help=f"MM outer taper width in Å past mm_switch_on (default: {DEFAULT_MM_SWITCH_WIDTH:g}).",
     )
     parser.add_argument(
         "--no-complementary-handoff",
@@ -122,8 +126,8 @@ class CutoffParameters:
     def __init__(
         self,
         ml_switch_width: float = 0.1,
-        mm_switch_on: float = 5.5,
-        mm_switch_width: float = 1.5,
+        mm_switch_on: float = DEFAULT_MM_SWITCH_ON,
+        mm_switch_width: float = DEFAULT_MM_SWITCH_WIDTH,
         *,
         complementary_handoff: bool = True,
         # Deprecated aliases (same semantics as the canonical names above).
@@ -298,8 +302,10 @@ class CutoffParameters:
             ml_switch_width=d.get(
                 "ml_switch_width", d.get("ml_cutoff", d.get("ml_cutoff_distance", 0.1))
             ),
-            mm_switch_on=d.get("mm_switch_on", 5.5),
-            mm_switch_width=d.get("mm_switch_width", d.get("mm_cutoff", 1.5)),
+            mm_switch_on=d.get("mm_switch_on", DEFAULT_MM_SWITCH_ON),
+            mm_switch_width=d.get(
+                "mm_switch_width", d.get("mm_cutoff", DEFAULT_MM_SWITCH_WIDTH)
+            ),
             complementary_handoff=d.get("complementary_handoff", True),
         )
 

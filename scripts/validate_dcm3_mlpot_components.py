@@ -72,8 +72,8 @@ def _parse_args() -> argparse.Namespace:
         help="Packmol sphere radius when building reference cluster",
     )
     p.add_argument("--atoms-per-monomer", type=int, default=5)
-    p.add_argument("--mm-switch-on", type=float, default=5.5)
-    p.add_argument("--mm-switch-width", type=float, default=1.5)
+    p.add_argument("--mm-switch-on", type=float, default=7.0)
+    p.add_argument("--mm-switch-width", type=float, default=5.0)
     p.add_argument("--ml-switch-width", type=float, default=0.1)
     p.add_argument("--scan-1d-min", type=float, default=2.0)
     p.add_argument("--scan-1d-max", type=float, default=10.0)

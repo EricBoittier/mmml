@@ -12,6 +12,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from mmml.interfaces.pycharmmInterface.cutoffs import (
+    DEFAULT_MM_SWITCH_ON,
+    DEFAULT_MM_SWITCH_WIDTH,
+)
+
 _DEFAULT_OUTPUT_DIR_STEMS = frozenset({"pycharmm_mlpot", "lambda_ti"})
 
 
@@ -837,16 +842,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--mm-switch-on",
         type=float,
-        default=5.5,
-        help="MM handoff distance (Å); ML→0 / MM→1 at this COM separation (default: 5.5).",
+        default=DEFAULT_MM_SWITCH_ON,
+        help=(
+            f"MM handoff distance (Å); ML→0 / MM→1 at this COM separation "
+            f"(default: {DEFAULT_MM_SWITCH_ON:g})."
+        ),
     )
     parser.add_argument(
         "--mm-cutoff",
         "--mm-switch-width",
         dest="mm_switch_width",
         type=float,
-        default=1.5,
-        help="MM outer taper width (Å) past mm_switch_on (default: 1.5).",
+        default=DEFAULT_MM_SWITCH_WIDTH,
+        help=(
+            f"MM outer taper width (Å) past mm_switch_on "
+            f"(default: {DEFAULT_MM_SWITCH_WIDTH:g})."
+        ),
     )
     parser.add_argument(
         "--mlpot-mm-internal-scale",
@@ -1383,11 +1394,19 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
             str(getattr(args, "dynamics_overlap_separate_margin", 0.2)),
         ]
     )
-    cmd.extend(["--mm-switch-on", str(getattr(args, "mm_switch_on", 5.5))])
+    cmd.extend(
+        ["--mm-switch-on", str(getattr(args, "mm_switch_on", DEFAULT_MM_SWITCH_ON))]
+    )
     cmd.extend(
         [
             "--mm-switch-width",
-            str(getattr(args, "mm_switch_width", getattr(args, "mm_cutoff", 1.5))),
+            str(
+                getattr(
+                    args,
+                    "mm_switch_width",
+                    getattr(args, "mm_cutoff", DEFAULT_MM_SWITCH_WIDTH),
+                )
+            ),
         ]
     )
     cmd.extend(

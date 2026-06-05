@@ -212,7 +212,12 @@ kcalmol2ev = 1.0 / ev2kcalmol
 # Module-level configuration ------------------------------------------------
 
 SPATIAL_DIMS: int = 3  # Number of spatial dimensions (x, y, z)
-from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters, GAMMA_ON
+from mmml.interfaces.pycharmmInterface.cutoffs import (
+    DEFAULT_MM_SWITCH_ON,
+    DEFAULT_MM_SWITCH_WIDTH,
+    CutoffParameters,
+    GAMMA_ON,
+)
 
 
 def set_pycharmm_xyz(atom_positions):
@@ -293,8 +298,8 @@ def setup_calculator(
     ATOMS_PER_MONOMER: Union[int, List[int], Sequence[int]],
     N_MONOMERS: int = 2,
     ml_switch_width: float = 0.1,
-    mm_switch_on: float = 5.5,
-    mm_switch_width: float = 1.5,
+    mm_switch_on: float = DEFAULT_MM_SWITCH_ON,
+    mm_switch_width: float = DEFAULT_MM_SWITCH_WIDTH,
     ml_cutoff_distance: float | None = None,
     mm_cutoff: float | None = None,
     complementary_handoff: bool = True,

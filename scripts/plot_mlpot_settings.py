@@ -20,8 +20,8 @@ from mmml.interfaces.pycharmmInterface.cutoffs import (  # noqa: E402
 CUTOFF_PRESETS: list[tuple[str, str, CutoffParameters]] = [
     (
         "code-default",
-        "Code default (5.5 / 1.5 / 0.1 Å)",
-        CutoffParameters(ml_switch_width=0.1, mm_switch_on=5.5, mm_switch_width=1.5),
+        "Code default (7 / 5 / 0.1 Å)",
+        CutoffParameters(ml_switch_width=0.1, mm_switch_on=7.0, mm_switch_width=5.0),
     ),
     (
         "dcm9-stability",

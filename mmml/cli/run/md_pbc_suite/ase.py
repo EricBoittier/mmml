@@ -51,6 +51,10 @@ from ase.calculators.calculator import PropertyNotImplementedError
 import mmml.interfaces.pycharmmInterface.import_pycharmm as pyci
 from mmml.cli.base import resolve_checkpoint_paths
 from mmml.interfaces.pycharmmInterface.import_pycharmm import reset_block, reset_block_no_internal
+from mmml.interfaces.pycharmmInterface.cutoffs import (
+    DEFAULT_MM_SWITCH_ON,
+    DEFAULT_MM_SWITCH_WIDTH,
+)
 from mmml.interfaces.pycharmmInterface.mmml_calculator import CutoffParameters, setup_calculator
 from mmml.utils.geometry_checks import assert_no_intermonomer_atom_overlap
 from mmml.utils.jax_gpu_warmup import warmup_ase_mmml_energy_forces
@@ -1158,8 +1162,8 @@ def main(argv: list[str] | None = None) -> int:
         help="Split trajectory into multiple files with at most this many frames each (0 = single file).",
     )
     parser.add_argument("--ml-cutoff", type=float, default=0.1)
-    parser.add_argument("--mm-switch-on", type=float, default=5.5)
-    parser.add_argument("--mm-cutoff", type=float, default=2.0)
+    parser.add_argument("--mm-switch-on", type=float, default=DEFAULT_MM_SWITCH_ON)
+    parser.add_argument("--mm-cutoff", type=float, default=DEFAULT_MM_SWITCH_WIDTH)
     parser.add_argument("--pre-min-fmax", type=float, default=0.1)
     parser.add_argument("--pre-min-steps", type=int, default=50)
     parser.add_argument(

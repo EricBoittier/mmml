@@ -15,6 +15,11 @@ from typing import Any, Dict, Tuple
 
 import numpy as np
 
+from mmml.interfaces.pycharmmInterface.cutoffs import (
+    DEFAULT_MM_SWITCH_ON,
+    DEFAULT_MM_SWITCH_WIDTH,
+)
+
 _PKG_ROOT = Path(__file__).resolve().parent.parent
 _BUNDLED_LEGACY_MEOH_PATH = (
     _PKG_ROOT / "models" / "physnetjax" / "defaults" / "meoh_dimer_portable.json"
@@ -87,16 +92,22 @@ def parse_base_args() -> argparse.Namespace:
     parser.add_argument(
         "--mm-switch-on",
         type=float,
-        default=5.5,
-        help="Distance (Å) where ML→0 and MM→1 in complementary handoff (default: 5.5).",
+        default=DEFAULT_MM_SWITCH_ON,
+        help=(
+            f"Distance (Å) where ML→0 and MM→1 in complementary handoff "
+            f"(default: {DEFAULT_MM_SWITCH_ON:g})."
+        ),
     )
     parser.add_argument(
         "--mm-switch-width",
         "--mm-cutoff",
         dest="mm_switch_width",
         type=float,
-        default=1.5,
-        help="MM outer taper width in Å past mm_switch_on (default: 1.5).",
+        default=DEFAULT_MM_SWITCH_WIDTH,
+        help=(
+            f"MM outer taper width in Å past mm_switch_on "
+            f"(default: {DEFAULT_MM_SWITCH_WIDTH:g})."
+        ),
     )
     parser.add_argument(
         "--include-mm",
