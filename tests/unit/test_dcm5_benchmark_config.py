@@ -25,6 +25,15 @@ from benchmark_lib import (  # noqa: E402
 EXPECTED_JOB_COUNT = 15
 
 
+@pytest.fixture(scope="module", autouse=True)
+def dcm5_test_checkpoint() -> Path:
+    """Create a dummy checkpoint dir so ``resolve_checkpoint`` passes in CI."""
+    ckpt = Path("/tmp/dcm5_test_ckpt")
+    ckpt.mkdir(parents=True, exist_ok=True)
+    os.environ["MMML_CKPT"] = str(ckpt)
+    return ckpt
+
+
 @pytest.fixture(scope="module")
 def cfg() -> dict:
     return load_config(WORKFLOW_ROOT / "config.yaml")
