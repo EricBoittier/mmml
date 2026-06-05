@@ -88,7 +88,12 @@ def _skip_if_runtime_incompatible(exc: Exception) -> None:
 
 
 def _stable_pbc_force_gradient_positions() -> np.ndarray:
-	"""Synthetic two-monomer geometry with no short C-C contacts."""
+	"""Synthetic two-monomer geometry with no short C-C contacts.
+
+	The 3.5 Å template spans ~7 Å per monomer, so non-overlapping monomers sit
+	≥7 Å apart (COM ≈14 Å here) and ML dimer terms are off with default cutoffs.
+	Use ``doML_dimer=False`` for finite-difference gradient checks.
+	"""
 	monomer_template = np.array(
 		[
 			[0.0, 0.0, 0.0],
@@ -498,6 +503,10 @@ def test_pbc_force_gradient_numerical():
 	"""
 	Numerical gradient of energy vs positions; compare against atoms.get_forces()
 	to ensure forces match -dE/dR (MIC-only, no coordinate transform).
+
+	Monomer-only (``doML_dimer=False``): the stable 3.5 Å template cannot place
+	non-overlapping dimers inside the default ML taper (COM < mm_switch_on).
+	Uses ``backprop=False`` so ASE forces follow production ModelOutput.forces.
 	"""
 	if not _can_import("jax"):
 		pytest.skip("jax not available in this environment")
@@ -521,6 +530,7 @@ def test_pbc_force_gradient_numerical():
 		N_MONOMERS=2,
 		doML=True,
 		doMM=False,
+		doML_dimer=False,
 		model_restart_path=ckpt,
 		MAX_ATOMS_PER_SYSTEM=20,
 		cell=cell_length,
@@ -530,7 +540,7 @@ def test_pbc_force_gradient_numerical():
 		[0, cell_length, 0],
 		[0, 0, cell_length],
 	])
-	R = _stable_pbc_force_gradient_positions()
+	R = _stable_pbc_force_gradient_positions().astype(np.float32)
 	Z = np.array([6] * 20)
 	cutoff_params = CutoffParameters()
 
@@ -540,6 +550,7 @@ def test_pbc_force_gradient_numerical():
 			atomic_positions=R,
 			n_monomers=2,
 			cutoff_params=cutoff_params,
+			backprop=False,
 		)
 	)
 
