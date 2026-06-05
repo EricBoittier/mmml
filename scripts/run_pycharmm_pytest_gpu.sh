@@ -12,10 +12,10 @@
 #   ./scripts/run_pycharmm_pytest_gpu.sh tests/functionality/mlpot/test_mlpot_energy_matches_ase.py -q
 #
 # Selections (MMML_PYTEST_SELECTION):
-#   gpu      — -m "pycharmm and gpu"  (default; ML + CHARMM integration)
+#   gpu      — -m "pycharmm and gpu"  (default; ML + CHARMM integration + short NVE/heat smoke)
 #   pycharmm — -m pycharmm            (all live PyCHARMM tests)
 #   smoke    — -m "pycharmm and not gpu" (CHARMM-only, no checkpoint/GPU ML)
-#   mlpot    — -m mlpot               (MLpot-focused subset)
+#   mlpot    — -m mlpot               (MLpot-focused subset incl. test_mlpot_dynamics_smoke)
 #   quick    — fast mocked CLI/unit checks before the heavy suite
 #
 set -euo pipefail
