@@ -128,6 +128,44 @@ def test_collect_sweep_flags_fail_energy(tmp_path) -> None:
     assert sane["b"][0] == 200.0
 
 
+def test_collect_sweep_write_report(tmp_path) -> None:
+    sys.path.insert(0, str(_REPO / "workflows" / "dcm3_nve_cutoff_sweep" / "scripts"))
+    from collect_sweep import _write_report
+
+    rows = [
+        {
+            "preset_id": "dcm9_stability",
+            "geom_id": "far",
+            "mm_switch_on": 7.0,
+            "mm_switch_width": 5.0,
+            "ml_switch_width": 0.1,
+            "etot_std_kcal": 100.0,
+            "max_abs_etot_step_delta_kcal": 20.0,
+            "etot_drift_kcal": 50.0,
+            "smoothness_score": 125.0,
+            "status": "pass",
+        },
+        {
+            "preset_id": "handoff_7p5",
+            "geom_id": "far",
+            "mm_switch_on": 7.5,
+            "mm_switch_width": 5.0,
+            "ml_switch_width": 0.1,
+            "etot_std_kcal": 1.0e9,
+            "max_abs_etot_step_delta_kcal": 1.0e9,
+            "etot_drift_kcal": 1.0e9,
+            "smoothness_score": 1.0e9,
+            "status": "fail_energy",
+        },
+    ]
+    cfg = {"composition": "DCM:3", "ps_nve": 5.0, "dt_fs": 0.25}
+    md_path = tmp_path / "report.md"
+    _write_report(rows, md_path, cfg, catastrophe=10000.0)
+    text = md_path.read_text(encoding="utf-8")
+    assert "excluding `fail_energy`" in text
+    assert "**Suggested preset (lowest sane mean):** `dcm9_stability`" in text
+
+
 def test_prepare_geometry_shell_uses_mpirun_wrapper_for_script() -> None:
     sh = (
         _REPO
