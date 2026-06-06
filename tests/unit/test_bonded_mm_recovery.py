@@ -975,6 +975,241 @@ def test_rewrite_dynamics_restart_writes_current_state(tmp_path):
     assert "write restart unit 92" in script
 
 
+def test_restore_charmm_state_from_restart_parses_and_syncs_positions(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        restore_charmm_state_from_restart,
+    )
+
+    restart = tmp_path / "prior.res"
+    restart.write_text(
+        "REST     0     1\n"
+        "       2 !NTITLE followed by title\n"
+        "* test\n"
+        "\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        "         2           0           0           0           0           0           0\n"
+        "\n"
+        " !X, Y, Z\n"
+        " 0.100000000000000D+00 0.200000000000000D+00 0.300000000000000D+00\n"
+        " 0.400000000000000D+00 0.500000000000000D+00 0.600000000000000D+00\n"
+    )
+    expected = np.array(
+        [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]],
+        dtype=float,
+    )
+    mock_py = MagicMock()
+    synced: list[np.ndarray] = []
+
+    def _capture_sync(pos):
+        synced.append(np.asarray(pos, dtype=float))
+
+    with patch.dict(
+        "sys.modules",
+        {
+            "pycharmm": mock_py,
+            "mmml.interfaces.pycharmmInterface.import_pycharmm": MagicMock(),
+        },
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        return_value=__import__("contextlib").nullcontext(),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        side_effect=_capture_sync,
+    ):
+        restore_charmm_state_from_restart(restart, read_unit=93)
+
+    assert len(synced) == 1
+    assert np.allclose(synced[0], expected)
+    script = mock_py.lingo.charmm_script.call_args[0][0]
+    assert "open read unit 93" in script
+    assert str(restart) in script
+    assert "read restart unit 93" in script
+
+
+def test_restore_charmm_state_from_restart_raises_without_finite_coords(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        restore_charmm_state_from_restart,
+    )
+
+    restart = tmp_path / "bad.res"
+    restart.write_text(
+        "REST     0     1\n"
+        "       2 !NTITLE followed by title\n"
+        "* test\n"
+        "\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        "         1           0           0           0           0           0           0\n"
+        "\n"
+        " !X, Y, Z\n"
+        "          NaN 0.200000000000000D+00 0.300000000000000D+00\n"
+    )
+    with pytest.raises(RuntimeError, match="no finite Cartesian coordinates"):
+        restore_charmm_state_from_restart(restart)
+
+
+def test_reload_pre_mlpot_topology_uses_explicit_positions_not_charmm_array(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        _reload_pre_mlpot_topology,
+    )
+
+    topo = tmp_path / "cluster.psf"
+    topo.write_text("psf", encoding="utf-8")
+    ctx = MagicMock()
+    ctx.use_pbc = False
+    ctx.charmm_cubic_box_side_A = None
+    ctx.cubic_box_side_A = None
+    explicit = np.array(
+        [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]],
+        dtype=float,
+    )
+    stale_nan = np.full((2, 3), np.nan)
+    synced: list[np.ndarray] = []
+
+    mock_py = MagicMock()
+    mock_read = MagicMock()
+    mock_py.read = mock_read
+
+    with patch.dict(
+        "sys.modules",
+        {
+            "pycharmm": mock_py,
+            "pycharmm.read": mock_read,
+            "mmml.interfaces.pycharmmInterface.import_pycharmm": MagicMock(),
+        },
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        return_value=__import__("contextlib").nullcontext(),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        return_value=stale_nan,
+    ) as get_pos, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        side_effect=lambda pos: synced.append(np.asarray(pos, dtype=float)),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.setup_default_nbonds",
+    ):
+        _reload_pre_mlpot_topology(ctx, topology_psf=topo, positions=explicit)
+
+    get_pos.assert_not_called()
+    assert len(synced) == 1
+    assert np.allclose(synced[0], explicit)
+    mock_read.psf_card.assert_called_once_with(str(topo.resolve()))
+    ctx.unset.assert_called_once()
+
+
+def test_reload_pre_mlpot_topology_raises_on_nonfinite_explicit_positions(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        _reload_pre_mlpot_topology,
+    )
+
+    topo = tmp_path / "cluster.psf"
+    topo.write_text("psf", encoding="utf-8")
+    ctx = MagicMock()
+    bad = np.array([[1.0, np.nan, 3.0]], dtype=float)
+
+    with pytest.raises(RuntimeError, match="pre-MLpot topology reload requires finite"):
+        _reload_pre_mlpot_topology(ctx, topology_psf=topo, positions=bad)
+
+
+def test_reload_pre_mlpot_topology_default_reads_finite_charmm_positions(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        _reload_pre_mlpot_topology,
+    )
+
+    topo = tmp_path / "cluster.psf"
+    topo.write_text("psf", encoding="utf-8")
+    ctx = MagicMock()
+    ctx.use_pbc = False
+    ctx.charmm_cubic_box_side_A = None
+    ctx.cubic_box_side_A = None
+    from_charmm = np.array([[7.0, 8.0, 9.0]], dtype=float)
+    synced: list[np.ndarray] = []
+
+    mock_py = MagicMock()
+    mock_read = MagicMock()
+    mock_py.read = mock_read
+
+    with patch.dict(
+        "sys.modules",
+        {
+            "pycharmm": mock_py,
+            "pycharmm.read": mock_read,
+            "mmml.interfaces.pycharmmInterface.import_pycharmm": MagicMock(),
+        },
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        return_value=__import__("contextlib").nullcontext(),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        return_value=from_charmm,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        side_effect=lambda pos: synced.append(np.asarray(pos, dtype=float)),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.setup_default_nbonds",
+    ):
+        _reload_pre_mlpot_topology(ctx, topology_psf=topo)
+
+    assert len(synced) == 1
+    assert np.allclose(synced[0], from_charmm)
+
+
+def test_run_extent_recovery_passes_restart_coords_to_all_ml_path(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        run_extent_recovery_from_prior_restart,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        DynamicsOverlapConfig,
+        OverlapRescueConfig,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+
+    restart = tmp_path / "prior.res"
+    restart.write_text(
+        "REST     0     1\n"
+        "       2 !NTITLE followed by title\n"
+        "* test\n"
+        "\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        "         2           0           0           0           0           0           0\n"
+        "\n"
+        " !X, Y, Z\n"
+        " 0.100000000000000D+00 0.200000000000000D+00 0.300000000000000D+00\n"
+        " 0.400000000000000D+00 0.500000000000000D+00 0.600000000000000D+00\n"
+    )
+    expected = np.array(
+        [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]],
+        dtype=float,
+    )
+    topo = tmp_path / "cluster.psf"
+    topo.write_text("psf", encoding="utf-8")
+    ctx = MagicMock(spec=MlpotContext)
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        min_distance_A=0.0,
+        n_monomers=1,
+        use_pbc=False,
+        topology_psf=topo,
+        rescue=OverlapRescueConfig(nstep_sd=10, verbose=False),
+    )
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_restart",
+    ) as restore, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._mlpot_covers_all_atoms",
+        return_value=True,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_all_ml_extent_recovery",
+    ) as extent_path, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_bonded_mm_recovery",
+    ) as light:
+        run_extent_recovery_from_prior_restart(ctx, cfg, prior_restart=restart)
+
+    restore.assert_called_once_with(restart)
+    extent_path.assert_called_once()
+    assert np.allclose(extent_path.call_args.kwargs["positions"], expected)
+    light.assert_not_called()
+
+
 def argparse_namespace(**kwargs):
     import argparse
 

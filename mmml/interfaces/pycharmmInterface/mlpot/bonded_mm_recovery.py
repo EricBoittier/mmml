@@ -73,10 +73,6 @@ def restore_charmm_state_from_restart(
     read_unit: int = 93,
 ) -> None:
     """Load coordinates (and crystal state) from a CHARMM restart into memory."""
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-    import pycharmm
-
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_restart_coordinates,
     )
@@ -90,6 +86,12 @@ def restore_charmm_state_from_restart(
         raise RuntimeError(
             f"restart {path.name} has no finite Cartesian coordinates in !X, Y, Z"
         )
+
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import pycharmm
+
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+
     with charmm_relaxed_bomlev():
         pycharmm.lingo.charmm_script(
             f"open read unit {int(read_unit)} name {path}\n"
@@ -573,12 +575,6 @@ def _reload_pre_mlpot_topology(
     positions: np.ndarray | None = None,
 ) -> None:
     """Replace MLpot-mutated PSF with the saved pre-MLpot topology."""
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-    import pycharmm
-    import pycharmm.read as read
-
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
         setup_default_nbonds,
@@ -594,6 +590,14 @@ def _reload_pre_mlpot_topology(
             "pre-MLpot topology reload requires finite coordinates "
             f"(got {int(np.sum(~np.isfinite(current_positions)))} non-finite values)"
         )
+
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import pycharmm
+    import pycharmm.read as read
+
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
+
     ctx.unset()
     with charmm_relaxed_bomlev():
         pycharmm.lingo.charmm_script(
