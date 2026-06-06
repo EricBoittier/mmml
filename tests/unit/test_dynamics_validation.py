@@ -12,8 +12,11 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
     assert_stage_dynamics_completed,
     count_dcd_frames,
     expected_dcd_frame_count,
+    read_restart_coordinates,
     read_restart_last_step,
+    read_restart_natom,
     restart_has_nonfinite_coordinates,
+    _restart_coordinate_values,
 )
 from mmml.utils.dcd_writer import concat_dcd_files, save_trajectory_dcd
 
@@ -290,11 +293,6 @@ def test_read_restart_last_step_real_fixture():
 
 
 def test_read_restart_coordinates_from_fixture():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
-        read_restart_coordinates,
-        read_restart_natom,
-    )
-
     stub = (
         Path(__file__).resolve().parents[1]
         / "functionality/mlpot/output/dynamics/nve_stub.res"
@@ -305,6 +303,87 @@ def test_read_restart_coordinates_from_fixture():
     assert pos is not None
     assert pos.shape == (20, 3)
     assert np.all(np.isfinite(pos))
+    assert pos[0, 0] == pytest.approx(1.38193103193303e-3)
+    assert pos[0, 1] == pytest.approx(1.13107354438552e-3)
+    assert pos[0, 2] == pytest.approx(2.29160874829407e-3)
+    # Concatenated Fortran floats on line 537 of the fixture (atom 2).
+    assert pos[1, 0] == pytest.approx(-9.35100401619100e-4)
+    assert pos[1, 1] == pytest.approx(2.56810137565518e-4)
+    assert pos[1, 2] == pytest.approx(-7.53960710226643e-4)
+
+
+def _minimal_restart_text(*, natom: int, coord_lines: list[str]) -> str:
+    return (
+        "REST     0     1\n"
+        "       2 !NTITLE followed by title\n"
+        "* minimal restart for unit tests\n"
+        "\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        f"         {natom}           0           0           0           0           0           0\n"
+        "\n"
+        " !X, Y, Z\n"
+        + "\n".join(coord_lines)
+        + "\n"
+    )
+
+
+def test_restart_coordinate_values_splits_concatenated_fortran_floats(tmp_path):
+    """Whitespace split misses glued tokens like ``D-03-0.753...``."""
+    path = tmp_path / "concat.res"
+    path.write_text(
+        _minimal_restart_text(
+            natom=2,
+            coord_lines=[
+                " 0.256810137565518D-03-0.753960710226643D-03 0.100000000000000D+00",
+                " 0.200000000000000D+00 0.300000000000000D+00 0.400000000000000D+00",
+            ],
+        )
+    )
+    flat = _restart_coordinate_values(path)
+    assert len(flat) == 6
+    assert flat[0] == pytest.approx(2.56810137565518e-4)
+    assert flat[1] == pytest.approx(-7.53960710226643e-4)
+    assert flat[2] == pytest.approx(0.1)
+
+    pos = read_restart_coordinates(path)
+    assert pos is not None
+    assert pos.shape == (2, 3)
+    assert np.allclose(pos[0], flat[:3])
+    assert np.allclose(pos[1], flat[3:])
+
+
+def test_read_restart_coordinates_returns_none_when_too_few_values(tmp_path):
+    path = tmp_path / "short.res"
+    path.write_text(
+        _minimal_restart_text(
+            natom=3,
+            coord_lines=[" 0.100000000000000D+00 0.200000000000000D+00"],
+        )
+    )
+    assert read_restart_coordinates(path) is None
+
+
+def test_restart_has_nonfinite_coordinates_detects_nan_in_coord_section(tmp_path):
+    path = tmp_path / "nan.res"
+    path.write_text(
+        _minimal_restart_text(
+            natom=1,
+            coord_lines=[" 0.100000000000000D+00          NaN 0.300000000000000D+00"],
+        )
+    )
+    assert read_restart_coordinates(path) is None
+    assert restart_has_nonfinite_coordinates(path) is True
+
+
+def test_restart_has_nonfinite_coordinates_false_for_finite_restart(tmp_path):
+    path = tmp_path / "ok.res"
+    path.write_text(
+        _minimal_restart_text(
+            natom=1,
+            coord_lines=[" 0.100000000000000D+00 0.200000000000000D+00 0.300000000000000D+00"],
+        )
+    )
+    assert restart_has_nonfinite_coordinates(path) is False
 
 
 def test_assert_stage_dynamics_completed_fails_truncated(tmp_path):
