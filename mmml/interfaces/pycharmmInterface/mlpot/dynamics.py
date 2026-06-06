@@ -2206,12 +2206,18 @@ def run_dynamics_with_io(
         apply_loose_pbc_dyn_freq_kwargs(kw, nstep=total_nstep)
     elif total_nstep > 0:
         _ensure_ntrfrq_above_nstep(kw, total_nstep)
-    if (
-        overlap is None
-        or not isinstance(overlap, DynamicsOverlapConfig)
-        or not overlap.enabled
-        or total_nstep <= 0
-    ):
+    guard_active = (
+        overlap is not None
+        and isinstance(overlap, DynamicsOverlapConfig)
+        and (overlap.enabled or overlap.intra_enabled or overlap.extent_enabled)
+    )
+    if guard_active and io is not None and io.restart_read is not None:
+        prior = Path(io.restart_read)
+        if prior.is_file() and overlap.prior_segment_restart is None:
+            from dataclasses import replace
+
+            overlap = replace(overlap, prior_segment_restart=prior)
+    if not guard_active or total_nstep <= 0:
         last_dyn = _run_dynamics_chunk(
             kw,
             io,

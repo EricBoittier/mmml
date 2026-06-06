@@ -27,6 +27,15 @@ class IntramonomerCloseContact:
     distance_A: float
 
 
+@dataclass(frozen=True)
+class MonomerExtentViolation:
+    """Monomer whose axis-aligned bounding box exceeds the allowed span."""
+
+    monomer: int
+    extent_A: float
+    atom_start: int
+
+
 def _cell_matrix(cell: Any | None) -> np.ndarray | None:
     if cell is None:
         return None
@@ -284,6 +293,73 @@ def find_worst_intramonomer_close_contact(
                         distance_A=dist,
                     )
     return best_dist, best
+
+
+def monomer_axis_extent(positions: np.ndarray, monomer_offsets: np.ndarray, monomer: int) -> float:
+    """Axis-aligned bounding-box span for one monomer (Å)."""
+    pos = np.asarray(positions, dtype=float)
+    offsets = np.asarray(monomer_offsets, dtype=int)
+    mi = int(monomer)
+    si, ei = int(offsets[mi]), int(offsets[mi + 1])
+    if ei <= si:
+        return 0.0
+    chunk = pos[si:ei]
+    return float(np.linalg.norm(chunk.max(axis=0) - chunk.min(axis=0)))
+
+
+def find_worst_monomer_extent(
+    positions: np.ndarray,
+    monomer_offsets: np.ndarray,
+) -> tuple[float, MonomerExtentViolation | None]:
+    """Return the largest monomer axis extent and the worst offender."""
+    pos = np.asarray(positions, dtype=float)
+    offsets = np.asarray(monomer_offsets, dtype=int)
+    n_monomers = int(len(offsets) - 1)
+    if n_monomers <= 0:
+        return 0.0, None
+
+    worst_extent = 0.0
+    worst: MonomerExtentViolation | None = None
+    for mi in range(n_monomers):
+        extent = monomer_axis_extent(pos, offsets, mi)
+        if extent > worst_extent:
+            worst_extent = extent
+            worst = MonomerExtentViolation(
+                monomer=mi,
+                extent_A=extent,
+                atom_start=int(offsets[mi]),
+            )
+    return worst_extent, worst
+
+
+def assert_monomer_extent_within_limit(
+    positions: np.ndarray,
+    monomer_offsets: np.ndarray,
+    *,
+    max_extent_A: float,
+    context: str = "geometry",
+) -> float:
+    """Raise if any monomer span exceeds ``max_extent_A`` or coords are non-finite."""
+    pos = np.asarray(positions, dtype=float)
+    if not np.all(np.isfinite(pos)):
+        n_bad = int(np.sum(~np.isfinite(pos)))
+        raise RuntimeError(
+            f"{context}: non-finite coordinates detected ({n_bad} atom(s))"
+        )
+
+    limit = float(max_extent_A)
+    if limit <= 0.0:
+        worst_extent, _ = find_worst_monomer_extent(pos, monomer_offsets)
+        return float(worst_extent)
+
+    worst_extent, violation = find_worst_monomer_extent(pos, monomer_offsets)
+    if violation is not None and worst_extent > limit:
+        raise RuntimeError(
+            f"{context}: monomer extent exceeded: "
+            f"monomer {violation.monomer + 1} (atom {violation.atom_start + 1}+) "
+            f"extent={worst_extent:.2f} A > max={limit:.2f} A"
+        )
+    return float(worst_extent)
 
 
 def assert_no_intramonomer_close_contact(

@@ -74,6 +74,8 @@ def test_resolve_defaults_to_rescue_and_1p5A():
     assert cfg.check_interval == 500
     assert cfg.enabled is True
     assert cfg.intra_enabled is True
+    assert cfg.extent_enabled is True
+    assert cfg.max_monomer_extent_A == pytest.approx(12.0)
     assert cfg.rescue.nstep_sd == 200
     assert cfg.rescue.nstep_abnr == 400
 
@@ -83,6 +85,14 @@ def test_resolve_off_disables_inter_and_intra():
     cfg = resolve_dynamics_overlap_config(args, n_monomers=4, use_pbc=False)
     assert cfg.enabled is False
     assert cfg.intra_enabled is False
+    assert cfg.extent_enabled is False
+
+
+def test_resolve_no_max_extent_disables_extent_guard():
+    args = argparse.Namespace(no_dynamics_max_monomer_extent=True)
+    cfg = resolve_dynamics_overlap_config(args, n_monomers=4, use_pbc=False)
+    assert cfg.extent_enabled is False
+    assert cfg.max_monomer_extent_A == 0.0
 
 
 def test_resolve_intra_min_distance_zero_disables_intra_only():
@@ -107,6 +117,7 @@ def test_overlap_cell_uses_fallback_when_pbound_zero():
             action="error",
             min_distance_A=1.5,
             intra_min_distance_A=0.0,
+            max_monomer_extent_A=0.0,
             n_monomers=2,
             use_pbc=True,
             fallback_box_side_A=30.0,
@@ -150,6 +161,65 @@ def test_check_overlap_raises_on_close_contact():
     ):
         with pytest.raises(RuntimeError, match="inter-monomer atom overlap"):
             check_dynamics_overlap(cfg, context="test", step=50)
+
+
+def test_check_extent_rescue_restores_prior_restart(tmp_path):
+    prior = tmp_path / "prior.res"
+    prior.write_text("prior restart\n")
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        min_distance_A=0.0,
+        intra_min_distance_A=0.0,
+        max_monomer_extent_A=12.0,
+        n_monomers=2,
+        use_pbc=False,
+        prior_segment_restart=prior,
+        rescue=OverlapRescueConfig(nstep_sd=10, nstep_abnr=0, verbose=False),
+    )
+    bad_pos = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [30.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+        ],
+        dtype=float,
+    )
+    good_pos = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [5.0, 0.0, 0.0],
+            [5.0, 1.0, 0.0],
+            [5.5, 0.5, 0.0],
+        ],
+        dtype=float,
+    )
+    ctx = mock.MagicMock()
+    positions = {"current": bad_pos.copy()}
+
+    def _get_pos():
+        return positions["current"]
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        side_effect=_get_pos,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_restart",
+        side_effect=lambda path: positions.update(current=good_pos.copy()),
+    ) as restore, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.run_intra_monomer_overlap_rescue",
+    ) as rescue:
+        extent, rescued = check_dynamics_overlap(
+            cfg, context="heat segment 2/2", step=1000, mlpot_ctx=ctx
+        )
+    restore.assert_called_once_with(prior)
+    rescue.assert_called_once()
+    assert rescued is True
+    assert extent == pytest.approx(np.sqrt(2.0))
 
 
 def test_check_intra_monomer_raises_on_close_contact():
@@ -233,6 +303,7 @@ def test_check_overlap_rescue_runs_minimize_and_rechecks():
         action="rescue",
         min_distance_A=1.5,
         intra_min_distance_A=0.0,
+        max_monomer_extent_A=0.0,
         n_monomers=2,
         use_pbc=False,
         rescue=OverlapRescueConfig(nstep_sd=10, nstep_abnr=0, verbose=False),
@@ -281,6 +352,7 @@ def test_check_overlap_rescue_applies_separation_last_resort():
         action="rescue",
         min_distance_A=1.5,
         intra_min_distance_A=0.0,
+        max_monomer_extent_A=0.0,
         n_monomers=2,
         use_pbc=False,
         rescue=OverlapRescueConfig(nstep_sd=10, nstep_abnr=0, verbose=False),

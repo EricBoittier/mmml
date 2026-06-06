@@ -46,6 +46,8 @@ class DynamicsOverlapConfig:
     rescue: OverlapRescueConfig = field(default_factory=OverlapRescueConfig)
     separate_on_rescue_fail: bool = True
     separate_margin_A: float = 0.2
+    max_monomer_extent_A: float = 12.0
+    prior_segment_restart: Path | None = None
     topology_psf: Path | None = None
     recovery_seed: int | None = None
     position_noise_A: float = 0.05
@@ -68,6 +70,14 @@ class DynamicsOverlapConfig:
     def intra_enabled(self) -> bool:
         return self.action != "off" and float(self.intra_min_distance_A) > 0.0
 
+    @property
+    def extent_enabled(self) -> bool:
+        return (
+            self.action != "off"
+            and float(self.max_monomer_extent_A) > 0.0
+            and int(self.n_monomers) >= 1
+        )
+
 
 def add_dynamics_overlap_args(parser: argparse.ArgumentParser) -> None:
     group = parser.add_argument_group("Dynamics overlap guard (PyCHARMM MLpot)")
@@ -78,7 +88,8 @@ def add_dynamics_overlap_args(parser: argparse.ArgumentParser) -> None:
         help=(
             "On inter-monomer overlap during MD: rescue=CHARMM bonded+VDW mini, then "
             "rigid monomer push if still overlapped (default); error=abort, "
-            "warn=log only, off=disable. Also controls intra-monomer close-contact checks."
+            "warn=log only, off=disable. Also controls intra-monomer close-contact checks "
+            "and max monomer extent (fly-off) recovery."
         ),
     )
     group.add_argument(
@@ -164,6 +175,22 @@ def add_dynamics_overlap_args(parser: argparse.ArgumentParser) -> None:
             "monomer separation is applied (default: 0.2)."
         ),
     )
+    group.add_argument(
+        "--dynamics-max-monomer-extent",
+        type=float,
+        default=12.0,
+        metavar="ANG",
+        help=(
+            "Maximum allowed axis-aligned monomer extent in Å during dynamics "
+            "(default: 12.0, aligned with CHARMM NBONDA group limit). "
+            "On violation, restore the prior segment restart and run bonded-MM SD."
+        ),
+    )
+    group.add_argument(
+        "--no-dynamics-max-monomer-extent",
+        action="store_true",
+        help="Disable max monomer extent / fly-off guard.",
+    )
 
 
 def overlap_config_for_stage(
@@ -180,7 +207,9 @@ def overlap_config_for_stage(
     ``--dynamics-overlap-check-interval`` steps inside each segment.  Equi/prod
     keep the configured interval.
     """
-    if overlap is None or not overlap.enabled:
+    if overlap is None or not (
+        overlap.enabled or overlap.intra_enabled or overlap.extent_enabled
+    ):
         return overlap
     if stage.lower() != "heat":
         return overlap
@@ -245,6 +274,11 @@ def resolve_dynamics_overlap_config(
             getattr(args, "no_dynamics_overlap_separate", False)
         ),
         separate_margin_A=float(getattr(args, "dynamics_overlap_separate_margin", 0.2)),
+        max_monomer_extent_A=(
+            0.0
+            if bool(getattr(args, "no_dynamics_max_monomer_extent", False))
+            else float(getattr(args, "dynamics_max_monomer_extent", 12.0))
+        ),
         memory_handoff=bool(getattr(args, "dynamics_overlap_memory_handoff", False)),
     )
 
@@ -329,6 +363,16 @@ def _assert_no_intramonomer_close_contact_fn():
 @lru_cache(maxsize=1)
 def _build_bond_exclusion_pairs_fn():
     return _geometry_checks_mod().build_bond_exclusion_pairs
+
+
+@lru_cache(maxsize=1)
+def _assert_monomer_extent_within_limit_fn():
+    return _geometry_checks_mod().assert_monomer_extent_within_limit
+
+
+@lru_cache(maxsize=1)
+def _find_worst_monomer_extent_fn():
+    return _geometry_checks_mod().find_worst_monomer_extent
 
 
 _bond_exclusion_cache: tuple[int, bool, frozenset[tuple[int, int]]] | None = None
@@ -443,6 +487,24 @@ def _intramonomer_check(
         excluded,
         min_distance=config.intra_min_distance_A,
         cell=cell,
+        context=context,
+    )
+
+
+def _extent_check(
+    config: DynamicsOverlapConfig,
+    *,
+    context: str,
+) -> float:
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+
+    pos = get_charmm_positions_array()
+    offsets = monomer_offsets(int(pos.shape[0]), config.n_monomers)
+    assert_monomer_extent_within_limit = _assert_monomer_extent_within_limit_fn()
+    return assert_monomer_extent_within_limit(
+        pos,
+        offsets,
+        max_extent_A=config.max_monomer_extent_A,
         context=context,
     )
 
@@ -619,6 +681,53 @@ def _handle_intramonomer_rescue(
         ) from still_bad
 
 
+def _handle_extent_rescue(
+    config: DynamicsOverlapConfig,
+    *,
+    label: str,
+    exc: RuntimeError,
+    mlpot_ctx: "MlpotContext",
+) -> float:
+    prior = config.prior_segment_restart
+    if prior is None or not Path(prior).is_file():
+        raise RuntimeError(
+            f"{exc}; extent recovery requires a prior segment restart file "
+            f"(got {prior!r})"
+        ) from exc
+    sd_steps = config.intra_rescue_sd_steps
+    if sd_steps is None:
+        sd_steps = config.rescue.nstep_sd
+    print(
+        f"{exc}\nAttempting fly-off recovery from prior restart "
+        f"{Path(prior).name} (bonded-MM SD={sd_steps})...",
+        flush=True,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        run_extent_recovery_from_prior_restart,
+    )
+
+    try:
+        run_extent_recovery_from_prior_restart(
+            mlpot_ctx,
+            config,
+            prior_restart=prior,
+        )
+        _maybe_save_rescue_snapshot(mlpot_ctx, config, label=label)
+    except Exception as rescue_exc:
+        raise RuntimeError(
+            f"{exc}; fly-off recovery from {Path(prior).name} failed: {rescue_exc}"
+        ) from rescue_exc
+    try:
+        return _extent_check(config, context=f"{label} after fly-off recovery")
+    except RuntimeError as still_bad:
+        raise RuntimeError(
+            f"{still_bad}; fly-off recovery from {Path(prior).name} "
+            f"(SD={sd_steps}) did not restore monomer extent "
+            f"<= {config.max_monomer_extent_A:.2f} A — inspect the prior restart "
+            f"or reduce the timestep / heating rate"
+        ) from still_bad
+
+
 def _run_geometry_guard(
     check_fn,
     *,
@@ -657,6 +766,35 @@ def _run_geometry_guard(
         )
 
 
+def _run_extent_guard(
+    config: DynamicsOverlapConfig,
+    *,
+    label: str,
+    mlpot_ctx: "MlpotContext | None",
+) -> tuple[float, bool]:
+    if config.action == "error":
+        return _extent_check(config, context=label), False
+
+    try:
+        return _extent_check(config, context=label), False
+    except RuntimeError as exc:
+        if config.action == "warn":
+            print(f"WARNING: {exc}", flush=True)
+            return float("nan"), False
+        if config.action != "rescue":
+            raise
+        if mlpot_ctx is None:
+            raise RuntimeError(
+                f"{exc}; fly-off recovery requires MlpotContext"
+            ) from exc
+        return (
+            _handle_extent_rescue(
+                config, label=label, exc=exc, mlpot_ctx=mlpot_ctx
+            ),
+            True,
+        )
+
+
 def check_dynamics_overlap(
     config: DynamicsOverlapConfig,
     *,
@@ -669,12 +807,20 @@ def check_dynamics_overlap(
     Returns ``(min_distance, rescued)`` where ``rescued`` is true when bonded-MM
     recovery rewrote coordinates (PSF reload invalidates in-memory dyna state).
     """
-    if not config.enabled and not config.intra_enabled:
+    if not config.enabled and not config.intra_enabled and not config.extent_enabled:
         return float("inf"), False
 
     label = context if step is None else f"{context} at step {step}"
     best = float("inf")
     rescued = False
+
+    if config.extent_enabled:
+        _, did_rescue = _run_extent_guard(
+            config,
+            label=label,
+            mlpot_ctx=mlpot_ctx,
+        )
+        rescued = rescued or did_rescue
 
     if config.enabled:
         dist, did_rescue = _run_geometry_guard(
@@ -699,5 +845,11 @@ def check_dynamics_overlap(
         rescued = rescued or did_rescue
         if np.isfinite(dist):
             best = min(best, dist)
+
+    if best == float("inf") and config.extent_enabled:
+        try:
+            best = _extent_check(config, context=f"{label} summary")
+        except RuntimeError:
+            pass
 
     return best, rescued
