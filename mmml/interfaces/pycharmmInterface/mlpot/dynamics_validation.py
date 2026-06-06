@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import struct
 from pathlib import Path
 
@@ -61,26 +62,48 @@ def expected_dcd_frame_count(*, nstep: int, nsavc: int) -> int:
     return 1 + n // sav
 
 
-def restart_has_nonfinite_coordinates(path: Path | None) -> bool:
-    """Return True when a restart file contains non-finite Cartesian coordinates."""
-    if path is None:
-        return False
+def _parse_fortran_d_float(token: str) -> float:
+    return float(token.upper().replace("D", "E"))
+
+
+_FORTRAN_FLOAT_RE = re.compile(
+    r"[+-]?(?:\d+\.\d*|\.\d+)[DEde][+-]?\d+",
+    re.IGNORECASE,
+)
+
+
+def read_restart_natom(path: Path) -> int | None:
+    """Return atom count from a CHARMM restart ``!NATOM`` header line."""
     p = Path(path)
     if not p.is_file():
-        return False
+        return None
     try:
-        text = p.read_text(errors="ignore")
+        lines = p.read_text(errors="ignore").splitlines()
     except OSError:
-        return False
-    if not text:
-        return False
-    upper = text.upper()
-    if "NAN" in upper or "INF" in upper:
-        marker = "!X, Y, Z"
-        idx = upper.find(marker)
-        if idx >= 0 and ("NAN" in upper[idx:] or "INF" in upper[idx:]):
-            return True
-    lines = text.splitlines()
+        return None
+    for i, raw in enumerate(lines):
+        tag = raw.strip().split()[0] if raw.strip() else ""
+        if not (tag.startswith("!NATOM") or tag.startswith("NATOM")):
+            continue
+        if i + 1 >= len(lines):
+            return None
+        fields = lines[i + 1].split()
+        if not fields:
+            return None
+        try:
+            return int(fields[0])
+        except ValueError:
+            return None
+    return None
+
+
+def _restart_coordinate_values(path: Path) -> list[float]:
+    """Parse Cartesian values from the ``!X, Y, Z`` section of a restart file."""
+    try:
+        lines = Path(path).read_text(errors="ignore").splitlines()
+    except OSError:
+        return []
+    values: list[float] = []
     in_coords = False
     for raw in lines:
         line = raw.strip()
@@ -93,13 +116,48 @@ def restart_has_nonfinite_coordinates(path: Path | None) -> bool:
             break
         if not in_coords:
             continue
-        for token in line.split():
-            try:
-                value = float(token.upper().replace("D", "E"))
-            except ValueError:
-                continue
-            if not np.isfinite(value):
-                return True
+        for match in _FORTRAN_FLOAT_RE.finditer(line):
+            values.append(_parse_fortran_d_float(match.group()))
+    return values
+
+
+def read_restart_coordinates(path: Path) -> np.ndarray | None:
+    """Return ``(N, 3)`` Cartesian coordinates from a CHARMM restart file."""
+    p = Path(path)
+    natom = read_restart_natom(p)
+    if natom is None or natom <= 0:
+        return None
+    flat = _restart_coordinate_values(p)
+    if len(flat) < 3 * natom:
+        return None
+    pos = np.asarray(flat[: 3 * natom], dtype=float).reshape(natom, 3)
+    if not np.all(np.isfinite(pos)):
+        return None
+    return pos
+
+
+def restart_has_nonfinite_coordinates(path: Path | None) -> bool:
+    """Return True when a restart file contains non-finite Cartesian coordinates."""
+    if path is None:
+        return False
+    p = Path(path)
+    if not p.is_file():
+        return False
+    if read_restart_coordinates(p) is not None:
+        return False
+    try:
+        text = p.read_text(errors="ignore")
+    except OSError:
+        return False
+    upper = text.upper()
+    if "NAN" in upper or "INF" in upper:
+        marker = "!X, Y, Z"
+        idx = upper.find(marker)
+        if idx >= 0 and ("NAN" in upper[idx:] or "INF" in upper[idx:]):
+            return True
+    for value in _restart_coordinate_values(p):
+        if not np.isfinite(value):
+            return True
     return False
 
 

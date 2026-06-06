@@ -77,15 +77,80 @@ def restore_charmm_state_from_restart(
     import pycharmm
 
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_restart_coordinates,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
     path = Path(restart_path).expanduser().resolve()
     if not path.is_file():
         raise FileNotFoundError(f"restart not found: {path}")
+    pos = read_restart_coordinates(path)
+    if pos is None:
+        raise RuntimeError(
+            f"restart {path.name} has no finite Cartesian coordinates in !X, Y, Z"
+        )
     with charmm_relaxed_bomlev():
         pycharmm.lingo.charmm_script(
             f"open read unit {int(read_unit)} name {path}\n"
             f"read restart unit {int(read_unit)}\n"
             f"close unit {int(read_unit)}\n"
+        )
+    sync_charmm_positions(pos)
+
+
+def _run_all_ml_extent_recovery(
+    ctx: MlpotContext,
+    config: Any,
+    bonded_cfg: BondedMmMiniConfig,
+    *,
+    positions: np.ndarray,
+) -> None:
+    """Fly-off recovery for all-ML: reload PSF using restart-file coords (no noise)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        MinimizeWithMlpotConfig,
+        minimize_with_mlpot,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.restraints import clear_mmfp_restraints
+
+    topo = getattr(config, "topology_psf", None)
+    if topo is None or not Path(topo).is_file():
+        raise RuntimeError(
+            "all-ML fly-off recovery requires pre-MLpot topology PSF "
+            "(cluster_for_vmd_*.psf)"
+        )
+    if bonded_cfg.verbose:
+        print(
+            f"Fly-off recovery: reloading pre-MLpot topology {Path(topo).name} "
+            f"with coords from prior restart",
+            flush=True,
+        )
+    _reload_pre_mlpot_topology(ctx, topology_psf=topo, positions=positions)
+    try:
+        clear_mmfp_restraints()
+        assert_bonded_mm_energy_active(context="Fly-off recovery (reloaded PSF)")
+        _run_bonded_sd_without_mlpot(ctx, bonded_cfg)
+    finally:
+        _reregister_mlpot_after_topology_reload(ctx)
+
+    n_mlpot = int(getattr(config, "mlpot_rescue_mini_nstep", 0) or 0)
+    pyCModel = getattr(config, "pyCModel", None)
+    if n_mlpot > 0 and pyCModel is not None:
+        if bonded_cfg.verbose:
+            print(
+                f"Fly-off recovery: MLpot SD mini ({n_mlpot} steps)",
+                flush=True,
+            )
+        minimize_with_mlpot(
+            MinimizeWithMlpotConfig(
+                nstep=n_mlpot,
+                nprint=bonded_cfg.nprint,
+                verbose=bonded_cfg.verbose,
+                pyCModel=pyCModel,
+                mlpot_ctx=ctx,
+                save=False,
+                skip_if_crd_exists=False,
+            )
         )
 
 
@@ -95,9 +160,24 @@ def run_extent_recovery_from_prior_restart(
     *,
     prior_restart: PathLike,
 ) -> None:
-    """Restore the prior segment restart, then run bonded-MM SD on the recovered coords."""
-    restore_charmm_state_from_restart(prior_restart)
-    run_intra_monomer_overlap_rescue(ctx, config)
+    """Restore the prior segment restart, then run bonded-MM SD on those coords."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import minimize_bonded_mm_recovery
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_restart_coordinates,
+    )
+
+    path = Path(prior_restart).expanduser().resolve()
+    restore_charmm_state_from_restart(path)
+    bonded_cfg = _bonded_cfg_from_overlap_config(config)
+    pos = read_restart_coordinates(path)
+    if pos is None:
+        raise RuntimeError(
+            f"fly-off recovery: parsed no finite coordinates from {path.name}"
+        )
+    if _mlpot_covers_all_atoms(ctx):
+        _run_all_ml_extent_recovery(ctx, config, bonded_cfg, positions=pos)
+        return
+    minimize_bonded_mm_recovery(ctx, bonded_cfg)
 
 
 def record_mm_baseline_strain(*, verbose: bool = False) -> MmStrainBaseline | None:
@@ -490,6 +570,7 @@ def _reload_pre_mlpot_topology(
     ctx: MlpotContext,
     *,
     topology_psf: PathLike,
+    positions: np.ndarray | None = None,
 ) -> None:
     """Replace MLpot-mutated PSF with the saved pre-MLpot topology."""
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
@@ -504,7 +585,15 @@ def _reload_pre_mlpot_topology(
         sync_charmm_positions,
     )
 
-    current_positions = get_charmm_positions_array()
+    if positions is None:
+        current_positions = get_charmm_positions_array()
+    else:
+        current_positions = np.asarray(positions, dtype=float)
+    if not np.all(np.isfinite(current_positions)):
+        raise RuntimeError(
+            "pre-MLpot topology reload requires finite coordinates "
+            f"(got {int(np.sum(~np.isfinite(current_positions)))} non-finite values)"
+        )
     ctx.unset()
     with charmm_relaxed_bomlev():
         pycharmm.lingo.charmm_script(

@@ -5,6 +5,7 @@ from __future__ import annotations
 import struct
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
@@ -286,6 +287,24 @@ def test_read_restart_last_step_real_fixture():
     )
     assert stub.is_file()
     assert read_restart_last_step(stub) == 2000
+
+
+def test_read_restart_coordinates_from_fixture():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_restart_coordinates,
+        read_restart_natom,
+    )
+
+    stub = (
+        Path(__file__).resolve().parents[1]
+        / "functionality/mlpot/output/dynamics/nve_stub.res"
+    )
+    assert stub.is_file()
+    assert read_restart_natom(stub) == 20
+    pos = read_restart_coordinates(stub)
+    assert pos is not None
+    assert pos.shape == (20, 3)
+    assert np.all(np.isfinite(pos))
 
 
 def test_assert_stage_dynamics_completed_fails_truncated(tmp_path):

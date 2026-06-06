@@ -227,16 +227,13 @@ def test_check_extent_rescue_restores_prior_restart(tmp_path):
         "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         side_effect=_get_pos,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_restart",
-        side_effect=lambda path: positions.update(current=good_pos.copy()),
-    ) as restore, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.run_intra_monomer_overlap_rescue",
-    ) as rescue:
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.run_extent_recovery_from_prior_restart",
+        side_effect=lambda *a, **k: positions.update(current=good_pos.copy()),
+    ) as extent_recovery:
         extent, rescued = check_dynamics_overlap(
             cfg, context="heat segment 2/2", step=1000, mlpot_ctx=ctx
         )
-    restore.assert_called_once_with(prior)
-    rescue.assert_called_once()
+    extent_recovery.assert_called_once()
     assert rescued is True
     assert extent == pytest.approx(np.sqrt(2.0))
 
