@@ -58,6 +58,13 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     production_restart_chain,
     run_dynamics_with_io,
 )
+from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    DynamicsOverlapConfig,
+    attach_prior_segment_restart,
+    augment_overlap_config_for_rescue,
+    overlap_config_for_stage,
+    resolve_dynamics_overlap_config,
+)
 from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
     apply_comp_velocity_policy,
 )
@@ -66,12 +73,6 @@ from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
     maybe_run_bonded_mm_mini_after_stage,
     record_mm_baseline_strain,
     rewrite_dynamics_restart_from_current_state,
-)
-from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
-    DynamicsOverlapConfig,
-    augment_overlap_config_for_rescue,
-    overlap_config_for_stage,
-    resolve_dynamics_overlap_config,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
     ensure_charmm_crystal_for_cpt,
@@ -1342,6 +1343,14 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         nstep=nstep,
                         n_segments=n_heat_segments,
                     )
+                    stage_overlap = attach_prior_segment_restart(
+                        stage_overlap,
+                        segment_index=seg_i,
+                        prev_restart=prev_restart,
+                        out_dir=out_dir,
+                        restart_prefix=f"heat_{tag}",
+                        restart_write=seg_io.restart_write,
+                    )
                     run_dynamics_with_io(
                         kw,
                         seg_io,
@@ -1815,6 +1824,11 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         f"({parts}); TEMINC={float(kw.get('TEMINC', 0)):.6g} K",
                         flush=True,
                     )
+            stage_overlap = attach_prior_segment_restart(
+                stage_overlap,
+                prev_restart=prev_restart,
+                restart_write=io.restart_write,
+            )
             run_dynamics_with_io(
                 kw,
                 io,

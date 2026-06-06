@@ -310,6 +310,80 @@ def augment_overlap_config_for_rescue(
     )
 
 
+def infer_prior_restart_from_write_path(restart_write: Path | str | None) -> Path | None:
+    """Infer ``{prefix}.{n-1}.res`` from a chained segment restart write path."""
+    if restart_write is None:
+        return None
+    path = Path(restart_write)
+    stem = path.stem
+    if "." not in stem:
+        return None
+    prefix, seg_raw = stem.rsplit(".", 1)
+    if not seg_raw.isdigit():
+        return None
+    seg_idx = int(seg_raw)
+    if seg_idx <= 0:
+        return None
+    prior = path.parent / f"{prefix}.{seg_idx - 1}.res"
+    return prior.resolve() if prior.is_file() else None
+
+
+def resolve_prior_segment_restart_path(
+    *,
+    segment_index: int,
+    prev_restart: Path | str | None = None,
+    out_dir: Path | str | None = None,
+    restart_prefix: str | None = None,
+) -> Path | None:
+    """Return the best on-disk checkpoint before the current segment."""
+    candidates: list[Path] = []
+    seg_i = int(segment_index)
+    if seg_i > 0 and out_dir is not None and restart_prefix:
+        candidates.append(Path(out_dir) / f"{restart_prefix}.{seg_i - 1}.res")
+    if prev_restart is not None:
+        candidates.append(Path(prev_restart))
+    seen: set[str] = set()
+    for cand in candidates:
+        p = cand.expanduser()
+        key = str(p)
+        if key in seen:
+            continue
+        seen.add(key)
+        if p.is_file():
+            return p.resolve()
+    return None
+
+
+def attach_prior_segment_restart(
+    overlap: DynamicsOverlapConfig | None,
+    *,
+    segment_index: int = 0,
+    prev_restart: Path | str | None = None,
+    out_dir: Path | str | None = None,
+    restart_prefix: str | None = None,
+    restart_write: Path | str | None = None,
+) -> DynamicsOverlapConfig | None:
+    """Attach a fly-off recovery checkpoint when extent guard is enabled."""
+    if overlap is None or not overlap.extent_enabled:
+        return overlap
+    existing = overlap.prior_segment_restart
+    if existing is not None and Path(existing).is_file():
+        return overlap
+    from dataclasses import replace
+
+    prior = resolve_prior_segment_restart_path(
+        segment_index=segment_index,
+        prev_restart=prev_restart,
+        out_dir=out_dir,
+        restart_prefix=restart_prefix,
+    )
+    if prior is None:
+        prior = infer_prior_restart_from_write_path(restart_write)
+    if prior is None:
+        return overlap
+    return replace(overlap, prior_segment_restart=prior)
+
+
 def monomer_offsets(n_atoms: int, n_monomers: int) -> np.ndarray:
     """Uniform monomer atom offsets (length ``n_monomers + 1``)."""
     n_atoms = int(n_atoms)
