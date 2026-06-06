@@ -12,6 +12,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
     count_dcd_frames,
     expected_dcd_frame_count,
     read_restart_last_step,
+    restart_has_nonfinite_coordinates,
 )
 from mmml.utils.dcd_writer import concat_dcd_files, save_trajectory_dcd
 
@@ -311,6 +312,44 @@ def test_assert_stage_dynamics_completed_fails_truncated(tmp_path):
             expected_nstep=40000,
             nsavc=500,
             dcd_path=dcd,
+            restart_path=res,
+        )
+
+
+def test_restart_has_nonfinite_coordinates_detects_nan_section(tmp_path):
+    res = tmp_path / "bad.res"
+    res.write_text(
+        "REST    48     1\n"
+        "\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        "          20        2000        1000           1          10        1000\n"
+        "\n"
+        " !X, Y, Z\n"
+        " NaN 0.0 0.0\n"
+        " 0.0 0.0 0.0\n",
+        encoding="utf-8",
+    )
+    assert restart_has_nonfinite_coordinates(res) is True
+
+
+def test_assert_stage_dynamics_completed_fails_nonfinite_restart(tmp_path):
+    res = tmp_path / "heat.res"
+    res.write_text(
+        "REST    48     1\n"
+        "\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        "          20        2000        1000           1          10        1000\n"
+        "\n"
+        " !X, Y, Z\n"
+        " NaN 0.0 0.0\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(RuntimeError, match="non-finite coordinates"):
+        assert_stage_dynamics_completed(
+            stage="heat",
+            expected_nstep=1000,
+            nsavc=100,
+            dcd_path=None,
             restart_path=res,
         )
 

@@ -5,6 +5,8 @@ from __future__ import annotations
 import struct
 from pathlib import Path
 
+import numpy as np
+
 _FMT_I = "<i"
 
 
@@ -57,6 +59,48 @@ def expected_dcd_frame_count(*, nstep: int, nsavc: int) -> int:
     n = max(1, int(nstep))
     sav = max(1, min(int(nsavc), n - 1))
     return 1 + n // sav
+
+
+def restart_has_nonfinite_coordinates(path: Path | None) -> bool:
+    """Return True when a restart file contains non-finite Cartesian coordinates."""
+    if path is None:
+        return False
+    p = Path(path)
+    if not p.is_file():
+        return False
+    try:
+        text = p.read_text(errors="ignore")
+    except OSError:
+        return False
+    if not text:
+        return False
+    upper = text.upper()
+    if "NAN" in upper or "INF" in upper:
+        marker = "!X, Y, Z"
+        idx = upper.find(marker)
+        if idx >= 0 and ("NAN" in upper[idx:] or "INF" in upper[idx:]):
+            return True
+    lines = text.splitlines()
+    in_coords = False
+    for raw in lines:
+        line = raw.strip()
+        if not line:
+            continue
+        if line.startswith("!X, Y, Z"):
+            in_coords = True
+            continue
+        if in_coords and line.startswith("!"):
+            break
+        if not in_coords:
+            continue
+        for token in line.split():
+            try:
+                value = float(token.upper().replace("D", "E"))
+            except ValueError:
+                continue
+            if not np.isfinite(value):
+                return True
+    return False
 
 
 def read_restart_last_step(path: Path) -> int | None:
@@ -277,6 +321,11 @@ def assert_stage_dynamics_completed(
         problems.append(
             f"restart step {restart_step} < {min_steps} "
             f"(expected ~{expected_nstep}; likely echeck or CHARMM abort)"
+        )
+    if restart_path is not None and restart_has_nonfinite_coordinates(restart_path):
+        problems.append(
+            f"restart {Path(restart_path).name} contains non-finite coordinates "
+            f"(NaN/Inf; dynamics blew up despite completing {restart_step or '?'} steps)"
         )
     if dcd_path is not None and header_frames > 0 and readable_frames < header_frames:
         problems.append(

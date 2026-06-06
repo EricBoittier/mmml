@@ -67,6 +67,39 @@ def rewrite_dynamics_restart_from_current_state(
         )
 
 
+def restore_charmm_state_from_restart(
+    restart_path: PathLike,
+    *,
+    read_unit: int = 93,
+) -> None:
+    """Load coordinates (and crystal state) from a CHARMM restart into memory."""
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import pycharmm
+
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+
+    path = Path(restart_path).expanduser().resolve()
+    if not path.is_file():
+        raise FileNotFoundError(f"restart not found: {path}")
+    with charmm_relaxed_bomlev():
+        pycharmm.lingo.charmm_script(
+            f"open read unit {int(read_unit)} name {path}\n"
+            f"read restart unit {int(read_unit)}\n"
+            f"close unit {int(read_unit)}\n"
+        )
+
+
+def run_extent_recovery_from_prior_restart(
+    ctx: MlpotContext,
+    config: Any,
+    *,
+    prior_restart: PathLike,
+) -> None:
+    """Restore the prior segment restart, then run bonded-MM SD on the recovered coords."""
+    restore_charmm_state_from_restart(prior_restart)
+    run_intra_monomer_overlap_rescue(ctx, config)
+
+
 def record_mm_baseline_strain(*, verbose: bool = False) -> MmStrainBaseline | None:
     """Record MM GRMS (+ internal energy when readable) after MM-only pre-minimize."""
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
