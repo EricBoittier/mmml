@@ -95,6 +95,25 @@ def test_resolve_no_max_extent_disables_extent_guard():
     assert cfg.max_monomer_extent_A == 0.0
 
 
+def test_infer_prior_restart_from_write_path(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        attach_prior_segment_restart,
+        infer_prior_restart_from_write_path,
+    )
+
+    prior = tmp_path / "heat_dcm_90.5.res"
+    current = tmp_path / "heat_dcm_90.6.res"
+    prior.write_text("prior\n")
+    current.write_text("current\n")
+    assert infer_prior_restart_from_write_path(current) == prior.resolve()
+    cfg = attach_prior_segment_restart(
+        DynamicsOverlapConfig(action="rescue", n_monomers=2),
+        restart_write=current,
+    )
+    assert cfg is not None
+    assert cfg.prior_segment_restart == prior.resolve()
+
+
 def test_resolve_intra_min_distance_zero_disables_intra_only():
     args = argparse.Namespace(dynamics_intra_min_distance=0.0)
     cfg = resolve_dynamics_overlap_config(args, n_monomers=4, use_pbc=False)
