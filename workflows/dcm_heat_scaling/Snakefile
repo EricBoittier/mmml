@@ -55,14 +55,11 @@ def _stable_slot(key: str, n_slots: int) -> int:
 
 
 def _slurm_extra(wildcards) -> str:
+    """SLURM flags not covered by standard Snakemake resources (no mem/tasks here)."""
     key = f"{wildcards.n}_{wildcards.repeat}_{wildcards.dt_slug}"
     node = _GPU_NODES[_stable_slot(key, len(_GPU_NODES))]
     mail = str(config.get("slurm_mail_user", "ericdavid.boittier@unibas.ch"))
-    return (
-        f"--nodes=1 --ntasks=4 --mem-per-cpu=3000 "
-        f"--mail-user={mail} --mail-type=END,FAIL "
-        f"--nodelist={node}"
-    )
+    return f"--mail-user={mail} --mail-type=END,FAIL --nodelist={node}"
 
 
 rule all:
@@ -88,6 +85,12 @@ rule run_heat:
         gpu=1,
         mpi=1,
         runtime=int(config.get("slurm_runtime_min", 2880)),
+        mem_mb_per_cpu=int(config.get("slurm_mem_mb_per_cpu", 3000)),
+        cpus_per_task=int(config.get("slurm_cpus_per_task", 4)),
+        tasks=int(config.get("slurm_ntasks", 4)),
+        nodes=int(config.get("slurm_nodes", 1)),
+        slurm_partition=str(config.get("slurm_partition", "gpu")),
+        gres=str(config.get("slurm_gres", "gpu:1")),
         slurm_extra=_slurm_extra,
     shell:
         """

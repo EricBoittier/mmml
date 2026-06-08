@@ -93,12 +93,11 @@ nohup uv run --with snakemake --with snakemake-executor-plugin-slurm \
   > snakemake_slurm.log 2>&1 &
 ```
 
-Slurm resources per job match your header:
+Slurm resources per job match your header (via Snakemake resources, not `slurm_extra`):
 
-- `--partition=gpu --gres=gpu:1`
-- `--nodes=1 --ntasks=4 --mem-per-cpu=3000`
-- `--mail-user=ericdavid.boittier@unibas.ch`
-- `--nodelist=gpu08` or `gpu09` (hashed from N / repeat / dt)
+- `slurm_partition=gpu`, `gres=gpu:1`
+- `nodes=1`, `tasks=4`, `cpus_per_task=4`, `mem_mb_per_cpu=3000`
+- `slurm_extra`: `--mail-user=...`, `--nodelist=gpu08|gpu09` only
 
 Single job:
 
