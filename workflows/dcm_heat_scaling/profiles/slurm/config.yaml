@@ -4,6 +4,11 @@ executor: slurm
 jobs: 4
 latency-wait: 120
 retries: 1
+envvars:
+  - MMML_CKPT
+  - JAX_ENABLE_X64
+  - MMML_PYTHON
+  - MMML_BIN
 default-resources:
   - gpu=1
   - mpi=1
