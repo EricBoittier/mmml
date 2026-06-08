@@ -1,0 +1,99 @@
+configfile: "config.yaml"
+
+import os
+from pathlib import Path
+
+
+def _repo_python() -> str:
+    repo = Path(workflow.basedir).resolve().parents[1]
+    env_py = os.environ.get("MMML_PYTHON", "").strip()
+    if env_py:
+        return env_py
+    venv = repo / ".venv" / "bin" / "python"
+    if venv.is_file():
+        return str(venv)
+    conda_prefix = os.environ.get("CONDA_PREFIX", "").strip()
+    if conda_prefix:
+        conda_py = Path(conda_prefix) / "bin" / "python"
+        if conda_py.is_file():
+            return str(conda_py)
+    return "python3"
+
+
+_REPO_PYTHON = _repo_python()
+_CLUSTER_SIZES = [int(n) for n in config["cluster_sizes"]]
+_REPEATS = [int(r) for r in config.get("repeats", [1])]
+_DT_VALUES = [float(x) for x in config.get("dt_fs_values", [0.25, 0.125])]
+_OUTPUT_ROOT = str(config.get("output_root", "artifacts/pycharmm_mlpot"))
+_GPU_NODES = [str(x) for x in (config.get("slurm_gpu_nodes") or ["gpu08", "gpu09"])]
+
+
+def _dt_slug(dt_fs: float) -> str:
+    if float(dt_fs) == 0.25:
+        return "dt025"
+    if float(dt_fs) == 0.125:
+        return "dt0125"
+    return f"dt{str(dt_fs).replace('.', 'p')}"
+
+
+_DT_SLUGS = [_dt_slug(dt) for dt in _DT_VALUES]
+
+
+def _run_relpath(n: int, repeat: int, dt_slug: str) -> str:
+    return f"{_OUTPUT_ROOT}/dcm{n}_npt_x64_{repeat}/{dt_slug}"
+
+
+def _heat_tag(n: int) -> str:
+    prefix = str(config.get("composition_prefix", "DCM"))
+    return f"{prefix.lower()}_{int(n)}"
+
+
+def _stable_slot(key: str, n_slots: int) -> int:
+    import zlib
+
+    return int(zlib.crc32(key.encode("utf-8"))) % max(1, int(n_slots))
+
+
+def _slurm_extra(wildcards) -> str:
+    key = f"{wildcards.n}_{wildcards.repeat}_{wildcards.dt_slug}"
+    node = _GPU_NODES[_stable_slot(key, len(_GPU_NODES))]
+    mail = str(config.get("slurm_mail_user", "ericdavid.boittier@unibas.ch"))
+    return (
+        f"--nodes=1 --ntasks=4 --mem-per-cpu=3000 "
+        f"--mail-user={mail} --mail-type=END,FAIL "
+        f"--nodelist={node}"
+    )
+
+
+rule all:
+    input:
+        expand(
+            "{root}/dcm{n}_npt_x64_{repeat}/{dt_slug}/done.txt",
+            root=_OUTPUT_ROOT,
+            n=_CLUSTER_SIZES,
+            repeat=_REPEATS,
+            dt_slug=_DT_SLUGS,
+        ),
+
+
+rule run_heat:
+    output:
+        touch("{root}/dcm{n}_npt_x64_{repeat}/{dt_slug}/done.txt"),
+    log:
+        stdout="{root}/dcm{n}_npt_x64_{repeat}/{dt_slug}/stdout.log",
+    params:
+        tag=lambda wildcards: _heat_tag(int(wildcards.n)),
+        workflow_dir=workflow.basedir,
+    resources:
+        gpu=1,
+        mpi=1,
+        runtime=int(config.get("slurm_runtime_min", 2880)),
+        slurm_extra=_slurm_extra,
+    shell:
+        """
+        mkdir -p {wildcards.root}/dcm{wildcards.n}_npt_x64_{wildcards.repeat}/{wildcards.dt_slug}
+        bash {params.workflow_dir}/scripts/job_shell.sh {wildcards.n} {wildcards.repeat} {wildcards.dt_slug} \
+            > {log.stdout} 2>&1
+        test -s {wildcards.root}/dcm{wildcards.n}_npt_x64_{wildcards.repeat}/{wildcards.dt_slug}/heat_{params.tag}.dcd
+        touch {output}
+        """

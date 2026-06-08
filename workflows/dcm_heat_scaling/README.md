@@ -1,0 +1,107 @@
+# DCM heat scaling (PyCHARMM MLpot)
+
+Snakemake workflow for **heat-only** `mmml md-system` runs on **DCM:5 … DCM:90** (step 5),
+with two timesteps (**0.25 fs** and **0.125 fs**) and configurable repeats.
+
+Sibling to [dcm_nve_scaling](../dcm_nve_scaling/) (short NVE screening).
+
+## Do not commit run outputs
+
+`artifacts/`, `results/`, and `.snakemake/` are gitignored.
+
+## Prerequisites
+
+```bash
+export MMML_CKPT=/mmhome/boittier/home/mmml_tutorial/acodcm/ckpts/dcm1-c137fb42-1f65-4748-880b-8f8184a20f70
+export JAX_ENABLE_X64=1
+```
+
+- GPU JAX (`uv sync --extra gpu`) or cluster conda/micromamba env with `jax` + `mmml`
+- OpenMPI + rebuilt `libcharmm.so` for large clusters (use [mmml-charmm-mpirun.sh](../../scripts/mmml-charmm-mpirun.sh); set `use_mpirun: false` in [config.yaml](config.yaml) for plain `mmml md-system`)
+- `packmol` on PATH
+- `snakemake`
+
+## Job matrix
+
+From [config.yaml](config.yaml) defaults:
+
+| Axis | Values |
+|------|--------|
+| Cluster size | 5, 10, …, 90 (18 sizes) |
+| Repeat `N` | `[1]` (extend `repeats:` for more) |
+| `dt-fs` | `0.25`, `0.125` |
+
+**36 jobs** with default config (18 × 2 dt × 1 repeat). Each job gets a unique seed:
+`seed_base + N×10000 + repeat×100 + dt_offset` (0 for 0.25 fs, 1 for 0.125 fs).
+
+Outputs under repo root:
+
+```
+artifacts/pycharmm_mlpot/dcm{N}_npt_x64_{repeat}/dt025/
+artifacts/pycharmm_mlpot/dcm{N}_npt_x64_{repeat}/dt0125/
+```
+
+Equivalent to your manual command (with `X` = cluster size, `N` = repeat):
+
+```bash
+export JAX_ENABLE_X64=1
+mmml md-system \
+  --setup pycharmm_full --backend pycharmm \
+  --composition DCM:X \
+  --output-dir artifacts/pycharmm_mlpot/dcmX_npt_x64_N/dt025 \
+  --md-stage heat --box-size 180 \
+  --ps-heat 1000 --n-heat-segments 4000 --heat-thermostat hoover \
+  --dt-fs 0.25 \
+  --flat-bottom-radius 55 --packmol-radius 15 --temperature 220 \
+  --dynamics-overlap-action rescue \
+  --checkpoint "$MMML_CKPT" --seed <unique> \
+  --dcd-nsavc 500 --dynamics-intra-min-distance 0.5 \
+  --ml-gpu-count 1 --ml-batch-size 2056 --no-echeck
+```
+
+## Run
+
+```bash
+cd workflows/dcm_heat_scaling
+bash scripts/preflight.sh
+snakemake -n
+```
+
+Local (serialize PyCHARMM via `mpi=1`):
+
+```bash
+snakemake -j2 --resources gpu=1 mpi=1 --keep-going
+```
+
+Slurm (gpu08 / gpu09, alternating per job):
+
+```bash
+snakemake --profile profiles/slurm -j4 --keep-going
+```
+
+Slurm resources per job match your header:
+
+- `--partition=gpu --gres=gpu:1`
+- `--nodes=1 --ntasks=4 --mem-per-cpu=3000`
+- `--mail-user=ericdavid.boittier@unibas.ch`
+- `--nodelist=gpu08` or `gpu09` (hashed from N / repeat / dt)
+
+Single job:
+
+```bash
+snakemake artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt025/done.txt --cores 1
+```
+
+Dry-run one size × both dt:
+
+```bash
+snakemake -n artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt025/done.txt \
+              artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt0125/done.txt
+```
+
+## Config notes
+
+- **`repeats`**: add `[1, 2, 3]` for multiple independent trajectories per (N, dt).
+- **`slurm_runtime_min`**: default 2880 (48 h); heat with `ps_heat=1000` is long — raise if needed.
+- **`slurm_gpu_nodes`**: `[gpu08, gpu09]` — edit if your cluster changes.
+- Radii (`flat_bottom_radius`, `packmol_radius`) are fixed in config; consider scaling for large N.
