@@ -7,6 +7,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.minimize_artifacts import (
     MLPOT_MMML,
     MinimizeArtifactRegistry,
     legacy_mlpot_mini_paths,
+    rescue_snapshot_spec,
     snapshot_file_paths,
 )
 
@@ -28,3 +29,13 @@ def test_registry_manifest(tmp_path: Path) -> None:
     data = reg.manifest_path.read_text(encoding="utf-8")
     assert "02_mlpot_mmml_dcm_9" in data
     assert '"kind": "MMML"' in data
+
+
+def test_registry_tracks_last_rescue_crd(tmp_path: Path) -> None:
+    reg = MinimizeArtifactRegistry(tmp_path, "dcm_30")
+    assert reg.last_rescue_crd is None
+    spec = rescue_snapshot_spec("heat segment 1/4", seq=10)
+    crd = tmp_path / f"{spec.stem('dcm_30')}.crd"
+    crd.write_text("dummy", encoding="utf-8")
+    reg.record(spec, {"crd": crd, "pdb": crd.with_suffix(".pdb")})
+    assert reg.last_rescue_crd == crd.resolve()

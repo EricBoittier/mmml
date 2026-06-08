@@ -1961,19 +1961,62 @@ def _prepare_post_rescue_overlap_handoff(
     chunk_kw["iunrea"] = -1
 
 
+def _overlap_rescue_restart_fallback_paths(
+    overlap: Optional["DynamicsOverlapConfig"],
+) -> tuple[Path | None, Path | None]:
+    """Return ``(rescue_crd, prior_segment_restart)`` for post-rescue restart recovery."""
+    if overlap is None:
+        return None, None
+    rescue_crd: Path | None = None
+    registry = getattr(overlap, "artifact_registry", None)
+    if registry is not None:
+        rescue_crd = getattr(registry, "last_rescue_crd", None)
+    prior = getattr(overlap, "prior_segment_restart", None)
+    prior_path = Path(prior) if prior is not None else None
+    return rescue_crd, prior_path
+
+
 def _refresh_segment_restart_after_overlap_rescue(
     restart_path: PathLike | None,
     chunk_kw: dict[str, Any],
     *,
     mlpot_ctx: Optional["MlpotContext"],
+    overlap: Optional["DynamicsOverlapConfig"] = None,
 ) -> None:
     """Rewrite the segment restart after last-chunk rescue (valid READYN if needed)."""
     from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
-        rewrite_dynamics_restart_from_current_state,
+        restore_post_rescue_coordinates,
+        rewrite_dynamics_restart_validated,
     )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+
+    rescued_positions = np.asarray(get_charmm_positions_array(), dtype=float).copy()
+    rescue_crd, prior_restart = _overlap_rescue_restart_fallback_paths(overlap)
 
     _assign_post_rescue_velocities_and_crystal(chunk_kw, mlpot_ctx=mlpot_ctx)
-    rewrite_dynamics_restart_from_current_state(restart_path)
+    if rewrite_dynamics_restart_validated(restart_path):
+        return
+
+    source = restore_post_rescue_coordinates(
+        rescued_positions=rescued_positions,
+        rescue_crd=rescue_crd,
+        prior_restart=prior_restart,
+    )
+    print(
+        f"WARN: post-rescue restart write had non-finite coordinates; "
+        f"restored from {source}",
+        flush=True,
+    )
+    _assign_post_rescue_velocities_and_crystal(chunk_kw, mlpot_ctx=mlpot_ctx)
+    if not rewrite_dynamics_restart_validated(restart_path):
+        raise RuntimeError(
+            f"post-rescue restart {Path(restart_path).name} still has non-finite "
+            f"coordinates after fallback from {source}"
+        )
+    print(
+        f"post-rescue restart recovered from {source}",
+        flush=True,
+    )
 
 
 def _prepare_overlap_chunk_after_restart(
@@ -2548,6 +2591,7 @@ def run_dynamics_with_io(
                             chunk_io.restart_write,
                             chunk_kw,
                             mlpot_ctx=mlpot_ctx,
+                            overlap=overlap,
                         )
                         print(
                             f"overlap ({overlap_context}): post-rescue restart refreshed "

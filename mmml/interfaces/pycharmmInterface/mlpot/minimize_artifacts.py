@@ -116,6 +116,7 @@ class MinimizeArtifactRegistry:
         self.out_dir.mkdir(parents=True, exist_ok=True)
         self._entries: list[dict[str, Any]] = []
         self._next_dynamic_seq = 10
+        self.last_rescue_crd: Path | None = None
 
     @property
     def manifest_path(self) -> Path:
@@ -147,6 +148,8 @@ class MinimizeArtifactRegistry:
             entry["grms_kcalmol_A"] = float(grms_kcalmol_A)
         if extra:
             entry["meta"] = extra
+        if spec.kind == "intra_rescue" and "crd" in files:
+            self.last_rescue_crd = Path(files["crd"])
         self._entries.append(entry)
         self.flush()
         if not any(e.get("stem") == entry["stem"] for e in self._entries[:-1]):

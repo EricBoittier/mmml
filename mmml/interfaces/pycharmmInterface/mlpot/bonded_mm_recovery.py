@@ -67,6 +67,64 @@ def rewrite_dynamics_restart_from_current_state(
         )
 
 
+def rewrite_dynamics_restart_validated(
+    restart_path: PathLike | None,
+    *,
+    write_unit: int = 92,
+) -> bool:
+    """Write restart from memory; return False when Cartesian coords are non-finite."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        restart_has_nonfinite_coordinates,
+    )
+
+    if restart_path is None:
+        return True
+    rewrite_dynamics_restart_from_current_state(restart_path, write_unit=write_unit)
+    return not restart_has_nonfinite_coordinates(Path(restart_path))
+
+
+def restore_post_rescue_coordinates(
+    *,
+    rescued_positions: np.ndarray | None = None,
+    rescue_crd: PathLike | None = None,
+    prior_restart: PathLike | None = None,
+) -> str:
+    """Load finite coordinates into CHARMM after a bad post-rescue restart write."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import load_minimized_coordinates
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        restart_has_nonfinite_coordinates,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        get_charmm_positions_array,
+        sync_charmm_positions,
+    )
+
+    if rescued_positions is not None:
+        pos = np.asarray(rescued_positions, dtype=float)
+        if pos.size and np.all(np.isfinite(pos)):
+            sync_charmm_positions(pos)
+            return "in-memory rescue positions"
+
+    if rescue_crd is not None:
+        crd = Path(rescue_crd).expanduser()
+        if crd.is_file():
+            load_minimized_coordinates(crd)
+            pos = get_charmm_positions_array()
+            if np.all(np.isfinite(pos)):
+                return f"rescue CRD {crd.name}"
+
+    if prior_restart is not None:
+        prior = Path(prior_restart).expanduser()
+        if prior.is_file() and not restart_has_nonfinite_coordinates(prior):
+            restore_charmm_state_from_restart(prior)
+            return f"prior restart {prior.name}"
+
+    raise RuntimeError(
+        "post-rescue restart fallback failed: no finite coordinates in rescued "
+        "positions, rescue CRD, or prior segment restart"
+    )
+
+
 def restore_charmm_state_from_restart(
     restart_path: PathLike,
     *,
