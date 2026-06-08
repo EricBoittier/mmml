@@ -35,5 +35,13 @@ ml_gpu_count: 1
 ml_batch_size: 2056
 no_echeck: true
 
-# Slurm GPU nodes (alternated per job via hash of N/repeat/dt).
+# Slurm (mapped to sbatch by snakemake-executor-plugin-slurm; do not duplicate in slurm_extra).
+slurm_partition: gpu
+slurm_gres: gpu:1
+slurm_nodes: 1
+slurm_ntasks: 4
+slurm_cpus_per_task: 4
+slurm_mem_mb_per_cpu: 3000
+slurm_runtime_min: 2880
+slurm_mail_user: ericdavid.boittier@unibas.ch
 slurm_gpu_nodes: [gpu08, gpu09]
