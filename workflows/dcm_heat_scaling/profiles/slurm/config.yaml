@@ -1,12 +1,15 @@
-# Slurm profile for DCM heat scaling (gpu08 / gpu09).
-# Per-job --nodelist is set via the rule ``slurm_extra`` resource.
+# Snakemake >=8.6: requires snakemake-executor-plugin-slurm (see README).
+# Install: uv run --with snakemake --with snakemake-executor-plugin-slurm ...
 executor: slurm
 jobs: 4
+latency-wait: 120
+retries: 1
 default-resources:
   - gpu=1
   - mpi=1
   - runtime=2880
-  - partition=gpu
-  - gres=gpu:1
+  - slurm_partition=gpu
+  - mem_mb_per_cpu=3000
   - cpus_per_task=4
-  - mem_mb=12000
+  - tasks=4
+  - gres=gpu:1
