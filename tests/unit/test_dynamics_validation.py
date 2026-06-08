@@ -489,3 +489,105 @@ def test_assert_stage_dynamics_completed_accepts_stale_restart_after_rescue(tmp_
         dcd_path=None,
         restart_path=res,
     )
+
+
+def test_rewrite_dynamics_restart_validated_detects_nan(tmp_path, monkeypatch):
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        rewrite_dynamics_restart_validated,
+    )
+
+    bad = tmp_path / "heat.res"
+    good = tmp_path / "good.res"
+    good.write_text(
+        _minimal_restart_text(
+            natom=1,
+            coord_lines=[" 0.100000000000000D+00 0.200000000000000D+00 0.300000000000000D+00"],
+        ),
+        encoding="utf-8",
+    )
+    bad.write_text(
+        _minimal_restart_text(
+            natom=1,
+            coord_lines=[" NaN 0.200000000000000D+00 0.300000000000000D+00"],
+        ),
+        encoding="utf-8",
+    )
+
+    def fake_rewrite(path, *, write_unit=92):
+        Path(path).write_text(bad.read_text(encoding="utf-8"), encoding="utf-8")
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.rewrite_dynamics_restart_from_current_state",
+        fake_rewrite,
+    )
+    assert rewrite_dynamics_restart_validated(bad) is False
+
+
+def test_restore_post_rescue_coordinates_prefers_memory(monkeypatch):
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        restore_post_rescue_coordinates,
+    )
+
+    pos = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]], dtype=float)
+    synced: list[np.ndarray] = []
+
+    def fake_sync(arr):
+        synced.append(np.asarray(arr, dtype=float).copy())
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        fake_sync,
+    )
+    source = restore_post_rescue_coordinates(rescued_positions=pos)
+    assert source == "in-memory rescue positions"
+    assert np.allclose(synced[0], pos)
+
+
+def test_refresh_segment_restart_after_overlap_rescue_recovers_from_memory(
+    tmp_path, monkeypatch, capsys
+):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _refresh_segment_restart_after_overlap_rescue,
+    )
+
+    restart = tmp_path / "heat.res"
+    rescued = np.array([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]], dtype=float)
+    validated_calls = {"n": 0}
+
+    def fake_validated(path, *, write_unit=92):
+        validated_calls["n"] += 1
+        return validated_calls["n"] > 1
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.rewrite_dynamics_restart_validated",
+        fake_validated,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        lambda: rescued.copy(),
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._assign_post_rescue_velocities_and_crystal",
+        lambda *_a, **_kw: None,
+    )
+    restored: list[np.ndarray] = []
+
+    def fake_restore(**kwargs):
+        restored.append(kwargs["rescued_positions"])
+        return "in-memory rescue positions"
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_post_rescue_coordinates",
+        fake_restore,
+    )
+
+    _refresh_segment_restart_after_overlap_rescue(
+        restart,
+        {"firstt": 57.0, "tbath": 57.0},
+        mlpot_ctx=None,
+    )
+    out = capsys.readouterr().out
+    assert validated_calls["n"] == 2
+    assert restored and np.allclose(restored[0], rescued)
+    assert "restored from in-memory rescue positions" in out
+    assert "post-rescue restart recovered" in out
