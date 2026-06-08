@@ -57,7 +57,7 @@ mmml md-system \
   --setup pycharmm_full --backend pycharmm \
   --composition DCM:X \
   --output-dir artifacts/pycharmm_mlpot/dcmX_npt_x64_N/dt025 \
-  --md-stage heat --box-size 180 \
+  --md-stages mini,heat --box-size 180 \
   --ps-heat 1000 --n-heat-segments 4000 --heat-thermostat hoover \
   --dt-fs 0.25 \
   --flat-bottom-radius 55 --packmol-radius 15 --temperature 220 \
@@ -120,3 +120,5 @@ snakemake -n ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt025/done.txt \
 - **`slurm_runtime_min`**: default 2880 (48 h); heat with `ps_heat=1000` is long — raise if needed.
 - **`slurm_gpu_nodes`**: `[gpu08, gpu09]` — edit if your cluster changes.
 - Radii (`flat_bottom_radius`, `packmol_radius`) are fixed in config; consider scaling for large N.
+- **`md_stages: mini,heat`**: heat-only skips `minimize_with_mlpot` and usually fails on fresh output dirs.
+- Snakemake captures rule logs automatically — do not add `> {log.stdout}` in the shell block (creates empty logs).

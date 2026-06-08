@@ -20,12 +20,13 @@ def _repo_python() -> str:
     return "python3"
 
 
+_REPO_ROOT = Path(workflow.basedir).resolve().parents[1]
 _REPO_PYTHON = _repo_python()
 _CLUSTER_SIZES = [int(n) for n in config["cluster_sizes"]]
 _REPEATS = [int(r) for r in config.get("repeats", [1])]
 _DT_VALUES = [float(x) for x in config.get("dt_fs_values", [0.25, 0.125])]
 _OUTPUT_ROOT = str(config.get("output_root", "artifacts/pycharmm_mlpot"))
-# run_job.py writes under repo root; paths here are relative to workflows/dcm_heat_scaling.
+# run_job.py writes under repo root; Snakemake cwd is workflows/dcm_heat_scaling.
 _ARTIFACT_ROOT = f"../../{_OUTPUT_ROOT}"
 _GPU_NODES = [str(x) for x in (config.get("slurm_gpu_nodes") or ["gpu08", "gpu09"])]
 
@@ -41,8 +42,13 @@ def _dt_slug(dt_fs: float) -> str:
 _DT_SLUGS = [_dt_slug(dt) for dt in _DT_VALUES]
 
 
-def _run_relpath(n: int, repeat: int, dt_slug: str) -> str:
-    return f"{_ARTIFACT_ROOT}/dcm{n}_npt_x64_{repeat}/{dt_slug}"
+def _artifact_dir(wildcards) -> str:
+    return str(
+        _REPO_ROOT
+        / _OUTPUT_ROOT
+        / f"dcm{wildcards.n}_npt_x64_{wildcards.repeat}"
+        / wildcards.dt_slug
+    )
 
 
 def _heat_tag(n: int) -> str:
@@ -85,23 +91,24 @@ rule run_heat:
         stdout="{root}/dcm{n}_npt_x64_{repeat}/{dt_slug}/stdout.log",
     params:
         tag=lambda wildcards: _heat_tag(int(wildcards.n)),
+        out_dir=_artifact_dir,
+        heat_dcd=lambda wildcards: f"{_artifact_dir(wildcards)}/heat_{_heat_tag(int(wildcards.n))}.dcd",
         workflow_dir=workflow.basedir,
     resources:
         gpu=1,
         mpi=1,
         runtime=int(config.get("slurm_runtime_min", 2880)),
         mem_mb_per_cpu=int(config.get("slurm_mem_mb_per_cpu", 3000)),
-        # Match #SBATCH --ntasks=4 without --cpus-per-task=4 (avoids --ntasks-per-gpu=4).
-        tasks=int(config.get("slurm_ntasks", 4)),
-        cpus_per_task=int(config.get("slurm_cpus_per_task", 1)),
+        tasks=int(config.get("slurm_ntasks", 1)),
+        cpus_per_task=int(config.get("slurm_cpus_per_task", 4)),
         nodes=int(config.get("slurm_nodes", 1)),
         slurm_partition=str(config.get("slurm_partition", "gpu")),
         slurm_extra=_slurm_extra,
     shell:
         """
-        mkdir -p {wildcards.root}/dcm{wildcards.n}_npt_x64_{wildcards.repeat}/{wildcards.dt_slug}
-        bash {params.workflow_dir}/scripts/job_shell.sh {wildcards.n} {wildcards.repeat} {wildcards.dt_slug} \
-            > {log.stdout} 2>&1
-        test -s {wildcards.root}/dcm{wildcards.n}_npt_x64_{wildcards.repeat}/{wildcards.dt_slug}/heat_{params.tag}.dcd
+        set -euo pipefail
+        mkdir -p {params.out_dir}
+        bash {params.workflow_dir}/scripts/job_shell.sh {wildcards.n} {wildcards.repeat} {wildcards.dt_slug}
+        test -s {params.heat_dcd}
         touch {output}
         """

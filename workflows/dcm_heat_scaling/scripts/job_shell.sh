@@ -18,12 +18,12 @@ PY="${MMML_PYTHON}"
 
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 
-echo "=== dcm_heat_scaling: DCM:${N_MONOMERS} repeat=${REPEAT} ${DT_SLUG} ===" >&2
-echo "REPO_ROOT=${REPO_ROOT}" >&2
-echo "PY=${PY}" >&2
-echo "MMML_BIN=${MMML_BIN:-<python -m mmml.cli.__main__>}" >&2
-echo "MMML_CKPT=${MMML_CKPT:-<unset>}" >&2
-echo "JAX_ENABLE_X64=${JAX_ENABLE_X64}" >&2
+echo "=== dcm_heat_scaling: DCM:${N_MONOMERS} repeat=${REPEAT} ${DT_SLUG} ==="
+echo "REPO_ROOT=${REPO_ROOT}"
+echo "PY=${PY}"
+echo "MMML_BIN=${MMML_BIN:-<python -m mmml.cli.__main__>}"
+echo "MMML_CKPT=${MMML_CKPT:-<unset>}"
+echo "JAX_ENABLE_X64=${JAX_ENABLE_X64}"
 
 "$PY" -c "
 import sys

@@ -19,7 +19,8 @@ seed_base: 123456
 
 setup: pycharmm_full
 backend: pycharmm
-md_stage: heat
+# Fresh runs need MLpot mini before heat (heat-only skips minimize_with_mlpot).
+md_stages: mini,heat
 box_size: 180.0
 ps_heat: 1000.0
 n_heat_segments: 4000

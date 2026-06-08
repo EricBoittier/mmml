@@ -142,10 +142,19 @@ def build_md_system_argv(
         str(out),
         "--job-name",
         job_name,
-        "--md-stage",
-        str(cfg.get("md_stage", "heat")),
         "--box-size",
         str(cfg["box_size"]),
+    ]
+
+    md_stages = cfg.get("md_stages")
+    if md_stages:
+        stages = md_stages if isinstance(md_stages, str) else ",".join(str(s) for s in md_stages)
+        argv.extend(["--md-stages", stages])
+    else:
+        argv.extend(["--md-stage", str(cfg.get("md_stage", "heat"))])
+
+    argv.extend(
+        [
         "--ps-heat",
         str(cfg["ps_heat"]),
         "--n-heat-segments",
@@ -172,7 +181,8 @@ def build_md_system_argv(
         str(int(cfg.get("ml_gpu_count", 1))),
         "--ml-batch-size",
         str(int(cfg.get("ml_batch_size", 2056))),
-    ]
+        ]
+    )
 
     if bool(cfg.get("no_echeck", False)):
         argv.append("--no-echeck")

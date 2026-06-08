@@ -31,7 +31,7 @@ def cfg(tmp_path, monkeypatch):
         "seed_base": 123456,
         "setup": "pycharmm_full",
         "backend": "pycharmm",
-        "md_stage": "heat",
+        "md_stages": "mini,heat",
         "box_size": 180.0,
         "ps_heat": 1000.0,
         "n_heat_segments": 4000,
@@ -66,7 +66,7 @@ def test_unique_seeds_per_dt_and_repeat(cfg):
 def test_build_md_system_argv_heat_flags(cfg):
     argv = build_md_system_argv(cfg, 30, 1, 0.25)
     assert "--setup" in argv and "pycharmm_full" in argv
-    assert "--md-stage" in argv and "heat" in argv
+    assert "--md-stages" in argv and "mini,heat" in argv
     assert "--dt-fs" in argv
     assert argv[argv.index("--dt-fs") + 1] == "0.25"
     assert "--dcd-nsavc" in argv
