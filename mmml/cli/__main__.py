@@ -45,6 +45,7 @@ Available commands:
   sample-diverse-xyz  Pick N diverse structures from XYZ(s); write sampled.npz (SOAP)
   gui         Start the molecular viewer GUI
   extract-checkpoint-metrics  Plot and print training metrics from Orbax checkpoints
+  orbax-to-json  Export an Orbax checkpoint to a portable JSON file
 
 Examples:
   mmml make-res --res CYBZ
@@ -78,6 +79,7 @@ Examples:
   mmml pyscf-evaluate -i md_sampled.npz -o md_evaluated.npz
   mmml interpolate-xyz reactants.xyz products.xyz -o path.npz --steps 500
   mmml unwrap-traj wrapped.traj -o unwrapped.extxyz --format extxyz --fast
+  mmml orbax-to-json mmml/models/physnetjax/ckpts/DESdimers/epoch-1985 -o DESdimers_params.json
 
 For help on a specific command:
   mmml <command> --help
@@ -86,7 +88,7 @@ For help on a specific command:
     
     parser.add_argument(
         'command',
-        choices=['make-res', 'make-box', 'run', 'md-system', 'lambda-mbar', 'run-pycharmm', 'pycharmm-two-residue-sample', 'xml2npz', 'validate', 'train', 'train-joint', 'evaluate', 'downstream', 'fix-and-split', 'pyscf-dft', 'pyscf-mp2', 'pyscf-evaluate', 'verify-esp-alignment', 'normal-mode-sample', 'physnet-md', 'physnet-evaluate', 'ef-train', 'ef-evaluate', 'ef-md', 'active-learning', 'kernel-fit', 'interpolate-xyz', 'unwrap-traj', 'sample-diverse-xyz', 'gui', 'extract-checkpoint-metrics'],
+        choices=['make-res', 'make-box', 'run', 'md-system', 'lambda-mbar', 'run-pycharmm', 'pycharmm-two-residue-sample', 'xml2npz', 'validate', 'train', 'train-joint', 'evaluate', 'downstream', 'fix-and-split', 'pyscf-dft', 'pyscf-mp2', 'pyscf-evaluate', 'verify-esp-alignment', 'normal-mode-sample', 'physnet-md', 'physnet-evaluate', 'ef-train', 'ef-evaluate', 'ef-md', 'active-learning', 'kernel-fit', 'interpolate-xyz', 'unwrap-traj', 'sample-diverse-xyz', 'gui', 'extract-checkpoint-metrics', 'orbax-to-json'],
         help='Command to run'
     )
     parser.add_argument(
@@ -265,6 +267,11 @@ For help on a specific command:
         from .misc import extract_checkpoint_metrics
         sys.argv = ['mmml extract-checkpoint-metrics'] + args.args
         return extract_checkpoint_metrics.main()
+
+    elif args.command == 'orbax-to-json':
+        from .misc import orbax_to_json_cmd
+        sys.argv = ['mmml orbax-to-json'] + args.args
+        return orbax_to_json_cmd.main()
     
     else:
         parser.print_help()
