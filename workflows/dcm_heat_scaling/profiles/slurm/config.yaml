@@ -10,7 +10,7 @@ envvars:
   - MMML_CKPT
 default-resources:
   - gpu=1
-  - mpi=1
+  - charmm_slot=1
   - runtime=2880
   - nodes=1
   - slurm_partition=gpu
