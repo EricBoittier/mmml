@@ -1,0 +1,39 @@
+# DCM:N heat-only PyCHARMM MLpot scaling (N = 5, 10, …, 90).
+# Checkpoint: export MMML_CKPT before snakemake.
+#
+# Output layout (repo root):
+#   artifacts/pycharmm_mlpot/dcm{N}_npt_x64_{repeat}/dt_{slug}/
+
+cluster_sizes: [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90]
+repeats: [1]
+dt_fs_values: [0.25, 0.125]
+
+composition_prefix: DCM
+checkpoint: "${MMML_CKPT}"
+output_root: artifacts/pycharmm_mlpot
+mpirun_wrapper: ../../scripts/mmml-charmm-mpirun.sh
+# Set false to match a plain ``mmml md-system`` launch (no OpenMPI wrapper).
+use_mpirun: true
+
+# Per-run seed: seed_base + N*10000 + repeat*100 + dt_offset (0.25→0, 0.125→1).
+seed_base: 123456
+
+setup: pycharmm_full
+backend: pycharmm
+md_stage: heat
+box_size: 180.0
+ps_heat: 1000.0
+n_heat_segments: 4000
+heat_thermostat: hoover
+flat_bottom_radius: 55.0
+packmol_radius: 15.0
+temperature: 220.0
+dcd_nsavc: 500
+dynamics_overlap_action: rescue
+dynamics_intra_min_distance: 0.5
+ml_gpu_count: 1
+ml_batch_size: 2056
+no_echeck: true
+
+# Slurm GPU nodes (alternated per job via hash of N/repeat/dt).
+slurm_gpu_nodes: [gpu08, gpu09]

@@ -1,0 +1,12 @@
+# Slurm profile for DCM heat scaling (gpu08 / gpu09).
+# Per-job --nodelist is set via the rule ``slurm_extra`` resource.
+executor: slurm
+jobs: 4
+default-resources:
+  - gpu=1
+  - mpi=1
+  - runtime=2880
+  - partition=gpu
+  - gres=gpu:1
+  - cpus_per_task=4
+  - mem_mb=12000
