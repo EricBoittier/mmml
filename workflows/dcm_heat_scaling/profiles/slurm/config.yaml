@@ -11,5 +11,5 @@ default-resources:
   - nodes=1
   - slurm_partition=gpu
   - mem_mb_per_cpu=3000
-  - cpus_per_task=1
-  - tasks=4
+  - cpus_per_task=4
+  - tasks=1

@@ -11,9 +11,8 @@ dt_fs_values: [0.25, 0.125]
 composition_prefix: DCM
 checkpoint: "${MMML_CKPT}"
 output_root: artifacts/pycharmm_mlpot
-mpirun_wrapper: ../../scripts/mmml-charmm-mpirun.sh
-# Set false to match a plain ``mmml md-system`` launch (no OpenMPI wrapper).
-use_mpirun: true
+# Plain ``mmml md-system`` (no mmml-charmm-mpirun.sh). Required for Snakemake Slurm jobsteps.
+use_mpirun: false
 
 # Per-run seed: seed_base + N*10000 + repeat*100 + dt_offset (0.25→0, 0.125→1).
 seed_base: 123456
@@ -38,9 +37,8 @@ no_echeck: true
 # Slurm (mapped to sbatch by snakemake-executor-plugin-slurm; do not duplicate in slurm_extra).
 slurm_partition: gpu
 slurm_nodes: 1
-slurm_ntasks: 4
-# 1 CPU per MPI rank (#SBATCH --ntasks=4 --mem-per-cpu=3000). Do not set 4 (→ 16 CPUs + ntasks-per-gpu).
-slurm_cpus_per_task: 1
+slurm_ntasks: 1
+slurm_cpus_per_task: 4
 slurm_mem_mb_per_cpu: 3000
 slurm_runtime_min: 2880
 slurm_mail_user: ericdavid.boittier@unibas.ch

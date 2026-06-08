@@ -25,6 +25,8 @@ _CLUSTER_SIZES = [int(n) for n in config["cluster_sizes"]]
 _REPEATS = [int(r) for r in config.get("repeats", [1])]
 _DT_VALUES = [float(x) for x in config.get("dt_fs_values", [0.25, 0.125])]
 _OUTPUT_ROOT = str(config.get("output_root", "artifacts/pycharmm_mlpot"))
+# run_job.py writes under repo root; paths here are relative to workflows/dcm_heat_scaling.
+_ARTIFACT_ROOT = f"../../{_OUTPUT_ROOT}"
 _GPU_NODES = [str(x) for x in (config.get("slurm_gpu_nodes") or ["gpu08", "gpu09"])]
 
 
@@ -40,7 +42,7 @@ _DT_SLUGS = [_dt_slug(dt) for dt in _DT_VALUES]
 
 
 def _run_relpath(n: int, repeat: int, dt_slug: str) -> str:
-    return f"{_OUTPUT_ROOT}/dcm{n}_npt_x64_{repeat}/{dt_slug}"
+    return f"{_ARTIFACT_ROOT}/dcm{n}_npt_x64_{repeat}/{dt_slug}"
 
 
 def _heat_tag(n: int) -> str:
@@ -69,7 +71,7 @@ rule all:
     input:
         expand(
             "{root}/dcm{n}_npt_x64_{repeat}/{dt_slug}/done.txt",
-            root=_OUTPUT_ROOT,
+            root=_ARTIFACT_ROOT,
             n=_CLUSTER_SIZES,
             repeat=_REPEATS,
             dt_slug=_DT_SLUGS,

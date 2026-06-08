@@ -83,7 +83,7 @@ def main() -> int:
     md_argv = build_md_system_argv(cfg, n, rep, dt_fs)
     os.chdir(_repo_root())
 
-    if bool(cfg.get("use_mpirun", True)):
+    if bool(cfg.get("use_mpirun", False)):
         mpirun_wrapper = _resolve_mpirun_wrapper(cfg)
         if not mpirun_wrapper.is_file():
             raise SystemExit(f"MPI wrapper not found: {mpirun_wrapper}")
