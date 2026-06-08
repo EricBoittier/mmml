@@ -95,9 +95,11 @@ nohup uv run --with snakemake --with snakemake-executor-plugin-slurm \
 
 Slurm resources per job match your header (via Snakemake resources, not `slurm_extra`):
 
-- `slurm_partition=gpu`, `gres=gpu:1`
-- `nodes=1`, `tasks=4`, `cpus_per_task=4`, `mem_mb_per_cpu=3000`
-- `slurm_extra`: `--mail-user=...`, `--nodelist=gpu08|gpu09` only
+- `slurm_partition=gpu`, `gpu=1` (→ `--gpus=1`)
+- `nodes=1`, `tasks=4`, `cpus_per_task=1`, `mem_mb_per_cpu=3000` (4 MPI ranks, 3 GB each)
+- `slurm_extra`: `--mail-user=...`, `--nodelist=gpu08,gpu09` (SLURM picks a free node)
+
+Do **not** set `cpus_per_task=4` with `gpu=1` — the Slurm plugin adds `--ntasks-per-gpu=4` and the node may reject the request.
 
 Single job:
 
