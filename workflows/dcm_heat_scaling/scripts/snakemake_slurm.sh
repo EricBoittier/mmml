@@ -11,6 +11,6 @@ shift || true
 exec uv run --with snakemake --with snakemake-executor-plugin-slurm snakemake \
   --profile profiles/slurm \
   -j"$JOBS" \
-  --resources gpu=1 mpi=1 \
+  --resources gpu=1 charmm_slot=1 \
   --keep-going \
   "$@"

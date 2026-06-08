@@ -76,10 +76,10 @@ bash scripts/preflight.sh
 snakemake -n
 ```
 
-Local (serialize PyCHARMM via `mpi=1`):
+Local (limit concurrent PyCHARMM jobs via `charmm_slot=1`):
 
 ```bash
-snakemake -j2 --resources gpu=1 mpi=1 --keep-going
+snakemake -j2 --resources gpu=1 charmm_slot=1 --keep-going
 ```
 
 Slurm (gpu08 / gpu09, alternating per job):
@@ -90,7 +90,7 @@ nohup bash scripts/snakemake_slurm.sh 4 > snakemake_slurm.log 2>&1 &
 
 # equivalent manual command
 nohup uv run --with snakemake --with snakemake-executor-plugin-slurm \
-  snakemake --profile profiles/slurm -j4 --resources gpu=1 mpi=1 --keep-going \
+  snakemake --profile profiles/slurm -j4 --resources gpu=1 charmm_slot=1 --keep-going \
   > snakemake_slurm.log 2>&1 &
 ```
 
@@ -123,3 +123,4 @@ snakemake -n ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt025/done.txt \
 - Radii (`flat_bottom_radius`, `packmol_radius`) are fixed in config; consider scaling for large N.
 - **`md_stages: mini,heat`**: heat-only skips `minimize_with_mlpot` and usually fails on fresh output dirs.
 - Snakemake captures rule logs automatically — do not add `> {log.stdout}` in the shell block (creates empty logs).
+- Use `charmm_slot=1` (not `mpi=1`) — the Slurm plugin treats `mpi` as a real MPI job and requires `tasks > 1`.

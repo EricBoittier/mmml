@@ -2,5 +2,5 @@ executor: local
 jobs: 2
 default-resources:
   - gpu=1
-  - mpi=1
+  - charmm_slot=1
   - runtime=2880

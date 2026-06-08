@@ -96,7 +96,7 @@ rule run_heat:
         workflow_dir=workflow.basedir,
     resources:
         gpu=1,
-        mpi=1,
+        charmm_slot=1,
         runtime=int(config.get("slurm_runtime_min", 2880)),
         mem_mb_per_cpu=int(config.get("slurm_mem_mb_per_cpu", 3000)),
         tasks=int(config.get("slurm_ntasks", 1)),
