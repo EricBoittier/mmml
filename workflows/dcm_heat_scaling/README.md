@@ -13,7 +13,8 @@ Sibling to [dcm_nve_scaling](../dcm_nve_scaling/) (short NVE screening).
 
 ```bash
 export MMML_CKPT=/mmhome/boittier/home/mmml_tutorial/acodcm/ckpts/dcm1-c137fb42-1f65-4748-880b-8f8184a20f70
-export JAX_ENABLE_X64=1
+export JAX_ENABLE_X64=1   # optional; job_shell defaults to 1
+# MMML_PYTHON / MMML_BIN optional — resolved from repo .venv when unset
 ```
 
 - GPU JAX (`uv sync --extra gpu`) or cluster conda/micromamba env with `jax` + `mmml`
