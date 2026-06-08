@@ -237,4 +237,6 @@ def test_clear_comp_for_production(mock_clear_coords, mock_zero, mock_script):
     clear_comp_for_production()
     mock_clear_coords.assert_called_once()
     mock_zero.assert_called_once_with("all", quiet=False)
-    mock_script.assert_called_once_with("scalar wcomp set 0 select all end")
+    mock_script.assert_called_once_with(
+        "scalar wcomp set 0 select all end", quiet=False
+    )
