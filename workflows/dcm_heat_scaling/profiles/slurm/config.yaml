@@ -4,11 +4,10 @@ executor: slurm
 jobs: 4
 latency-wait: 120
 retries: 1
+# Only list vars that must be set before launch. MMML_PYTHON/MMML_BIN are
+# resolved from .venv by scripts/resolve_mmml_env.sh when unset.
 envvars:
   - MMML_CKPT
-  - JAX_ENABLE_X64
-  - MMML_PYTHON
-  - MMML_BIN
 default-resources:
   - gpu=1
   - mpi=1
