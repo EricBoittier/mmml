@@ -37,11 +37,13 @@ no_echeck: true
 
 # Slurm (mapped to sbatch by snakemake-executor-plugin-slurm; do not duplicate in slurm_extra).
 slurm_partition: gpu
-slurm_gres: gpu:1
 slurm_nodes: 1
 slurm_ntasks: 4
-slurm_cpus_per_task: 4
+# 1 CPU per MPI rank (#SBATCH --ntasks=4 --mem-per-cpu=3000). Do not set 4 (→ 16 CPUs + ntasks-per-gpu).
+slurm_cpus_per_task: 1
 slurm_mem_mb_per_cpu: 3000
 slurm_runtime_min: 2880
 slurm_mail_user: ericdavid.boittier@unibas.ch
+# Comma list: SLURM schedules on whichever node is free (set "" to drop --nodelist).
+slurm_nodelist: gpu08,gpu09
 slurm_gpu_nodes: [gpu08, gpu09]
