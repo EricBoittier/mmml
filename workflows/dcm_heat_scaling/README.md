@@ -19,7 +19,15 @@ export JAX_ENABLE_X64=1
 - GPU JAX (`uv sync --extra gpu`) or cluster conda/micromamba env with `jax` + `mmml`
 - OpenMPI + rebuilt `libcharmm.so` for large clusters (use [mmml-charmm-mpirun.sh](../../scripts/mmml-charmm-mpirun.sh); set `use_mpirun: false` in [config.yaml](config.yaml) for plain `mmml md-system`)
 - `packmol` on PATH
-- `snakemake`
+- `snakemake` **and** [`snakemake-executor-plugin-slurm`](https://snakemake.github.io/snakemake-plugin-catalog/plugins/executor/slurm.html) (Snakemake 8+ no longer bundles Slurm)
+
+```bash
+# one-off check (from workflow dir)
+uv run --with snakemake --with snakemake-executor-plugin-slurm snakemake --version
+```
+
+Without the plugin, `--profile profiles/slurm` fails with:
+`invalid choice: 'slurm' (choose from local, dryrun, touch)`.
 
 ## Job matrix
 
@@ -76,7 +84,13 @@ snakemake -j2 --resources gpu=1 mpi=1 --keep-going
 Slurm (gpu08 / gpu09, alternating per job):
 
 ```bash
-snakemake --profile profiles/slurm -j4 --keep-going
+# recommended wrapper (checks plugin, passes --resources)
+nohup bash scripts/snakemake_slurm.sh 4 > snakemake_slurm.log 2>&1 &
+
+# equivalent manual command
+nohup uv run --with snakemake --with snakemake-executor-plugin-slurm \
+  snakemake --profile profiles/slurm -j4 --resources gpu=1 mpi=1 --keep-going \
+  > snakemake_slurm.log 2>&1 &
 ```
 
 Slurm resources per job match your header:
