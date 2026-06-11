@@ -115,6 +115,58 @@ snakemake -n ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt025/done.txt \
               ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt0125/done.txt
 ```
 
+## Check progress
+
+The log you pasted (`artifacts/...` without `../../`, `mpi=1`, manual `> stdout.log`) is from an **older Snakefile** before the path/MPI fixes. Ignore it unless timestamps match your latest launch.
+
+**Summary table** (works while Snakemake is running or after failures):
+
+```bash
+cd ~/mmml/workflows/dcm_heat_scaling
+bash scripts/status.sh
+```
+
+Writes `results/status.csv` and prints counts:
+
+| status | meaning |
+|--------|---------|
+| `done` | `done.txt` exists — Snakemake marked success |
+| `running` | `stdout.log` shows MD activity and/or growing `heat_dcm_N.dcd` |
+| `failed` | log shows traceback / exit code, no DCD |
+| `started` | log exists but no DCD yet |
+| `partial` | DCD exists but job did not finish (`done.txt` missing) |
+| `pending` | no output directory yet |
+
+**Quick shell checks** (repo root = `~/mmml`):
+
+```bash
+# how many finished?
+find ~/mmml/artifacts/pycharmm_mlpot -name done.txt | wc -l
+
+# any heat trajectories (even if Snakemake not done yet)?
+find ~/mmml/artifacts/pycharmm_mlpot -name 'heat_dcm_*.dcd' -ls
+
+# driver log (login node)
+tail -f ~/mmml/workflows/dcm_heat_scaling/snakemake_slurm.log
+
+# one job log (gpu node output)
+tail -f ~/mmml/artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt025/stdout.log
+
+# slurm queue
+squeue -u $USER
+```
+
+**Stale outputs:** early runs wrote under `workflows/dcm_heat_scaling/artifacts/` (wrong). Current runs use `~/mmml/artifacts/pycharmm_mlpot/`. `status.sh` flags stale dirs.
+
+After pulling latest fixes, restart cleanly:
+
+```bash
+export MMML_CKPT=...
+cd ~/mmml/workflows/dcm_heat_scaling
+nohup bash scripts/snakemake_slurm.sh 4 > snakemake_slurm.log 2>&1 &
+bash scripts/status.sh
+```
+
 ## Config notes
 
 - **`repeats`**: add `[1, 2, 3]` for multiple independent trajectories per (N, dt).
