@@ -1,3 +1,4 @@
 results/
 .snakemake/
 artifacts/
+# repo-root artifacts are under ../../artifacts/ — not gitignored here
