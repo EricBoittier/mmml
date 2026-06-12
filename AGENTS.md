@@ -38,3 +38,34 @@ caveats for working in the cloud VM.
   `cd mmml/gui/viewer && npm run dev` (Vite on :5173, proxies `/api` to :8000).
 - Viewing `.pdb` / `.npz` / `.traj` files needs no GPU or checkpoints. Sample files live in
   `mmml/generate/sample/pdb/`.
+
+### CHARMM / pyCHARMM (live build)
+- The CHARMM source ships as `setup/charmm.tar.xz`; the extracted tree, the build output, and the
+  generated `CHARMMSETUP` file are all gitignored, so they do NOT survive a fresh checkout and are
+  intentionally NOT part of the update script (a CHARMM compile is too heavy/brittle for startup).
+- To build a CPU-only (serial) `libcharmm.so` for the pyCHARMM tests, system packages are needed:
+  `gcc-14 g++-14 gfortran-14 libstdc++-14-dev libfftw3-dev` (the prebuilt `.so` in the tarball was
+  linked against OpenMPI + a custom gcc-14 and will not load here). Then:
+  ```bash
+  cd setup/charmm && bash ../install.sh   # extracts tarball + writes CHARMMSETUP (CHARMM_HOME/LIB_DIR)
+  mkdir -p build_agent && cd build_agent
+  CC=gcc-14 CXX=g++-14 FC=gfortran-14 ../configure --as-library --without-mpi --without-openmm
+  make -j"$(nproc)"                       # ~6 min; produces build_agent/libcharmm.so
+  cd .. && ln -sf build_agent/libcharmm.so libcharmm.so   # pyCHARMM loads $CHARMM_LIB_DIR/libcharmm.so
+  ```
+- `import pycharmm` loads `libcharmm.so` at import time, so it requires `CHARMM_LIB_DIR` (and
+  `CHARMM_HOME`) pointing at `setup/charmm`. `mmml.interfaces.pycharmmInterface.import_pycharmm`
+  additionally reads the repo-root `CHARMMSETUP` file for those two paths. `import mmml` does NOT
+  import pycharmm, so the rest of the package works without a CHARMM build.
+- Run the CHARMM-related tests with the env set:
+  `CHARMM_HOME=$PWD/setup/charmm CHARMM_LIB_DIR=$PWD/setup/charmm uv run pytest -m "pycharmm and not gpu"`.
+  The `pycharmm and gpu` tests load ML checkpoints and force JAX GPU compilation; they fail here with
+  `ptxas not found` (no CUDA/GPU in the VM), not because of CHARMM.
+
+### Packaging (uv tool / pip, with pyCHARMM)
+- The wheel bundles both the `mmml` and `pycharmm` top-level packages plus the `mmml` console scripts
+  (`mmml`, `mmml-pycharmm-two-residue-sample`, `mmml-spectra-md`); no pyproject changes are needed.
+- Install as a uv tool: `uv tool install .` (exposes the `mmml` CLI on PATH in an isolated venv).
+- Install as a pip package: `pip install .` (or the built wheel). `uv build` writes the sdist/wheel.
+- In both installs `import pycharmm` works only when `CHARMM_LIB_DIR`/`CHARMM_HOME` are exported and a
+  built `libcharmm.so` exists — the shared library is environment state, not bundled in the wheel.
