@@ -59,8 +59,14 @@ caveats for working in the cloud VM.
   import pycharmm, so the rest of the package works without a CHARMM build.
 - Run the CHARMM-related tests with the env set:
   `CHARMM_HOME=$PWD/setup/charmm CHARMM_LIB_DIR=$PWD/setup/charmm uv run pytest -m "pycharmm and not gpu"`.
-  The `pycharmm and gpu` tests load ML checkpoints and force JAX GPU compilation; they fail here with
-  `ptxas not found` (no CUDA/GPU in the VM), not because of CHARMM.
+- The `pycharmm and gpu` tests build the ML calculator, which defaults to GPU and fails with
+  `ptxas not found` on this CPU-only VM. Force the CPU path to run them here:
+  `MMML_MLPOT_DEVICE=cpu MMML_JAX_WARMUP_DEVICE=cpu` (these select the JAX device/warmup backend; see
+  `mmml/interfaces/pycharmmInterface/jax_device_policy.py`). With those set plus `CHARMM_LIB_DIR`, the
+  full suite is green on CPU.
+- ML regression tests that only need the portable JSON params (no CHARMM, no GPU, no Orbax/NPZ) live in
+  `tests/functionality/mmml_tests/test_physnet_json_regression.py`; they load
+  `examples/ckpts_json/DESdimers_params.json` and pin energy/forces, and run in CI on CPU.
 
 ### Packaging (uv tool / pip, with pyCHARMM)
 - The wheel bundles both the `mmml` and `pycharmm` top-level packages plus the `mmml` console scripts
