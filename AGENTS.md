@@ -29,12 +29,26 @@ caveats for working in the cloud VM.
   are not bundled, so README energy-calculator examples that load a checkpoint will not run as-is.
 
 ### GUI (molecular viewer)
-- `mmml/gui/viewer/node_modules` is tracked in git but ships incomplete; a fresh checkout fails
-  `vite build` until deps are restored. The update script runs `npm install --prefix mmml/gui/viewer`
-  to repair it (idempotent). `dist/` is gitignored and must be built before production serving.
+- `mmml/gui/viewer/node_modules` is gitignored (not committed); the update script runs
+  `npm install --prefix mmml/gui/viewer` to create it (idempotent). `dist/` is gitignored and must
+  be built before production serving.
 - Production serve (single port): `cd mmml/gui/viewer && npm run build`, then
   `uv run mmml gui --data-dir <dir> --no-browser` → http://127.0.0.1:8000.
 - Dev mode (hot reload): `uv run mmml gui --data-dir <dir> --dev --no-browser` (API on :8000) plus
   `cd mmml/gui/viewer && npm run dev` (Vite on :5173, proxies `/api` to :8000).
 - Viewing `.pdb` / `.npz` / `.traj` files needs no GPU or checkpoints. Sample files live in
   `mmml/generate/sample/pdb/`.
+
+### Repository size & Git LFS
+- Do NOT commit large/regenerable binaries. `.gitignore` already covers `node_modules/`, `*.dcd`,
+  `*.traj`, `*.pov-state`, `*.h5`, `*.xyz`, `*.png`, checkpoints, etc.; add new large artifacts there
+  (or host them externally) rather than committing them.
+- Git history is heavy (~3.8 GB pack) from binaries committed in the past (training checkpoints,
+  notebooks with outputs, `.pov-state`, `.dcd/.traj`, EF param JSONs, a vendored `hdf5-*` tree).
+  Deleting files now does not shrink a clone — history must be rewritten. Use
+  `scripts/slim_repo_history.sh` (a maintainer-run, backup-first `git filter-repo` flow; it never
+  force-pushes for you). A conservative purge tested 3.8 GB → 3.2 GB; an aggressive one → ~0.95 GB.
+- Fast checkout without rewriting history: `git clone --filter=blob:none <url>` (partial) or
+  `git clone --depth 1 <url>` (shallow).
+- Reclaiming Git LFS quota requires deleting the historical LFS objects (GitHub does not GC them
+  automatically) — rewrite history, then recreate the repo or use GitHub's LFS admin tooling.
