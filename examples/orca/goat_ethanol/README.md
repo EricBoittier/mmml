@@ -45,7 +45,7 @@ Pass criteria for a smoke run:
 
 ## Input notes
 
-- `! GOAT` — basin-hopping / ensemble search ([ORCA 6.0 manual §6.4](https://www.faccts.de/docs/orca/6.0/manual/contents/typical/GOAT.html))
+- `! ExtOpt GOAT` — required to activate the external PES; combine with `! PAL4` etc.
 - `%method ProgExt` — MMML client (same pattern as AIMNet2 via [orca-external-tools](https://github.com/faccts/orca-external-tools))
 - `%geom EnforceStrictConvergence false` — GOAT sets strict convergence by default; ML potentials can be noisy at `TolE` floors (see AIMNet2 OET docs)
 - `NWORKERS 4` + `! PAL4` — one worker per core for this small example; scale up for production
@@ -55,7 +55,7 @@ Pass criteria for a smoke run:
 For real conformer work on larger molecules:
 
 ```text
-! GOAT
+! ExtOpt GOAT
 ! PAL16
 
 %pal
