@@ -1,0 +1,82 @@
+                                 *****************
+                                 * O   R   C   A *
+                                 *****************
+
+                       *****************************
+                       * Geometry Optimization Run *
+                       *****************************
+
+Geometry optimization settings:
+Update method            Update   .... BFGS
+Choice of coordinates    CoordSys .... (2022) Redundant Internals
+Initial Hessian          InHess   .... Almloef's Model
+Max. no of cycles        MaxIter  .... 9000
+
+Convergence Tolerances:
+Energy Change            TolE     ....  5.0000e-06 Eh
+Max. Gradient            TolMAXG  ....  3.0000e-04 Eh/bohr
+RMS Gradient             TolRMSG  ....  1.0000e-04 Eh/bohr
+Max. Displacement        TolMAXD  ....  4.0000e-03 bohr
+RMS Displacement         TolRMSD  ....  2.0000e-03 bohr
+Strict Convergence                .... False
+
+------------------------------------------------------------------------------
+                        ORCA OPTIMIZATION COORDINATE SETUP
+------------------------------------------------------------------------------
+
+The optimization will be done in redundant internal coordinates (2022)
+Making redundant internal coordinates   ...  (2022 redundants) done
+Evaluating the initial hessian          ...  (Almloef) done
+Evaluating the coordinates              ...  done
+Calculating the B-matrix                .... done
+Calculating the G-matrix                .... done
+Diagonalizing the G-matrix              .... done
+The first mode is                       ....    9
+The number of degrees of freedom        ....   21
+
+    -----------------------------------------------------------------
+                    Redundant Internal Coordinates
+
+
+    -----------------------------------------------------------------
+         Definition                    Initial Value    Approx d2E/dq
+    -----------------------------------------------------------------
+      1. B(C   1,C   0)                  1.5058         0.408363   
+      2. B(O   2,C   1)                  1.4140         0.512345   
+      3. B(H   3,C   0)                  1.0802         0.373251   
+      4. B(H   4,C   0)                  1.0803         0.373225   
+      5. B(H   5,C   0)                  1.0791         0.374843   
+      6. B(H   6,C   1)                  1.0921         0.357281   
+      7. B(H   7,C   1)                  1.0917         0.357796   
+      8. B(H   8,O   2)                  0.9305         0.579469   
+      9. A(C   1,C   0,H   5)          111.2304         0.331300   
+     10. A(H   3,C   0,H   4)          107.4327         0.294140   
+     11. A(H   3,C   0,H   5)          107.1784         0.294341   
+     12. A(C   1,C   0,H   4)          111.7203         0.331063   
+     13. A(C   1,C   0,H   3)          111.7521         0.331067   
+     14. A(H   4,C   0,H   5)          107.2750         0.294338   
+     15. A(H   6,C   1,H   7)          107.1443         0.290188   
+     16. A(C   0,C   1,O   2)          108.4365         0.387209   
+     17. A(O   2,C   1,H   7)          110.6406         0.339315   
+     18. A(C   0,C   1,H   7)          109.9839         0.328761   
+     19. A(O   2,C   1,H   6)          110.6053         0.339234   
+     20. A(C   0,C   1,H   6)          110.0314         0.328683   
+     21. A(C   1,O   2,H   8)          109.2472         0.364925   
+     22. D(O   2,C   1,C   0,H   4)    -59.7648         0.013213   
+     23. D(H   6,C   1,C   0,H   3)   -178.2662         0.013213   
+     24. D(O   2,C   1,C   0,H   3)     60.6429         0.013213   
+     25. D(H   6,C   1,C   0,H   4)     61.3261         0.013213   
+     26. D(H   6,C   1,C   0,H   5)    -58.5207         0.013213   
+     27. D(O   2,C   1,C   0,H   5)   -179.6116         0.013213   
+     28. D(H   8,O   2,C   1,C   0)   -177.8819         0.020787   
+     29. D(H   8,O   2,C   1,H   7)    -57.1828         0.020787   
+     30. D(H   8,O   2,C   1,H   6)     61.3821         0.020787   
+    -----------------------------------------------------------------
+
+Number of atoms                         .... 9
+Number of degrees of freedom            .... 30
+
+
+         *************************************************************
+         *                GEOMETRY OPTIMIZATION CYCLE   1            *
+         *************************************************************

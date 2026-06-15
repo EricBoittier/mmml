@@ -1,0 +1,5 @@
+ethanol_goat.goat.0.3_EXT.xyz # xyz filename
+0 # charge
+1 # multiplicity
+1 # NCores
+1 # do gradient
