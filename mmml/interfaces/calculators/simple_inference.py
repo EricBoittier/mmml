@@ -3,15 +3,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+from typing import Any, Optional
+
 import numpy as np
 import jax.numpy as jnp
 from ase.calculators.calculator import Calculator, all_changes
-from pathlib import Path
-from typing import Any, Optional
-from collections.abc import Mapping
-import importlib.util
-import pickle
-import sys
 
 from mmml.data.units import ANGSTROM_TO_BOHR
 
@@ -325,140 +322,16 @@ def create_calculator_from_checkpoint(
     cutoff: Optional[float] = None,
     use_dcmnet_dipole: bool = False,
     disable_physnet_point_coulomb: bool = False,
-) -> SimpleInferenceCalculator:
+) -> Calculator:
     """Load model parameters and return a ready-to-use calculator."""
+    from mmml.interfaces.calculators.checkpoint_loading import (
+        create_calculator_from_checkpoint as _create_calculator_from_checkpoint,
+    )
 
-    checkpoint_path = Path(checkpoint_path).resolve()
-    if not checkpoint_path.exists():
-        raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
-
-    # Prefer canonical package path first (stable in installed/editable environments).
-    try:
-        from mmml.cli.misc.train_joint import (
-            JointPhysNetDCMNet,
-            JointPhysNetNonEquivariant,
-        )
-    except Exception:
-        # Fallback for legacy/local workflows where only example trainer exists.
-        repo_root = Path(__file__).resolve().parents[3]
-        trainer_candidates = [
-            repo_root / "examples" / "other" / "co2" / "dcmnet_physnet_train" / "trainer.py",
-            repo_root / "examples" / "co2" / "dcmnet_physnet_train" / "trainer.py",
-        ]
-        trainer_path = next((p for p in trainer_candidates if p.exists()), None)
-        if trainer_path is None:
-            raise FileNotFoundError(
-                "Could not locate trainer module. Tried package import "
-                "`mmml.cli.misc.train_joint` and example trainer paths: "
-                + ", ".join(str(p) for p in trainer_candidates)
-            )
-
-        spec = importlib.util.spec_from_file_location("dcmnet_trainer", trainer_path)
-        if spec is None or spec.loader is None:
-            raise ImportError(f"Could not load trainer module from {trainer_path}")
-        trainer = importlib.util.module_from_spec(spec)
-        sys.modules[spec.name] = trainer
-        spec.loader.exec_module(trainer)
-
-        JointPhysNetDCMNet = trainer.JointPhysNetDCMNet  # type: ignore[attr-defined]
-        JointPhysNetNonEquivariant = trainer.JointPhysNetNonEquivariant  # type: ignore[attr-defined]
-
-    with checkpoint_path.open("rb") as f:
-        checkpoint_data = pickle.load(f)
-
-    def _is_mapping(x: Any) -> bool:
-        return isinstance(x, Mapping)
-
-    def _to_dict(x: Any) -> dict[str, Any]:
-        if isinstance(x, dict):
-            return x
-        if _is_mapping(x):
-            return dict(x)
-        raise TypeError(f"Expected mapping, got {type(x)}")
-
-    def _extract_params_tree(tree: Any) -> Any:
-        # Common training checkpoint format: {"params": ...}
-        if _is_mapping(tree) and "params" in tree:
-            tree = tree["params"]
-        # Some checkpoints can be nested as {"params": {"params": ...}}
-        while _is_mapping(tree) and "params" in tree and len(_to_dict(tree)) == 1:
-            tree = tree["params"]
-        # model.apply expects variables tree with top-level "params"
-        if _is_mapping(tree):
-            tree_dict = _to_dict(tree)
-            model_param_roots = {
-                "physnet",
-                "dcmnet",
-                "noneq_model",
-                "charge_mixer",
-                "coulomb_lambda",
-            }
-            if "params" not in tree_dict and any(k in tree_dict for k in model_param_roots):
-                return {"params": tree}
-        return tree
-
-    def _find_key_recursive(tree: Any, key: str) -> Optional[Any]:
-        if _is_mapping(tree):
-            tree_dict = _to_dict(tree)
-            if key in tree_dict:
-                return tree_dict[key]
-            for value in tree_dict.values():
-                found = _find_key_recursive(value, key)
-                if found is not None:
-                    return found
-        return None
-
-    params = _extract_params_tree(checkpoint_data)
-
-    config_path = checkpoint_path.parent / "model_config.pkl"
-    if not config_path.exists():
-        raise FileNotFoundError(f"Model config not found: {config_path}")
-
-    with config_path.open("rb") as f:
-        saved_config = pickle.load(f)
-
-    physnet_config = dict(saved_config["physnet_config"])
-    if disable_physnet_point_coulomb:
-        physnet_config["include_electrostatics"] = False
-    mix_coulomb_energy = saved_config.get("mix_coulomb_energy", False)
-
-    if is_noneq:
-        noneq_config = saved_config["noneq_config"]
-        model = JointPhysNetNonEquivariant(
-            physnet_config=physnet_config,
-            noneq_config=noneq_config,
-            mix_coulomb_energy=mix_coulomb_energy,
-        )
-    else:
-        dcmnet_config = saved_config["dcmnet_config"]
-        model = JointPhysNetDCMNet(
-            physnet_config=physnet_config,
-            dcmnet_config=dcmnet_config,
-            mix_coulomb_energy=mix_coulomb_energy,
-        )
-
-    # Backward-compatible fixup for checkpoints/model variants that expect
-    # a root-level "coulomb_lambda" parameter when Coulomb mixing is enabled.
-    if mix_coulomb_energy and _is_mapping(params):
-        params_dict = _to_dict(params)
-        if "params" in params_dict and _is_mapping(params_dict["params"]):
-            inner = _to_dict(params_dict["params"])
-            if "coulomb_lambda" not in inner:
-                recovered_lambda = _find_key_recursive(checkpoint_data, "coulomb_lambda")
-                if recovered_lambda is not None:
-                    inner["coulomb_lambda"] = recovered_lambda
-                else:
-                    # Safe fallback for fixed-lambda or legacy checkpoints that
-                    # don't serialize this parameter explicitly.
-                    inner["coulomb_lambda"] = jnp.array([1.0], dtype=jnp.float32)
-                params = {"params": inner}
-
-    if cutoff is None:
-        cutoff = physnet_config.get("cutoff", 6.0)
-
-    return SimpleInferenceCalculator(
-        model=model,
-        params=params,
+    return _create_calculator_from_checkpoint(
+        checkpoint_path,
+        is_noneq=is_noneq,
         cutoff=cutoff,
         use_dcmnet_dipole=use_dcmnet_dipole,
+        disable_physnet_point_coulomb=disable_physnet_point_coulomb,
     )

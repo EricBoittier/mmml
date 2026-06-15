@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from mmml.interfaces.calculators.checkpoint_loading import validate_checkpoint_path
+
 
 @dataclass(frozen=True)
 class MmmlOrcaSettings:
@@ -23,7 +25,11 @@ def add_model_arguments(parser: ArgumentParser) -> None:
     parser.add_argument(
         "--checkpoint",
         default=os.environ.get("MMML_CHECKPOINT"),
-        help="Path to MMML checkpoint pickle (or set MMML_CHECKPOINT).",
+        help=(
+            "Checkpoint path: joint .pkl, portable params.json / .json file, "
+            "or Orbax directory (epoch-* or manifest.ocdbt). "
+            "Can also be set with MMML_CHECKPOINT."
+        ),
     )
     parser.add_argument("--cutoff", type=float, default=None, help="Neighbor-list cutoff (Å).")
     parser.add_argument("--noneq", action="store_true", help="Load a non-equivariant checkpoint.")
@@ -51,13 +57,12 @@ def settings_from_namespace(
 
     if not checkpoint_value:
         raise ValueError(
-            "Missing checkpoint. Pass --checkpoint /path/to/epoch.pkl, set MMML_CHECKPOINT, "
+            "Missing checkpoint. Pass --checkpoint PATH, set MMML_CHECKPOINT, "
             "or start the server with a default checkpoint."
         )
 
     checkpoint = Path(checkpoint_value).expanduser().resolve()
-    if not checkpoint.is_file():
-        raise FileNotFoundError(f"Checkpoint not found: {checkpoint}")
+    validate_checkpoint_path(checkpoint)
 
     cutoff = args.cutoff
     if cutoff is None and default_settings is not None:

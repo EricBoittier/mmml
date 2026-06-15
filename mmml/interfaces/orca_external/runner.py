@@ -15,10 +15,9 @@ from mmml.cli.misc.fix_and_split import (
     convert_energy_ev_to_hartree,
     convert_forces_ev_angstrom_to_hartree_bohr,
 )
-from mmml.interfaces.calculators.simple_inference import (
-    SimpleInferenceCalculator,
-    create_calculator_from_checkpoint,
-)
+from ase.calculators.calculator import Calculator
+
+from mmml.interfaces.calculators.simple_inference import create_calculator_from_checkpoint
 from mmml.interfaces.orca_external.protocol import (
     ExtInpData,
     natoms_from_xyz,
@@ -45,7 +44,7 @@ def _cache_key(settings: MmmlOrcaSettings) -> tuple[Any, ...]:
     )
 
 
-def get_calculator(settings: MmmlOrcaSettings) -> SimpleInferenceCalculator:
+def get_calculator(settings: MmmlOrcaSettings) -> Calculator:
     """Return a cached MMML calculator for the given settings."""
     key = _cache_key(settings)
     cached = _CALCULATOR_CACHE.get(key)
@@ -85,7 +84,7 @@ def mmml_forces_to_orca_gradient(forces_ev_angstrom: np.ndarray) -> np.ndarray:
 
 def evaluate_structure(
     atoms: Atoms,
-    calculator: SimpleInferenceCalculator,
+    calculator: Calculator,
     *,
     do_gradient: bool,
 ) -> tuple[float, list[float]]:
