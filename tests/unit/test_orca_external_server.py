@@ -6,11 +6,18 @@ import json
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from mmml.interfaces.orca_external.client import send_to_server
 from mmml.interfaces.orca_external.runner import clear_calculator_cache
 from mmml.interfaces.orca_external.server import MmmlOrcaServer
 from mmml.interfaces.orca_external.settings import MmmlOrcaSettings
+
+
+@pytest.fixture
+def orca_server_kwargs() -> dict:
+    """Fast, deterministic batching for unit tests."""
+    return {"max_batch_size": 8, "batch_wait_ms": 0.0}
 
 
 def _write_orca_job(tmp_path: Path, basename: str = "job_EXT") -> Path:
@@ -66,45 +73,56 @@ def _install_mock_calculator(monkeypatch) -> None:
     )
 
 
-def test_server_handle_writes_engrad(tmp_path: Path, monkeypatch) -> None:
+def test_server_handle_writes_engrad(
+    tmp_path: Path, monkeypatch, orca_server_kwargs: dict
+) -> None:
     clear_calculator_cache()
     _install_mock_calculator(monkeypatch)
     extinp_path = _write_orca_job(tmp_path)
 
     settings = MmmlOrcaSettings(checkpoint=_dummy_checkpoint(tmp_path))
-    server = MmmlOrcaServer(default_settings=settings)
-    result = server.handle(
-        [extinp_path.name],
-        directory=str(tmp_path),
-    )
+    server = MmmlOrcaServer(default_settings=settings, **orca_server_kwargs)
+    try:
+        result = server.handle(
+            [extinp_path.name],
+            directory=str(tmp_path),
+        )
 
-    assert result["status"] == "Success"
-    engrad_path = tmp_path / "job_EXT.engrad"
-    assert engrad_path.is_file()
-    assert "2\n" in engrad_path.read_text()
-    clear_calculator_cache()
+        assert result["status"] == "Success"
+        engrad_path = tmp_path / "job_EXT.engrad"
+        assert engrad_path.is_file()
+        assert "2\n" in engrad_path.read_text()
+    finally:
+        server.shutdown()
+        clear_calculator_cache()
 
 
-def test_server_inherits_default_checkpoint(tmp_path: Path, monkeypatch) -> None:
+def test_server_inherits_default_checkpoint(
+    tmp_path: Path, monkeypatch, orca_server_kwargs: dict
+) -> None:
     clear_calculator_cache()
     _install_mock_calculator(monkeypatch)
     extinp_path = _write_orca_job(tmp_path, basename="inherit_EXT")
 
     settings = MmmlOrcaSettings(checkpoint=_dummy_checkpoint(tmp_path), cutoff=8.5)
-    server = MmmlOrcaServer(default_settings=settings)
-    server.handle([extinp_path.name], directory=str(tmp_path))
+    server = MmmlOrcaServer(default_settings=settings, **orca_server_kwargs)
+    try:
+        server.handle([extinp_path.name], directory=str(tmp_path))
+        assert (tmp_path / "inherit_EXT.engrad").is_file()
+    finally:
+        server.shutdown()
+        clear_calculator_cache()
 
-    assert (tmp_path / "inherit_EXT.engrad").is_file()
-    clear_calculator_cache()
 
-
-def test_client_forwards_to_server(tmp_path: Path, monkeypatch) -> None:
+def test_client_forwards_to_server(
+    tmp_path: Path, monkeypatch, orca_server_kwargs: dict
+) -> None:
     clear_calculator_cache()
     _install_mock_calculator(monkeypatch)
     extinp_path = _write_orca_job(tmp_path, basename="client_EXT")
 
     settings = MmmlOrcaSettings(checkpoint=_dummy_checkpoint(tmp_path))
-    server = MmmlOrcaServer(default_settings=settings)
+    server = MmmlOrcaServer(default_settings=settings, **orca_server_kwargs)
 
     def _fake_urlopen(request, timeout=None):
         payload = json.loads(request.data.decode("utf-8"))
@@ -124,11 +142,14 @@ def test_client_forwards_to_server(tmp_path: Path, monkeypatch) -> None:
 
     monkeypatch.setattr("mmml.interfaces.orca_external.client.urllib.request.urlopen", _fake_urlopen)
 
-    send_to_server(
-        "127.0.0.1:8888",
-        [extinp_path.name],
-        working_directory=str(tmp_path),
-    )
+    try:
+        send_to_server(
+            "127.0.0.1:8888",
+            [extinp_path.name],
+            working_directory=str(tmp_path),
+        )
 
-    assert (tmp_path / "client_EXT.engrad").is_file()
-    clear_calculator_cache()
+        assert (tmp_path / "client_EXT.engrad").is_file()
+    finally:
+        server.shutdown()
+        clear_calculator_cache()

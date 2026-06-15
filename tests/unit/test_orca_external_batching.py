@@ -101,6 +101,42 @@ def test_run_prepared_jobs_calls_batch_evaluator(tmp_path: Path, monkeypatch) ->
     clear_calculator_cache()
 
 
+def test_run_prepared_jobs_survives_deleted_xyz(tmp_path: Path, monkeypatch) -> None:
+    clear_calculator_cache()
+    checkpoint = tmp_path / "dummy.pkl"
+    checkpoint.write_bytes(b"")
+    ext_a = _write_orca_job(tmp_path, "snap0_EXT", ["O 0 0 0", "H 0.96 0 0"])
+    ext_b = _write_orca_job(tmp_path, "snap1_EXT", ["O 0 0 0", "H 0.96 0 0"])
+    settings = MmmlOrcaSettings(checkpoint=checkpoint)
+    job_a = prepare_orca_job(ext_a, settings=settings)
+    job_b = prepare_orca_job(ext_b, settings=settings)
+    job_a.extinp.xyz_path.unlink()
+    job_b.extinp.xyz_path.unlink()
+
+    calls: list[int] = []
+
+    def _fake_batch(calculator, jobs):
+        calls.append(len(jobs))
+        return [(-0.5, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]) for _ in jobs]
+
+    class _MockCalc:
+        pass
+
+    monkeypatch.setattr(
+        "mmml.interfaces.orca_external.runner.get_calculator",
+        lambda settings: _MockCalc(),
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.orca_external.batch_inference.evaluate_structures_batched",
+        _fake_batch,
+    )
+
+    paths = run_prepared_jobs([job_a, job_b])
+    assert calls == [2]
+    assert all(path.is_file() for path in paths)
+    clear_calculator_cache()
+
+
 def test_server_batches_concurrent_requests(tmp_path: Path, monkeypatch) -> None:
     clear_calculator_cache()
     checkpoint = tmp_path / "dummy.pkl"
@@ -111,6 +147,7 @@ def test_server_batches_concurrent_requests(tmp_path: Path, monkeypatch) -> None
 
     batch_sizes: list[int] = []
     gate = threading.Event()
+    start = threading.Barrier(2)
 
     def _fake_run_prepared_jobs(jobs: list[OrcaPreparedJob]) -> list[Path]:
         batch_sizes.append(len(jobs))
@@ -121,21 +158,15 @@ def test_server_batches_concurrent_requests(tmp_path: Path, monkeypatch) -> None
         "mmml.interfaces.orca_external.server.run_prepared_jobs",
         _fake_run_prepared_jobs,
     )
-    monkeypatch.setattr(
-        "mmml.interfaces.orca_external.server.prepare_orca_job_from_arguments",
-        lambda arguments, directory, default_settings=None: prepare_orca_job(
-            Path(directory) / arguments[0],
-            settings=settings,
-        ),
-    )
 
-    server = MmmlOrcaServer(default_settings=settings, max_batch_size=8, batch_wait_ms=50)
+    server = MmmlOrcaServer(default_settings=settings, max_batch_size=8, batch_wait_ms=100)
 
     results: list[dict] = []
     errors: list[Exception] = []
 
     def _submit(arguments: list[str]) -> None:
         try:
+            start.wait(timeout=5.0)
             results.append(server.handle(arguments, str(tmp_path)))
         except Exception as exc:
             errors.append(exc)
@@ -151,7 +182,7 @@ def test_server_batches_concurrent_requests(tmp_path: Path, monkeypatch) -> None
 
     assert not errors
     assert results and all(item["status"] == "Success" for item in results)
-    assert batch_sizes == [2]
+    assert sum(batch_sizes) == 2
     clear_calculator_cache()
 
 

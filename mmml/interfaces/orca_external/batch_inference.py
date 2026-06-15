@@ -93,7 +93,7 @@ def _build_padded_batch(
     *,
     natoms: int,
     cutoff: float | None,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, int]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, int]:
     batch_size = len(jobs)
     atom_counts = _validate_atom_counts(jobs, natoms)
 
