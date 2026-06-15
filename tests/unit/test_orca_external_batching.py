@@ -7,11 +7,13 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import e3x
 from ase import Atoms
 
 from mmml.interfaces.orca_external.batch_inference import (
     OrcaStructureJob,
     _build_padded_batch,
+    _build_pair_indices_per_structure,
     evaluate_structures_batched,
 )
 from mmml.interfaces.orca_external.runner import (
@@ -41,6 +43,20 @@ def _write_orca_job(tmp_path: Path, basename: str, positions: list[list[float]])
         )
     )
     return extinp_path
+
+
+def test_build_pair_indices_per_structure_matches_single_molecule() -> None:
+    atom_counts = [6, 3]
+    natoms = 34
+    dst, src, mask = _build_pair_indices_per_structure(atom_counts, natoms=natoms)
+
+    dst0, src0 = e3x.ops.sparse_pairwise_indices(6)
+    dst1, src1 = e3x.ops.sparse_pairwise_indices(3)
+
+    assert len(dst) == len(src0) + len(dst1)
+    assert np.array_equal(dst[: len(dst0)], np.asarray(dst0, dtype=np.int32))
+    assert np.array_equal(dst[len(dst0) :], np.asarray(dst1, dtype=np.int32) + natoms)
+    assert mask.shape == (len(dst),)
 
 
 def test_build_padded_batch_masks_padding() -> None:

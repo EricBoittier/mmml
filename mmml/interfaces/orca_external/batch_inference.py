@@ -71,9 +71,21 @@ def evaluate_structures_batched(
         ]
 
     if isinstance(calculator, SimpleInferenceCalculator):
-        return _evaluate_simple_inference_batch(calculator, jobs)
+        try:
+            return _evaluate_simple_inference_batch(calculator, jobs)
+        except Exception:
+            return [
+                _evaluate_structure_single(job.atoms, calculator, do_gradient=job.do_gradient)
+                for job in jobs
+            ]
 
-    return _evaluate_physnet_ef_batch(calculator, jobs)
+    try:
+        return _evaluate_physnet_ef_batch(calculator, jobs)
+    except Exception:
+        return [
+            _evaluate_structure_single(job.atoms, calculator, do_gradient=job.do_gradient)
+            for job in jobs
+        ]
 
 
 def _validate_atom_counts(jobs: list[OrcaStructureJob], natoms: int) -> list[int]:
@@ -86,6 +98,29 @@ def _validate_atom_counts(jobs: list[OrcaStructureJob], natoms: int) -> list[int
             )
         counts.append(n_atoms)
     return counts
+
+
+def _build_pair_indices_per_structure(
+    atom_counts: list[int],
+    *,
+    natoms: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Build pair lists the same way as single-molecule PhysNet EF inference."""
+    dst_parts: list[np.ndarray] = []
+    src_parts: list[np.ndarray] = []
+    for batch_idx, n_atoms in enumerate(atom_counts):
+        if n_atoms < 2:
+            continue
+        base = batch_idx * natoms
+        dst, src = e3x.ops.sparse_pairwise_indices(n_atoms)
+        dst_parts.append(np.asarray(dst, dtype=np.int32) + base)
+        src_parts.append(np.asarray(src, dtype=np.int32) + base)
+    if not dst_parts:
+        empty = np.array([], dtype=np.int32)
+        return empty, empty, np.array([], dtype=np.float32)
+    dst_idx = np.concatenate(dst_parts)
+    src_idx = np.concatenate(src_parts)
+    return dst_idx, src_idx, np.ones(len(dst_idx), dtype=np.float32)
 
 
 def _build_padded_batch(
@@ -162,9 +197,19 @@ def _results_from_batch_output(
         energy_hartree = convert_energy_ev_to_hartree(float(energies[batch_idx]))
         gradient: list[float] = []
         if job.do_gradient:
-            base = batch_idx * natoms
-            mol_forces = forces[base : base + n_atoms]
+            if forces.ndim == 3:
+                mol_forces = forces[batch_idx, :n_atoms]
+            else:
+                base = batch_idx * natoms
+                mol_forces = forces[base : base + n_atoms]
+            mol_forces = np.asarray(mol_forces, dtype=float).reshape(n_atoms, 3)
+            if not np.isfinite(mol_forces).all():
+                raise ValueError(f"Non-finite forces for batch item {batch_idx}")
             gradient = _mmml_forces_to_orca_gradient(mol_forces).tolist()
+            if len(gradient) != 3 * n_atoms:
+                raise ValueError(
+                    f"Gradient length {len(gradient)} != {3 * n_atoms} for {n_atoms} atoms"
+                )
         results.append((energy_hartree, gradient))
 
     return results
@@ -202,8 +247,14 @@ def _evaluate_physnet_ef_batch(
     params = calculator._mmml_physnet_params
     natoms = int(model.natoms)
     atom_counts = _validate_atom_counts(jobs, natoms)
-    flat_z, flat_r, dst_idx, src_idx, batch_segments, batch_mask, flat_atom_mask, batch_size = (
-        _build_padded_batch(jobs, natoms=natoms, cutoff=None)
+    flat_z, flat_r, _, _, batch_segments, _, flat_atom_mask, batch_size = _build_padded_batch(
+        jobs,
+        natoms=natoms,
+        cutoff=None,
+    )
+    dst_idx, src_idx, batch_mask = _build_pair_indices_per_structure(
+        atom_counts,
+        natoms=natoms,
     )
 
     is_spooky = bool(getattr(calculator, "_mmml_physnet_is_spooky", False))
