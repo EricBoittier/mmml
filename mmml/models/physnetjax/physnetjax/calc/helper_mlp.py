@@ -87,6 +87,11 @@ def get_ase_calc(
 
     class MessagePassingCalculator(ase_calc.Calculator):
         implemented_properties = Implemented_properties
+        _mmml_physnet_model = model
+        _mmml_physnet_params = params
+        _mmml_physnet_is_spooky = is_spooky_model
+        _mmml_spooky_charge = float(spooky_charge)
+        _mmml_spooky_multiplicity = float(spooky_multiplicity)
 
         def calculate(
             self,

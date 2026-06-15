@@ -14,6 +14,16 @@ export MMML_CHECKPOINT=~/mmml/mmml/models/physnetjax/defaults/hf_json/test-f41c0
 mmml orca-server --checkpoint "$MMML_CHECKPOINT" --warmup -b 127.0.0.1:8888
 ```
 
+For GOAT / multi-worker ORCA runs, enable GPU micro-batching (default: up to 16
+requests, 10 ms collect window):
+
+```bash
+mmml orca-server --checkpoint "$MMML_CHECKPOINT" --warmup \
+  -b 127.0.0.1:8888 --batch-size 16 --batch-wait-ms 10
+```
+
+Use `--batch-size 1` to disable batching (strictly serial requests).
+
 Leave this running. First request after `--warmup` should be fast (JAX already loaded).
 
 ## 2. ORCA client wrapper
@@ -163,5 +173,5 @@ end
 ## Unit tests (local)
 
 ```bash
-pytest tests/unit/test_orca_external.py tests/unit/test_orca_external_server.py tests/unit/test_orca_external_cli.py -q
+pytest tests/unit/test_orca_external.py tests/unit/test_orca_external_server.py tests/unit/test_orca_external_cli.py tests/unit/test_orca_external_batching.py -q
 ```
