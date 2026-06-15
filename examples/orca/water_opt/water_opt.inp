@@ -1,4 +1,4 @@
-! Opt
+! ExtOpt Opt
 %maxcore 2000
 
 %method

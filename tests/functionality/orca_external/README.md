@@ -45,7 +45,7 @@ H   0.000000  -0.757200  -0.469200
 **`water_opt.inp`**:
 
 ```text
-! Opt
+! ExtOpt Opt
 %maxcore 2000
 
 %method
@@ -55,6 +55,10 @@ end
 
 * xyzfile 0 1 water.xyz
 ```
+
+**Important:** ORCA only calls `ProgExt` when `! ExtOpt` is on the simple-input line
+(`! ExtOpt Opt`, `! ExtOpt GOAT`, etc.). `%method ProgExt` alone is ignored and ORCA
+will run its default electronic-structure method instead.
 
 Replace `/home/boittier` with your username/path.
 
@@ -108,7 +112,7 @@ Pass: `water_EXT.engrad` exists, contains atom count `3`, energy in Eh, and 9 gr
 Geometry optimization (`examples/orca/water_opt/water_opt.inp`), or single-point gradient:
 
 ```text
-! EnGrad
+! ExtOpt EnGrad
 %method
   ProgExt "/home/boittier/bin/mmml-orca-client"
   Ext_Params "-b 127.0.0.1:8888"
