@@ -230,6 +230,9 @@ explicit = true
 
 [project.scripts]
 mmml = "mmml.cli.__main__:main"
+mmml-orca-external = "mmml.interfaces.orca_external.runner:main"
+mmml-orca-server = "mmml.interfaces.orca_external.server:main"
+mmml-orca-client = "mmml.interfaces.orca_external.client:main"
 mmml-pycharmm-two-residue-sample = "mmml.cli.run.pycharmm_two_residue_sample:main"
 mmml-spectra-md = "mmml.spectra.spectra_md:main"
 
