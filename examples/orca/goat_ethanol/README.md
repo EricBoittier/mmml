@@ -13,7 +13,7 @@ production ensembles.
 Same as `examples/orca/water_opt/`:
 
 1. `mmml orca-server` running with `--warmup`
-2. `examples/orca/mmml-orca-client` executable (`chmod +x`) — or symlink from `~/bin`
+2. `examples/orca/mmml-orca-client` executable (`chmod +x`) — set `ProgExt` to its **absolute** path (same as `water_opt.inp`)
 3. ORCA 6.x
 
 ```bash
@@ -45,10 +45,11 @@ Pass criteria for a smoke run:
 
 ## Input notes
 
-- `! ExtOpt GOAT` — required to activate the external PES; combine with `! PAL4` etc.
-- `%method ProgExt` — MMML client (same pattern as AIMNet2 via [orca-external-tools](https://github.com/faccts/orca-external-tools))
-- `%geom EnforceStrictConvergence false` — GOAT sets strict convergence by default; ML potentials can be noisy at `TolE` floors (see AIMNet2 OET docs)
-- `NWORKERS 4` + `! PAL4` — one worker per core for this small example; scale up for production
+- `! ExtOpt GOAT PAL4` — required external PES + parallel workers (same pattern as [OET GOAT](https://www.faccts.de/docs/orca/6.1/tutorials/workflows/extopt.html))
+- `%method ProgExt` + `Ext_Params "-b host:port"` — MMML client (identical to `water_opt.inp`)
+- `%pal nprocs 4` + `%goat NWORKERS 4` — one worker per core
+- `%goat MAXITER 32` — reduced from default 128 for smoke runs
+- `%geom EnforceStrictConvergence false` — GOAT sets strict convergence by default; ML potentials can be noisy at `TolE` floors
 
 ## Production settings
 

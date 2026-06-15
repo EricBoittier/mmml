@@ -1,15 +1,19 @@
-! ExtOpt GOAT
-! PAL4
+! ExtOpt GOAT PAL4
 
 %maxcore 4000
 
+%pal
+  nprocs 4
+end
+
 %method
-  ProgExt "/home/boittier/mmml/examples/orca/mmml-orca-client"
+  ProgExt "/mmhome/boittier/home/mmml/examples/orca/mmml-orca-client"
   Ext_Params "-b 127.0.0.1:8888"
 end
 
 %goat
   NWORKERS 4
+  MAXITER 32
   KEEPWORKERDATA TRUE
 end
 
