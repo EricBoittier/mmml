@@ -2,7 +2,7 @@
 %maxcore 2000
 
 %method
-  ProgExt "/home/boittier/mmml/examples/orca/mmml-orca-client"
+  ProgExt "/mmhome/boittier/home/mmml/examples/orca/mmml-orca-client"
   Ext_Params "-b 127.0.0.1:8888"
 end
 
