@@ -46,6 +46,9 @@ Available commands:
   gui         Start the molecular viewer GUI
   extract-checkpoint-metrics  Plot and print training metrics from Orbax checkpoints
   orbax-to-json  Export an Orbax checkpoint to a portable JSON file
+  orca-server    Persistent JAX server for ORCA external-tool calculations
+  orca-client    ORCA ProgExt client that forwards jobs to orca-server
+  orca-external  Standalone ORCA external-tool wrapper (no server)
 
 Examples:
   mmml make-res --res CYBZ
@@ -80,6 +83,8 @@ Examples:
   mmml interpolate-xyz reactants.xyz products.xyz -o path.npz --steps 500
   mmml unwrap-traj wrapped.traj -o unwrapped.extxyz --format extxyz --fast
   mmml orbax-to-json mmml/models/physnetjax/ckpts/DESdimers/epoch-1985 -o DESdimers_params.json
+  mmml orca-server --checkpoint mmml/models/physnetjax/defaults/hf_json/test-f41c04c0-62e3-4785-9018-351ffdc161c4_epoch-251_portable.json --warmup
+  mmml orca-client -b 127.0.0.1:8888 job_EXT.extinp.tmp
 
 For help on a specific command:
   mmml <command> --help
@@ -88,7 +93,7 @@ For help on a specific command:
     
     parser.add_argument(
         'command',
-        choices=['make-res', 'make-box', 'run', 'md-system', 'lambda-mbar', 'run-pycharmm', 'pycharmm-two-residue-sample', 'xml2npz', 'validate', 'train', 'train-joint', 'evaluate', 'downstream', 'fix-and-split', 'pyscf-dft', 'pyscf-mp2', 'pyscf-evaluate', 'verify-esp-alignment', 'normal-mode-sample', 'physnet-md', 'physnet-evaluate', 'ef-train', 'ef-evaluate', 'ef-md', 'active-learning', 'kernel-fit', 'interpolate-xyz', 'unwrap-traj', 'sample-diverse-xyz', 'gui', 'extract-checkpoint-metrics', 'orbax-to-json'],
+        choices=['make-res', 'make-box', 'run', 'md-system', 'lambda-mbar', 'run-pycharmm', 'pycharmm-two-residue-sample', 'xml2npz', 'validate', 'train', 'train-joint', 'evaluate', 'downstream', 'fix-and-split', 'pyscf-dft', 'pyscf-mp2', 'pyscf-evaluate', 'verify-esp-alignment', 'normal-mode-sample', 'physnet-md', 'physnet-evaluate', 'ef-train', 'ef-evaluate', 'ef-md', 'active-learning', 'kernel-fit', 'interpolate-xyz', 'unwrap-traj', 'sample-diverse-xyz', 'gui', 'extract-checkpoint-metrics', 'orbax-to-json', 'orca-server', 'orca-client', 'orca-external'],
         help='Command to run'
     )
     parser.add_argument(
@@ -272,6 +277,18 @@ For help on a specific command:
         from .misc import orbax_to_json_cmd
         sys.argv = ['mmml orbax-to-json'] + args.args
         return orbax_to_json_cmd.main()
+
+    elif args.command == 'orca-server':
+        from mmml.interfaces.orca_external.server import main as orca_server_main
+        return orca_server_main(args.args or None)
+
+    elif args.command == 'orca-client':
+        from mmml.interfaces.orca_external.client import main as orca_client_main
+        return orca_client_main(args.args or None)
+
+    elif args.command == 'orca-external':
+        from mmml.interfaces.orca_external.runner import main as orca_external_main
+        return orca_external_main(args.args or None)
     
     else:
         parser.print_help()
