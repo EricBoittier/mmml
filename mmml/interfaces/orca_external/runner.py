@@ -4,19 +4,19 @@ from __future__ import annotations
 
 import warnings
 from argparse import ArgumentParser
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 from ase import Atoms
+from ase.calculators.calculator import Calculator
 from ase.data import atomic_numbers
 
 from mmml.cli.misc.fix_and_split import (
     convert_energy_ev_to_hartree,
     convert_forces_ev_angstrom_to_hartree_bohr,
 )
-from ase.calculators.calculator import Calculator
-
 from mmml.interfaces.calculators.simple_inference import create_calculator_from_checkpoint
 from mmml.interfaces.orca_external.protocol import (
     ExtInpData,
@@ -31,7 +31,17 @@ from mmml.interfaces.orca_external.settings import (
     settings_from_namespace,
 )
 
-_CALCULATOR_CACHE: dict[tuple[Any, ...], SimpleInferenceCalculator] = {}
+
+@dataclass(frozen=True)
+class OrcaPreparedJob:
+    """Parsed ORCA external-tool job ready for evaluation."""
+
+    input_path: Path
+    extinp: ExtInpData
+    settings: MmmlOrcaSettings
+    atoms: Atoms
+
+_CALCULATOR_CACHE: dict[tuple[Any, ...], Calculator] = {}
 
 
 def _cache_key(settings: MmmlOrcaSettings) -> tuple[Any, ...]:
@@ -124,6 +134,104 @@ def _warn_unsupported_extinp_fields(extinp: ExtInpData) -> None:
         )
 
 
+def prepare_orca_job_from_arguments(
+    arguments: list[str],
+    directory: str,
+    *,
+    default_settings: MmmlOrcaSettings | None = None,
+) -> OrcaPreparedJob:
+    """Parse an ORCA/client argument vector into a prepared job."""
+    working_dir = Path(directory).resolve()
+    if not working_dir.is_dir():
+        raise ValueError(f"Invalid directory: {working_dir}")
+
+    inputfile, settings = parse_runner_arguments(arguments, default_settings=default_settings)
+    return prepare_orca_job(working_dir / inputfile, settings=settings)
+
+
+def prepare_orca_job(
+    inputfile: str | Path,
+    *,
+    default_settings: MmmlOrcaSettings | None = None,
+    settings: MmmlOrcaSettings | None = None,
+) -> OrcaPreparedJob:
+    """Parse an ORCA external-tool input file into a prepared job."""
+    input_path = Path(inputfile).resolve()
+    extinp = read_extinp(input_path)
+    _warn_unsupported_extinp_fields(extinp)
+
+    if not extinp.xyz_path.is_file():
+        raise FileNotFoundError(f"XYZ file not found: {extinp.xyz_path}")
+
+    if settings is None:
+        _, settings = parse_runner_arguments([input_path.name], default_settings=default_settings)
+
+    return OrcaPreparedJob(
+        input_path=input_path,
+        extinp=extinp,
+        settings=settings,
+        atoms=atoms_from_xyz(extinp.xyz_path),
+    )
+
+
+def run_prepared_jobs(
+    jobs: list[OrcaPreparedJob],
+) -> list[Path]:
+    """Evaluate one or more prepared ORCA jobs, batching when possible."""
+    if not jobs:
+        return []
+
+    if len(jobs) == 1:
+        return [_run_single_prepared_job(jobs[0])]
+
+    settings_key = _cache_key(jobs[0].settings)
+    if any(_cache_key(job.settings) != settings_key for job in jobs):
+        raise ValueError("Batched ORCA jobs must share the same checkpoint and model flags.")
+
+    calculator = get_calculator(jobs[0].settings)
+    from mmml.interfaces.orca_external.batch_inference import (
+        OrcaStructureJob,
+        evaluate_structures_batched,
+    )
+
+    structure_jobs = [
+        OrcaStructureJob(atoms=job.atoms, do_gradient=job.extinp.do_gradient)
+        for job in jobs
+    ]
+    evaluations = evaluate_structures_batched(calculator, structure_jobs)
+
+    engrad_paths: list[Path] = []
+    for job, (energy, gradient) in zip(jobs, evaluations, strict=True):
+        basename = job.extinp.xyz_path.name.removesuffix(".xyz")
+        engrad_path = job.input_path.parent / f"{basename}.engrad"
+        write_engrad(
+            engrad_path,
+            natoms=natoms_from_xyz(job.extinp.xyz_path),
+            energy_hartree=energy,
+            gradient_hartree_bohr=gradient or None,
+        )
+        engrad_paths.append(engrad_path)
+    return engrad_paths
+
+
+def _run_single_prepared_job(job: OrcaPreparedJob) -> Path:
+    calculator = get_calculator(job.settings)
+    energy, gradient = evaluate_structure(
+        job.atoms,
+        calculator,
+        do_gradient=job.extinp.do_gradient,
+    )
+    basename = job.extinp.xyz_path.name.removesuffix(".xyz")
+    engrad_path = job.input_path.parent / f"{basename}.engrad"
+    write_engrad(
+        engrad_path,
+        natoms=natoms_from_xyz(job.extinp.xyz_path),
+        energy_hartree=energy,
+        gradient_hartree_bohr=gradient or None,
+    )
+    return engrad_path
+
+
 class MmmlOrcaExternalRunner:
     """Run a single ORCA external-tool request with an MMML checkpoint."""
 
@@ -132,30 +240,8 @@ class MmmlOrcaExternalRunner:
 
     def run(self, inputfile: str | Path) -> Path:
         """Parse ``inputfile``, evaluate the structure, and write ``*.engrad``."""
-        input_path = Path(inputfile).resolve()
-        extinp = read_extinp(input_path)
-        _warn_unsupported_extinp_fields(extinp)
-
-        if not extinp.xyz_path.is_file():
-            raise FileNotFoundError(f"XYZ file not found: {extinp.xyz_path}")
-
-        atoms = atoms_from_xyz(extinp.xyz_path)
-        calculator = get_calculator(self.settings)
-        energy, gradient = evaluate_structure(
-            atoms,
-            calculator,
-            do_gradient=extinp.do_gradient,
-        )
-
-        basename = extinp.xyz_path.name.removesuffix(".xyz")
-        engrad_path = input_path.parent / f"{basename}.engrad"
-        write_engrad(
-            engrad_path,
-            natoms=natoms_from_xyz(extinp.xyz_path),
-            energy_hartree=energy,
-            gradient_hartree_bohr=gradient or None,
-        )
-        return engrad_path
+        job = prepare_orca_job(inputfile, settings=self.settings)
+        return run_prepared_jobs([job])[0]
 
 
 def build_runner_parser() -> ArgumentParser:

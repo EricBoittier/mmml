@@ -7,8 +7,10 @@ import io
 import logging
 import os
 import threading
+import time
 import traceback
 from contextlib import redirect_stdout
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -19,8 +21,11 @@ from pydantic import BaseModel, Field
 
 from mmml.interfaces.orca_external.runner import (
     MmmlOrcaExternalRunner,
+    OrcaPreparedJob,
     get_calculator,
     parse_runner_arguments,
+    prepare_orca_job_from_arguments,
+    run_prepared_jobs,
 )
 from mmml.interfaces.orca_external.settings import (
     MmmlOrcaSettings,
@@ -29,6 +34,8 @@ from mmml.interfaces.orca_external.settings import (
 )
 
 DEFAULT_BIND = "127.0.0.1:8888"
+DEFAULT_BATCH_SIZE = 16
+DEFAULT_BATCH_WAIT_MS = 10
 
 
 class CalculateRequest(BaseModel):
@@ -36,12 +43,39 @@ class CalculateRequest(BaseModel):
     directory: str
 
 
-class MmmlOrcaServer:
-    """Handle ORCA external-tool requests with a resident MMML calculator."""
+@dataclass
+class _PendingRequest:
+    arguments: list[str]
+    directory: str
+    done: threading.Event = field(default_factory=threading.Event)
+    result: dict[str, Any] | None = None
 
-    def __init__(self, default_settings: MmmlOrcaSettings | None = None) -> None:
+
+class MmmlOrcaServer:
+    """Handle ORCA external-tool requests with optional GPU micro-batching."""
+
+    def __init__(
+        self,
+        default_settings: MmmlOrcaSettings | None = None,
+        *,
+        max_batch_size: int = DEFAULT_BATCH_SIZE,
+        batch_wait_ms: float = DEFAULT_BATCH_WAIT_MS,
+    ) -> None:
         self.default_settings = default_settings
-        self._lock = threading.Lock()
+        self.max_batch_size = max(1, int(max_batch_size))
+        self.batch_wait_s = max(0.0, float(batch_wait_ms) / 1000.0)
+        self._queue: list[_PendingRequest] = []
+        self._queue_cond = threading.Condition()
+        self._shutdown = False
+        self._worker = threading.Thread(target=self._batch_worker, name="mmml-orca-batch", daemon=True)
+        self._worker.start()
+
+    def shutdown(self) -> None:
+        """Stop the background batch worker."""
+        with self._queue_cond:
+            self._shutdown = True
+            self._queue_cond.notify_all()
+        self._worker.join(timeout=5.0)
 
     def warmup(self) -> None:
         """Load the default checkpoint into the process cache."""
@@ -50,22 +84,94 @@ class MmmlOrcaServer:
         get_calculator(self.default_settings)
 
     def handle(self, arguments: list[str], directory: str) -> dict[str, Any]:
-        working_dir = Path(directory).resolve()
-        if not working_dir.is_dir():
-            raise ValueError(f"Invalid directory: {working_dir}")
+        """Enqueue a request and block until the engrad file is written."""
+        pending = _PendingRequest(arguments=list(arguments), directory=directory)
+        with self._queue_cond:
+            self._queue.append(pending)
+            self._queue_cond.notify()
+        pending.done.wait()
+        assert pending.result is not None
+        return pending.result
 
-        inputfile, settings = parse_runner_arguments(
-            arguments,
+    def _batch_worker(self) -> None:
+        while True:
+            batch = self._collect_batch()
+            if batch is None:
+                return
+            if not batch:
+                continue
+            self._process_batch(batch)
+
+    def _collect_batch(self) -> list[_PendingRequest] | None:
+        with self._queue_cond:
+            while not self._shutdown and not self._queue:
+                self._queue_cond.wait()
+
+            if self._shutdown and not self._queue:
+                return None
+
+            deadline = time.monotonic() + self.batch_wait_s
+            batch = [self._queue.pop(0)]
+            settings_key = self._settings_key(batch[0])
+
+            while len(batch) < self.max_batch_size:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                while not self._shutdown and not self._queue and remaining > 0:
+                    self._queue_cond.wait(timeout=remaining)
+                    remaining = deadline - time.monotonic()
+                if not self._queue:
+                    break
+                if self._settings_key(self._queue[0]) != settings_key:
+                    break
+                batch.append(self._queue.pop(0))
+
+            return batch
+
+    def _settings_key(self, pending: _PendingRequest) -> tuple[Any, ...]:
+        _, settings = parse_runner_arguments(
+            pending.arguments,
             default_settings=self.default_settings,
         )
-        input_path = (working_dir / inputfile).resolve()
+        return (
+            str(settings.checkpoint.resolve()),
+            settings.cutoff,
+            settings.is_noneq,
+            settings.use_dcmnet_dipole,
+            settings.disable_physnet_point_coulomb,
+        )
 
-        buf = io.StringIO()
-        with self._lock:
+    def _process_batch(self, batch: list[_PendingRequest]) -> None:
+        prepared_jobs: list[OrcaPreparedJob] = []
+        try:
+            for pending in batch:
+                prepared_jobs.append(
+                    prepare_orca_job_from_arguments(
+                        pending.arguments,
+                        pending.directory,
+                        default_settings=self.default_settings,
+                    )
+                )
+
+            buf = io.StringIO()
             with redirect_stdout(buf):
-                MmmlOrcaExternalRunner(settings).run(input_path)
+                run_prepared_jobs(prepared_jobs)
 
-        return {"status": "Success", "stdout": buf.getvalue()}
+            stdout = buf.getvalue()
+            for pending in batch:
+                pending.result = {"status": "Success", "stdout": stdout}
+                pending.done.set()
+        except Exception as exc:
+            error_payload = {
+                "status": "Error",
+                "error_message": str(exc),
+                "error_type": type(exc).__name__,
+                "traceback": traceback.format_exc(),
+            }
+            for pending in batch:
+                pending.result = dict(error_payload)
+                pending.done.set()
 
 
 def create_app(server: MmmlOrcaServer) -> FastAPI:
@@ -114,6 +220,24 @@ def build_server_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Load the default checkpoint at startup (recommended).",
     )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=DEFAULT_BATCH_SIZE,
+        help=(
+            "Maximum number of ORCA requests to evaluate in one GPU batch. "
+            f"Default: {DEFAULT_BATCH_SIZE}. Use 1 to disable batching."
+        ),
+    )
+    parser.add_argument(
+        "--batch-wait-ms",
+        type=float,
+        default=DEFAULT_BATCH_WAIT_MS,
+        help=(
+            "Milliseconds to wait for additional requests before launching a batch. "
+            f"Default: {DEFAULT_BATCH_WAIT_MS}."
+        ),
+    )
     add_model_arguments(parser)
     return parser
 
@@ -126,7 +250,11 @@ def main(argv: list[str] | None = None) -> None:
     if args.checkpoint or os.environ.get("MMML_CHECKPOINT"):
         default_settings = settings_from_namespace(args)
 
-    server = MmmlOrcaServer(default_settings=default_settings)
+    server = MmmlOrcaServer(
+        default_settings=default_settings,
+        max_batch_size=args.batch_size,
+        batch_wait_ms=args.batch_wait_ms,
+    )
     if args.warmup:
         logging.info("Warming up MMML checkpoint...")
         server.warmup()
