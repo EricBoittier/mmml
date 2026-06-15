@@ -13,7 +13,7 @@ production ensembles.
 Same as `examples/orca/water_opt/`:
 
 1. `mmml orca-server` running with `--warmup`
-2. `~/bin/mmml-orca-client` wrapper pointing at `mmml orca-client`
+2. `examples/orca/mmml-orca-client` executable (`chmod +x`) — or symlink from `~/bin`
 3. ORCA 6.x
 
 ```bash
