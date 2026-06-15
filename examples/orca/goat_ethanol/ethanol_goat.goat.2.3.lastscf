@@ -1,0 +1,4 @@
+Calling /mmhome/boittier/home/mmml/examples/orca/mmml-orca-client ethanol_goat.goat.2.3_EXT.extinp.tmp -b 127.0.0.1:8888  >> ethanol_goat.goat.2.3.out ... 
+
+
+Error (ORCA/EXT): external program failed with exit code 256
