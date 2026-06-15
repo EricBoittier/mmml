@@ -15,7 +15,8 @@ mmml orca-server --checkpoint "$MMML_CHECKPOINT" --warmup -b 127.0.0.1:8888
 ```
 
 For GOAT / multi-worker ORCA runs, enable GPU micro-batching (default: up to 16
-requests, 10 ms collect window):
+requests, 10 ms collect window). ORCA temp files are read immediately on each
+client request, before batching waits, so parallel GOAT workers are safe.
 
 ```bash
 mmml orca-server --checkpoint "$MMML_CHECKPOINT" --warmup \

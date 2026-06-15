@@ -206,7 +206,7 @@ def run_prepared_jobs(
         engrad_path = job.input_path.parent / f"{basename}.engrad"
         write_engrad(
             engrad_path,
-            natoms=natoms_from_xyz(job.extinp.xyz_path),
+            natoms=len(job.atoms),
             energy_hartree=energy,
             gradient_hartree_bohr=gradient or None,
         )
@@ -225,7 +225,7 @@ def _run_single_prepared_job(job: OrcaPreparedJob) -> Path:
     engrad_path = job.input_path.parent / f"{basename}.engrad"
     write_engrad(
         engrad_path,
-        natoms=natoms_from_xyz(job.extinp.xyz_path),
+        natoms=len(job.atoms),
         energy_hartree=energy,
         gradient_hartree_bohr=gradient or None,
     )

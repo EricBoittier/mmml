@@ -20,10 +20,9 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from mmml.interfaces.orca_external.runner import (
-    MmmlOrcaExternalRunner,
     OrcaPreparedJob,
+    _cache_key,
     get_calculator,
-    parse_runner_arguments,
     prepare_orca_job_from_arguments,
     run_prepared_jobs,
 )
@@ -45,8 +44,7 @@ class CalculateRequest(BaseModel):
 
 @dataclass
 class _PendingRequest:
-    arguments: list[str]
-    directory: str
+    prepared: OrcaPreparedJob
     done: threading.Event = field(default_factory=threading.Event)
     result: dict[str, Any] | None = None
 
@@ -85,7 +83,21 @@ class MmmlOrcaServer:
 
     def handle(self, arguments: list[str], directory: str) -> dict[str, Any]:
         """Enqueue a request and block until the engrad file is written."""
-        pending = _PendingRequest(arguments=list(arguments), directory=directory)
+        try:
+            prepared = prepare_orca_job_from_arguments(
+                arguments,
+                directory,
+                default_settings=self.default_settings,
+            )
+        except Exception as exc:
+            return {
+                "status": "Error",
+                "error_message": str(exc),
+                "error_type": type(exc).__name__,
+                "traceback": traceback.format_exc(),
+            }
+
+        pending = _PendingRequest(prepared=prepared)
         with self._queue_cond:
             self._queue.append(pending)
             self._queue_cond.notify()
@@ -95,12 +107,25 @@ class MmmlOrcaServer:
 
     def _batch_worker(self) -> None:
         while True:
-            batch = self._collect_batch()
+            try:
+                batch = self._collect_batch()
+            except Exception:
+                logging.exception("ORCA batch worker failed while collecting requests")
+                continue
             if batch is None:
                 return
             if not batch:
                 continue
             self._process_batch(batch)
+
+    def _fail_pending(self, pending: _PendingRequest, exc: Exception) -> None:
+        pending.result = {
+            "status": "Error",
+            "error_message": str(exc),
+            "error_type": type(exc).__name__,
+            "traceback": traceback.format_exc(),
+        }
+        pending.done.set()
 
     def _collect_batch(self) -> list[_PendingRequest] | None:
         with self._queue_cond:
@@ -112,8 +137,14 @@ class MmmlOrcaServer:
 
             deadline = time.monotonic() + self.batch_wait_s
             batch = [self._queue.pop(0)]
-            settings_key = self._settings_key(batch[0])
 
+        try:
+            settings_key = self._settings_key(batch[0])
+        except Exception as exc:
+            self._fail_pending(batch[0], exc)
+            return []
+
+        with self._queue_cond:
             while len(batch) < self.max_batch_size:
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
@@ -123,37 +154,24 @@ class MmmlOrcaServer:
                     remaining = deadline - time.monotonic()
                 if not self._queue:
                     break
-                if self._settings_key(self._queue[0]) != settings_key:
+                try:
+                    next_key = self._settings_key(self._queue[0])
+                except Exception as exc:
+                    orphan = self._queue.pop(0)
+                    self._fail_pending(orphan, exc)
+                    continue
+                if next_key != settings_key:
                     break
                 batch.append(self._queue.pop(0))
 
             return batch
 
     def _settings_key(self, pending: _PendingRequest) -> tuple[Any, ...]:
-        _, settings = parse_runner_arguments(
-            pending.arguments,
-            default_settings=self.default_settings,
-        )
-        return (
-            str(settings.checkpoint.resolve()),
-            settings.cutoff,
-            settings.is_noneq,
-            settings.use_dcmnet_dipole,
-            settings.disable_physnet_point_coulomb,
-        )
+        return _cache_key(pending.prepared.settings)
 
     def _process_batch(self, batch: list[_PendingRequest]) -> None:
-        prepared_jobs: list[OrcaPreparedJob] = []
+        prepared_jobs = [pending.prepared for pending in batch]
         try:
-            for pending in batch:
-                prepared_jobs.append(
-                    prepare_orca_job_from_arguments(
-                        pending.arguments,
-                        pending.directory,
-                        default_settings=self.default_settings,
-                    )
-                )
-
             buf = io.StringIO()
             with redirect_stdout(buf):
                 run_prepared_jobs(prepared_jobs)
