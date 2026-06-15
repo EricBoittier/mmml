@@ -18,17 +18,32 @@ Leave this running. First request after `--warmup` should be fast (JAX already l
 
 ## 2. ORCA client wrapper
 
-ORCA `ProgExt` must be a single executable. Point it at a small wrapper:
+ORCA `ProgExt` must be a single executable path that exists on disk.
+
+**Bundled wrapper** (after `git pull`): `examples/orca/mmml-orca-client` — resolves
+`~/mmml/.venv/bin/mmml orca-client` from the repo root. Make it executable once:
 
 ```bash
-cat > ~/bin/mmml-orca-client <<'EOF'
-#!/bin/bash
-exec "$HOME/mmml/.venv/bin/mmml" orca-client "$@"
-EOF
-chmod +x ~/bin/mmml-orca-client
+chmod +x ~/mmml/examples/orca/mmml-orca-client
+~/mmml/examples/orca/mmml-orca-client -h
 ```
 
-Adjust `$HOME/mmml/.venv` if your venv lives elsewhere.
+Point `ProgExt` at the **absolute** path to that script (see `water_opt.inp`).
+
+**Optional** `~/bin` symlink if you prefer a short path:
+
+```bash
+mkdir -p ~/bin
+ln -sf ~/mmml/examples/orca/mmml-orca-client ~/bin/mmml-orca-client
+```
+
+**Alternative:** `ProgExt` can be the venv entry point directly:
+
+```text
+ProgExt "/home/boittier/mmml/.venv/bin/mmml-orca-client"
+```
+
+(after `uv sync` in `~/mmml`). Or set `export EXTOPTEXE=...` and omit `ProgExt`.
 
 ## 3. Example files (`examples/orca/water_opt/`)
 
@@ -49,7 +64,7 @@ H   0.000000  -0.757200  -0.469200
 %maxcore 2000
 
 %method
-  ProgExt "/home/boittier/bin/mmml-orca-client"
+  ProgExt "/home/boittier/mmml/examples/orca/mmml-orca-client"
   Ext_Params "-b 127.0.0.1:8888"
 end
 
@@ -114,7 +129,7 @@ Geometry optimization (`examples/orca/water_opt/water_opt.inp`), or single-point
 ```text
 ! ExtOpt EnGrad
 %method
-  ProgExt "/home/boittier/bin/mmml-orca-client"
+  ProgExt "/home/boittier/mmml/examples/orca/mmml-orca-client"
   Ext_Params "-b 127.0.0.1:8888"
 end
 * xyzfile 0 1 water.xyz
