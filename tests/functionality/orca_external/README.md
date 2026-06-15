@@ -105,7 +105,7 @@ Pass: `water_EXT.engrad` exists, contains atom count `3`, energy in Eh, and 9 gr
 
 ## ORCA input variants
 
-Geometry optimization (above), or single-point gradient:
+Geometry optimization (`examples/orca/water_opt/water_opt.inp`), or single-point gradient:
 
 ```text
 ! EnGrad
@@ -115,6 +115,20 @@ Geometry optimization (above), or single-point gradient:
 end
 * xyzfile 0 1 water.xyz
 ```
+
+### GOAT conformer search
+
+See `examples/orca/goat_ethanol/` for a global optimization example using
+[ORCA GOAT](https://www.faccts.de/docs/orca/6.0/manual/contents/typical/GOAT.html)
+with MMML as the external PES. Start the server first, then:
+
+```bash
+cd ~/mmml/examples/orca/goat_ethanol
+orca ethanol_goat.inp
+```
+
+GOAT performs many gradient calls — keep `mmml-orca-server` warm and use `!PAL` /
+`%GOAT NWORKERS` to parallelize workers.
 
 Standalone (no server; slow — reloads JAX each call):
 
