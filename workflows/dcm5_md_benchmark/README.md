@@ -40,7 +40,7 @@ export MMML_PYTHON="$PWD/../../.venv/bin/python"   # from workflow dir
 
 PyCHARMM runs use [scripts/mmml-charmm-mpirun.sh](../../scripts/mmml-charmm-mpirun.sh) (1 MPI rank).
 
-## Job matrix (15 jobs)
+## Job matrix (16 jobs)
 
 | Category | Jobs |
 |----------|------|
@@ -48,7 +48,7 @@ PyCHARMM runs use [scripts/mmml-charmm-mpirun.sh](../../scripts/mmml-charmm-mpir
 | NVE PBC | `ase_pbc_nve`, `jaxmd_pbc_nve`, `pycharmm_pbc_nve` |
 | NVT vacuum | `ase_vac_nvt_nhc`, `ase_vac_nvt_langevin`, `jaxmd_vac_nvt`, `pycharmm_vac_heat_scale`, `pycharmm_vac_heat_hoover` |
 | NVT PBC | `ase_pbc_nvt_nhc`, `ase_pbc_nvt_langevin`, `jaxmd_pbc_nvt` |
-| NPT PBC | `jaxmd_pbc_npt` (optional — may fail on 2 ps smoke; does not block collect) |
+| NPT PBC | `jaxmd_pbc_npt` (optional — may fail on 2 ps smoke; does not block collect), `pycharmm_pbc_npt` (PBC mini + heat + NpT equil/production; required) |
 
 Shared parameters (see [config.yaml](config.yaml)):
 
