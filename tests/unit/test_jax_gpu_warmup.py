@@ -91,3 +91,39 @@ def test_ensure_jax_cuda_toolchain_required_raises_when_missing(monkeypatch):
             raised = True
             assert "ptxas not found" in str(exc)
         assert raised
+
+
+def test_jax_compile_timers_log_passes(capsys, monkeypatch):
+    monkeypatch.setenv("MMML_JAX_COMPILE_TIMERS", "1")
+    jax_gpu_warmup.reset_jax_compile_timers()
+    calls = {"n": 0}
+
+    def _run_once() -> int:
+        calls["n"] += 1
+        return calls["n"]
+
+    jax_gpu_warmup.run_jax_warmup_passes("test_kernel", 2, _run_once, block=lambda _: None)
+    out = capsys.readouterr().out
+    assert "JAX compile timer [test_kernel] pass 1 (compile+run):" in out
+    assert "JAX compile timer [test_kernel] pass 2 (run):" in out
+    assert "compile≈" in out
+    jax_gpu_warmup.maybe_log_jax_compile_timers()
+    summary = capsys.readouterr().out
+    assert "JAX compile timers — estimated compile=" in summary
+    assert "test_kernel:" in summary
+
+
+def test_jax_compile_timers_disabled_by_default(capsys, monkeypatch):
+    monkeypatch.delenv("MMML_JAX_COMPILE_TIMERS", raising=False)
+    monkeypatch.delenv("MMML_MLPOT_PROFILE", raising=False)
+    jax_gpu_warmup.reset_jax_compile_timers()
+    jax_gpu_warmup.run_jax_warmup_passes("silent", 2, lambda: 1, block=lambda _: None)
+    assert "JAX compile timer" not in capsys.readouterr().out
+
+
+def test_jax_compile_timers_follow_mlpot_profile(capsys, monkeypatch):
+    monkeypatch.delenv("MMML_JAX_COMPILE_TIMERS", raising=False)
+    monkeypatch.setenv("MMML_MLPOT_PROFILE", "1")
+    jax_gpu_warmup.reset_jax_compile_timers()
+    jax_gpu_warmup.run_jax_warmup_passes("profiled", 1, lambda: 0, block=lambda _: None)
+    assert "JAX compile timer [profiled]" in capsys.readouterr().out
