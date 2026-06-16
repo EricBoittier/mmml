@@ -330,6 +330,11 @@ def _pin_charmm_openmp_for_serial_mlpot() -> None:
 
 def prepare_serial_charmm_mpi_env() -> None:
     """Env/LD setup only — do **not** call ``MPI_Init`` (CHARMM owns that)."""
+    from mmml.interfaces.pycharmmInterface.jax_compile_threads import (
+        sanitize_xla_flags_env,
+    )
+
+    sanitize_xla_flags_env(quiet=True)
     prepare_charmm_mpi_runtime()
     _pin_charmm_openmp_for_serial_mlpot()
     if not _under_mpirun():

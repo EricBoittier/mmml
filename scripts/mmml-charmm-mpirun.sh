@@ -20,7 +20,10 @@ import os
 import shlex
 
 from mmml.interfaces.pycharmmInterface.charmm_mpi import charmm_mpirun_path, mpi_shell_setup_lines
+from mmml.interfaces.pycharmmInterface.jax_compile_threads import sanitize_xla_flags_env
 from mmml.utils.jax_gpu_warmup import ensure_jax_cuda_runtime_libs
+
+sanitize_xla_flags_env(quiet=True)
 
 for line in mpi_shell_setup_lines():
     print(line)
