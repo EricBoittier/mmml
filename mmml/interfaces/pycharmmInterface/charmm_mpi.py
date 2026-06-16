@@ -180,14 +180,35 @@ def mpi_library_path_export() -> str:
     return f"export LD_LIBRARY_PATH={prefix}${{LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}}"
 
 
+def _openmpi_root_mpirun() -> Path | None:
+    """Optional ``OPENMPI_ROOT/bin/mpirun`` (same convention as ``scripts/rebuild_charmm_mlpot.sh``)."""
+    root = (os.environ.get("OPENMPI_ROOT") or "").strip()
+    if not root:
+        return None
+    candidate = Path(root).expanduser() / "bin" / "mpirun"
+    if candidate.is_file():
+        return candidate.resolve()
+    return None
+
+
 @lru_cache(maxsize=1)
 def charmm_mpirun_path() -> Path | None:
-    """``mpirun`` from the same OpenMPI install as ``libcharmm.so`` (not system OpenMPI 3)."""
+    """``mpirun`` from the same OpenMPI install as ``libcharmm.so``.
+
+    Resolution order: ``MMML_MPIRUN``, ``OPENMPI_ROOT/bin/mpirun``, then
+    ``libmpi.so`` directory from ``ldd libcharmm.so`` → ``../bin/mpirun``.
+    When auto-discovery fails, set ``MMML_MPIRUN`` to the launcher that matches
+    the ``libmpi`` line from ``ldd`` (do not assume a distro layout).
+    """
     override = (os.environ.get("MMML_MPIRUN") or "").strip()
     if override:
         candidate = Path(override).expanduser()
         if candidate.is_file():
             return candidate.resolve()
+
+    from_openmpi_root = _openmpi_root_mpirun()
+    if from_openmpi_root is not None:
+        return from_openmpi_root
 
     lib = _charmm_lib_path()
     if lib is None:

@@ -294,7 +294,7 @@
 // ── Slide 3: Engineering · MetaTensor / ORCA ──────────────────────────────────
 
 #slide[
-  #slide-h1[Shipped like software — MMML today, metatomic next]
+  #slide-h1[Atomistic ML software — MMML today, Metatomic next?]
 
   #grid(
     columns: (1fr, 1fr),
