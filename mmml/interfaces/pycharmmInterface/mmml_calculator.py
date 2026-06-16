@@ -2136,13 +2136,6 @@ def setup_calculator(
                 """Ensure MM fn is built and return update_mm_pairs, or None for cell-list path."""
                 pos_np = np.asarray(positions)
                 _ensure_mm_fn(pos_np, cutoff_params_arg)
-                box_jax = jnp.asarray(box, dtype=ml_jnp_dtype) if box is not None else None
-                _maybe_warmup_hybrid_jit(
-                    pos_np,
-                    cutoff_params_arg,
-                    atomic_numbers,
-                    box=box_jax,
-                )
                 return _cached_update_mm_pairs[0]
 
             update_fn_factory = get_update_fn if doMM else None

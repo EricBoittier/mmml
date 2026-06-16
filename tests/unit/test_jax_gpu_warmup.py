@@ -127,3 +127,30 @@ def test_jax_compile_timers_follow_mlpot_profile(capsys, monkeypatch):
     jax_gpu_warmup.reset_jax_compile_timers()
     jax_gpu_warmup.run_jax_warmup_passes("profiled", 1, lambda: 0, block=lambda _: None)
     assert "JAX compile timer [profiled]" in capsys.readouterr().out
+
+
+def test_warmup_hybrid_spherical_cutoff_skips_duplicate_key(monkeypatch):
+    jax_gpu_warmup.reset_hybrid_spherical_warmup_cache()
+    monkeypatch.setattr(jax_gpu_warmup, "_jax_warmup_backend", lambda: "cpu")
+    calls = {"n": 0}
+
+    def _calc(**_kwargs):
+        calls["n"] += 1
+        return type("R", (), {"energy": 0.0, "forces": None})()
+
+    import numpy as np
+
+    pos = np.zeros((4, 3))
+    z = np.zeros(4, dtype=int)
+    kw = dict(
+        atomic_numbers=z,
+        positions=pos,
+        n_monomers=2,
+        cutoff_params=object(),
+        doML=True,
+        doMM=True,
+        doML_dimer=True,
+    )
+    jax_gpu_warmup.warmup_hybrid_spherical_cutoff(_calc, **kw)
+    jax_gpu_warmup.warmup_hybrid_spherical_cutoff(_calc, **kw)
+    assert calls["n"] == 2

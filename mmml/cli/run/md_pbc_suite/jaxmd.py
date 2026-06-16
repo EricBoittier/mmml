@@ -497,9 +497,14 @@ def main(argv: list[str] | None = None) -> int:
 
         from mmml.utils.jax_gpu_warmup import warmup_hybrid_spherical_cutoff
 
+        mm_pair_idx = None
+        mm_pair_mask = None
         if get_update_fn is not None and not free_space and L is not None:
             box_nl = np.array([L, L, L], dtype=np.float64)
-            get_update_fn(np.asarray(atoms.get_positions(), dtype=np.float64), cutoff, box=box_nl)
+            pos_np = np.asarray(atoms.get_positions(), dtype=np.float64)
+            update_fn = get_update_fn(pos_np, cutoff, box=box_nl)
+            if update_fn is not None:
+                mm_pair_idx, mm_pair_mask = update_fn(pos_np, box=box_nl)
         else:
             _ = float(atoms.get_potential_energy())
         box_warm = (
@@ -514,6 +519,8 @@ def main(argv: list[str] | None = None) -> int:
             n_monomers=n_molecules,
             cutoff_params=cutoff,
             box=box_warm,
+            mm_pair_idx=mm_pair_idx,
+            mm_pair_mask=mm_pair_mask,
         )
         print("[jaxmd] hybrid JIT warmup complete (delay-kernel calibration)")
 
