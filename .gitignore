@@ -1,5 +1,5 @@
 CHARMMSETUP
-
+examples/orca/goat_ethanol/ethanol_goat.goat.*
 # Core dump files (from program crashes)
 core.*
 *.core
