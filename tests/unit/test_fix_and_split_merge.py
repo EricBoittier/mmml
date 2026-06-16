@@ -7,7 +7,9 @@ import pytest
 
 from mmml.cli.misc.fix_and_split import (
     _load_and_merge_efd,
+    atomic_ref_sum_hartree,
     check_atomic_ref_subtraction,
+    diagnose_energy_unit_for_atomic_refs,
     expected_atomic_ref_units,
     subtract_atomic_references,
 )
@@ -115,3 +117,23 @@ def test_check_atomic_ref_subtraction_catches_wrong_units():
         ref_units="hartree",
     )
     assert np.allclose(e_right, -1.0)
+
+
+def test_diagnose_energy_unit_detects_ev_totals():
+    n_atoms = 40
+    n_samples = 3
+    z_row = np.array([6] * 34 + [1] * 6, dtype=np.int32)
+    z = np.broadcast_to(z_row.reshape(1, -1), (n_samples, n_atoms))
+    ref_ha = atomic_ref_sum_hartree(z, "pbe0/def2-tzvp", "hartree")
+    e_ev = np.full(n_samples, -(ref_ha * 27.211386 + 5.0))
+
+    hint = diagnose_energy_unit_for_atomic_refs(
+        e_ev, z, "pbe0/def2-tzvp", "hartree", "hartree"
+    )
+    assert hint is not None
+    assert "--energy-in ev" in hint
+
+    e_ha = np.full(n_samples, -(ref_ha + 5.0))
+    corrected = subtract_atomic_references(e_ha, z, "pbe0/def2-tzvp", ref_units="hartree")
+    assert np.allclose(corrected, -5.0)
+    assert diagnose_energy_unit_for_atomic_refs(e_ha, z, "pbe0/def2-tzvp", "hartree", "hartree") is None
