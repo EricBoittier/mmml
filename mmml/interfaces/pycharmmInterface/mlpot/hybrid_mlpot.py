@@ -315,27 +315,33 @@ class DecomposedMlpotModel:
             return
         if self._pending_factory is None or self._pending_factory_z is None:
             raise RuntimeError("DecomposedMlpotModel: JAX factory was not initialized")
+        from mmml.interfaces.pycharmmInterface.jax_compile_threads import (
+            jax_compile_threads_context,
+        )
         from mmml.utils.jax_gpu_warmup import ensure_xla_gpu_warmed
 
-        ensure_xla_gpu_warmed()
-        z = self._pending_factory_z
-        r0 = np.zeros((len(z), 3), dtype=np.float64)
-        from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_context
-
-        with mlpot_jax_device_context():
-            _, spherical_fn, get_update_fn = unpack_factory_result(
-                self._pending_factory(
-                    atomic_numbers=jnp.asarray(z),
-                    atomic_positions=jnp.asarray(r0),
-                    n_monomers=self._n_monomers,
-                    cutoff_params=self._cutoff_params,
-                    doML=self._pending_do_ml,
-                    doMM=self._do_mm,
-                    doML_dimer=self._pending_do_ml_dimer,
-                    backprop=False,
-                    create_ase_calculator=False,
-                )
+        with jax_compile_threads_context():
+            ensure_xla_gpu_warmed()
+            z = self._pending_factory_z
+            r0 = np.zeros((len(z), 3), dtype=np.float64)
+            from mmml.interfaces.pycharmmInterface.jax_device_policy import (
+                mlpot_jax_device_context,
             )
+
+            with mlpot_jax_device_context():
+                _, spherical_fn, get_update_fn = unpack_factory_result(
+                    self._pending_factory(
+                        atomic_numbers=jnp.asarray(z),
+                        atomic_positions=jnp.asarray(r0),
+                        n_monomers=self._n_monomers,
+                        cutoff_params=self._cutoff_params,
+                        doML=self._pending_do_ml,
+                        doMM=self._do_mm,
+                        doML_dimer=self._pending_do_ml_dimer,
+                        backprop=False,
+                        create_ase_calculator=False,
+                    )
+                )
         self._spherical_fn = spherical_fn
         if self._do_mm:
             self._get_update_fn = get_update_fn
