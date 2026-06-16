@@ -523,6 +523,56 @@ def subtract_atomic_references(
     return E_hartree - E_ref_per_sample
 
 
+def atomic_ref_sum_hartree(
+    Z: np.ndarray,
+    scheme: str,
+    ref_units: str = "hartree",
+) -> float:
+    """Mean per-sample sum of atomic reference energies (Hartree) from Z."""
+    Z = np.asarray(Z)
+    n = int(Z.shape[0]) if Z.ndim > 1 else 1
+    zero_e = np.zeros(n, dtype=np.float64)
+    corrected = subtract_atomic_references(zero_e, Z, scheme, ref_units=ref_units)
+    return float(abs(np.mean(corrected)))
+
+
+def diagnose_energy_unit_for_atomic_refs(
+    E: np.ndarray,
+    Z: np.ndarray,
+    scheme: str,
+    ref_units: str,
+    declared_energy_in: str,
+) -> Optional[str]:
+    """
+    Detect when E is labeled Hartree but magnitudes match eV totals for the Z composition.
+    """
+    from mmml.data.units import EV_TO_HARTREE, HARTREE_TO_EV
+
+    ref_ha = abs(atomic_ref_sum_hartree(Z, scheme, ref_units))
+    if ref_ha <= 0.0:
+        return None
+    e_mean = abs(float(np.mean(np.asarray(E, dtype=np.float64))))
+    if declared_energy_in == "hartree" and e_mean > 5.0 * ref_ha:
+        e_as_ha_if_ev = e_mean * EV_TO_HARTREE
+        if 0.7 * ref_ha <= e_as_ha_if_ev <= 1.3 * ref_ha:
+            return (
+                f"|E| mean ({e_mean:.4g}) is ~{e_mean / ref_ha:.0f}× the atomic-ref sum implied by Z "
+                f"({ref_ha:.4g} Ha), but matches input energies in eV converted to Hartree "
+                f"({e_as_ha_if_ev:.4g} Ha). Use --energy-in ev "
+                f"(and --force-in ev-angstrom if forces are not Hartree/Bohr)."
+            )
+    if declared_energy_in == "ev" and e_mean > 5.0 * ref_ha * HARTREE_TO_EV:
+        e_as_ha_if_hartree = e_mean * EV_TO_HARTREE
+        if 0.7 * ref_ha <= e_as_ha_if_hartree <= 1.3 * ref_ha:
+            return None
+        if 0.7 * ref_ha <= e_mean <= 1.3 * ref_ha:
+            return (
+                f"|E| mean ({e_mean:.4g}) matches atomic-ref sum in Hartree ({ref_ha:.4g} Ha) "
+                f"but you passed --energy-in ev. Try --energy-in hartree."
+            )
+    return None
+
+
 def expected_atomic_ref_units(scheme: str) -> str:
     """
     Infer native units of per-atom references in atomic_reference_energies.json.
@@ -547,6 +597,8 @@ def check_atomic_ref_subtraction(
     *,
     scheme: str,
     ref_units: str,
+    energy_in_declared: Optional[str] = None,
+    Z: Optional[np.ndarray] = None,
 ) -> None:
     """
     Raise ValueError when atomic-reference subtraction barely changed total-like energies.
@@ -570,6 +622,14 @@ def check_atomic_ref_subtraction(
         hint += (
             f" You passed --atomic-ref-units {units}; try --atomic-ref-units {expected_units}."
         )
+    elif energy_in_declared and Z is not None:
+        unit_hint = diagnose_energy_unit_for_atomic_refs(
+            e_before, Z, scheme, ref_units, energy_in_declared
+        )
+        if unit_hint:
+            hint += f" {unit_hint}"
+        else:
+            hint += " Check that Z contains real atomic numbers for all non-padded atoms."
     else:
         hint += " Check that Z contains real atomic numbers for all non-padded atoms."
     raise ValueError(hint)
@@ -1370,6 +1430,11 @@ def fix_and_split_data(
                     f"  ⚠️  Scheme '{atomic_ref}' refs look like {expected_units} in JSON; "
                     f"you passed --atomic-ref-units {atomic_ref_units}"
                 )
+            unit_hint = diagnose_energy_unit_for_atomic_refs(
+                E_work, Z_expanded, atomic_ref, atomic_ref_units, energy_in
+            )
+            if unit_hint:
+                raise ValueError(unit_hint)
             E_before_ref = E_work.copy()
             if energy_in == "ev":
                 E_ha = convert_energy_ev_to_hartree(E_work)
@@ -1379,6 +1444,8 @@ def fix_and_split_data(
                     E_ha,
                     scheme=atomic_ref,
                     ref_units=atomic_ref_units,
+                    energy_in_declared=energy_in,
+                    Z=Z_expanded,
                 )
                 E_work = convert_energy_hartree_to_ev(E_ha)
             else:
@@ -1388,6 +1455,8 @@ def fix_and_split_data(
                     E_work,
                     scheme=atomic_ref,
                     ref_units=atomic_ref_units,
+                    energy_in_declared=energy_in,
+                    Z=Z_expanded,
                 )
         except ValueError as e:
             print(f"\n❌ Atomic reference subtraction failed: {e}")
