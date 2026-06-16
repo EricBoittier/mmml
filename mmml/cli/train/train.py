@@ -190,61 +190,61 @@ def train_physnetjax(
     verbose: bool = True
 ):
     """
-    Train PhysNetJAX model.
-    
-    Parameters
-    ----------
-    config : TrainConfig
-        Training configuration
-    train_data : dict
-        Training data dictionary
-    valid_data : dict
-        Validation data dictionary
-    verbose : bool
-        Whether to print progress
+    Train PhysNetJAX model via the physnet-train pipeline.
+
+    Prefer ``mmml physnet-train`` for full CLI/YAML options. This wrapper maps
+  the simplified ``mmml train --model physnetjax`` config onto that pipeline.
     """
     if verbose:
         print("\n" + "="*60)
         print("Training PhysNetJAX Model")
         print("="*60)
-    
+        print("  (delegating to mmml physnet-train / make_training)")
+
     try:
-        from mmml.data.adapters import prepare_physnet_batches
-        
-        # Prepare batches
-        if verbose:
-            print("\n📦 Preparing training batches...")
-        
-        train_batches = prepare_physnet_batches(
-            train_data,
-            batch_size=config.batch_size,
-            shuffle=True
-        )
-        
-        valid_batches = prepare_physnet_batches(
-            valid_data,
-            batch_size=config.batch_size,
-            shuffle=False
-        )
-        
-        if verbose:
-            print(f"   Train batches: {len(train_batches)}")
-            print(f"   Valid batches: {len(valid_batches)}")
-            if config.physnet_checkpoint:
-                print(f"   PhysNet checkpoint: {config.physnet_checkpoint}")
-            if config.physnet_transfer_model:
-                print(f"   PhysNet transfer model: {config.physnet_transfer_model}")
-        
-        # TODO: Load actual PhysNetJAX model and train
-        # For now, this is a placeholder showing the structure
-        
-        if verbose:
-            print("\n⚠️  Actual PhysNetJAX training not yet implemented")
-            print("   Batch preparation successful!")
-            print("   Ready for model training integration")
-        
+        from mmml.cli.make.make_training import args_from_kwargs, run, validate_train_args
+
+        n_train = len(train_data.get("E", train_data.get("R", [])))
+        n_valid = len(valid_data.get("E", valid_data.get("R", [])))
+        if n_valid == 0:
+            raise ValueError(
+                "PhysNet training requires a non-empty validation split. "
+                "Use mmml physnet-train with --n-valid, or mmml train --valid."
+            )
+
+        # Persist the already-loaded splits so make_training can consume them.
+        import tempfile
+        import numpy as np
+
+        tmp = Path(tempfile.mkdtemp(prefix="mmml_physnet_train_"))
+        train_path = tmp / "train.npz"
+        valid_path = tmp / "valid.npz"
+        np.savez_compressed(train_path, **train_data)
+        np.savez_compressed(valid_path, **valid_data)
+
+        kwargs = {
+            "data": str(train_path),
+            "ckpt_dir": config.output_dir,
+            "tag": Path(config.output_dir).name or "physnet_run",
+            "n_train": n_train,
+            "n_valid": n_valid,
+            "seed": 42,
+            "batch_size": config.batch_size,
+            "num_epochs": config.max_epochs,
+            "learning_rate": config.learning_rate,
+            "energy_weight": (config.loss_weights or {}).get("energy", 1.0),
+            "forces_weight": (config.loss_weights or {}).get("forces", 52.91),
+            "dipole_weight": (config.loss_weights or {}).get("dipole", 27.21),
+            "restart": config.physnet_checkpoint,
+        }
+        if config.model_params:
+            kwargs.update(config.model_params)
+
+        args = args_from_kwargs(**kwargs)
+        validate_train_args(args)
+        run(args)
         return True
-        
+
     except Exception as e:
         print(f"❌ Error training PhysNetJAX: {e}")
         if verbose:
