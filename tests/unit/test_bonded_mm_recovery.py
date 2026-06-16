@@ -552,6 +552,30 @@ def test_reregister_mlpot_reattaches_without_new_mlpot_or_nbond_rebuild():
     mlpot.reattach_mlpot.assert_called_once_with()
 
 
+def test_reregister_after_topology_reload_skips_upinb_rebuild():
+    from mmml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+
+    ctx = MagicMock(spec=MlpotContext)
+    positions = np.zeros((25, 3), dtype=float)
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        return_value=positions,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+    ) as sync_pos, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.register_mlpot",
+    ) as register, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.refresh_nbonds_after_mlpot_pbc",
+    ) as refresh_pbc:
+        bonded_mm_recovery._reregister_mlpot_after_topology_reload(ctx)
+
+    ctx.reregister_mlpot.assert_called_once_with()
+    sync_pos.assert_called_once_with(positions)
+    register.assert_not_called()
+    refresh_pbc.assert_not_called()
+
+
 def test_assert_mlpot_user_active_reattaches_when_user_missing():
     import sys
     import types

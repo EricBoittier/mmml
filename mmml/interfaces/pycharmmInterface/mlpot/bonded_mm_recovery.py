@@ -675,34 +675,15 @@ def _reload_pre_mlpot_topology(
 def _reregister_mlpot_after_topology_reload(ctx: MlpotContext) -> None:
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
-        refresh_nbonds_after_mlpot_pbc,
-        register_mlpot,
-        select_all_atoms,
         sync_charmm_positions,
     )
 
     positions = get_charmm_positions_array()
-    ml_z = np.asarray(ctx.ml_Z, dtype=int)
-    new_ctx = register_mlpot(
-        ctx.pyCModel,
-        ml_z,
-        select_all_atoms(),
-        ml_charge=ctx.ml_charge,
-        ml_fq=ctx.ml_fq,
-        use_pbc=ctx.use_pbc,
-        mm_internal_scale=float(getattr(ctx, "mm_internal_scale", 0.0)),
-    )
-    new_ctx.ml_Z = ml_z
-    new_ctx.use_pbc = bool(ctx.use_pbc)
-    new_ctx.cubic_box_side_A = ctx.cubic_box_side_A
-    new_ctx.charmm_cubic_box_side_A = getattr(ctx, "charmm_cubic_box_side_A", None)
-    if new_ctx.use_pbc and new_ctx.cubic_box_side_A is not None:
-        refresh_nbonds_after_mlpot_pbc(
-            cubic_box_side_A=float(new_ctx.cubic_box_side_A),
-            force=True,
-        )
+    # ``_reload_pre_mlpot_topology`` already rebuilt CHARMM PBC/vacuum nbonds with
+    # MLpot detached. A fresh ``register_mlpot`` or ``refresh_nbonds_after_mlpot_pbc``
+    # (``update_bnbnd`` / ``upinb``) segfaults for all-ML PBC clusters.
+    ctx.reregister_mlpot()
     sync_charmm_positions(positions)
-    _copy_mlpot_context_state(ctx, new_ctx)
 
 
 def _run_bonded_sd_without_mlpot(
