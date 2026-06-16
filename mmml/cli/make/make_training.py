@@ -464,14 +464,16 @@ def main_loop(args):
         num_epochs=args.num_epochs,
     )
 
-    # save the parameters named with the date-time
+    # save portable JSON (params + architecture) for inference / physnet-evaluate
     now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    model_attrs = model.return_attributes()
+    portable = {"params": params_out, "config": model_attrs}
     params_path = (ckpt_dir / f"params_{args.tag}_{now}.json") if ckpt_dir else Path(f"params_{args.tag}_{now}.json")
     if ckpt_dir:
         params_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(params_path, 'w') as f:
-        print(f"Saving parameters to {params_path}")
-        json.dump(params_out, f, default=to_jsonable)
+    with open(params_path, "w") as f:
+        print(f"Saving portable checkpoint to {params_path}")
+        json.dump(portable, f, default=to_jsonable)
 
     return params_out, params_path
     

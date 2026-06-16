@@ -92,6 +92,62 @@ def _metrics_extra_kcal_to_ev(mae_kcal: float, rmse_kcal: float) -> Dict[str, fl
     }
 
 
+def _load_physnet_checkpoint(checkpoint: Path, natoms: int):
+    """Load (checkpoint_path, params, model) from Orbax or portable/legacy JSON."""
+    import json
+
+    from mmml.models.physnetjax.physnetjax.models.model import EF as StandardEF
+    from mmml.utils.model_checkpoint import json_to_params, normalize_flax_params_for_apply
+
+    ckpt = checkpoint.resolve()
+    json_path: Path | None = None
+    if ckpt.is_file() and ckpt.suffix == ".json":
+        json_path = ckpt
+    elif ckpt.is_dir():
+        candidates = sorted(ckpt.glob("params*.json"))
+        if len(candidates) == 1:
+            json_path = candidates[0]
+        elif (ckpt / "params.json").is_file():
+            json_path = ckpt / "params.json"
+
+    if json_path is not None:
+        loaded = json_to_params(json_path, backend="jax")
+        config = loaded.get("config")
+        if not config:
+            for alt in (
+                json_path.parent / "args.model.json",
+                json_path.parent.parent / "args.model.json",
+                Path("args.model.json"),
+            ):
+                if alt.is_file():
+                    with alt.open() as handle:
+                        config = json.load(handle)
+                    print(f"Using model architecture from {alt}")
+                    break
+        if not config:
+            raise ValueError(
+                f"{json_path} has weights only (no config). "
+                "Combine with args.model.json into a portable JSON, or use an Orbax epoch-* checkpoint."
+            )
+        model = StandardEF(**config)
+        model.natoms = natoms
+        if "zbl" in config:
+            model.zbl = bool(config["zbl"])
+        params = normalize_flax_params_for_apply(loaded["params"], backend="jax")
+        return json_path, params, model
+
+    from mmml.models.physnetjax.physnetjax.restart.restart import get_last, get_params_model
+
+    restart_path = get_last(str(ckpt))
+    params, model = get_params_model(str(restart_path), natoms=natoms)
+    if model is None:
+        raise ValueError(
+            f"Orbax checkpoint {restart_path} has no model_attributes. "
+            "Export with mmml orbax-to-json or re-train with checkpoint saving enabled."
+        )
+    return restart_path, params, model
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Evaluate PhysNetJAX checkpoint on NPZ (energies, forces, dipoles).",
@@ -193,21 +249,14 @@ def main() -> int:
             print("Error: no samples to evaluate.", file=sys.stderr)
             return 1
 
-        from mmml.models.physnetjax.physnetjax.restart.restart import (
-            get_last,
-            get_params_model,
-        )
         from mmml.models.physnetjax.physnetjax.data.data import prepare_datasets
         from mmml.models.physnetjax.physnetjax.data.batches import prepare_batches_jit
         from mmml.models.physnetjax.physnetjax.analysis.analysis import plot_stats
 
-        restart_path = get_last(str(args.checkpoint))
-        params, model = get_params_model(str(restart_path), natoms=natoms)
-        if model is None:
-            print(
-                "Error: checkpoint has no model_attributes; cannot rebuild EF model.",
-                file=sys.stderr,
-            )
+        try:
+            restart_path, params, model = _load_physnet_checkpoint(args.checkpoint, natoms)
+        except (ValueError, FileNotFoundError) as exc:
+            print(f"Error: {exc}", file=sys.stderr)
             return 1
 
         key = jax.random.PRNGKey(args.seed)
