@@ -3,8 +3,14 @@
 from pathlib import Path
 
 import numpy as np
+import pytest
 
-from mmml.cli.misc.fix_and_split import _load_and_merge_efd, subtract_atomic_references
+from mmml.cli.misc.fix_and_split import (
+    _load_and_merge_efd,
+    check_atomic_ref_subtraction,
+    expected_atomic_ref_units,
+    subtract_atomic_references,
+)
 
 
 def _write_efd(path: Path, n_samples: int, n_atoms: int = 4, z_1d: bool = False) -> None:
@@ -76,3 +82,36 @@ def test_merge_efd_z_rows_match_r_after_concat(tmp_path):
         z_expanded = z
 
     assert z_expanded.shape[0] == n_samples
+
+
+def test_expected_atomic_ref_units_for_def2tzvp():
+    assert expected_atomic_ref_units("pbe0/def2-tzvp") == "hartree"
+
+
+def test_check_atomic_ref_subtraction_catches_wrong_units():
+    n_atoms = 4
+    n_samples = 3
+    z = np.broadcast_to(np.array([[6, 1, 1, 1]], dtype=np.int32), (n_samples, n_atoms))
+
+    e_before_large = np.full(n_samples, -35130.0)
+    e_wrong = subtract_atomic_references(e_before_large, z, "pbe0/def2-tzvp", ref_units="ev")
+    with pytest.raises(ValueError, match="atomic-ref-units hartree"):
+        check_atomic_ref_subtraction(
+            e_before_large,
+            e_wrong,
+            scheme="pbe0/def2-tzvp",
+            ref_units="ev",
+        )
+
+    ref_offset = float(
+        subtract_atomic_references(np.zeros(n_samples), z, "pbe0/def2-tzvp", ref_units="hartree")[0]
+    )
+    e_before = np.full(n_samples, -ref_offset - 1.0)
+    e_right = subtract_atomic_references(e_before, z, "pbe0/def2-tzvp", ref_units="hartree")
+    check_atomic_ref_subtraction(
+        e_before,
+        e_right,
+        scheme="pbe0/def2-tzvp",
+        ref_units="hartree",
+    )
+    assert np.allclose(e_right, -1.0)

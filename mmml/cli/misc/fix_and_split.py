@@ -523,6 +523,58 @@ def subtract_atomic_references(
     return E_hartree - E_ref_per_sample
 
 
+def expected_atomic_ref_units(scheme: str) -> str:
+    """
+    Infer native units of per-atom references in atomic_reference_energies.json.
+
+    Schemes with total atomic energies (e.g. pbe0/def2-tzvp) store C:0 around -37 Hartree.
+    Schemes with small deltas (e.g. pbe0/sz) store C:0 around -0.1 eV.
+    """
+    refs = load_atomic_reference_energies(scheme)
+    probe_keys = ("C:0", "H:0", "N:0", "O:0")
+    for key in probe_keys:
+        if key in refs:
+            return "hartree" if abs(float(refs[key])) > 1.0 else "ev"
+    vals = [abs(float(v)) for k, v in refs.items() if k.endswith(":0")]
+    if vals and max(vals) > 1.0:
+        return "hartree"
+    return "ev"
+
+
+def check_atomic_ref_subtraction(
+    E_before_hartree: np.ndarray,
+    E_after_hartree: np.ndarray,
+    *,
+    scheme: str,
+    ref_units: str,
+) -> None:
+    """
+    Raise ValueError when atomic-reference subtraction barely changed total-like energies.
+    """
+    e_before = np.asarray(E_before_hartree, dtype=np.float64)
+    e_after = np.asarray(E_after_hartree, dtype=np.float64)
+    mean_before = float(np.mean(e_before))
+    mean_after = float(np.mean(e_after))
+    shift = abs(mean_before - mean_after)
+    if abs(mean_before) < 500.0 or shift >= 0.05 * abs(mean_before):
+        return
+
+    expected_units = expected_atomic_ref_units(scheme)
+    units = ref_units.lower()
+    hint = (
+        f"Atomic reference subtraction only shifted mean |E| by {shift:.4g} Hartree "
+        f"(before={mean_before:.6f}, after={mean_after:.6f}). "
+        f"For scheme '{scheme}', refs in JSON look like {expected_units}."
+    )
+    if units != expected_units:
+        hint += (
+            f" You passed --atomic-ref-units {units}; try --atomic-ref-units {expected_units}."
+        )
+    else:
+        hint += " Check that Z contains real atomic numbers for all non-padded atoms."
+    raise ValueError(hint)
+
+
 def reduce_esp_grid(
     esp: np.ndarray,
     esp_grid: np.ndarray,
@@ -1311,12 +1363,35 @@ def fix_and_split_data(
     if atomic_ref:
         if verbose:
             print(f"\nSubtracting atomic reference energies (scheme: {atomic_ref}, ref units: {atomic_ref_units})")
-        if energy_in == "ev":
-            E_ha = convert_energy_ev_to_hartree(E_work)
-            E_ha = subtract_atomic_references(E_ha, Z_expanded, atomic_ref, ref_units=atomic_ref_units)
-            E_work = convert_energy_hartree_to_ev(E_ha)
-        else:
-            E_work = subtract_atomic_references(E_work, Z_expanded, atomic_ref, ref_units=atomic_ref_units)
+        try:
+            expected_units = expected_atomic_ref_units(atomic_ref)
+            if atomic_ref_units.lower() != expected_units and verbose:
+                print(
+                    f"  ⚠️  Scheme '{atomic_ref}' refs look like {expected_units} in JSON; "
+                    f"you passed --atomic-ref-units {atomic_ref_units}"
+                )
+            E_before_ref = E_work.copy()
+            if energy_in == "ev":
+                E_ha = convert_energy_ev_to_hartree(E_work)
+                E_ha = subtract_atomic_references(E_ha, Z_expanded, atomic_ref, ref_units=atomic_ref_units)
+                check_atomic_ref_subtraction(
+                    convert_energy_ev_to_hartree(E_before_ref),
+                    E_ha,
+                    scheme=atomic_ref,
+                    ref_units=atomic_ref_units,
+                )
+                E_work = convert_energy_hartree_to_ev(E_ha)
+            else:
+                E_work = subtract_atomic_references(E_work, Z_expanded, atomic_ref, ref_units=atomic_ref_units)
+                check_atomic_ref_subtraction(
+                    E_before_ref,
+                    E_work,
+                    scheme=atomic_ref,
+                    ref_units=atomic_ref_units,
+                )
+        except ValueError as e:
+            print(f"\n❌ Atomic reference subtraction failed: {e}")
+            return False
         if verbose:
             print(f"  E after ref subtraction: mean={E_work.mean():.6f}, range=[{E_work.min():.6f}, {E_work.max():.6f}]")
 
