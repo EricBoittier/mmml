@@ -608,6 +608,31 @@ def build_mm_energy_forces_fn(
             elec = coulomb(distances, pair_qq_dyn) * pair_mask_ij
             return vdw + elec
 
+        def _mm_dynamic_energy_scalar(
+            positions: Array,
+            pair_idx: Array,
+            pair_mask: Array,
+            cell_for_mic: Array,
+        ) -> Array:
+            pair_i = pair_idx[:, 0]
+            pair_j = pair_idx[:, 1]
+            mid_i = _monomer_id_jnp[pair_i]
+            mid_j = _monomer_id_jnp[pair_j]
+            pair_dimer_idx_dyn = _dimer_lookup_arr[mid_i, mid_j]
+            pair_energies = calculate_mm_pair_energies_dynamic(
+                positions, pair_idx, pair_mask, cell_for_mic=cell_for_mic
+            )
+            return apply_switching_function(
+                positions,
+                pair_energies,
+                pair_dimer_idx_arg=pair_dimer_idx_dyn,
+                box_override=cell_for_mic,
+            )
+
+        _mm_dynamic_value_and_grad = jax.jit(
+            jax.value_and_grad(_mm_dynamic_energy_scalar, argnums=0),
+        )
+
         @jax.jit
         def calculate_mm_energy_and_forces_dynamic(
             positions: Array,
@@ -615,26 +640,17 @@ def build_mm_energy_forces_fn(
             pair_mask: Array,
             box_override: Optional[Array] = None,
         ) -> Tuple[Array, Array]:
-            pair_i = pair_idx[:, 0]
-            pair_j = pair_idx[:, 1]
-            mid_i = _monomer_id_jnp[pair_i]
-            mid_j = _monomer_id_jnp[pair_j]
-            pair_dimer_idx_dyn = _dimer_lookup_arr[mid_i, mid_j]
-
             _cell_raw = box_override if box_override is not None else _pbc_cell_jnp
             _cell_for_mic = _box_to_cell_3x3(_cell_raw)
-            pair_energies = calculate_mm_pair_energies_dynamic(
-                positions, pair_idx, pair_mask, cell_for_mic=_cell_for_mic
+            switched_energy, grad = _mm_dynamic_value_and_grad(
+                positions,
+                pair_idx,
+                pair_mask,
+                _cell_for_mic,
             )
-            switched_energy = apply_switching_function(
-                positions, pair_energies, pair_dimer_idx_arg=pair_dimer_idx_dyn, box_override=_cell_for_mic
-            )
-            def _switched_dyn(pos, cell):
-                pe = calculate_mm_pair_energies_dynamic(pos, pair_idx, pair_mask, cell_for_mic=cell)
-                return apply_switching_function(pos, pe, pair_dimer_idx_arg=pair_dimer_idx_dyn, box_override=cell)
-            switched_mm_energy_dyn = lambda pos: _switched_dyn(pos, _cell_for_mic)
-            forces = -1.0 * jax.grad(switched_mm_energy_dyn)(positions)
+            forces = -1.0 * grad
             forces = jnp.where(jnp.isfinite(forces), forces, 0.0)
+            switched_energy = jnp.where(jnp.isfinite(switched_energy), switched_energy, 0.0)
             return switched_energy, forces
 
         def _cell_list_fallback_pairs(positions_in: np.ndarray, _nbr_debug: bool) -> Tuple[Array, Array]:

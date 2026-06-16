@@ -104,6 +104,8 @@ class DecomposedMlpotCalculator:
         self.ev2kcal = float(ev2kcalmol)
         self._cell = float(cell) if cell else False
         self.last_ml_forces: np.ndarray | None = None
+        self._value_and_grad_fn: Any | None = None
+        self._vg_cache_key: tuple[Any, ...] | None = None
 
     def _grad_cache_owner(self) -> DecomposedMlpotCalculator | DecomposedMlpotModel:
         parent = getattr(self, "_parent_model", None)
