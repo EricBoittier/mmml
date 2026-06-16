@@ -99,6 +99,28 @@ def test_charmm_mpirun_path_from_ldd(monkeypatch, tmp_path):
     charmm_mpi.charmm_lib_links_mpi.cache_clear()
 
 
+def test_charmm_mpirun_path_from_openmpi_root(monkeypatch, tmp_path):
+    lib = tmp_path / "libcharmm.so"
+    lib.write_bytes(b"stub")
+    prefix = tmp_path / "openmpi-prefix"
+    bindir = prefix / "bin"
+    bindir.mkdir(parents=True)
+    mpirun = bindir / "mpirun"
+    mpirun.write_text("#!/bin/sh\n")
+    mpirun.chmod(0o755)
+
+    monkeypatch.setenv("CHARMM_LIB_DIR", str(tmp_path))
+    monkeypatch.setenv("OPENMPI_ROOT", str(prefix))
+    charmm_mpi.charmm_mpirun_path.cache_clear()
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.subprocess.run",
+        return_value=mock.Mock(returncode=0, stdout=""),
+    ):
+        found = charmm_mpi.charmm_mpirun_path()
+    assert found == mpirun.resolve()
+    charmm_mpi.charmm_mpirun_path.cache_clear()
+
+
 def test_recover_mpi_never_finalizes(monkeypatch):
     monkeypatch.delenv("MMML_NO_MPI_INIT", raising=False)
     with mock.patch(
