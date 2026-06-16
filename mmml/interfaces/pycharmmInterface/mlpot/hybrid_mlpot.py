@@ -538,7 +538,7 @@ def _warmup_value_and_grad_for_model(
 ) -> None:
     """Compile the CHARMM callback ``value_and_grad`` path (SD / dynamics)."""
     from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_context
-    from mmml.utils.jax_gpu_warmup import block_jax_values
+    from mmml.utils.jax_gpu_warmup import block_jax_values, run_jax_warmup_passes
 
     z = np.asarray(physnet_ml_atomic_numbers(model._atomic_numbers), dtype=int)
     pos = np.asarray(positions, dtype=np.float64)
@@ -561,14 +561,21 @@ def _warmup_value_and_grad_for_model(
             atomic_numbers_jax=atomic_numbers_jax,
             box_jax=box,
         )
-        for _ in range(2):
-            e_raw, grad = value_and_grad_fn(
+
+        def _run_value_and_grad():
+            return value_and_grad_fn(
                 positions_jax,
                 pair_idx,
                 pair_mask,
                 use_mm_pairs,
             )
-            block_jax_values(e_raw, grad)
+
+        run_jax_warmup_passes(
+            "mlpot_value_and_grad",
+            2,
+            _run_value_and_grad,
+            block=lambda out: block_jax_values(out[0], out[1]),
+        )
 
 
 def warmup_decomposed_mlpot(
@@ -634,6 +641,9 @@ def warmup_decomposed_mlpot(
     from mmml.interfaces.pycharmmInterface.charmm_mpi import recover_mpi_for_charmm_after_jax
 
     recover_mpi_for_charmm_after_jax(phase="after decomposed MLpot JAX warmup")
+    from mmml.utils.jax_gpu_warmup import maybe_log_jax_compile_timers
+
+    maybe_log_jax_compile_timers()
     if verbose:
         # MM warmup may have silenced CHARMM; restore visibility before MLpot registration.
         from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_verbose

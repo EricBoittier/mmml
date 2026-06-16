@@ -16,16 +16,146 @@ import logging
 import os
 import shutil
 import sys
+import time
 from contextlib import nullcontext
+from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
 _xla_gpu_warmed = False
 _ptxas_path_configured = False
 _jax_cuda_runtime_libs_configured = False
+
+
+@dataclass
+class JAXCompileTiming:
+    """One JAX warmup pass (first pass is compile+run; later passes are mostly run)."""
+
+    label: str
+    pass_index: int
+    wall_seconds: float
+
+
+@dataclass
+class JAXCompileTimerSession:
+    """Collected warmup timings for an optional end-of-phase summary."""
+
+    entries: list[JAXCompileTiming] = field(default_factory=list)
+
+    def record(self, label: str, pass_index: int, wall_seconds: float) -> None:
+        self.entries.append(
+            JAXCompileTiming(label=label, pass_index=pass_index, wall_seconds=wall_seconds)
+        )
+
+    def summary_lines(self) -> list[str]:
+        if not self.entries:
+            return []
+        by_label: dict[str, list[JAXCompileTiming]] = {}
+        for entry in self.entries:
+            by_label.setdefault(entry.label, []).append(entry)
+        lines: list[str] = []
+        total_compile = 0.0
+        total_run = 0.0
+        for label, passes in sorted(by_label.items()):
+            passes = sorted(passes, key=lambda e: e.pass_index)
+            if len(passes) >= 2:
+                run_s = passes[-1].wall_seconds
+                compile_s = max(0.0, passes[0].wall_seconds - run_s)
+                total_compile += compile_s
+                total_run += run_s
+                lines.append(
+                    f"  {label}: compile≈{compile_s:.2f}s, run≈{run_s:.2f}s "
+                    f"(pass1={passes[0].wall_seconds:.2f}s)"
+                )
+            else:
+                total_run += passes[0].wall_seconds
+                lines.append(
+                    f"  {label}: {passes[0].wall_seconds:.2f}s (single pass)"
+                )
+        header = (
+            f"mmml: JAX compile timers — estimated compile={total_compile:.2f}s, "
+            f"run={total_run:.2f}s"
+        )
+        return [header, *lines]
+
+
+_COMPILE_TIMER_SESSION = JAXCompileTimerSession()
+
+
+def jax_compile_timers_enabled() -> bool:
+    """Enable with ``MMML_JAX_COMPILE_TIMERS=1`` or ``MMML_MLPOT_PROFILE=1``."""
+    for key in ("MMML_JAX_COMPILE_TIMERS", "MMML_MLPOT_PROFILE"):
+        if (os.environ.get(key) or "").strip().lower() in ("1", "yes", "true"):
+            return True
+    return False
+
+
+def reset_jax_compile_timers() -> None:
+    global _COMPILE_TIMER_SESSION
+    _COMPILE_TIMER_SESSION = JAXCompileTimerSession()
+
+
+def get_jax_compile_timer_session() -> JAXCompileTimerSession:
+    return _COMPILE_TIMER_SESSION
+
+
+def maybe_log_jax_compile_timers(*, quiet: bool = False) -> None:
+    if quiet or not jax_compile_timers_enabled():
+        return
+    lines = _COMPILE_TIMER_SESSION.summary_lines()
+    if not lines:
+        return
+    for line in lines:
+        print(line, flush=True)
+
+
+def _log_jax_compile_pass(label: str, pass_index: int, wall_seconds: float) -> None:
+    _COMPILE_TIMER_SESSION.record(label, pass_index, wall_seconds)
+    phase = "compile+run" if pass_index == 0 else "run"
+    print(
+        f"mmml: JAX compile timer [{label}] pass {pass_index + 1} ({phase}): "
+        f"{wall_seconds:.2f}s",
+        flush=True,
+    )
+
+
+def run_jax_warmup_passes(
+    label: str,
+    n_passes: int,
+    run_once: Callable[[], Any],
+    *,
+    block: Callable[[Any], None] | None = None,
+) -> None:
+    """Run ``n_passes`` warmup executions; log wall time per pass when timers are on."""
+    block_fn = block or (lambda result: block_jax_values(result))
+    if not jax_compile_timers_enabled():
+        for _ in range(n_passes):
+            block_fn(run_once())
+        return
+    for pass_index in range(n_passes):
+        t0 = time.perf_counter()
+        result = run_once()
+        block_fn(result)
+        wall = time.perf_counter() - t0
+        _log_jax_compile_pass(label, pass_index, wall)
+    if n_passes >= 2:
+        entries = [
+            e
+            for e in _COMPILE_TIMER_SESSION.entries
+            if e.label == label and e.pass_index < n_passes
+        ]
+        if len(entries) >= 2:
+            entries = sorted(entries, key=lambda e: e.pass_index)
+            run_s = entries[-1].wall_seconds
+            compile_s = max(0.0, entries[0].wall_seconds - run_s)
+            print(
+                f"mmml: JAX compile timer [{label}] summary: "
+                f"compile≈{compile_s:.2f}s, run≈{run_s:.2f}s",
+                flush=True,
+            )
 
 
 def _site_package_roots() -> list[Path]:
@@ -222,10 +352,16 @@ def ensure_xla_gpu_warmed(*, force: bool = False) -> bool:
         return y + jnp.sum(m @ m)
 
     x = jnp.ones((256,), dtype=jnp.float32)
-    # Two executions: first may compile; second satisfies delay-kernel calibration.
-    for _ in range(2):
-        out = _warmup_kernel(x)
-        jax.block_until_ready(out)
+
+    def _run_kernel() -> Any:
+        return _warmup_kernel(x)
+
+    run_jax_warmup_passes(
+        "xla_gpu_delay_kernel",
+        2,
+        _run_kernel,
+        block=lambda out: jax.block_until_ready(out),
+    )
 
     _xla_gpu_warmed = True
     logger.debug("XLA GPU delay-kernel warmup completed on %s", gpu_devices[0])
@@ -293,11 +429,17 @@ def warmup_hybrid_spherical_cutoff(
         else nullcontext()
     )
 
-    # Two untimed runs: first compiles/autotunes; second calibrates XLA's delay kernel.
+    def _block_spherical_result(result: Any) -> None:
+        block_jax_values(getattr(result, "energy", None), getattr(result, "forces", None))
+
+    # Two runs: first compiles/autotunes; second calibrates XLA's delay kernel.
     with device_ctx:
-        for _ in range(2):
-            result = spherical_cutoff_calculator(**kwargs)
-            block_jax_values(getattr(result, "energy", None), getattr(result, "forces", None))
+        run_jax_warmup_passes(
+            "spherical_cutoff",
+            2,
+            lambda: spherical_cutoff_calculator(**kwargs),
+            block=_block_spherical_result,
+        )
 
 
 def warmup_ase_mmml_energy_forces(atoms: Any, *, include_forces: bool = True) -> None:
