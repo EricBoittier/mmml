@@ -93,7 +93,9 @@ For help on a specific command:
     
     parser.add_argument(
         'command',
-        choices=['make-res', 'make-box', 'run', 'md-system', 'lambda-mbar', 'run-pycharmm', 'pycharmm-two-residue-sample', 'xml2npz', 'validate', 'train', 'train-joint', 'evaluate', 'downstream', 'fix-and-split', 'pyscf-dft', 'pyscf-mp2', 'pyscf-evaluate', 'verify-esp-alignment', 'normal-mode-sample', 'physnet-md', 'physnet-evaluate', 'ef-train', 'ef-evaluate', 'ef-md', 'active-learning', 'kernel-fit', 'interpolate-xyz', 'unwrap-traj', 'sample-diverse-xyz', 'gui', 'extract-checkpoint-metrics', 'orbax-to-json', 'orca-server', 'orca-client', 'orca-external'],
+        choices=['make-res', 'make-box', 'run', 'md-system', 'lambda-mbar', 'run-pycharmm', 'pycharmm-two-residue-sample', 'xml2npz', 'validate', 'train', 'train-joint', 'evaluate', 'downstream',
+                  'fix-and-split', 'pyscf-dft', 'pyscf-mp2', 'pyscf-evaluate', 'pyscf-evaluate-mp2', 'verify-esp-alignment', 'normal-mode-sample', 'physnet-md', 'physnet-evaluate', 'ef-train', 'ef-evaluate', 'ef-md', 
+                  'active-learning', 'kernel-fit', 'interpolate-xyz', 'unwrap-traj', 'sample-diverse-xyz', 'gui', 'extract-checkpoint-metrics', 'orbax-to-json', 'orca-server', 'orca-client', 'orca-external'],
         help='Command to run'
     )
     parser.add_argument(
@@ -223,6 +225,11 @@ For help on a specific command:
         sys.argv = ['mmml physnet-evaluate'] + args.args
         return physnet_evaluate.main()
 
+    elif args.command == 'pyscf-evaluate-mp2':
+        from .misc import pyscf_evaluate_mp2
+        sys.argv = ['mmml pyscf-evaluate-mp2'] + args.args
+        return pyscf_evaluate_mp2.main()
+    
     elif args.command == 'ef-train':
         from .misc import ef_train
         sys.argv = ['mmml ef-train'] + args.args
