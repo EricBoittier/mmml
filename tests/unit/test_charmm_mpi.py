@@ -135,3 +135,50 @@ def test_prepare_serial_charmm_mpi_env_pins_omp_threads(monkeypatch):
     ):
         charmm_mpi.prepare_serial_charmm_mpi_env()
     assert os.environ["OMP_NUM_THREADS"] == "1"
+
+
+def test_maybe_rerun_md_system_skips_when_disabled(monkeypatch):
+    monkeypatch.setenv("MMML_NO_MPI_RERUN", "1")
+    assert charmm_mpi.maybe_rerun_md_system_under_mpirun(["md-system", "--help"]) is None
+
+
+def test_maybe_rerun_md_system_skips_under_mpirun(monkeypatch):
+    monkeypatch.delenv("MMML_NO_MPI_RERUN", raising=False)
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
+        return_value=True,
+    ):
+        assert charmm_mpi.maybe_rerun_md_system_under_mpirun(["md-system"]) is None
+
+
+def test_maybe_rerun_md_system_invokes_mpirun(monkeypatch, tmp_path):
+    monkeypatch.delenv("MMML_NO_MPI_RERUN", raising=False)
+    mpirun = tmp_path / "mpirun"
+    mpirun.write_text("#!/bin/sh\nexit 0\n")
+    mpirun.chmod(0o755)
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._needs_mpi_setup",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_mpirun_path",
+        return_value=mpirun.resolve(),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.subprocess.run",
+        return_value=mock.Mock(returncode=0),
+    ) as mock_run:
+        code = charmm_mpi.maybe_rerun_md_system_under_mpirun(
+            ["md-system", "--backend", "pycharmm"]
+        )
+    assert code == 0
+    mock_run.assert_called_once()
+    cmd = mock_run.call_args.args[0]
+    assert str(mpirun.resolve()) == cmd[0]
+    assert cmd[1:3] == ["-np", "1"]
+    assert cmd[4:6] == ["-m", "mmml.cli.__main__"]
+    assert cmd[6:] == ["md-system", "--backend", "pycharmm"]

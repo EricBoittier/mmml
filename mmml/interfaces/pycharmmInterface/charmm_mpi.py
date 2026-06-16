@@ -455,4 +455,31 @@ def mpirun_launch_hint(argv0: str = "mmml md-system") -> str:
     return "\n".join(lines)
 
 
+def maybe_rerun_md_system_under_mpirun(argv: list[str]) -> int | None:
+    """Re-exec ``mmml md-system`` under ``mpirun -np 1`` for MPI-linked CHARMM.
+
+    Serial ``python -m mmml md-system`` can intermittently segfault in Fortran
+    ``upinb`` during MLpot registration.  Launching under the same OpenMPI as
+    ``libcharmm.so`` initializes MPI before CHARMM/Python start.
+    """
+    import subprocess
+    import sys
+
+    if _truthy("MMML_NO_MPI_RERUN") or _under_mpirun() or not _needs_mpi_setup():
+        return None
+    if not charmm_lib_links_mpi():
+        return None
+    mpirun = charmm_mpirun_path()
+    if mpirun is None:
+        return None
+    cmd = [str(mpirun), "-np", "1", sys.executable, "-m", "mmml.cli.__main__", *argv]
+    print(
+        "mmml: MPI-linked CHARMM — re-launching under OpenMPI for MLpot registration:\n  "
+        + " ".join(cmd),
+        flush=True,
+    )
+    proc = subprocess.run(cmd)
+    return int(proc.returncode)
+
+
 _apply_cuda_mpi_env_defaults()

@@ -368,6 +368,12 @@ def _register_mlpot_context(
         if atoms_per_monomer is not None
         else _atoms_per_monomer_list(z, n_monomers)
     )
+    import os
+    import sys
+
+    if "jax" not in sys.modules:
+        os.environ["JAX_PLATFORMS"] = "cpu"
+        os.environ["MMML_MLPOT_DEVICE"] = "cpu"
     _, _, pyCModel = load_physnet_mlpot_bundle(
         ckpt,
         n_atoms,
@@ -402,6 +408,9 @@ def _register_mlpot_context(
         use_pbc=mlpot_use_pbc,
         mm_internal_scale=mm_internal_scale,
     )
+    from mmml.interfaces.pycharmmInterface.jax_device_policy import apply_mlpot_jax_platform_env
+
+    apply_mlpot_jax_platform_env(quiet=not verbose)
     if int(n_monomers) > 1:
         from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
             DecomposedMlpotModel,
