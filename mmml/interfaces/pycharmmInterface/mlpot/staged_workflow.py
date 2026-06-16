@@ -1266,6 +1266,11 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     )
                     apply_comp_velocity_policy("heat", kw, args, quiet=seg_prep_quiet)
                     apply_dyn_inbfrq_from_args(kw, args, charmm_pbc=charmm_pbc)
+                    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+                        apply_dyn_imgfrq_from_args,
+                    )
+
+                    apply_dyn_imgfrq_from_args(kw, args, charmm_pbc=charmm_pbc)
                     if (seg_i == 0 or use_memory) and (
                         use_memory or prev_restart_is_current_state
                     ):
@@ -1709,10 +1714,12 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             )
             apply_comp_velocity_policy(stage, kw, args)
             from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+                apply_dyn_imgfrq_from_args,
                 apply_dyn_inbfrq_from_args,
             )
 
             apply_dyn_inbfrq_from_args(kw, args, charmm_pbc=charmm_pbc)
+            apply_dyn_imgfrq_from_args(kw, args, charmm_pbc=charmm_pbc)
             if stage in ("heat", "nve") and (
                 stage == "heat"
                 or (

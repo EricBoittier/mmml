@@ -1662,6 +1662,24 @@ def test_harmonize_dynamics_frequency_for_remainder_chunk():
     assert kw3["nsavc"] == 40
 
 
+def test_apply_dyn_imgfrq_from_args_sets_pbc_list_freqs():
+    from argparse import Namespace
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        apply_dyn_imgfrq_from_args,
+    )
+
+    kw = {"imgfrq": 50, "ihbfrq": 50, "ilbfrq": 50}
+    apply_dyn_imgfrq_from_args(kw, Namespace(dyn_imgfrq=400), charmm_pbc=True)
+    assert kw["imgfrq"] == 400
+    assert kw["ihbfrq"] == 400
+    assert kw["ilbfrq"] == 400
+
+    kw_vac = {"imgfrq": 50}
+    apply_dyn_imgfrq_from_args(kw_vac, Namespace(dyn_imgfrq=400), charmm_pbc=False)
+    assert kw_vac["imgfrq"] == 50
+
+
 def test_apply_loose_pbc_dyn_freq_kwargs_above_nstep():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         apply_loose_pbc_dyn_freq_kwargs,

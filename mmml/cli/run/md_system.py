@@ -744,6 +744,13 @@ def parse_args() -> argparse.Namespace:
         help="pycharmm: CHARMM inbfrq for dynamics (-1=heuristic, 50=vacuum default)",
     )
     parser.add_argument(
+        "--dyn-imgfrq",
+        type=int,
+        default=None,
+        metavar="N",
+        help="pycharmm PBC: image/HB list rebuild every N steps (default 50; larger=faster)",
+    )
+    parser.add_argument(
         "--pre-nve-charmm-update",
         action=argparse.BooleanOptionalAction,
         default=None,
@@ -1326,6 +1333,7 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     if getattr(args, "mlpot_pbc", False):
         cmd.append("--mlpot-pbc")
     _append_optional(cmd, "--dyn-inbfrq", getattr(args, "dyn_inbfrq", None))
+    _append_optional(cmd, "--dyn-imgfrq", getattr(args, "dyn_imgfrq", None))
     if getattr(args, "pre_nve_charmm_update", None) is False:
         cmd.append("--no-pre-nve-charmm-update")
     elif getattr(args, "pre_nve_charmm_update", None) is True:
