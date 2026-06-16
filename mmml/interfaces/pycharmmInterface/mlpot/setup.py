@@ -557,8 +557,9 @@ def apply_recovery_nbonds(ctx: MlpotContext, *, nbxmod: int = RECOVERY_NBXMOD) -
     pycharmm = _import_pycharmm()
     pycharmm.nbonds.update_bnbnd()
     if ctx.use_pbc and ctx.cubic_box_side_A is not None:
-        cutnb = 18.0
-        cutim = cutnb + 4.0
+        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import pbc_nbond_cutoffs
+
+        cutnb, cutim = pbc_nbond_cutoffs(float(ctx.cubic_box_side_A))
         pycharmm.UpdateNonBondedScript(
             **pbc_nbond_kwargs(nbxmod=nbxmod, cutnb=cutnb, cutim=cutim)
         ).run()
@@ -625,8 +626,9 @@ def refresh_nbonds_after_mlpot_pbc(
 
     with charmm_relaxed_bomlev():
         prepare_charmm_pbc(side)
-        pycharmm.nbonds.update_bnbnd()
-        apply_pbc_nbonds(nbxmod=nbxmod, cutnb=cutnb)
+        if force:
+            pycharmm.nbonds.update_bnbnd()
+        apply_pbc_nbonds(nbxmod=nbxmod, cubic_box_side_A=side)
 
 
 def load_cluster_from_artifacts(

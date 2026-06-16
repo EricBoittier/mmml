@@ -206,6 +206,19 @@ def test_decomposed_calculator_initializes_mm_before_spherical_fn():
     assert calc.spherical_fn.call_count == 1
 
 
+def test_pbc_nbond_cutoffs_respects_half_box():
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import pbc_nbond_cutoffs
+
+    cutnb, cutim = pbc_nbond_cutoffs(35.0)
+    assert cutnb < 17.5
+    assert cutim <= 17.5
+    assert cutim >= cutnb
+
+    cutnb55, cutim55 = pbc_nbond_cutoffs(55.0)
+    assert cutnb55 == pytest.approx(18.0)
+    assert cutim55 == pytest.approx(22.0)
+
+
 def test_charmm_ctypes_scalar_accepts_int_and_ctypes_wrapper():
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import _charmm_ctypes_scalar
 

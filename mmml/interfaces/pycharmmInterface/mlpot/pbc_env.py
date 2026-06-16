@@ -97,6 +97,28 @@ def cubic_box_length_from_geometry(
     return max(span + 2.0 * float(pad), 2.0 * float(ml_cutoff) + float(pad))
 
 
+def pbc_nbond_cutoffs(
+    cubic_box_side_A: float,
+    *,
+    cutnb_max: float = 18.0,
+    margin_A: float = 1.0,
+) -> tuple[float, float]:
+    """Return ``(cutnb, cutim)`` safe for a cubic CHARMM cell.
+
+    CHARMM requires ``cutnb`` (and typically ``cutim``) below half the box length.
+    Defaults like ``cutnb=18`` Å are invalid for ``L=35`` Å and can segfault in
+    ``upinb`` when MLpot registers exclusions on a dense cluster.
+    """
+    L = float(cubic_box_side_A)
+    if L <= 0.0:
+        raise ValueError(f"cubic box side must be > 0, got {L}")
+    half = 0.5 * L
+    cap = max(6.0, half - float(margin_A))
+    cutnb = min(float(cutnb_max), cap)
+    cutim = min(cutnb + 4.0, max(cutnb + 1.0, half - 0.5 * float(margin_A)))
+    return cutnb, cutim
+
+
 def _read_charmm_box_sides_A() -> tuple[float, float, float]:
     """Read CHARMM periodic box lengths (Å) via ``pbound_get_size``."""
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401 — CHARMM env
@@ -219,7 +241,7 @@ def ensure_charmm_crystal_for_cpt(
 
     disable_charmm_domdec()
     prepare_charmm_pbc(side)
-    apply_pbc_nbonds()
+    apply_pbc_nbonds(cubic_box_side_A=side)
     if not quiet:
         print(
             f"CHARMM crystal ready for CPT (cubic L={side:.3f} Å)",
@@ -248,14 +270,27 @@ def prepare_charmm_pbc(cubic_box_side_A: float) -> None:
         )
 
 
-def apply_pbc_nbonds(*, nbxmod: int = 5, cutnb: float = 18.0) -> None:
-    """Nonbond list for periodic CHARMM (``cutim >= cutnb``)."""
+def apply_pbc_nbonds(
+    *,
+    nbxmod: int = 5,
+    cutnb: float = 18.0,
+    cubic_box_side_A: float | None = None,
+) -> tuple[float, float]:
+    """Nonbond list for periodic CHARMM (``cutim >= cutnb``).
+
+    When ``cubic_box_side_A`` is set, clamp cutoffs to stay below half the box.
+    Returns the ``(cutnb, cutim)`` actually applied.
+    """
     from mmml.interfaces.pycharmmInterface.nbonds_config import pbc_nbond_kwargs
 
     import pycharmm
 
-    cutim = float(cutnb) + 4.0
+    if cubic_box_side_A is not None:
+        cutnb, cutim = pbc_nbond_cutoffs(cubic_box_side_A, cutnb_max=cutnb)
+    else:
+        cutim = float(cutnb) + 4.0
     pycharmm.NonBondedScript(**pbc_nbond_kwargs(nbxmod=nbxmod, cutnb=cutnb, cutim=cutim)).run()
+    return cutnb, cutim
 
 
 def setup_charmm_environment(
@@ -277,7 +312,17 @@ def setup_charmm_environment(
 
         disable_charmm_domdec()
         prepare_charmm_pbc(float(cubic_box_side_A))
-        apply_pbc_nbonds(nbxmod=nbxmod)
+        cutnb, cutim = apply_pbc_nbonds(
+            nbxmod=nbxmod,
+            cubic_box_side_A=float(cubic_box_side_A),
+        )
+        if cutnb < 18.0 - 1e-6:
+            print(
+                f"PBC nbonds: cutnb/cutim={cutnb:.2f}/{cutim:.2f} Å "
+                f"(capped for cubic L={float(cubic_box_side_A):.2f} Å; "
+                "CHARMM requires cutnb < L/2)",
+                flush=True,
+            )
         return {"pbc": True, "box_A": float(cubic_box_side_A)}
     prepare_charmm_vacuum()
     setup_default_nbonds(nbxmod=nbxmod)
