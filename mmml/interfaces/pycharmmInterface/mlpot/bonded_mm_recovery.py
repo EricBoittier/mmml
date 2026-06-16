@@ -376,20 +376,16 @@ def _run_all_ml_intra_overlap_rescue(
     config: Any,
     bonded_cfg: BondedMmMiniConfig,
 ) -> None:
-    """Reload clean PSF, bonded SD, reattach MLpot, optional ML SD mini."""
+    """All-ML intra rescue: noise + MLpot SD only (no PSF reload).
+
+    Reloading ``cluster_for_vmd_*.psf`` via ``DELETE ATOM ALL`` after dynamics
+    segfaults on MPI-linked CHARMM.  Bonded MM is inactive under all-ML BLOCK
+    anyway, so MLpot SD is the appropriate fix for intra-monomer close contacts.
+    """
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         MinimizeWithMlpotConfig,
         minimize_with_mlpot,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.restraints import clear_mmfp_restraints
-
-    topo = getattr(config, "topology_psf", None)
-    if topo is None or not Path(topo).is_file():
-        raise RuntimeError(
-            "all-ML intra-monomer rescue requires pre-MLpot topology PSF "
-            "(cluster_for_vmd_*.psf); lightweight MLpot detach leaves CHARMM bonded "
-            "terms at zero"
-        )
 
     noise = float(getattr(config, "position_noise_A", 0.05) or 0.0)
     seed = getattr(config, "recovery_seed", None)
@@ -402,38 +398,34 @@ def _run_all_ml_intra_overlap_rescue(
             )
         apply_charmm_position_noise(amplitude_A=noise, seed=seed)
 
+    pyCModel = getattr(config, "pyCModel", None)
+    if pyCModel is None:
+        raise RuntimeError(
+            "all-ML intra overlap rescue requires pyCModel on overlap config"
+        )
+
+    sd_steps = int(
+        getattr(config, "intra_rescue_sd_steps", None) or bonded_cfg.nstep_sd
+    )
     if bonded_cfg.verbose:
         print(
-            f"Intra overlap rescue: reloading pre-MLpot topology {Path(topo).name}",
+            f"Intra overlap rescue (all-ML): MLpot SD {sd_steps} steps "
+            "(no pre-MLpot PSF reload)",
             flush=True,
         )
-    _reload_pre_mlpot_topology(ctx, topology_psf=topo)
-    try:
-        clear_mmfp_restraints()
-        assert_bonded_mm_energy_active(context="Intra overlap rescue (reloaded PSF)")
-        _run_bonded_sd_without_mlpot(ctx, bonded_cfg)
-    finally:
-        _reregister_mlpot_after_topology_reload(ctx)
-
-    n_mlpot = int(getattr(config, "mlpot_rescue_mini_nstep", 0) or 0)
-    pyCModel = getattr(config, "pyCModel", None)
-    if n_mlpot > 0 and pyCModel is not None:
-        if bonded_cfg.verbose:
-            print(
-                f"Intra overlap rescue: MLpot SD mini ({n_mlpot} steps)",
-                flush=True,
-            )
-        minimize_with_mlpot(
-            MinimizeWithMlpotConfig(
-                nstep=n_mlpot,
-                nprint=bonded_cfg.nprint,
-                verbose=bonded_cfg.verbose,
-                pyCModel=pyCModel,
-                mlpot_ctx=ctx,
-                save=False,
-                skip_if_crd_exists=False,
-            )
+    minimize_with_mlpot(
+        MinimizeWithMlpotConfig(
+            nstep=sd_steps,
+            nprint=bonded_cfg.nprint,
+            tolenr=bonded_cfg.tolenr,
+            tolgrd=bonded_cfg.tolgrd,
+            verbose=bonded_cfg.verbose,
+            pyCModel=pyCModel,
+            mlpot_ctx=ctx,
+            save=False,
+            skip_if_crd_exists=False,
         )
+    )
 
 
 def _run_bonded_vdw_sd_without_mlpot(
