@@ -1,0 +1,4 @@
+UID          PID    PPID  C STIME TTY          TIME CMD
+boittier 1867326 1685703  0 17:31 pts/3    00:00:00 -bash
+boittier 1867327 1867326 99 17:31 pts/3    00:23:46 /mmhome/boittier/home/mmml/.venv/bin/python3 /mmhome/boittier/home/mmml/.venv/bin/mmml md-system --setup pycharmm_full --backend pycharmm --composition DCM:90 --output-dir artifacts/pycharmm_mlpot/dcm90_npt_x64_5 --md-stage heat --box-size 180 --ps-heat 1000 --n-heat-segments 4000 --heat-thermostat hoover --dt-fs 0.15 --flat-bottom-radius 55 --packmol-radius 15 --temperature 220 --dynamics-overlap-action rescue --checkpoint /mmhome/boittier/home/mmml_tutorial/acodcm/ckpts/dcm1-c137fb42-1f65-4748-880b-8f8184a20f70 --seed 123456 --dcd-nsav 500 --dynamics-intra-min-distance 0.5 --ml-gpu-count 2 --ml-batch-size 2056 --no-echeck
+boittier 1900756 1685703  0 17:46 pts/3    00:00:00 ps -fa
