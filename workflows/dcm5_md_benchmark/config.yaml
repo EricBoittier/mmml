@@ -201,3 +201,16 @@ jobs:
       - "200"
       - "--jax-md-update-interval"
       - "1"
+
+  pycharmm_pbc_npt:
+    backend: pycharmm
+    setup: pbc_npt
+    # Full PBC + CPT NpT with fixed box size.
+    pbc: true
+    box_size: 35.0
+    integrator: npt_nhc
+    # Use the full staged pipeline but skip the standalone NVE leg:
+    # mini → heat (NVT) → equi (NpT) → prod (NpT)
+    md_stages: "mini,heat,equi,prod"
+    ps_heat: 2.0
+    ps: 2.0

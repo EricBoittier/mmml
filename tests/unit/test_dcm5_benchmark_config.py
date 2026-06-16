@@ -22,7 +22,7 @@ from benchmark_lib import (  # noqa: E402
     namespace_for_job,
 )
 
-EXPECTED_JOB_COUNT = 15
+EXPECTED_JOB_COUNT = 16
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -90,6 +90,7 @@ def test_config_composition_is_dcm5(cfg: dict) -> None:
         "pycharmm_vac_heat_scale",
         "pycharmm_vac_heat_hoover",
         "jaxmd_pbc_npt",
+        "pycharmm_pbc_npt",
     ],
 )
 def test_build_md_system_argv_includes_core_flags(cfg: dict, job_id: str) -> None:
