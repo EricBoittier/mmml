@@ -717,6 +717,11 @@ def setup_calculator(
         pbc_cell = None
         pbc_map = do_pbc_map = False
 
+    _jax_md_skin_distance = float(jax_md_skin_distance)
+    if pbc_cell is not None and _jax_md_skin_distance == 0.0:
+        # Reuse jax_md pair lists between MLpot callbacks when coords move < 0.5 Å.
+        _jax_md_skin_distance = 0.5
+
 
 
     def switch_ML(X,
@@ -811,7 +816,7 @@ def setup_calculator(
             jax_md_max_overflow_retries=jax_md_max_overflow_retries,
             jax_md_overflow_fallback_to_cell_list=jax_md_overflow_fallback_to_cell_list,
             jax_md_update_interval=jax_md_update_interval,
-            jax_md_skin_distance=jax_md_skin_distance,
+            jax_md_skin_distance=_jax_md_skin_distance,
             debug=debug,
             ml_compute_dtype=ml_compute_dtype,
         )
@@ -843,7 +848,7 @@ def setup_calculator(
                 jax_md_max_overflow_retries=jax_md_max_overflow_retries,
                 jax_md_overflow_fallback_to_cell_list=jax_md_overflow_fallback_to_cell_list,
                 jax_md_update_interval=jax_md_update_interval,
-                jax_md_skin_distance=jax_md_skin_distance,
+                jax_md_skin_distance=_jax_md_skin_distance,
                 debug=debug,
                 ml_compute_dtype=ml_compute_dtype,
             )
