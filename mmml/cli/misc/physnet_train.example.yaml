@@ -2,11 +2,13 @@
 # CLI flags override values from this file.
 
 data: output/energies_forces_dipoles_train.npz
+valid_data: output/energies_forces_dipoles_valid.npz
 ckpt_dir: ./ckpts/ama_mp2
 tag: ama_mp2
 
-n_train: 24000
-n_valid: 3000
+# Omit n_train/n_valid when valid_data is set (uses full NPZ files as-is).
+# n_train: 24000
+# n_valid: 3000
 seed: 42
 
 batch_size: 32

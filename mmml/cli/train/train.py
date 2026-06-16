@@ -190,45 +190,23 @@ def train_physnetjax(
     verbose: bool = True
 ):
     """
-    Train PhysNetJAX model via the physnet-train pipeline.
+    Train PhysNetJAX via ``make_training`` using file paths from ``TrainConfig``.
 
-    Prefer ``mmml physnet-train`` for full CLI/YAML options. This wrapper maps
-  the simplified ``mmml train --model physnetjax`` config onto that pipeline.
+    For full options (YAML, model hyperparameters), use ``mmml physnet-train``.
     """
     if verbose:
         print("\n" + "="*60)
         print("Training PhysNetJAX Model")
         print("="*60)
-        print("  (delegating to mmml physnet-train / make_training)")
+        print("  Tip: use `mmml physnet-train --config train.yaml` for full control")
 
     try:
         from mmml.cli.make.make_training import args_from_kwargs, run, validate_train_args
 
-        n_train = len(train_data.get("E", train_data.get("R", [])))
-        n_valid = len(valid_data.get("E", valid_data.get("R", [])))
-        if n_valid == 0:
-            raise ValueError(
-                "PhysNet training requires a non-empty validation split. "
-                "Use mmml physnet-train with --n-valid, or mmml train --valid."
-            )
-
-        # Persist the already-loaded splits so make_training can consume them.
-        import tempfile
-        import numpy as np
-
-        tmp = Path(tempfile.mkdtemp(prefix="mmml_physnet_train_"))
-        train_path = tmp / "train.npz"
-        valid_path = tmp / "valid.npz"
-        np.savez_compressed(train_path, **train_data)
-        np.savez_compressed(valid_path, **valid_data)
-
         kwargs = {
-            "data": str(train_path),
+            "data": config.train_file,
             "ckpt_dir": config.output_dir,
             "tag": Path(config.output_dir).name or "physnet_run",
-            "n_train": n_train,
-            "n_valid": n_valid,
-            "seed": 42,
             "batch_size": config.batch_size,
             "num_epochs": config.max_epochs,
             "learning_rate": config.learning_rate,
@@ -237,6 +215,11 @@ def train_physnetjax(
             "dipole_weight": (config.loss_weights or {}).get("dipole", 27.21),
             "restart": config.physnet_checkpoint,
         }
+        if config.valid_file:
+            kwargs["valid_data"] = config.valid_file
+        else:
+            kwargs["n_train"] = len(train_data.get("E", train_data.get("R", [])))
+            kwargs["n_valid"] = len(valid_data.get("E", valid_data.get("R", [])))
         if config.model_params:
             kwargs.update(config.model_params)
 
@@ -274,12 +257,9 @@ Examples:
            --train dataset.npz \\
            --train-fraction 0.8
   
-  # Train PhysNetJAX
-  %(prog)s --model physnetjax \\
-           --train train.npz \\
-           --valid valid.npz \\
-           --batch-size 64 \\
-           --learning-rate 0.0001
+  # Train PhysNetJAX (prefer physnet-train for full options / YAML)
+  mmml physnet-train --config train.yaml
+  %(prog)s --model physnetjax --train train.npz --valid valid.npz
         """
     )
     
