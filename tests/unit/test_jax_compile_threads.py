@@ -70,3 +70,25 @@ def test_apply_jax_compile_xla_flags_appends(monkeypatch):
     flags = os.environ["XLA_FLAGS"]
     assert "xla_cpu_multi_thread_eigen=true" in flags
     assert "intra_op_parallelism_threads=6" in flags
+
+
+def test_sanitize_xla_flags_strips_thread_pool_size(monkeypatch):
+    from mmml.interfaces.pycharmmInterface.jax_compile_threads import (
+        apply_jax_compile_xla_flags,
+        sanitize_xla_flags_env,
+    )
+
+    monkeypatch.setenv(
+        "XLA_FLAGS",
+        "--xla_cpu_thread_pool_size=16 --xla_gpu_cuda_data_dir=/usr/local/cuda",
+    )
+    assert sanitize_xla_flags_env(quiet=True) is True
+    assert "thread_pool_size" not in os.environ["XLA_FLAGS"]
+    assert "xla_gpu_cuda_data_dir" in os.environ["XLA_FLAGS"]
+
+    monkeypatch.setenv("MMML_JAX_COMPILE_THREADS", "4")
+    monkeypatch.delenv("MMML_NO_JAX_COMPILE_THREADS", raising=False)
+    apply_jax_compile_xla_flags(quiet=True)
+    flags = os.environ["XLA_FLAGS"]
+    assert "thread_pool_size" not in flags
+    assert "intra_op_parallelism_threads=4" in flags

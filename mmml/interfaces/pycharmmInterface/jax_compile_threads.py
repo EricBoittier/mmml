@@ -14,6 +14,7 @@ For XLA's Eigen pool, also call :func:`apply_jax_compile_xla_flags` before the f
 from __future__ import annotations
 
 import os
+import re
 from contextlib import contextmanager
 from typing import Iterator
 
@@ -24,9 +25,34 @@ _OPENMP_LIKE_VARS = (
     "NUMEXPR_NUM_THREADS",
 )
 
+# jaxlib 0.9.x on gpu08 aborts on this flag; strip stale job.sh / shell exports.
+_UNSUPPORTED_XLA_FLAG_RE = re.compile(
+    r"--?xla_cpu_thread_pool_size(?:=\S+)?",
+    flags=re.IGNORECASE,
+)
+
 
 def _truthy(name: str) -> bool:
     return (os.environ.get(name) or "").strip().lower() in ("1", "yes", "true")
+
+
+def sanitize_xla_flags_env(*, quiet: bool = False) -> bool:
+    """Remove XLA flags known to crash some JAX builds (e.g. gpu08 jaxlib 0.9.x)."""
+    existing = (os.environ.get("XLA_FLAGS") or "").strip()
+    if not existing or not _UNSUPPORTED_XLA_FLAG_RE.search(existing):
+        return False
+    cleaned = _UNSUPPORTED_XLA_FLAG_RE.sub("", existing)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    if cleaned:
+        os.environ["XLA_FLAGS"] = cleaned
+    else:
+        os.environ.pop("XLA_FLAGS", None)
+    if not quiet and not _truthy("MMML_QUIET"):
+        print(
+            "mmml: stripped unsupported xla_cpu_thread_pool_size from XLA_FLAGS",
+            flush=True,
+        )
+    return True
 
 
 def jax_compile_threads_enabled() -> bool:
@@ -50,6 +76,7 @@ def resolve_jax_compile_thread_count() -> int:
 
 def apply_jax_compile_xla_flags(*, quiet: bool = False) -> int:
     """Append XLA CPU thread flags before JAX backend init (no-op when disabled)."""
+    sanitize_xla_flags_env(quiet=quiet)
     n = resolve_jax_compile_thread_count()
     if n <= 0:
         return 0
