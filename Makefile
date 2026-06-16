@@ -318,13 +318,10 @@ BATCH_SHAPE ?= 512
 NBLEN ?= 16384
 
 physnet-train:
-	@echo "physnet-train is deprecated: scripts/physnet_hydra_train.py was removed."
-	@echo "Use mmml.cli.train.train or current training entrypoints under mmml/cli/."
+	@echo "Use: uv run mmml physnet-train --help"
 
 physnet-train-adv:
-	@echo "physnet-train-adv is deprecated: scripts/physnet_hydra_train.py was removed."
-	@echo "Use mmml.cli.train.train or current training entrypoints under mmml/cli/."
+	@echo "Use: uv run mmml physnet-train --config your.yaml"
 
 physnet-train-chg:
-	@echo "physnet-train-chg is deprecated: scripts/physnet_hydra_train.py was removed."
-	@echo "Use mmml.cli.train.train or current training entrypoints under mmml/cli/."
+	@echo "Use: uv run mmml physnet-train with --dipole-weight / --charges-weight"

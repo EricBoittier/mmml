@@ -328,117 +328,53 @@ def _maybe_unpad_dataset(data_path: str, natoms: Optional[int]) -> tuple[str, in
 
 def _load_physnet_npz_dict(path: str, natoms: int) -> dict:
     """Load one NPZ split into the dict format expected by train_model."""
-    from mmml.models.physnetjax.physnetjax.data.data import make_dicts
+    from mmml.models.physnetjax.physnetjax.data.data import make_dicts, prepare_multiple_datasets
 
-    data, keys, _, _ = prepare_datasets(
+    data, keys, _, _ = prepare_multiple_datasets(
         jax.random.PRNGKey(0),
         train_size=0,
         valid_size=0,
-        files=[path],
+        filename=[path],
         natoms=natoms,
         verbose=False,
     )
     n_samples = data[keys.index("R")].shape[0]
     all_idx = np.arange(n_samples)
-    train_data, _ = make_dicts(data, keys, all_idx, np.array([], dtype=int))
+    train_data, _ = make_dicts(data, keys, all_idx, np.array([], dtype=np.int64))
     return train_data
 
 
 def main_loop(args):
     seed = args.seed
     data_key, train_key = jax.random.split(jax.random.PRNGKey(seed), 2)
-    files = [args.data]
-    train_size = args.n_train
-    valid_size = args.n_valid
-    
-    # Convert ckpt_dir to absolute path (required by Orbax)
+
     if args.ckpt_dir is not None:
         ckpt_dir = Path(args.ckpt_dir).resolve()
         print(f"Checkpoint directory (absolute): {ckpt_dir}")
     else:
         ckpt_dir = None
-    
-    # Auto-detect num_atoms from dataset if not provided
-    # AND automatically remove padding if present
+
     if args.num_atoms is None:
         print("Auto-detecting number of atoms from dataset...")
-        data = np.load(args.data)
-        
-        # Check actual molecule size from N field
-        if 'N' in data:
-            max_n = int(np.max(data['N']))
-            print(f"  ✅ Actual molecule size: {max_n} atoms (from max(N))")
-            
-            # Check if data is padded
-            if 'R' in data and len(data['R'].shape) >= 2:
-                padded_atoms = int(data['R'].shape[1])
-                if padded_atoms > max_n:
-                    print(f"  ⚠️  Data is PADDED: {padded_atoms} atoms in array (padding: {padded_atoms - max_n})")
-                    print("  🔧 Auto-removing padding to train efficiently...")
-                    
-                    # Remove padding from dataset
-                    data_unpadded = {}
-                    for key, value in data.items():
-                        if key == 'R' and value.ndim == 3:
-                            data_unpadded[key] = value[:, :max_n, :]
-                        elif key == 'Z' and value.ndim == 2:
-                            data_unpadded[key] = value[:, :max_n]
-                        elif key == 'F' and value.ndim == 3:
-                            data_unpadded[key] = value[:, :max_n, :]
-                        else:
-                            data_unpadded[key] = value
-                    
-                    # Save unpadded version
-                    unpadded_path = Path(args.data).parent / f"{Path(args.data).stem}_unpadded.npz"
-                    np.savez_compressed(unpadded_path, **data_unpadded)
-                    print(f"  ✅ Saved unpadded data to: {unpadded_path}")
-                    print("  📝 Using unpadded version for training")
-                    
-                    # Update args.data to point to unpadded file
-                    args.data = str(unpadded_path)
-                    files = [args.data]
-                    natoms = max_n
-                else:
-                    natoms = padded_atoms
-                    print(f"  ✅ No padding detected (R.shape[1] = {padded_atoms} = max(N))")
-            else:
-                natoms = max_n
-        elif 'R' in data and len(data['R'].shape) >= 2:
-            natoms = int(data['R'].shape[1])
-            print(f"  ✅ Detected num_atoms = {natoms} from R.shape")
-        else:
-            raise ValueError("Could not auto-detect num_atoms from dataset. Please specify --num_atoms explicitly.")
+        data_path, natoms = _maybe_unpad_dataset(args.data, None)
+        args.data = data_path
     else:
         natoms = args.num_atoms
         print(f"Using specified num_atoms = {natoms}")
-        
-        # Still check if padding should be removed
-        data = np.load(args.data)
-        if 'N' in data:
-            max_n = int(np.max(data['N']))
-            if 'R' in data and data['R'].shape[1] > max_n and natoms == max_n:
-                print(f"  🔧 Specified num_atoms ({natoms}) < padded size ({data['R'].shape[1]})")
-                print("  🔧 Auto-removing padding...")
-                
-                # Remove padding
-                data_unpadded = {}
-                for key, value in data.items():
-                    if key == 'R' and value.ndim == 3:
-                        data_unpadded[key] = value[:, :natoms, :]
-                    elif key == 'Z' and value.ndim == 2:
-                        data_unpadded[key] = value[:, :natoms]
-                    elif key == 'F' and value.ndim == 3:
-                        data_unpadded[key] = value[:, :natoms, :]
-                    else:
-                        data_unpadded[key] = value
-                
-                unpadded_path = Path(args.data).parent / f"{Path(args.data).stem}_unpadded.npz"
-                np.savez_compressed(unpadded_path, **data_unpadded)
-                print(f"  ✅ Saved and using: {unpadded_path}")
-                args.data = str(unpadded_path)
-                files = [args.data]
-    
-    train_data, valid_data = prepare_datasets(data_key, train_size, valid_size, files, natoms=natoms)
+        data_path, natoms = _maybe_unpad_dataset(args.data, natoms)
+        args.data = data_path
+
+    if args.valid_data:
+        valid_path, _ = _maybe_unpad_dataset(args.valid_data, natoms)
+        args.valid_data = valid_path
+        print(f"Using fixed splits:\n  train: {args.data}\n  valid: {args.valid_data}")
+        train_data = _load_physnet_npz_dict(args.data, natoms)
+        valid_data = _load_physnet_npz_dict(args.valid_data, natoms)
+    else:
+        files = [args.data]
+        train_data, valid_data = prepare_datasets(
+            data_key, args.n_train, args.n_valid, files, natoms=natoms
+        )
     
     if args.model is not None:
         model = load_model(args.model)
