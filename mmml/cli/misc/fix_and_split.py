@@ -979,7 +979,7 @@ def _load_and_merge_efd(efd_files: Union[Path, List[Path]]) -> Dict:
 
     # Concatenate multiple files
     parts = [dict(np.load(f, allow_pickle=True)) for f in efd_files]
-    concat_keys = ['R', 'E', 'F', 'N', 'Dxyz', 'esp', 'Ef', 'efield_Ef', 'efield_scf_Ef']
+    concat_keys = ['R', 'E', 'F', 'N', 'Z', 'D', 'Q', 'Dxyz', 'esp', 'Ef', 'efield_Ef', 'efield_scf_Ef']
     grid_key = 'esp_grid' if 'esp_grid' in parts[0] else ('vdw_surface' if 'vdw_surface' in parts[0] else None)
     if grid_key:
         concat_keys.append(grid_key)
