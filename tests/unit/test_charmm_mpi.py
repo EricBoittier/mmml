@@ -115,3 +115,23 @@ def test_recover_mpi_never_finalizes(monkeypatch):
         return_value=False,
     ):
         assert charmm_mpi.recover_mpi_for_charmm_after_jax(phase="test") is True
+
+
+def test_prepare_serial_charmm_mpi_env_pins_omp_threads(monkeypatch):
+    monkeypatch.delenv("MMML_NO_CHARMM_OMP_PIN", raising=False)
+    monkeypatch.delenv("MMML_CHARMM_OMP_THREADS", raising=False)
+    monkeypatch.setenv("OMP_NUM_THREADS", "32")
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.prepare_charmm_mpi_runtime",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.scrub_stale_openmpi_env",
+        return_value=0,
+    ):
+        charmm_mpi.prepare_serial_charmm_mpi_env()
+    assert os.environ["OMP_NUM_THREADS"] == "1"

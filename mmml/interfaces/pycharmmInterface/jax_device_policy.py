@@ -107,3 +107,13 @@ def mlpot_jax_device_context() -> Iterator[Any]:
         devices = jax.devices("cpu")
     with jax.default_device(devices[0]):
         yield devices[0]
+
+
+@contextmanager
+def jax_cpu_until_mlpot_registered() -> Iterator[Any]:
+    """Keep JAX array placement on CPU until CHARMM MLpot ``upinb`` completes."""
+    import jax
+
+    cpu = jax.devices("cpu")
+    with jax.default_device(cpu[0]):
+        yield cpu[0]

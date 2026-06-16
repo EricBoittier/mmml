@@ -275,7 +275,7 @@ class DecomposedMlpotCalculator:
 class DecomposedMlpotModel:
     def __init__(
         self,
-        spherical_fn: Any,
+        spherical_fn: Any | None,
         cutoff_params: CutoffParameters,
         n_monomers: int,
         atomic_numbers: np.ndarray,
@@ -283,6 +283,12 @@ class DecomposedMlpotModel:
         do_mm: bool = True,
         get_update_fn: Any | None = None,
         ml_compute_dtype: str | None = None,
+        *,
+        pending_factory: Any | None = None,
+        pending_factory_z: np.ndarray | None = None,
+        pending_do_ml: bool = True,
+        pending_do_ml_dimer: bool = True,
+        verbose: bool = False,
     ) -> None:
         self._spherical_fn = spherical_fn
         self._cutoff_params = cutoff_params
@@ -295,8 +301,56 @@ class DecomposedMlpotModel:
         self._last_ml_forces: np.ndarray | None = None
         self._value_and_grad_fn: Any | None = None
         self._vg_cache_key: tuple[Any, ...] | None = None
+        self._pending_factory = pending_factory
+        self._pending_factory_z = (
+            None if pending_factory_z is None else np.asarray(pending_factory_z, dtype=int)
+        )
+        self._pending_do_ml = bool(pending_do_ml)
+        self._pending_do_ml_dimer = bool(pending_do_ml_dimer)
+        self._verbose = bool(verbose)
+
+    def _finalize_jax_factory(self) -> None:
+        """Build ``spherical_fn`` on GPU after CHARMM MLpot ``upinb`` (``MLpot.__init__``)."""
+        if self._spherical_fn is not None:
+            return
+        if self._pending_factory is None or self._pending_factory_z is None:
+            raise RuntimeError("DecomposedMlpotModel: JAX factory was not initialized")
+        from mmml.utils.jax_gpu_warmup import ensure_xla_gpu_warmed
+
+        ensure_xla_gpu_warmed()
+        z = self._pending_factory_z
+        r0 = np.zeros((len(z), 3), dtype=np.float64)
+        from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_context
+
+        with mlpot_jax_device_context():
+            _, spherical_fn, get_update_fn = unpack_factory_result(
+                self._pending_factory(
+                    atomic_numbers=jnp.asarray(z),
+                    atomic_positions=jnp.asarray(r0),
+                    n_monomers=self._n_monomers,
+                    cutoff_params=self._cutoff_params,
+                    doML=self._pending_do_ml,
+                    doMM=self._do_mm,
+                    doML_dimer=self._pending_do_ml_dimer,
+                    backprop=False,
+                    create_ase_calculator=False,
+                )
+            )
+        self._spherical_fn = spherical_fn
+        if self._do_mm:
+            self._get_update_fn = get_update_fn
+        self._pending_factory = None
+        self._pending_factory_z = None
+        if self._verbose:
+            print(
+                f"Decomposed MLpot spherical_fn={spherical_fn!r} "
+                f"(JIT bind doML={self._pending_do_ml} doMM={self._do_mm} "
+                f"doML_dimer={self._pending_do_ml_dimer})",
+                flush=True,
+            )
 
     def get_pycharmm_calculator(self, ml_atom_indices=None, ml_atomic_numbers=None, **kwargs):
+        self._finalize_jax_factory()
         if ml_atomic_numbers is not None:
             z = np.asarray(ml_atomic_numbers, dtype=int)
         else:
@@ -328,6 +382,7 @@ def build_decomposed_mlpot_model(
     verbose: bool = False,
     args: Any | None = None,
     ml_compute_dtype: str | None = None,
+    defer_jax_until_mlpot_registered: bool = False,
 ) -> DecomposedMlpotModel:
     ckpt = Path(checkpoint).expanduser().resolve()
     if args is not None and ml_compute_dtype is None:
@@ -402,6 +457,7 @@ def build_decomposed_mlpot_model(
         ml_max_active_dimers=ml_max_active_dimers,
         cell=cell,
         ml_compute_dtype=ml_compute_dtype,
+        defer_xla_gpu_warmup=defer_jax_until_mlpot_registered,
     )
     if verbose:
         _print_setup_calculator_factory_summary(
@@ -418,6 +474,22 @@ def build_decomposed_mlpot_model(
             ml_gpu_count=gpu_count,
             ml_max_active_dimers=ml_max_active_dimers,
             cell=cell,
+        )
+    if defer_jax_until_mlpot_registered:
+        return DecomposedMlpotModel(
+            None,
+            cutoff_params,
+            int(n_monomers),
+            np.asarray(atomic_numbers, dtype=int),
+            cell=cell,
+            do_mm=do_mm,
+            get_update_fn=None,
+            ml_compute_dtype=ml_compute_dtype,
+            pending_factory=factory,
+            pending_factory_z=z,
+            pending_do_ml=do_ml,
+            pending_do_ml_dimer=do_ml_dimer,
+            verbose=verbose,
         )
     r0 = np.zeros((len(z), 3), dtype=np.float64)
     from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_context
@@ -507,6 +579,7 @@ def warmup_decomposed_mlpot(
     verbose: bool = False,
 ) -> None:
     """JIT-compile hybrid ML/MM outside the CHARMM callback (before MLpot SD)."""
+    model._finalize_jax_factory()
     from mmml.utils.jax_gpu_warmup import warmup_hybrid_spherical_cutoff
 
     z = np.asarray(physnet_ml_atomic_numbers(model._atomic_numbers), dtype=int)

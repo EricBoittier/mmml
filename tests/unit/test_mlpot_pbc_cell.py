@@ -79,6 +79,45 @@ def test_build_decomposed_mlpot_vacuum_cell_false():
     assert model._get_update_fn is get_update_fn
 
 
+def test_decomposed_mlpot_defers_jax_factory_until_get_calculator():
+    z = np.array([6, 1, 1, 1, 6, 1, 1, 1], dtype=int)
+    per = [4, 4]
+    factory = MagicMock(
+        return_value=(
+            None,
+            MagicMock(),
+            MagicMock(),
+        )
+    )
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.setup_calculator",
+        return_value=factory,
+    ) as mock_setup, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.unpack_factory_result",
+        return_value=(None, MagicMock(), MagicMock()),
+    ) as mock_unpack, patch(
+        "mmml.utils.jax_gpu_warmup.ensure_xla_gpu_warmed",
+    ) as mock_xla_warm, patch(
+        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
+        return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()),
+    ):
+        model = build_decomposed_mlpot_model(
+            "/tmp/fake_ckpt.json",
+            z,
+            per,
+            2,
+            defer_jax_until_mlpot_registered=True,
+        )
+        assert model._spherical_fn is None
+        mock_unpack.assert_not_called()
+        model.get_pycharmm_calculator()
+    mock_setup.assert_called_once()
+    assert mock_setup.call_args.kwargs["defer_xla_gpu_warmup"] is True
+    mock_xla_warm.assert_called_once()
+    mock_unpack.assert_called_once()
+    assert model._spherical_fn is not None
+
+
 def test_register_mlpot_context_forwards_cell():
     from mmml.interfaces.pycharmmInterface.mlpot import run_workflow
 
