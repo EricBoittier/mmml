@@ -69,4 +69,4 @@ def test_apply_jax_compile_xla_flags_appends(monkeypatch):
     assert n == 6
     flags = os.environ["XLA_FLAGS"]
     assert "xla_cpu_multi_thread_eigen=true" in flags
-    assert "xla_cpu_thread_pool_size=6" in flags
+    assert "intra_op_parallelism_threads=6" in flags

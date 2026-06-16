@@ -53,12 +53,14 @@ def apply_jax_compile_xla_flags(*, quiet: bool = False) -> int:
     n = resolve_jax_compile_thread_count()
     if n <= 0:
         return 0
+    # ``xla_cpu_thread_pool_size`` is not in all JAX/XLA builds (gpu08 jaxlib 0.9.x
+    # aborts on unknown flags). ``intra_op_parallelism_threads`` is widely supported.
     flags = (
         f"--xla_cpu_multi_thread_eigen=true "
-        f"--xla_cpu_thread_pool_size={n}"
+        f"intra_op_parallelism_threads={n}"
     )
     existing = (os.environ.get("XLA_FLAGS") or "").strip()
-    if "xla_cpu_thread_pool_size" in existing:
+    if "xla_cpu_multi_thread_eigen" in existing or "intra_op_parallelism_threads" in existing:
         if not quiet and not _truthy("MMML_QUIET"):
             print(
                 "mmml: JAX compile XLA_FLAGS already set; not overriding",
@@ -69,7 +71,7 @@ def apply_jax_compile_xla_flags(*, quiet: bool = False) -> int:
     os.environ["XLA_FLAGS"] = merged
     if not quiet and not _truthy("MMML_QUIET"):
         print(
-            f"mmml: JAX compile XLA_FLAGS thread_pool_size={n}",
+            f"mmml: JAX compile XLA_FLAGS intra_op_parallelism_threads={n}",
             flush=True,
         )
     return n
