@@ -348,6 +348,20 @@ def _register_mlpot_context(
             flush=True,
         )
 
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+        charmm_lib_links_mpi,
+        mpirun_launch_hint,
+    )
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import _under_mpirun
+
+    if verbose and charmm_lib_links_mpi() and not _under_mpirun():
+        print(
+            "mmml: MPI-linked libcharmm.so without mpirun (serial MLpot). "
+            "If MLpot registration segfaults in upinb, use:\n  "
+            + mpirun_launch_hint("mmml md-system"),
+            flush=True,
+        )
+
     atoms = ase.Atoms(numbers=z, positions=r)
     apm = (
         list(atoms_per_monomer)

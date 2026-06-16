@@ -759,6 +759,7 @@ def load_physnet_mlpot_bundle(
             cell=float(cell) if cell is not None else False,
             verbose=verbose,
             args=args,
+            defer_jax_until_mlpot_registered=True,
         )
         return None, None, pyCModel
 

@@ -346,6 +346,7 @@ def setup_calculator(
     jax_md_update_interval: int = 1,
     jax_md_skin_distance: float = 0.0,
     ml_compute_dtype: str | None = None,
+    defer_xla_gpu_warmup: bool = False,
 ):
     """Create hybrid ML/MM calculator with outputs in eV/eV-A.
 
@@ -537,6 +538,13 @@ def setup_calculator(
         (restart_path.is_file() and restart_path.suffix == ".json")
         or ((restart_path / "params.json").exists())
     )
+
+    from contextlib import ExitStack
+    from mmml.interfaces.pycharmmInterface.jax_device_policy import jax_cpu_until_mlpot_registered
+
+    _mlpot_jax_defer_stack = ExitStack()
+    if defer_xla_gpu_warmup:
+        _mlpot_jax_defer_stack.enter_context(jax_cpu_until_mlpot_registered())
     
     if is_json_checkpoint:
         # This is a JSON checkpoint - use it directly
@@ -655,9 +663,14 @@ def setup_calculator(
             "n_res is an EF architecture parameter, not the number of CHARMM residues."
         )
     apply_xla_cuda_timer_log_filter()
-    if ensure_xla_gpu_warmed():
+    if not defer_xla_gpu_warmup and ensure_xla_gpu_warmed():
         print(
             "[setup_calculator] Generic XLA GPU warmup (full hybrid warmup runs after PyCHARMM/CGENFF init)"
+        )
+    elif defer_xla_gpu_warmup and verbose:
+        print(
+            "[setup_calculator] Deferred XLA GPU warmup until after CHARMM MLpot registration",
+            flush=True,
         )
     is_spooky_model = "spooky_model" in type(MODEL).__module__
 
@@ -669,6 +682,8 @@ def setup_calculator(
         _cached_batch_structure = prepare_batch_structure(full_batch_size, max_atoms)
     except Exception:
         pass
+    if defer_xla_gpu_warmup:
+        _mlpot_jax_defer_stack.close()
 
     from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
         resolve_max_active_dimers,
