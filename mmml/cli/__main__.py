@@ -25,7 +25,8 @@ Available commands:
   run-pycharmm  Pure CHARMM heating and equilibration (no ML)
   pycharmm-two-residue-sample  Restrained sampling for a two-residue CHARMM system
   xml2npz     Convert Molpro XML files to NPZ format
-  train       Train DCMNet or PhysNetJAX models (coming soon)
+  train       Train DCMNet or PhysNetJAX models (PhysNet: use physnet-train)
+  physnet-train  Train PhysNetJAX EF from NPZ (supports --config YAML)
   evaluate    Evaluate trained models (coming soon)
   validate    Validate NPZ files against schema
   train-joint Joint PhysNet+DCMNet training with PhysNet transfer initialization
@@ -72,6 +73,8 @@ Examples:
   mmml pyscf-evaluate -i out/06_sampled.npz -o out/07_evaluated.npz
   mmml pyscf-evaluate -i traj.npz -o out.npz --EF --esp
   mmml physnet-md --checkpoint out/ckpts/cybz_physnet --data out/splits/energies_forces_dipoles_train.npz -o out/
+  mmml physnet-train --data splits/train.npz --ckpt-dir ./ckpts/run --tag my_run
+  mmml physnet-train --config train.yaml
   mmml physnet-evaluate --checkpoint out/ckpts/cybz_physnet --data out/splits/test.npz -o out/physnet_eval
   mmml ef-train --train-npz splits/train.npz --valid-npz splits/valid.npz --output-dir ./ef_run
   mmml ef-evaluate --params ./ef_run/params.json --test-npz splits/test.npz --output-dir ./ef_eval --save-output-npz
@@ -94,7 +97,7 @@ For help on a specific command:
     parser.add_argument(
         'command',
         choices=['make-res', 'make-box', 'run', 'md-system', 'lambda-mbar', 'run-pycharmm', 'pycharmm-two-residue-sample', 'xml2npz', 'validate', 'train', 'train-joint', 'evaluate', 'downstream',
-                  'fix-and-split', 'pyscf-dft', 'pyscf-mp2', 'pyscf-evaluate', 'pyscf-evaluate-mp2', 'verify-esp-alignment', 'normal-mode-sample', 'physnet-md', 'physnet-evaluate', 'ef-train', 'ef-evaluate', 'ef-md', 
+                  'fix-and-split', 'pyscf-dft', 'pyscf-mp2', 'pyscf-evaluate', 'pyscf-evaluate-mp2', 'verify-esp-alignment', 'normal-mode-sample', 'physnet-train', 'physnet-md', 'physnet-evaluate', 'ef-train', 'ef-evaluate', 'ef-md',
                   'active-learning', 'kernel-fit', 'interpolate-xyz', 'unwrap-traj', 'sample-diverse-xyz', 'gui', 'extract-checkpoint-metrics', 'orbax-to-json', 'orca-server', 'orca-client', 'orca-external'],
         help='Command to run'
     )
@@ -170,6 +173,11 @@ For help on a specific command:
         from . import train
         sys.argv = ['mmml train'] + args.args
         return train.main()
+
+    elif args.command == 'physnet-train':
+        from .make import make_training
+        sys.argv = ['mmml physnet-train'] + args.args
+        return make_training.main()
 
     elif args.command == 'train-joint':
         from .misc import train_joint

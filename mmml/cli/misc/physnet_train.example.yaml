@@ -1,0 +1,32 @@
+# Example PhysNetJAX training config for: mmml physnet-train --config train.yaml
+# CLI flags override values from this file.
+
+data: output/energies_forces_dipoles_train.npz
+ckpt_dir: ./ckpts/ama_mp2
+tag: ama_mp2
+
+n_train: 24000
+n_valid: 3000
+seed: 42
+
+batch_size: 32
+num_epochs: 2000
+learning_rate: 0.001
+
+energy_weight: 1.0
+forces_weight: 52.91
+dipole_weight: 27.21
+charges_weight: 14.39
+objective: valid_loss
+
+# Auto-detected from N/R when omitted
+# num_atoms: 40
+max_atomic_number: 35
+
+features: 64
+max_degree: 0
+num_basis_functions: 32
+num_iterations: 2
+n_res: 2
+cutoff: 8.0
+use_energy_bias: true
