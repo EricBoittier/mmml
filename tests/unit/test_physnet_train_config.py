@@ -61,6 +61,40 @@ def test_validate_fixed_splits():
         validate_train_args(args)
 
 
+def test_legacy_underscore_cli_flags():
+    args = parse_train_args(
+        [
+            "--data",
+            "train.npz",
+            "--ckpt_dir",
+            "./ckpts/run",
+            "--n_train",
+            "100",
+            "--n_valid",
+            "10",
+            "--batch_size",
+            "8",
+            "--num_epochs",
+            "5",
+            "--learning_rate",
+            "0.01",
+            "--energy_weight",
+            "2.0",
+            "--max_atomic_number",
+            "35",
+            "--num_iterations",
+            "5",
+            "--num_basis_functions",
+            "64",
+        ]
+    )
+    assert args.data == "train.npz"
+    assert args.ckpt_dir == "./ckpts/run"
+    assert args.n_train == 100
+    assert args.batch_size == 8
+    assert args.num_basis_functions == 64
+
+
 def test_save_train_config_roundtrip(tmp_path: Path):
     args = parse_args([])
     args.data = "train.npz"
