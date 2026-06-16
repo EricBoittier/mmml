@@ -387,6 +387,46 @@ def block_jax_values(*values: Any) -> None:
             pass
 
 
+_hybrid_spherical_warmup_keys: set[tuple[Any, ...]] = set()
+
+
+def reset_hybrid_spherical_warmup_cache() -> None:
+    """Clear process-wide hybrid warmup dedup (tests only)."""
+    global _hybrid_spherical_warmup_keys
+    _hybrid_spherical_warmup_keys = set()
+
+
+def _hybrid_warmup_key(
+    *,
+    positions: Any,
+    atomic_numbers: Any,
+    n_monomers: int,
+    doML: bool,
+    doMM: bool,
+    doML_dimer: bool,
+    debug: bool,
+    mm_pair_idx: Any,
+    mm_pair_mask: Any,
+    box: Any,
+) -> tuple[Any, ...]:
+    """JIT-relevant warmup fingerprint (skip identical repeat compiles)."""
+    pair_shape = getattr(mm_pair_idx, "shape", None)
+    return (
+        int(n_monomers),
+        bool(doML),
+        bool(doMM),
+        bool(doML_dimer),
+        bool(debug),
+        getattr(positions, "shape", None),
+        str(getattr(positions, "dtype", None)),
+        getattr(atomic_numbers, "shape", None),
+        str(getattr(atomic_numbers, "dtype", None)),
+        pair_shape,
+        getattr(mm_pair_mask, "shape", None),
+        box is not None,
+    )
+
+
 def warmup_hybrid_spherical_cutoff(
     spherical_cutoff_calculator: Any,
     *,
@@ -405,11 +445,8 @@ def warmup_hybrid_spherical_cutoff(
     """Compile and run one hybrid MMML eval; block until GPU work completes.
 
     Call after PyCHARMM/MM setup (e.g. CGENFF drudes) and before timed JAX-MD compiles.
+    Identical repeat calls in one process are skipped (MLpot used to warm twice).
     """
-    backend = _jax_warmup_backend()
-    if backend == "gpu":
-        ensure_jax_cuda_toolchain(required=True)
-        ensure_xla_gpu_warmed(force=True)
     kwargs = dict(
         positions=positions,
         atomic_numbers=atomic_numbers,
@@ -423,6 +460,25 @@ def warmup_hybrid_spherical_cutoff(
         mm_pair_mask=mm_pair_mask,
         box=box,
     )
+    key = _hybrid_warmup_key(
+        positions=positions,
+        atomic_numbers=atomic_numbers,
+        n_monomers=n_monomers,
+        doML=doML,
+        doMM=doMM,
+        doML_dimer=doML_dimer,
+        debug=debug,
+        mm_pair_idx=mm_pair_idx,
+        mm_pair_mask=mm_pair_mask,
+        box=box,
+    )
+    if key in _hybrid_spherical_warmup_keys:
+        return
+
+    backend = _jax_warmup_backend()
+    if backend == "gpu":
+        ensure_jax_cuda_toolchain(required=True)
+        ensure_xla_gpu_warmed(force=False)
     try:
         import jax
     except ImportError:
@@ -445,6 +501,7 @@ def warmup_hybrid_spherical_cutoff(
             lambda: spherical_cutoff_calculator(**kwargs),
             block=_block_spherical_result,
         )
+    _hybrid_spherical_warmup_keys.add(key)
 
 
 def warmup_ase_mmml_energy_forces(atoms: Any, *, include_forces: bool = True) -> None:
