@@ -1701,6 +1701,11 @@ def main() -> int:
             )
 
             apply_mlpot_jax_compilation_cache_env(quiet=True)
+            from mmml.interfaces.pycharmmInterface.jax_compile_threads import (
+                apply_jax_compile_xla_flags,
+            )
+
+            apply_jax_compile_xla_flags(quiet=True)
             from mmml.cli.run.md_pbc_suite import pycharmm_mlpot as backend_mod
         else:
             from mmml.cli.run.md_pbc_suite import jaxmd as backend_mod

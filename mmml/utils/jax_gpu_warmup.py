@@ -130,17 +130,22 @@ def run_jax_warmup_passes(
     block: Callable[[Any], None] | None = None,
 ) -> None:
     """Run ``n_passes`` warmup executions; log wall time per pass when timers are on."""
+    from mmml.interfaces.pycharmmInterface.jax_compile_threads import (
+        jax_compile_threads_context,
+    )
+
     block_fn = block or (lambda result: block_jax_values(result))
-    if not jax_compile_timers_enabled():
-        for _ in range(n_passes):
-            block_fn(run_once())
-        return
-    for pass_index in range(n_passes):
-        t0 = time.perf_counter()
-        result = run_once()
-        block_fn(result)
-        wall = time.perf_counter() - t0
-        _log_jax_compile_pass(label, pass_index, wall)
+    with jax_compile_threads_context():
+        if not jax_compile_timers_enabled():
+            for _ in range(n_passes):
+                block_fn(run_once())
+            return
+        for pass_index in range(n_passes):
+            t0 = time.perf_counter()
+            result = run_once()
+            block_fn(result)
+            wall = time.perf_counter() - t0
+            _log_jax_compile_pass(label, pass_index, wall)
     if n_passes >= 2:
         entries = [
             e

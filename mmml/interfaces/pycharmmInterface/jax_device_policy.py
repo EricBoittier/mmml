@@ -74,6 +74,11 @@ def apply_mlpot_jax_compilation_cache_env(*, quiet: bool = False) -> Path | None
 
 def apply_mlpot_jax_platform_env(*, quiet: bool = False) -> str:
     """Set ``JAX_PLATFORMS`` and compilation cache before the first ``import jax``."""
+    from mmml.interfaces.pycharmmInterface.jax_compile_threads import (
+        apply_jax_compile_xla_flags,
+    )
+
+    apply_jax_compile_xla_flags(quiet=quiet)
     device = mlpot_jax_device_name()
     os.environ.setdefault("JAX_PLATFORMS", device)
     apply_mlpot_jax_compilation_cache_env(quiet=quiet)
