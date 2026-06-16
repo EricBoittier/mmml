@@ -1670,12 +1670,16 @@ def main() -> int:
         elif backend == "pycharmm":
             from mmml.interfaces.pycharmmInterface.charmm_mpi import (
                 charmm_lib_links_mpi,
+                maybe_rerun_md_system_under_mpirun,
                 prepare_serial_charmm_mpi_env,
                 _under_mpirun,
                 mpirun_launch_hint,
             )
 
             prepare_serial_charmm_mpi_env()
+            rerun_code = maybe_rerun_md_system_under_mpirun(sys.argv[1:])
+            if rerun_code is not None:
+                return rerun_code
             if charmm_lib_links_mpi() and not _under_mpirun():
                 print(
                     "mmml: OpenMPI-linked CHARMM — for large MLpot clusters prefer:\n  "
@@ -1685,10 +1689,10 @@ def main() -> int:
                     flush=True,
                 )
             from mmml.interfaces.pycharmmInterface.jax_device_policy import (
-                apply_mlpot_jax_platform_env,
+                apply_mlpot_jax_compilation_cache_env,
             )
 
-            apply_mlpot_jax_platform_env(quiet=True)
+            apply_mlpot_jax_compilation_cache_env(quiet=True)
             from mmml.cli.run.md_pbc_suite import pycharmm_mlpot as backend_mod
         else:
             from mmml.cli.run.md_pbc_suite import jaxmd as backend_mod
