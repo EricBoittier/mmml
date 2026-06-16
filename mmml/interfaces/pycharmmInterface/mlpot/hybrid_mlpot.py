@@ -24,6 +24,22 @@ from mmml.interfaces.pycharmmInterface.mlpot.mlpot_gpu_policy import resolve_ml_
 
 __all__ = ["resolve_ml_batch_size", "DecomposedMlpotCalculator", "DecomposedMlpotModel", "build_decomposed_mlpot_model", "warmup_decomposed_mlpot"]
 
+_DUMMY_MM_PAIR_IDX = jnp.zeros((1, 2), dtype=jnp.int32)
+_DUMMY_MM_PAIR_MASK = jnp.zeros((1,), dtype=jnp.bool_)
+
+
+def _box_cache_key(box: jnp.ndarray | None) -> tuple[float, float, float] | None:
+    if box is None:
+        return None
+    return (float(box[0, 0]), float(box[1, 1]), float(box[2, 2]))
+
+
+def _box_numpy_for_update(box: jnp.ndarray | None) -> np.ndarray | None:
+    if box is None:
+        return None
+    side = float(box[0, 0])
+    return np.asarray([side, side, side], dtype=np.float64)
+
 
 def _print_setup_calculator_factory_summary(
     factory: Any,
@@ -89,6 +105,85 @@ class DecomposedMlpotCalculator:
         self._cell = float(cell) if cell else False
         self.last_ml_forces: np.ndarray | None = None
 
+    def _grad_cache_owner(self) -> DecomposedMlpotCalculator | DecomposedMlpotModel:
+        parent = getattr(self, "_parent_model", None)
+        return parent if parent is not None else self
+
+    def _get_value_and_grad_fn(
+        self,
+        *,
+        n_atoms: int,
+        atomic_numbers_jax: jnp.ndarray,
+        box_jax: jnp.ndarray | None,
+    ) -> Any:
+        """Return a cached ``jit(value_and_grad)`` for MLpot SD/dynamics callbacks."""
+        dtype = resolve_ml_compute_dtype(self._ml_compute_dtype)
+        cache_key = (
+            int(n_atoms),
+            int(self.n_monomers),
+            bool(self.do_mm),
+            dtype,
+            _box_cache_key(box_jax),
+        )
+        owner = self._grad_cache_owner()
+        if owner._vg_cache_key == cache_key and owner._value_and_grad_fn is not None:
+            return owner._value_and_grad_fn
+
+        spherical_fn = self.spherical_fn
+        cutoff_params = self.cutoff_params
+        n_monomers = self.n_monomers
+        do_mm = self.do_mm
+
+        def energy_scalar(
+            positions: jnp.ndarray,
+            mm_pair_idx: jnp.ndarray,
+            mm_pair_mask: jnp.ndarray,
+            use_mm_pairs: bool,
+        ) -> jnp.ndarray:
+            kwargs: dict[str, Any] = dict(
+                positions=positions,
+                atomic_numbers=atomic_numbers_jax,
+                n_monomers=n_monomers,
+                cutoff_params=cutoff_params,
+                doML=True,
+                doMM=do_mm,
+                doML_dimer=True,
+            )
+            if box_jax is not None:
+                kwargs["box"] = box_jax
+            if use_mm_pairs:
+                kwargs["mm_pair_idx"] = mm_pair_idx
+                kwargs["mm_pair_mask"] = mm_pair_mask
+            out = spherical_fn(**kwargs)
+            return jnp.reshape(out.energy, (-1,))[0]
+
+        fn = jax.jit(
+            jax.value_and_grad(energy_scalar, argnums=0),
+            static_argnums=(3,),
+        )
+        owner._value_and_grad_fn = fn
+        owner._vg_cache_key = cache_key
+        return fn
+
+    def _resolve_mm_pairs(
+        self,
+        pos: np.ndarray,
+        box: jnp.ndarray | None,
+    ) -> tuple[jnp.ndarray, jnp.ndarray, bool]:
+        if not self.do_mm or self._get_update_fn is None:
+            return _DUMMY_MM_PAIR_IDX, _DUMMY_MM_PAIR_MASK, False
+        update_fn = self._get_update_fn(pos, self.cutoff_params, box=box)
+        if update_fn is None:
+            return _DUMMY_MM_PAIR_IDX, _DUMMY_MM_PAIR_MASK, False
+        box_np = _box_numpy_for_update(box)
+        if box_np is not None:
+            mm_pair_idx, mm_pair_mask = update_fn(pos, box=box_np)
+        else:
+            mm_pair_idx, mm_pair_mask = update_fn(pos)
+        if mm_pair_idx is None or mm_pair_mask is None:
+            return _DUMMY_MM_PAIR_IDX, _DUMMY_MM_PAIR_MASK, False
+        return jnp.asarray(mm_pair_idx), jnp.asarray(mm_pair_mask), True
+
     def calculate_charmm(
         self,
         Natom: int,
@@ -141,28 +236,23 @@ class DecomposedMlpotCalculator:
             get_mlpot_profile_stats().record_charmm_gap()
         t0 = time.perf_counter()
         with mlpot_jax_device_context():
-            if self.do_mm and self._get_update_fn is not None:
-                self._get_update_fn(pos, self.cutoff_params, box=box)
+            mm_pair_idx, mm_pair_mask, use_mm_pairs = self._resolve_mm_pairs(pos, box)
             positions_jax = as_ml_array(
                 pos,
                 dtype=resolve_ml_compute_dtype(getattr(self, "_ml_compute_dtype", None)),
             )
             atomic_numbers_jax = jnp.asarray(self.atomic_numbers[:n])
-
-            def energy_scalar(p):
-                out = self.spherical_fn(
-                    positions=p,
-                    atomic_numbers=atomic_numbers_jax,
-                    n_monomers=self.n_monomers,
-                    cutoff_params=self.cutoff_params,
-                    doML=True,
-                    doMM=self.do_mm,
-                    doML_dimer=True,
-                    box=box,
-                )
-                return jnp.reshape(out.energy, (-1,))[0]
-
-            e_raw, grad = jax.value_and_grad(energy_scalar)(positions_jax)
+            value_and_grad_fn = self._get_value_and_grad_fn(
+                n_atoms=n,
+                atomic_numbers_jax=atomic_numbers_jax,
+                box_jax=box,
+            )
+            e_raw, grad = value_and_grad_fn(
+                positions_jax,
+                mm_pair_idx,
+                mm_pair_mask,
+                use_mm_pairs,
+            )
             e_raw = jnp.where(jnp.isfinite(e_raw), e_raw, 0.0)
             grad = jnp.where(jnp.isfinite(grad), grad, 0.0)
             e_kcal = float(jax.device_get(e_raw)) * self.ev2kcal
@@ -201,6 +291,8 @@ class DecomposedMlpotModel:
         self._get_update_fn = get_update_fn
         self._ml_compute_dtype = ml_compute_dtype
         self._last_ml_forces: np.ndarray | None = None
+        self._value_and_grad_fn: Any | None = None
+        self._vg_cache_key: tuple[Any, ...] | None = None
 
     def get_pycharmm_calculator(self, ml_atom_indices=None, ml_atomic_numbers=None, **kwargs):
         if ml_atomic_numbers is not None:
@@ -361,6 +453,50 @@ def build_decomposed_mlpot_model(
     return model
 
 
+def _warmup_value_and_grad_for_model(
+    model: DecomposedMlpotModel,
+    positions: np.ndarray,
+    *,
+    box: jnp.ndarray | None,
+    mm_pair_idx: Any = None,
+    mm_pair_mask: Any = None,
+    use_mm_pairs: bool = False,
+) -> None:
+    """Compile the CHARMM callback ``value_and_grad`` path (SD / dynamics)."""
+    from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_context
+    from mmml.utils.jax_gpu_warmup import block_jax_values
+
+    z = np.asarray(physnet_ml_atomic_numbers(model._atomic_numbers), dtype=int)
+    pos = np.asarray(positions, dtype=np.float64)
+    calc = model.get_pycharmm_calculator()
+    if use_mm_pairs and mm_pair_idx is not None and mm_pair_mask is not None:
+        pair_idx = jnp.asarray(mm_pair_idx)
+        pair_mask = jnp.asarray(mm_pair_mask)
+    else:
+        pair_idx, pair_mask = _DUMMY_MM_PAIR_IDX, _DUMMY_MM_PAIR_MASK
+        use_mm_pairs = False
+
+    with mlpot_jax_device_context():
+        positions_jax = as_ml_array(
+            pos,
+            dtype=resolve_ml_compute_dtype(model._ml_compute_dtype),
+        )
+        atomic_numbers_jax = jnp.asarray(z)
+        value_and_grad_fn = calc._get_value_and_grad_fn(
+            n_atoms=len(z),
+            atomic_numbers_jax=atomic_numbers_jax,
+            box_jax=box,
+        )
+        for _ in range(2):
+            e_raw, grad = value_and_grad_fn(
+                positions_jax,
+                pair_idx,
+                pair_mask,
+                use_mm_pairs,
+            )
+            block_jax_values(e_raw, grad)
+
+
 def warmup_decomposed_mlpot(
     model: DecomposedMlpotModel,
     positions: np.ndarray,
@@ -378,6 +514,19 @@ def warmup_decomposed_mlpot(
     if pbc_cell:
         side = float(pbc_cell)
         box = jnp.asarray([[side, 0.0, 0.0], [0.0, side, 0.0], [0.0, 0.0, side]])
+    mm_pair_idx = None
+    mm_pair_mask = None
+    use_mm_pairs = False
+    if model._do_mm and model._get_update_fn is not None:
+        update_fn = model._get_update_fn(r, model._cutoff_params, box=box)
+        if update_fn is not None:
+            box_np = _box_numpy_for_update(box)
+            if box_np is not None:
+                mm_pair_idx, mm_pair_mask = update_fn(r, box=box_np)
+            else:
+                mm_pair_idx, mm_pair_mask = update_fn(r)
+            use_mm_pairs = True
+
     if verbose:
         msg = f"Decomposed MLpot JAX warmup: {len(z)} atoms, {model._n_monomers} monomers"
         if model._do_mm:
@@ -385,21 +534,28 @@ def warmup_decomposed_mlpot(
         if pbc_cell:
             msg += f", MIC PBC L={float(pbc_cell):.3f} Å"
         print(msg, flush=True)
-    if model._do_mm and model._get_update_fn is not None:
-        # Build CGENFF MM pair fn on concrete coords, then run hybrid JIT warmup.
-        model._get_update_fn(r, model._cutoff_params, box=box)
-    else:
-        warmup_hybrid_spherical_cutoff(
-            model._spherical_fn,
-            atomic_numbers=jnp.asarray(z),
-            positions=jnp.asarray(r),
-            n_monomers=model._n_monomers,
-            cutoff_params=model._cutoff_params,
-            doML=True,
-            doMM=False,
-            doML_dimer=True,
-            box=box,
-        )
+
+    warmup_hybrid_spherical_cutoff(
+        model._spherical_fn,
+        atomic_numbers=jnp.asarray(z),
+        positions=jnp.asarray(r),
+        n_monomers=model._n_monomers,
+        cutoff_params=model._cutoff_params,
+        doML=True,
+        doMM=model._do_mm,
+        doML_dimer=True,
+        box=box,
+        mm_pair_idx=mm_pair_idx,
+        mm_pair_mask=mm_pair_mask,
+    )
+    _warmup_value_and_grad_for_model(
+        model,
+        r,
+        box=box,
+        mm_pair_idx=mm_pair_idx,
+        mm_pair_mask=mm_pair_mask,
+        use_mm_pairs=use_mm_pairs,
+    )
     from mmml.interfaces.pycharmmInterface.charmm_mpi import recover_mpi_for_charmm_after_jax
 
     recover_mpi_for_charmm_after_jax(phase="after decomposed MLpot JAX warmup")
