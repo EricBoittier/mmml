@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
 
-pytest.importorskip("jax")
+jax = pytest.importorskip("jax")
+import jax.numpy as jnp
 
 from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
 from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
@@ -138,6 +140,8 @@ def test_warmup_decomposed_mlpot_passes_box_when_cell_set():
     with patch(
         "mmml.utils.jax_gpu_warmup.warmup_hybrid_spherical_cutoff",
     ) as mock_warmup, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot._warmup_value_and_grad_for_model",
+    ) as mock_vg_warmup, patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ):
         warmup_decomposed_mlpot(model, r, verbose=False)
@@ -146,11 +150,12 @@ def test_warmup_decomposed_mlpot_passes_box_when_cell_set():
     box = mock_warmup.call_args.kwargs["box"]
     assert box is not None
     assert float(box[0, 0]) == pytest.approx(20.0)
+    mock_vg_warmup.assert_called_once()
 
 
 def test_warmup_decomposed_mlpot_do_mm_uses_get_update_fn():
     z = np.zeros(8, dtype=int)
-    get_update_fn = MagicMock()
+    get_update_fn = MagicMock(return_value=MagicMock(return_value=(None, None)))
     model = DecomposedMlpotModel(
         MagicMock(),
         CutoffParameters(),
@@ -165,17 +170,21 @@ def test_warmup_decomposed_mlpot_do_mm_uses_get_update_fn():
     with patch(
         "mmml.utils.jax_gpu_warmup.warmup_hybrid_spherical_cutoff",
     ) as mock_warmup, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot._warmup_value_and_grad_for_model",
+    ) as mock_vg_warmup, patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ):
         warmup_decomposed_mlpot(model, r, verbose=False)
 
     get_update_fn.assert_called_once()
-    mock_warmup.assert_not_called()
+    mock_warmup.assert_called_once()
+    assert mock_warmup.call_args.kwargs["doMM"] is True
+    mock_vg_warmup.assert_called_once()
 
 
 def test_decomposed_calculator_initializes_mm_before_spherical_fn():
     z = np.zeros(8, dtype=int)
-    get_update_fn = MagicMock()
+    get_update_fn = MagicMock(return_value=MagicMock(return_value=(None, None)))
     calc = DecomposedMlpotCalculator(
         MagicMock(),
         CutoffParameters(),
@@ -184,8 +193,10 @@ def test_decomposed_calculator_initializes_mm_before_spherical_fn():
         do_mm=True,
         get_update_fn=get_update_fn,
     )
-    mock_out = MagicMock(energy=0.0, forces=np.zeros((8, 3)))
-    calc.spherical_fn = MagicMock(return_value=mock_out)
+    mock_energy = jnp.array(0.0)
+    mock_grad = jnp.zeros((8, 3))
+    mock_vg = MagicMock(return_value=(mock_energy, mock_grad))
+    calc._get_value_and_grad_fn = MagicMock(return_value=mock_vg)
     n = 8
     x = np.zeros(n, dtype=np.float64)
     y = np.zeros(n, dtype=np.float64)
@@ -203,7 +214,7 @@ def test_decomposed_calculator_initializes_mm_before_spherical_fn():
         )
 
     get_update_fn.assert_called_once()
-    assert calc.spherical_fn.call_count == 1
+    mock_vg.assert_called_once()
 
 
 def test_pbc_nbond_cutoffs_respects_half_box():
@@ -309,8 +320,17 @@ def test_decomposed_calculator_passes_charmm_box_to_spherical_fn():
         z,
         cell=40.0,
     )
-    mock_out = MagicMock(energy=0.0, forces=np.zeros((8, 3)))
-    calc.spherical_fn = MagicMock(return_value=mock_out)
+    captured: dict[str, Any] = {}
+
+    def _fake_vg_fn(*, n_atoms, atomic_numbers_jax, box_jax):
+        captured["box_jax"] = box_jax
+
+        def _eval(positions_jax, mm_pair_idx, mm_pair_mask, use_mm_pairs):
+            return jnp.array(0.0), jnp.zeros((8, 3))
+
+        return _eval
+
+    calc._get_value_and_grad_fn = MagicMock(side_effect=_fake_vg_fn)
     n = 8
     x = np.zeros(n, dtype=np.float64)
     y = np.zeros(n, dtype=np.float64)
@@ -331,6 +351,49 @@ def test_decomposed_calculator_passes_charmm_box_to_spherical_fn():
             n, 0, 0, None, x, y, zc, dx, dy, dz, 0, 0, None, None, None, None, None, None, None
         )
     assert calc._cell == pytest.approx(39.0)
-    box = calc.spherical_fn.call_args.kwargs["box"]
+    box = captured["box_jax"]
     assert box is not None
     assert float(box[0, 0]) == pytest.approx(39.0)
+
+
+def test_value_and_grad_fn_cached_across_callbacks(monkeypatch):
+    monkeypatch.setenv("MMML_MLPOT_DEVICE", "cpu")
+    z = np.zeros(8, dtype=int)
+
+    def spherical_fn(**kwargs):
+        pos = kwargs["positions"]
+        energy = jnp.sum(pos**2)
+
+        class Out:
+            pass
+
+        out = Out()
+        out.energy = energy
+        return out
+
+    calc = DecomposedMlpotCalculator(
+        spherical_fn,
+        CutoffParameters(),
+        2,
+        z,
+        do_mm=False,
+    )
+    n = 8
+    x = np.linspace(0.1, 0.8, n, dtype=np.float64)
+    y = np.zeros(n, dtype=np.float64)
+    zc = np.zeros(n, dtype=np.float64)
+    dx = np.zeros(n, dtype=np.float64)
+    dy = np.zeros(n, dtype=np.float64)
+    dz = np.zeros(n, dtype=np.float64)
+
+    calc.calculate_charmm(
+        n, 0, 0, None, x, y, zc, dx, dy, dz, 0, 0, None, None, None, None, None, None, None
+    )
+    first_key = calc._grad_cache_owner()._vg_cache_key
+    calc.calculate_charmm(
+        n, 0, 0, None, x + 0.01, y, zc, dx, dy, dz, 0, 0, None, None, None, None, None, None, None
+    )
+    second_key = calc._grad_cache_owner()._vg_cache_key
+
+    assert first_key is not None
+    assert second_key == first_key
