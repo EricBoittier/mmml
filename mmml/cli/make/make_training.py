@@ -467,7 +467,11 @@ def main_loop(args):
     # save portable JSON (params + architecture) for inference / physnet-evaluate
     now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     model_attrs = model.return_attributes()
-    portable = {"params": params_out, "config": model_attrs}
+    from mmml.utils.model_checkpoint import normalize_flax_params_for_apply
+
+    # Store the bare module tree once; Flax init/apply wrap under `params`.
+    params_inner = normalize_flax_params_for_apply(params_out, backend="jax")["params"]
+    portable = {"params": params_inner, "config": model_attrs}
     params_path = (ckpt_dir / f"params_{args.tag}_{now}.json") if ckpt_dir else Path(f"params_{args.tag}_{now}.json")
     if ckpt_dir:
         params_path.parent.mkdir(parents=True, exist_ok=True)

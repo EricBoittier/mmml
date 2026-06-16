@@ -113,6 +113,12 @@ def _load_physnet_checkpoint(checkpoint: Path, natoms: int):
     if json_path is not None:
         loaded = json_to_params(json_path, backend="jax")
         config = loaded.get("config")
+        params_raw = loaded.get("params")
+        # A portable file may have been nested again under `params` during manual merge.
+        if isinstance(params_raw, dict) and "params" in params_raw and not config:
+            nested_config = params_raw.get("config") or params_raw.get("model_attributes")
+            if nested_config:
+                config = nested_config
         if not config:
             for alt in (
                 json_path.parent / "args.model.json",
@@ -133,7 +139,7 @@ def _load_physnet_checkpoint(checkpoint: Path, natoms: int):
         model.natoms = natoms
         if "zbl" in config:
             model.zbl = bool(config["zbl"])
-        params = normalize_flax_params_for_apply(loaded["params"], backend="jax")
+        params = normalize_flax_params_for_apply(params_raw, backend="jax")
         return json_path, params, model
 
     from mmml.models.physnetjax.physnetjax.restart.restart import get_last, get_params_model

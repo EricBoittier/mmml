@@ -620,6 +620,9 @@ def json_to_params(
     return result
 
 
+_CHECKPOINT_META_KEYS = frozenset({"config", "metadata", "model_attributes"})
+
+
 def normalize_flax_params_for_apply(
     params: Any,
     *,
@@ -629,7 +632,9 @@ def normalize_flax_params_for_apply(
 
     Flax modules expect ``variables`` with a top-level ``'params'`` key. JSON
     checkpoints may store either a bare variable tree or ``{'params': tree}``;
-    some exports double-wrap as ``{'params': {'params': tree}}``.
+    some exports double-wrap as ``{'params': {'params': tree}}``. A full
+    portable JSON (``params`` + ``config``) may also be nested again under
+    ``params`` when users merge checkpoints manually.
 
     Parameters
     ----------
@@ -659,15 +664,27 @@ def normalize_flax_params_for_apply(
     if not isinstance(params, dict):
         return {"params": params}
 
-    # Collapse double wrap from JSON export: {'params': {'params': tree}}
-    inner = params.get("params")
-    if (
-        isinstance(inner, dict)
-        and set(inner.keys()) == {"params"}
-        and isinstance(inner.get("params"), dict)
-    ):
-        params = inner
+    # Peel a mistaken full portable JSON stored under `params`.
+    while isinstance(params, dict):
+        keys = set(params.keys())
+        if "params" in keys and keys <= {"params"} | _CHECKPOINT_META_KEYS:
+            params = params["params"]
+            continue
+        break
 
+    if isinstance(params, dict):
+        params = {k: v for k, v in params.items() if k not in _CHECKPOINT_META_KEYS}
+
+    # Collapse redundant single-key `params` wrappers from JSON / Flax exports.
+    while (
+        isinstance(params, dict)
+        and set(params.keys()) == {"params"}
+        and isinstance(params.get("params"), dict)
+    ):
+        params = params["params"]
+
+    if not isinstance(params, dict):
+        return {"params": params}
     if "params" not in params:
         return {"params": params}
     return params

@@ -142,6 +142,28 @@ def test_normalize_flax_params_double_wrap_and_bare_tree():
     assert "embedding" in out_double["params"]
 
 
+def test_normalize_flax_params_nested_portable_merge():
+    """Manual merge of an already-portable JSON is unwrapped for model.apply."""
+    bare = _create_synthetic_params()
+    already_portable = {"params": bare, "config": {"features": 64}}
+    wrongly_merged = {
+        "params": already_portable,
+        "config": {"features": 128},
+    }
+    out = normalize_flax_params_for_apply(wrongly_merged["params"], backend="numpy")
+    assert set(out.keys()) == {"params"}
+    assert "embedding" in out["params"]
+    assert "config" not in out
+
+
+def test_normalize_flax_params_strips_config_sibling():
+    bare = _create_synthetic_params()
+    polluted = {"params": bare, "config": {"features": 64}}
+    out = normalize_flax_params_for_apply(polluted, backend="numpy")
+    assert set(out.keys()) == {"params"}
+    assert "embedding" in out["params"]
+
+
 def test_orbax_to_json_with_config_and_metadata(temp_dir):
     """orbax_to_json includes config and metadata when provided."""
     pytest.importorskip("orbax")
