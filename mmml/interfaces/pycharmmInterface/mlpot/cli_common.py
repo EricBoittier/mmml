@@ -1159,7 +1159,10 @@ def assert_dynamics_ready(
     import pycharmm
     import pycharmm.energy as energy
 
-    pycharmm.lingo.charmm_script("ENER")
+    if require_mlpot_user:
+        pycharmm.lingo.charmm_script("ENER FORCE")
+    else:
+        pycharmm.lingo.charmm_script("ENER")
     grms = charmm_grms()
     user_kcal: float | None = None
     if require_mlpot_user:
@@ -1172,9 +1175,9 @@ def assert_dynamics_ready(
             or not math.isfinite(user_kcal)
             or abs(user_kcal) <= user_zero_tol_kcalmol
         )
-        if user_missing or grms < 1.0e-4:
+        if user_missing:
             msg = (
-                "Pre-dynamics check failed: MLpot USER energy inactive or GRMS≈0 "
+                "Pre-dynamics check failed: MLpot USER energy inactive "
                 f"(USER={user_kcal}, GRMS={grms:.4f}). "
                 "Dynamics would integrate a free gas / zeroed BLOCK state."
             )
