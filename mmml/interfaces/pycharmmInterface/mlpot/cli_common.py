@@ -1409,6 +1409,17 @@ def add_staged_md_args(parser: argparse.ArgumentParser) -> None:
         ),
     )
     group.add_argument(
+        "--dyn-imgfrq",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "PBC dynamics: image/HB/extended list rebuild every N steps "
+            "(sets imgfrq, ihbfrq, ilbfrq; default 50). Larger N reduces "
+            "UPDECI/mlpot_update CPU cost; use only when lists stay valid."
+        ),
+    )
+    group.add_argument(
         "--pre-nve-charmm-update",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -1422,6 +1433,14 @@ def add_staged_md_args(parser: argparse.ArgumentParser) -> None:
 def resolve_dyn_inbfrq(args: argparse.Namespace) -> int | None:
     """Explicit ``--dyn-inbfrq`` for dynamics stages, if set."""
     raw = getattr(args, "dyn_inbfrq", None)
+    if raw is None:
+        return None
+    return int(raw)
+
+
+def resolve_dyn_imgfrq(args: argparse.Namespace) -> int | None:
+    """Explicit ``--dyn-imgfrq`` for PBC dynamics (image/HB list cadence)."""
+    raw = getattr(args, "dyn_imgfrq", None)
     if raw is None:
         return None
     return int(raw)

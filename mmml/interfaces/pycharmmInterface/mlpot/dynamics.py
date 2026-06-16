@@ -669,6 +669,26 @@ def apply_dyn_inbfrq_from_args(
         kw["ilbfrq"] = 0
 
 
+def apply_dyn_imgfrq_from_args(
+    kw: dict[str, Any],
+    args: Any,
+    *,
+    charmm_pbc: bool,
+) -> None:
+    """Override PBC image/HB list cadence when ``--dyn-imgfrq`` is set."""
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_dyn_imgfrq
+
+    if not charmm_pbc:
+        return
+    img = resolve_dyn_imgfrq(args)
+    if img is None:
+        return
+    freq = int(img)
+    kw["imgfrq"] = freq
+    kw["ihbfrq"] = freq
+    kw["ilbfrq"] = freq
+
+
 def _strip_crystal_dyn_keywords(kw: dict[str, Any]) -> None:
     """Remove ``ixtfrq`` when no crystal is active (avoids DCNTRL extraneous-keyword warn)."""
     kw.pop("ixtfrq", None)
