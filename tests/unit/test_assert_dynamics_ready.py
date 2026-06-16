@@ -22,7 +22,8 @@ def _install_fake_pycharmm(
     fake_energy.get_term_by_name = lambda name: user_kcal
 
     fake_lingo = types.ModuleType("pycharmm.lingo")
-    fake_lingo.charmm_script = lambda script: None
+    scripts: list[str] = []
+    fake_lingo.charmm_script = lambda script: scripts.append(str(script).strip().upper())
 
     fake_pycharmm = types.ModuleType("pycharmm")
     fake_pycharmm.lingo = fake_lingo
@@ -38,6 +39,34 @@ def test_assert_dynamics_ready_rejects_zero_grms_without_user(monkeypatch):
 
     with pytest.raises(RuntimeError, match="USER energy inactive"):
         assert_dynamics_ready(max_grms=50.0, require_mlpot_user=True)
+
+
+def test_assert_dynamics_ready_accepts_active_mlpot_low_grms(monkeypatch):
+    _install_fake_pycharmm(monkeypatch, grms=0.0, user_kcal=-45817.0)
+
+    grms = assert_dynamics_ready(max_grms=50.0, require_mlpot_user=True)
+    assert grms == pytest.approx(0.0)
+
+
+def test_assert_dynamics_ready_calls_ener_force_when_mlpot_required(monkeypatch):
+    scripts: list[str] = []
+    fake_energy = types.ModuleType("pycharmm.energy")
+    fake_energy.get_grms = lambda: 0.1
+    fake_energy.get_term_by_name = lambda name: -100.0
+
+    fake_lingo = types.ModuleType("pycharmm.lingo")
+    fake_lingo.charmm_script = lambda script: scripts.append(str(script))
+
+    fake_pycharmm = types.ModuleType("pycharmm")
+    fake_pycharmm.lingo = fake_lingo
+    fake_pycharmm.energy = fake_energy
+
+    monkeypatch.setitem(sys.modules, "pycharmm", fake_pycharmm)
+    monkeypatch.setitem(sys.modules, "pycharmm.energy", fake_energy)
+    monkeypatch.setitem(sys.modules, "pycharmm.lingo", fake_lingo)
+
+    assert_dynamics_ready(max_grms=50.0, require_mlpot_user=True)
+    assert scripts == ["ENER FORCE"]
 
 
 def test_assert_dynamics_ready_accepts_active_mlpot(monkeypatch):
