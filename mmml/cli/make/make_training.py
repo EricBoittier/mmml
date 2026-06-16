@@ -85,6 +85,7 @@ See mmml/cli/misc/physnet_train.example.yaml for a template.
     parser.add_argument("--data", type=str, default=None, help="Training NPZ file")
     parser.add_argument(
         "--valid-data",
+        "--valid_data",
         type=str,
         default=None,
         dest="valid_data",
@@ -92,6 +93,7 @@ See mmml/cli/misc/physnet_train.example.yaml for a template.
     )
     parser.add_argument(
         "--ckpt-dir",
+        "--ckpt_dir",
         type=str,
         default=None,
         dest="ckpt_dir",
@@ -105,35 +107,64 @@ See mmml/cli/misc/physnet_train.example.yaml for a template.
         default=None,
         help="Optional model JSON to load instead of creating a new EF model",
     )
-    parser.add_argument("--n-train", type=int, default=1000, dest="n_train")
-    parser.add_argument("--n-valid", type=int, default=100, dest="n_valid")
+    parser.add_argument("--n-train", "--n_train", type=int, default=1000, dest="n_train")
+    parser.add_argument("--n-valid", "--n_valid", type=int, default=100, dest="n_valid")
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--batch-size", type=int, default=1, dest="batch_size")
-    parser.add_argument("--num-epochs", type=int, default=100, dest="num_epochs")
-    parser.add_argument("--learning-rate", type=float, default=0.001, dest="learning_rate")
-    parser.add_argument("--energy-weight", type=float, default=1.0, dest="energy_weight")
-    parser.add_argument("--forces-weight", type=float, default=52.91, dest="forces_weight")
-    parser.add_argument("--dipole-weight", type=float, default=27.21, dest="dipole_weight")
-    parser.add_argument("--charges-weight", type=float, default=14.39, dest="charges_weight")
+    parser.add_argument("--batch-size", "--batch_size", type=int, default=1, dest="batch_size")
+    parser.add_argument("--num-epochs", "--num_epochs", type=int, default=100, dest="num_epochs")
+    parser.add_argument(
+        "--learning-rate", "--learning_rate", type=float, default=0.001, dest="learning_rate"
+    )
+    parser.add_argument(
+        "--energy-weight", "--energy_weight", type=float, default=1.0, dest="energy_weight"
+    )
+    parser.add_argument(
+        "--forces-weight", "--forces_weight", type=float, default=52.91, dest="forces_weight"
+    )
+    parser.add_argument(
+        "--dipole-weight", "--dipole_weight", type=float, default=27.21, dest="dipole_weight"
+    )
+    parser.add_argument(
+        "--charges-weight", "--charges_weight", type=float, default=14.39, dest="charges_weight"
+    )
     parser.add_argument("--objective", type=str, default="valid_loss")
     parser.add_argument("--restart", type=str, default=None, help="Checkpoint path to restart from")
 
     parser.add_argument(
         "--num-atoms",
+        "--num_atoms",
         type=int,
         default=None,
         dest="num_atoms",
         help="Atoms per structure (auto-detected from N/R if omitted)",
     )
     parser.add_argument("--features", type=int, default=64)
-    parser.add_argument("--max-degree", type=int, default=0, dest="max_degree")
-    parser.add_argument("--num-basis-functions", type=int, default=32, dest="num_basis_functions")
-    parser.add_argument("--num-iterations", type=int, default=2, dest="num_iterations")
-    parser.add_argument("--n-res", type=int, default=2, dest="n_res")
+    parser.add_argument("--max-degree", "--max_degree", type=int, default=0, dest="max_degree")
+    parser.add_argument(
+        "--num-basis-functions",
+        "--num_basis_functions",
+        type=int,
+        default=32,
+        dest="num_basis_functions",
+    )
+    parser.add_argument(
+        "--num-iterations",
+        "--num_iterations",
+        type=int,
+        default=2,
+        dest="num_iterations",
+    )
+    parser.add_argument("--n-res", "--n_res", type=int, default=2, dest="n_res")
     parser.add_argument("--cutoff", type=float, default=8.0)
-    parser.add_argument("--max-atomic-number", type=int, default=28, dest="max_atomic_number")
+    parser.add_argument(
+        "--max-atomic-number",
+        "--max_atomic_number",
+        type=int,
+        default=28,
+        dest="max_atomic_number",
+    )
     parser.add_argument("--zbl", action="store_true", default=False)
-    parser.add_argument("--use-pbc", action="store_true", default=False, dest="use_pbc")
+    parser.add_argument("--use-pbc", "--use_pbc", action="store_true", default=False, dest="use_pbc")
     parser.add_argument(
         "--no-energy-bias",
         action="store_false",
@@ -143,8 +174,10 @@ See mmml/cli/misc/physnet_train.example.yaml for a template.
     parser.set_defaults(use_energy_bias=True)
     parser.add_argument(
         "--save-config",
+        "--save_config",
         type=str,
         default=None,
+        dest="save_config",
         help="Write resolved training options to YAML and exit",
     )
     parser.add_argument(
