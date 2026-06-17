@@ -21,6 +21,8 @@ _CONFIG_ALIASES: dict[str, str] = {
     "handoff-write-res": "handoff_write_res",
     "handoff-template-res": "handoff_template_res",
     "no-stage-summary": "no_stage_summary",
+    "campaign_output": "campaign_output_dir",
+    "campaign-output": "campaign_output_dir",
 }
 
 
