@@ -615,8 +615,8 @@ def set_up_nhc_sim_routine(
             dt=dt,
             pressure=pressure,
             kT=kT,
-            barostat_kwargs=default_nhc_kwargs(jnp.array(barostat_tau), nhc_kwargs),
-            thermostat_kwargs=default_nhc_kwargs(jnp.array(nhc_tau * dt), nhc_kwargs),
+            barostat_kwargs=default_nhc_kwargs(as_jaxmd_dtype(barostat_tau), nhc_kwargs),
+            thermostat_kwargs=default_nhc_kwargs(as_jaxmd_dtype(nhc_tau * dt), nhc_kwargs),
         )
         c.print(Panel(
             f"pressure={p_atm:.2f} atm | barostat_tau={barostat_tau:.6f} ps | thermostat tau={nhc_tau * dt:.6f} ps",
@@ -636,7 +636,7 @@ def set_up_nhc_sim_routine(
         init_fn, apply_fn = simulate.nvt_nose_hoover(
             wrapped_force_fn, shift, dt=dt, kT=kT,
             thermostat_kwargs=default_nhc_kwargs(
-                jnp.array(nhc_tau * dt), nhc_kwargs
+                as_jaxmd_dtype(nhc_tau * dt), nhc_kwargs
             ),
         )
         c.print(Panel(
