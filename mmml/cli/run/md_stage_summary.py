@@ -114,13 +114,19 @@ def build_pycharmm_plan_rows(
             ps = float(getattr(args, "ps", 1.0))
             nsteps = _nstep(ps, dt)
         t_first = None
-        t_final = float(getattr(args, "temperature", 300.0))
+        t_final = float(getattr(args, "temperature", 300.0) or 300.0)
         if stage == "heat":
-            t_first = float(getattr(args, "heat_firstt", 0.2 * t_final))
-            t_final = float(getattr(args, "heat_finalt", t_final))
+            from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+                resolve_heat_firstt_finalt,
+            )
+
+            t_first, t_final = resolve_heat_firstt_finalt(args, default_temp=t_final)
         p_atm = None
         if stage in {"equi", "prod"} and str(getattr(args, "setup", "")).endswith("npt"):
-            p_atm = float(getattr(args, "npt_pressure", getattr(args, "pressure", 1.0)))
+            raw_p = getattr(args, "npt_pressure", None)
+            if raw_p is None:
+                raw_p = getattr(args, "pressure", None)
+            p_atm = float(raw_p) if raw_p is not None else None
         rows.append(
             MdStageSummary(
                 stage=stage,

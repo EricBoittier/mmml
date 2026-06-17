@@ -41,6 +41,26 @@ def test_build_single_leg_plan_row() -> None:
     assert row.pressure_atm == pytest.approx(10.0)
 
 
+def test_build_pycharmm_plan_rows_heat_defaults_when_unset() -> None:
+    args = Namespace(
+        setup="pbc_npt",
+        md_stages="mini,heat,equi",
+        dt_fs=0.25,
+        ps_heat=0.1,
+        ps_equi=0.1,
+        temperature=160.0,
+        pressure=1.0,
+        dcd_nsavc=800,
+        mini_nstep=100,
+        heat_firstt=None,
+        heat_finalt=None,
+    )
+    rows = build_pycharmm_plan_rows("equil", args)
+    heat = next(r for r in rows if r.stage == "heat")
+    assert heat.temperature_K == pytest.approx(160.0)
+    assert heat.temperature_first_K == pytest.approx(32.0)
+
+
 def test_build_pycharmm_plan_rows_expands_stages() -> None:
     args = Namespace(
         setup="pbc_npt",
