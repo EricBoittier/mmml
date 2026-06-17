@@ -332,6 +332,47 @@ def _residue_geometries_for_packmol(
     return residue_geometries
 
 
+def _build_cluster_psf_topology_only(
+    composition: list[tuple[str, int]],
+    *,
+    expected_atoms: int,
+    atoms_per_list: list[int],
+    residue_labels: list[str],
+) -> np.ndarray:
+    """Build cluster PSF from composition without make-res monomer geometry work."""
+    if int(sum(atoms_per_list)) != int(expected_atoms):
+        raise RuntimeError(
+            f"Handoff layout atom count ({int(sum(atoms_per_list))}) does not match "
+            f"expected_atoms={int(expected_atoms)}"
+        )
+    if len(atoms_per_list) != len(residue_labels):
+        raise RuntimeError(
+            "Handoff residue label count does not match per-monomer atom layout"
+        )
+
+    sequence_items: list[str] = []
+    for residue, count in composition:
+        sequence_items.extend([residue] * int(count))
+    sequence = " ".join(sequence_items)
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import prepare_charmm_vacuum
+
+    _reset_pycharmm_system()
+    prepare_charmm_vacuum()
+    _read_cgenff_toppar()
+    read.sequence_string(sequence)
+    gen.new_segment(seg_name="CLST", setup_ic=True)
+    ic.prm_fill(replace_all=True)
+    ic.build()
+
+    z = np.asarray(get_Z_from_psf(), dtype=int)
+    if int(len(z)) != int(expected_atoms):
+        raise RuntimeError(
+            f"Composition-derived PSF atom count ({len(z)}) does not match handoff "
+            f"geometry ({int(expected_atoms)}). Composition={composition}"
+        )
+    return z
+
+
 def _build_cluster_psf_from_composition(
     composition: list[tuple[str, int]],
     *,
@@ -1427,6 +1468,7 @@ def main(argv: list[str] | None = None) -> int:
             atomic_numbers=z,
             atoms_per_list=atoms_per_list,
             residue_labels=residue_labels,
+            positions=r0,
             quiet=bool(getattr(args, "quiet", False)),
         )
     psf_charge_summary = _validate_psf_charges(

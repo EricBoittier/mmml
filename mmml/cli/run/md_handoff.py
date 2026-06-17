@@ -201,31 +201,72 @@ def _validate_handoff_psf_layout(
         )
 
 
+def _live_psf_atom_count() -> int:
+    try:
+        import pycharmm.psf as psf
+
+        return int(len(np.asarray(psf.get_charges(), dtype=float)))
+    except Exception:
+        return 0
+
+
+def _live_psf_matches_handoff(n_atoms: int) -> bool:
+    if int(n_atoms) <= 0:
+        return False
+    try:
+        import pycharmm.psf as psf
+
+        charges = np.asarray(psf.get_charges(), dtype=float)
+        return (
+            charges.shape[0] == int(n_atoms)
+            and np.all(np.isfinite(charges))
+        )
+    except Exception:
+        return False
+
+
 def ensure_psf_for_handoff_cluster(
     *,
     composition: list[tuple[str, int]],
     atomic_numbers: np.ndarray,
     atoms_per_list: list[int],
     residue_labels: list[str],
+    positions: np.ndarray | None = None,
     quiet: bool = False,
 ) -> None:
-    """Build CHARMM PSF when cluster geometry was loaded from handoff (no Packmol/PSF build)."""
-    from mmml.cli.run.md_pbc_suite.ase import _build_cluster_psf_from_composition
+    """Ensure CHARMM PSF exists for handoff continuation without destroying a live PSF."""
+    n_atoms = int(len(atomic_numbers))
+    if _live_psf_matches_handoff(n_atoms):
+        if not quiet:
+            print(
+                f"Reusing live CHARMM PSF for handoff continuation ({n_atoms} atoms)",
+                flush=True,
+            )
+        return
 
-    psf_z, _atom_names, psf_atoms_per, psf_residue_labels = _build_cluster_psf_from_composition(
+    from mmml.cli.run.md_pbc_suite.ase import _build_cluster_psf_topology_only
+
+    psf_z = _build_cluster_psf_topology_only(
         composition,
+        expected_atoms=n_atoms,
+        atoms_per_list=atoms_per_list,
+        residue_labels=residue_labels,
     )
     _validate_handoff_psf_layout(
         psf_atomic_numbers=psf_z,
-        psf_atoms_per_list=psf_atoms_per,
-        psf_residue_labels=psf_residue_labels,
+        psf_atoms_per_list=atoms_per_list,
+        psf_residue_labels=residue_labels,
         atomic_numbers=atomic_numbers,
         atoms_per_list=atoms_per_list,
         residue_labels=residue_labels,
     )
+    if positions is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+
+        sync_charmm_positions(np.asarray(positions, dtype=np.float64))
     if not quiet:
         print(
-            f"Built CHARMM PSF from composition for handoff continuation ({len(atomic_numbers)} atoms)",
+            f"Built CHARMM PSF from composition for handoff continuation ({n_atoms} atoms)",
             flush=True,
         )
 
