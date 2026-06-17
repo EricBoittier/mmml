@@ -1,6 +1,5 @@
+import tomllib
 from pathlib import Path
-
-import toml
 
 MAIN_PATH = Path(__file__).resolve().parents[1]
 ANALYSIS_PATH = MAIN_PATH / "analysis"
@@ -17,7 +16,8 @@ if not MAIN_PATH.joinpath("paths.toml").exists():
     pass
 else:
     # read the paths.toml file
-    paths = toml.load(MAIN_PATH / "paths.toml")["paths"]
+    with (MAIN_PATH / "paths.toml").open("rb") as f:
+        paths = tomllib.load(f)["paths"]
 
     if "data" in paths:
         DATA_PATH = Path(paths["data"])
