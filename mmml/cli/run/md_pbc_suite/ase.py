@@ -449,6 +449,30 @@ def packmol_sphere_center_from_args(args: argparse.Namespace) -> tuple[float, fl
     return (0.0, 0.0, 0.0)
 
 
+def resolve_cluster_geometry(
+    args: argparse.Namespace,
+    handoff: Any | None = None,
+) -> tuple[np.ndarray, np.ndarray, list[int], list[str], dict[str, int] | None]:
+    """Build or load cluster geometry; skip Packmol when continuing from handoff."""
+    if handoff is not None:
+        from mmml.cli.run.md_handoff import cluster_geometry_from_handoff
+
+        z, r0, atoms_per_list, residue_labels, composition_summary = (
+            cluster_geometry_from_handoff(
+                handoff,
+                composition=getattr(args, "composition", None),
+                n_molecules=int(getattr(args, "n_molecules", 1) or 1),
+            )
+        )
+        if not getattr(args, "quiet", False):
+            print(
+                f"Continuing from handoff ({len(z)} atoms); skipped Packmol/cluster build",
+                flush=True,
+            )
+        return z, r0, atoms_per_list, residue_labels, composition_summary
+    return build_initial_cluster_from_args(args)
+
+
 def build_initial_cluster_from_args(
     args: argparse.Namespace,
 ) -> tuple[np.ndarray, np.ndarray, list[int], list[str], dict[str, int] | None]:
@@ -1378,13 +1402,10 @@ def main(argv: list[str] | None = None) -> int:
     handoff_in = get_handoff_in()
     skip_pre_min = bool(handoff_in is not None and not getattr(args, "handoff_pre_minimize", False))
 
-    z, r0, atoms_per_list, residue_labels, composition_summary = build_initial_cluster_from_args(
-        args
+    z, r0, atoms_per_list, residue_labels, composition_summary = resolve_cluster_geometry(
+        args,
+        handoff_in,
     )
-    if handoff_in is not None:
-        r0 = np.asarray(handoff_in.positions, dtype=float)
-        if handoff_in.atomic_numbers is not None and int(handoff_in.atomic_numbers.sum()) > 0:
-            z = np.asarray(handoff_in.atomic_numbers, dtype=int)
     n_molecules = len(atoms_per_list)
     cluster_build_s = _tmark() - t_c0
     _tlog(f"cluster_build: {cluster_build_s:.3f} s", timing_log)

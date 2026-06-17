@@ -114,6 +114,61 @@ def handoff_from_charmm(
     )
 
 
+def cluster_layout_from_composition_string(
+    composition: str,
+    *,
+    n_atoms: int,
+) -> tuple[list[int], list[str], dict[str, int]]:
+    """Per-monomer atom counts from ``RES:COUNT`` composition and handoff size."""
+    parts = [p.strip() for p in str(composition).split(",") if p.strip()]
+    comp: list[tuple[str, int]] = []
+    for part in parts:
+        if ":" not in part:
+            raise ValueError(f"invalid composition token {part!r}; use RES:COUNT")
+        res, cnt = part.split(":", 1)
+        comp.append((res.strip().upper(), int(cnt)))
+    composition_summary = {res: int(cnt) for res, cnt in comp}
+    n_mol = sum(composition_summary.values())
+    if n_mol <= 0:
+        raise ValueError("composition must include at least one monomer")
+    if int(n_atoms) % int(n_mol) != 0:
+        raise ValueError(
+            f"handoff has {n_atoms} atoms but composition implies {n_mol} monomers "
+            "(atom count not divisible by monomer count)"
+        )
+    per = int(n_atoms) // int(n_mol)
+    atoms_per_list = [per] * n_mol
+    residue_labels = [res for res, cnt in comp for _ in range(int(cnt))]
+    return atoms_per_list, residue_labels, composition_summary
+
+
+def cluster_geometry_from_handoff(
+    handoff: MdHandoffState,
+    *,
+    composition: str | None = None,
+    n_molecules: int = 1,
+) -> tuple[np.ndarray, np.ndarray, list[int], list[str], dict[str, int]]:
+    """Positions/Z and per-monomer layout from handoff (no Packmol)."""
+    z = np.asarray(handoff.atomic_numbers, dtype=np.int32)
+    r0 = np.asarray(handoff.positions, dtype=np.float64)
+    if composition:
+        atoms_per_list, residue_labels, composition_summary = (
+            cluster_layout_from_composition_string(composition, n_atoms=len(z))
+        )
+    else:
+        n_mol = int(n_molecules)
+        if len(z) % n_mol != 0:
+            raise ValueError(
+                f"handoff has {len(z)} atoms but n_molecules={n_mol} "
+                "(atom count not divisible by monomer count)"
+            )
+        per = len(z) // n_mol
+        atoms_per_list = [per] * n_mol
+        residue_labels = ["MEOH"] * n_mol
+        composition_summary = {"MEOH": n_mol}
+    return z, r0, atoms_per_list, residue_labels, composition_summary
+
+
 def apply_handoff_to_atoms(atoms: Any, handoff: MdHandoffState) -> None:
     atoms.set_positions(handoff.positions)
     if handoff.atomic_numbers is not None and handoff.atomic_numbers.any():

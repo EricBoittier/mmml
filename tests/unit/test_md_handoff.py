@@ -32,6 +32,35 @@ def test_detect_handoff_format_res(nve_stub: Path) -> None:
     assert detect_handoff_format(nve_stub) == "res"
 
 
+def test_cluster_geometry_from_handoff_skips_packmol_layout() -> None:
+    from mmml.cli.run.md_handoff import MdHandoffState, cluster_geometry_from_handoff
+
+    handoff = MdHandoffState(
+        positions=np.zeros((100, 3), dtype=float),
+        atomic_numbers=np.array([6, 1, 1, 1, 1] * 20, dtype=int),
+        cell=np.diag([38.0, 38.0, 38.0]),
+        pbc=True,
+    )
+    z, r0, per, labels, summary = cluster_geometry_from_handoff(
+        handoff,
+        composition="DCM:20",
+    )
+    assert len(z) == 100
+    assert per == [5] * 20
+    assert labels == ["DCM"] * 20
+    assert summary == {"DCM": 20}
+    assert r0.shape == (100, 3)
+
+
+def test_pycharmm_stage_dcd_frames_counts_overlap_chunks(tmp_path: Path) -> None:
+    from mmml.cli.run.md_stage_summary import pycharmm_stage_dcd_frames
+
+    out = tmp_path
+    (out / "equi_dcm_20.chunk.0000.dcd").write_bytes(b"")
+    (out / "equi_dcm_20.chunk.0001.dcd").write_bytes(b"")
+    assert pycharmm_stage_dcd_frames(out, "equi", "dcm_20") == 0
+
+
 def test_load_handoff_from_res_round_trip_coords(nve_stub: Path) -> None:
     handoff = load_handoff_from_res(nve_stub)
     assert handoff.positions.shape == (20, 3)

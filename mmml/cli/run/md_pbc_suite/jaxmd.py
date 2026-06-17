@@ -31,7 +31,7 @@ from .ase import (
     _run_charmm_minimize,
     _validate_psf_charges,
     build_initial_cluster_from_args,
-    resolve_cluster_packmol_sphere,
+    resolve_cluster_geometry,
 )
 
 
@@ -356,13 +356,10 @@ def main(argv: list[str] | None = None) -> int:
     handoff_in = get_handoff_in()
     skip_pre_min = bool(handoff_in is not None and not getattr(args, "handoff_pre_minimize", False))
 
-    z, r0, atoms_per_list, residue_labels, _composition_summary = build_initial_cluster_from_args(
-        args
+    z, r0, atoms_per_list, residue_labels, _composition_summary = resolve_cluster_geometry(
+        args,
+        handoff_in,
     )
-    if handoff_in is not None:
-        r0 = np.asarray(handoff_in.positions, dtype=float)
-        if handoff_in.atomic_numbers is not None and int(handoff_in.atomic_numbers.sum()) > 0:
-            z = np.asarray(handoff_in.atomic_numbers, dtype=int)
     n_molecules = len(atoms_per_list)
     if args.composition:
         composition = _parse_composition(args.composition)
