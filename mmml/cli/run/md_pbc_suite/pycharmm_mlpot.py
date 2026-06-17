@@ -119,10 +119,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="CHARMM selection for MMFP wall (default: all; DCM: use 'TYPE C').",
     )
     parser.add_argument(
+        "--packmol-placement",
+        choices=("cube", "sphere"),
+        default=None,
+        help="Packmol constraint: cube (default) or sphere (--packmol-radius).",
+    )
+    parser.add_argument(
         "--packmol-sphere",
         action=argparse.BooleanOptionalAction,
         default=None,
-        help="Pack --composition inside a sphere with Packmol",
+        dest="packmol_sphere",
+        help="Legacy alias for --packmol-placement sphere.",
     )
     parser.add_argument(
         "--packmol-radius",
