@@ -178,6 +178,22 @@ def test_resolve_heat_firstt_finalt_dcm9_soft():
     assert resolve_heat_firstt_finalt(args, default_temp=300.0) == (0.0, 240.0)
 
 
+def test_resolve_stage_ps_handles_explicit_none():
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_stage_ps
+
+    args = argparse.Namespace(
+        ps=1.0,
+        ps_prod=None,
+        ps_equi=None,
+        ps_heat=None,
+        ps_nve=None,
+    )
+    assert resolve_stage_ps(args, "prod") == 1.0
+    assert resolve_stage_ps(args, "equi") == 50.0
+    assert resolve_stage_ps(args, "heat") == 10.0
+    assert resolve_stage_ps(args, "nve") == 1.0
+
+
 def test_recommend_echeck_kcal_medium_cluster():
     assert recommend_echeck_kcal(20, 100) == 1000.0
 
