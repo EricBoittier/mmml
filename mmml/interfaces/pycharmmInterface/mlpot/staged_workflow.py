@@ -20,7 +20,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     print_vmd_load_help,
     resolve_checkpoint,
     resolve_constrain_resids,
-    resolve_dcd_nsavc,
+    resolve_dcd_nsavc_for_args,
     resolve_dynamics_print_kwargs,
     resolve_heat_firstt_finalt,
     resolve_heat_hoover_tmass,
@@ -988,9 +988,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         sync_charmm_positions(r)
     elif "mini" in stages and not getattr(args, "skip_cluster_build", False):
         save_mini = bool(getattr(args, "save", True))
-        mini_dcd_nsavc = resolve_dcd_nsavc(
-            dcd_nsavc=args.dcd_nsavc, nstep=mini_nstep
-        )
+        mini_dcd_nsavc = resolve_dcd_nsavc_for_args(args, nstep=mini_nstep)
         r = _charmm_pre_minimize_before_mlpot(
             args,
             nprint=mini_nprint,
@@ -1058,9 +1056,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         if "mini" in stages:
             fix_sel = select_by_resids(fix_resids) if fix_resids else None
             save_mini = bool(getattr(args, "save", True))
-            mini_dcd_nsavc = resolve_dcd_nsavc(
-                dcd_nsavc=args.dcd_nsavc, nstep=mini_nstep
-            )
+            mini_dcd_nsavc = resolve_dcd_nsavc_for_args(args, nstep=mini_nstep)
             if not args.quiet:
                 print(
                     f"\nMLpot SD minimize: {mini_nstep} steps/pass, {n_atoms} atoms",
@@ -1191,11 +1187,8 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 for seg_i, seg_io in enumerate(seg_chain):
                     seg_ps = _stage_ps(args, "heat") / n_heat_segments
                     nstep = dynamics_nstep_from_ps(seg_ps, dt_fs)
-                    dcd_nsavc = resolve_dcd_nsavc(
-                        dcd_nsavc=args.dcd_nsavc,
-                        dcd_interval_ps=getattr(args, "dcd_interval_ps", None),
-                        timestep_ps=timestep_ps,
-                        nstep=nstep,
+                    dcd_nsavc = resolve_dcd_nsavc_for_args(
+                        args, timestep_ps=timestep_ps, nstep=nstep
                     )
                     dyn_print = resolve_dynamics_print_kwargs(args, nstep=nstep)
                     save_interval_ps = timestep_ps * dcd_nsavc
@@ -1448,11 +1441,8 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 for seg_i, seg_io in enumerate(seg_chain):
                     seg_ps = _stage_ps(args, "equi") / n_equi_segments
                     nstep = dynamics_nstep_from_ps(seg_ps, dt_fs)
-                    dcd_nsavc = resolve_dcd_nsavc(
-                        dcd_nsavc=args.dcd_nsavc,
-                        dcd_interval_ps=getattr(args, "dcd_interval_ps", None),
-                        timestep_ps=timestep_ps,
-                        nstep=nstep,
+                    dcd_nsavc = resolve_dcd_nsavc_for_args(
+                        args, timestep_ps=timestep_ps, nstep=nstep
                     )
                     dyn_print = resolve_dynamics_print_kwargs(args, nstep=nstep)
                     save_interval_ps = timestep_ps * dcd_nsavc
@@ -1560,11 +1550,8 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 for seg_i, seg_io in enumerate(seg_chain):
                     seg_ps = _stage_ps(args, "prod") / n_prod_segments
                     nstep = dynamics_nstep_from_ps(seg_ps, dt_fs)
-                    dcd_nsavc = resolve_dcd_nsavc(
-                        dcd_nsavc=args.dcd_nsavc,
-                        dcd_interval_ps=getattr(args, "dcd_interval_ps", None),
-                        timestep_ps=timestep_ps,
-                        nstep=nstep,
+                    dcd_nsavc = resolve_dcd_nsavc_for_args(
+                        args, timestep_ps=timestep_ps, nstep=nstep
                     )
                     dyn_print = resolve_dynamics_print_kwargs(args, nstep=nstep)
                     save_interval_ps = timestep_ps * dcd_nsavc
@@ -1664,11 +1651,8 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
 
             stage_ps = _stage_ps(args, stage)
             nstep = dynamics_nstep_from_ps(stage_ps, dt_fs)
-            dcd_nsavc = resolve_dcd_nsavc(
-                dcd_nsavc=args.dcd_nsavc,
-                dcd_interval_ps=getattr(args, "dcd_interval_ps", None),
-                timestep_ps=timestep_ps,
-                nstep=nstep,
+            dcd_nsavc = resolve_dcd_nsavc_for_args(
+                args, timestep_ps=timestep_ps, nstep=nstep
             )
             dyn_print = resolve_dynamics_print_kwargs(args, nstep=nstep)
             save_interval_ps = timestep_ps * dcd_nsavc

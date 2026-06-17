@@ -66,6 +66,29 @@ def ps_from_nsteps(nsteps: int, dt_fs: float) -> float:
     return float(nsteps) * float(dt_fs) / 1000.0
 
 
+def pycharmm_trajectory_tag(args: Any) -> str:
+    """Filename tag used by staged PyCHARMM artifacts (e.g. ``dcm_20``)."""
+    comp = getattr(args, "composition", None)
+    if comp:
+        return str(comp).strip().lower().replace(":", "_")
+    residue = str(getattr(args, "residue", "cluster") or "cluster").lower()
+    n_mol = int(getattr(args, "n_molecules", 1) or 1)
+    return f"{residue}_{n_mol}"
+
+
+def pycharmm_stage_dcd_frames(output_dir: Path, stage: str, tag: str) -> int:
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        count_readable_dcd_frames,
+    )
+
+    out = Path(output_dir)
+    for name in (f"{stage}_{tag}.dcd", f"charmm_mm_{stage}_{tag}.dcd"):
+        path = out / name
+        if path.is_file():
+            return int(count_readable_dcd_frames(path))
+    return 0
+
+
 def cubic_box_side_from_cell(cell: Any) -> float | None:
     if cell is None:
         return None
@@ -91,6 +114,7 @@ def build_pycharmm_plan_rows(
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
         dynamics_nstep_from_ps as _nstep,
         opt_attr,
+        resolve_dcd_nsavc,
         resolve_dt_fs,
         resolve_heat_firstt_finalt,
         resolve_stage_pressure_atm,
@@ -99,6 +123,7 @@ def build_pycharmm_plan_rows(
     )
 
     dt = resolve_dt_fs(args)
+    timestep_ps = float(dt) / 1000.0
     stages = str(opt_attr(args, "md_stages", "") or "").split(",")
     stages = [s.strip() for s in stages if s.strip()]
     if not stages:
@@ -117,6 +142,14 @@ def build_pycharmm_plan_rows(
             t_first, t_final = resolve_heat_firstt_finalt(args, default_temp=t_final)
         p_atm = resolve_stage_pressure_atm(args, stage)
         box_raw = opt_attr(args, "box_size", None)
+        dcd_max = opt_attr(args, "dcd_max_frames", 25)
+        record_every = resolve_dcd_nsavc(
+            dcd_nsavc=int(opt_attr(args, "dcd_nsavc", 1) or 1),
+            dcd_interval_ps=opt_attr(args, "dcd_interval_ps", None),
+            timestep_ps=timestep_ps,
+            nstep=nsteps if nsteps > 0 else None,
+            dcd_max_frames=dcd_max,
+        )
         rows.append(
             MdStageSummary(
                 stage=stage,
@@ -132,7 +165,7 @@ def build_pycharmm_plan_rows(
                 temperature_first_K=t_first,
                 pressure_atm=p_atm,
                 box_A_initial=float(box_raw) if box_raw is not None else None,
-                record_every_steps=int(opt_attr(args, "dcd_nsavc", 1) or 1),
+                record_every_steps=record_every,
                 integrator=stage,
                 status="planned",
                 description=description,

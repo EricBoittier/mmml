@@ -56,3 +56,69 @@ def test_merge_campaign_job_config_defaults() -> None:
     assert merged["composition"] == "DCM:5"
     assert merged["depends_on"] == "equil"
     assert merged["backend"] == "jaxmd"
+
+
+def test_namespace_from_merged_keeps_extra_args_last() -> None:
+    from mmml.cli.run.md_campaign import namespace_from_merged
+
+    merged = merge_campaign_job_config(_sample_campaign(), "prod")
+    merged["continue_from"] = "/tmp/handoff/state.npz"
+    merged["extra_args"] = ["--steps-per-recording", "800"]
+    args = namespace_from_merged(merged)
+    assert getattr(args, "continue_from", None) is None
+    assert args.extra_args == ["--steps-per-recording", "800"]
+    assert "--job-id" not in args.extra_args
+    assert "--continue-from" not in args.extra_args
+
+
+def test_build_command_filters_campaign_flags_from_extra_args() -> None:
+    from argparse import Namespace
+
+    from mmml.cli.run.md_system import build_command
+
+    args = Namespace(
+        backend="jaxmd",
+        setup="pbc_nvt",
+        composition="DCM:20",
+        spacing=5.0,
+        ps=1.0,
+        dt_fs=0.25,
+        temperature=160.0,
+        pressure=1.0,
+        traj_chunk_frames=0,
+        n_molecules=1,
+        box_size=40.0,
+        checkpoint="/tmp/ckpt.json",
+        output_dir="/tmp/out",
+        template_pdb=None,
+        seed=123,
+        min_intermonomer_atom_distance=0.1,
+        packmol_sphere=True,
+        packmol_radius=10.0,
+        packmol_tolerance=2.0,
+        packmol_center=None,
+        flat_bottom_radius=None,
+        nvt_integrator="nhc",
+        traj_export_molecular_wrap=False,
+        extra_args=[
+            "--steps-per-recording",
+            "800",
+            "--job-id",
+            "jaxmd_prod",
+            "--continue-from",
+            "/tmp/state.npz",
+        ],
+    )
+    backend, argv = build_command(args)
+    assert backend == "jaxmd"
+    assert "--job-id" not in argv
+    assert "--continue-from" not in argv
+    assert "--steps-per-recording" in argv
+
+
+def test_resolve_dcd_nsavc_caps_frames_for_short_legs() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_dcd_nsavc
+
+    assert resolve_dcd_nsavc(dcd_nsavc=1, nstep=400, dcd_max_frames=25) == 16
+    assert resolve_dcd_nsavc(dcd_nsavc=1, nstep=400, dcd_max_frames=0) == 1
+    assert resolve_dcd_nsavc(dcd_nsavc=500, nstep=4000, dcd_max_frames=25) == 500

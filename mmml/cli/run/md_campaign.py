@@ -50,13 +50,40 @@ def _resolve_output_dir(merged: dict[str, Any], run_id: str) -> Path:
     return (Path(str(root)) / run_id).resolve()
 
 
+_CAMPAIGN_ONLY_KEYS = frozenset(
+    {
+        "description",
+        "depends_on",
+        "repeat",
+        "optional",
+        "integrator",
+        "pbc",
+        "handoff_write_res",
+        "config",
+        "run_all",
+        "resume_campaign",
+        "campaign_output_dir",
+        "job_id",
+        "job_name",
+        "continue_from",
+        "continue_from_frame",
+        "no_stage_summary",
+        "handoff_template_res",
+        "handoff_pre_minimize",
+    }
+)
+
+
 def namespace_from_merged(merged: dict[str, Any]) -> Namespace:
     from mmml.cli.run import md_system
 
     argv: list[str] = []
-    skip = {"description", "depends_on", "repeat", "optional", "integrator", "pbc", "handoff_write_res"}
+    extra_tail: list[str] = []
+    raw_extra = merged.get("extra_args")
+    if raw_extra:
+        extra_tail.extend(["--extra-args", *[str(x) for x in raw_extra]])
     for key, value in merged.items():
-        if key in skip or value is None:
+        if key in _CAMPAIGN_ONLY_KEYS or value is None or key == "extra_args":
             continue
         flag = f"--{key.replace('_', '-')}"
         if isinstance(value, bool):
@@ -76,6 +103,7 @@ def namespace_from_merged(merged: dict[str, Any]) -> Namespace:
                 argv.extend(str(v) for v in value)
         else:
             argv.extend([flag, str(value)])
+    argv.extend(extra_tail)
     old = sys.argv[:]
     sys.argv = ["md-system", *argv]
     try:
