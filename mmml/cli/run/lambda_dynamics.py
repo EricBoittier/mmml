@@ -274,23 +274,39 @@ def build_cluster_system(cfg: LambdaDynamicsConfig) -> ClusterContext:
     md = md_suite
 
     if cfg.composition:
-        from mmml.interfaces.pycharmmInterface.packmol_placement import resolve_packmol_sphere_use
+        from mmml.interfaces.pycharmmInterface.packmol_placement import (
+            resolve_packmol_cube_side,
+            resolve_packmol_placement_mode,
+            resolve_packmol_sphere_radius,
+            resolve_packmol_use,
+        )
 
         composition = md._parse_composition(cfg.composition)
-        use_packmol = resolve_packmol_sphere_use(
+        use_packmol = resolve_packmol_use(
             composition=cfg.composition,
-            packmol_radius=cfg.packmol_radius,
-            flat_bottom_radius=cfg.flat_bottom_radius,
-            packmol_sphere=cfg.packmol_sphere,
+            packmol=getattr(cfg, "packmol", None),
         )
         if use_packmol:
-            from mmml.interfaces.pycharmmInterface.packmol_placement import resolve_packmol_sphere_radius
-
-            radius = resolve_packmol_sphere_radius(cfg.packmol_radius, cfg.flat_bottom_radius)
+            placement = resolve_packmol_placement_mode(
+                packmol_placement=getattr(cfg, "packmol_placement", None),
+                packmol_sphere=cfg.packmol_sphere,
+            )
             center = cfg.packmol_center if cfg.packmol_center is not None else (0.0, 0.0, 0.0)
+            cube_side: float | None = None
+            radius: float | None = None
+            if placement == "sphere":
+                radius = resolve_packmol_sphere_radius(cfg.packmol_radius, cfg.flat_bottom_radius)
+            else:
+                cube_side = resolve_packmol_cube_side(
+                    box_size=cfg.box_size,
+                    packmol_radius=cfg.packmol_radius,
+                    flat_bottom_radius=cfg.flat_bottom_radius,
+                )
             z, r0, atoms_per_list, residue_labels = md._build_cluster_from_composition_packmol(
                 composition=composition,
+                placement=placement,
                 center=center,
+                cube_side=cube_side,
                 radius=radius,
                 tolerance=float(cfg.packmol_tolerance),
                 seed=int(cfg.seed),
@@ -324,13 +340,14 @@ def build_cluster_system(cfg: LambdaDynamicsConfig) -> ClusterContext:
     monomer_offsets = np.zeros(n_monomers + 1, dtype=int)
     monomer_offsets[1:] = np.cumsum(np.asarray(atoms_per_list, dtype=int))
 
-    from mmml.interfaces.pycharmmInterface.packmol_placement import resolve_packmol_sphere_use
+    from mmml.interfaces.pycharmmInterface.packmol_placement import resolve_packmol_use
 
-    if not resolve_packmol_sphere_use(
-        composition=cfg.composition,
-        packmol_radius=cfg.packmol_radius,
-        flat_bottom_radius=cfg.flat_bottom_radius,
-        packmol_sphere=cfg.packmol_sphere,
+    if (
+        not resolve_packmol_use(
+            composition=cfg.composition,
+            packmol=getattr(cfg, "packmol", None),
+        )
+        and cfg.composition
     ):
         r0 = md._randomize_monomer_com_positions(
             r0,

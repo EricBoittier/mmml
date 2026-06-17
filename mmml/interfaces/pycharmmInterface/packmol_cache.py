@@ -1,4 +1,4 @@
-"""Disk cache for Packmol sphere cluster builds (monomer MM + Packmol + cluster MM)."""
+"""Disk cache for Packmol cluster builds (monomer MM + Packmol + cluster MM)."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from typing import Any
 
 import numpy as np
 
-CACHE_VERSION = 1
+CACHE_VERSION = 2
 
 
 def packmol_cache_root(
@@ -33,8 +33,10 @@ def packmol_cache_root(
 def packmol_cache_key(
     *,
     composition: list[tuple[str, int]],
+    placement: str,
     center: tuple[float, float, float],
-    radius: float,
+    cube_side: float | None = None,
+    radius: float | None = None,
     tolerance: float,
     seed: int | None,
     charmm_sd_steps: int,
@@ -46,8 +48,10 @@ def packmol_cache_key(
     payload: dict[str, Any] = {
         "version": CACHE_VERSION,
         "composition": [[str(r).upper(), int(n)] for r, n in composition],
+        "placement": str(placement),
         "center": [float(c) for c in center],
-        "radius": float(radius),
+        "cube_side": None if cube_side is None else float(cube_side),
+        "radius": None if radius is None else float(radius),
         "tolerance": float(tolerance),
         "seed": None if seed is None else int(seed),
         "charmm_sd_steps": int(charmm_sd_steps),
@@ -161,8 +165,10 @@ def load_packmol_cluster_cache(entry_dir: Path) -> dict[str, Any] | None:
 def try_load_packmol_cluster_cache(
     *,
     composition: list[tuple[str, int]],
+    placement: str,
     center: tuple[float, float, float],
-    radius: float,
+    cube_side: float | None = None,
+    radius: float | None = None,
     tolerance: float,
     seed: int | None,
     charmm_sd_steps: int,
@@ -173,7 +179,9 @@ def try_load_packmol_cluster_cache(
 ) -> dict[str, Any] | None:
     key = packmol_cache_key(
         composition=composition,
+        placement=placement,
         center=center,
+        cube_side=cube_side,
         radius=radius,
         tolerance=tolerance,
         seed=seed,

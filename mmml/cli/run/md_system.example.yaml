@@ -12,7 +12,7 @@
 # checkpoint: /path/to/DESdimers_params.json
 # output_dir: results/jaxmd_single
 # box_size: 38.0
-# packmol_radius: 20
+# packmol_placement: cube  # default; use sphere + packmol_radius for legacy sphere packing
 # dt_fs: 0.25
 # temperature: 260.0
 # pressure: 10.0
@@ -20,10 +20,11 @@
 # seed: 123
 
 # --- Campaign: PyCHARMM equil → JAX-MD prod → PyCHARMM prod ---------------
+# box_size: Packmol inside-cube edge length (Å) and PBC cell side
+# packmol_radius: optional legacy fallback (cube side = 2× radius when box_size unset)
 defaults:
   composition: "DCM:20"
   checkpoint: /mmhome/boittier/home/mmml/examples/ckpts_json/DESdimers_params.json
-  packmol_radius: 20
   box_size: 38.0
   dt_fs: 0.25
   temperature: 160.0

@@ -436,8 +436,10 @@ def _build_cluster_psf_from_composition(
 def _build_cluster_from_composition_packmol(
     *,
     composition: list[tuple[str, int]],
+    placement: str = "cube",
     center: tuple[float, float, float],
-    radius: float,
+    cube_side: float | None = None,
+    radius: float | None = None,
     tolerance: float = 2.0,
     seed: int | None = None,
     charmm_sd_steps: int = 50,
@@ -454,7 +456,9 @@ def _build_cluster_from_composition_packmol(
 
     return build_packmol_composition_cluster(
         composition=composition,
+        placement=placement,
         center=center,
+        cube_side=cube_side,
         radius=radius,
         tolerance=tolerance,
         seed=seed,
@@ -470,15 +474,18 @@ def _build_cluster_from_composition_packmol(
     )
 
 
-def resolve_cluster_packmol_sphere(args: argparse.Namespace) -> bool:
-    from mmml.interfaces.pycharmmInterface.packmol_placement import resolve_packmol_sphere_use
+def resolve_cluster_packmol(args: argparse.Namespace) -> bool:
+    from mmml.interfaces.pycharmmInterface.packmol_placement import resolve_packmol_use
 
-    return resolve_packmol_sphere_use(
+    return resolve_packmol_use(
         composition=getattr(args, "composition", None),
-        packmol_radius=getattr(args, "packmol_radius", None),
-        flat_bottom_radius=getattr(args, "flat_bottom_radius", None),
-        packmol_sphere=getattr(args, "packmol_sphere", None),
+        packmol=getattr(args, "packmol", None),
     )
+
+
+def resolve_cluster_packmol_sphere(args: argparse.Namespace) -> bool:
+    """Backward-compatible alias: True when any Packmol placement is active."""
+    return resolve_cluster_packmol(args)
 
 
 def packmol_sphere_center_from_args(args: argparse.Namespace) -> tuple[float, float, float]:
@@ -518,28 +525,48 @@ def build_initial_cluster_from_args(
     args: argparse.Namespace,
 ) -> tuple[np.ndarray, np.ndarray, list[int], list[str], dict[str, int] | None]:
     """Build cluster geometry; returns z, r0, atoms_per_list, residue_labels, composition_summary."""
-    use_packmol = resolve_cluster_packmol_sphere(args)
+    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+        resolve_packmol_cube_side,
+        resolve_packmol_placement_mode,
+        resolve_packmol_sphere_radius,
+    )
+
+    use_packmol = resolve_cluster_packmol(args)
     if use_packmol and not args.composition:
         raise ValueError(
-            "Spherical Packmol placement requires --composition (e.g. MEOH:30) "
-            "and --packmol-radius (Å)."
+            "Packmol placement requires --composition (e.g. MEOH:30) "
+            "and --box-size (Å) for cube packing."
         )
 
     if args.composition:
         composition = _parse_composition(args.composition)
         composition_summary = {res: int(cnt) for res, cnt in composition}
         if use_packmol:
-            from mmml.interfaces.pycharmmInterface.packmol_placement import resolve_packmol_sphere_radius
-
-            radius = resolve_packmol_sphere_radius(
-                getattr(args, "packmol_radius", None),
-                getattr(args, "flat_bottom_radius", None),
+            placement = resolve_packmol_placement_mode(
+                packmol_placement=getattr(args, "packmol_placement", None),
+                packmol_sphere=getattr(args, "packmol_sphere", None),
             )
             center = packmol_sphere_center_from_args(args)
             tolerance = float(getattr(args, "packmol_tolerance", 2.0))
+            cube_side: float | None = None
+            radius: float | None = None
+            if placement == "sphere":
+                radius = resolve_packmol_sphere_radius(
+                    getattr(args, "packmol_radius", None),
+                    getattr(args, "flat_bottom_radius", None),
+                )
+            else:
+                cube_side = resolve_packmol_cube_side(
+                    box_size=getattr(args, "box_size", None),
+                    packmol_box_size=getattr(args, "packmol_box_size", None),
+                    packmol_radius=getattr(args, "packmol_radius", None),
+                    flat_bottom_radius=getattr(args, "flat_bottom_radius", None),
+                )
             z, r0, atoms_per_list, residue_labels = _build_cluster_from_composition_packmol(
                 composition=composition,
+                placement=placement,
                 center=center,
+                cube_side=cube_side,
                 radius=radius,
                 tolerance=tolerance,
                 seed=int(getattr(args, "seed", 0)),
@@ -548,21 +575,33 @@ def build_initial_cluster_from_args(
                 charmm_tolenr=float(getattr(args, "charmm_tolenr", 1e-3)),
                 charmm_tolgrd=float(getattr(args, "charmm_tolgrd", 1e-3)),
                 scratch_dir=(
-                    Path(args.output_dir) / "packmol_sphere"
+                    Path(args.output_dir) / "packmol_cluster"
                     if getattr(args, "output_dir", None) is not None
                     else None
                 ),
                 verbose=not getattr(args, "quiet", False),
+                reuse_packmol_cache=bool(getattr(args, "reuse_packmol_cache", True)),
+                packmol_cache_dir=getattr(args, "packmol_cache_dir", None),
+                force_rebuild_packmol_cache=bool(
+                    getattr(args, "rebuild_packmol", False)
+                ),
             )
-            fb_r = getattr(args, "flat_bottom_radius", None)
-            print(
-                f"Cluster built with Packmol sphere: center={center}, packmol_radius={radius:.3f} Å"
-                + (
-                    f", flat_bottom_radius={float(fb_r):.3f} Å"
-                    if fb_r is not None and float(fb_r) > 0
-                    else ""
+            if placement == "sphere":
+                fb_r = getattr(args, "flat_bottom_radius", None)
+                print(
+                    f"Cluster built with Packmol sphere: center={center}, "
+                    f"packmol_radius={radius:.3f} Å"
+                    + (
+                        f", flat_bottom_radius={float(fb_r):.3f} Å"
+                        if fb_r is not None and float(fb_r) > 0
+                        else ""
+                    )
                 )
-            )
+            else:
+                print(
+                    f"Cluster built with Packmol cube: center={center}, "
+                    f"side={cube_side:.3f} Å, tol={tolerance:.1f} Å"
+                )
         else:
             z, r0, atoms_per_list, residue_labels = _build_cluster_from_composition(
                 composition=composition,
@@ -1285,14 +1324,26 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--langevin-friction", type=float, default=0.02)
     parser.add_argument("--seed", type=int, default=123)
     parser.add_argument(
+        "--packmol",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Pack --composition with Packmol (default cube inside --box-size). "
+            "Use --no-packmol for legacy grid placement."
+        ),
+    )
+    parser.add_argument(
+        "--packmol-placement",
+        choices=("cube", "sphere"),
+        default=None,
+        help="Packmol constraint: cube (default) or sphere (--packmol-radius).",
+    )
+    parser.add_argument(
         "--packmol-sphere",
         action=argparse.BooleanOptionalAction,
         default=None,
         dest="packmol_sphere",
-        help=(
-            "Pack --composition inside a sphere with Packmol (--packmol-radius). "
-            "Default: on when --composition and --packmol-radius (or legacy: --flat-bottom-radius) are set."
-        ),
+        help="Legacy alias for --packmol-placement sphere.",
     )
     parser.add_argument(
         "--packmol-radius",

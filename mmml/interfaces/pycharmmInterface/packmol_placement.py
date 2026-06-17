@@ -1,12 +1,15 @@
-"""Packmol input generation and spherical cluster placement (no PyCHARMM import)."""
+"""Packmol input generation and cluster placement (cube or sphere; no PyCHARMM import)."""
 
 from __future__ import annotations
 
 import os
 import shutil
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
+
+PackmolPlacement = Literal["cube", "sphere"]
 
 PACKMOL_PATH = Path("~/mmml/mmml/generate/packmol/packmol").expanduser()
 
@@ -42,26 +45,81 @@ def execute_packmol_script(packmol_input: str, inp_path: Path) -> None:
         raise RuntimeError(f"packmol failed with exit code {ret}")
 
 
+def resolve_packmol_use(
+    *,
+    composition: str | None,
+    packmol: bool | None = None,
+) -> bool:
+    """Use Packmol for ``--composition`` unless explicitly disabled with ``--no-packmol``."""
+    if packmol is False:
+        return False
+    return composition is not None
+
+
+def resolve_packmol_placement_mode(
+    *,
+    packmol_placement: str | None = None,
+    packmol_sphere: bool | None = None,
+) -> PackmolPlacement:
+    """Return ``cube`` (default) or ``sphere`` (legacy ``--packmol-sphere``)."""
+    if packmol_placement is not None:
+        mode = str(packmol_placement).strip().lower()
+        if mode in ("cube", "sphere"):
+            return mode  # type: ignore[return-value]
+        raise ValueError(
+            f"Invalid packmol placement {packmol_placement!r}; expected 'cube' or 'sphere'."
+        )
+    if packmol_sphere is True:
+        return "sphere"
+    return "cube"
+
+
+def resolve_packmol_cube_side(
+    *,
+    box_size: float | None = None,
+    packmol_box_size: float | None = None,
+    packmol_radius: float | None = None,
+    flat_bottom_radius: float | None = None,
+) -> float:
+    """Cube edge length (Å) for ``inside cube``; prefer explicit box / packmol box sizes."""
+    if packmol_box_size is not None and float(packmol_box_size) > 0.0:
+        return float(packmol_box_size)
+    if box_size is not None and float(box_size) > 0.0:
+        return float(box_size)
+    if packmol_radius is not None and float(packmol_radius) > 0.0:
+        return 2.0 * float(packmol_radius)
+    if flat_bottom_radius is not None and float(flat_bottom_radius) > 0.0:
+        return 2.0 * float(flat_bottom_radius)
+    raise ValueError(
+        "Packmol cube placement requires --box-size > 0 (or --packmol-box-size, "
+        "or legacy --packmol-radius / --flat-bottom-radius for a diameter estimate)."
+    )
+
+
+def packmol_cube_origin(
+    center: tuple[float, float, float],
+    side: float,
+) -> tuple[float, float, float]:
+    """Minimum corner for a cube centered at ``center`` with edge length ``side``."""
+    cx, cy, cz = (float(center[0]), float(center[1]), float(center[2]))
+    half = float(side) / 2.0
+    return (cx - half, cy - half, cz - half)
+
+
 def resolve_packmol_sphere_use(
     *,
     composition: str | None,
     packmol_radius: float | None = None,
     flat_bottom_radius: float | None = None,
     packmol_sphere: bool | None = None,
+    packmol: bool | None = None,
 ) -> bool:
-    """Use spherical Packmol placement when explicitly requested or composition + a radius."""
-    if packmol_sphere is True:
-        return True
-    if packmol_sphere is False:
+    """True when spherical (not cube) Packmol placement is selected."""
+    if not resolve_packmol_use(composition=composition, packmol=packmol):
         return False
-    if composition is None:
-        return False
-    if packmol_radius is not None and float(packmol_radius) > 0.0:
-        return True
-    # Legacy: auto-enable when only --flat-bottom-radius was set (uses it as packmol R too).
-    if flat_bottom_radius is not None and float(flat_bottom_radius) > 0.0:
-        return True
-    return False
+    return resolve_packmol_placement_mode(
+        packmol_sphere=packmol_sphere,
+    ) == "sphere"
 
 
 def resolve_packmol_sphere_radius(
@@ -268,6 +326,85 @@ def assign_packmol_pdb_to_psf_order(
     return out
 
 
+def _packmol_inside_restraint_line(
+    placement: PackmolPlacement,
+    *,
+    center: tuple[float, float, float],
+    cube_side: float | None = None,
+    radius: float | None = None,
+) -> str:
+    if placement == "cube":
+        if cube_side is None or float(cube_side) <= 0.0:
+            raise ValueError(f"cube side must be positive, got {cube_side}")
+        x0, y0, z0 = packmol_cube_origin(center, float(cube_side))
+        return f"  inside cube {x0} {y0} {z0} {float(cube_side)}"
+    if placement == "sphere":
+        if radius is None or float(radius) <= 0.0:
+            raise ValueError(f"sphere radius must be positive, got {radius}")
+        cx, cy, cz = (float(center[0]), float(center[1]), float(center[2]))
+        return f"  inside sphere {cx} {cy} {cz} {float(radius)}"
+    raise ValueError(f"unsupported Packmol placement {placement!r}")
+
+
+def run_packmol_mixed(
+    blocks: list[tuple[Path, int]],
+    *,
+    placement: PackmolPlacement = "cube",
+    center: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    cube_side: float | None = None,
+    radius: float | None = None,
+    output_pdb: str | Path = "pdb/init-packmol-sphere.pdb",
+    input_path: str | Path | None = None,
+    tolerance: float = 2.0,
+    seed: int | None = None,
+) -> str:
+    """Pack multiple structure types inside one cube or sphere (composition order)."""
+    if not blocks:
+        raise ValueError("run_packmol_mixed: no structure blocks")
+
+    restraint = _packmol_inside_restraint_line(
+        placement,
+        center=center,
+        cube_side=cube_side,
+        radius=radius,
+    )
+    out = Path(output_pdb)
+    out.parent.mkdir(parents=True, exist_ok=True)
+
+    structure_lines: list[str] = []
+    for pdb_path, count in blocks:
+        if count <= 0:
+            continue
+        structure_lines.append(
+            f"structure {pdb_path}\n"
+            f"  chain A\n"
+            f"  resnumbers 2\n"
+            f"  number {int(count)}\n"
+            f"{restraint}\n"
+            f"end structure"
+        )
+
+    if not structure_lines:
+        raise ValueError("run_packmol_mixed: all molecule counts are zero")
+
+    randint = int(seed) if seed is not None else int(np.random.randint(1_000_000))
+    packmol_input = (
+        f"seed {randint}\n"
+        f"output {out}\n"
+        f"filetype pdb\n"
+        f"tolerance {float(tolerance)}\n\n"
+        + "\n\n".join(structure_lines)
+        + "\n"
+    )
+    default_inp = (
+        "packmol_cube.inp" if placement == "cube" else "packmol_sphere.inp"
+    )
+    inp_path = Path(input_path) if input_path is not None else Path("packmol") / default_inp
+    execute_packmol_script(packmol_input, inp_path)
+    print(f"Generated {out}", flush=True)
+    return str(out)
+
+
 def run_packmol_sphere(
     n_molecules: int,
     center: tuple[float, float, float],
@@ -289,6 +426,29 @@ def run_packmol_sphere(
     )
 
 
+def run_packmol_cube_mixed(
+    blocks: list[tuple[Path, int]],
+    center: tuple[float, float, float],
+    cube_side: float,
+    *,
+    output_pdb: str | Path = "pdb/init-packmol-sphere.pdb",
+    input_path: str | Path | None = None,
+    tolerance: float = 2.0,
+    seed: int | None = None,
+) -> str:
+    """Pack multiple structure types inside one cube (composition order)."""
+    return run_packmol_mixed(
+        blocks,
+        placement="cube",
+        center=center,
+        cube_side=float(cube_side),
+        output_pdb=output_pdb,
+        input_path=input_path,
+        tolerance=tolerance,
+        seed=seed,
+    )
+
+
 def run_packmol_sphere_mixed(
     blocks: list[tuple[Path, int]],
     center: tuple[float, float, float],
@@ -300,41 +460,13 @@ def run_packmol_sphere_mixed(
     seed: int | None = None,
 ) -> str:
     """Pack multiple structure types inside one sphere (composition order)."""
-    if not blocks:
-        raise ValueError("run_packmol_sphere_mixed: no structure blocks")
-    if float(radius) <= 0.0:
-        raise ValueError(f"sphere radius must be positive, got {radius}")
-
-    cx, cy, cz = (float(center[0]), float(center[1]), float(center[2]))
-    out = Path(output_pdb)
-    out.parent.mkdir(parents=True, exist_ok=True)
-
-    structure_lines: list[str] = []
-    for pdb_path, count in blocks:
-        if count <= 0:
-            continue
-        structure_lines.append(
-            f"structure {pdb_path}\n"
-            f"  chain A\n"
-            f"  resnumbers 2\n"
-            f"  number {int(count)}\n"
-            f"  inside sphere {cx} {cy} {cz} {float(radius)}\n"
-            f"end structure"
-        )
-
-    if not structure_lines:
-        raise ValueError("run_packmol_sphere_mixed: all molecule counts are zero")
-
-    randint = int(seed) if seed is not None else int(np.random.randint(1_000_000))
-    packmol_input = (
-        f"seed {randint}\n"
-        f"output {out}\n"
-        f"filetype pdb\n"
-        f"tolerance {float(tolerance)}\n\n"
-        + "\n\n".join(structure_lines)
-        + "\n"
+    return run_packmol_mixed(
+        blocks,
+        placement="sphere",
+        center=center,
+        radius=float(radius),
+        output_pdb=output_pdb,
+        input_path=input_path,
+        tolerance=tolerance,
+        seed=seed,
     )
-    inp_path = Path(input_path) if input_path is not None else Path("packmol") / "packmol_sphere.inp"
-    execute_packmol_script(packmol_input, inp_path)
-    print(f"Generated {out}", flush=True)
-    return str(out)

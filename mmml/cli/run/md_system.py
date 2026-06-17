@@ -141,20 +141,32 @@ def build_parser() -> argparse.ArgumentParser:
         help="Abort if atoms from different monomers get closer than this distance in Angstrom (<=0 disables).",
     )
     parser.add_argument(
-        "--packmol-sphere",
+        "--packmol",
         action=argparse.BooleanOptionalAction,
         default=None,
         help=(
-            "Pack --composition inside a sphere with Packmol (--packmol-radius). "
-            "Default: on when --composition and --packmol-radius (or legacy: --flat-bottom-radius) are set."
+            "Pack --composition with Packmol (default: inside cube from --box-size). "
+            "Use --no-packmol for legacy grid placement."
         ),
+    )
+    parser.add_argument(
+        "--packmol-placement",
+        choices=("cube", "sphere"),
+        default=None,
+        help="Packmol constraint: cube (default) or sphere (--packmol-radius).",
+    )
+    parser.add_argument(
+        "--packmol-sphere",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Legacy alias for --packmol-placement sphere.",
     )
     parser.add_argument(
         "--packmol-radius",
         type=float,
         default=None,
         metavar="Å",
-        help="Packmol sphere radius in Angstrom (independent of --flat-bottom-radius).",
+        help="Packmol sphere radius in Angstrom (required for --packmol-placement sphere).",
     )
     parser.add_argument(
         "--packmol-center",
@@ -162,19 +174,19 @@ def build_parser() -> argparse.ArgumentParser:
         nargs=3,
         metavar=("CX", "CY", "CZ"),
         default=None,
-        help="Packmol sphere center in Angstrom (default: 0 0 0).",
+        help="Packmol constraint center in Angstrom (default: 0 0 0).",
     )
     parser.add_argument(
         "--packmol-tolerance",
         type=float,
         default=2.0,
-        help="Packmol distance tolerance (Å) when using spherical packing (default: 2.0).",
+        help="Packmol distance tolerance (Å) for composition packing (default: 2.0).",
     )
     parser.add_argument(
         "--reuse-packmol-cache",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="pycharmm: reuse disk cache for Packmol sphere cluster builds (default: on).",
+        help="pycharmm: reuse disk cache for Packmol cluster builds (default: on).",
     )
     parser.add_argument(
         "--rebuild-packmol",
@@ -1204,45 +1216,74 @@ def _pycharmm_run_summary(args: argparse.Namespace) -> str:
     return " | ".join(parts)
 
 
-def _validate_packmol_sphere_args(args: argparse.Namespace) -> None:
+def _validate_packmol_args(args: argparse.Namespace) -> None:
     from mmml.interfaces.pycharmmInterface.packmol_placement import (
+        resolve_packmol_cube_side,
+        resolve_packmol_placement_mode,
         resolve_packmol_sphere_radius,
-        resolve_packmol_sphere_use,
+        resolve_packmol_use,
     )
 
-    if not resolve_packmol_sphere_use(
+    if not resolve_packmol_use(
         composition=args.composition,
-        packmol_radius=getattr(args, "packmol_radius", None),
-        flat_bottom_radius=args.flat_bottom_radius,
-        packmol_sphere=getattr(args, "packmol_sphere", None),
+        packmol=getattr(args, "packmol", None),
     ):
         return
     if not args.composition:
         raise ValueError(
-            "Spherical Packmol placement requires --composition (e.g. ACO:30) "
-            "and --packmol-radius (Å)."
+            "Packmol placement requires --composition (e.g. ACO:30)."
         )
-    resolve_packmol_sphere_radius(
-        getattr(args, "packmol_radius", None),
-        args.flat_bottom_radius,
+    placement = resolve_packmol_placement_mode(
+        packmol_placement=getattr(args, "packmol_placement", None),
+        packmol_sphere=getattr(args, "packmol_sphere", None),
+    )
+    if placement == "sphere":
+        resolve_packmol_sphere_radius(
+            getattr(args, "packmol_radius", None),
+            args.flat_bottom_radius,
+        )
+    else:
+        resolve_packmol_cube_side(
+            box_size=getattr(args, "box_size", None),
+            packmol_box_size=getattr(args, "packmol_box_size", None),
+            packmol_radius=getattr(args, "packmol_radius", None),
+            flat_bottom_radius=args.flat_bottom_radius,
+        )
+
+
+def _validate_packmol_sphere_args(args: argparse.Namespace) -> None:
+    """Backward-compatible alias."""
+    _validate_packmol_args(args)
+
+
+def _append_packmol_args(cmd: list[str], args: argparse.Namespace) -> None:
+    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+        resolve_packmol_placement_mode,
+        resolve_packmol_use,
     )
 
-
-def _append_packmol_sphere_args(cmd: list[str], args: argparse.Namespace) -> None:
-    from mmml.interfaces.pycharmmInterface.packmol_placement import resolve_packmol_sphere_use
-
-    if not resolve_packmol_sphere_use(
+    if not resolve_packmol_use(
         composition=args.composition,
-        packmol_radius=getattr(args, "packmol_radius", None),
-        flat_bottom_radius=args.flat_bottom_radius,
-        packmol_sphere=getattr(args, "packmol_sphere", None),
+        packmol=getattr(args, "packmol", None),
     ):
         return
-    cmd.append("--packmol-sphere")
+    placement = resolve_packmol_placement_mode(
+        packmol_placement=getattr(args, "packmol_placement", None),
+        packmol_sphere=getattr(args, "packmol_sphere", None),
+    )
+    if placement == "sphere":
+        cmd.append("--packmol-sphere")
+    else:
+        cmd.extend(["--packmol-placement", "cube"])
     _append_optional(cmd, "--packmol-radius", getattr(args, "packmol_radius", None))
     if args.packmol_center is not None:
         cmd.extend(["--packmol-center", *[str(x) for x in args.packmol_center]])
     cmd.extend(["--packmol-tolerance", str(args.packmol_tolerance)])
+
+
+def _append_packmol_sphere_args(cmd: list[str], args: argparse.Namespace) -> None:
+    """Backward-compatible alias."""
+    _append_packmol_args(cmd, args)
 
 
 def _run_lambda_ti_inline(args: argparse.Namespace) -> int:
@@ -1921,7 +1962,7 @@ def main() -> int:
     exit_code = 2
     try:
         try:
-            _validate_packmol_sphere_args(args)
+            _validate_packmol_args(args)
         except ValueError as exc:
             print(f"mmml md-system: error: {exc}", file=sys.stderr)
             return 2
