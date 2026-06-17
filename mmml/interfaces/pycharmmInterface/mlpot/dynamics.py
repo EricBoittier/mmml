@@ -2335,7 +2335,8 @@ def run_dynamics_with_io(
     )
 
     n_chunks = total_nstep // interval
-    pending_post_rescue_handoff = False
+    post_rescue_in_memory_mode = False
+    post_rescue_handoff_applied = False
     if (
         n_chunks > 20
         and "heat" in str(overlap_context).lower()
@@ -2408,7 +2409,7 @@ def run_dynamics_with_io(
                     split_trajectory=split_trajectory,
                     mlpot_ctx=mlpot_ctx,
                     use_memory_handoff=(
-                        pending_post_rescue_handoff
+                        post_rescue_in_memory_mode
                         or _overlap_chunk_uses_memory_handoff(
                             mlpot_ctx,
                             chunk_index=chunk_index,
@@ -2424,7 +2425,7 @@ def run_dynamics_with_io(
                 ):
                     chunk_dcd_paths.append(Path(chunk_io.trajectory))
             mem_handoff = (
-                pending_post_rescue_handoff
+                post_rescue_in_memory_mode
                 or _overlap_chunk_uses_memory_handoff(
                     mlpot_ctx,
                     chunk_index=chunk_index,
@@ -2499,12 +2500,12 @@ def run_dynamics_with_io(
                     total_nstep=total_nstep,
                     n_chunks=n_chunks,
                 )
-            if pending_post_rescue_handoff:
+            if post_rescue_in_memory_mode and not post_rescue_handoff_applied:
                 _prepare_post_rescue_overlap_handoff(
                     chunk_kw,
                     mlpot_ctx=mlpot_ctx,
                 )
-                pending_post_rescue_handoff = False
+                post_rescue_handoff_applied = True
             if chunk_io is None or chunk_io.restart_write is None:
                 chunk_kw.pop("iunwri", None)
 
@@ -2569,7 +2570,7 @@ def run_dynamics_with_io(
                     n_chunks=n_chunks,
                     overlap_context=overlap_context,
                     mlpot_ctx=mlpot_ctx,
-                    memory_handoff=overlap_memory_handoff,
+                    memory_handoff=overlap_memory_handoff or post_rescue_in_memory_mode,
                 )
             if steps_done < steps_before_chunk + chunk_nstep - 1:
                 print(
@@ -2599,11 +2600,11 @@ def run_dynamics_with_io(
                         steps_done,
                     )
                     if chunk_index + 1 < n_chunks:
-                        pending_post_rescue_handoff = True
+                        post_rescue_in_memory_mode = True
                         print(
                             f"overlap ({overlap_context}): post-rescue in-memory handoff "
-                            f"at global step {steps_done} (fresh velocities; avoiding "
-                            f"stale CPT READYN after PSF reload)",
+                            f"at global step {steps_done} for remaining chunks "
+                            f"(fresh velocities; avoiding stale CPT READYN after PSF reload)",
                             flush=True,
                         )
                     else:
@@ -2636,9 +2637,24 @@ def run_dynamics_with_io(
                     n_chunks=n_chunks,
                     overlap_context=overlap_context,
                     mlpot_ctx=mlpot_ctx,
-                    memory_handoff=overlap_memory_handoff,
+                    memory_handoff=overlap_memory_handoff or post_rescue_in_memory_mode,
                 )
         completed = True
+        if (
+            post_rescue_in_memory_mode
+            and io is not None
+            and io.restart_write is not None
+            and steps_done >= total_nstep - 1
+        ):
+            from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+                patch_restart_global_step,
+            )
+
+            _refresh_restart_write_after_chunk(
+                io.restart_write,
+                final_restart=final_restart,
+            )
+            patch_restart_global_step(Path(io.restart_write), steps_done)
         if (
             io is not None
             and io.restart_write is not None
