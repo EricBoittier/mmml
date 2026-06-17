@@ -61,6 +61,23 @@ runs:
     assert flat == {}
 
 
+def test_campaign_output_alias(tmp_path: Path) -> None:
+    cfg = tmp_path / "campaign.yaml"
+    cfg.write_text(
+        """
+campaign_output: artifacts/my_campaign
+defaults:
+  composition: DCM:5
+runs:
+  job_a:
+    backend: jaxmd
+    setup: pbc_nve
+""".strip()
+    )
+    args = parse_md_system_args(["--config", str(cfg), "--run-all"])
+    assert str(args.campaign_output_dir).endswith("artifacts/my_campaign")
+
+
 def test_apply_mapping_hyphen_keys() -> None:
     from mmml.cli.run.md_system import parse_args
 
