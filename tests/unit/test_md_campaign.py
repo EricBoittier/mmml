@@ -51,6 +51,22 @@ def test_expand_repeated_jobs() -> None:
     assert run_ids == ["equil", "prod", "nve.0", "nve.1"]
 
 
+def test_resolve_output_dir_repeat_subdirs(tmp_path) -> None:
+    from mmml.cli.run.md_campaign import _resolve_output_dir
+
+    merged = {"output_dir": str(tmp_path / "jaxmd_nve"), "repeat": 4}
+    assert _resolve_output_dir(merged, "jaxmd_nve.0", rep=0) == (
+        tmp_path / "jaxmd_nve" / "rep00"
+    ).resolve()
+    assert _resolve_output_dir(merged, "jaxmd_nve.3", rep=3) == (
+        tmp_path / "jaxmd_nve" / "rep03"
+    ).resolve()
+    single = {"output_dir": str(tmp_path / "jaxmd_prod"), "repeat": 1}
+    assert _resolve_output_dir(single, "jaxmd_prod", rep=0) == (
+        tmp_path / "jaxmd_prod"
+    ).resolve()
+
+
 def test_merge_campaign_job_config_defaults() -> None:
     merged = merge_campaign_job_config(_sample_campaign(), "prod")
     assert merged["composition"] == "DCM:5"
