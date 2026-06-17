@@ -22,11 +22,11 @@
 # --- Campaign: PyCHARMM equil → JAX-MD prod → PyCHARMM prod ---------------
 defaults:
   composition: "DCM:20"
-  checkpoint: /path/to/DESdimers_params.json
+  checkpoint: /mmhome/boittier/home/mmml/examples/ckpts_json/DESdimers_params.json
   packmol_radius: 20
   box_size: 38.0
   dt_fs: 0.25
-  temperature: 260.0
+  temperature: 160.0
   seed: 123
   spacing: 5.0
   mm_switch_on: 9.0
@@ -41,18 +41,18 @@ runs:
     backend: pycharmm
     setup: pbc_npt
     md_stages: "mini,heat,equi"
-    ps_heat: 20
-    ps_equi: 20
-    pressure: 10.0
+    ps_heat: 0.1
+    ps_equi: 0.1
+    pressure: 1.0
     output_dir: results/pycharmm_equil
 
   jaxmd_prod:
-    description: "NPT production with JAX-MD after PyCHARMM equilibration"
+    description: "NVT production with JAX-MD after PyCHARMM equilibration"
     backend: jaxmd
-    setup: pbc_npt
+    setup: pbc_nvt
     depends_on: pycharmm_equil
     ps: 20
-    pressure: 10.0
+    pressure: 1.0
     output_dir: results/jaxmd_prod
     handoff_write_res: true
     extra_args:
@@ -65,8 +65,8 @@ runs:
     description: "Short NVE replicates from NPT prod (seed offset per rep)"
     backend: jaxmd
     setup: pbc_nve
-    ps: 5
-    repeat: 3
+    ps: 1
+    repeat: 4
     depends_on: jaxmd_prod
     output_dir: results/jaxmd_nve
 
@@ -76,6 +76,6 @@ runs:
     setup: pbc_npt
     depends_on: jaxmd_prod
     md_stages: "prod"
-    ps: 20
-    pressure: 10.0
+    ps: 1
+    pressure: 1.0
     output_dir: results/pycharmm_prod
