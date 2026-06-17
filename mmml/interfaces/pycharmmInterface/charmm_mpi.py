@@ -498,7 +498,13 @@ def maybe_rerun_md_system_under_mpirun(argv: list[str]) -> int | None:
     mpirun = charmm_mpirun_path()
     if mpirun is None:
         return None
-    cmd = [str(mpirun), "-np", "1", sys.executable, "-m", "mmml.cli.__main__", *argv]
+    tail = list(argv)
+    # ``mmml md-system`` via ``cli.__main__`` rewrites sys.argv to
+    # ``['mmml md-system', '--config', ...]`` so callers often pass argv[1:]
+    # without the ``md-system`` subcommand.
+    if not tail or tail[0] != "md-system":
+        tail = ["md-system", *tail]
+    cmd = [str(mpirun), "-np", "1", sys.executable, "-m", "mmml.cli.__main__", *tail]
     print(
         "mmml: MPI-linked CHARMM — re-launching under OpenMPI for MLpot registration:\n  "
         + " ".join(cmd),
