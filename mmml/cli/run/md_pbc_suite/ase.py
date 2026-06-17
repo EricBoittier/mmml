@@ -768,11 +768,9 @@ def _run_charmm_minimize(
     try:
         if quiet:
             pyci.pycharmm_quiet()
-        from mmml.interfaces.pycharmmInterface.nbonds_config import pbc_nbond_kwargs
+        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import apply_pbc_nbonds
 
         use_pbc_charmm = cubic_box_side_A is not None and float(cubic_box_side_A) > 0.0
-        cutnb_mm = 18.0
-        cutim_mm = cutnb_mm + 4.0 if use_pbc_charmm else None
         if use_pbc_charmm:
             from mmml.interfaces.pycharmmInterface.pycharmmCommands import pbcset
             from mmml.interfaces.pycharmmInterface.setupBox import _ensure_crystal_image_str
@@ -789,11 +787,10 @@ def _run_charmm_minimize(
             )
 
         if use_pbc_charmm:
-            nbond_kw = pbc_nbond_kwargs(
-                nbxmod=nbxmod,
-                cutnb=cutnb_mm,
-                cutim=cutim_mm,
-            )
+            cuts = apply_pbc_nbonds(nbxmod=nbxmod, cubic_box_side_A=L)
+            if cuts.was_capped and not quiet:
+                print(cuts.summary_line(), flush=True)
+            nbond_kw = cuts.as_pbc_nbond_kwargs(nbxmod=nbxmod)
         else:
             from mmml.interfaces.pycharmmInterface.nbonds_config import (
                 vacuum_nbond_kwargs,

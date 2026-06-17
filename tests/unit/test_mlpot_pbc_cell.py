@@ -118,6 +118,33 @@ def test_decomposed_mlpot_defers_jax_factory_until_get_calculator():
     assert model._spherical_fn is not None
 
 
+def test_setup_calculator_defer_skips_terminal_xla_gpu_warmup():
+    """Factory build with defer must not touch GPU before CHARMM register_mlpot."""
+    ckpt = Path(__file__).resolve().parents[2] / "examples/ckpts_json/DESdimers_params.json"
+    if not ckpt.is_file():
+        pytest.skip("DESdimers_params.json checkpoint missing")
+
+    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mmml_calculator.ensure_xla_gpu_warmed",
+        return_value=False,
+    ) as mock_warm:
+        factory = setup_calculator(
+            ATOMS_PER_MONOMER=5,
+            N_MONOMERS=2,
+            doML=True,
+            doMM=False,
+            model_restart_path=str(ckpt),
+            MAX_ATOMS_PER_SYSTEM=10,
+            cell=38.0,
+            defer_xla_gpu_warmup=True,
+            verbose=False,
+        )
+    mock_warm.assert_not_called()
+    assert callable(factory)
+
+
 def test_register_mlpot_context_forwards_cell():
     from mmml.interfaces.pycharmmInterface.mlpot import run_workflow
 
@@ -267,16 +294,36 @@ def test_decomposed_calculator_initializes_mm_before_spherical_fn():
 
 
 def test_pbc_nbond_cutoffs_respects_half_box():
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import pbc_nbond_cutoffs
+    from mmml.interfaces.pycharmmInterface.nbonds_config import pbc_nbond_cutoffs
 
-    cutnb, cutim = pbc_nbond_cutoffs(35.0)
-    assert cutnb < 17.5
-    assert cutim <= 17.5
-    assert cutim >= cutnb
+    cuts35 = pbc_nbond_cutoffs(35.0)
+    assert cuts35.cutnb < 17.5
+    assert cuts35.cutim <= 17.5
+    assert cuts35.cutim >= cuts35.cutnb
+    assert cuts35.ctonnb < cuts35.ctofnb < cuts35.cutnb
+    assert cuts35.ctexnb == pytest.approx(cuts35.cutnb)
 
-    cutnb55, cutim55 = pbc_nbond_cutoffs(55.0)
-    assert cutnb55 == pytest.approx(18.0)
-    assert cutim55 == pytest.approx(22.0)
+    cuts38 = pbc_nbond_cutoffs(38.0)
+    assert cuts38.cutnb == pytest.approx(18.0)
+    assert cuts38.cutim == pytest.approx(18.0)
+    assert cuts38.cutim < 0.5 * 38.0
+    assert cuts38.was_capped
+
+    cuts55 = pbc_nbond_cutoffs(55.0)
+    assert cuts55.cutnb == pytest.approx(18.0)
+    assert cuts55.cutim == pytest.approx(22.0)
+    assert cuts55.ctonnb == pytest.approx(13.0)
+    assert cuts55.ctofnb == pytest.approx(17.0)
+    assert not cuts55.was_capped
+
+
+def test_pbc_nbond_kwargs_includes_ctexnb_when_capped():
+    from mmml.interfaces.pycharmmInterface.nbonds_config import pbc_nbond_cutoffs
+
+    cuts = pbc_nbond_cutoffs(35.0)
+    kw = cuts.as_pbc_nbond_kwargs()
+    assert kw["ctexnb"] == pytest.approx(cuts.cutnb)
+    assert kw["cutim"] == pytest.approx(cuts.cutim)
 
 
 def test_charmm_ctypes_scalar_accepts_int_and_ctypes_wrapper():
