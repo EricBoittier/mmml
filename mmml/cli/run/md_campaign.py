@@ -335,26 +335,22 @@ def build_benchmark_md_system_argv(
     if job.get("pbc"):
         box_size = job.get("box_size", cfg["box_size"])
         argv.extend(["--box-size", str(box_size)])
-        argv.extend(
-            [
-                "--packmol-sphere",
-                "--packmol-radius",
-                str(cfg["packmol_radius"]),
-                "--packmol-tolerance",
-                str(cfg["packmol_tolerance"]),
-            ]
-        )
     else:
-        argv.extend(
-            [
-                "--packmol-sphere",
-                "--packmol-radius",
-                str(cfg["packmol_radius"]),
-                "--packmol-tolerance",
-                str(cfg["packmol_tolerance"]),
-            ]
-        )
+        box_size = cfg.get("box_size")
+        if box_size is not None:
+            argv.extend(["--box-size", str(box_size)])
         argv.append("--free-space")
+
+    argv.extend(
+        [
+            "--packmol-placement",
+            "cube",
+            "--packmol-tolerance",
+            str(cfg["packmol_tolerance"]),
+        ]
+    )
+    if cfg.get("packmol_radius") is not None:
+        argv.extend(["--packmol-radius", str(cfg["packmol_radius"])])
 
     if job.get("nvt_integrator"):
         argv.extend(["--nvt-integrator", str(job["nvt_integrator"])])

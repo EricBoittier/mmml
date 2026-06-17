@@ -226,8 +226,10 @@ def build_minimized_monomer_for_packmol(
 def build_packmol_composition_cluster(
     *,
     composition: list[tuple[str, int]],
+    placement: str = "cube",
     center: tuple[float, float, float],
-    radius: float,
+    cube_side: float | None = None,
+    radius: float | None = None,
     tolerance: float = 2.0,
     seed: int | None = None,
     charmm_sd_steps: int = 50,
@@ -240,7 +242,7 @@ def build_packmol_composition_cluster(
     packmol_cache_dir: str | Path | None = None,
     force_rebuild_packmol_cache: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, list[int], list[str]]:
-    """CHARMM-minimize monomers, Packmol sphere pack, cluster PSF, then cluster MM relax."""
+    """CHARMM-minimize monomers, Packmol cube/sphere pack, cluster PSF, then cluster MM relax."""
     from mmml.cli.run.md_pbc_suite.ase import (
         _build_cluster_psf_from_composition,
         _load_packmol_sphere_positions,
@@ -251,7 +253,7 @@ def build_packmol_composition_cluster(
         minimize_charmm_mm_only,
     )
 
-    scratch_root = Path(scratch_dir) if scratch_dir is not None else Path("pdb/packmol_sphere")
+    scratch_root = Path(scratch_dir) if scratch_dir is not None else Path("pdb/packmol_cluster")
     cache_root = packmol_cache.packmol_cache_root(
         output_dir=scratch_root.parent if scratch_dir is not None else None,
         override=packmol_cache_dir,
@@ -259,8 +261,10 @@ def build_packmol_composition_cluster(
     if reuse_packmol_cache and not force_rebuild_packmol_cache:
         cached = packmol_cache.try_load_packmol_cluster_cache(
             composition=composition,
+            placement=str(placement),
             center=center,
-            radius=float(radius),
+            cube_side=cube_side,
+            radius=radius,
             tolerance=float(tolerance),
             seed=seed,
             charmm_sd_steps=int(charmm_sd_steps),
@@ -359,17 +363,39 @@ def build_packmol_composition_cluster(
         packed_counts = ", ".join(
             f"{path.stem.upper()}:{count}" for path, count in packmol_blocks
         )
-        print(f"[cluster] 3/4 Packmol sphere placement ({packed_counts})", flush=True)
+        if placement == "sphere":
+            print(
+                f"[cluster] 3/4 Packmol sphere placement ({packed_counts})",
+                flush=True,
+            )
+        else:
+            print(
+                f"[cluster] 3/4 Packmol cube placement ({packed_counts}, "
+                f"side={float(cube_side):.1f} Å)",
+                flush=True,
+            )
 
-    packmol_placement.run_packmol_sphere_mixed(
-        packmol_blocks,
-        center=center,
-        radius=float(radius),
-        output_pdb=output_pdb,
-        input_path=scratch_root / "packmol_sphere.inp",
-        tolerance=float(tolerance),
-        seed=seed,
-    )
+    inp_name = "packmol_sphere.inp" if placement == "sphere" else "packmol_cube.inp"
+    if placement == "sphere":
+        packmol_placement.run_packmol_sphere_mixed(
+            packmol_blocks,
+            center=center,
+            radius=float(radius),
+            output_pdb=output_pdb,
+            input_path=scratch_root / inp_name,
+            tolerance=float(tolerance),
+            seed=seed,
+        )
+    else:
+        packmol_placement.run_packmol_cube_mixed(
+            packmol_blocks,
+            center=center,
+            cube_side=float(cube_side),
+            output_pdb=output_pdb,
+            input_path=scratch_root / inp_name,
+            tolerance=float(tolerance),
+            seed=seed,
+        )
 
     if verbose:
         print("[cluster] 4/4 Build cluster PSF and CHARMM MM relax", flush=True)
@@ -418,8 +444,10 @@ def build_packmol_composition_cluster(
     if reuse_packmol_cache:
         cache_key = packmol_cache.packmol_cache_key(
             composition=composition,
+            placement=str(placement),
             center=center,
-            radius=float(radius),
+            cube_side=cube_side,
+            radius=radius,
             tolerance=float(tolerance),
             seed=seed,
             charmm_sd_steps=int(charmm_sd_steps),
@@ -428,17 +456,20 @@ def build_packmol_composition_cluster(
             charmm_tolgrd=float(charmm_tolgrd),
         )
         entry = cache_root / cache_key
+        manifest = {
+            "version": packmol_cache.CACHE_VERSION,
+            "cache_key": cache_key,
+            "composition": [[r, n] for r, n in composition],
+            "placement": str(placement),
+            "center": list(center),
+            "cube_side": None if cube_side is None else float(cube_side),
+            "radius": None if radius is None else float(radius),
+            "tolerance": float(tolerance),
+            "seed": seed,
+        }
         packmol_cache.save_packmol_cluster_cache(
             entry,
-            manifest={
-                "version": packmol_cache.CACHE_VERSION,
-                "cache_key": cache_key,
-                "composition": [[r, n] for r, n in composition],
-                "center": list(center),
-                "radius": float(radius),
-                "tolerance": float(tolerance),
-                "seed": seed,
-            },
+            manifest=manifest,
             z=z,
             positions=shifted,
             atoms_per_list=atoms_per_list,

@@ -1,4 +1,4 @@
-"""Tests for spherical Packmol helpers (no Packmol binary required)."""
+"""Tests for Packmol placement helpers (no Packmol binary required)."""
 
 from __future__ import annotations
 
@@ -8,28 +8,35 @@ import numpy as np
 import pytest
 
 
-def test_resolve_packmol_sphere_use_defaults():
-    from mmml.interfaces.pycharmmInterface.packmol_placement import resolve_packmol_sphere_use
+def test_resolve_packmol_use_defaults():
+    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+        resolve_packmol_sphere_use,
+        resolve_packmol_use,
+    )
 
-    assert resolve_packmol_sphere_use(composition="MEOH:5", packmol_radius=12.0) is True
-    assert resolve_packmol_sphere_use(composition="MEOH:5", flat_bottom_radius=12.0) is True
-    assert resolve_packmol_sphere_use(composition="MEOH:5") is False
-    assert (
-        resolve_packmol_sphere_use(
-            composition="MEOH:5",
-            packmol_radius=12.0,
-            packmol_sphere=False,
-        )
-        is False
-    )
-    assert (
-        resolve_packmol_sphere_use(
-            composition=None,
-            packmol_radius=12.0,
-            packmol_sphere=True,
-        )
-        is True
-    )
+    assert resolve_packmol_use(composition="MEOH:5") is True
+    assert resolve_packmol_use(composition="MEOH:5", packmol=False) is False
+    assert resolve_packmol_use(composition=None) is False
+    assert resolve_packmol_sphere_use(composition="MEOH:5", packmol_radius=12.0) is False
+    assert resolve_packmol_sphere_use(composition="MEOH:5", packmol_sphere=True) is True
+    assert resolve_packmol_sphere_use(composition=None, packmol_sphere=True) is False
+
+
+def test_resolve_packmol_cube_side():
+    from mmml.interfaces.pycharmmInterface.packmol_placement import resolve_packmol_cube_side
+
+    assert resolve_packmol_cube_side(box_size=38.0) == 38.0
+    assert resolve_packmol_cube_side(packmol_radius=20.0) == 40.0
+    assert resolve_packmol_cube_side(flat_bottom_radius=12.0) == 24.0
+    with pytest.raises(ValueError, match="box-size"):
+        resolve_packmol_cube_side()
+
+
+def test_packmol_cube_origin():
+    from mmml.interfaces.pycharmmInterface.packmol_placement import packmol_cube_origin
+
+    assert packmol_cube_origin((0.0, 0.0, 0.0), 40.0) == (-20.0, -20.0, -20.0)
+    assert packmol_cube_origin((10.0, 0.0, -5.0), 20.0) == (0.0, -10.0, -15.0)
 
 
 def test_resolve_packmol_sphere_radius_separate():
@@ -111,3 +118,31 @@ def test_run_packmol_sphere_mixed_writes_inp(tmp_path, monkeypatch):
     assert "tolerance 1.5" in captured["input"]
     assert "seed 42" in captured["input"]
     assert str(out) in captured["input"]
+
+
+def test_run_packmol_cube_mixed_writes_inp(tmp_path, monkeypatch):
+    from mmml.interfaces.pycharmmInterface import packmol_placement
+
+    captured: dict[str, str] = {}
+
+    def fake_execute(packmol_input: str, inp_path: Path) -> None:
+        captured["input"] = packmol_input
+
+    monkeypatch.setattr(packmol_placement, "execute_packmol_script", fake_execute)
+
+    pdb_a = tmp_path / "a.pdb"
+    pdb_a.write_text("END\n")
+    out = tmp_path / "cluster.pdb"
+
+    packmol_placement.run_packmol_cube_mixed(
+        [(pdb_a, 5)],
+        center=(0.0, 0.0, 0.0),
+        cube_side=40.0,
+        output_pdb=out,
+        tolerance=2.0,
+        seed=7,
+    )
+
+    assert "inside cube -20.0 -20.0 -20.0 40.0" in captured["input"]
+    assert "number 5" in captured["input"]
+    assert "seed 7" in captured["input"]
