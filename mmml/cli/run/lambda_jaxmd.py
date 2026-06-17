@@ -15,7 +15,7 @@ from ase.io.trajectory import Trajectory
 from jax import jit
 from jax_md import simulate, space, units as jax_md_units
 
-from mmml.cli.run.jaxmd_runner import as_jaxmd_dtype
+from mmml.cli.run.jaxmd_runner import as_jaxmd_dtype, normalize_jaxmd_state
 from mmml.cli.run.lambda_dynamics import (
     LambdaDynamicsConfig,
     LambdaMdSettings,
@@ -284,7 +284,7 @@ def _init_jaxmd_state(
 ):
     unit = jax_md_units.metal_unit_system()
     dt = float(dt_fs) * 0.001
-    kT = float(temperature_K) * unit["temperature"]
+    kT = as_jaxmd_dtype(float(temperature_K) * unit["temperature"])
     key = jax.random.PRNGKey(int(seed))
 
     R = jnp.asarray(positions, dtype=jnp.float32)
@@ -305,16 +305,18 @@ def _init_jaxmd_state(
                 "chain_length": 3,
                 "chain_steps": 2,
                 "sy_steps": 3,
-                "tau": jnp.array(nhc_tau * dt),
+                "tau": as_jaxmd_dtype(nhc_tau * dt),
             },
         )
-        state = init_fn(key, R, mass=bundle.masses)
+        state = normalize_jaxmd_state(init_fn(key, R, mass=bundle.masses))
     else:
         init_fn, apply_fn = simulate.nve(bundle.wrapped_force_fn, bundle.shift, dt)
-        state = init_fn(key, R, kT, mass=bundle.masses)
+        state = normalize_jaxmd_state(init_fn(key, R, kT, mass=bundle.masses))
 
     if remove_net_drift:
-        state = state.set(momentum=_zero_com_momentum(state.momentum, bundle.masses))
+        state = normalize_jaxmd_state(
+            state.set(momentum=_zero_com_momentum(state.momentum, bundle.masses))
+        )
     return jit(apply_fn), state, dt
 
 
