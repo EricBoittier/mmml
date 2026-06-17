@@ -221,7 +221,8 @@ all-cpu = [
 ]
 
 [tool.uv.sources]
-jax-md = { git = "https://github.com/google/jax-md.git"}
+# jax-md 0.2.29+ (type-checking / API cleanup, PR #408)
+jax-md = { git = "https://github.com/google/jax-md.git", rev = "a722def5f2c30bd9dceb5fcc5c2a8d19f3cba2b6" }
 
 [[tool.uv.index]]
 name = "jax-cuda"
