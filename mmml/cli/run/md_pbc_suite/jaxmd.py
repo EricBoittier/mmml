@@ -32,6 +32,7 @@ from .ase import (
     _validate_psf_charges,
     build_initial_cluster_from_args,
     resolve_cluster_geometry,
+    resolve_cluster_packmol_sphere,
 )
 
 
