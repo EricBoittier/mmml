@@ -99,6 +99,43 @@ def test_charmm_mpirun_path_from_ldd(monkeypatch, tmp_path):
     charmm_mpi.charmm_lib_links_mpi.cache_clear()
 
 
+    charmm_mpi.charmm_mpirun_path.cache_clear()
+    charmm_mpi.charmm_lib_links_mpi.cache_clear()
+
+
+def test_charmm_mpirun_path_prefers_built_openmpi_over_distro(monkeypatch, tmp_path):
+    lib = tmp_path / "libcharmm.so"
+    lib.write_bytes(b"stub")
+    built = tmp_path / "opt" / "openmpi-5" / "build"
+    built_bin = built / "bin"
+    built_bin.mkdir(parents=True)
+    built_lib = built / "lib"
+    built_lib.mkdir(parents=True)
+    mpirun = built_bin / "mpirun"
+    mpirun.write_text("#!/bin/sh\n")
+    mpirun.chmod(0o755)
+    built_mpi = built_lib / "libmpi.so.40"
+    built_mpi.symlink_to("/dev/null")
+
+    usr_mpi = tmp_path / "usr" / "lib" / "libmpi.so.40"
+    usr_mpi.parent.mkdir(parents=True)
+    usr_mpi.symlink_to("/dev/null")
+
+    monkeypatch.setenv("CHARMM_LIB_DIR", str(tmp_path))
+    charmm_mpi.charmm_mpirun_path.cache_clear()
+    ldd_out = (
+        f"libmpi.so.40 => {usr_mpi}\n"
+        f"libmpi.so.40 => {built_mpi}\n"
+    )
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.subprocess.run",
+        return_value=mock.Mock(returncode=0, stdout=ldd_out),
+    ):
+        found = charmm_mpi.charmm_mpirun_path()
+    assert found == mpirun.resolve()
+    charmm_mpi.charmm_mpirun_path.cache_clear()
+
+
 def test_charmm_mpirun_path_from_openmpi_root(monkeypatch, tmp_path):
     lib = tmp_path / "libcharmm.so"
     lib.write_bytes(b"stub")
@@ -191,6 +228,8 @@ def test_maybe_rerun_md_system_invokes_mpirun(monkeypatch, tmp_path):
         "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_mpirun_path",
         return_value=mpirun.resolve(),
     ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.prepare_serial_charmm_mpi_env",
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.subprocess.run",
         return_value=mock.Mock(returncode=0),
     ) as mock_run:
@@ -204,6 +243,9 @@ def test_maybe_rerun_md_system_invokes_mpirun(monkeypatch, tmp_path):
     assert cmd[1:3] == ["-np", "1"]
     assert cmd[4:6] == ["-m", "mmml.cli.__main__"]
     assert cmd[6:] == ["md-system", "--backend", "pycharmm"]
+    env = mock_run.call_args.kwargs.get("env")
+    assert env is not None
+    assert str(mpirun.parent) in env["PATH"].split(os.pathsep)
 
 
 def test_maybe_rerun_md_system_prepends_subcommand(monkeypatch, tmp_path):

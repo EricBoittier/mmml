@@ -180,6 +180,41 @@ def mpi_library_path_export() -> str:
     return f"export LD_LIBRARY_PATH={prefix}${{LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}}"
 
 
+def _libmpi_paths_from_ldd(ldd_stdout: str) -> list[Path]:
+    paths: list[Path] = []
+    seen: set[Path] = set()
+    for line in ldd_stdout.splitlines():
+        low = line.lower()
+        if "libmpi.so" not in low or "=>" not in line:
+            continue
+        try:
+            _, _, rest = line.partition("=>")
+            libpath = rest.split("(", 1)[0].strip()
+        except IndexError:
+            continue
+        if not libpath.startswith("/"):
+            continue
+        libmpi_path = Path(libpath)
+        if libmpi_path in seen:
+            continue
+        seen.add(libmpi_path)
+        paths.append(libmpi_path)
+    # Prefer the OpenMPI prefix used to build libcharmm.so over distro /usr/lib.
+    paths.sort(key=lambda p: (str(p).startswith("/usr"), str(p)))
+    return paths
+
+
+def _mpirun_for_libmpi(libmpi: Path) -> Path | None:
+    lib_dir = libmpi.parent
+    for candidate in (
+        lib_dir.parent / "bin" / "mpirun",
+        lib_dir / "mpirun",
+    ):
+        if candidate.is_file():
+            return candidate.resolve()
+    return None
+
+
 def _openmpi_root_mpirun() -> Path | None:
     """Optional ``OPENMPI_ROOT/bin/mpirun`` (same convention as ``scripts/rebuild_charmm_mlpot.sh``)."""
     root = (os.environ.get("OPENMPI_ROOT") or "").strip()
@@ -211,27 +246,12 @@ def charmm_mpirun_path() -> Path | None:
         return from_openmpi_root
 
     lib = _charmm_lib_path()
-    if lib is None:
-        return None
+    if lib is not None:
+        for libmpi in _libmpi_paths_from_ldd(_run_ldd(lib)):
+            found = _mpirun_for_libmpi(libmpi)
+            if found is not None:
+                return found
 
-    for line in _run_ldd(lib).splitlines():
-        low = line.lower()
-        if "libmpi.so" not in low or "=>" not in line:
-            continue
-        try:
-            _, _, rest = line.partition("=>")
-            libpath = rest.split("(", 1)[0].strip()
-        except IndexError:
-            continue
-        if not libpath.startswith("/"):
-            continue
-        lib_dir = Path(libpath).parent.resolve()
-        for candidate in (
-            lib_dir.parent / "bin" / "mpirun",
-            lib_dir / "mpirun",
-        ):
-            if candidate.is_file():
-                return candidate.resolve()
     return None
 
 
@@ -497,7 +517,23 @@ def maybe_rerun_md_system_under_mpirun(argv: list[str]) -> int | None:
         return None
     mpirun = charmm_mpirun_path()
     if mpirun is None:
+        print(
+            "mmml: MPI-linked CHARMM but no matching OpenMPI mpirun found. "
+            "Set OPENMPI_ROOT or MMML_MPIRUN, or use:\n  "
+            + mpirun_launch_hint("mmml md-system"),
+            flush=True,
+        )
         return None
+    if str(mpirun).startswith("/usr/bin/"):
+        print(
+            "mmml: warning: using distro OpenMPI launcher "
+            f"{mpirun}; if this fails with PMIx errors, set\n"
+            "  export OPENMPI_ROOT=/opt/gcc-14.2.0/openmpi-5.0.5/build\n"
+            "  export MMML_MPIRUN=$OPENMPI_ROOT/bin/mpirun\n"
+            "or run via ./scripts/mmml-charmm-mpirun.sh",
+            flush=True,
+        )
+    prepare_serial_charmm_mpi_env()
     tail = list(argv)
     # ``mmml md-system`` via ``cli.__main__`` rewrites sys.argv to
     # ``['mmml md-system', '--config', ...]`` so callers often pass argv[1:]
@@ -505,12 +541,17 @@ def maybe_rerun_md_system_under_mpirun(argv: list[str]) -> int | None:
     if not tail or tail[0] != "md-system":
         tail = ["md-system", *tail]
     cmd = [str(mpirun), "-np", "1", sys.executable, "-m", "mmml.cli.__main__", *tail]
+    env = os.environ.copy()
+    bindir = str(mpirun.parent)
+    path_parts = [p for p in env.get("PATH", "").split(os.pathsep) if p]
+    if bindir not in path_parts:
+        env["PATH"] = os.pathsep.join([bindir, *path_parts])
     print(
         "mmml: MPI-linked CHARMM — re-launching under OpenMPI for MLpot registration:\n  "
         + " ".join(cmd),
         flush=True,
     )
-    proc = subprocess.run(cmd)
+    proc = subprocess.run(cmd, env=env)
     return int(proc.returncode)
 
 
