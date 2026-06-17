@@ -68,6 +68,7 @@ runs:
     ps: 1
     repeat: 4
     depends_on: jaxmd_prod
+    # Each replicate writes to results/jaxmd_nve/rep00 … rep03 (see md_campaign._resolve_output_dir).
     output_dir: results/jaxmd_nve
 
   pycharmm_prod:

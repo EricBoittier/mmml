@@ -43,9 +43,13 @@ def _campaign_needs_pycharmm(campaign: dict[str, Any]) -> bool:
     return any(str((runs[j] or {}).get("backend", "")) == "pycharmm" for j in runs)
 
 
-def _resolve_output_dir(merged: dict[str, Any], run_id: str) -> Path:
+def _resolve_output_dir(merged: dict[str, Any], run_id: str, *, rep: int = 0) -> Path:
+    repeat = int(merged.get("repeat", 1))
     if merged.get("output_dir"):
-        return Path(str(merged["output_dir"])).expanduser().resolve()
+        base = Path(str(merged["output_dir"])).expanduser().resolve()
+        if repeat > 1:
+            return (base / f"rep{int(rep):02d}").resolve()
+        return base
     root = merged.get("output_root", "results")
     return (Path(str(root)) / run_id).resolve()
 
@@ -184,7 +188,7 @@ def run_campaign(args: Namespace) -> int:
         merged = merge_campaign_job_config(campaign, base_id)
         if rep:
             merged["seed"] = int(merged.get("seed", 123)) + rep
-        out_dir = _resolve_output_dir(merged, run_id)
+        out_dir = _resolve_output_dir(merged, run_id, rep=rep)
         merged["output_dir"] = str(out_dir)
         merged["job_name"] = run_id
         dep = merged.get("depends_on")
