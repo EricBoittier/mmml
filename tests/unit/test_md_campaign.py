@@ -87,6 +87,50 @@ def test_namespace_from_merged_keeps_extra_args_last() -> None:
     assert "--continue-from" not in args.extra_args
 
 
+def test_build_command_jaxmd_cube_packmol_argv_parses_in_jaxmd_backend() -> None:
+    from argparse import Namespace
+
+    from mmml.cli.run.md_system import build_command
+
+    args = Namespace(
+        backend="jaxmd",
+        setup="pbc_nvt",
+        composition="BENZ:30",
+        spacing=5.0,
+        ps=50.0,
+        dt_fs=0.25,
+        temperature=260.0,
+        pressure=1.0,
+        traj_chunk_frames=0,
+        n_molecules=30,
+        box_size=32.0,
+        checkpoint="/tmp/ckpt.json",
+        output_dir="/tmp/out",
+        template_pdb=None,
+        seed=123,
+        min_intermonomer_atom_distance=0.1,
+        packmol=None,
+        packmol_placement=None,
+        packmol_sphere=None,
+        packmol_radius=None,
+        packmol_tolerance=2.0,
+        packmol_center=None,
+        flat_bottom_radius=None,
+        flat_bottom_k=1.0,
+        flat_bottom_mode="system",
+        nvt_integrator="nhc",
+        traj_export_molecular_wrap=False,
+        extra_args=["--steps-per-recording", "800", "--jax-md-update-interval", "1"],
+    )
+    backend, argv = build_command(args)
+    assert backend == "jaxmd"
+    assert "--packmol-placement" in argv
+    idx = argv.index("--packmol-placement")
+    assert argv[idx + 1] == "cube"
+    assert "--steps-per-recording" in argv
+    assert "--jax-md-update-interval" in argv
+
+
 def test_build_command_filters_campaign_flags_from_extra_args() -> None:
     from argparse import Namespace
 
