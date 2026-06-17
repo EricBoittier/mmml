@@ -14,6 +14,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     assert_dynamics_ready,
     build_cluster_from_args_with_tag,
     charmm_grms,
+    composition_tag,
     dynamics_nstep_from_ps,
     format_resid_constraint_message,
     print_cluster_geometry_summary,
@@ -808,7 +809,46 @@ def _can_seed_stage_from_memory(
 
 def _load_or_build_cluster(
     args: argparse.Namespace,
+    *,
+    handoff_in=None,
 ) -> tuple[np.ndarray, np.ndarray, int, str]:
+    from mmml.cli.run.md_handoff import (
+        cluster_geometry_from_handoff,
+        ensure_psf_for_handoff_cluster,
+        get_handoff_in,
+    )
+    from mmml.cli.run.md_pbc_suite.ase import _parse_composition
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import load_cluster_from_artifacts
+
+    ho = handoff_in if handoff_in is not None else get_handoff_in()
+    if ho is not None:
+        n_mol_default = int(getattr(args, "n_molecules", 1) or 1)
+        z, r0, atoms_per_list, residue_labels, _ = cluster_geometry_from_handoff(
+            ho,
+            composition=getattr(args, "composition", None),
+            n_molecules=n_mol_default,
+        )
+        if getattr(args, "composition", None):
+            composition = _parse_composition(args.composition)
+        else:
+            n_mol = len(atoms_per_list)
+            composition = [(residue_labels[0], n_mol)]
+        ensure_psf_for_handoff_cluster(
+            composition=composition,
+            atomic_numbers=z,
+            atoms_per_list=atoms_per_list,
+            residue_labels=residue_labels,
+            positions=r0,
+            quiet=bool(getattr(args, "quiet", False)),
+        )
+        n_mol = len(atoms_per_list)
+        tag = composition_tag(composition, getattr(args, "residue", "MEOH").upper(), n_mol)
+        if not getattr(args, "quiet", False):
+            print(
+                f"Continuing from handoff ({len(z)} atoms); skipped Packmol/cluster build",
+                flush=True,
+            )
+        return z, np.asarray(r0, dtype=np.float64), n_mol, tag
     if getattr(args, "skip_cluster_build", False) or getattr(args, "from_psf", None):
         return load_cluster_from_artifacts(args)
     return build_cluster_from_args_with_tag(args)
@@ -830,7 +870,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     fix_resids = resolve_fix_resids(args)
     dynamics_constrain = resolve_constrain_resids(args)
     ckpt = resolve_checkpoint(args.checkpoint)
-    z, r, n_mol, tag = _load_or_build_cluster(args)
+    z, r, n_mol, tag = _load_or_build_cluster(args, handoff_in=handoff_in)
     if handoff_in is not None:
         r = np.asarray(handoff_in.positions, dtype=np.float64)
         if (
