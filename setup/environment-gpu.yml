@@ -56,7 +56,7 @@ dependencies:
       - jmp
       - jraph
       - orbax-checkpoint
-      - jax-md @ git+https://github.com/google/jax-md.git@05221c551e71f1b5f64458c0e3533452c22efec0
+      - jax-md @ git+https://github.com/google/jax-md.git@a722def5f2c30bd9dceb5fcc5c2a8d19f3cba2b6
       
       # ML utilities
       - ml-dtypes
