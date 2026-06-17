@@ -922,7 +922,7 @@ def main(argv: list[str] | None = None) -> int:
         return 130
     if run_status == "error":
         return 1
-    if frames:
+    if len(frames) > 0:
         last_xyz = np.asarray(frames[-1], dtype=np.float64)
         last_box = None
         if boxes is not None and len(boxes):
