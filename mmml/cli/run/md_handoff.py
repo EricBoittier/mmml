@@ -169,6 +169,67 @@ def cluster_geometry_from_handoff(
     return z, r0, atoms_per_list, residue_labels, composition_summary
 
 
+def _validate_handoff_psf_layout(
+    *,
+    psf_atomic_numbers: np.ndarray,
+    psf_atoms_per_list: list[int],
+    psf_residue_labels: list[str],
+    atomic_numbers: np.ndarray,
+    atoms_per_list: list[int],
+    residue_labels: list[str],
+) -> None:
+    n_atoms = int(len(atomic_numbers))
+    if int(len(psf_atomic_numbers)) != n_atoms:
+        raise RuntimeError(
+            f"Handoff PSF atom count ({len(psf_atomic_numbers)}) does not match "
+            f"handoff geometry ({n_atoms})"
+        )
+    if list(psf_atoms_per_list) != list(atoms_per_list):
+        raise RuntimeError(
+            "Handoff per-monomer atom counts do not match composition-derived PSF layout"
+        )
+    if list(psf_residue_labels) != list(residue_labels):
+        raise RuntimeError(
+            "Handoff residue label order does not match composition-derived PSF layout"
+        )
+    if not np.array_equal(
+        np.asarray(psf_atomic_numbers, dtype=int),
+        np.asarray(atomic_numbers, dtype=int),
+    ):
+        raise RuntimeError(
+            "Handoff atomic numbers do not match composition-derived PSF (Z mismatch)"
+        )
+
+
+def ensure_psf_for_handoff_cluster(
+    *,
+    composition: list[tuple[str, int]],
+    atomic_numbers: np.ndarray,
+    atoms_per_list: list[int],
+    residue_labels: list[str],
+    quiet: bool = False,
+) -> None:
+    """Build CHARMM PSF when cluster geometry was loaded from handoff (no Packmol/PSF build)."""
+    from mmml.cli.run.md_pbc_suite.ase import _build_cluster_psf_from_composition
+
+    psf_z, _atom_names, psf_atoms_per, psf_residue_labels = _build_cluster_psf_from_composition(
+        composition,
+    )
+    _validate_handoff_psf_layout(
+        psf_atomic_numbers=psf_z,
+        psf_atoms_per_list=psf_atoms_per,
+        psf_residue_labels=psf_residue_labels,
+        atomic_numbers=atomic_numbers,
+        atoms_per_list=atoms_per_list,
+        residue_labels=residue_labels,
+    )
+    if not quiet:
+        print(
+            f"Built CHARMM PSF from composition for handoff continuation ({len(atomic_numbers)} atoms)",
+            flush=True,
+        )
+
+
 def apply_handoff_to_atoms(atoms: Any, handoff: MdHandoffState) -> None:
     atoms.set_positions(handoff.positions)
     if handoff.atomic_numbers is not None and handoff.atomic_numbers.any():
