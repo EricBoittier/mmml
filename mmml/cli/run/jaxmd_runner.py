@@ -27,6 +27,15 @@ from typing import Callable, Optional
 
 WORSE_COUNT_THRESHOLD = 100
 
+# JAX-MD integrator carry (positions, momenta) must stay float32 even when the hybrid
+# calculator runs ML/MM interior math in float64 (ml_compute_dtype=float64).
+_JAXMD_DTYPE = jnp.float32
+
+
+def as_jaxmd_dtype(x):
+    """Cast to the dtype used for JAX-MD state arrays (positions, forces to integrator)."""
+    return jnp.asarray(x, dtype=_JAXMD_DTYPE)
+
 
 def _real_cartesian_to_fractional(pos_real: np.ndarray, box_3x3: np.ndarray) -> np.ndarray:
     """Map real-space Cartesian rows (n, 3) to fractional coords for jax_md NPT state."""
@@ -295,7 +304,7 @@ def set_up_nhc_sim_routine(
             mm_pair_mask=mm_pair_mask,
             box=box,
         )
-        return result.forces
+        return as_jaxmd_dtype(result.forces)
 
     # evaluate_energies_and_forces (initial call - get update_fn if available)
     use_pbc = args.cell is not None
@@ -426,7 +435,7 @@ def set_up_nhc_sim_routine(
                 mm_pair_mask=_pbc_state["pair_mask"],
                 box=_pbc_state["box"],
             )
-            return pbc_map_fn.transform_forces(pos, F_mapped)
+            return as_jaxmd_dtype(pbc_map_fn.transform_forces(pos, F_mapped))
     else:
         # MIC-only: capture box and pairs for PBC minimization (Fix A)
         @jit
@@ -495,11 +504,18 @@ def set_up_nhc_sim_routine(
     @jit
     def sim(state, neighbor=None, pressure=None):
         """Step function: for NPT pass neighbor and pressure; for NVT/NVE no kwargs."""
+
+        def _cast_state(s):
+            return s.set(
+                position=as_jaxmd_dtype(s.position),
+                momentum=as_jaxmd_dtype(s.momentum),
+            )
+
         def step_nve(i, s):
-            return apply_fn(s)
+            return _cast_state(apply_fn(s))
 
         def step_npt(i, s):
-            return apply_fn(s, neighbor=neighbor, pressure=pressure)
+            return _cast_state(apply_fn(s, neighbor=neighbor, pressure=pressure))
 
         step_fn = step_npt if (neighbor is not None and pressure is not None) else step_nve
         return lax.fori_loop(0, steps_per_recording, step_fn, state)
@@ -581,7 +597,7 @@ def set_up_nhc_sim_routine(
                 box=box_eff,
             )
             # grad(E) = -F; quantity.force = -grad, so we supply -F as grad
-            grad_frac = -F * g
+            grad_frac = as_jaxmd_dtype(-F * g)
             return (grad_frac, None, None, None, None, None)
 
         npt_energy_fn.defvjp(npt_energy_fn_fwd, npt_energy_fn_bwd)
@@ -958,7 +974,7 @@ def set_up_nhc_sim_routine(
             md_pos_wrapped = wrap_groups(
                 jnp.asarray(md_pos), _monomer_groups, _cell_jax, mass=Si_mass
             )
-            md_pos_frac = md_pos_wrapped / float(args.cell)  # cubic: frac = R / L
+            md_pos_frac = as_jaxmd_dtype(md_pos_wrapped / float(args.cell))  # cubic: frac = R / L
             # Neighbor list with fractional_coordinates expects frac pos and box [L,L,L]
             box_nl = np.array([float(args.cell)] * 3, dtype=np.float64)
             pair_idx, pair_mask = update_fn(np.asarray(md_pos_frac), box=box_nl)
@@ -969,11 +985,11 @@ def set_up_nhc_sim_routine(
             npt_pair_idx, npt_pair_mask = pair_idx, pair_mask
             npt_pressure = pressure  # Use same pressure as NPT block (handles --pressure 0)
         elif args.ensemble == "nvt":
-            state = init_fn(key, md_pos, mass=Si_mass)
+            state = init_fn(key, as_jaxmd_dtype(md_pos), mass=Si_mass)
             npt_pair_idx, npt_pair_mask = None, None
             npt_pressure = None
         else:
-            state = init_fn(key, md_pos, kT, mass=Si_mass)
+            state = init_fn(key, as_jaxmd_dtype(md_pos), kT, mass=Si_mass)
             npt_pair_idx, npt_pair_mask = None, None
             npt_pressure = None
         c.print(Panel(f"Momentum initialized for {T} K", title="[bold]JAX-MD[/bold]", border_style="green"))
@@ -1198,15 +1214,14 @@ def set_up_nhc_sim_routine(
                         box_curr = simulate.npt_box(state)
                         frac_pos = state.position
                         wrapped_frac = frac_pos - jnp.floor(frac_pos)
-                        state = state.set(position=wrapped_frac)
+                        state = state.set(position=as_jaxmd_dtype(wrapped_frac))
                         pos_for_overlap = space.transform(box_curr, state.position)
                         pos_for_overlap = wrap_groups(pos_for_overlap, _monomer_groups, box_curr, mass=Si_mass)
                         rescued = _check_overlap(pos_for_overlap, box_curr, f"JAX-MD dynamics record {i + 1}")
                         if rescued is not None:
                             b_np = np.asarray(jax.device_get(box_curr), dtype=float)
-                            new_frac = jnp.asarray(
+                            new_frac = as_jaxmd_dtype(
                                 _real_cartesian_to_fractional(rescued, b_np),
-                                dtype=jnp.float32,
                             )
                             new_frac = new_frac - jnp.floor(new_frac)
                             state = state.set(position=new_frac)
@@ -1224,10 +1239,10 @@ def set_up_nhc_sim_routine(
                         wrapped_pos = wrap_groups(
                             state.position, _monomer_groups, _cell_jax, mass=Si_mass
                         )
-                        state = state.set(position=wrapped_pos)
+                        state = state.set(position=as_jaxmd_dtype(wrapped_pos))
                         rescued = _check_overlap(state.position, _cell_jax, f"JAX-MD dynamics record {i + 1}")
                         if rescued is not None:
-                            state = state.set(position=jnp.asarray(rescued, dtype=jnp.float32))
+                            state = state.set(position=as_jaxmd_dtype(rescued))
                             if update_fn is not None:
                                 pp_i, pp_m = update_fn(
                                     np.asarray(state.position), box=pbc_box_nl
@@ -1237,7 +1252,7 @@ def set_up_nhc_sim_routine(
                 else:
                     rescued = _check_overlap(state.position, None, f"JAX-MD dynamics record {i + 1}")
                     if rescued is not None:
-                        state = state.set(position=jnp.asarray(rescued, dtype=jnp.float32))
+                        state = state.set(position=as_jaxmd_dtype(rescued))
 
                 # Store current position (NPT: fractional + box for correct real coords at save)
                 if is_npt:

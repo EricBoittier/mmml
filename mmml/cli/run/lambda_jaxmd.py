@@ -15,6 +15,7 @@ from ase.io.trajectory import Trajectory
 from jax import jit
 from jax_md import simulate, space, units as jax_md_units
 
+from mmml.cli.run.jaxmd_runner import as_jaxmd_dtype
 from mmml.cli.run.lambda_dynamics import (
     LambdaDynamicsConfig,
     LambdaMdSettings,
@@ -195,7 +196,7 @@ def build_lambda_jaxmd_bundle(
             mm_pair_mask=mm_pair_mask,
             box=box,
         )
-        return out.forces
+        return as_jaxmd_dtype(out.forces)
 
     @jit
     def wrapped_force_fn(position, **_kwargs):
