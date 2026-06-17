@@ -418,6 +418,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="pycharmm: DCD frame every N integration/SD steps",
     )
     parser.add_argument(
+        "--dcd-interval-ps",
+        type=float,
+        default=None,
+        metavar="PS",
+        help="pycharmm: DCD save interval in ps (overrides --dcd-nsavc when set)",
+    )
+    parser.add_argument(
+        "--dcd-max-frames",
+        type=int,
+        default=25,
+        metavar="N",
+        help=(
+            "pycharmm: cap DCD output to ~N frames per stage when --dcd-interval-ps "
+            "is unset (0 = no cap)"
+        ),
+    )
+    parser.add_argument(
         "--save-forces-npz",
         action="store_true",
         help="pycharmm: write <output-dir>/forces.npz during dynamics",
@@ -1621,8 +1638,32 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     if getattr(args, "flat_bottom_radius", None) is not None:
         cmd.extend(["--flat-bottom-radius", str(args.flat_bottom_radius)])
     if args.extra_args:
-        cmd.extend(args.extra_args)
+        cmd.extend(_filter_campaign_flags_from_argv(list(args.extra_args)))
     return cmd
+
+
+def _filter_campaign_flags_from_argv(argv: list[str]) -> list[str]:
+    """Drop md-system campaign keys that must not reach ASE/JAX-MD parsers."""
+    skip = {
+        "--job-id",
+        "--job-name",
+        "--continue-from",
+        "--continue-from-frame",
+        "--config",
+        "--run-all",
+        "--resume-campaign",
+        "--campaign-output-dir",
+    }
+    out: list[str] = []
+    i = 0
+    while i < len(argv):
+        tok = argv[i]
+        if tok in skip:
+            i += 2 if i + 1 < len(argv) and not str(argv[i + 1]).startswith("-") else 1
+            continue
+        out.append(tok)
+        i += 1
+    return out
 
 
 def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
@@ -1728,7 +1769,7 @@ def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
         cmd.extend(["--flat-bottom-k", str(args.flat_bottom_k)])
         cmd.extend(["--flat-bottom-mode", str(args.flat_bottom_mode)])
     if args.extra_args:
-        cmd.extend(args.extra_args)
+        cmd.extend(_filter_campaign_flags_from_argv(list(args.extra_args)))
     return backend, cmd
 
 
@@ -1832,12 +1873,22 @@ def run_backend(backend: str, argv: list[str], args: argparse.Namespace) -> int:
 
     job_name = resolve_job_name(args) or "run"
     if backend == "pycharmm":
+        from mmml.cli.run.md_stage_summary import (
+            pycharmm_stage_dcd_frames,
+            pycharmm_trajectory_tag,
+        )
+
         plan: list[MdStageSummary] = build_pycharmm_plan_rows(job_name, args)
+        tag = pycharmm_trajectory_tag(args)
+        out_dir = Path(args.output_dir) if args.output_dir is not None else None
         for row in plan:
             if row.stage != "mini":
                 row.nsteps_completed = row.nsteps_requested
                 row.ps_completed = row.ps_requested
                 row.status = "complete" if exit_code == 0 else "error"
+                if out_dir is not None and row.stage in {"heat", "equi", "nve", "prod"}:
+                    row.frames_written = pycharmm_stage_dcd_frames(out_dir, row.stage, tag)
+                    row.record_every_steps = max(1, int(row.record_every_steps or 1))
     else:
         row = build_single_leg_plan_row(job_name, args, backend)
         nsteps = dynamics_nstep_from_ps(float(args.ps), float(args.dt_fs))

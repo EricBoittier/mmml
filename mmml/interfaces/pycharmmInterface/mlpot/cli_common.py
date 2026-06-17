@@ -281,6 +281,16 @@ def add_dcd_save_args(parser: argparse.ArgumentParser) -> None:
         help="Alternative to --dcd-nsavc: save interval in ps (dynamics only)",
     )
     group.add_argument(
+        "--dcd-max-frames",
+        type=int,
+        default=25,
+        metavar="N",
+        help=(
+            "Cap DCD output to about N frames per stage when --dcd-interval-ps is unset "
+            "(default: 25; set 0 to allow every-step output with --dcd-nsavc 1)"
+        ),
+    )
+    group.add_argument(
         "--rescue-old-dcd",
         action="store_true",
         help=(
@@ -296,6 +306,7 @@ def resolve_dcd_nsavc(
     dcd_interval_ps: float | None = None,
     timestep_ps: float | None = None,
     nstep: int | None = None,
+    dcd_max_frames: int | None = 25,
 ) -> int:
     if dcd_interval_ps is not None:
         if timestep_ps is None or timestep_ps <= 0:
@@ -304,6 +315,15 @@ def resolve_dcd_nsavc(
     else:
         nsavc = int(dcd_nsavc)
     nsavc = max(1, nsavc)
+    if (
+        dcd_interval_ps is None
+        and dcd_max_frames is not None
+        and int(dcd_max_frames) > 0
+        and nstep is not None
+        and int(nstep) > 1
+    ):
+        min_nsavc = max(1, (int(nstep) + int(dcd_max_frames) - 1) // int(dcd_max_frames))
+        nsavc = max(nsavc, min_nsavc)
     if nstep is not None:
         n = int(nstep)
         if n > 1:
@@ -311,6 +331,22 @@ def resolve_dcd_nsavc(
         else:
             nsavc = min(nsavc, n)
     return nsavc
+
+
+def resolve_dcd_nsavc_for_args(
+    args: argparse.Namespace,
+    *,
+    nstep: int | None = None,
+    timestep_ps: float | None = None,
+) -> int:
+    """Resolve DCD ``nsavc`` from a parsed ``md-system`` / PyCHARMM namespace."""
+    return resolve_dcd_nsavc(
+        dcd_nsavc=int(getattr(args, "dcd_nsavc", 1)),
+        dcd_interval_ps=getattr(args, "dcd_interval_ps", None),
+        timestep_ps=timestep_ps,
+        nstep=nstep,
+        dcd_max_frames=getattr(args, "dcd_max_frames", 25),
+    )
 
 
 def apply_charmm_output_from_args(args: argparse.Namespace) -> int:
