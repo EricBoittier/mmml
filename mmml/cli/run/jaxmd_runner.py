@@ -37,6 +37,15 @@ def as_jaxmd_dtype(x):
     return jnp.asarray(x, dtype=_JAXMD_DTYPE)
 
 
+def normalize_jaxmd_state(state):
+    """Keep JAX-MD integrator carry dtypes consistent (float32) for lax.scan/fori_loop."""
+    return state.set(
+        position=as_jaxmd_dtype(state.position),
+        momentum=as_jaxmd_dtype(state.momentum),
+        mass=as_jaxmd_dtype(state.mass),
+    )
+
+
 def _real_cartesian_to_fractional(pos_real: np.ndarray, box_3x3: np.ndarray) -> np.ndarray:
     """Map real-space Cartesian rows (n, 3) to fractional coords for jax_md NPT state."""
     B = np.asarray(box_3x3, dtype=np.float64)[:3, :3]
@@ -246,6 +255,7 @@ def set_up_nhc_sim_routine(
     """
     atoms_template = atoms_template if atoms_template is not None else atoms
     T = args.temperature
+    Si_mass = as_jaxmd_dtype(Si_mass)
 
     @jax.jit
     def evaluate_energies_and_forces(
@@ -493,7 +503,7 @@ def set_up_nhc_sim_routine(
         getattr(args, "steps_per_recording", None)
         or (25 if (args.ensemble == "npt" and use_pbc) else 1000)
     )
-    kT = T * unit['temperature']
+    kT = as_jaxmd_dtype(T * unit['temperature'])
     jax.random.PRNGKey(0)
     c.print(Panel(
         f"Ensemble: {args.ensemble.upper()} | dt={dt} ps ({dt_fs} fs) | kT={kT} ({T} K) | steps_per_recording={steps_per_recording}",
@@ -506,10 +516,7 @@ def set_up_nhc_sim_routine(
         """Step function: for NPT pass neighbor and pressure; for NVT/NVE no kwargs."""
 
         def _cast_state(s):
-            return s.set(
-                position=as_jaxmd_dtype(s.position),
-                momentum=as_jaxmd_dtype(s.momentum),
-            )
+            return normalize_jaxmd_state(s)
 
         def step_nve(i, s):
             return _cast_state(apply_fn(s))
@@ -992,6 +999,7 @@ def set_up_nhc_sim_routine(
             state = init_fn(key, as_jaxmd_dtype(md_pos), kT, mass=Si_mass)
             npt_pair_idx, npt_pair_mask = None, None
             npt_pressure = None
+        state = normalize_jaxmd_state(state)
         c.print(Panel(f"Momentum initialized for {T} K", title="[bold]JAX-MD[/bold]", border_style="green"))
         nhc_positions = []
         nhc_boxes = []  # NPT: box at each record step (for frac→real when saving)
