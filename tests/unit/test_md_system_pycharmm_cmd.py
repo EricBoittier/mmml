@@ -81,6 +81,7 @@ def _pycharmm_args(**overrides) -> argparse.Namespace:
         test_first_charmm=False,
         test_first_update_nbonds=False,
         packmol_sphere=True,
+        packmol_placement=None,
         packmol_radius=10.0,
         packmol_tolerance=2.0,
         packmol_center=None,
@@ -181,6 +182,19 @@ def test_build_pycharmm_command_forwards_ml_compute_dtype_when_set():
     assert "--ml-compute-dtype" in cmd
     idx = cmd.index("--ml-compute-dtype")
     assert cmd[idx + 1] == "float64"
+
+
+def test_build_pycharmm_command_cube_packmol_argv_parses_in_pycharmm_backend():
+    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+
+    cmd = build_pycharmm_command(
+        _pycharmm_args(packmol_sphere=None, packmol_placement="cube")
+    )
+    assert "--packmol-placement" in cmd
+    idx = cmd.index("--packmol-placement")
+    assert cmd[idx + 1] == "cube"
+    parsed = pycharmm_mlpot.parse_args(cmd)
+    assert parsed.packmol_placement == "cube"
 
 
 def test_build_pycharmm_command_forwards_packmol_cache_and_run_state_flags():
