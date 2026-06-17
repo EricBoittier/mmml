@@ -831,6 +831,27 @@ def main(argv: list[str] | None = None) -> int:
     run_error = getattr(run_sim, "last_error", None)
     hdf5_path = Path(getattr(run_sim, "last_hdf5_path", f"{output_prefix}_{args.ensemble}.h5"))
 
+    if len(frames) > 0:
+        last_xyz = np.asarray(frames[-1], dtype=np.float64)
+        last_box = None
+        if boxes is not None and len(boxes):
+            last_box = np.asarray(boxes[-1], dtype=np.float64)
+        out_atoms = Atoms(numbers=z, positions=last_xyz)
+        if last_box is not None:
+            out_atoms.set_cell(last_box)
+            out_atoms.set_pbc(True)
+        elif not free_space and L is not None:
+            out_atoms.set_cell([L, L, L])
+            out_atoms.set_pbc(True)
+        set_handoff_out(
+            handoff_from_atoms(
+                out_atoms,
+                temperature_K=float(args.temperature),
+                pressure_atm=float(args.pressure) if args.ensemble == "npt" else None,
+                metadata={"backend": "jaxmd", "ensemble": args.ensemble},
+            )
+        )
+
     traj_chunk_frames = int(max(0, args.traj_chunk_frames))
     traj_paths: list[Path] = []
     if traj_chunk_frames <= 0:
@@ -922,38 +943,6 @@ def main(argv: list[str] | None = None) -> int:
         return 130
     if run_status == "error":
         return 1
-    if len(frames) > 0:
-        last_xyz = np.asarray(frames[-1], dtype=np.float64)
-        last_box = None
-        if boxes is not None and len(boxes):
-            last_box = np.asarray(boxes[-1], dtype=np.float64)
-        rho_final = None
-        try:
-            from mmml.utils.hdf5_reporter import load_hdf5_trajectory
-
-            if hdf5_path.is_file():
-                h5data = load_hdf5_trajectory(hdf5_path, datasets=["density_g_cm3", "temperature"])
-                if "density_g_cm3" in h5data and len(h5data["density_g_cm3"]):
-                    rho_final = float(h5data["density_g_cm3"][-1])
-                if "temperature" in h5data and len(h5data["temperature"]):
-                    summary["temperature_final_K"] = float(h5data["temperature"][-1])
-                    summary["temperature_mean_K"] = float(np.mean(h5data["temperature"]))
-        except Exception:
-            pass
-        if rho_final is not None:
-            summary["density_g_cm3_final"] = rho_final
-        out_atoms = Atoms(numbers=z, positions=last_xyz)
-        if last_box is not None:
-            out_atoms.set_cell(last_box)
-            out_atoms.set_pbc(True)
-        set_handoff_out(
-            handoff_from_atoms(
-                out_atoms,
-                temperature_K=float(args.temperature),
-                pressure_atm=float(args.pressure) if args.ensemble == "npt" else None,
-                metadata={"backend": "jaxmd", "ensemble": args.ensemble},
-            )
-        )
     return 0
 
 
