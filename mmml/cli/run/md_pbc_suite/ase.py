@@ -1393,6 +1393,7 @@ def main(argv: list[str] | None = None) -> int:
 
     from mmml.cli.run.md_handoff import (
         apply_handoff_to_atoms,
+        ensure_psf_for_handoff_cluster,
         get_handoff_in,
         handoff_from_atoms,
         set_handoff_out,
@@ -1412,6 +1413,22 @@ def main(argv: list[str] | None = None) -> int:
     n_atoms = len(z)
     monomer_offsets = np.zeros(n_molecules + 1, dtype=int)
     monomer_offsets[1:] = np.cumsum(np.asarray(atoms_per_list, dtype=int))
+    if handoff_in is not None:
+        if args.composition:
+            handoff_composition = _parse_composition(args.composition)
+        elif composition_summary:
+            handoff_composition = [
+                (str(res), int(cnt)) for res, cnt in composition_summary.items()
+            ]
+        else:
+            handoff_composition = [(residue_labels[0], n_molecules)]
+        ensure_psf_for_handoff_cluster(
+            composition=handoff_composition,
+            atomic_numbers=z,
+            atoms_per_list=atoms_per_list,
+            residue_labels=residue_labels,
+            quiet=bool(getattr(args, "quiet", False)),
+        )
     psf_charge_summary = _validate_psf_charges(
         monomer_offsets=monomer_offsets,
         residue_labels=residue_labels,
