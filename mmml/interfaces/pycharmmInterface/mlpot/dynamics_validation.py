@@ -99,26 +99,49 @@ def read_restart_natom(path: Path) -> int | None:
 
 def _restart_coordinate_values(path: Path) -> list[float]:
     """Parse Cartesian values from the ``!X, Y, Z`` section of a restart file."""
+    return _restart_section_values(path, "!X, Y, Z")
+
+
+def _restart_section_values(path: Path, section_marker: str) -> list[float]:
+    """Parse Fortran floats from a named restart section until the next ``!`` header."""
     try:
         lines = Path(path).read_text(errors="ignore").splitlines()
     except OSError:
         return []
     values: list[float] = []
-    in_coords = False
+    in_section = False
+    marker = section_marker.strip()
     for raw in lines:
         line = raw.strip()
         if not line:
             continue
-        if line.startswith("!X, Y, Z"):
-            in_coords = True
+        if line.startswith(marker) or (
+            marker.upper() in line.upper() and line.startswith("!")
+        ):
+            in_section = True
             continue
-        if in_coords and line.startswith("!"):
+        if in_section and line.startswith("!"):
             break
-        if not in_coords:
+        if not in_section:
             continue
         for match in _FORTRAN_FLOAT_RE.finditer(line):
             values.append(_parse_fortran_d_float(match.group()))
     return values
+
+
+def read_restart_velocities(path: Path) -> np.ndarray | None:
+    """Return ``(N, 3)`` velocities from ``!VELOCITIES`` when present."""
+    p = Path(path)
+    natom = read_restart_natom(p)
+    if natom is None or natom <= 0:
+        return None
+    flat = _restart_section_values(p, "!VELOCITIES")
+    if len(flat) < 3 * natom:
+        return None
+    vel = np.asarray(flat[: 3 * natom], dtype=float).reshape(natom, 3)
+    if not np.all(np.isfinite(vel)):
+        return None
+    return vel
 
 
 def read_restart_coordinates(path: Path) -> np.ndarray | None:

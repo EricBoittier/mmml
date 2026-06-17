@@ -822,7 +822,13 @@ def _load_or_build_cluster(
 
 
 def run_staged_workflow(args: argparse.Namespace) -> int:
+    from mmml.cli.run.md_handoff import get_handoff_in, handoff_from_charmm, set_handoff_out
+    from mmml.cli.run.md_stage_summary import cubic_box_side_from_cell
+
+    handoff_in = get_handoff_in()
     stages = resolve_md_stages(args)
+    if handoff_in is not None and not getattr(args, "handoff_pre_minimize", False):
+        stages = [s for s in stages if s != "mini"]
     if getattr(args, "no_pre_minimize", False):
         stages = [s for s in stages if s != "mini"]
     if not stages:
@@ -832,6 +838,18 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     dynamics_constrain = resolve_constrain_resids(args)
     ckpt = resolve_checkpoint(args.checkpoint)
     z, r, n_mol, tag = _load_or_build_cluster(args)
+    if handoff_in is not None:
+        r = np.asarray(handoff_in.positions, dtype=np.float64)
+        if (
+            handoff_in.atomic_numbers is not None
+            and len(handoff_in.atomic_numbers) == len(r)
+            and int(np.asarray(handoff_in.atomic_numbers).sum()) > 0
+        ):
+            z = np.asarray(handoff_in.atomic_numbers, dtype=np.int32)
+        if handoff_in.cell is not None:
+            side = cubic_box_side_from_cell(handoff_in.cell)
+            if side is not None:
+                args.box_size = float(side)
     validate_resids_for_cluster(fix_resids, n_mol)
     validate_resids_for_cluster(dynamics_constrain, n_mol)
     print_cluster_geometry_summary(r, n_mol)
@@ -920,6 +938,30 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
 
     setup_charmm_environment(use_pbc=charmm_pbc, cubic_box_side_A=box_side)
     sync_charmm_positions(r)
+    if handoff_in is not None:
+        sync_charmm_positions(handoff_in.positions)
+        if (
+            handoff_in.velocities is not None
+            and getattr(args, "continue_velocities", True)
+            and not getattr(args, "restart_from", None)
+        ):
+            seed_res = out_dir / "handoff" / "continue_seed.res"
+            seed_res.parent.mkdir(parents=True, exist_ok=True)
+            template = getattr(args, "handoff_template_res", None)
+            if template is None:
+                for cand in (
+                    paths.get("heat_res"),
+                    paths.get("equi_res"),
+                    paths.get("prod_res"),
+                ):
+                    if cand is not None and Path(cand).is_file():
+                        template = Path(cand)
+                        break
+            if template is not None:
+                from mmml.cli.run.md_handoff import save_handoff_to_res
+
+                save_handoff_to_res(handoff_in, seed_res, template_res=Path(template))
+                args.restart_from = seed_res
 
     vmd_topo_psf = paths["vmd_psf"]
     if getattr(args, "skip_cluster_build", False) and getattr(args, "from_psf", None):
@@ -1918,4 +1960,21 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             n_atoms=n_atoms,
             bondless_psf=paths["mini_psf"] if paths["mini_psf"].is_file() else None,
         )
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_restart_last_step,
+    )
+
+    set_handoff_out(
+        handoff_from_charmm(
+            z,
+            temperature_K=float(getattr(args, "temperature", getattr(args, "temp", 300.0))),
+            pressure_atm=float(args.pressure) if getattr(args, "pressure", None) is not None else None,
+            step=(
+                read_restart_last_step(last_restart_path)
+                if last_restart_path is not None
+                else None
+            ),
+            metadata={"backend": "pycharmm", "tag": tag, "stages": list(stages)},
+        )
+    )
     return 0

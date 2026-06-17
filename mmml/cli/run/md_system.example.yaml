@@ -1,0 +1,81 @@
+# Single-run example (flat keys):
+#   mmml md-system --config mmml/cli/run/md_system.example.yaml
+#
+# Campaign example (defaults + runs):
+#   mmml md-system --config mmml/cli/run/md_system.example.yaml --run-all
+#   mmml md-system --config mmml/cli/run/md_system.example.yaml --job-id jaxmd_prod
+
+# --- Uncomment for a single JAX-MD NPT run ---------------------------------
+# setup: pbc_npt
+# backend: jaxmd
+# composition: "DCM:20"
+# checkpoint: /path/to/DESdimers_params.json
+# output_dir: results/jaxmd_single
+# box_size: 38.0
+# packmol_radius: 20
+# dt_fs: 0.25
+# temperature: 260.0
+# pressure: 10.0
+# ps: 20
+# seed: 123
+
+# --- Campaign: PyCHARMM equil → JAX-MD prod → PyCHARMM prod ---------------
+defaults:
+  composition: "DCM:20"
+  checkpoint: /path/to/DESdimers_params.json
+  packmol_radius: 20
+  box_size: 38.0
+  dt_fs: 0.25
+  temperature: 260.0
+  seed: 123
+  spacing: 5.0
+  mm_switch_on: 9.0
+  mm_switch_width: 1.5
+  ml_switch_width: 1.0
+
+campaign_output: artifacts/dcm20_pipeline
+
+runs:
+  pycharmm_equil:
+    description: "Minimize, heat, and NPT equilibrate at 260 K / 10 atm"
+    backend: pycharmm
+    setup: pbc_npt
+    md_stages: "mini,heat,equi"
+    ps_heat: 20
+    ps_equi: 20
+    pressure: 10.0
+    output_dir: results/pycharmm_equil
+
+  jaxmd_prod:
+    description: "NPT production with JAX-MD after PyCHARMM equilibration"
+    backend: jaxmd
+    setup: pbc_npt
+    depends_on: pycharmm_equil
+    ps: 20
+    pressure: 10.0
+    output_dir: results/jaxmd_prod
+    handoff_write_res: true
+    extra_args:
+      - "--steps-per-recording"
+      - "800"
+      - "--jax-md-update-interval"
+      - "1"
+
+  jaxmd_nve:
+    description: "Short NVE replicates from NPT prod (seed offset per rep)"
+    backend: jaxmd
+    setup: pbc_nve
+    ps: 5
+    repeat: 3
+    depends_on: jaxmd_prod
+    output_dir: results/jaxmd_nve
+
+  pycharmm_prod:
+    description: "Production leg in PyCHARMM using handoff .res from JAX-MD"
+    backend: pycharmm
+    setup: pbc_npt
+    depends_on: jaxmd_prod
+    md_stages: "prod"
+    ps: 20
+    pressure: 10.0
+    output_dir: results/pycharmm_prod

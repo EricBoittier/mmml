@@ -75,6 +75,37 @@ def save_run_state(
         return path / "run_state.npz"
 
 
+def load_run_state_tree(path: Path) -> dict[str, Any]:
+    """Load geometry handoff tree from Orbax dir or ``run_state.npz``."""
+    root = Path(path).expanduser().resolve()
+    if (root / "format.txt").is_file():
+        fmt = (root / "format.txt").read_text(encoding="utf-8").strip().lower()
+        if fmt == "orbax" and (root / "orbax").is_dir():
+            import orbax.checkpoint as ocp
+
+            return ocp.PyTreeCheckpointer().restore(root / "orbax")
+    npz_path = root / "run_state.npz"
+    if npz_path.is_file():
+        loaded = np.load(npz_path, allow_pickle=True)
+        tree: dict[str, Any] = {}
+        for key in loaded.files:
+            if key == "metadata":
+                raw = loaded[key]
+                if isinstance(raw, np.ndarray) and raw.dtype == object and raw.shape == ():
+                    tree[key] = raw.item()
+                else:
+                    tree[key] = raw
+            else:
+                tree[key] = loaded[key]
+        if "metadata" not in tree and (root / "metadata.json").is_file():
+            tree["metadata"] = json.loads((root / "metadata.json").read_text(encoding="utf-8"))
+        return tree
+    if root.suffix.lower() == ".npz" and root.is_file():
+        loaded = np.load(root, allow_pickle=True)
+        return {key: loaded[key] for key in loaded.files}
+    raise FileNotFoundError(f"No run state at {root}")
+
+
 def maybe_save_run_state_from_workflow(
     args: Any,
     *,
