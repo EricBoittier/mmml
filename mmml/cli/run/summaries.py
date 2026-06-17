@@ -115,6 +115,8 @@ def print_flat_bottom_summary(
     console: Optional[Console] = None,
 ) -> None:
     """Print hybrid energy, flat-bottom term, and COM diagnostics."""
+    if flat_bottom_radius is None or float(flat_bottom_radius) <= 0.0:
+        return
     c = console or Console()
     mode = str(flat_bottom_mode).lower().strip()
     hybrid = float(np.asarray(result.hybrid_energy).reshape(()))
