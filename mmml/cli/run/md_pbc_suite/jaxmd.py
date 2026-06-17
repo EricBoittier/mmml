@@ -160,14 +160,26 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--jaxmd-pbc-minimize-steps", type=int, default=200)
     p.add_argument("--seed", type=int, default=123)
     p.add_argument(
+        "--packmol",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Pack --composition with Packmol (default cube inside --box-size). "
+            "Use --no-packmol for legacy grid placement."
+        ),
+    )
+    p.add_argument(
+        "--packmol-placement",
+        choices=("cube", "sphere"),
+        default=None,
+        help="Packmol constraint: cube (default) or sphere (--packmol-radius).",
+    )
+    p.add_argument(
         "--packmol-sphere",
         action=argparse.BooleanOptionalAction,
         default=None,
         dest="packmol_sphere",
-        help=(
-            "Pack --composition with Packmol inside a sphere (--packmol-radius). "
-            "Default: on when --composition and --packmol-radius (or legacy: --flat-bottom-radius) are set."
-        ),
+        help="Legacy alias for --packmol-placement sphere.",
     )
     p.add_argument(
         "--packmol-radius",
@@ -189,7 +201,7 @@ def main(argv: list[str] | None = None) -> int:
         "--packmol-tolerance",
         type=float,
         default=2.0,
-        help="Packmol tolerance (Å) for --packmol-sphere (default: 2.0).",
+        help="Packmol distance tolerance in Å (default: 2.0).",
     )
     p.add_argument(
         "--flat-bottom-radius",
