@@ -375,6 +375,7 @@ def main(argv: list[str] | None = None) -> int:
             atomic_numbers=z,
             atoms_per_list=atoms_per_list,
             residue_labels=residue_labels,
+            positions=r0,
             quiet=bool(getattr(args, "quiet", False)),
         )
     psf_charge_summary = _validate_psf_charges(
