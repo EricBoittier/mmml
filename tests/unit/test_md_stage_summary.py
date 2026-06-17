@@ -61,6 +61,41 @@ def test_build_pycharmm_plan_rows_heat_defaults_when_unset() -> None:
     assert heat.temperature_first_K == pytest.approx(32.0)
 
 
+def test_build_pycharmm_plan_rows_prod_uses_ps_when_ps_prod_unset() -> None:
+    args = Namespace(
+        setup="pbc_npt",
+        md_stages="prod",
+        dt_fs=0.25,
+        ps=1.0,
+        ps_prod=None,
+        ps_equi=None,
+        temperature=160.0,
+        pressure=1.0,
+        dcd_nsavc=800,
+    )
+    rows = build_pycharmm_plan_rows("pycharmm_prod", args)
+    assert len(rows) == 1
+    assert rows[0].stage == "prod"
+    assert rows[0].ps_requested == pytest.approx(1.0)
+    assert rows[0].pressure_atm == pytest.approx(1.0)
+
+
+def test_build_single_leg_plan_row_tolerates_none_ps() -> None:
+    args = Namespace(
+        setup="pbc_nvt",
+        ps=None,
+        dt_fs=None,
+        temperature=None,
+        pressure=None,
+        box_size=38.0,
+    )
+    row = build_single_leg_plan_row("jaxmd_prod", args, "jaxmd")
+    assert row.ps_requested == pytest.approx(1.0)
+    assert row.dt_fs == pytest.approx(0.25)
+    assert row.temperature_K == pytest.approx(300.0)
+    assert row.pressure_atm is None
+
+
 def test_build_pycharmm_plan_rows_expands_stages() -> None:
     args = Namespace(
         setup="pbc_npt",

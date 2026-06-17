@@ -112,16 +112,9 @@ _STAGE_ORDER: tuple[MdStage, ...] = ("mini", "heat", "nve", "equi", "prod")
 
 
 def _stage_ps(args: argparse.Namespace, stage: MdStage) -> float:
-    dt_fs = float(getattr(args, "dt_fs", 0.25))
-    if stage == "heat":
-        return float(getattr(args, "ps_heat", 10.0))
-    if stage == "equi":
-        return float(getattr(args, "ps_equi", 50.0))
-    if stage == "prod":
-        return float(getattr(args, "ps_prod", None) or getattr(args, "ps", 100.0))
-    if stage == "nve":
-        return float(getattr(args, "ps_nve", None) or getattr(args, "ps", 50.0))
-    return float(getattr(args, "ps", 1.0))
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_stage_ps
+
+    return resolve_stage_ps(args, stage)
 
 
 def _artifact_paths(out_dir: Path, tag: str) -> dict[str, Path]:

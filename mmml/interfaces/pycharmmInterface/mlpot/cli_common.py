@@ -360,6 +360,42 @@ def resolve_heat_firstt_finalt(
     return t_start, t_end
 
 
+def opt_attr(args: argparse.Namespace, name: str, default: Any = None) -> Any:
+    """Return ``getattr(args, name)`` unless the value is ``None`` (unset CLI default)."""
+    val = getattr(args, name, None)
+    return default if val is None else val
+
+
+def resolve_stage_ps(args: argparse.Namespace, stage: str) -> float:
+    """Per-stage dynamics length in ps for PyCHARMM staged workflows."""
+    if stage == "heat":
+        return float(opt_attr(args, "ps_heat", 10.0))
+    if stage == "equi":
+        return float(opt_attr(args, "ps_equi", 50.0))
+    if stage == "prod":
+        return float(opt_attr(args, "ps_prod", opt_attr(args, "ps", 100.0)))
+    if stage == "nve":
+        return float(opt_attr(args, "ps_nve", opt_attr(args, "ps", 50.0)))
+    return float(opt_attr(args, "ps", 1.0))
+
+
+def resolve_stage_pressure_atm(args: argparse.Namespace, stage: str) -> float | None:
+    """Target pressure (atm) for NPT equilibration/production stages."""
+    setup = str(opt_attr(args, "setup", "") or "")
+    if stage not in {"equi", "prod"} or not setup.endswith("npt"):
+        return None
+    raw = opt_attr(args, "npt_pressure", opt_attr(args, "pressure", 1.0))
+    return float(raw) if raw is not None else None
+
+
+def resolve_stage_temperature_K(args: argparse.Namespace, *, default: float = 300.0) -> float:
+    return float(opt_attr(args, "temperature", default))
+
+
+def resolve_dt_fs(args: argparse.Namespace, *, default: float = 0.25) -> float:
+    return float(opt_attr(args, "dt_fs", default))
+
+
 def resolve_heat_comp_damp(args: argparse.Namespace) -> bool:
     """Whether heat runs experimental COMP force-damp prep (default off)."""
     return bool(getattr(args, "heat_comp_damp", False))

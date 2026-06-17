@@ -88,51 +88,41 @@ def build_pycharmm_plan_rows(
     description: str | None = None,
 ) -> list[MdStageSummary]:
     """Expand PyCHARMM ``md_stages`` into plan rows with step counts."""
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import dynamics_nstep_from_ps as _nstep
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        dynamics_nstep_from_ps as _nstep,
+        opt_attr,
+        resolve_dt_fs,
+        resolve_heat_firstt_finalt,
+        resolve_stage_pressure_atm,
+        resolve_stage_ps,
+        resolve_stage_temperature_K,
+    )
 
-    dt = float(getattr(args, "dt_fs", 0.25))
-    stages = str(getattr(args, "md_stages", "") or "").split(",")
+    dt = resolve_dt_fs(args)
+    stages = str(opt_attr(args, "md_stages", "") or "").split(",")
     stages = [s.strip() for s in stages if s.strip()]
     if not stages:
         stages = ["dynamics"]
     rows: list[MdStageSummary] = []
     for stage in stages:
         if stage == "mini":
-            nsteps = int(getattr(args, "mini_nstep", 0))
+            nsteps = int(opt_attr(args, "mini_nstep", 0) or 0)
             ps = ps_from_nsteps(nsteps, dt)
-        elif stage == "heat":
-            ps = float(getattr(args, "ps_heat", getattr(args, "ps", 1.0)))
-            nsteps = _nstep(ps, dt)
-        elif stage == "nve":
-            ps = float(getattr(args, "ps_nve", getattr(args, "ps", 1.0)))
-            nsteps = _nstep(ps, dt)
-        elif stage in {"equi", "prod"}:
-            key = f"ps_{stage}"
-            ps = float(getattr(args, key, getattr(args, "ps", 1.0)))
-            nsteps = _nstep(ps, dt)
         else:
-            ps = float(getattr(args, "ps", 1.0))
+            ps = resolve_stage_ps(args, stage)
             nsteps = _nstep(ps, dt)
         t_first = None
-        t_final = float(getattr(args, "temperature", 300.0) or 300.0)
+        t_final = resolve_stage_temperature_K(args)
         if stage == "heat":
-            from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
-                resolve_heat_firstt_finalt,
-            )
-
             t_first, t_final = resolve_heat_firstt_finalt(args, default_temp=t_final)
-        p_atm = None
-        if stage in {"equi", "prod"} and str(getattr(args, "setup", "")).endswith("npt"):
-            raw_p = getattr(args, "npt_pressure", None)
-            if raw_p is None:
-                raw_p = getattr(args, "pressure", None)
-            p_atm = float(raw_p) if raw_p is not None else None
+        p_atm = resolve_stage_pressure_atm(args, stage)
+        box_raw = opt_attr(args, "box_size", None)
         rows.append(
             MdStageSummary(
                 stage=stage,
                 job_id=job_id,
                 backend="pycharmm",
-                setup=str(getattr(args, "setup", "")),
+                setup=str(opt_attr(args, "setup", "") or ""),
                 nsteps_requested=nsteps,
                 nsteps_completed=0,
                 dt_fs=dt,
@@ -141,8 +131,8 @@ def build_pycharmm_plan_rows(
                 temperature_K=t_final,
                 temperature_first_K=t_first,
                 pressure_atm=p_atm,
-                box_A_initial=float(getattr(args, "box_size", 0) or 0) or None,
-                record_every_steps=int(getattr(args, "dcd_nsavc", 1)),
+                box_A_initial=float(box_raw) if box_raw is not None else None,
+                record_every_steps=int(opt_attr(args, "dcd_nsavc", 1) or 1),
                 integrator=stage,
                 status="planned",
                 description=description,
@@ -152,18 +142,26 @@ def build_pycharmm_plan_rows(
 
 
 def build_single_leg_plan_row(job_id: str, args: Any, backend: str, *, description: str | None = None) -> MdStageSummary:
-    dt = float(getattr(args, "dt_fs", 0.25))
-    ps = float(getattr(args, "ps", 1.0))
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        opt_attr,
+        resolve_dt_fs,
+        resolve_stage_temperature_K,
+    )
+
+    dt = resolve_dt_fs(args)
+    ps = float(opt_attr(args, "ps", 1.0))
     nsteps = dynamics_nstep_from_ps(ps, dt)
-    setup = str(getattr(args, "setup", ""))
+    setup = str(opt_attr(args, "setup", "") or "")
     ensemble = setup.split("_")[-1] if "_" in setup else "dynamics"
     record = 100
     if backend == "jaxmd":
-        extra = list(getattr(args, "extra_args", []) or [])
+        extra = list(opt_attr(args, "extra_args", []) or [])
         for i, tok in enumerate(extra):
             if tok == "--steps-per-recording" and i + 1 < len(extra):
                 record = int(extra[i + 1])
-    p_atm = float(getattr(args, "pressure", 1.0)) if ensemble == "npt" else None
+    p_raw = opt_attr(args, "pressure", None)
+    p_atm = float(p_raw) if ensemble == "npt" and p_raw is not None else None
+    box_raw = opt_attr(args, "box_size", None)
     return MdStageSummary(
         stage=ensemble,
         job_id=job_id,
@@ -174,9 +172,9 @@ def build_single_leg_plan_row(job_id: str, args: Any, backend: str, *, descripti
         dt_fs=dt,
         ps_requested=ps,
         ps_completed=0.0,
-        temperature_K=float(getattr(args, "temperature", 300.0)),
+        temperature_K=resolve_stage_temperature_K(args),
         pressure_atm=p_atm,
-        box_A_initial=float(getattr(args, "box_size", 0) or 0) or None,
+        box_A_initial=float(box_raw) if box_raw is not None else None,
         record_every_steps=record,
         integrator=ensemble,
         status="planned",
