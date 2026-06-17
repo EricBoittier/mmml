@@ -682,8 +682,6 @@ def setup_calculator(
         _cached_batch_structure = prepare_batch_structure(full_batch_size, max_atoms)
     except Exception:
         pass
-    if defer_xla_gpu_warmup:
-        _mlpot_jax_defer_stack.close()
 
     from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
         resolve_max_active_dimers,
@@ -2482,7 +2480,10 @@ def setup_calculator(
     # Expose pbc_map and do_pbc_map so callers (e.g. run_sim) can pass them to the calculator
     get_spherical_cutoff_calculator.pbc_map = pbc_map if do_pbc_map else None
     get_spherical_cutoff_calculator.do_pbc_map = do_pbc_map
-    ensure_xla_gpu_warmed()
+    if defer_xla_gpu_warmup:
+        _mlpot_jax_defer_stack.close()
+    else:
+        ensure_xla_gpu_warmed()
     return get_spherical_cutoff_calculator
 
 ######################################################

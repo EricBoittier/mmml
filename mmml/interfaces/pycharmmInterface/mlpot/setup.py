@@ -549,20 +549,18 @@ RECOVERY_NBXMOD = 2
 
 def apply_recovery_nbonds(ctx: MlpotContext, *, nbxmod: int = RECOVERY_NBXMOD) -> None:
     """Temporary nonbond settings for bonded rescue SD (``NBXMOD 2``, VDW on in BLOCK)."""
-    from mmml.interfaces.pycharmmInterface.nbonds_config import (
-        pbc_nbond_kwargs,
-        vacuum_nbond_kwargs,
-    )
+    from mmml.interfaces.pycharmmInterface.nbonds_config import vacuum_nbond_kwargs
 
     pycharmm = _import_pycharmm()
     pycharmm.nbonds.update_bnbnd()
     if ctx.use_pbc and ctx.cubic_box_side_A is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import pbc_nbond_cutoffs
+        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import apply_pbc_nbonds
 
-        cutnb, cutim = pbc_nbond_cutoffs(float(ctx.cubic_box_side_A))
-        pycharmm.UpdateNonBondedScript(
-            **pbc_nbond_kwargs(nbxmod=nbxmod, cutnb=cutnb, cutim=cutim)
-        ).run()
+        cuts = apply_pbc_nbonds(
+            nbxmod=nbxmod,
+            cubic_box_side_A=float(ctx.cubic_box_side_A),
+        )
+        pycharmm.UpdateNonBondedScript(**cuts.as_pbc_nbond_kwargs(nbxmod=nbxmod)).run()
     else:
         # Dynamics may leave imgfrq>0; clear before rescue SD (inbfrq=0 is invalid then).
         pycharmm.nbonds.set_imgfrq(-1)
