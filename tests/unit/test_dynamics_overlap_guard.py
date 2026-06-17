@@ -681,10 +681,12 @@ def test_overlap_post_rescue_handoff_continues_in_memory(tmp_path, capsys):
     assert calls[0][0]["restart"] is False
     assert calls[1][0]["restart"] is False
     assert calls[1][1] is not None and calls[1][1].restart_read is None
-    assert calls[2][0]["restart"] is True
-    assert calls[2][0]["iasvel"] == 0
+    assert calls[2][0]["restart"] is False
+    assert calls[2][1] is not None and calls[2][1].restart_read is None
     post_rescue.assert_called_once()
-    assert "post-rescue in-memory handoff at global step 500" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "post-rescue in-memory handoff at global step 500" in out
+    assert "remaining chunks" in out
 
 
 def test_overlap_post_rescue_single_chunk_patches_without_extra_dyna(tmp_path, capsys):
