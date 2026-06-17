@@ -345,9 +345,24 @@ def main(argv: list[str] | None = None) -> int:
         base_ckpt_dir, _ = resolve_checkpoint_paths(args.checkpoint.expanduser().resolve())
     print(f"Using MMML checkpoint: {base_ckpt_dir}")
 
+    from mmml.cli.run.md_handoff import (
+        apply_handoff_to_atoms,
+        get_handoff_in,
+        handoff_from_atoms,
+        set_handoff_out,
+    )
+    from mmml.cli.run.md_stage_summary import cubic_box_side_from_cell
+
+    handoff_in = get_handoff_in()
+    skip_pre_min = bool(handoff_in is not None and not getattr(args, "handoff_pre_minimize", False))
+
     z, r0, atoms_per_list, residue_labels, _composition_summary = build_initial_cluster_from_args(
         args
     )
+    if handoff_in is not None:
+        r0 = np.asarray(handoff_in.positions, dtype=float)
+        if handoff_in.atomic_numbers is not None and int(handoff_in.atomic_numbers.sum()) > 0:
+            z = np.asarray(handoff_in.atomic_numbers, dtype=int)
     n_molecules = len(atoms_per_list)
     if args.composition:
         composition = _parse_composition(args.composition)
@@ -360,7 +375,7 @@ def main(argv: list[str] | None = None) -> int:
         residue_labels=residue_labels,
         total_atoms=len(z),
     )
-    if not resolve_cluster_packmol_sphere(args):
+    if not resolve_cluster_packmol_sphere(args) and handoff_in is None:
         r0 = _randomize_monomer_com_positions(
             r0,
             monomer_offsets,
@@ -381,6 +396,10 @@ def main(argv: list[str] | None = None) -> int:
         r = r0 - r0.mean(axis=0)
     else:
         L = float(args.box_size) if args.box_size is not None else float(_cubic_box_length(r0, ml_w))
+        if handoff_in is not None and handoff_in.cell is not None:
+            side = cubic_box_side_from_cell(handoff_in.cell)
+            if side is not None:
+                L = float(side)
         r = r0 - r0.mean(axis=0) + 0.5 * L
     geom_tag = "vac" if free_space else "pbc"
     atoms = Atoms(numbers=z, positions=r)
@@ -390,7 +409,14 @@ def main(argv: list[str] | None = None) -> int:
         assert L is not None
         atoms.set_cell([L, L, L])
         atoms.set_pbc(True)
+    if handoff_in is not None:
+        apply_handoff_to_atoms(atoms, handoff_in)
     minimization_summary: dict[str, float | str] = {}
+    if skip_pre_min:
+        args.calculator_pre_minimize = False
+        args.jaxmd_minimize_steps = 0
+        args.jaxmd_pbc_minimize_steps = 0
+        args.charmm_pre_minimize = False
     _check_or_charmm_overlap_rescue(
         atoms,
         monomer_offsets,
@@ -888,6 +914,38 @@ def main(argv: list[str] | None = None) -> int:
         return 130
     if run_status == "error":
         return 1
+    if frames:
+        last_xyz = np.asarray(frames[-1], dtype=np.float64)
+        last_box = None
+        if boxes is not None and len(boxes):
+            last_box = np.asarray(boxes[-1], dtype=np.float64)
+        rho_final = None
+        try:
+            from mmml.utils.hdf5_reporter import load_hdf5_trajectory
+
+            if hdf5_path.is_file():
+                h5data = load_hdf5_trajectory(hdf5_path, datasets=["density_g_cm3", "temperature"])
+                if "density_g_cm3" in h5data and len(h5data["density_g_cm3"]):
+                    rho_final = float(h5data["density_g_cm3"][-1])
+                if "temperature" in h5data and len(h5data["temperature"]):
+                    summary["temperature_final_K"] = float(h5data["temperature"][-1])
+                    summary["temperature_mean_K"] = float(np.mean(h5data["temperature"]))
+        except Exception:
+            pass
+        if rho_final is not None:
+            summary["density_g_cm3_final"] = rho_final
+        out_atoms = Atoms(numbers=z, positions=last_xyz)
+        if last_box is not None:
+            out_atoms.set_cell(last_box)
+            out_atoms.set_pbc(True)
+        set_handoff_out(
+            handoff_from_atoms(
+                out_atoms,
+                temperature_K=float(args.temperature),
+                pressure_atm=float(args.pressure) if args.ensemble == "npt" else None,
+                metadata={"backend": "jaxmd", "ensemble": args.ensemble},
+            )
+        )
     return 0
 
 

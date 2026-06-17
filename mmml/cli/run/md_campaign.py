@@ -1,0 +1,387 @@
+"""In-process campaign runner for ``mmml md-system``."""
+
+from __future__ import annotations
+
+import sys
+import time
+from argparse import Namespace
+from pathlib import Path
+from typing import Any
+
+from mmml.cli.run.md_config import (
+    campaign_job_ids,
+    expand_repeated_jobs,
+    load_yaml_config,
+    merge_campaign_job_config,
+    topological_job_order,
+)
+from mmml.cli.run.md_handoff import (
+    clear_handoff_context,
+    get_handoff_out,
+    handoff_is_valid,
+    load_handoff,
+    save_handoff,
+    set_handoff_in,
+    set_handoff_out,
+)
+from mmml.cli.run.md_stage_summary import (
+    MdJobSummary,
+    MdStageSummary,
+    build_pycharmm_plan_rows,
+    build_single_leg_plan_row,
+    print_campaign_plan,
+    print_campaign_report,
+    print_stage_summary,
+    write_campaign_plan,
+    write_campaign_summary,
+    write_stage_summary_json,
+)
+
+
+def _campaign_needs_pycharmm(campaign: dict[str, Any]) -> bool:
+    runs = campaign.get("runs") or campaign.get("jobs") or {}
+    return any(str((runs[j] or {}).get("backend", "")) == "pycharmm" for j in runs)
+
+
+def _resolve_output_dir(merged: dict[str, Any], run_id: str) -> Path:
+    if merged.get("output_dir"):
+        return Path(str(merged["output_dir"])).expanduser().resolve()
+    root = merged.get("output_root", "results")
+    return (Path(str(root)) / run_id).resolve()
+
+
+def namespace_from_merged(merged: dict[str, Any]) -> Namespace:
+    from mmml.cli.run import md_system
+
+    argv: list[str] = []
+    skip = {"description", "depends_on", "repeat", "optional", "integrator", "pbc", "handoff_write_res"}
+    for key, value in merged.items():
+        if key in skip or value is None:
+            continue
+        flag = f"--{key.replace('_', '-')}"
+        if isinstance(value, bool):
+            if value:
+                argv.append(flag)
+            elif key.startswith("no_") or key in {
+                "handoff_write_res",
+                "continue_velocities",
+                "traj_export_molecular_wrap",
+            }:
+                argv.append(f"--no-{key[3:].replace('_', '-')}" if key.startswith("no_") else f"--no-{key.replace('_', '-')}")
+        elif isinstance(value, list):
+            if key == "extra_args":
+                argv.extend(["--extra-args", *value])
+            else:
+                argv.append(flag)
+                argv.extend(str(v) for v in value)
+        else:
+            argv.extend([flag, str(value)])
+    old = sys.argv[:]
+    sys.argv = ["md-system", *argv]
+    try:
+        args = md_system.parse_md_system_args()
+        md_system._apply_backend_setup_defaults(args)
+        return args
+    finally:
+        sys.argv = old
+
+
+def build_plan_rows(campaign: dict[str, Any], job_order: list[str]) -> list[MdStageSummary]:
+    rows: list[MdStageSummary] = []
+    for jid in job_order:
+        merged = merge_campaign_job_config(campaign, jid)
+        args = namespace_from_merged(merged)
+        desc = merged.get("description")
+        backend = str(merged.get("backend", args.backend))
+        if backend == "pycharmm":
+            rows.extend(build_pycharmm_plan_rows(jid, args, description=desc))
+        else:
+            rows.append(build_single_leg_plan_row(jid, args, backend, description=desc))
+    return rows
+
+
+def run_single_backend(
+    args: Namespace,
+    *,
+    handoff_in=None,
+) -> tuple[int, Any, list[MdStageSummary]]:
+    from mmml.cli.run import md_system
+
+    clear_handoff_context()
+    set_handoff_in(handoff_in)
+    set_handoff_out(None)
+    backend, argv = md_system.build_command(args)
+    exit_code = md_system.run_backend(backend, argv, args)
+    handoff_out = get_handoff_out()
+    stages: list[MdStageSummary] = getattr(md_system, "_last_job_stages", []) or []
+    return exit_code, handoff_out, stages
+
+
+def run_campaign(args: Namespace) -> int:
+    from mmml.cli.run import md_system
+
+    campaign = load_yaml_config(args.config)
+    if getattr(args, "job_id", None):
+        order = [str(args.job_id)]
+    elif getattr(args, "run_all", False):
+        order = topological_job_order(campaign)
+    else:
+        raise ValueError("Campaign config requires --job-id or --run-all")
+
+    if _campaign_needs_pycharmm(campaign):
+        from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+            maybe_rerun_md_system_under_mpirun,
+            prepare_serial_charmm_mpi_env,
+        )
+
+        prepare_serial_charmm_mpi_env()
+        rerun = maybe_rerun_md_system_under_mpirun(sys.argv[1:])
+        if rerun is not None:
+            return int(rerun)
+
+    plan_rows = build_plan_rows(campaign, order)
+    campaign_root = Path(getattr(args, "campaign_output_dir", None) or campaign.get("campaign_output", "artifacts/md_campaign"))
+    campaign_root = campaign_root.expanduser().resolve()
+    campaign_root.mkdir(parents=True, exist_ok=True)
+    write_campaign_plan(campaign_root / "campaign_plan.json", plan_rows)
+    if not getattr(args, "quiet", False):
+        print_campaign_plan(plan_rows)
+
+    expanded = expand_repeated_jobs(campaign, order)
+    handoff_by_run: dict[str, Any] = {}
+    job_summaries: list[MdJobSummary] = []
+    campaign_rc = 0
+
+    for base_id, run_id, rep in expanded:
+        merged = merge_campaign_job_config(campaign, base_id)
+        if rep:
+            merged["seed"] = int(merged.get("seed", 123)) + rep
+        out_dir = _resolve_output_dir(merged, run_id)
+        merged["output_dir"] = str(out_dir)
+        merged["job_name"] = run_id
+        dep = merged.get("depends_on")
+        handoff_in = None
+        if dep:
+            dep_key = str(dep)
+            for _, rid, _ in expanded:
+                if rid == dep_key or rid.startswith(dep_key + "."):
+                    handoff_in = handoff_by_run.get(rid)
+                    break
+            if handoff_in is None:
+                dep_dir = _resolve_output_dir(
+                    merge_campaign_job_config(campaign, dep_key), dep_key
+                )
+                npz = dep_dir / "handoff" / "state.npz"
+                if npz.is_file():
+                    handoff_in = load_handoff(npz)
+            if handoff_in is not None and not merged.get("continue_from"):
+                merged["continue_from"] = str(
+                    _resolve_output_dir(
+                        merge_campaign_job_config(campaign, dep_key), dep_key
+                    )
+                    / "handoff"
+                    / "state.npz"
+                )
+        if handoff_in is None and merged.get("continue_from"):
+            handoff_in = load_handoff(Path(str(merged["continue_from"])))
+
+        if getattr(args, "resume_campaign", False) and handoff_is_valid(out_dir):
+            print(f"mmml md-system: resume skip complete job {run_id!r}", flush=True)
+            if (out_dir / "handoff" / "state.npz").is_file():
+                handoff_by_run[run_id] = load_handoff(out_dir / "handoff" / "state.npz")
+            continue
+
+        ns = namespace_from_merged(merged)
+        ns.output_dir = out_dir
+        ns.job_name = run_id
+        t0 = time.perf_counter()
+        rc, handoff_out, stages = run_single_backend(ns, handoff_in=handoff_in)
+        wall = time.perf_counter() - t0
+        if handoff_out is not None:
+            template = None
+            if dep and handoff_by_run.get(str(dep)):
+                prev_dir = _resolve_output_dir(merge_campaign_job_config(campaign, str(dep)), str(dep))
+                cand = prev_dir / "handoff" / "final.res"
+                if cand.is_file():
+                    template = cand
+            paths = save_handoff(
+                handoff_out,
+                out_dir,
+                template_res=template,
+                write_res=bool(getattr(ns, "handoff_write_res", True)),
+            )
+            handoff_by_run[run_id] = handoff_out
+        else:
+            paths = {}
+
+        if not getattr(args, "no_stage_summary", False):
+            for st in stages:
+                st.wall_time_s = wall / max(1, len(stages))
+                if not getattr(args, "quiet", False):
+                    print_stage_summary(st)
+            job_summary = MdJobSummary(
+                job_id=run_id,
+                backend=str(ns.backend),
+                setup=str(ns.setup),
+                stages=stages,
+                handoff={k: str(v) for k, v in paths.items()},
+                wall_time_s=wall,
+                exit_code=rc,
+            )
+            write_stage_summary_json(job_summary, out_dir)
+            job_summaries.append(job_summary)
+
+        if rc != 0:
+            campaign_rc = rc
+            if not merged.get("optional"):
+                break
+
+    write_campaign_summary(campaign_root / "campaign_summary.json", job_summaries)
+    if not getattr(args, "quiet", False):
+        print_campaign_report(job_summaries)
+    return campaign_rc
+
+
+def build_md_system_argv_from_campaign(
+    campaign: dict[str, Any],
+    job_id: str,
+    *,
+    output_dir: Path | None = None,
+) -> list[str]:
+    """Build flat argv for one campaign job (benchmark workflows)."""
+    merged = merge_campaign_job_config(campaign, job_id, output_dir=output_dir)
+    args = namespace_from_merged(merged)
+    from mmml.cli.run import md_system
+
+    _backend, backend_argv = md_system.build_command(args)
+    return backend_argv
+
+
+def build_benchmark_md_system_argv(
+    cfg: dict[str, Any],
+    job_id: str,
+    *,
+    output_dir: Path | None,
+    resolve_checkpoint,
+    job_output_dir,
+) -> list[str]:
+    """Build flat ``mmml md-system`` CLI argv for legacy benchmark ``config.yaml`` jobs."""
+    job = cfg["jobs"][job_id]
+    out = output_dir or job_output_dir(cfg, job_id)
+
+    argv: list[str] = [
+        "--setup",
+        str(job["setup"]),
+        "--backend",
+        str(job["backend"]),
+        "--composition",
+        str(cfg["composition"]),
+        "--checkpoint",
+        str(resolve_checkpoint(str(cfg["checkpoint"]))),
+        "--output-dir",
+        str(out),
+        "--job-name",
+        job_id,
+        "--seed",
+        str(cfg["seed"]),
+        "--dt-fs",
+        str(cfg["dt_fs"]),
+        "--ps",
+        str(job.get("ps", cfg["ps"])),
+        "--temperature",
+        str(cfg["temperature"]),
+        "--spacing",
+        str(cfg["spacing"]),
+        "--mm-switch-on",
+        str(cfg["mm_switch_on"]),
+        "--mm-switch-width",
+        str(cfg["mm_switch_width"]),
+        "--ml-switch-width",
+        str(cfg["ml_switch_width"]),
+    ]
+
+    if job.get("pbc"):
+        box_size = job.get("box_size", cfg["box_size"])
+        argv.extend(["--box-size", str(box_size)])
+        argv.extend(
+            [
+                "--packmol-sphere",
+                "--packmol-radius",
+                str(cfg["packmol_radius"]),
+                "--packmol-tolerance",
+                str(cfg["packmol_tolerance"]),
+            ]
+        )
+    else:
+        argv.extend(
+            [
+                "--packmol-sphere",
+                "--packmol-radius",
+                str(cfg["packmol_radius"]),
+                "--packmol-tolerance",
+                str(cfg["packmol_tolerance"]),
+            ]
+        )
+        argv.append("--free-space")
+
+    if job.get("nvt_integrator"):
+        argv.extend(["--nvt-integrator", str(job["nvt_integrator"])])
+
+    if str(job["backend"]) == "pycharmm":
+        argv.extend(
+            [
+                "--mini-nstep",
+                str(cfg["mini_nstep"]),
+                "--dyn-nprint",
+                str(cfg["dyn_nprint"]),
+                "--dcd-nsavc",
+                str(cfg["dcd_nsavc"]),
+                "--dynamics-overlap-action",
+                "rescue",
+                "--dynamics-overlap-check-interval",
+                str(cfg.get("dynamics_overlap_check_interval", 8000)),
+                "--echeck",
+                str(cfg.get("echeck", 500.0)),
+                "--charmm-sd-steps",
+                "25",
+                "--charmm-abnr-steps",
+                "100",
+                "--skip-energy-show",
+                "--ml-gpu-count",
+                "1",
+            ]
+        )
+        if job.get("md_stages"):
+            argv.extend(["--md-stages", str(job["md_stages"])])
+        if job.get("ps_nve") is not None:
+            argv.extend(["--ps-nve", str(job["ps_nve"])])
+        if job.get("ps_heat") is not None:
+            argv.extend(["--ps-heat", str(job["ps_heat"])])
+        if job.get("heat_thermostat"):
+            argv.extend(["--heat-thermostat", str(job["heat_thermostat"])])
+        heat_ihtfrq = job.get("heat_ihtfrq")
+        if heat_ihtfrq is not None:
+            argv.extend(["--heat-ihtfrq", str(heat_ihtfrq)])
+        argv.extend(["--heat-firstt", str(job.get("heat_firstt", cfg["heat_firstt"]))])
+        argv.extend(["--heat-finalt", str(job.get("heat_finalt", cfg["heat_finalt"]))])
+        if cfg.get("bonded_mm_mini"):
+            argv.append("--bonded-mm-mini")
+            argv.extend(
+                ["--bonded-mm-mini-after", str(cfg.get("bonded_mm_mini_after", "mini"))]
+            )
+            argv.extend(
+                [
+                    "--bonded-mm-mini-steps",
+                    str(int(cfg.get("bonded_mm_mini_steps", 50))),
+                ]
+            )
+
+    if str(job["setup"]) == "pbc_npt":
+        argv.extend(["--pressure", str(job.get("pressure", cfg["pressure"]))])
+
+    extra = list(job.get("extra_args") or [])
+    if extra:
+        argv.append("--extra-args")
+        argv.extend(extra)
+
+    return argv

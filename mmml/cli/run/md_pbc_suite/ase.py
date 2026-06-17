@@ -1369,9 +1369,25 @@ def main(argv: list[str] | None = None) -> int:
 
     timing_log: list[str] = []
     t_c0 = _tmark()
+
+    from mmml.cli.run.md_handoff import (
+        apply_handoff_to_atoms,
+        get_handoff_in,
+        handoff_from_atoms,
+        set_handoff_out,
+    )
+    from mmml.cli.run.md_stage_summary import cubic_box_side_from_cell
+
+    handoff_in = get_handoff_in()
+    skip_pre_min = bool(handoff_in is not None and not getattr(args, "handoff_pre_minimize", False))
+
     z, r0, atoms_per_list, residue_labels, composition_summary = build_initial_cluster_from_args(
         args
     )
+    if handoff_in is not None:
+        r0 = np.asarray(handoff_in.positions, dtype=float)
+        if handoff_in.atomic_numbers is not None and int(handoff_in.atomic_numbers.sum()) > 0:
+            z = np.asarray(handoff_in.atomic_numbers, dtype=int)
     n_molecules = len(atoms_per_list)
     cluster_build_s = _tmark() - t_c0
     _tlog(f"cluster_build: {cluster_build_s:.3f} s", timing_log)
@@ -1384,7 +1400,7 @@ def main(argv: list[str] | None = None) -> int:
         total_atoms=n_atoms,
         log_lines=timing_log,
     )
-    if not resolve_cluster_packmol_sphere(args):
+    if not resolve_cluster_packmol_sphere(args) and handoff_in is None:
         r0 = _randomize_monomer_com_positions(
             r0,
             monomer_offsets,
@@ -1412,6 +1428,10 @@ def main(argv: list[str] | None = None) -> int:
     r0 = initial_atoms.get_positions()
 
     L = float(args.box_size) if args.box_size is not None else _cubic_box_length(r0, args.ml_cutoff)
+    if handoff_in is not None and handoff_in.cell is not None:
+        side = cubic_box_side_from_cell(handoff_in.cell)
+        if side is not None:
+            L = float(side)
     r_pbc = r0 - r0.mean(axis=0) + 0.5 * L
 
     nsteps = int(round(args.ps * 1000.0 / args.dt_fs))
@@ -1474,6 +1494,8 @@ def main(argv: list[str] | None = None) -> int:
         else:
             atoms.set_cell(None)
             atoms.set_pbc(False)
+        if handoff_in is not None:
+            apply_handoff_to_atoms(atoms, handoff_in)
 
         run_timings: dict[str, float] = {}
         _check_or_charmm_overlap_rescue(
@@ -1488,7 +1510,7 @@ def main(argv: list[str] | None = None) -> int:
             nbxmod=args.charmm_nbxmod,
             timings=run_timings,
         )
-        if args.charmm_pre_minimize:
+        if args.charmm_pre_minimize and not skip_pre_min:
             _tlog(
                 f"{key}: CHARMM minimization starting (SD={args.charmm_sd_steps}, "
                 f"ABNR={args.charmm_abnr_steps}, tolenr={args.charmm_tolenr:g}, tolgrd={args.charmm_tolgrd:g})",
@@ -1584,52 +1606,54 @@ def main(argv: list[str] | None = None) -> int:
             )
 
         t_b = _tmark()
-        _tlog(
-            f"{key}: BFGS starting (max {args.pre_min_steps} steps, fmax={args.pre_min_fmax}; "
-            "this is pre-MD minimization, not dynamics yet)",
-            timing_log,
-        )
-        min_traj_path = out_dir / f"{key}_min.traj"
-        bfgs_log = None if args.quiet_bfgs else "-"
-        opt = BFGS(atoms, logfile=bfgs_log, trajectory=str(min_traj_path), maxstep=args.bfgs_maxstep)
-        opt.attach(
-            lambda: _check_or_charmm_overlap_rescue(
+        fmin = float(np.abs(atoms.get_forces()).max()) if skip_pre_min else None
+        if not skip_pre_min:
+            _tlog(
+                f"{key}: BFGS starting (max {args.pre_min_steps} steps, fmax={args.pre_min_fmax}; "
+                "this is pre-MD minimization, not dynamics yet)",
+                timing_log,
+            )
+            min_traj_path = out_dir / f"{key}_min.traj"
+            bfgs_log = None if args.quiet_bfgs else "-"
+            opt = BFGS(atoms, logfile=bfgs_log, trajectory=str(min_traj_path), maxstep=args.bfgs_maxstep)
+            opt.attach(
+                lambda: _check_or_charmm_overlap_rescue(
+                    atoms,
+                    monomer_offsets,
+                    min_distance=args.min_intermonomer_atom_distance,
+                    context=f"{key}: ASE BFGS",
+                    nstep_sd=args.charmm_sd_steps,
+                    nstep_abnr=args.charmm_abnr_steps,
+                    tolenr=args.charmm_tolenr,
+                    tolgrd=args.charmm_tolgrd,
+                    nbxmod=args.charmm_nbxmod,
+                    timings=run_timings,
+                ),
+                interval=1,
+            )
+            opt.run(fmax=args.pre_min_fmax, steps=args.pre_min_steps)
+            run_timings["bfgs_wall_s"] = _tmark() - t_b
+            run_timings["bfgs_traj"] = str(min_traj_path.relative_to(out_dir))
+            fmin = float(np.abs(atoms.get_forces()).max())
+            n_bfgs = int(opt.get_number_of_steps())
+            run_timings["bfgs_iterations"] = float(n_bfgs)
+            _tlog(
+                f"{key}: BFGS {run_timings['bfgs_wall_s']:.3f} s ({n_bfgs} iters)",
+                timing_log,
+            )
+            _check_or_charmm_overlap_rescue(
                 atoms,
                 monomer_offsets,
                 min_distance=args.min_intermonomer_atom_distance,
-                context=f"{key}: ASE BFGS",
+                context=f"{key}: after ASE BFGS",
                 nstep_sd=args.charmm_sd_steps,
                 nstep_abnr=args.charmm_abnr_steps,
                 tolenr=args.charmm_tolenr,
                 tolgrd=args.charmm_tolgrd,
                 nbxmod=args.charmm_nbxmod,
                 timings=run_timings,
-            ),
-            interval=1,
-        )
-        opt.run(fmax=args.pre_min_fmax, steps=args.pre_min_steps)
-        run_timings["bfgs_wall_s"] = _tmark() - t_b
-        run_timings["bfgs_traj"] = str(min_traj_path.relative_to(out_dir))
-        fmin = float(np.abs(atoms.get_forces()).max())
-        n_bfgs = int(opt.get_number_of_steps())
-        run_timings["bfgs_iterations"] = float(n_bfgs)
-        _tlog(
-            f"{key}: BFGS {run_timings['bfgs_wall_s']:.3f} s ({n_bfgs} iters)",
-            timing_log,
-        )
-        _check_or_charmm_overlap_rescue(
-            atoms,
-            monomer_offsets,
-            min_distance=args.min_intermonomer_atom_distance,
-            context=f"{key}: after ASE BFGS",
-            nstep_sd=args.charmm_sd_steps,
-            nstep_abnr=args.charmm_abnr_steps,
-            tolenr=args.charmm_tolenr,
-            tolgrd=args.charmm_tolgrd,
-            nbxmod=args.charmm_nbxmod,
-            timings=run_timings,
-        )
-        if fmin > args.pre_min_fmax:
+            )
+        if not skip_pre_min and fmin is not None and fmin > args.pre_min_fmax:
             if args.rescue_minimize:
                 _tlog(
                     f"{key}: rescue minimization triggered (fmax={fmin:.6f} > {args.pre_min_fmax:.6f})",
@@ -1690,6 +1714,8 @@ def main(argv: list[str] | None = None) -> int:
                     f"--max-fmax-after-min={args.max_fmax_after_min:.6f} even after rescue. "
                     "Increase minimization steps, tighten cutoffs, and/or reduce initial temperature."
                 )
+        elif skip_pre_min:
+            fmin = float(np.abs(atoms.get_forces()).max())
 
         res = run_md(
             name=key,
@@ -1725,6 +1751,13 @@ def main(argv: list[str] | None = None) -> int:
                 res["mm_pair_update_stats"] = stats
         suite_summary["runs"][key] = res
         suite_summary["timing"]["runs"][key] = dict(run_timings)
+        set_handoff_out(
+            handoff_from_atoms(
+                atoms,
+                temperature_K=float(args.nvt_temp_K if mode.startswith("nvt") else args.nve_temp_K),
+                metadata={"backend": "ase", "mode": mode, "pbc": use_pbc},
+            )
+        )
         _tlog(
             f"{key}: MD integrator {run_timings.get('md_integrator_loop_s', 0):.3f} s "
             f"({run_timings.get('md_per_step_mean_ms', 0):.4f} ms/step mean)",

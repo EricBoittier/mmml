@@ -22,7 +22,7 @@ from mmml.interfaces.pycharmmInterface.ml_dtypes import add_ml_compute_dtype_arg
 _DEFAULT_OUTPUT_DIR_STEMS = frozenset({"pycharmm_mlpot", "lambda_ti"})
 
 
-def parse_args() -> argparse.Namespace:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
             "Run predefined MD setups (free-space NVE/NVT, periodic NVE/NVT, periodic NPT, "
@@ -905,7 +905,106 @@ def parse_args() -> argparse.Namespace:
         help="lambda_ti: skip completed production trajectories; redo partial prod.traj files.",
     )
 
-    return parser.parse_args()
+    # --- YAML config / campaign / handoff -------------------------------------
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=None,
+        help="YAML file with md-system options or a campaign (defaults + runs/jobs).",
+    )
+    parser.add_argument(
+        "--job-id",
+        type=str,
+        default=None,
+        help="Run one job from a campaign config (--config); honors depends_on chain.",
+    )
+    parser.add_argument(
+        "--run-all",
+        action="store_true",
+        help="Run all jobs from a campaign config in dependency order (in-process).",
+    )
+    parser.add_argument(
+        "--resume-campaign",
+        action="store_true",
+        help="Skip campaign jobs whose output-dir/handoff already exists.",
+    )
+    parser.add_argument(
+        "--campaign-output-dir",
+        type=Path,
+        default=None,
+        help="Directory for campaign_plan.json and campaign_summary.json.",
+    )
+    parser.add_argument(
+        "--continue-from",
+        type=Path,
+        default=None,
+        help="Resume from handoff path (.res, .h5, .traj, run_state/, state.npz).",
+    )
+    parser.add_argument(
+        "--continue-from-frame",
+        type=int,
+        default=-1,
+        help="Frame index for .h5/.traj continue-from (default: -1 last).",
+    )
+    parser.add_argument(
+        "--continue-velocities",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Use velocities from handoff when present (else re-thermalize).",
+    )
+    parser.add_argument(
+        "--handoff-write-res",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Write handoff/final.res alongside state.npz after dynamics.",
+    )
+    parser.add_argument(
+        "--handoff-template-res",
+        type=Path,
+        default=None,
+        help="Template CHARMM .res for pure-Python handoff writer.",
+    )
+    parser.add_argument(
+        "--handoff-pre-minimize",
+        action="store_true",
+        help="Run pre-minimization even when continuing from a handoff.",
+    )
+    parser.add_argument(
+        "--no-stage-summary",
+        action="store_true",
+        help="Do not write stage_summary.json (campaigns).",
+    )
+
+    return parser
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    return build_parser().parse_args(argv)
+
+
+def parse_md_system_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Parse CLI with optional ``--config`` YAML (CLI overrides file)."""
+    from mmml.cli.run.md_config import apply_mapping_to_namespace, load_yaml_config
+
+    if argv is None:
+        argv = sys.argv[1:]
+    pre = argparse.ArgumentParser(add_help=False)
+    pre.add_argument("--config", type=str, default=None)
+    pre_args, remaining = pre.parse_known_args(argv)
+    defaults = vars(parse_args([]))
+    if pre_args.config:
+        cfg = load_yaml_config(pre_args.config)
+        flat = {k: v for k, v in cfg.items() if k not in {"defaults", "runs", "jobs"}}
+        tmp = argparse.Namespace(**defaults)
+        apply_mapping_to_namespace(tmp, flat, source="config")
+        defaults.update(vars(tmp))
+        defaults["config"] = pre_args.config
+    parser = build_parser()
+    parser.set_defaults(**defaults)
+    return parser.parse_args(remaining)
+
+
+_last_job_stages: list[Any] = []
 
 
 def _repo_root() -> Path:
@@ -1314,6 +1413,8 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     _append_optional(cmd, "--ps-nve", getattr(args, "ps_nve", None))
     _append_optional(cmd, "--ps-prod", getattr(args, "ps_prod", None))
     _append_optional(cmd, "--restart-from", getattr(args, "restart_from", None))
+    if getattr(args, "continue_from", None) and not getattr(args, "restart_from", None):
+        _append_optional(cmd, "--restart-from", args.continue_from)
     _append_optional(cmd, "--from-psf", getattr(args, "from_psf", None))
     _append_optional(cmd, "--from-crd", getattr(args, "from_crd", None))
     if args.no_fix:
@@ -1631,8 +1732,138 @@ def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
     return backend, cmd
 
 
+def run_backend(backend: str, argv: list[str], args: argparse.Namespace) -> int:
+    """Dispatch one backend in-process; honors handoff context vars."""
+    global _last_job_stages
+    from mmml.cli.run.md_handoff import (
+        get_handoff_in,
+        get_handoff_out,
+        load_handoff,
+        save_handoff,
+        set_handoff_in,
+    )
+    from mmml.cli.run.md_stage_summary import (
+        MdJobSummary,
+        MdStageSummary,
+        build_pycharmm_plan_rows,
+        build_single_leg_plan_row,
+        dynamics_nstep_from_ps,
+        ps_from_nsteps,
+        print_stage_summary,
+        write_stage_summary_json,
+    )
+
+    if backend == "pycharmm":
+        print(
+            f"mmml md-system: running pycharmm ({_pycharmm_run_summary(args)})",
+            flush=True,
+        )
+        print(f"  {' '.join(argv)}", flush=True)
+    else:
+        print(
+            f"mmml md-system: running {backend} in-process:",
+            " ".join(argv),
+            flush=True,
+        )
+
+    handoff_in = get_handoff_in()
+    if handoff_in is None and getattr(args, "continue_from", None):
+        handoff_in = load_handoff(
+            Path(args.continue_from),
+            frame=int(getattr(args, "continue_from_frame", -1)),
+        )
+        if not getattr(args, "continue_velocities", True) and handoff_in is not None:
+            from dataclasses import replace
+
+            handoff_in = replace(handoff_in, velocities=None)
+        set_handoff_in(handoff_in)
+
+    if backend == "ase":
+        from mmml.cli.run.md_pbc_suite import ase as backend_mod
+    elif backend == "pycharmm":
+        from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+            charmm_lib_links_mpi,
+            maybe_rerun_md_system_under_mpirun,
+            prepare_serial_charmm_mpi_env,
+            _under_mpirun,
+            mpirun_launch_hint,
+        )
+
+        prepare_serial_charmm_mpi_env()
+        campaign_active = bool(
+            getattr(args, "config", None)
+            and (getattr(args, "job_id", None) or getattr(args, "run_all", False))
+        )
+        if not campaign_active:
+            rerun_code = maybe_rerun_md_system_under_mpirun(sys.argv[1:])
+            if rerun_code is not None:
+                return rerun_code
+        if charmm_lib_links_mpi() and not _under_mpirun():
+            print(
+                "mmml: OpenMPI-linked CHARMM — for large MLpot clusters prefer:\n  "
+                f"  {_repo_root() / 'scripts/mmml-charmm-mpirun.sh'} md-system ...\n"
+                "  (or see mpirun hint below if SD hits domdec/MPI errors)\n  "
+                + mpirun_launch_hint("mmml md-system"),
+                flush=True,
+            )
+        from mmml.interfaces.pycharmmInterface.jax_device_policy import (
+            apply_mlpot_jax_compilation_cache_env,
+        )
+
+        apply_mlpot_jax_compilation_cache_env(quiet=True)
+        from mmml.interfaces.pycharmmInterface.jax_compile_threads import (
+            apply_jax_compile_xla_flags,
+        )
+
+        apply_jax_compile_xla_flags(quiet=True)
+        from mmml.cli.run.md_pbc_suite import pycharmm_mlpot as backend_mod
+    else:
+        from mmml.cli.run.md_pbc_suite import jaxmd as backend_mod
+
+    exit_code = int(backend_mod.main(argv))
+    handoff_out = get_handoff_out()
+    if handoff_out is not None and args.output_dir is not None:
+        save_handoff(
+            handoff_out,
+            Path(args.output_dir),
+            template_res=getattr(args, "handoff_template_res", None),
+            write_res=bool(getattr(args, "handoff_write_res", True)),
+        )
+
+    job_name = resolve_job_name(args) or "run"
+    if backend == "pycharmm":
+        plan: list[MdStageSummary] = build_pycharmm_plan_rows(job_name, args)
+        for row in plan:
+            if row.stage != "mini":
+                row.nsteps_completed = row.nsteps_requested
+                row.ps_completed = row.ps_requested
+                row.status = "complete" if exit_code == 0 else "error"
+    else:
+        row = build_single_leg_plan_row(job_name, args, backend)
+        nsteps = dynamics_nstep_from_ps(float(args.ps), float(args.dt_fs))
+        row.nsteps_requested = nsteps
+        row.nsteps_completed = nsteps if exit_code == 0 else 0
+        row.ps_completed = ps_from_nsteps(row.nsteps_completed, float(args.dt_fs))
+        row.status = "complete" if exit_code == 0 else "error"
+        plan = [row]
+    _last_job_stages = plan
+    if not getattr(args, "no_stage_summary", False) and args.output_dir is not None:
+        js = MdJobSummary(
+            job_id=job_name,
+            backend=backend,
+            setup=str(args.setup),
+            stages=plan,
+            exit_code=exit_code,
+        )
+        write_stage_summary_json(js, Path(args.output_dir))
+        if not getattr(args, "quiet", False):
+            for st in plan:
+                print_stage_summary(st)
+    return exit_code
+
+
 def main() -> int:
-    args = parse_args()
+    args = parse_md_system_args()
     started_at = datetime.now(timezone.utc).isoformat()
     backend: str | None = None
     argv: list[str] | None = None
@@ -1643,6 +1874,10 @@ def main() -> int:
         except ValueError as exc:
             print(f"mmml md-system: error: {exc}", file=sys.stderr)
             return 2
+        if args.config and (args.job_id or args.run_all):
+            from mmml.cli.run.md_campaign import run_campaign
+
+            return int(run_campaign(args))
         if args.setup == "lambda_ti":
             backend = str(args.backend)
             try:
@@ -1661,55 +1896,7 @@ def main() -> int:
         except ValueError as exc:
             print(f"mmml md-system: error: {exc}", file=sys.stderr)
             return 2
-        if backend == "pycharmm":
-            print(
-                f"mmml md-system: running pycharmm ({_pycharmm_run_summary(args)})",
-                flush=True,
-            )
-            print(f"  {' '.join(argv)}", flush=True)
-        else:
-            print(
-                f"mmml md-system: running {backend} in-process:",
-                " ".join(argv),
-                flush=True,
-            )
-        if backend == "ase":
-            from mmml.cli.run.md_pbc_suite import ase as backend_mod
-        elif backend == "pycharmm":
-            from mmml.interfaces.pycharmmInterface.charmm_mpi import (
-                charmm_lib_links_mpi,
-                maybe_rerun_md_system_under_mpirun,
-                prepare_serial_charmm_mpi_env,
-                _under_mpirun,
-                mpirun_launch_hint,
-            )
-
-            prepare_serial_charmm_mpi_env()
-            rerun_code = maybe_rerun_md_system_under_mpirun(sys.argv[1:])
-            if rerun_code is not None:
-                return rerun_code
-            if charmm_lib_links_mpi() and not _under_mpirun():
-                print(
-                    "mmml: OpenMPI-linked CHARMM — for large MLpot clusters prefer:\n  "
-                    f"  {_repo_root() / 'scripts/mmml-charmm-mpirun.sh'} md-system ...\n"
-                    "  (or see mpirun hint below if SD hits domdec/MPI errors)\n  "
-                    + mpirun_launch_hint("mmml md-system"),
-                    flush=True,
-                )
-            from mmml.interfaces.pycharmmInterface.jax_device_policy import (
-                apply_mlpot_jax_compilation_cache_env,
-            )
-
-            apply_mlpot_jax_compilation_cache_env(quiet=True)
-            from mmml.interfaces.pycharmmInterface.jax_compile_threads import (
-                apply_jax_compile_xla_flags,
-            )
-
-            apply_jax_compile_xla_flags(quiet=True)
-            from mmml.cli.run.md_pbc_suite import pycharmm_mlpot as backend_mod
-        else:
-            from mmml.cli.run.md_pbc_suite import jaxmd as backend_mod
-        exit_code = int(backend_mod.main(argv))
+        exit_code = run_backend(backend, argv, args)
         return exit_code
     finally:
         _maybe_save_job_run_manifest(

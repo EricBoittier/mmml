@@ -86,113 +86,16 @@ def build_md_system_argv(
     output_dir: Path | None = None,
 ) -> list[str]:
     """Build flat ``mmml md-system`` CLI argv for one benchmark job."""
-    job = cfg["jobs"][job_id]
-    out = output_dir or job_output_dir(cfg, job_id)
+    _ensure_repo_on_path()
+    from mmml.cli.run.md_campaign import build_benchmark_md_system_argv
 
-    argv: list[str] = [
-        "--setup",
-        str(job["setup"]),
-        "--backend",
-        str(job["backend"]),
-        "--composition",
-        str(cfg["composition"]),
-        "--checkpoint",
-        str(resolve_checkpoint(str(cfg["checkpoint"]))),
-        "--output-dir",
-        str(out),
-        "--job-name",
+    return build_benchmark_md_system_argv(
+        cfg,
         job_id,
-        "--seed",
-        str(cfg["seed"]),
-        "--dt-fs",
-        str(cfg["dt_fs"]),
-        "--ps",
-        str(job.get("ps", cfg["ps"])),
-        "--temperature",
-        str(cfg["temperature"]),
-        "--spacing",
-        str(cfg["spacing"]),
-        "--mm-switch-on",
-        str(cfg["mm_switch_on"]),
-        "--mm-switch-width",
-        str(cfg["mm_switch_width"]),
-        "--ml-switch-width",
-        str(cfg["ml_switch_width"]),
-    ]
-
-    if job.get("pbc"):
-        box_size = job.get("box_size", cfg["box_size"])
-        argv.extend(["--box-size", str(box_size)])
-        _append_packmol_argv(argv, cfg)
-    else:
-        _append_packmol_argv(argv, cfg)
-        argv.append("--free-space")
-
-    if job.get("nvt_integrator"):
-        argv.extend(["--nvt-integrator", str(job["nvt_integrator"])])
-
-    if str(job["backend"]) == "pycharmm":
-        argv.extend(
-            [
-                "--mini-nstep",
-                str(cfg["mini_nstep"]),
-                "--dyn-nprint",
-                str(cfg["dyn_nprint"]),
-                "--dcd-nsavc",
-                str(cfg["dcd_nsavc"]),
-                "--dynamics-overlap-action",
-                "rescue",
-                "--dynamics-overlap-check-interval",
-                str(cfg.get("dynamics_overlap_check_interval", 8000)),
-                "--echeck",
-                str(cfg.get("echeck", 500.0)),
-                "--charmm-sd-steps",
-                "25",
-                "--charmm-abnr-steps",
-                "100",
-                "--skip-energy-show",
-                "--ml-gpu-count",
-                "1",
-            ]
-        )
-        if job.get("md_stages"):
-            argv.extend(["--md-stages", str(job["md_stages"])])
-        if job.get("ps_nve") is not None:
-            argv.extend(["--ps-nve", str(job["ps_nve"])])
-        if job.get("ps_heat") is not None:
-            argv.extend(["--ps-heat", str(job["ps_heat"])])
-        if job.get("heat_thermostat"):
-            argv.extend(["--heat-thermostat", str(job["heat_thermostat"])])
-        heat_ihtfrq = job.get("heat_ihtfrq")
-        if heat_ihtfrq is not None:
-            argv.extend(["--heat-ihtfrq", str(heat_ihtfrq)])
-        argv.extend(
-            ["--heat-firstt", str(job.get("heat_firstt", cfg["heat_firstt"]))]
-        )
-        argv.extend(
-            ["--heat-finalt", str(job.get("heat_finalt", cfg["heat_finalt"]))]
-        )
-        if cfg.get("bonded_mm_mini"):
-            argv.append("--bonded-mm-mini")
-            argv.extend(
-                ["--bonded-mm-mini-after", str(cfg.get("bonded_mm_mini_after", "mini"))]
-            )
-            argv.extend(
-                [
-                    "--bonded-mm-mini-steps",
-                    str(int(cfg.get("bonded_mm_mini_steps", 50))),
-                ]
-            )
-
-    if str(job["setup"]) == "pbc_npt":
-        argv.extend(["--pressure", str(job.get("pressure", cfg["pressure"]))])
-
-    extra = list(job.get("extra_args") or [])
-    if extra:
-        argv.append("--extra-args")
-        argv.extend(extra)
-
-    return argv
+        output_dir=output_dir,
+        resolve_checkpoint=resolve_checkpoint,
+        job_output_dir=job_output_dir,
+    )
 
 
 def namespace_for_job(
