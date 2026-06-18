@@ -1588,6 +1588,14 @@ def add_bonded_mm_mini_args(parser: argparse.ArgumentParser) -> None:
         help="SD steps for bonded-only recovery mini (default: 50)",
     )
     group.add_argument(
+        "--bonded-mm-mini-always",
+        action="store_true",
+        help=(
+            "Run bonded SD after every stage in --bonded-mm-mini-after, even when "
+            "GRMS/ANGL/internal strain is below baseline (default: strain-gated only)"
+        ),
+    )
+    group.add_argument(
         "--bonded-mm-internal-margin",
         type=float,
         default=0.0,
