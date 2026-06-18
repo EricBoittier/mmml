@@ -58,6 +58,9 @@ def count_overlap_chunk_dcd_frames(dcd_path: Path) -> tuple[int, int]:
 def expected_dcd_frame_count(*, nstep: int, nsavc: int) -> int:
     """Minimum frames CHARMM should write (step 0 plus every ``nsavc`` steps)."""
     n = max(1, int(nstep))
+    if n <= 1:
+        # nstep=1 with nsavc=1 writes a single coordinate set (step 1), not step 0+1.
+        return 1
     sav = max(1, min(int(nsavc), n - 1))
     return 1 + n // sav
 
@@ -375,7 +378,9 @@ def assert_stage_dynamics_completed(
     expected_nstep = max(1, int(expected_nstep))
     nsavc = max(1, int(nsavc))
     expected_frames = expected_dcd_frame_count(nstep=expected_nstep, nsavc=nsavc)
-    min_frames = max(2, int(expected_frames * min_frame_fraction))
+    min_frames = max(1, int(expected_frames * min_frame_fraction))
+    if expected_frames >= 2:
+        min_frames = max(2, min_frames)
     min_steps = max(1, int(expected_nstep * min_step_fraction))
 
     restart_step: int | None = None

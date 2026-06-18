@@ -24,6 +24,7 @@ from mmml.utils.dcd_writer import concat_dcd_files, save_trajectory_dcd
 def test_expected_dcd_frame_count():
     assert expected_dcd_frame_count(nstep=40000, nsavc=500) == 81
     assert expected_dcd_frame_count(nstep=721, nsavc=500) == 2
+    assert expected_dcd_frame_count(nstep=1, nsavc=1) == 1
 
 
 def test_scan_dcd_frame_count_truncated_header(tmp_path):
@@ -382,6 +383,37 @@ def test_restart_has_nonfinite_coordinates_false_for_finite_restart(tmp_path):
         )
     )
     assert restart_has_nonfinite_coordinates(path) is False
+
+
+def test_assert_stage_dynamics_completed_accepts_single_step_heat(tmp_path):
+    """nstep=1 heat (instant velocity scaling) writes one DCD frame, not two."""
+    dcd = tmp_path / "heat.dcd"
+    res = tmp_path / "heat.res"
+    res.write_text(
+        "REST    48     1\n"
+        "\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        "          10     0       1       1      10     500     297       0       0\n",
+        encoding="utf-8",
+    )
+
+    class _Atoms:
+        def __len__(self):
+            return 5
+
+    save_trajectory_dcd(
+        dcd,
+        np.zeros((1, 5, 3), dtype=np.float32),
+        _Atoms(),
+        steps_per_frame=1,
+    )
+    assert_stage_dynamics_completed(
+        stage="heat",
+        expected_nstep=1,
+        nsavc=1,
+        dcd_path=dcd,
+        restart_path=res,
+    )
 
 
 def test_assert_stage_dynamics_completed_fails_truncated(tmp_path):
