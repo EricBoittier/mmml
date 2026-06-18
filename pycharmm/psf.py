@@ -589,8 +589,10 @@ def get_iblo_inb():
     """
     natom = get_natom()
     nnb = get_nnb()
-    if natom <= 0 or nnb <= 0:
-        return list()
+    if natom <= 0:
+        return [], []
+    if nnb <= 0:
+        return [0] * natom, []
 
     iblo = (ctypes.c_int * natom)()
     inb = (ctypes.c_int * nnb)()

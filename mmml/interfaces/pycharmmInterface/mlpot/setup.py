@@ -520,8 +520,8 @@ def save_cluster_topology_for_vmd(
     save_topology_sidecar(
         topology_fingerprint_path(psf_path),
         fingerprint,
-        pre_mlpot_iblo=pre_iblo,
-        pre_mlpot_inb=pre_inb,
+        pre_mlpot_iblo=pre_iblo if pre_inb else None,
+        pre_mlpot_inb=pre_inb if pre_inb else None,
     )
     return {"psf": psf_path, "pdb": pdb_path.resolve()}
 
