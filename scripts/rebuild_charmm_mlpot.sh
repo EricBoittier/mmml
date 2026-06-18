@@ -16,17 +16,21 @@ PMIX_LIB="${PMIX_LIB:-/opt/gcc-14.2.0/pmix-5.0.4/lib}"
 
 CLEAN=0
 USE_NFS_BUILD=0
+DEBUG=0
+CHARMM_BUILD_TYPE="${CHARMM_BUILD_TYPE:-Release}"
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") [--clean] [--use-nfs-build]
+Usage: $(basename "$0") [--clean] [--use-nfs-build] [--debug]
 
   --clean           Remove the cmake build directory and reconfigure from scratch.
   --use-nfs-build   Build in setup/charmm/build/cmake (default: \$HOME/.cache/mmml-charmm-build).
+  --debug           RelWithDebInfo + -g -fbacktrace (readable gdb/addr2line on segfaults).
 
 Environment:
   CHARMM_HOME       CHARMM source tree (default: $ROOT/setup/charmm)
   CHARMM_BUILD_DIR  CMake build directory (default: \$HOME/.cache/mmml-charmm-build)
+  CHARMM_BUILD_TYPE CMake build type (default: Release; --debug sets RelWithDebInfo)
   OPENMPI_ROOT      OpenMPI 5 prefix (default: $OPENMPI_ROOT)
 EOF
 }
@@ -35,6 +39,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --clean) CLEAN=1; shift ;;
     --use-nfs-build) USE_NFS_BUILD=1; shift ;;
+    --debug) DEBUG=1; CHARMM_BUILD_TYPE=RelWithDebInfo; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -113,15 +118,27 @@ done
 
 if [[ "$needs_configure" == 1 ]]; then
   mkdir -p "$BUILD_DIR"
-  echo "Configuring CHARMM library in $BUILD_DIR (OpenMPI: $OPENMPI_ROOT) ..."
-  cmake -S "$CHARMM_HOME" -B "$BUILD_DIR" \
-    -DCMAKE_INSTALL_PREFIX="$CHARMM_HOME" \
-    -Das_library=ON \
-    -Din_place_install=ON \
-    -Dopenmm=OFF \
-    -DMPI_C_COMPILER="$MPI_CC" \
-    -DMPI_CXX_COMPILER="$MPI_CXX" \
+  echo "Configuring CHARMM library in $BUILD_DIR (OpenMPI: $OPENMPI_ROOT, build: $CHARMM_BUILD_TYPE) ..."
+  CMAKE_ARGS=(
+    -S "$CHARMM_HOME"
+    -B "$BUILD_DIR"
+    -DCMAKE_INSTALL_PREFIX="$CHARMM_HOME"
+    -DCMAKE_BUILD_TYPE="$CHARMM_BUILD_TYPE"
+    -Das_library=ON
+    -Din_place_install=ON
+    -Dopenmm=OFF
+    -DMPI_C_COMPILER="$MPI_CC"
+    -DMPI_CXX_COMPILER="$MPI_CXX"
     -DMPI_Fortran_COMPILER="$MPI_FC"
+  )
+  if [[ "$DEBUG" == 1 ]]; then
+    CMAKE_ARGS+=(
+      -DCMAKE_Fortran_FLAGS="-g -fbacktrace -fno-omit-frame-pointer"
+      -DCMAKE_C_FLAGS="-g -fno-omit-frame-pointer"
+      -DCMAKE_CXX_FLAGS="-g -fno-omit-frame-pointer"
+    )
+  fi
+  cmake "${CMAKE_ARGS[@]}"
 fi
 
 echo "Building libcharmm.so in $BUILD_DIR ..."
@@ -148,9 +165,20 @@ fi
 
 cp -f "$BUILT" "$LIB_OUT"
 echo "Installed $LIB_OUT (from $BUILT)"
+if [[ "$DEBUG" == 1 ]]; then
+  if command -v readelf >/dev/null 2>&1 && readelf -S "$LIB_OUT" 2>/dev/null | grep -q '\.debug'; then
+    echo "Debug symbols: present in $LIB_OUT"
+  else
+    echo "rebuild_charmm_mlpot: warning: no .debug sections in $LIB_OUT (gdb backtraces may lack line numbers)" >&2
+  fi
+fi
 cat <<EOF
 Verify:
   uv run python -c "from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import mlpot_limits_message; print(mlpot_limits_message())"
 Expect: max_Nml=50000, max_Npr=3998000, source=api_func.F90 (libcharmm.so is up to date)
 If you see max_Nml=100: set CHARMM_HOME/CHARMM_LIB_DIR in CHARMMSETUP or export them, then rebuild again.
+
+Segfault diagnosis:
+  MMML_MPI_GDB=1 ./scripts/mmml-charmm-mpirun.sh md-system --config ...
+  (uses OMPI_MCA_orte_abort_print_stack=1 by default; ignore PRRTE Sphinx help noise)
 EOF
