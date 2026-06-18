@@ -27,6 +27,65 @@ def test_expected_dcd_frame_count():
     assert expected_dcd_frame_count(nstep=1, nsavc=1) == 1
 
 
+def test_harmonize_nsavc_frequency():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        harmonize_nsavc_frequency,
+    )
+
+    assert harmonize_nsavc_frequency(100, 41) == 1
+    assert harmonize_nsavc_frequency(40, 40) == 20
+    assert harmonize_nsavc_frequency(10, 40) == 10
+    assert harmonize_nsavc_frequency(200, 500) == 125
+
+
+def test_expected_overlap_chunk_dcd_frame_count_benz30_equi_case():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        expected_overlap_chunk_dcd_frame_count,
+    )
+
+    # 5000 steps, 10 × 500-step overlap chunks, nsavc=200 → 2 frames/chunk (restart).
+    assert (
+        expected_overlap_chunk_dcd_frame_count(
+            total_nstep=5000, nsavc=200, n_chunks=10
+        )
+        == 20
+    )
+
+
+def test_assert_stage_dynamics_completed_accepts_overlap_chunk_dcds(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        assert_stage_dynamics_completed,
+    )
+
+    class _Atoms:
+        def __len__(self):
+            return 5
+
+    atoms = _Atoms()
+    dcd = tmp_path / "equi_dcm_200.dcd"
+    for i in range(10):
+        save_trajectory_dcd(
+            tmp_path / f"equi_dcm_200.chunk.{i:04d}.dcd",
+            np.zeros((2, 5, 3), dtype=np.float32),
+            atoms,
+            steps_per_frame=200,
+        )
+    res = tmp_path / "equi.res"
+    res.write_text(
+        "REST     0         5000\n!NATOM\n10\n!X, Y, Z\n"
+        + " ".join(["0.0"] * 30)
+        + "\n",
+        encoding="utf-8",
+    )
+    assert_stage_dynamics_completed(
+        stage="equi",
+        expected_nstep=5000,
+        nsavc=200,
+        dcd_path=dcd,
+        restart_path=res,
+    )
+
+
 def test_scan_dcd_frame_count_truncated_header(tmp_path):
     from mmml.utils.dcd_reader import scan_dcd_frame_count
     from mmml.utils.dcd_writer import save_trajectory_dcd

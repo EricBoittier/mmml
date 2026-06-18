@@ -65,6 +65,49 @@ def expected_dcd_frame_count(*, nstep: int, nsavc: int) -> int:
     return 1 + n // sav
 
 
+def harmonize_nsavc_frequency(value: int, chunk_nstep: int) -> int:
+    """Trajectory save interval: strictly less than ``nstep`` and (when possible) divides it."""
+    n = max(1, int(chunk_nstep))
+    if n <= 1:
+        return max(1, int(value))
+    cap = n - 1
+    val = max(1, min(int(value), cap))
+    if n % val == 0:
+        return val
+    for d in range(val, 0, -1):
+        if n % d == 0:
+            return d
+    return 1
+
+
+def expected_overlap_chunk_dcd_frame_count(
+    *,
+    total_nstep: int,
+    nsavc: int,
+    n_chunks: int,
+    cold_start_first_chunk: bool = False,
+) -> int:
+    """Expected readable frames across per-chunk overlap DCDs.
+
+    Overlap segments restart between chunks; CHARMM usually omits a duplicate
+    origin frame on continuation chunks, so expect ``nstep // nsavc`` per chunk
+    rather than ``1 + nstep // nsavc`` for every chunk.
+    """
+    n_chunks = max(1, int(n_chunks))
+    total = max(1, int(total_nstep))
+    chunk_nstep = max(1, total // n_chunks)
+    # Use the configured nsavc (capped per chunk), not the harmonized divisor.
+    # Overlap chunks restart without a duplicate origin frame on each segment.
+    sav = max(1, min(int(nsavc), chunk_nstep - 1))
+    per_restart = max(1, chunk_nstep // sav)
+    if cold_start_first_chunk and n_chunks > 1:
+        per_cold = expected_dcd_frame_count(nstep=chunk_nstep, nsavc=sav)
+        return per_cold + per_restart * (n_chunks - 1)
+    if cold_start_first_chunk:
+        return expected_dcd_frame_count(nstep=chunk_nstep, nsavc=sav)
+    return per_restart * n_chunks
+
+
 def _parse_fortran_d_float(token: str) -> float:
     return float(token.upper().replace("D", "E"))
 
@@ -377,7 +420,15 @@ def assert_stage_dynamics_completed(
 
     expected_nstep = max(1, int(expected_nstep))
     nsavc = max(1, int(nsavc))
-    expected_frames = expected_dcd_frame_count(nstep=expected_nstep, nsavc=nsavc)
+    chunk_paths = overlap_chunk_dcd_paths(dcd_path) if dcd_path is not None else []
+    if chunk_paths:
+        expected_frames = expected_overlap_chunk_dcd_frame_count(
+            total_nstep=expected_nstep,
+            nsavc=nsavc,
+            n_chunks=len(chunk_paths),
+        )
+    else:
+        expected_frames = expected_dcd_frame_count(nstep=expected_nstep, nsavc=nsavc)
     min_frames = max(1, int(expected_frames * min_frame_fraction))
     if expected_frames >= 2:
         min_frames = max(2, min_frames)
@@ -419,15 +470,20 @@ def assert_stage_dynamics_completed(
             f"{readable_frames} are readable (truncated or corrupt file)"
         )
     if dcd_path is not None and n_frames < min_frames:
-        chunk_paths = overlap_chunk_dcd_paths(dcd_path)
         label = (
             f"{len(chunk_paths)} overlap chunk DCD(s) for {dcd_path.name}"
             if chunk_paths
             else f"DCD {dcd_path.name}"
         )
+        chunk_note = (
+            f" ({len(chunk_paths)} chunks × ~{expected_frames // max(1, len(chunk_paths))} "
+            f"frames/chunk at nsavc={nsavc})"
+            if chunk_paths
+            else f" at nsavc={nsavc}"
+        )
         problems.append(
             f"{label} has {n_frames} readable frame(s), "
-            f"expected >= {min_frames} ({expected_frames} at nsavc={nsavc})"
+            f"expected >= {min_frames} (~{expected_frames} total{chunk_note})"
         )
 
     if not problems:
