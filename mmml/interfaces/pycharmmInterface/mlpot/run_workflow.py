@@ -390,6 +390,7 @@ def _register_mlpot_context(
         cell=ml_cell,
         verbose=verbose,
         args=args,
+        defer_jax_until_after_sd=bool(defer_jax_warmup),
     )
     mm_internal_scale = (
         float(getattr(args, "mlpot_mm_internal_scale", 0.0) or 0.0)
