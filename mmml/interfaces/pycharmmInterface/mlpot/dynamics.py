@@ -1877,18 +1877,12 @@ def _harmonize_dynamics_frequency(value: int, chunk_nstep: int) -> int:
 
 
 def _harmonize_nsavc_frequency(value: int, chunk_nstep: int) -> int:
-    """Trajectory save interval: strictly less than ``nstep`` and (when possible) divides it."""
-    n = max(1, int(chunk_nstep))
-    if n <= 1:
-        return max(1, int(value))
-    cap = n - 1
-    val = max(1, min(int(value), cap))
-    if n % val == 0:
-        return val
-    for d in range(val, 0, -1):
-        if n % d == 0:
-            return d
-    return 1
+    """Backward-compatible alias; see :func:`harmonize_nsavc_frequency` in validation."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        harmonize_nsavc_frequency,
+    )
+
+    return harmonize_nsavc_frequency(value, chunk_nstep)
 
 
 def _ensure_nsavc_below_nstep(kw: dict[str, Any]) -> None:
@@ -1915,6 +1909,7 @@ _OVERLAP_CHUNK_FREQ_KEYS = (
     "iprfrq",
     "nprint",
     "isvfrq",
+    "nsavc",
 )
 
 
@@ -1929,7 +1924,17 @@ def _harmonize_overlap_chunk_frequencies(
     for key in _OVERLAP_CHUNK_FREQ_KEYS:
         if key not in chunk_kw:
             continue
-        chunk_kw[key] = _harmonize_dynamics_frequency(int(chunk_kw[key]), n)
+        if key == "nsavc":
+            old = int(chunk_kw[key])
+            new = _harmonize_nsavc_frequency(old, n)
+            if new != old:
+                print(
+                    f"overlap chunk: DCD nsavc {old} -> {new} (nstep={n})",
+                    flush=True,
+                )
+            chunk_kw[key] = new
+        else:
+            chunk_kw[key] = _harmonize_dynamics_frequency(int(chunk_kw[key]), n)
     if loose_pbc:
         apply_loose_pbc_dyn_freq_kwargs(chunk_kw, nstep=n)
     else:

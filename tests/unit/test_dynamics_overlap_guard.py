@@ -1690,11 +1690,11 @@ def test_harmonize_dynamics_frequency_for_remainder_chunk():
 
     kw2 = {"nsavc": 10}
     _harmonize_overlap_chunk_frequencies(kw2, 41)
-    assert kw2["nsavc"] == 10
+    assert kw2["nsavc"] == 1
 
     kw3 = {"nsavc": 40}
     _harmonize_overlap_chunk_frequencies(kw3, 40)
-    assert kw3["nsavc"] == 40
+    assert kw3["nsavc"] == 20
 
 
 def test_apply_dyn_imgfrq_from_args_sets_pbc_list_freqs():
