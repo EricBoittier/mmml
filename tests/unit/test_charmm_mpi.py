@@ -240,11 +240,8 @@ def test_maybe_rerun_md_system_invokes_mpirun(monkeypatch, tmp_path):
     mock_run.assert_called_once()
     cmd = mock_run.call_args.args[0]
     assert str(mpirun.resolve()) == cmd[0]
-    assert cmd[1:4] == ["-np", "1", "--mca"]
-    assert cmd[4] == "orte_abort_print_stack"
-    assert cmd[5] == "1"
-    assert cmd[6:8] == [mock_run.call_args.args[0][6], "-m"]
-    assert cmd[8] == "mmml.cli.__main__"
+    assert cmd[1:6] == ["-np", "1", "--mca", "orte_abort_print_stack", "1"]
+    assert cmd[7:9] == ["-m", "mmml.cli.__main__"]
     assert cmd[9:] == ["md-system", "--backend", "pycharmm"]
     env = mock_run.call_args.kwargs.get("env")
     assert env is not None
@@ -277,7 +274,9 @@ def test_maybe_rerun_md_system_prepends_subcommand(monkeypatch, tmp_path):
         )
     assert code == 0
     cmd = mock_run.call_args.args[0]
-    assert cmd[6:] == ["md-system", "--config", "dcm_test.yaml", "--run-all"]
+    assert cmd[1:6] == ["-np", "1", "--mca", "orte_abort_print_stack", "1"]
+    assert cmd[7:9] == ["-m", "mmml.cli.__main__"]
+    assert cmd[9:] == ["md-system", "--config", "dcm_test.yaml", "--run-all"]
 
 
 def test_mpi_mpirun_extra_args_abort_stack_by_default(monkeypatch):
