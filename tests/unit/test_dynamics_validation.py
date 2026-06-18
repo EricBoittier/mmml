@@ -108,10 +108,30 @@ def test_run_dynamics_clears_comparison_coords_when_iasvel_zero_no_start():
     fake_pycharmm.DynamicsScript.return_value = dyn
     with patch(
         "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.clear_comparison_coordinates"
-    ) as clear_comp, patch.dict(sys.modules, {"pycharmm": fake_pycharmm}):
+    ) as clear_comp, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers"
+    ) as release_bufs, patch.dict(sys.modules, {"pycharmm": fake_pycharmm}):
         run_dynamics({"iasvel": 0, "start": False, "nstep": 10})
     clear_comp.assert_called_once()
     dyn.run.assert_called_once()
+    assert release_bufs.call_count == 2
+
+
+def test_release_charmm_dynamics_api_buffers_calls_del_routines():
+    import sys
+    from unittest.mock import MagicMock, patch
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _release_charmm_dynamics_api_buffers,
+    )
+
+    fake_lib = MagicMock()
+    with patch.dict(sys.modules, {"pycharmm.lib": fake_lib}, clear=False):
+        _release_charmm_dynamics_api_buffers()
+    fake_lib.charmm.lambdata_del.assert_called_once()
+    fake_lib.charmm.ktable_del.assert_called_once()
+    fake_lib.charmm.velos_del.assert_called_once()
+    fake_lib.charmm.msldata_del.assert_called_once()
 
 
 def test_build_nve_dynamics_restart_uses_iasvel_zero():

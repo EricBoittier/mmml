@@ -1535,6 +1535,24 @@ def final_npt_segment_restart(data_dir: PathLike, prefix: str, n_segments: int) 
     return data_dir / f"{prefix}.res"
 
 
+def _release_charmm_dynamics_api_buffers() -> None:
+    """Free CHARMM dynamics dataframe buffers left allocated by ``dynamc``.
+
+    BLOCK-enabled builds call ``lambdata_init`` inside ``dynamc`` even when
+    PyCHARMM does not request ``lambdata=True``.  A second ``dyna`` (e.g.
+    ``nstep=0`` Boltzmann assign followed by HEAT) then hits ``dataframe_init``
+    ``chmrealloc`` and can segfault.  Mirror PyCHARMM's post-run cleanup.
+    """
+    try:
+        import pycharmm.lib as lib
+    except ImportError:
+        return
+    for name in ("lambdata_del", "ktable_del", "velos_del", "msldata_del"):
+        fn = getattr(lib.charmm, name, None)
+        if fn is not None:
+            fn()
+
+
 def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     """Instantiate and run ``pycharmm.DynamicsScript``."""
     from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
@@ -1547,8 +1565,10 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     # coordinates as velocities — zero COMP defensively.
     if not dynamics_kwargs.get("start") and int(dynamics_kwargs.get("iasvel", 1)) == 0:
         clear_comparison_coordinates()
+    _release_charmm_dynamics_api_buffers()
     dyn = pycharmm.DynamicsScript(**dynamics_kwargs)
     dyn.run()
+    _release_charmm_dynamics_api_buffers()
     return dyn
 
 

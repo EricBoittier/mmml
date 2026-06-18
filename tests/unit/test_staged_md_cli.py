@@ -384,6 +384,39 @@ def test_configure_heat_dynamics_start_hoover_memory_handoff_no_comp_velocities(
     assert kw["iasvel"] == 1
 
 
+def test_configure_heat_dynamics_start_scale_memory_handoff_single_dyna():
+    """Scale heat after mini uses one dyna (start=True), not nstep=0 + heat."""
+    io = CharmmTrajectoryFiles()
+    kw = {
+        "firstt": 26.0,
+        "finalt": 130.0,
+        "tbath": 130.0,
+        "ihtfrq": 500,
+        "start": False,
+    }
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.assign_velocities_at_temperature"
+    ) as assign:
+        _configure_heat_dynamics_start(
+            kw,
+            io,
+            coords_in_memory=True,
+            restart_from_file=False,
+            timestep_ps=0.0002,
+            use_pbc=True,
+            quiet=True,
+            heat_thermostat="scale",
+        )
+
+    assign.assert_not_called()
+    assert kw["restart"] is False
+    assert kw["new"] is False
+    assert kw["start"] is True
+    assert kw["iasvel"] == 1
+    assert kw["iasors"] == 0
+
+
 def test_configure_nve_dynamics_start_memory_handoff_no_readyn(tmp_path):
     """After mini, NVE must not READYN a 1-step scratch restart (CHARMM EOF)."""
     from unittest.mock import patch
