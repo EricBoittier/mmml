@@ -255,12 +255,22 @@ class DecomposedMlpotCalculator:
         t0 = time.perf_counter()
         from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import (
             broadcast_mlpot_result,
+            mpi_rank_size,
             mlpot_runs_on_this_rank,
+        )
+        from mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
+            spatial_mpi_enabled,
         )
 
         run_ml = mlpot_runs_on_this_rank()
         e_kcal = 0.0
         forces = np.zeros((n, 3), dtype=np.float64)
+        rank, mpi_size = mpi_rank_size()
+        use_spatial = (
+            bool(getattr(self, "_spatial_mpi", False) or spatial_mpi_enabled())
+            and mpi_size > 1
+            and bool(self._cell)
+        )
         if run_ml:
             with mlpot_jax_device_context():
                 mm_pair_idx, mm_pair_mask, use_mm_pairs = self._resolve_mm_pairs(pos, box)
@@ -274,11 +284,35 @@ class DecomposedMlpotCalculator:
                     atomic_numbers_jax=atomic_numbers_jax,
                     box_jax=box,
                 )
+                mono_jax = jnp.zeros((0,), dtype=jnp.int32)
+                dimer_jax = jnp.zeros((0,), dtype=jnp.int32)
+                if use_spatial:
+                    from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.batch_builder import (
+                        build_spatial_batch_indices,
+                        make_spatial_domain_grid,
+                    )
+
+                    grid = make_spatial_domain_grid(
+                        float(self._cell), mpi_size, self.cutoff_params
+                    )
+                    batch_idx = build_spatial_batch_indices(
+                        pos,
+                        self.n_monomers,
+                        self._atoms_per_monomer,
+                        grid,
+                        rank,
+                        self.cutoff_params,
+                    )
+                    mono_jax = jnp.asarray(batch_idx.owned_monomers, dtype=jnp.int32)
+                    dimer_jax = jnp.asarray(batch_idx.active_dimer_indices, dtype=jnp.int32)
                 e_raw, grad = value_and_grad_fn(
                     positions_jax,
                     mm_pair_idx,
                     mm_pair_mask,
                     use_mm_pairs,
+                    mono_jax,
+                    dimer_jax,
+                    use_spatial,
                 )
                 e_raw = jnp.where(jnp.isfinite(e_raw), e_raw, 0.0)
                 grad = jnp.where(jnp.isfinite(grad), grad, 0.0)
@@ -319,6 +353,8 @@ class DecomposedMlpotModel:
         pending_do_ml: bool = True,
         pending_do_ml_dimer: bool = True,
         verbose: bool = False,
+        spatial_mpi: bool = False,
+        atoms_per_monomer: Sequence[int] | None = None,
     ) -> None:
         self._spherical_fn = spherical_fn
         self._cutoff_params = cutoff_params
@@ -328,6 +364,12 @@ class DecomposedMlpotModel:
         self._do_mm = bool(do_mm)
         self._get_update_fn = get_update_fn
         self._ml_compute_dtype = ml_compute_dtype
+        self._spatial_mpi = bool(spatial_mpi)
+        if atoms_per_monomer is None:
+            apm = max(1, len(self._atomic_numbers) // max(1, int(n_monomers)))
+            self._atoms_per_monomer = [apm] * int(n_monomers)
+        else:
+            self._atoms_per_monomer = [int(x) for x in atoms_per_monomer]
         self._last_ml_forces: np.ndarray | None = None
         self._value_and_grad_fn: Any | None = None
         self._vg_cache_key: tuple[Any, ...] | None = None
@@ -400,6 +442,8 @@ class DecomposedMlpotModel:
             do_mm=self._do_mm,
             get_update_fn=self._get_update_fn,
             ml_compute_dtype=self._ml_compute_dtype,
+            spatial_mpi=self._spatial_mpi,
+            atoms_per_monomer=self._atoms_per_monomer,
         )
         calc._parent_model = self
         return calc
