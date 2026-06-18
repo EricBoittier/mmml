@@ -853,9 +853,8 @@ def test_maybe_run_bonded_mm_mini_all_ml_skips_heavy_reload_after_mini_when_grms
     ), patch.object(
         bonded_mm_recovery,
         "_run_heavy_bonded_recovery_check",
-    ) as heavy, patch.object(
-        bonded_mm_recovery,
-        "charmm_grms",
+    ) as heavy, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms",
         return_value=0.45,
     ):
         ran = bonded_mm_recovery.maybe_run_bonded_mm_mini_after_stage(
@@ -889,9 +888,8 @@ def test_maybe_run_bonded_mm_mini_all_ml_raises_when_mini_grms_high(tmp_path):
     ), patch.object(
         bonded_mm_recovery,
         "_run_heavy_bonded_recovery_check",
-    ) as heavy, patch.object(
-        bonded_mm_recovery,
-        "charmm_grms",
+    ) as heavy, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms",
         return_value=20.0,
     ), pytest.raises(RuntimeError, match="unsafe on MPI-linked CHARMM"):
         bonded_mm_recovery.maybe_run_bonded_mm_mini_after_stage(
