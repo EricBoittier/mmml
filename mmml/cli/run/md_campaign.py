@@ -43,6 +43,13 @@ def _campaign_needs_pycharmm(campaign: dict[str, Any]) -> bool:
     return any(str((runs[j] or {}).get("backend", "")) == "pycharmm" for j in runs)
 
 
+def _pycharmm_bonded_mm_mini_enabled(cfg: dict[str, Any], job: dict[str, Any]) -> bool:
+    """PyCHARMM campaign jobs strain-check after heat by default."""
+    if job.get("bonded_mm_mini") is False or cfg.get("bonded_mm_mini") is False:
+        return False
+    return True
+
+
 def _resolve_output_dir(merged: dict[str, Any], run_id: str, *, rep: int = 0) -> Path:
     repeat = int(merged.get("repeat", 1))
     if merged.get("output_dir"):
@@ -110,6 +117,8 @@ def namespace_from_merged(merged: dict[str, Any]) -> Namespace:
         if isinstance(value, bool):
             if value:
                 argv.append(flag)
+            elif key == "bonded_mm_mini":
+                argv.append("--no-bonded-mm-mini")
             elif key.startswith("no_") or key in {
                 "handoff_write_res",
                 "continue_velocities",
@@ -410,19 +419,30 @@ def build_benchmark_md_system_argv(
             argv.extend(["--heat-ihtfrq", str(heat_ihtfrq)])
         argv.extend(["--heat-firstt", str(job.get("heat_firstt", cfg["heat_firstt"]))])
         argv.extend(["--heat-finalt", str(job.get("heat_finalt", cfg["heat_finalt"]))])
-        if cfg.get("bonded_mm_mini"):
-            argv.append("--bonded-mm-mini")
-            argv.extend(
-                ["--bonded-mm-mini-after", str(cfg.get("bonded_mm_mini_after", "mini"))]
-            )
-            argv.extend(
-                [
-                    "--bonded-mm-mini-steps",
-                    str(int(cfg.get("bonded_mm_mini_steps", 50))),
-                ]
-            )
-            if cfg.get("bonded_mm_mini_always"):
-                argv.append("--bonded-mm-mini-always")
+        if str(job["backend"]) == "pycharmm":
+            if _pycharmm_bonded_mm_mini_enabled(cfg, job):
+                argv.append("--bonded-mm-mini")
+                argv.extend(
+                    [
+                        "--bonded-mm-mini-after",
+                        str(
+                            job.get(
+                                "bonded_mm_mini_after",
+                                cfg.get("bonded_mm_mini_after", "mini,heat"),
+                            )
+                        ),
+                    ]
+                )
+                argv.extend(
+                    [
+                        "--bonded-mm-mini-steps",
+                        str(int(cfg.get("bonded_mm_mini_steps", 50))),
+                    ]
+                )
+                if cfg.get("bonded_mm_mini_always") or job.get("bonded_mm_mini_always"):
+                    argv.append("--bonded-mm-mini-always")
+            else:
+                argv.append("--no-bonded-mm-mini")
 
     if str(job["setup"]) == "pbc_npt":
         argv.extend(["--pressure", str(job.get("pressure", cfg["pressure"]))])

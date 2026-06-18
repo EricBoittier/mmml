@@ -1569,17 +1569,19 @@ def add_bonded_mm_mini_args(parser: argparse.ArgumentParser) -> None:
     )
     group.add_argument(
         "--bonded-mm-mini",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=True,
         help=(
             "Compare MM bonded GRMS to post-MM-pre-min baseline after selected stages; "
-            "run bonded-only SD (BLOCK toggle, MLpot stays on) if higher"
+            "run bonded-only SD (BLOCK toggle, MLpot stays on) if higher "
+            "(default: on; heat is always checked when enabled)"
         ),
     )
     group.add_argument(
         "--bonded-mm-mini-after",
         type=str,
-        default="mini",
-        help="Comma-separated dynamics stages to check (default: mini)",
+        default="mini,heat",
+        help="Comma-separated dynamics stages to check (default: mini,heat; heat always)",
     )
     group.add_argument(
         "--bonded-mm-mini-steps",

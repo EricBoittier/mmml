@@ -1698,9 +1698,11 @@ def _ensure_valid_overlap_scratch_restart(
     rest_field = _restart_header_step_field(path)
     hint = (
         "CHARMM wrote a coordinate-history restart (REST third field -1) or dynamics "
-        "was unstable. For HEAT after mini use in-memory Boltzmann assignment; avoid "
-        "dyna start without firstt on overlap chunk 0; try --heat-thermostat hoover "
-        "and a single heat segment (--dynamics-overlap-check-interval >= heat nstep)."
+        "was unstable. On MPI-linked CHARMM use in-memory overlap handoff (default "
+        "under mpirun; or --dynamics-overlap-memory-handoff). For HEAT after mini use "
+        "in-memory Boltzmann assignment; avoid dyna start without firstt on overlap "
+        "chunk 0; try --heat-thermostat hoover and a single heat segment "
+        "(--dynamics-overlap-check-interval >= heat nstep)."
     )
     raise RuntimeError(
         f"overlap ({overlap_context}): scratch restart {path.name} is not restartable "

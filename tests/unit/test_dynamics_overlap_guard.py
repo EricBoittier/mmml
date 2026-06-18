@@ -17,6 +17,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
     check_dynamics_overlap,
     monomer_offsets,
     resolve_dynamics_overlap_config,
+    resolve_overlap_memory_handoff,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics_with_io
 
@@ -80,6 +81,36 @@ def test_resolve_defaults_to_rescue_and_1p5A():
     assert cfg.max_monomer_extent_A == pytest.approx(12.0)
     assert cfg.rescue.nstep_sd == 200
     assert cfg.rescue.nstep_abnr == 400
+    assert cfg.memory_handoff is False
+
+
+def test_resolve_overlap_memory_handoff_explicit_and_mpi_default(monkeypatch):
+    args = argparse.Namespace(dynamics_overlap_memory_handoff=True)
+    assert resolve_overlap_memory_handoff(args) is True
+
+    args = argparse.Namespace()
+    monkeypatch.delenv("MMML_NO_OVERLAP_MEMORY_HANDOFF", raising=False)
+    monkeypatch.delenv("MMML_OVERLAP_MEMORY_HANDOFF", raising=False)
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
+        return_value=True,
+    ):
+        assert resolve_overlap_memory_handoff(args) is True
+        cfg = resolve_dynamics_overlap_config(args, n_monomers=4, use_pbc=False)
+        assert cfg.memory_handoff is True
+
+    monkeypatch.setenv("MMML_NO_OVERLAP_MEMORY_HANDOFF", "1")
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
+        return_value=True,
+    ):
+        assert resolve_overlap_memory_handoff(args) is False
 
 
 def test_resolve_off_disables_inter_and_intra():

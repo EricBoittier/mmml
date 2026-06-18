@@ -1063,7 +1063,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
 
     baseline = None
     if (
-        getattr(args, "bonded_mm_mini", False)
+        getattr(args, "bonded_mm_mini", True)
         and getattr(args, "charmm_pre_minimize", True)
         and not pretreat_mm
     ):

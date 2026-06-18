@@ -103,6 +103,20 @@ def test_apply_campaign_cli_overrides_ml_flags() -> None:
     assert "ml_gpu_count" not in merged2
 
 
+def test_namespace_from_merged_defaults_bonded_mm_mini_on_pycharmm() -> None:
+    from mmml.cli.run.md_campaign import namespace_from_merged
+
+    args = namespace_from_merged(
+        {
+            "backend": "pycharmm",
+            "setup": "pbc_npt",
+            "composition": "BENZ:10",
+        }
+    )
+    assert args.bonded_mm_mini is True
+    assert args.bonded_mm_mini_after == "mini,heat"
+
+
 def test_namespace_from_merged_bonded_mm_mini_always() -> None:
     from mmml.cli.run.md_campaign import namespace_from_merged
 

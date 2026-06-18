@@ -664,14 +664,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--bonded-mm-mini",
-        action="store_true",
-        help="pycharmm: bonded-only SD if internal energy exceeds post-MM-pre-min baseline",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "pycharmm: bonded-only SD if MM bonded strain exceeds post-MM-pre-min baseline "
+            "(default: on; heat always checked when enabled)"
+        ),
     )
     parser.add_argument(
         "--bonded-mm-mini-after",
         type=str,
-        default="mini",
-        help="pycharmm: comma-separated stages to check (default: mini)",
+        default="mini,heat",
+        help="pycharmm: comma-separated stages to check (default: mini,heat; heat always)",
     )
     parser.add_argument(
         "--bonded-mm-mini-steps",
@@ -1513,7 +1517,7 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd.append("--no-pre-nve-charmm-update")
     elif getattr(args, "pre_nve_charmm_update", None) is True:
         cmd.append("--pre-nve-charmm-update")
-    if getattr(args, "bonded_mm_mini", False):
+    if getattr(args, "bonded_mm_mini", True):
         cmd.append("--bonded-mm-mini")
         cmd.extend(["--bonded-mm-mini-after", str(args.bonded_mm_mini_after)])
         cmd.extend(["--bonded-mm-mini-steps", str(args.bonded_mm_mini_steps)])
@@ -1548,6 +1552,8 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
             )
         if getattr(args, "bonded_mm_mini_always", False):
             cmd.append("--bonded-mm-mini-always")
+    else:
+        cmd.append("--no-bonded-mm-mini")
     if getattr(args, "allow_high_bonded_strain", False):
         cmd.append("--allow-high-bonded-strain")
     cmd.extend(["--dynamics-overlap-action", str(args.dynamics_overlap_action)])
