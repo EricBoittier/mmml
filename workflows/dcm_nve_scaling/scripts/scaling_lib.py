@@ -230,6 +230,8 @@ def build_md_system_argv(
                 str(int(cfg.get("bonded_mm_mini_steps", 50))),
             ]
         )
+        if cfg.get("bonded_mm_mini_always"):
+            argv.append("--bonded-mm-mini-always")
 
     if bool(cfg.get("pre_nve_charmm_update", True)):
         argv.append("--pre-nve-charmm-update")
