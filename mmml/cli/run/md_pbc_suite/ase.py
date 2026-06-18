@@ -825,24 +825,9 @@ def _numpy_wrap_monomers_primary_cell(
     monomer_offsets: np.ndarray,
     cell_matrix: np.ndarray,
 ) -> np.ndarray:
-    """Rigid integer-lattice shifts per monomer so each COM sits in the primary orthorhombic cell."""
-    pos = np.asarray(positions, dtype=float).copy()
-    c = np.asarray(cell_matrix, dtype=float).reshape(3, 3)
-    Lx, Ly, Lz = float(c[0, 0]), float(c[1, 1]), float(c[2, 2])
-    n_mol = int(len(monomer_offsets) - 1)
-    for mi in range(n_mol):
-        s, e = int(monomer_offsets[mi]), int(monomer_offsets[mi + 1])
-        com = pos[s:e].mean(axis=0)
-        shift = np.array(
-            [
-                -np.floor(com[0] / Lx) * Lx if Lx > 0 else 0.0,
-                -np.floor(com[1] / Ly) * Ly if Ly > 0 else 0.0,
-                -np.floor(com[2] / Lz) * Lz if Lz > 0 else 0.0,
-            ],
-            dtype=float,
-        )
-        pos[s:e] += shift
-    return pos
+    from mmml.utils.geometry_checks import wrap_monomers_primary_cell
+
+    return wrap_monomers_primary_cell(positions, monomer_offsets, cell_matrix)
 
 
 def _run_charmm_minimize(
@@ -1489,7 +1474,7 @@ def main(argv: list[str] | None = None) -> int:
     t_c0 = _tmark()
 
     from mmml.cli.run.md_handoff import (
-        apply_handoff_to_atoms,
+        apply_handoff_geometry_to_atoms,
         ensure_psf_for_handoff_cluster,
         get_handoff_in,
         handoff_from_atoms,
@@ -1547,18 +1532,19 @@ def main(argv: list[str] | None = None) -> int:
             min_com_distance=args.min_com_start_distance,
         )
     initial_atoms = Atoms(numbers=z, positions=r0)
-    _check_or_charmm_overlap_rescue(
-        initial_atoms,
-        monomer_offsets,
-        min_distance=args.min_intermonomer_atom_distance,
-        context="initial placement",
-        nstep_sd=args.charmm_sd_steps,
-        nstep_abnr=args.charmm_abnr_steps,
-        tolenr=args.charmm_tolenr,
-        tolgrd=args.charmm_tolgrd,
-        nbxmod=args.charmm_nbxmod,
-    )
-    r0 = initial_atoms.get_positions()
+    if handoff_in is None:
+        _check_or_charmm_overlap_rescue(
+            initial_atoms,
+            monomer_offsets,
+            min_distance=args.min_intermonomer_atom_distance,
+            context="initial placement",
+            nstep_sd=args.charmm_sd_steps,
+            nstep_abnr=args.charmm_abnr_steps,
+            tolenr=args.charmm_tolenr,
+            tolgrd=args.charmm_tolgrd,
+            nbxmod=args.charmm_nbxmod,
+        )
+        r0 = initial_atoms.get_positions()
 
     L = float(args.box_size) if args.box_size is not None else _cubic_box_length(r0, args.ml_cutoff)
     if handoff_in is not None and handoff_in.cell is not None:
@@ -1628,21 +1614,29 @@ def main(argv: list[str] | None = None) -> int:
             atoms.set_cell(None)
             atoms.set_pbc(False)
         if handoff_in is not None:
-            apply_handoff_to_atoms(atoms, handoff_in)
+            apply_handoff_geometry_to_atoms(
+                atoms, handoff_in, monomer_offsets=monomer_offsets
+            )
 
         run_timings: dict[str, float] = {}
-        _check_or_charmm_overlap_rescue(
-            atoms,
-            monomer_offsets,
-            min_distance=args.min_intermonomer_atom_distance,
-            context=f"{key}: before minimization",
-            nstep_sd=args.charmm_sd_steps,
-            nstep_abnr=args.charmm_abnr_steps,
-            tolenr=args.charmm_tolenr,
-            tolgrd=args.charmm_tolgrd,
-            nbxmod=args.charmm_nbxmod,
-            timings=run_timings,
-        )
+        if handoff_in is None or not skip_pre_min:
+            _check_or_charmm_overlap_rescue(
+                atoms,
+                monomer_offsets,
+                min_distance=args.min_intermonomer_atom_distance,
+                context=f"{key}: before minimization",
+                nstep_sd=args.charmm_sd_steps,
+                nstep_abnr=args.charmm_abnr_steps,
+                tolenr=args.charmm_tolenr,
+                tolgrd=args.charmm_tolgrd,
+                nbxmod=args.charmm_nbxmod,
+                timings=run_timings,
+            )
+        elif not getattr(args, "quiet", False):
+            _tlog(
+                f"{key}: skipping overlap check (continuing from equilibrated handoff)",
+                timing_log,
+            )
         if args.charmm_pre_minimize and not skip_pre_min:
             _tlog(
                 f"{key}: CHARMM minimization starting (SD={args.charmm_sd_steps}, "

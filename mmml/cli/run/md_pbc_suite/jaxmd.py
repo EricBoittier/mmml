@@ -359,7 +359,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Using MMML checkpoint: {base_ckpt_dir}")
 
     from mmml.cli.run.md_handoff import (
-        apply_handoff_to_atoms,
+        apply_handoff_geometry_to_atoms,
         ensure_psf_for_handoff_cluster,
         get_handoff_in,
         handoff_from_atoms,
@@ -430,25 +430,33 @@ def main(argv: list[str] | None = None) -> int:
         atoms.set_cell([L, L, L])
         atoms.set_pbc(True)
     if handoff_in is not None:
-        apply_handoff_to_atoms(atoms, handoff_in)
+        apply_handoff_geometry_to_atoms(
+            atoms, handoff_in, monomer_offsets=monomer_offsets
+        )
     minimization_summary: dict[str, float | str] = {}
     if skip_pre_min:
         args.calculator_pre_minimize = False
         args.jaxmd_minimize_steps = 0
         args.jaxmd_pbc_minimize_steps = 0
         args.charmm_pre_minimize = False
-    _check_or_charmm_overlap_rescue(
-        atoms,
-        monomer_offsets,
-        min_distance=args.min_intermonomer_atom_distance,
-        context="initial placement",
-        nstep_sd=args.charmm_sd_steps,
-        nstep_abnr=args.charmm_abnr_steps,
-        tolenr=args.charmm_tolenr,
-        tolgrd=args.charmm_tolgrd,
-        nbxmod=args.charmm_nbxmod,
-        timings=minimization_summary,
-    )
+    if handoff_in is None or not skip_pre_min:
+        _check_or_charmm_overlap_rescue(
+            atoms,
+            monomer_offsets,
+            min_distance=args.min_intermonomer_atom_distance,
+            context="initial placement",
+            nstep_sd=args.charmm_sd_steps,
+            nstep_abnr=args.charmm_abnr_steps,
+            tolenr=args.charmm_tolenr,
+            tolgrd=args.charmm_tolgrd,
+            nbxmod=args.charmm_nbxmod,
+            timings=minimization_summary,
+        )
+    elif not getattr(args, "quiet", False):
+        print(
+            "Skipping initial overlap check (continuing from equilibrated handoff).",
+            flush=True,
+        )
     if args.charmm_pre_minimize:
         print(
             f"CHARMM pre-minimization starting "

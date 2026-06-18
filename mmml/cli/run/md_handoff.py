@@ -259,6 +259,10 @@ def ensure_psf_for_handoff_cluster(
     """Ensure CHARMM PSF exists for handoff continuation without destroying a live PSF."""
     n_atoms = int(len(atomic_numbers))
     if _live_psf_matches_handoff(n_atoms):
+        if positions is not None:
+            from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+
+            sync_charmm_positions(np.asarray(positions, dtype=np.float64))
         if not quiet:
             print(
                 f"Reusing live CHARMM PSF for handoff continuation ({n_atoms} atoms)",
@@ -304,6 +308,29 @@ def apply_handoff_to_atoms(atoms: Any, handoff: MdHandoffState) -> None:
         atoms.set_pbc(False)
     if handoff.velocities is not None:
         atoms.set_velocities(handoff.velocities)
+
+
+def apply_handoff_geometry_to_atoms(
+    atoms: Any,
+    handoff: MdHandoffState,
+    *,
+    monomer_offsets: np.ndarray,
+    sync_charmm: bool = True,
+) -> None:
+    """Apply handoff coords/velocities/box and wrap monomers into the primary PBC cell."""
+    apply_handoff_to_atoms(atoms, handoff)
+    pos = np.asarray(atoms.get_positions(), dtype=float)
+    if bool(np.asarray(atoms.pbc).any()) and atoms.cell is not None:
+        from mmml.utils.geometry_checks import wrap_monomers_primary_cell
+
+        pos = wrap_monomers_primary_cell(
+            pos, np.asarray(monomer_offsets, dtype=int), atoms.cell.array
+        )
+        atoms.set_positions(pos)
+    if sync_charmm:
+        from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+
+        sync_charmm_positions(np.asarray(atoms.get_positions(), dtype=np.float64))
 
 
 def set_handoff_in(state: MdHandoffState | None) -> None:

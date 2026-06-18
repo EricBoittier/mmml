@@ -74,6 +74,34 @@ def _mic_displacement(from_pos: np.ndarray, to_pos: np.ndarray, cell: np.ndarray
     return _mic(np.asarray(to_pos, dtype=float) - np.asarray(from_pos, dtype=float), cell)
 
 
+def wrap_monomers_primary_cell(
+    positions: np.ndarray,
+    monomer_offsets: np.ndarray,
+    cell: Any,
+) -> np.ndarray:
+    """Rigid integer-lattice shifts per monomer so each COM sits in the primary orthorhombic cell."""
+    pos = np.asarray(positions, dtype=float).copy()
+    cell_mat = _cell_matrix(cell)
+    if cell_mat is None:
+        return pos
+    Lx, Ly, Lz = float(cell_mat[0, 0]), float(cell_mat[1, 1]), float(cell_mat[2, 2])
+    offsets = np.asarray(monomer_offsets, dtype=int)
+    n_mol = int(len(offsets) - 1)
+    for mi in range(n_mol):
+        s, e = int(offsets[mi]), int(offsets[mi + 1])
+        com = pos[s:e].mean(axis=0)
+        shift = np.array(
+            [
+                -np.floor(com[0] / Lx) * Lx if Lx > 0 else 0.0,
+                -np.floor(com[1] / Ly) * Ly if Ly > 0 else 0.0,
+                -np.floor(com[2] / Lz) * Lz if Lz > 0 else 0.0,
+            ],
+            dtype=float,
+        )
+        pos[s:e] += shift
+    return pos
+
+
 def find_worst_intermonomer_overlap(
     positions: np.ndarray,
     monomer_offsets: np.ndarray,
