@@ -74,6 +74,35 @@ def test_merge_campaign_job_config_defaults() -> None:
     assert merged["backend"] == "jaxmd"
 
 
+def test_apply_campaign_cli_overrides_ml_flags() -> None:
+    from argparse import Namespace
+
+    from mmml.cli.run.md_campaign import apply_campaign_cli_overrides
+
+    merged = {"backend": "pycharmm", "ml_gpu_count": 1, "ml_batch_size": 64}
+    parent = Namespace(
+        ml_batch_size=128,
+        ml_gpu_count=2,
+        ml_max_active_dimers=None,
+        ml_spatial_mpi=False,
+    )
+    apply_campaign_cli_overrides(merged, parent)
+    assert merged["ml_batch_size"] == 128
+    assert merged["ml_gpu_count"] == 2
+
+    merged2 = {"backend": "pycharmm"}
+    parent2 = Namespace(
+        ml_batch_size=None,
+        ml_gpu_count=None,
+        ml_max_active_dimers=900,
+        ml_spatial_mpi=True,
+    )
+    apply_campaign_cli_overrides(merged2, parent2)
+    assert merged2["ml_max_active_dimers"] == 900
+    assert merged2["ml_spatial_mpi"] is True
+    assert "ml_gpu_count" not in merged2
+
+
 def test_namespace_from_merged_keeps_extra_args_last() -> None:
     from mmml.cli.run.md_campaign import namespace_from_merged
 
