@@ -36,15 +36,84 @@ class TopologyFingerprint:
     atom_names: tuple[str, ...]
     resids: tuple[int, ...]
 
+    def is_valid(self) -> bool:
+        return (
+            self.natom > 0
+            and len(self.atom_names) == self.natom
+            and len(self.resids) == self.natom
+        )
+
     def matches_live(self) -> bool:
         live = capture_topology_fingerprint_from_charmm()
-        return (
-            live.natom == self.natom
-            and live.nres == self.nres
-            and live.nseg == self.nseg
-            and live.atom_names == self.atom_names
-            and live.resids == self.resids
+        return fingerprints_equivalent(self, live)
+
+
+def _normalize_atom_names(names: tuple[str, ...] | list[str]) -> tuple[str, ...]:
+    return tuple(str(name).strip() for name in names)
+
+
+def fingerprints_equivalent(
+    expected: TopologyFingerprint,
+    live: TopologyFingerprint,
+) -> bool:
+    """True when PSF composition matches (atom order, names, residue IDs, counts)."""
+    return (
+        live.natom == expected.natom
+        and live.nres == expected.nres
+        and live.nseg == expected.nseg
+        and _normalize_atom_names(live.atom_names)
+        == _normalize_atom_names(expected.atom_names)
+        and live.resids == expected.resids
+    )
+
+
+def describe_fingerprint_diff(
+    expected: TopologyFingerprint,
+    live: TopologyFingerprint,
+) -> str:
+    """Human-readable summary of composition mismatches."""
+    parts: list[str] = []
+    if live.natom != expected.natom:
+        parts.append(f"natom {expected.natom} -> {live.natom}")
+    if live.nres != expected.nres:
+        parts.append(f"nres {expected.nres} -> {live.nres}")
+    if live.nseg != expected.nseg:
+        parts.append(f"nseg {expected.nseg} -> {live.nseg}")
+    if len(expected.atom_names) != expected.natom:
+        parts.append(
+            f"stored atom_names length {len(expected.atom_names)} != natom {expected.natom}"
         )
+    if len(expected.resids) != expected.natom:
+        parts.append(
+            f"stored resids length {len(expected.resids)} != natom {expected.natom}"
+        )
+    if _normalize_atom_names(live.atom_names) != _normalize_atom_names(
+        expected.atom_names
+    ):
+        for idx, (exp, got) in enumerate(
+            zip(expected.atom_names, live.atom_names, strict=False)
+        ):
+            if _normalize_atom_names((exp,)) != _normalize_atom_names((got,)):
+                parts.append(
+                    f"atom_names differ at index {idx}: {exp!r} -> {got!r}"
+                )
+                break
+        else:
+            parts.append(
+                f"atom_names length {len(expected.atom_names)} -> {len(live.atom_names)}"
+            )
+    if live.resids != expected.resids:
+        for idx, (exp, got) in enumerate(
+            zip(expected.resids, live.resids, strict=False)
+        ):
+            if exp != got:
+                parts.append(f"resids differ at index {idx}: {exp} -> {got}")
+                break
+        else:
+            parts.append(
+                f"resids length {len(expected.resids)} -> {len(live.resids)}"
+            )
+    return "; ".join(parts) if parts else "unknown composition mismatch"
 
 
 def topology_fingerprint_path(psf_path: PathLike) -> Path:
@@ -155,6 +224,8 @@ def load_topology_sidecar(path: PathLike) -> TopologySidecar | None:
         atom_names=tuple(str(x) for x in raw["atom_names"]),
         resids=tuple(int(x) for x in raw["resids"]),
     )
+    if not fp.is_valid():
+        return None
     iblo_raw = raw.get("pre_mlpot_iblo")
     inb_raw = raw.get("pre_mlpot_inb")
     return TopologySidecar(
@@ -168,7 +239,7 @@ def attach_topology_recovery_state(
     ctx: "MlpotContext",
     topology_psf: PathLike | None,
 ) -> None:
-    """Load composition fingerprint (+ optional pre-MLpot iblo/inb) onto ``ctx``."""
+    """Attach topology PSF path, optional iblo/inb sidecar, and live composition fingerprint."""
     if topology_psf is None:
         return
     psf = Path(topology_psf).expanduser()
@@ -176,13 +247,13 @@ def attach_topology_recovery_state(
         return
     ctx.topology_psf_path = psf.resolve()
     sidecar = load_topology_sidecar(topology_fingerprint_path(psf))
-    if sidecar is None:
-        return
-    ctx.topology_fingerprint = sidecar.fingerprint
-    if sidecar.pre_mlpot_iblo is not None:
-        ctx.pre_mlpot_iblo = list(sidecar.pre_mlpot_iblo)
-    if sidecar.pre_mlpot_inb is not None:
-        ctx.pre_mlpot_inb = list(sidecar.pre_mlpot_inb)
+    if sidecar is not None:
+        if sidecar.pre_mlpot_iblo is not None:
+            ctx.pre_mlpot_iblo = list(sidecar.pre_mlpot_iblo)
+        if sidecar.pre_mlpot_inb is not None:
+            ctx.pre_mlpot_inb = list(sidecar.pre_mlpot_inb)
+    # Authoritative mid-run reference: live PSF at MLpot registration (post pretreat).
+    ctx.topology_fingerprint = capture_topology_fingerprint_from_charmm()
 
 
 def resolve_topology_fingerprint(
@@ -213,10 +284,10 @@ def ensure_composition_unchanged(
     if fp.matches_live():
         return
     live = capture_topology_fingerprint_from_charmm()
+    diff = describe_fingerprint_diff(fp, live)
     raise RuntimeError(
-        f"{context}: CHARMM composition changed since pre-MLpot topology "
-        f"(expected natom={fp.natom}, live natom={live.natom}). "
-        "Restart from a prior segment .res or rebuild the cluster; "
+        f"{context}: CHARMM composition changed since MLpot registration "
+        f"({diff}). Restart from a prior segment .res or rebuild the cluster; "
         "do not use DELETE ATOM PSF reload mid-run."
     )
 

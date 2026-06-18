@@ -67,8 +67,32 @@ def test_save_and_load_topology_sidecar(tmp_path):
     assert raw["natom"] == 3
 
 
+def test_load_topology_sidecar_rejects_stale_resid_length(tmp_path):
+    path = tmp_path / "stale.topology.json"
+    path.write_text(
+        json.dumps(
+            {
+                "natom": 1000,
+                "nres": 200,
+                "nseg": 1,
+                "atom_names": ["C"] * 1000,
+                "resids": [1] * 100,
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert load_topology_sidecar(path) is None
+
+
 def test_attach_topology_recovery_state_sets_ctx_fields(tmp_path):
-    fp = TopologyFingerprint(
+    sidecar_fp = TopologyFingerprint(
+        natom=2,
+        nres=1,
+        nseg=1,
+        atom_names=("C", "H"),
+        resids=(1, 1),
+    )
+    live_fp = TopologyFingerprint(
         natom=2,
         nres=1,
         nseg=1,
@@ -79,7 +103,7 @@ def test_attach_topology_recovery_state_sets_ctx_fields(tmp_path):
     psf.write_text("* psf\n", encoding="utf-8")
     save_topology_sidecar(
         topology_fingerprint_path(psf),
-        fp,
+        sidecar_fp,
         pre_mlpot_iblo=[0, 1],
         pre_mlpot_inb=[2],
     )
@@ -89,10 +113,14 @@ def test_attach_topology_recovery_state_sets_ctx_fields(tmp_path):
     ctx.pre_mlpot_iblo = None
     ctx.pre_mlpot_inb = None
 
-    attach_topology_recovery_state(ctx, psf)
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.topology_recovery.capture_topology_fingerprint_from_charmm",
+        return_value=live_fp,
+    ):
+        attach_topology_recovery_state(ctx, psf)
 
     assert ctx.topology_psf_path == psf.resolve()
-    assert ctx.topology_fingerprint == fp
+    assert ctx.topology_fingerprint == live_fp
     assert ctx.pre_mlpot_iblo == [0, 1]
     assert ctx.pre_mlpot_inb == [2]
 
@@ -115,7 +143,7 @@ def test_ensure_composition_unchanged_raises_on_mismatch():
     with patch(
         "mmml.interfaces.pycharmmInterface.mlpot.topology_recovery.capture_topology_fingerprint_from_charmm",
         return_value=live,
-    ), pytest.raises(RuntimeError, match="composition changed"):
+    ), pytest.raises(RuntimeError, match="MLpot registration"):
         ensure_composition_unchanged(fp, context="test")
 
 
