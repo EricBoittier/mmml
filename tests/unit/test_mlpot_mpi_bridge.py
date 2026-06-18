@@ -62,10 +62,15 @@ def test_broadcast_mlpot_result_single_rank():
     assert out_e == 1.5
 
 
-@pytest.mark.skipif(
-    not pytest.importorskip("mpi4py", reason="mpi4py not installed"),
-    reason="mpi4py required",
-)
+try:
+    import mpi4py  # noqa: F401
+
+    HAS_MPI4PY = True
+except ImportError:
+    HAS_MPI4PY = False
+
+
+@pytest.mark.skipif(not HAS_MPI4PY, reason="mpi4py not installed")
 def test_broadcast_mlpot_result_mpi4py():
     from mpi4py import MPI
 
