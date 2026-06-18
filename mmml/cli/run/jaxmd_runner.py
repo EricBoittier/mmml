@@ -1408,6 +1408,8 @@ def set_up_nhc_sim_routine(
 
                     # Stop on numerical instability (NaN, Inf, or energy blow-up to 0)
                     if not np.isfinite(e_pot) or not np.isfinite(temp):
+                        run_status = "error"
+                        run_error = f"numerical instability at step {steps}"
                         print(f"Numerical instability at step {steps}; stopping.")
                         if len(nhc_positions) > 1:
                             nhc_positions = nhc_positions[:-1]
@@ -1415,6 +1417,8 @@ def set_up_nhc_sim_routine(
                                 nhc_boxes = nhc_boxes[:-1]
                         break
                     if e_pot >= 0 and energy_initial < 0:
+                        run_status = "error"
+                        run_error = f"energy blow-up at step {steps} (E_pot={e_pot:.4f})"
                         c.print(Panel(f"Energy blow-up at step {steps} (E_pot={e_pot:.4f}); stopping.", title="[bold red]Error[/bold red]", border_style="red"))
                         if len(nhc_positions) > 1:
                             nhc_positions = nhc_positions[:-1]
