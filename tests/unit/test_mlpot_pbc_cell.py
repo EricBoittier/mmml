@@ -493,3 +493,97 @@ def test_value_and_grad_fn_cached_across_callbacks(monkeypatch):
 
     assert first_key is not None
     assert second_key == first_key
+
+
+def test_build_ml_exclusion_lists_upper_triangle():
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import _build_ml_exclusion_lists
+
+    iblo, inb = _build_ml_exclusion_lists([0, 2, 4], natom=6)
+    assert list(iblo) == [2, 2, 3, 3, 3, 3]
+    assert inb == [3, 5, 5]
+
+
+def test_register_mlpot_pbc_installs_exclusions_before_block():
+    from mmml.interfaces.pycharmmInterface.mlpot import setup as mlpot_setup
+
+    call_order: list[str] = []
+    fake_pycharmm = MagicMock()
+    fake_pycharmm.coor.get_natom.return_value = 4
+    fake_sel = MagicMock()
+    fake_sel.get_atom_indexes.return_value = [0, 1, 2, 3]
+
+    def _install(_sel):
+        call_order.append("install_exclusions")
+
+    def _block(*args, **kwargs):
+        call_order.append("block")
+        return "all"
+
+    def _mlpot(**kwargs):
+        call_order.append("mlpot")
+        if kwargs.get("skip_iblo_inb_update"):
+            call_order.append("skip_iblo")
+        return MagicMock()
+
+    with patch.object(mlpot_setup, "_import_pycharmm", return_value=fake_pycharmm), patch.object(
+        mlpot_setup, "_install_ml_exclusions", side_effect=_install
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_mlpot_energy_block",
+        side_effect=_block,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits.validate_mlpot_system_size",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()),
+    ), patch.object(fake_pycharmm, "MLpot", side_effect=_mlpot):
+        mlpot_setup.register_mlpot(
+            MagicMock(),
+            [1, 1, 1, 1],
+            fake_sel,
+            use_pbc=True,
+        )
+
+    assert call_order == ["install_exclusions", "block", "mlpot", "skip_iblo"]
+
+
+def test_register_mlpot_vacuum_skips_pre_block_exclusions():
+    from mmml.interfaces.pycharmmInterface.mlpot import setup as mlpot_setup
+
+    call_order: list[str] = []
+    fake_pycharmm = MagicMock()
+    fake_sel = MagicMock()
+    fake_sel.get_atom_indexes.return_value = [0, 1]
+
+    def _block(*args, **kwargs):
+        call_order.append("block")
+        return "all"
+
+    def _mlpot(**kwargs):
+        call_order.append("mlpot")
+        if kwargs.get("skip_iblo_inb_update"):
+            call_order.append("skip_iblo")
+        return MagicMock()
+
+    with patch.object(mlpot_setup, "_import_pycharmm", return_value=fake_pycharmm), patch.object(
+        mlpot_setup, "_install_ml_exclusions"
+    ) as mock_install, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_mlpot_energy_block",
+        side_effect=_block,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits.validate_mlpot_system_size",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()),
+    ), patch.object(fake_pycharmm, "MLpot", side_effect=_mlpot), patch.object(
+        fake_pycharmm, "UpdateNonBondedScript"
+    ) as mock_nb:
+        mock_nb.return_value.run = MagicMock()
+        mlpot_setup.register_mlpot(
+            MagicMock(),
+            [1, 1],
+            fake_sel,
+            use_pbc=False,
+        )
+
+    mock_install.assert_not_called()
+    assert call_order == ["block", "mlpot"]

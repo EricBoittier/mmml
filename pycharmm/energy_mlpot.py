@@ -46,6 +46,8 @@ class MLpot():
         mlmm_ctofnb=None,
         # Keep PSF bonds/angles; use CHARMM BLOCK to disable internal MM on ML atoms.
         preserve_psf_internals=True,
+        # ML exclusions + ``upinb`` were already installed (PBC registration path).
+        skip_iblo_inb_update=False,
         # Additional model keyword arguments
         **kwargs
     ):
@@ -87,10 +89,11 @@ class MLpot():
                 self.ml_inb.append(jdx + 1)  # + 1 as CHARMM start at index 1
         self.ml_nnb = len(self.ml_inb)
 
-        pycharmm.psf.set_iblo_inb(self.ml_iblo, self.ml_inb)
+        if not skip_iblo_inb_update:
+            pycharmm.psf.set_iblo_inb(self.ml_iblo, self.ml_inb)
 
-        pycharmm.nbonds.update_bnbnd()  # Already executed in set_iblo_inb()
-        pycharmm.image.update_bimag()
+            pycharmm.nbonds.update_bnbnd()  # Already executed in set_iblo_inb()
+            pycharmm.image.update_bimag()
 
         ###################################################
         # START - Potential model dependent part
