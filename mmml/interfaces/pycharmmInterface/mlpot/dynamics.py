@@ -610,6 +610,15 @@ def _import_pycharmm_modules():
     return pycharmm, cons_fix, energy, minimize, read, write
 
 
+def _ensure_domdec_off_for_mlpot_energy(*, context: str) -> bool:
+    """Mockable domdec-off hook before MLpot SD / dynamics."""
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        ensure_domdec_off_for_mlpot_energy,
+    )
+
+    return ensure_domdec_off_for_mlpot_energy(context=context)
+
+
 def _non_pbc_dyn_freq_kwargs(*, inbfrq: int = 50) -> dict[str, int]:
     """Image list freqs for vacuum / free-space (no crystal updates)."""
     # inbfrq=-1: heuristic rebuild when the cluster moves (best list/force consistency).
@@ -2252,11 +2261,7 @@ def run_dynamics_with_io(
     )
 
     if mlpot_ctx is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.setup import (
-            ensure_domdec_off_for_mlpot_energy,
-        )
-
-        ensure_domdec_off_for_mlpot_energy(context=overlap_context)
+        _ensure_domdec_off_for_mlpot_energy(context=overlap_context)
 
     kw = dict(dynamics_kwargs)
     _ensure_nsavc_below_nstep(kw)
@@ -2759,11 +2764,7 @@ def minimize_with_mlpot(
 
         sync_charmm_positions(config.reference_positions)
 
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
-        ensure_domdec_off_for_mlpot_energy,
-    )
-
-    ensure_domdec_off_for_mlpot_energy(context="MLpot SD minimize")
+    _ensure_domdec_off_for_mlpot_energy(context="MLpot SD minimize")
 
     dcd_file = None
     if config.save and config.dcd_path is not None and config.dcd_nsavc > 0:

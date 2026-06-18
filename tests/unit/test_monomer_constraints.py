@@ -139,7 +139,7 @@ def test_minimize_with_mlpot_runs_two_sd_passes_when_fixed_selection_set():
     ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.ensure_domdec_off_for_mlpot_energy",
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
     ) as mock_domdec:
         assert minimize_with_mlpot(config) is True
 
@@ -170,7 +170,7 @@ def test_minimize_with_mlpot_asserts_user_when_ctx_provided():
     ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.ensure_domdec_off_for_mlpot_energy",
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.assert_mlpot_user_active",
     ) as assert_user:
@@ -203,7 +203,7 @@ def test_minimize_with_mlpot_single_pass_when_no_fix():
     ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.ensure_domdec_off_for_mlpot_energy",
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
     ):
         minimize_with_mlpot(config)
 
