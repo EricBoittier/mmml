@@ -69,11 +69,15 @@ mmml md-system --setup free_nvt --backend pycharmm \
 
 Argv forwarding is covered by unit tests; end-to-end physics is your layer 3 check.
 
-## `bonded-mm-mini` on all-ML dimers (DCM:2)
+## `bonded-mm-mini` on all-ML dimers (DCM:2 / large clusters)
 
-Do **not** use as a pass/fail gate for ML quality on tiny all-ML clusters. It compares **CGENFF bonded** strain on coordinates relaxed by **MLpot** (BLOCK zeros bonded during ML). A good ML mini (`GRMS≈0.13`) can still read `bonded-MM-mini: GRMS 7.6` and trigger heavy PSF reload + SD. After **heat**, MM bonded strain can explode (`GRMS>1000`, `ANGL>600`) while the run still prints `Staged workflow OK` if recovery SD converges.
+**Safe on all-ML** when `cluster_for_vmd_*.psf` was saved at build time: recovery detaches MLpot, applies bonded-MM BLOCK, runs `CHARMM UPDATE` only (no `DELETE ATOM` / `upinb`), then reattaches MLpot. Strain is measured with full-MM BLOCK while MLpot is detached (PSF connectivity is intact; BLOCK was zeroing bonded terms under MLpot).
 
-For DCM:2 smoke tests prefer: no `--bonded-mm-mini`, longer `--ps-heat`, Hoover or smaller `TEMINC` (see `CHARMM_SETTINGS.md`), and constraint tests (`--fix-resids`) as in layer 2.
+For DCM:2 smoke tests, bonded strain after MLpot mini can still read high vs CGENFF baseline — that is expected when comparing ML-relaxed coords to CHARMM bonded reference. Use strain margins (`--bonded-mm-grms-margin`) or skip `--bonded-mm-mini` on tiny smoke systems.
+
+For DCM:100+ on MPI-linked CHARMM, **do not** set `MMML_ALLOW_PSF_DELETE_RELOAD=1`; the default inplace path avoids the post-MLpot `DELETE ATOM` segfault.
+
+For DCM:2 heat smoke tests prefer: no `--bonded-mm-mini`, longer `--ps-heat`, Hoover or smaller `TEMINC` (see `CHARMM_SETTINGS.md`), and constraint tests (`--fix-resids`) as in layer 2.
 
 ## Related code
 

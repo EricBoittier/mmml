@@ -394,22 +394,15 @@ def _bonded_recovery_sd_kwargs(ctx: "MlpotContext", config: BondedMmMiniConfig) 
 
 
 def _prepare_bonded_mm_rescue_environment(ctx: "MlpotContext") -> None:
-    """Rebuild lists and validate bonded CHARMM terms after MLpot detach."""
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
-        assert_bonded_mm_energy_active,
-    )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
-        MlpotContext,
-        apply_recovery_nbonds,
-        RECOVERY_NBXMOD,
+    """Refresh pair lists with UPDATE only (no upinb) after MLpot detach."""
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from mmml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
+        prepare_rescue_lists_safe,
     )
 
     if not isinstance(ctx, MlpotContext):
         raise TypeError("ctx must be MlpotContext")
-    pycharmm = _import_pycharmm_modules()[0]
-    apply_recovery_nbonds(ctx, nbxmod=RECOVERY_NBXMOD)
-    pycharmm.lingo.charmm_script("UPDATE")
-    assert_bonded_mm_energy_active(context="Bonded-MM rescue")
+    prepare_rescue_lists_safe(ctx, context="Bonded-MM rescue", use_recovery_nbxmod=True)
 
 
 def minimize_bonded_mm_recovery(
@@ -480,20 +473,19 @@ def minimize_bonded_mm_recovery(
 
 
 def _prepare_overlap_rescue_lists(ctx: "MlpotContext") -> None:
-    """Rebuild bonded/image lists for rescue minimization (NBXMOD 2, no image centering)."""
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
-        MlpotContext,
-        RECOVERY_NBXMOD,
-        apply_recovery_nbonds,
+    """Bonded+VDW rescue list prep (NBXMOD 2, UPDATE only; no upinb)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from mmml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
+        prepare_rescue_lists_safe,
     )
 
     if not isinstance(ctx, MlpotContext):
         raise TypeError("ctx must be MlpotContext")
-    pycharmm = _import_pycharmm_modules()[0]
-    with charmm_relaxed_bomlev():
-        apply_recovery_nbonds(ctx, nbxmod=RECOVERY_NBXMOD)
-        pycharmm.lingo.charmm_script("UPDATE")
+    prepare_rescue_lists_safe(
+        ctx,
+        context="overlap rescue",
+        use_recovery_nbxmod=True,
+    )
 
 
 def minimize_overlap_rescue(

@@ -1592,7 +1592,8 @@ def add_bonded_mm_mini_args(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help=(
             "Run bonded SD after every stage in --bonded-mm-mini-after, even when "
-            "GRMS/ANGL/internal strain is below baseline (default: strain-gated only)"
+            "GRMS/ANGL/internal strain is below baseline (default: strain-gated only). "
+            "All-ML clusters on MPI-linked CHARMM use MLpot SD instead of PSF reload."
         ),
     )
     group.add_argument(

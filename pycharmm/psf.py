@@ -598,6 +598,30 @@ def get_iblo_inb():
     return list(iblo), list(inb)
 
 
+def _set_iblo_inb_arrays(new_inblo, new_inb):
+  natom = get_natom()
+  if natom > 0:
+    iblo = (ctypes.c_int * natom)(*new_inblo)
+  else:
+    iblo = list()
+
+  nnb = len(new_inb)
+  if nnb > 0:
+    inb = (ctypes.c_int * nnb)(*new_inb)
+  else:
+    inb = list()
+
+  #nnb = ctypes.c_int(nnb)  # Segmentation fault for single c_int parameter
+  nnb_arr = (ctypes.c_int * 1)(nnb)  # c_int array with one element: nnb
+  lib.charmm.psf_set_iblo_inb(nnb_arr, iblo, inb)
+  return int(get_nnb())
+
+
+def set_iblo_inb_no_update(new_inblo, new_inb):
+  """Set PSF exclusion lists without ``update_bnbnd`` / ``upinb`` (safe after MLpot)."""
+  return _set_iblo_inb_arrays(new_inblo, new_inb)
+
+
 def set_iblo_inb(new_inblo, new_inb):
     """Set non-bonded exclusion list
 
@@ -613,26 +637,9 @@ def set_iblo_inb(new_inblo, new_inb):
     nnb : int
           number of atom pairs in non-bonded exclusion list
     """
-    natom = get_natom()
-    if natom > 0:
-        iblo = (ctypes.c_int * natom)(*new_inblo)
-    else:
-        iblo = list()
-
-    nnb = len(new_inb)
-    if nnb > 0:
-        inb = (ctypes.c_int * nnb)(*new_inb)
-    else:
-        inb = list()
-
-    #nnb = ctypes.c_int(nnb)  # Segmentation fault for single c_int parameter
-    nnb = (ctypes.c_int * 1)(nnb)  # c_int array with one element: nnb
-    lib.charmm.psf_set_iblo_inb(nnb, iblo, inb)
-
-    nnb = get_nnb()
+    nnb = _set_iblo_inb_arrays(new_inblo, new_inb)
     pycharmm.nbonds.update_bnbnd()
     pycharmm.image.update_bimag()
-
     return nnb
 
 

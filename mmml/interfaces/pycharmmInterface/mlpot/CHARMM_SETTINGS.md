@@ -116,7 +116,8 @@ Use `--allow-incomplete-dynamics` only for debugging. For heat tests on small cl
 | Flag | Purpose |
 |------|---------|
 | `--mlpot-mm-internal-scale` | CGENFF BOND/ANGL/DIHE weight on ML atoms during MLpot (0=off, 0.1=soft MM internal; ELEC/VDW off) |
-| `--bonded-mm-mini` | CHARMM bonded-only recovery SD after selected stages |
+| `--bonded-mm-mini` | CHARMM bonded-only recovery SD after selected stages (inplace BLOCK toggle; safe on all-ML when `cluster_for_vmd_*.psf` fingerprint matches) |
+| `MMML_ALLOW_PSF_DELETE_RELOAD=1` | Deprecated `DELETE ATOM` + PSF reload for debugging only (segfaults on MPI-linked CHARMM after MLpot) |
 | `--fix-resids` / `--constrain-resids` | `cons_fix` in mini pass 2 / MD |
 | `--quiet` | Low `PRNLev` + coarse print |
 | `--charmm-sd-steps` / `--charmm-abnr-steps` | MM pre-min before MLpot |
