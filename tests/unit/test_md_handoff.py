@@ -117,3 +117,30 @@ def test_handoff_to_npz_dict_serializes_metadata() -> None:
     d = handoff_to_npz_dict(state)
     assert "metadata" in d
     assert "positions" in d
+
+
+def test_find_latest_charmm_restart_prefers_equi_segment(tmp_path: Path) -> None:
+    from mmml.cli.run.md_handoff import find_latest_charmm_restart_in_dir
+
+    (tmp_path / "heat_DCM20.res").write_text("heat", encoding="utf-8")
+    equi0 = tmp_path / "equi_DCM20.0.res"
+    equi1 = tmp_path / "equi_DCM20.1.res"
+    equi0.write_text("equi0", encoding="utf-8")
+    equi1.write_text("equi1", encoding="utf-8")
+    chosen = find_latest_charmm_restart_in_dir(tmp_path)
+    assert chosen == equi1
+
+
+def test_load_dependency_handoff_falls_back_to_staged_res(
+    tmp_path: Path, nve_stub: Path
+) -> None:
+    import shutil
+
+    from mmml.cli.run.md_handoff import load_dependency_handoff
+
+    dep = tmp_path / "equil"
+    dep.mkdir()
+    shutil.copy(nve_stub, dep / "equi_DCM20.res")
+    handoff = load_dependency_handoff(dep)
+    assert handoff is not None
+    assert handoff.positions.shape == (20, 3)
