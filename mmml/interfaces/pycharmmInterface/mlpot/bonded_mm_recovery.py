@@ -290,6 +290,11 @@ def measure_mm_bonded_strain_with_full_block(ctx: MlpotContext) -> MmStrainBasel
     return _with_mlpot_detached(ctx, _measure)
 
 
+def bonded_mm_mini_always(args: argparse.Namespace) -> bool:
+    """True when bonded SD runs after every watched stage, ignoring strain margins."""
+    return bool(getattr(args, "bonded_mm_mini_always", False))
+
+
 def _bonded_strain_margins(args: argparse.Namespace) -> tuple[float, float, float]:
     grms_margin = float(
         getattr(args, "bonded_mm_grms_margin", None)
@@ -750,36 +755,46 @@ def _run_heavy_bonded_recovery_check(
 
         clear_mmfp_restraints()
         current = _measure_current_mm_strain()
-        grms_margin, internal_margin, angl_margin = _bonded_strain_margins(args)
-        reasons = tuple(
-            _recovery_reasons(
-                current,
-                baseline,
-                grms_margin=grms_margin,
-                internal_margin=internal_margin,
-                angl_margin=angl_margin,
-            )
-        )
-        if not reasons:
+        always = bonded_mm_mini_always(args)
+        if always:
+            reasons = ("always",)
             if not args.quiet:
                 print(
-                    f"bonded-MM-mini: strain OK after {stage} with reloaded topology "
-                    f"(GRMS {current.grms_kcalmol_A:.4f} kcal/mol/Å)",
+                    f"bonded-MM-mini: always after {stage}; "
+                    "running heavy bonded SD (pre-MLpot topology)",
                     flush=True,
                 )
-            return BondedMmRecoveryResult(
-                ran_recovery=False,
-                current=current,
-                reasons=reasons,
-                heavy_reload=True,
+        else:
+            grms_margin, internal_margin, angl_margin = _bonded_strain_margins(args)
+            reasons = tuple(
+                _recovery_reasons(
+                    current,
+                    baseline,
+                    grms_margin=grms_margin,
+                    internal_margin=internal_margin,
+                    angl_margin=angl_margin,
+                )
             )
+            if not reasons:
+                if not args.quiet:
+                    print(
+                        f"bonded-MM-mini: strain OK after {stage} with reloaded topology "
+                        f"(GRMS {current.grms_kcalmol_A:.4f} kcal/mol/Å)",
+                        flush=True,
+                    )
+                return BondedMmRecoveryResult(
+                    ran_recovery=False,
+                    current=current,
+                    reasons=reasons,
+                    heavy_reload=True,
+                )
 
-        if not args.quiet:
-            print(
-                f"bonded-MM-mini: after {stage}: {'; '.join(reasons)}; "
-                "running heavy bonded SD (pre-MLpot topology)",
-                flush=True,
-            )
+            if not args.quiet:
+                print(
+                    f"bonded-MM-mini: after {stage}: {'; '.join(reasons)}; "
+                    "running heavy bonded SD (pre-MLpot topology)",
+                    flush=True,
+                )
         nstep = int(getattr(args, "bonded_mm_mini_steps", 50))
         _run_bonded_sd_without_mlpot(
             ctx,
@@ -986,7 +1001,8 @@ def maybe_run_bonded_mm_mini_after_stage(
     """If MM bonded strain rose above baseline, run bonded-only SD (BLOCK toggle only).
 
     Triggers when GRMS exceeds baseline + ``--bonded-mm-grms-margin``, and/or (if margins
-    > 0) internal or ANGL exceed baseline + their margins.
+    > 0) internal or ANGL exceed baseline + their margins. With ``--bonded-mm-mini-always``,
+    runs bonded SD after every stage listed in ``--bonded-mm-mini-after`` regardless of strain.
 
     Returns True when recovery SD ran (caller should hand off next stage from memory).
     """
@@ -996,7 +1012,8 @@ def maybe_run_bonded_mm_mini_after_stage(
     watch = {s.strip().lower() for s in raw.split(",") if s.strip()}
     if stage.lower() not in watch:
         return False
-    if baseline is None:
+    always = bonded_mm_mini_always(args)
+    if baseline is None and not always:
         if not args.quiet:
             print(
                 "bonded-MM-mini: no baseline strain recorded; skipping check",
@@ -1055,32 +1072,40 @@ def maybe_run_bonded_mm_mini_after_stage(
             )
         return False
 
-    grms_margin, internal_margin, angl_margin = _bonded_strain_margins(args)
-    current = measure_mm_bonded_strain_with_full_block(ctx)
-    reasons = _recovery_reasons(
-        current,
-        baseline,
-        grms_margin=grms_margin,
-        internal_margin=internal_margin,
-        angl_margin=angl_margin,
-    )
-    if not reasons:
+    if always:
         if not args.quiet:
-            msg = f"bonded-MM-mini: strain OK after {stage} (GRMS {current.grms_kcalmol_A:.4f}"
-            if current.angl_kcalmol is not None:
-                msg += f", ANGL {current.angl_kcalmol:.4f}"
-            if current.internal_kcalmol is not None:
-                msg += f", internal {current.internal_kcalmol:.4f}"
-            msg += " kcal/mol)"
-            print(msg, flush=True)
-        return False
-
-    if not args.quiet:
-        print(
-            f"bonded-MM-mini: after {stage}: {'; '.join(reasons)}; "
-            f"running bonded SD (MLpot detached)",
-            flush=True,
+            print(
+                f"bonded-MM-mini: always after {stage}; "
+                "running bonded SD (MLpot detached)",
+                flush=True,
+            )
+    else:
+        grms_margin, internal_margin, angl_margin = _bonded_strain_margins(args)
+        current = measure_mm_bonded_strain_with_full_block(ctx)
+        reasons = _recovery_reasons(
+            current,
+            baseline,
+            grms_margin=grms_margin,
+            internal_margin=internal_margin,
+            angl_margin=angl_margin,
         )
+        if not reasons:
+            if not args.quiet:
+                msg = f"bonded-MM-mini: strain OK after {stage} (GRMS {current.grms_kcalmol_A:.4f}"
+                if current.angl_kcalmol is not None:
+                    msg += f", ANGL {current.angl_kcalmol:.4f}"
+                if current.internal_kcalmol is not None:
+                    msg += f", internal {current.internal_kcalmol:.4f}"
+                msg += " kcal/mol)"
+                print(msg, flush=True)
+            return False
+
+        if not args.quiet:
+            print(
+                f"bonded-MM-mini: after {stage}: {'; '.join(reasons)}; "
+                "running bonded SD (MLpot detached)",
+                flush=True,
+            )
     nstep = int(getattr(args, "bonded_mm_mini_steps", 50))
     minimize_bonded_mm_recovery(
         ctx,

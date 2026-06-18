@@ -680,6 +680,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="pycharmm: bonded recovery SD steps (default: 50)",
     )
     parser.add_argument(
+        "--bonded-mm-mini-always",
+        action="store_true",
+        help=(
+            "pycharmm: bonded SD after every --bonded-mm-mini-after stage "
+            "(ignore strain margins)"
+        ),
+    )
+    parser.add_argument(
         "--bonded-mm-internal-margin",
         type=float,
         default=0.0,
@@ -1538,6 +1546,8 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
                     str(args.bonded_mm_max_internal_kcal),
                 ]
             )
+        if getattr(args, "bonded_mm_mini_always", False):
+            cmd.append("--bonded-mm-mini-always")
     if getattr(args, "allow_high_bonded_strain", False):
         cmd.append("--allow-high-bonded-strain")
     cmd.extend(["--dynamics-overlap-action", str(args.dynamics_overlap_action)])

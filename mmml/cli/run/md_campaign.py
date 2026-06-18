@@ -421,6 +421,8 @@ def build_benchmark_md_system_argv(
                     str(int(cfg.get("bonded_mm_mini_steps", 50))),
                 ]
             )
+            if cfg.get("bonded_mm_mini_always"):
+                argv.append("--bonded-mm-mini-always")
 
     if str(job["setup"]) == "pbc_npt":
         argv.extend(["--pressure", str(job.get("pressure", cfg["pressure"]))])

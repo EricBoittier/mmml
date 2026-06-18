@@ -677,6 +677,91 @@ def test_maybe_run_bonded_mm_mini_skips_when_grms_ok():
     assert ran is False
 
 
+def test_maybe_run_bonded_mm_mini_always_runs_when_grms_ok():
+    from mmml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
+
+    ctx = MagicMock()
+    args = argparse_namespace(
+        bonded_mm_mini=True,
+        bonded_mm_mini_always=True,
+        bonded_mm_mini_after="heat",
+        bonded_mm_mini_steps=25,
+        bonded_mm_grms_margin=0.0,
+        dyn_nprint=100,
+        quiet=True,
+        show_energy=False,
+    )
+    baseline = MmStrainBaseline(grms_kcalmol_A=12.0, internal_kcalmol=24.0, angl_kcalmol=24.0)
+    with patch.object(
+        bonded_mm_recovery,
+        "measure_mm_bonded_strain_with_full_block",
+    ) as measure, patch.object(
+        bonded_mm_recovery,
+        "minimize_bonded_mm_recovery",
+    ) as mini:
+        ran = bonded_mm_recovery.maybe_run_bonded_mm_mini_after_stage(
+            ctx,
+            args,
+            stage="heat",
+            baseline=baseline,
+            restart_path="/tmp/heat.res",
+        )
+    measure.assert_not_called()
+    mini.assert_called_once()
+    assert ran is True
+
+
+def test_maybe_run_bonded_mm_mini_always_heavy_reload(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
+
+    ctx = MagicMock()
+    args = argparse_namespace(
+        bonded_mm_mini=True,
+        bonded_mm_mini_always=True,
+        bonded_mm_mini_after="heat",
+        bonded_mm_mini_steps=40,
+        quiet=True,
+        dyn_nprint=100,
+        show_energy=False,
+    )
+    topology_psf = tmp_path / "cluster_for_vmd_benz_100.psf"
+    topology_psf.write_text("* psf\n", encoding="utf-8")
+    with patch.object(
+        bonded_mm_recovery,
+        "_mlpot_covers_all_atoms",
+        return_value=True,
+    ), patch.object(
+        bonded_mm_recovery,
+        "_bonded_mm_skip_reason_after_heat_overlap",
+        return_value=None,
+    ), patch.object(
+        bonded_mm_recovery,
+        "_reload_pre_mlpot_topology",
+    ), patch.object(
+        bonded_mm_recovery,
+        "_measure_current_mm_strain",
+        return_value=MmStrainBaseline(grms_kcalmol_A=0.1),
+    ), patch.object(
+        bonded_mm_recovery,
+        "_run_bonded_sd_without_mlpot",
+    ) as sd, patch.object(
+        bonded_mm_recovery,
+        "_reregister_mlpot_after_topology_reload",
+    ), patch.object(
+        bonded_mm_recovery,
+        "_restore_flat_bottom_after_heavy_recovery",
+    ):
+        ran = bonded_mm_recovery.maybe_run_bonded_mm_mini_after_stage(
+            ctx,
+            args,
+            stage="heat",
+            baseline=None,
+            topology_psf=topology_psf,
+        )
+    sd.assert_called_once()
+    assert ran is True
+
+
 def test_recovery_reasons_angl_margin():
     from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         MmStrainBaseline,
