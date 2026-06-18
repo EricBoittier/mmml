@@ -148,6 +148,7 @@ Re-calling `update_bnbnd()` / `upinb` after MLpot registration can **segfault** 
 
 - Uses `inbfrq=0` during MLpot SD (avoids `mlpot_update` each step).
 - Syncs lists after mini with `CHARMM UPDATE` only — not full `upinb` ([`sync_charmm_lists_after_mini`](dynamics.py)).
+- Bonded recovery uses `prepare_rescue_lists_safe` (UPDATE only, optional `NBXMOD 2` script) — not `apply_recovery_nbonds` / `upinb` ([`topology_recovery.py`](topology_recovery.py)).
 - Re-attaches MLpot via `reattach_mlpot()` without rebuilding `iblo/inb` ([`setup.py`](setup.py), [`energy_mlpot.py`](../../../../pycharmm/energy_mlpot.py)).
 
 ---
@@ -324,6 +325,6 @@ Python bindings: [`pycharmm/energy_mlpot.py`](../../../../pycharmm/energy_mlpot.
 ## Open questions / future work
 
 1. **Wire `idxu`/`idxv`** into the decomposed callback for ML–MM embedding electrostatics (stub exists in single-monomer `PyCharmm_Calculator`; not implemented for multi-monomer path).
-2. **Safe `upinb` after MLpot** on large all-ML clusters — currently avoided; limits topology rescue and NBXMOD restoration.
+2. **Safe recovery after MLpot** — bonded-MM-mini, overlap rescue, and extent recovery use **inplace** BLOCK toggle + `CHARMM UPDATE` only ([`topology_recovery.py`](topology_recovery.py), [`bonded_mm_recovery.py`](bonded_mm_recovery.py)). Deprecated `DELETE ATOM` + `read.psf_card` requires `MMML_ALLOW_PSF_DELETE_RELOAD=1`. `set_iblo_inb_no_update` restores pre-MLpot exclusions without `upinb` when UPDATE-only prep is insufficient.
 3. **Align CHARMM and Python update cadence** — Python MM lists refresh every ENER; CHARMM lists may lag by up to `inbfrq` steps. Consider whether CHARMM list staleness affects any active code path beyond the unused Fortran indices.
 4. **Vacuum spatial culling** — static all-pairs scales as O(n_monomers² × n_atoms²); acceptable for DCM clusters but may need jax-md or cell lists for very large free-space systems.

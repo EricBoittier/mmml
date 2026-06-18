@@ -116,6 +116,10 @@ class MlpotContext:
     ml_charge: float = 0.0
     ml_fq: bool = True
     mm_internal_scale: float = 0.0
+    topology_psf_path: Path | None = None
+    topology_fingerprint: Any = None
+    pre_mlpot_iblo: list[int] | None = None
+    pre_mlpot_inb: list[int] | None = None
 
     def unset(self) -> None:
         self.mlpot.unset_mlpot()
@@ -494,8 +498,16 @@ def save_cluster_topology_for_vmd(
     """Save PSF + PDB for VMD (connectivity preserved; MLpot uses BLOCK, not PSF deletes).
 
     Load in VMD with: ``vmd cluster_for_vmd.psf cluster_for_vmd.pdb`` (or a trajectory).
+    Also writes a composition fingerprint sidecar for safe inplace recovery.
     """
+    import pycharmm.psf as psf
     import pycharmm.write as write
+
+    from mmml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
+        capture_topology_fingerprint_from_charmm,
+        save_topology_sidecar,
+        topology_fingerprint_path,
+    )
 
     sync_charmm_positions(positions)
     out = Path(out_dir).expanduser().resolve()
@@ -503,6 +515,14 @@ def save_cluster_topology_for_vmd(
     psf_path = write_charmm_psf(out / f"{stem}.psf")
     pdb_path = out / f"{stem}.pdb"
     write.coor_pdb(str(pdb_path), title=title)
+    fingerprint = capture_topology_fingerprint_from_charmm()
+    pre_iblo, pre_inb = psf.get_iblo_inb()
+    save_topology_sidecar(
+        topology_fingerprint_path(psf_path),
+        fingerprint,
+        pre_mlpot_iblo=pre_iblo,
+        pre_mlpot_inb=pre_inb,
+    )
     return {"psf": psf_path, "pdb": pdb_path.resolve()}
 
 

@@ -166,14 +166,19 @@ def _run_all_ml_extent_recovery(
     *,
     positions: np.ndarray,
 ) -> None:
-    """Fly-off recovery for all-ML: reload PSF using restart-file coords (no noise)."""
+    """Fly-off recovery for all-ML: inplace bonded SD on prior restart coords."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         MinimizeWithMlpotConfig,
         minimize_with_mlpot,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.restraints import clear_mmfp_restraints
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+    from mmml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
+        BondedRecoveryMode,
+        run_bonded_recovery_inplace,
+    )
 
-    topo = getattr(config, "topology_psf", None)
+    topo = getattr(config, "topology_psf", None) or getattr(ctx, "topology_psf_path", None)
     if topo is None or not Path(topo).is_file():
         raise RuntimeError(
             "all-ML fly-off recovery requires pre-MLpot topology PSF "
@@ -181,17 +186,18 @@ def _run_all_ml_extent_recovery(
         )
     if bonded_cfg.verbose:
         print(
-            f"Fly-off recovery: reloading pre-MLpot topology {Path(topo).name} "
-            f"with coords from prior restart",
+            f"Fly-off recovery: inplace bonded SD with coords from prior restart "
+            f"(topology {Path(topo).name})",
             flush=True,
         )
-    _reload_pre_mlpot_topology(ctx, topology_psf=topo, positions=positions)
-    try:
-        clear_mmfp_restraints()
-        assert_bonded_mm_energy_active(context="Fly-off recovery (reloaded PSF)")
-        _run_bonded_sd_without_mlpot(ctx, bonded_cfg)
-    finally:
-        _reregister_mlpot_after_topology_reload(ctx)
+    sync_charmm_positions(np.asarray(positions, dtype=float))
+    clear_mmfp_restraints()
+    run_bonded_recovery_inplace(
+        ctx,
+        BondedRecoveryMode.BONDED_ONLY,
+        bonded_cfg,
+        topology_psf=topo,
+    )
 
     n_mlpot = int(getattr(config, "mlpot_rescue_mini_nstep", 0) or 0)
     pyCModel = getattr(config, "pyCModel", None)
@@ -290,42 +296,24 @@ def measure_mm_bonded_strain_with_full_block(ctx: MlpotContext) -> MmStrainBasel
     return _with_mlpot_detached(ctx, _measure)
 
 
+def _measure_stage_bonded_strain(
+    ctx: MlpotContext,
+    topology_psf: PathLike | None = None,
+) -> MmStrainBaseline:
+    """Measure MM bonded strain (detached full-MM BLOCK for all-ML)."""
+    topo = topology_psf or getattr(ctx, "topology_psf_path", None)
+    if _mlpot_covers_all_atoms(ctx) and topo is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
+            measure_mm_strain_inplace,
+        )
+
+        return measure_mm_strain_inplace(ctx, topology_psf=topo)
+    return measure_mm_bonded_strain_with_full_block(ctx)
+
+
 def bonded_mm_mini_always(args: argparse.Namespace) -> bool:
     """True when bonded SD runs after every watched stage, ignoring strain margins."""
     return bool(getattr(args, "bonded_mm_mini_always", False))
-
-
-def _all_ml_mini_heavy_reload_policy(
-    args: argparse.Namespace,
-    *,
-    baseline: MmStrainBaseline,
-    stage: str,
-) -> tuple[str | None, str | None]:
-    """Decide whether all-ML ``DELETE ATOM`` PSF reload is needed/safe after MLpot mini.
-
-    Reloading ``cluster_for_vmd_*.psf`` via ``DELETE ATOM ALL`` after MLpot registration
-    segfaults on MPI-linked CHARMM (see intra overlap rescue).  When post-MLpot mini GRMS
-    is already within baseline margins, skip the heavy reload entirely.
-    """
-    if stage.lower() != "mini" or bonded_mm_mini_always(args):
-        return None, None
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
-
-    grms_margin, _, _ = _bonded_strain_margins(args)
-    grms = float(charmm_grms())
-    grms_thr = float(baseline.grms_kcalmol_A) + grms_margin
-    if grms <= grms_thr:
-        return (
-            f"post-MLpot mini GRMS {grms:.4f} ≤ {grms_thr:.4f} kcal/mol/Å "
-            "(skipping DELETE ATOM PSF reload; unsafe on MPI-linked CHARMM after MLpot)",
-            None,
-        )
-    return None, (
-        f"bonded-MM-mini: post-MLpot mini GRMS {grms:.4f} > {grms_thr:.4f} kcal/mol/Å; "
-        "all-ML PSF reload (DELETE ATOM) is unsafe on MPI-linked CHARMM. "
-        "Increase --mini-nstep / --charmm-sd-steps, relax --bonded-mm-grms-margin, "
-        "or disable --bonded-mm-mini for large all-ML clusters."
-    )
 
 
 def _bonded_strain_margins(args: argparse.Namespace) -> tuple[float, float, float]:
@@ -391,8 +379,8 @@ def assert_bonded_mm_energy_active(*, context: str = "bonded-MM rescue") -> None
     if bonded_zero:
         raise RuntimeError(
             f"{context}: CHARMM bonded MM terms read zero after BLOCK setup "
-            "(BOND/ANGL/GRMS). All-ML workflows must reload the pre-MLpot topology "
-            "PSF before bonded rescue."
+            "(BOND/ANGL/GRMS). Use inplace recovery (BLOCK toggle + UPDATE) or "
+            "set MMML_ALLOW_PSF_DELETE_RELOAD=1 for deprecated PSF reload."
         )
 
 
@@ -532,20 +520,23 @@ def _run_all_ml_inter_overlap_rescue(
     ctx: MlpotContext,
     config: Any,
 ) -> None:
-    """Reload clean PSF, bonded+VDW SD/ABNR, reattach MLpot, optional ML SD mini."""
+    """Inplace bonded+VDW SD/ABNR for all-ML inter-monomer overlap (no PSF reload)."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         MinimizeWithMlpotConfig,
         minimize_with_mlpot,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.restraints import clear_mmfp_restraints
+    from mmml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
+        BondedRecoveryMode,
+        run_bonded_recovery_inplace,
+    )
 
-    topo = getattr(config, "topology_psf", None)
+    topo = getattr(config, "topology_psf", None) or getattr(ctx, "topology_psf_path", None)
     rescue = config.rescue
     if topo is None or not Path(topo).is_file():
         raise RuntimeError(
             "all-ML inter-monomer rescue requires pre-MLpot topology PSF "
-            "(cluster_for_vmd_*.psf); reload restores CHARMM VDW between monomers "
-            "while MLpot is detached"
+            "(cluster_for_vmd_*.psf)"
         )
 
     noise = float(getattr(config, "position_noise_A", 0.05) or 0.0)
@@ -559,17 +550,28 @@ def _run_all_ml_inter_overlap_rescue(
             )
         apply_charmm_position_noise(amplitude_A=noise, seed=seed)
 
+    bonded_cfg = BondedMmMiniConfig(
+        nstep_sd=int(rescue.nstep_sd),
+        nprint=max(1, int(rescue.nprint)),
+        tolenr=float(rescue.tolenr),
+        tolgrd=float(rescue.tolgrd),
+        verbose=bool(rescue.verbose),
+        show_energy=False,
+    )
     if rescue.verbose:
         print(
-            f"Inter overlap rescue: reloading pre-MLpot topology {Path(topo).name}",
+            f"Inter overlap rescue: inplace bonded+VDW recovery "
+            f"(topology {Path(topo).name})",
             flush=True,
         )
-    _reload_pre_mlpot_topology(ctx, topology_psf=topo)
-    try:
-        clear_mmfp_restraints()
-        _run_bonded_vdw_sd_without_mlpot(ctx, rescue)
-    finally:
-        _reregister_mlpot_after_topology_reload(ctx)
+    clear_mmfp_restraints()
+    run_bonded_recovery_inplace(
+        ctx,
+        BondedRecoveryMode.BONDED_VDW,
+        bonded_cfg,
+        topology_psf=topo,
+        rescue=rescue,
+    )
 
     n_mlpot = int(getattr(config, "mlpot_rescue_mini_nstep", 0) or 0)
     pyCModel = getattr(config, "pyCModel", None)
@@ -635,6 +637,10 @@ def _copy_mlpot_context_state(dst: MlpotContext, src: MlpotContext) -> None:
         "ml_charge",
         "ml_fq",
         "mm_internal_scale",
+        "topology_psf_path",
+        "topology_fingerprint",
+        "pre_mlpot_iblo",
+        "pre_mlpot_inb",
     ):
         setattr(dst, name, getattr(src, name))
 
@@ -662,7 +668,26 @@ def _reload_pre_mlpot_topology(
     topology_psf: PathLike,
     positions: np.ndarray | None = None,
 ) -> None:
-    """Replace MLpot-mutated PSF with the saved pre-MLpot topology."""
+    """Replace MLpot-mutated PSF with the saved pre-MLpot topology (deprecated)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
+        allow_psf_delete_reload,
+        ensure_composition_unchanged,
+        resolve_topology_fingerprint,
+    )
+
+    if not allow_psf_delete_reload():
+        fp = resolve_topology_fingerprint(topology_psf)
+        ensure_composition_unchanged(
+            fp,
+            topology_psf=topology_psf,
+            context="PSF DELETE reload",
+        )
+        raise RuntimeError(
+            "DELETE ATOM PSF reload is disabled (unsafe after MLpot registration). "
+            "Use inplace bonded recovery (default) or set "
+            "MMML_ALLOW_PSF_DELETE_RELOAD=1 for debugging only."
+        )
+
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
         setup_default_nbonds,
@@ -1077,41 +1102,23 @@ def maybe_run_bonded_mm_mini_after_stage(
         )
 
     if _mlpot_covers_all_atoms(ctx):
-        if topology_psf is not None:
-            skip_reason = _bonded_mm_skip_reason_after_heat_overlap(ctx, args, stage=stage)
-            if skip_reason is None and baseline is not None:
-                skip_reason, unsafe_err = _all_ml_mini_heavy_reload_policy(
-                    args,
-                    baseline=baseline,
-                    stage=stage,
+        topo = topology_psf or getattr(ctx, "topology_psf_path", None)
+        if topo is None or not Path(topo).is_file():
+            if not args.quiet:
+                print(
+                    f"bonded-MM-mini: skipping after {stage} for all-ML system; "
+                    "no pre-MLpot topology PSF (cluster_for_vmd_*.psf) available",
+                    flush=True,
                 )
-                if unsafe_err is not None:
-                    raise RuntimeError(unsafe_err)
-            if skip_reason is not None:
-                if not args.quiet:
-                    print(
-                        f"bonded-MM-mini: skipping heavy recovery after {stage}: {skip_reason}",
-                        flush=True,
-                    )
-                return False
-            result = _run_heavy_bonded_recovery_check(
-                ctx,
-                args,
-                stage=stage,
-                baseline=baseline,
-                topology_psf=topology_psf,
-            )
-            if result.ran_recovery:
-                _record_bonded_snapshot()
-            return result.ran_recovery
-        if not args.quiet:
-            print(
-                f"bonded-MM-mini: skipping after {stage} for all-ML system; "
-                "CHARMM bonded terms are unavailable after MLpot registration "
-                "and no pre-MLpot topology PSF was provided",
-                flush=True,
-            )
-        return False
+            return False
+        skip_reason = _bonded_mm_skip_reason_after_heat_overlap(ctx, args, stage=stage)
+        if skip_reason is not None:
+            if not args.quiet:
+                print(
+                    f"bonded-MM-mini: skipping recovery after {stage}: {skip_reason}",
+                    flush=True,
+                )
+            return False
 
     if always:
         if not args.quiet:
@@ -1122,7 +1129,10 @@ def maybe_run_bonded_mm_mini_after_stage(
             )
     else:
         grms_margin, internal_margin, angl_margin = _bonded_strain_margins(args)
-        current = measure_mm_bonded_strain_with_full_block(ctx)
+        current = _measure_stage_bonded_strain(
+            ctx,
+            topology_psf=topology_psf or getattr(ctx, "topology_psf_path", None),
+        )
         reasons = _recovery_reasons(
             current,
             baseline,
@@ -1132,7 +1142,10 @@ def maybe_run_bonded_mm_mini_after_stage(
         )
         if not reasons:
             if not args.quiet:
-                msg = f"bonded-MM-mini: strain OK after {stage} (GRMS {current.grms_kcalmol_A:.4f}"
+                msg = (
+                    f"bonded-MM-mini: strain OK after {stage} "
+                    f"(GRMS {current.grms_kcalmol_A:.4f}"
+                )
                 if current.angl_kcalmol is not None:
                     msg += f", ANGL {current.angl_kcalmol:.4f}"
                 if current.internal_kcalmol is not None:
@@ -1144,19 +1157,31 @@ def maybe_run_bonded_mm_mini_after_stage(
         if not args.quiet:
             print(
                 f"bonded-MM-mini: after {stage}: {'; '.join(reasons)}; "
-                "running bonded SD (MLpot detached)",
+                "running bonded SD (MLpot detached, inplace recovery)",
                 flush=True,
             )
     nstep = int(getattr(args, "bonded_mm_mini_steps", 50))
-    minimize_bonded_mm_recovery(
-        ctx,
-        BondedMmMiniConfig(
-            nstep_sd=nstep,
-            nprint=max(1, int(getattr(args, "dyn_nprint", 500))),
-            verbose=not args.quiet,
-            show_energy=bool(getattr(args, "show_energy", False)),
-        ),
+    bonded_cfg = BondedMmMiniConfig(
+        nstep_sd=nstep,
+        nprint=max(1, int(getattr(args, "dyn_nprint", 500))),
+        verbose=not args.quiet,
+        show_energy=bool(getattr(args, "show_energy", False)),
     )
+    topo = topology_psf or getattr(ctx, "topology_psf_path", None)
+    if _mlpot_covers_all_atoms(ctx) and topo is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
+            BondedRecoveryMode,
+            run_bonded_recovery_inplace,
+        )
+
+        run_bonded_recovery_inplace(
+            ctx,
+            BondedRecoveryMode.BONDED_ONLY,
+            bonded_cfg,
+            topology_psf=topo,
+        )
+    else:
+        minimize_bonded_mm_recovery(ctx, bonded_cfg)
     _record_bonded_snapshot()
     if not args.quiet:
         print(

@@ -711,7 +711,7 @@ def test_maybe_run_bonded_mm_mini_always_runs_when_grms_ok():
     assert ran is True
 
 
-def test_maybe_run_bonded_mm_mini_always_heavy_reload(tmp_path):
+def test_maybe_run_bonded_mm_mini_always_inplace_all_ml(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
 
     ctx = MagicMock()
@@ -719,25 +719,19 @@ def test_maybe_run_bonded_mm_mini_always_heavy_reload(tmp_path):
         bonded_mm_mini=True,
         bonded_mm_mini_always=True,
         bonded_mm_mini_after="heat",
+        bonded_mm_mini_steps=40,
+        dyn_nprint=100,
         quiet=True,
     )
     topology_psf = tmp_path / "cluster_for_vmd_benz_100.psf"
     topology_psf.write_text("* psf\n", encoding="utf-8")
-    result = bonded_mm_recovery.BondedMmRecoveryResult(
-        ran_recovery=True,
-        current=MmStrainBaseline(grms_kcalmol_A=0.1),
-        reasons=("always",),
-        heavy_reload=True,
-    )
     with patch.object(
         bonded_mm_recovery,
         "_mlpot_covers_all_atoms",
         return_value=True,
-    ), patch.object(
-        bonded_mm_recovery,
-        "_run_heavy_bonded_recovery_check",
-        return_value=result,
-    ) as heavy:
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.topology_recovery.run_bonded_recovery_inplace",
+    ) as inplace:
         ran = bonded_mm_recovery.maybe_run_bonded_mm_mini_after_stage(
             ctx,
             args,
@@ -745,7 +739,39 @@ def test_maybe_run_bonded_mm_mini_always_heavy_reload(tmp_path):
             baseline=None,
             topology_psf=topology_psf,
         )
-    heavy.assert_called_once()
+    inplace.assert_called_once()
+    assert ran is True
+
+
+def test_maybe_run_bonded_mm_mini_always_all_ml_mini_uses_inplace(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
+
+    ctx = MagicMock()
+    args = argparse_namespace(
+        bonded_mm_mini=True,
+        bonded_mm_mini_always=True,
+        bonded_mm_mini_after="mini",
+        bonded_mm_mini_steps=25,
+        dyn_nprint=50,
+        quiet=True,
+    )
+    topology_psf = tmp_path / "cluster_for_vmd_dcm_100.psf"
+    topology_psf.write_text("* psf\n", encoding="utf-8")
+    with patch.object(
+        bonded_mm_recovery,
+        "_mlpot_covers_all_atoms",
+        return_value=True,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.topology_recovery.run_bonded_recovery_inplace",
+    ) as inplace:
+        ran = bonded_mm_recovery.maybe_run_bonded_mm_mini_after_stage(
+            ctx,
+            args,
+            stage="mini",
+            baseline=MmStrainBaseline(grms_kcalmol_A=0.5),
+            topology_psf=topology_psf,
+        )
+    inplace.assert_called_once()
     assert ran is True
 
 
@@ -818,10 +844,9 @@ def test_maybe_run_bonded_mm_mini_skips_heavy_when_heat_overlap(tmp_path):
         bonded_mm_recovery,
         "_bonded_mm_skip_reason_after_heat_overlap",
         return_value="worst inter-monomer distance 0.71 Å < 0.50 Å",
-    ) as skip, patch.object(
-        bonded_mm_recovery,
-        "_run_heavy_bonded_recovery_check",
-    ) as heavy:
+    ) as skip, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.topology_recovery.run_bonded_recovery_inplace",
+    ) as inplace:
         ran = bonded_mm_recovery.maybe_run_bonded_mm_mini_after_stage(
             ctx,
             args,
@@ -830,11 +855,11 @@ def test_maybe_run_bonded_mm_mini_skips_heavy_when_heat_overlap(tmp_path):
             topology_psf=topology_psf,
         )
     skip.assert_called_once()
-    heavy.assert_not_called()
+    inplace.assert_not_called()
     assert ran is False
 
 
-def test_maybe_run_bonded_mm_mini_all_ml_skips_heavy_reload_after_mini_when_grms_ok(tmp_path):
+def test_maybe_run_bonded_mm_mini_all_ml_skips_when_strain_ok(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
 
     ctx = MagicMock()
@@ -846,17 +871,18 @@ def test_maybe_run_bonded_mm_mini_all_ml_skips_heavy_reload_after_mini_when_grms
     topology_psf = tmp_path / "cluster_for_vmd_dcm_100.psf"
     topology_psf.write_text("* psf\n", encoding="utf-8")
     baseline = MmStrainBaseline(grms_kcalmol_A=5.0)
+    ok = MmStrainBaseline(grms_kcalmol_A=0.45)
     with patch.object(
         bonded_mm_recovery,
         "_mlpot_covers_all_atoms",
         return_value=True,
     ), patch.object(
         bonded_mm_recovery,
-        "_run_heavy_bonded_recovery_check",
-    ) as heavy, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms",
-        return_value=0.45,
-    ):
+        "_measure_stage_bonded_strain",
+        return_value=ok,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.topology_recovery.run_bonded_recovery_inplace",
+    ) as inplace:
         ran = bonded_mm_recovery.maybe_run_bonded_mm_mini_after_stage(
             ctx,
             args,
@@ -865,11 +891,11 @@ def test_maybe_run_bonded_mm_mini_all_ml_skips_heavy_reload_after_mini_when_grms
             topology_psf=topology_psf,
         )
 
-    heavy.assert_not_called()
+    inplace.assert_not_called()
     assert ran is False
 
 
-def test_maybe_run_bonded_mm_mini_all_ml_raises_when_mini_grms_high(tmp_path):
+def test_maybe_run_bonded_mm_mini_all_ml_runs_inplace_when_strain_high(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
 
     ctx = MagicMock()
@@ -877,22 +903,24 @@ def test_maybe_run_bonded_mm_mini_all_ml_raises_when_mini_grms_high(tmp_path):
         bonded_mm_mini=True,
         bonded_mm_mini_after="mini",
         quiet=True,
+        bonded_mm_grms_margin=0.0,
     )
     topology_psf = tmp_path / "cluster_for_vmd_dcm_100.psf"
     topology_psf.write_text("* psf\n", encoding="utf-8")
     baseline = MmStrainBaseline(grms_kcalmol_A=5.0)
+    high = MmStrainBaseline(grms_kcalmol_A=20.0)
     with patch.object(
         bonded_mm_recovery,
         "_mlpot_covers_all_atoms",
         return_value=True,
     ), patch.object(
         bonded_mm_recovery,
-        "_run_heavy_bonded_recovery_check",
-    ) as heavy, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms",
-        return_value=20.0,
-    ), pytest.raises(RuntimeError, match="unsafe on MPI-linked CHARMM"):
-        bonded_mm_recovery.maybe_run_bonded_mm_mini_after_stage(
+        "_measure_stage_bonded_strain",
+        return_value=high,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.topology_recovery.run_bonded_recovery_inplace",
+    ) as inplace:
+        ran = bonded_mm_recovery.maybe_run_bonded_mm_mini_after_stage(
             ctx,
             args,
             stage="mini",
@@ -900,10 +928,11 @@ def test_maybe_run_bonded_mm_mini_all_ml_raises_when_mini_grms_high(tmp_path):
             topology_psf=topology_psf,
         )
 
-    heavy.assert_not_called()
+    inplace.assert_called_once()
+    assert ran is True
 
 
-def test_maybe_run_bonded_mm_mini_all_ml_uses_heavy_reload(tmp_path):
+def test_maybe_run_bonded_mm_mini_all_ml_uses_inplace_recovery(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
 
     ctx = MagicMock()
@@ -911,28 +940,26 @@ def test_maybe_run_bonded_mm_mini_all_ml_uses_heavy_reload(tmp_path):
         bonded_mm_mini=True,
         bonded_mm_mini_after="heat",
         quiet=True,
+        bonded_mm_grms_margin=0.0,
     )
     topology_psf = tmp_path / "cluster_for_vmd_dcm_10.psf"
     topology_psf.write_text("* psf\n", encoding="utf-8")
     baseline = MmStrainBaseline(grms_kcalmol_A=5.0)
-    result = bonded_mm_recovery.BondedMmRecoveryResult(
-        ran_recovery=True,
-        current=MmStrainBaseline(grms_kcalmol_A=20.0),
-        reasons=("GRMS high",),
-        heavy_reload=True,
-    )
+    high = MmStrainBaseline(grms_kcalmol_A=20.0)
     with patch.object(
         bonded_mm_recovery,
         "_mlpot_covers_all_atoms",
         return_value=True,
     ), patch.object(
         bonded_mm_recovery,
-        "_run_heavy_bonded_recovery_check",
-        return_value=result,
-    ) as heavy, patch.object(
+        "_measure_stage_bonded_strain",
+        return_value=high,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.topology_recovery.run_bonded_recovery_inplace",
+    ) as inplace, patch.object(
         bonded_mm_recovery,
-        "measure_mm_bonded_strain_with_full_block",
-    ) as measure:
+        "minimize_bonded_mm_recovery",
+    ) as hybrid_mini:
         ran = bonded_mm_recovery.maybe_run_bonded_mm_mini_after_stage(
             ctx,
             args,
@@ -942,14 +969,8 @@ def test_maybe_run_bonded_mm_mini_all_ml_uses_heavy_reload(tmp_path):
             topology_psf=topology_psf,
         )
 
-    heavy.assert_called_once_with(
-        ctx,
-        args,
-        stage="heat",
-        baseline=baseline,
-        topology_psf=topology_psf,
-    )
-    measure.assert_not_called()
+    inplace.assert_called_once()
+    hybrid_mini.assert_not_called()
     assert ran is True
 
 
@@ -1211,10 +1232,24 @@ def test_restore_charmm_state_from_restart_raises_without_finite_coords(tmp_path
         restore_charmm_state_from_restart(restart)
 
 
-def test_reload_pre_mlpot_topology_uses_explicit_positions_not_charmm_array(tmp_path):
+def test_reload_pre_mlpot_topology_disabled_without_env_flag(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         _reload_pre_mlpot_topology,
     )
+
+    topo = tmp_path / "cluster.psf"
+    topo.write_text("psf", encoding="utf-8")
+    ctx = MagicMock()
+    with pytest.raises(RuntimeError, match="DELETE ATOM PSF reload is disabled"):
+        _reload_pre_mlpot_topology(ctx, topology_psf=topo)
+
+
+def test_reload_pre_mlpot_topology_uses_explicit_positions_not_charmm_array(tmp_path, monkeypatch):
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        _reload_pre_mlpot_topology,
+    )
+
+    monkeypatch.setenv("MMML_ALLOW_PSF_DELETE_RELOAD", "1")
 
     topo = tmp_path / "cluster.psf"
     topo.write_text("psf", encoding="utf-8")
@@ -1261,10 +1296,12 @@ def test_reload_pre_mlpot_topology_uses_explicit_positions_not_charmm_array(tmp_
     ctx.unset.assert_called_once()
 
 
-def test_reload_pre_mlpot_topology_raises_on_nonfinite_explicit_positions(tmp_path):
+def test_reload_pre_mlpot_topology_raises_on_nonfinite_explicit_positions(tmp_path, monkeypatch):
     from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         _reload_pre_mlpot_topology,
     )
+
+    monkeypatch.setenv("MMML_ALLOW_PSF_DELETE_RELOAD", "1")
 
     topo = tmp_path / "cluster.psf"
     topo.write_text("psf", encoding="utf-8")
@@ -1275,10 +1312,12 @@ def test_reload_pre_mlpot_topology_raises_on_nonfinite_explicit_positions(tmp_pa
         _reload_pre_mlpot_topology(ctx, topology_psf=topo, positions=bad)
 
 
-def test_reload_pre_mlpot_topology_default_reads_finite_charmm_positions(tmp_path):
+def test_reload_pre_mlpot_topology_default_reads_finite_charmm_positions(tmp_path, monkeypatch):
     from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         _reload_pre_mlpot_topology,
     )
+
+    monkeypatch.setenv("MMML_ALLOW_PSF_DELETE_RELOAD", "1")
 
     topo = tmp_path / "cluster.psf"
     topo.write_text("psf", encoding="utf-8")

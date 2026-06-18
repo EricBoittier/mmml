@@ -1083,6 +1083,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         mlpot_use_pbc=mlpot_pbc,
         verbose=not args.quiet,
         args=args,
+        topology_psf=recovery_topology_psf,
     )
 
     restart_from = (

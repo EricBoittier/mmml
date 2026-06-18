@@ -333,6 +333,7 @@ def _register_mlpot_context(
     verbose: bool = False,
     args: Any | None = None,
     defer_jax_warmup: bool | None = None,
+    topology_psf: PathLike | None = None,
 ):
     import ase
 
@@ -469,6 +470,11 @@ def _register_mlpot_context(
     pos_chk = get_charmm_positions_array()
     if np.allclose(pos_chk, 0.0):
         sync_charmm_positions(r)
+    from mmml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
+        attach_topology_recovery_state,
+    )
+
+    attach_topology_recovery_state(ctx, topology_psf)
     return ctx, pyCModel
 
 
@@ -590,6 +596,7 @@ def run_minimize_workflow(args: argparse.Namespace) -> int:
         mlpot_use_pbc=mlpot_pbc,
         verbose=not args.quiet,
         args=args,
+        topology_psf=vmd_topo_psf if vmd_topo_psf.is_file() else None,
     )
     fix_sel = select_by_resids(fix_resids) if fix_resids else None
     try:
@@ -724,6 +731,7 @@ def run_dynamics_workflow(
         verbose=not args.quiet,
         args=args,
         defer_jax_warmup=defer_jax_warmup,
+        topology_psf=vmd_topo_psf if vmd_topo_psf.is_file() else None,
     )
     show_energy = resolve_show_energy(args)
     ml_cell = float(box_side) if mlpot_pbc and box_side is not None else None
