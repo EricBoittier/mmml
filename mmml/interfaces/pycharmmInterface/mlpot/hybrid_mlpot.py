@@ -355,6 +355,7 @@ class DecomposedMlpotModel:
         verbose: bool = False,
         spatial_mpi: bool = False,
         atoms_per_monomer: Sequence[int] | None = None,
+        defer_jax_until_after_sd: bool = False,
     ) -> None:
         self._spherical_fn = spherical_fn
         self._cutoff_params = cutoff_params
@@ -365,6 +366,9 @@ class DecomposedMlpotModel:
         self._get_update_fn = get_update_fn
         self._ml_compute_dtype = ml_compute_dtype
         self._spatial_mpi = bool(spatial_mpi)
+        self._defer_jax_until_after_sd = bool(defer_jax_until_after_sd)
+        self._jax_on_gpu = spherical_fn is not None
+        self._registered_calculator: DecomposedMlpotCalculator | None = None
         if atoms_per_monomer is None:
             apm = max(1, len(self._atomic_numbers) // max(1, int(n_monomers)))
             self._atoms_per_monomer = [apm] * int(n_monomers)
@@ -381,26 +385,38 @@ class DecomposedMlpotModel:
         self._pending_do_ml_dimer = bool(pending_do_ml_dimer)
         self._verbose = bool(verbose)
 
-    def _finalize_jax_factory(self) -> None:
-        """Build ``spherical_fn`` on GPU after CHARMM MLpot ``upinb`` (``MLpot.__init__``)."""
+    def _finalize_jax_factory(self, *, gpu: bool = False) -> None:
+        """Build ``spherical_fn`` after CHARMM MLpot ``upinb`` (``MLpot.__init__``)."""
         if self._spherical_fn is not None:
             return
         if self._pending_factory is None or self._pending_factory_z is None:
             raise RuntimeError("DecomposedMlpotModel: JAX factory was not initialized")
+        cpu_only = self._defer_jax_until_after_sd and not gpu
         from mmml.interfaces.pycharmmInterface.jax_compile_threads import (
             jax_compile_threads_context,
         )
         from mmml.utils.jax_gpu_warmup import ensure_xla_gpu_warmed
 
         with jax_compile_threads_context():
-            ensure_xla_gpu_warmed()
+            if not cpu_only:
+                ensure_xla_gpu_warmed()
             z = self._pending_factory_z
             r0 = np.zeros((len(z), 3), dtype=np.float64)
             from mmml.interfaces.pycharmmInterface.jax_device_policy import (
+                jax_cpu_until_mlpot_registered,
                 mlpot_jax_device_context,
             )
 
-            with mlpot_jax_device_context():
+            device_ctx = (
+                jax_cpu_until_mlpot_registered if cpu_only else mlpot_jax_device_context
+            )
+            if cpu_only and self._verbose:
+                print(
+                    "Decomposed MLpot: JAX factory on CPU until after MLpot SD "
+                    "(MPI-linked CHARMM)",
+                    flush=True,
+                )
+            with device_ctx():
                 _, spherical_fn, get_update_fn = unpack_factory_result(
                     self._pending_factory(
                         atomic_numbers=jnp.asarray(z),
@@ -417,15 +433,35 @@ class DecomposedMlpotModel:
         self._spherical_fn = spherical_fn
         if self._do_mm:
             self._get_update_fn = get_update_fn
-        self._pending_factory = None
-        self._pending_factory_z = None
+        self._jax_on_gpu = not cpu_only
+        if not cpu_only:
+            self._pending_factory = None
+            self._pending_factory_z = None
         if self._verbose:
+            backend = "CPU" if cpu_only else "GPU"
             print(
                 f"Decomposed MLpot spherical_fn={spherical_fn!r} "
-                f"(JIT bind doML={self._pending_do_ml} doMM={self._do_mm} "
+                f"({backend}; JIT bind doML={self._pending_do_ml} doMM={self._do_mm} "
                 f"doML_dimer={self._pending_do_ml_dimer})",
                 flush=True,
             )
+
+    def promote_jax_factory_to_gpu(self) -> None:
+        """Rebuild ``spherical_fn`` on GPU after MLpot SD (MPI defer path)."""
+        if not self._defer_jax_until_after_sd or self._jax_on_gpu:
+            return
+        self._spherical_fn = None
+        self._value_and_grad_fn = None
+        self._vg_cache_key = None
+        if self._do_mm:
+            self._get_update_fn = None
+        self._finalize_jax_factory(gpu=True)
+        calc = self._registered_calculator
+        if calc is not None:
+            calc.spherical_fn = self._spherical_fn
+            calc._get_update_fn = self._get_update_fn
+            calc._value_and_grad_fn = None
+            calc._vg_cache_key = None
 
     def get_pycharmm_calculator(self, ml_atom_indices=None, ml_atomic_numbers=None, **kwargs):
         self._finalize_jax_factory()
@@ -446,6 +482,7 @@ class DecomposedMlpotModel:
             atoms_per_monomer=self._atoms_per_monomer,
         )
         calc._parent_model = self
+        self._registered_calculator = calc
         return calc
 
 
@@ -464,6 +501,7 @@ def build_decomposed_mlpot_model(
     args: Any | None = None,
     ml_compute_dtype: str | None = None,
     defer_jax_until_mlpot_registered: bool = False,
+    defer_jax_until_after_sd: bool = False,
 ) -> DecomposedMlpotModel:
     ckpt = Path(checkpoint).expanduser().resolve()
     if args is not None and ml_compute_dtype is None:
@@ -581,6 +619,7 @@ def build_decomposed_mlpot_model(
             verbose=verbose,
             spatial_mpi=spatial_mpi,
             atoms_per_monomer=per,
+            defer_jax_until_after_sd=defer_jax_until_after_sd,
         )
     r0 = np.zeros((len(z), 3), dtype=np.float64)
     from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_context
@@ -681,8 +720,11 @@ def warmup_decomposed_mlpot(
     cell: Union[float, bool] | None = None,
     verbose: bool = False,
 ) -> None:
-    """JIT-compile hybrid ML/MM outside the CHARMM callback (before MLpot SD)."""
-    model._finalize_jax_factory()
+    """JIT-compile hybrid ML/MM on GPU (after MLpot SD when MPI defers JAX)."""
+    if model._defer_jax_until_after_sd and not model._jax_on_gpu:
+        model.promote_jax_factory_to_gpu()
+    else:
+        model._finalize_jax_factory()
     from mmml.utils.jax_gpu_warmup import warmup_hybrid_spherical_cutoff
 
     z = np.asarray(physnet_ml_atomic_numbers(model._atomic_numbers), dtype=int)
