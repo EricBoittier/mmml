@@ -719,38 +719,25 @@ def test_maybe_run_bonded_mm_mini_always_heavy_reload(tmp_path):
         bonded_mm_mini=True,
         bonded_mm_mini_always=True,
         bonded_mm_mini_after="heat",
-        bonded_mm_mini_steps=40,
         quiet=True,
-        dyn_nprint=100,
-        show_energy=False,
     )
     topology_psf = tmp_path / "cluster_for_vmd_benz_100.psf"
     topology_psf.write_text("* psf\n", encoding="utf-8")
+    result = bonded_mm_recovery.BondedMmRecoveryResult(
+        ran_recovery=True,
+        current=MmStrainBaseline(grms_kcalmol_A=0.1),
+        reasons=("always",),
+        heavy_reload=True,
+    )
     with patch.object(
         bonded_mm_recovery,
         "_mlpot_covers_all_atoms",
         return_value=True,
     ), patch.object(
         bonded_mm_recovery,
-        "_bonded_mm_skip_reason_after_heat_overlap",
-        return_value=None,
-    ), patch.object(
-        bonded_mm_recovery,
-        "_reload_pre_mlpot_topology",
-    ), patch.object(
-        bonded_mm_recovery,
-        "_measure_current_mm_strain",
-        return_value=MmStrainBaseline(grms_kcalmol_A=0.1),
-    ), patch.object(
-        bonded_mm_recovery,
-        "_run_bonded_sd_without_mlpot",
-    ) as sd, patch.object(
-        bonded_mm_recovery,
-        "_reregister_mlpot_after_topology_reload",
-    ), patch.object(
-        bonded_mm_recovery,
-        "_restore_flat_bottom_after_heavy_recovery",
-    ):
+        "_run_heavy_bonded_recovery_check",
+        return_value=result,
+    ) as heavy:
         ran = bonded_mm_recovery.maybe_run_bonded_mm_mini_after_stage(
             ctx,
             args,
@@ -758,7 +745,7 @@ def test_maybe_run_bonded_mm_mini_always_heavy_reload(tmp_path):
             baseline=None,
             topology_psf=topology_psf,
         )
-    sd.assert_called_once()
+    heavy.assert_called_once()
     assert ran is True
 
 
@@ -845,6 +832,77 @@ def test_maybe_run_bonded_mm_mini_skips_heavy_when_heat_overlap(tmp_path):
     skip.assert_called_once()
     heavy.assert_not_called()
     assert ran is False
+
+
+def test_maybe_run_bonded_mm_mini_all_ml_skips_heavy_reload_after_mini_when_grms_ok(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
+
+    ctx = MagicMock()
+    args = argparse_namespace(
+        bonded_mm_mini=True,
+        bonded_mm_mini_after="mini",
+        quiet=True,
+    )
+    topology_psf = tmp_path / "cluster_for_vmd_dcm_100.psf"
+    topology_psf.write_text("* psf\n", encoding="utf-8")
+    baseline = MmStrainBaseline(grms_kcalmol_A=5.0)
+    with patch.object(
+        bonded_mm_recovery,
+        "_mlpot_covers_all_atoms",
+        return_value=True,
+    ), patch.object(
+        bonded_mm_recovery,
+        "_run_heavy_bonded_recovery_check",
+    ) as heavy, patch.object(
+        bonded_mm_recovery,
+        "charmm_grms",
+        return_value=0.45,
+    ):
+        ran = bonded_mm_recovery.maybe_run_bonded_mm_mini_after_stage(
+            ctx,
+            args,
+            stage="mini",
+            baseline=baseline,
+            topology_psf=topology_psf,
+        )
+
+    heavy.assert_not_called()
+    assert ran is False
+
+
+def test_maybe_run_bonded_mm_mini_all_ml_raises_when_mini_grms_high(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
+
+    ctx = MagicMock()
+    args = argparse_namespace(
+        bonded_mm_mini=True,
+        bonded_mm_mini_after="mini",
+        quiet=True,
+    )
+    topology_psf = tmp_path / "cluster_for_vmd_dcm_100.psf"
+    topology_psf.write_text("* psf\n", encoding="utf-8")
+    baseline = MmStrainBaseline(grms_kcalmol_A=5.0)
+    with patch.object(
+        bonded_mm_recovery,
+        "_mlpot_covers_all_atoms",
+        return_value=True,
+    ), patch.object(
+        bonded_mm_recovery,
+        "_run_heavy_bonded_recovery_check",
+    ) as heavy, patch.object(
+        bonded_mm_recovery,
+        "charmm_grms",
+        return_value=20.0,
+    ), pytest.raises(RuntimeError, match="unsafe on MPI-linked CHARMM"):
+        bonded_mm_recovery.maybe_run_bonded_mm_mini_after_stage(
+            ctx,
+            args,
+            stage="mini",
+            baseline=baseline,
+            topology_psf=topology_psf,
+        )
+
+    heavy.assert_not_called()
 
 
 def test_maybe_run_bonded_mm_mini_all_ml_uses_heavy_reload(tmp_path):
