@@ -240,9 +240,12 @@ def test_maybe_rerun_md_system_invokes_mpirun(monkeypatch, tmp_path):
     mock_run.assert_called_once()
     cmd = mock_run.call_args.args[0]
     assert str(mpirun.resolve()) == cmd[0]
-    assert cmd[1:3] == ["-np", "1"]
-    assert cmd[4:6] == ["-m", "mmml.cli.__main__"]
-    assert cmd[6:] == ["md-system", "--backend", "pycharmm"]
+    assert cmd[1:4] == ["-np", "1", "--mca"]
+    assert cmd[4] == "orte_abort_print_stack"
+    assert cmd[5] == "1"
+    assert cmd[6:8] == [mock_run.call_args.args[0][6], "-m"]
+    assert cmd[8] == "mmml.cli.__main__"
+    assert cmd[9:] == ["md-system", "--backend", "pycharmm"]
     env = mock_run.call_args.kwargs.get("env")
     assert env is not None
     assert str(mpirun.parent) in env["PATH"].split(os.pathsep)
@@ -275,3 +278,36 @@ def test_maybe_rerun_md_system_prepends_subcommand(monkeypatch, tmp_path):
     assert code == 0
     cmd = mock_run.call_args.args[0]
     assert cmd[6:] == ["md-system", "--config", "dcm_test.yaml", "--run-all"]
+
+
+def test_mpi_mpirun_extra_args_abort_stack_by_default(monkeypatch):
+    monkeypatch.delenv("MMML_NO_MPI_ABORT_STACK", raising=False)
+    monkeypatch.delenv("MMML_MPI_VERBOSE", raising=False)
+    assert charmm_mpi.mpi_mpirun_extra_args() == [
+        "--mca",
+        "orte_abort_print_stack",
+        "1",
+    ]
+
+
+def test_mpi_mpirun_extra_args_verbose(monkeypatch):
+    monkeypatch.delenv("MMML_NO_MPI_ABORT_STACK", raising=False)
+    monkeypatch.setenv("MMML_MPI_VERBOSE", "1")
+    args = charmm_mpi.mpi_mpirun_extra_args()
+    assert args[:3] == ["--mca", "orte_abort_print_stack", "1"]
+    assert "plm_base_verbose" in args
+
+
+def test_mpi_diagnostic_env_defaults(monkeypatch):
+    monkeypatch.delenv("MMML_NO_MPI_ABORT_STACK", raising=False)
+    monkeypatch.delenv("OMPI_MCA_orte_abort_print_stack", raising=False)
+    charmm_mpi.mpi_diagnostic_env_defaults()
+    assert os.environ["OMPI_MCA_orte_abort_print_stack"] == "1"
+
+
+def test_explain_mpi_crash_prints_for_sigsegv(capsys):
+    charmm_mpi.explain_mpi_crash(139, argv0="mmml md-system")
+    err = capsys.readouterr().err
+    assert "SIGSEGV" in err
+    assert "Sphinx" in err
+    assert "rebuild_charmm_mlpot.sh --debug" in err
