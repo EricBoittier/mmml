@@ -296,9 +296,13 @@ def prepare_rescue_lists_safe(
     ctx: "MlpotContext",
     *,
     context: str = "bonded-MM rescue",
-    use_recovery_nbxmod: bool = False,
 ) -> None:
-    """Refresh pair lists with ``UPDATE`` only (no ``upinb`` / ``update_bnbnd``)."""
+    """Refresh pair lists with ``UPDATE`` only (no ``upinb`` / ``update_bnbnd``).
+
+    For bonded+VDW rescue on hybrid systems, call :func:`apply_recovery_nbonds`
+    before BLOCK setup — ``NBXMOD`` changes require ``upinb``, which segfaults on
+    large all-ML PBC clusters.
+    """
     from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         assert_bonded_mm_energy_active,
     )
@@ -308,13 +312,6 @@ def prepare_rescue_lists_safe(
 
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
 
-    if use_recovery_nbxmod:
-        from mmml.interfaces.pycharmmInterface.mlpot.setup import RECOVERY_NBXMOD
-        from mmml.interfaces.pycharmmInterface.nbonds_config import vacuum_nbond_kwargs
-
-        pycharmm.UpdateNonBondedScript(
-            **vacuum_nbond_kwargs(nbxmod=RECOVERY_NBXMOD)
-        ).run()
     with charmm_relaxed_bomlev():
         pycharmm.lingo.charmm_script("UPDATE")
     try:
@@ -381,7 +378,6 @@ def run_bonded_recovery_inplace(
         context="inplace bonded recovery",
     )
 
-    use_nbxmod = mode == BondedRecoveryMode.BONDED_VDW
     if config.verbose:
         print(
             f"bonded recovery: inplace {mode.value} "
@@ -394,7 +390,6 @@ def run_bonded_recovery_inplace(
         prepare_rescue_lists_safe(
             ctx,
             context=f"inplace {mode.value} recovery",
-            use_recovery_nbxmod=use_nbxmod,
         )
         pycharmm, cons_fix, *_ = _import_pycharmm_modules()
         minimize = _import_pycharmm_modules()[3]

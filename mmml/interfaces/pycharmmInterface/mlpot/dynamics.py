@@ -402,7 +402,7 @@ def _prepare_bonded_mm_rescue_environment(ctx: "MlpotContext") -> None:
 
     if not isinstance(ctx, MlpotContext):
         raise TypeError("ctx must be MlpotContext")
-    prepare_rescue_lists_safe(ctx, context="Bonded-MM rescue", use_recovery_nbxmod=True)
+    prepare_rescue_lists_safe(ctx, context="Bonded-MM rescue")
 
 
 def minimize_bonded_mm_recovery(
@@ -473,7 +473,7 @@ def minimize_bonded_mm_recovery(
 
 
 def _prepare_overlap_rescue_lists(ctx: "MlpotContext") -> None:
-    """Bonded+VDW rescue list prep (NBXMOD 2, UPDATE only; no upinb)."""
+    """Sync pair lists after ``apply_recovery_nbonds`` (UPDATE only; no second upinb)."""
     from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
     from mmml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
         prepare_rescue_lists_safe,
@@ -481,11 +481,7 @@ def _prepare_overlap_rescue_lists(ctx: "MlpotContext") -> None:
 
     if not isinstance(ctx, MlpotContext):
         raise TypeError("ctx must be MlpotContext")
-    prepare_rescue_lists_safe(
-        ctx,
-        context="overlap rescue",
-        use_recovery_nbxmod=True,
-    )
+    prepare_rescue_lists_safe(ctx, context="overlap rescue")
 
 
 def minimize_overlap_rescue(
@@ -502,6 +498,7 @@ def minimize_overlap_rescue(
     )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         MlpotContext,
+        apply_recovery_nbonds,
         get_charmm_positions_array,
         restore_workflow_nbonds,
     )
@@ -512,6 +509,7 @@ def minimize_overlap_rescue(
         raise TypeError("ctx must be MlpotContext")
 
     def _run_rescue() -> float | None:
+        apply_recovery_nbonds(ctx)
         apply_bonded_vdw_recovery_block()
         _prepare_overlap_rescue_lists(ctx)
         pycharmm, cons_fix, *_ = _import_pycharmm_modules()

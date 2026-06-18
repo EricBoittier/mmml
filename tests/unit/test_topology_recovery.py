@@ -217,3 +217,31 @@ def test_run_bonded_recovery_inplace_never_deletes_psf(tmp_path):
     ]
     joined = " ".join(script_calls)
     assert "DELETE ATOM" not in joined
+
+
+def test_prepare_rescue_lists_safe_update_only_no_upinb():
+    import sys
+
+    from mmml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
+        prepare_rescue_lists_safe,
+    )
+
+    mock_py = MagicMock()
+    ctx = MagicMock()
+    ctx.pre_mlpot_iblo = None
+    ctx.pre_mlpot_inb = None
+    with patch.dict(
+        sys.modules,
+        {
+            "pycharmm": mock_py,
+            "mmml.interfaces.pycharmmInterface.import_pycharmm": MagicMock(),
+        },
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.assert_bonded_mm_energy_active",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        return_value=__import__("contextlib").nullcontext(),
+    ):
+        prepare_rescue_lists_safe(ctx, context="test")
+    mock_py.UpdateNonBondedScript.assert_not_called()
+    mock_py.lingo.charmm_script.assert_called_with("UPDATE")
