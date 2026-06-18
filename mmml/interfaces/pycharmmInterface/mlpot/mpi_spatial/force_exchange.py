@@ -45,3 +45,23 @@ def mpi_allreduce_forces(
     out = np.empty_like(local)
     comm.Allreduce([local, MPI.DOUBLE], [out, MPI.DOUBLE], op=MPI.SUM)
     return out
+
+
+def mpi_allreduce_energy(energy: float, comm: Any = None) -> float:
+    """Sum ML energy contributions across MPI ranks."""
+    local = float(energy)
+    if comm is None:
+        try:
+            from mpi4py import MPI
+
+            comm = MPI.COMM_WORLD
+        except Exception:
+            return local
+    if comm.Get_size() <= 1:
+        return local
+    from mpi4py import MPI
+
+    buf = np.array([local], dtype=np.float64)
+    out = np.zeros(1, dtype=np.float64)
+    comm.Allreduce([buf, MPI.DOUBLE], [out, MPI.DOUBLE], op=MPI.SUM)
+    return float(out[0])

@@ -47,6 +47,37 @@ mmml md-system ... --ml-batch-size 256
 
 Multi-GPU on one node (still `np=1`): `--ml-gpu-count N` with `--ml-batch-size 128–256`.
 
+### Dual-GPU pmap (recommended on one 2-GPU node)
+
+Use **one MPI rank** and let JAX `pmap` spread PhysNet chunks across both GPUs:
+
+```bash
+export CUDA_VISIBLE_DEVICES=0,1
+MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh md-system ... \
+  --ml-batch-size 128 --ml-gpu-count 2
+```
+
+`ml_batch_size` must be small enough that `ceil(systems_per_step / ml_batch_size) >= 2` so both GPUs receive chunks (see `effective_ml_gpu_count` in [`mlpot_gpu_policy.py`](../mmml/interfaces/pycharmmInterface/mlpot/mlpot_gpu_policy.py)).
+
+Benchmark guidance:
+
+```bash
+python scripts/benchmark_mlpot_ml_batch.py --checkpoint path/to/ckpt --n-monomers 90 \
+  --batch-sizes 64 128 256 --ml-gpu-count 2
+```
+
+### Spatial MPI (`np=2`, experimental)
+
+Per-rank ML decomposition with one GPU per rank — see [Spatial ML MPI](mlpot-spatial-mpi.md):
+
+```bash
+export MMML_MLPOT_SPATIAL_MPI=1
+MMML_MPI_NP=2 ./scripts/mmml-charmm-mpirun.sh md-system ... \
+  --ml-spatial-mpi --ml-gpu-count 1 --ml-batch-size 256
+```
+
+Do **not** combine `np>1` with `--ml-gpu-count 2` on a 2-GPU node without explicit per-rank GPU binding.
+
 ## Staged workflow
 
 1. **Build / minimize / heat** — PyCHARMM MLpot (`md-system`).
@@ -55,7 +86,9 @@ Multi-GPU on one node (still `np=1`): `--ml-gpu-count N` with `--ml-batch-size 1
 
 ## MPI note
 
-Do **not** use `MMML_MPI_NP>1` for performance until spatial halo decomposition is implemented. See [Spatial ML MPI](mlpot-spatial-mpi.md) for the target design.
+- **Production:** `MMML_MPI_NP=1` with optional `--ml-gpu-count 2` for dual-GPU pmap.
+- **Experimental:** `MMML_MPI_NP=2` with `--ml-spatial-mpi` for per-rank ML decomposition (see [Spatial ML MPI](mlpot-spatial-mpi.md)).
+- **Do not** use `np>1` with rank-0 bridge for performance; use spatial MPI or stay on `np=1`.
 
 ## Python API
 

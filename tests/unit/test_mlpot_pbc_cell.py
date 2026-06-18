@@ -173,6 +173,9 @@ def test_register_mlpot_context_forwards_cell():
         "mmml.interfaces.pycharmmInterface.mlpot.run_workflow.select_all_atoms",
         return_value=fake_sel,
     ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.run_workflow.defer_jax_warmup_until_after_mlpot_sd",
+        return_value=False,
+    ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.warmup_decomposed_mlpot",
         side_effect=_warmup,
     ) as mock_warmup, patch(

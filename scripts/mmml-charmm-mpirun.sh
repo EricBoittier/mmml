@@ -74,7 +74,28 @@ if ! [[ "$MPI_NP" =~ ^[1-9][0-9]*$ ]]; then
   exit 1
 fi
 if [[ "$MPI_NP" -gt 1 ]]; then
-  echo "mmml-charmm-mpirun: warning: MMML_MPI_NP=${MPI_NP} (experimental; domdec off; rank-0 MLpot bridge)" >&2
+  if [[ "${MMML_MLPOT_SPATIAL_MPI:-}" == 1 || "${MMML_MLPOT_SPATIAL_MPI:-}" == true || "${MMML_MLPOT_SPATIAL_MPI:-}" == yes ]]; then
+    echo "mmml-charmm-mpirun: MMML_MPI_NP=${MPI_NP} spatial ML (MMML_MLPOT_SPATIAL_MPI=1; 1 GPU per rank)" >&2
+  else
+    echo "mmml-charmm-mpirun: warning: MMML_MPI_NP=${MPI_NP} (experimental; domdec off; rank-0 MLpot bridge)" >&2
+  fi
+fi
+
+# Warn when multiple MPI ranks and multi-GPU pmap may oversubscribe GPUs.
+_ML_GPU_COUNT="${MMML_MLPOT_N_GPUS:-1}"
+for ((i=1; i<${#@}; i++)); do
+  if [[ "${!i}" == "--ml-gpu-count" && $((i+1)) -le $# ]]; then
+    _ML_GPU_COUNT="${@:$((i+1)):1}"
+    break
+  fi
+done
+if [[ "$MPI_NP" -gt 1 && "${_ML_GPU_COUNT:-1}" -gt 1 ]]; then
+  echo "mmml-charmm-mpirun: warning: np=${MPI_NP} with ml_gpu_count=${_ML_GPU_COUNT} may fight over GPUs; use --ml-gpu-count 1 and MMML_MLPOT_SPATIAL_MPI=1 or np=1 dual-GPU pmap" >&2
+fi
+
+# Pin one GPU per MPI rank when spatial ML is enabled (local rank -> CUDA_VISIBLE_DEVICES).
+if [[ "$MPI_NP" -gt 1 && ( "${MMML_MLPOT_SPATIAL_MPI:-}" == 1 || "${MMML_MLPOT_SPATIAL_MPI:-}" == true || "${MMML_MLPOT_SPATIAL_MPI:-}" == yes ) ]]; then
+  export MMML_MPI_PIN_GPU_PER_RANK="${MMML_MPI_PIN_GPU_PER_RANK:-1}"
 fi
 
 mmml_mpi_finish() {
