@@ -21,6 +21,8 @@ def test_minimize_overlap_rescue_uses_vdw_block_and_restores_nbonds():
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._with_mlpot_detached",
         side_effect=lambda _ctx, fn: fn(),
     ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.apply_recovery_nbonds",
+    ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_rescue_lists",
     ) as prep_lists, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_bonded_vdw_recovery_block",
