@@ -27,8 +27,25 @@ os.environ["CHARMM_LIB_DIR"] = chml
 CHARMM_HOME = os.environ["CHARMM_HOME"]
 CHARMM_LIB_DIR = os.environ["CHARMM_LIB_DIR"]
 
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def _ensure_vendored_pycharmm_on_path() -> None:
+    """Prefer mmml's patched ``pycharmm`` over ``$CHARMM_HOME/tool/pycharmm``.
+
+    ``sys.path.append(tool/pycharmm)`` alone lets an older CHARMM install shadow the
+    vendored package (missing ``MLpot.skip_iblo_inb_update`` for PBC registration).
+    """
+    root = str(_REPO_ROOT)
+    if root in sys.path:
+        sys.path.remove(root)
+    sys.path.insert(0, root)
+
+
+_ensure_vendored_pycharmm_on_path()
 chmhp = Path(CHARMM_HOME) / "tool" / "pycharmm"
-sys.path.append(str(chmhp))
+if str(chmhp) not in sys.path:
+    sys.path.append(str(chmhp))
 
 CGENFF_RTF = cwd / ".." / ".." / "data" / "charmm" / "top_all36_cgenff.rtf"
 CGENFF_RTF = CGENFF_RTF.resolve()

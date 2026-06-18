@@ -38,3 +38,13 @@ def test_disable_charmm_domdec_runs_once():
     mod.disable_charmm_domdec()
     assert mod.pycharmm.lingo.charmm_script.call_count == 1
     assert mod.pycharmm.lingo.charmm_script.call_args[0][0] == "domdec off"
+
+
+def test_ensure_vendored_pycharmm_on_path_prefers_repo_root():
+    import sys
+
+    from mmml.interfaces.pycharmmInterface import import_pycharmm
+
+    repo = Path(__file__).resolve().parents[2]
+    assert sys.path[0] == str(repo)
+    assert import_pycharmm._REPO_ROOT == repo
