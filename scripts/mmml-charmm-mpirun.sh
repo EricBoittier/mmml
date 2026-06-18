@@ -4,7 +4,8 @@
 # MPI ranks: default 1 (recommended). Override for experiments:
 #   MMML_MPI_NP=4 ./scripts/mmml-charmm-mpirun.sh md-system ...
 # MLpot disables CHARMM domdec and runs the Python callback on every rank — np>1
-# is unsupported and may hang, corrupt I/O, or fight over GPUs.
+# is experimental. Rank-0 MLpot bridge (mpi_bridge) runs PhysNet on rank 0 only
+# and broadcasts forces; disable with MMML_MLPOT_RANK0_BRIDGE=0.
 #
 # Crash diagnostics (enabled by default):
 #   OMPI_MCA_orte_abort_print_stack=1  — backtrace on MPI abort
@@ -71,7 +72,7 @@ if ! [[ "$MPI_NP" =~ ^[1-9][0-9]*$ ]]; then
   exit 1
 fi
 if [[ "$MPI_NP" -gt 1 ]]; then
-  echo "mmml-charmm-mpirun: warning: MMML_MPI_NP=${MPI_NP} (experimental; domdec off, no rank-0 MLpot guard)" >&2
+  echo "mmml-charmm-mpirun: warning: MMML_MPI_NP=${MPI_NP} (experimental; domdec off; rank-0 MLpot bridge)" >&2
 fi
 
 mmml_mpi_finish() {

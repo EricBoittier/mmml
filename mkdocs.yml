@@ -37,6 +37,8 @@ nav:
   - Package Architecture: package-architecture.md
   - DCMNet Calculators: dcmnet_calculators.md
   - MLpot Settings: mlpot-settings.md
+  - Medium PBC (500–2000 monomers): mlpot-medium-pbc.md
+  - Spatial ML MPI: mlpot-spatial-mpi.md
   - Development: development.md
   - Units Summary: UNITS_SUMMARY.md
   - API Reference: api.md
