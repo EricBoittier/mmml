@@ -513,14 +513,19 @@ def disable_charmm_domdec() -> None:
     _disable()
 
 
-def prepare_charmm_vacuum() -> None:
-    """Vacuum: domdec off (once), crystal free."""
+def ensure_domdec_off_for_mlpot_energy(*, context: str = "MLpot energy") -> bool:
+    """Single ``domdec off`` after JAX warmup, before MLpot SD / dynamics."""
     from mmml.interfaces.pycharmmInterface.import_pycharmm import (
-        crystal_free_charmm,
-        disable_charmm_domdec,
+        ensure_domdec_off_for_mlpot_energy as _ensure,
     )
 
-    disable_charmm_domdec()
+    return _ensure(context=context)
+
+
+def prepare_charmm_vacuum() -> None:
+    """Vacuum: crystal free (domdec off is deferred until MLpot SD/dynamics)."""
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import crystal_free_charmm
+
     crystal_free_charmm()
 
 

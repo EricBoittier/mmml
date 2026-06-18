@@ -215,9 +215,6 @@ def ensure_charmm_crystal_for_cpt(
                 return
         except Exception:
             pass
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import disable_charmm_domdec
-
-    disable_charmm_domdec()
     prepare_charmm_pbc(side)
     apply_pbc_nbonds(cubic_box_side_A=side)
     if not quiet:
@@ -299,9 +296,6 @@ def setup_charmm_environment(
     if use_pbc:
         if cubic_box_side_A is None or float(cubic_box_side_A) <= 0.0:
             raise ValueError("PBC requires a positive cubic box side (Å)")
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import disable_charmm_domdec
-
-        disable_charmm_domdec()
         prepare_charmm_pbc(float(cubic_box_side_A))
         cuts = apply_pbc_nbonds(
             nbxmod=nbxmod,

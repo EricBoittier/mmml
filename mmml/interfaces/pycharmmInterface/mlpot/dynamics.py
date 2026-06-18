@@ -1539,11 +1539,8 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
         clear_comparison_coordinates,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import disable_charmm_domdec
 
     import pycharmm
-
-    disable_charmm_domdec()
     # PyCHARMM omits ``start`` from the script when start=False, so CHARMM may keep
     # START active after a prior Boltzmann assign. With iasvel=0 that reads COMP
     # coordinates as velocities — zero COMP defensively.
@@ -2262,6 +2259,13 @@ def run_dynamics_with_io(
         check_dynamics_overlap,
     )
 
+    if mlpot_ctx is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+            ensure_domdec_off_for_mlpot_energy,
+        )
+
+        ensure_domdec_off_for_mlpot_energy(context=overlap_context)
+
     kw = dict(dynamics_kwargs)
     _ensure_nsavc_below_nstep(kw)
     total_nstep = int(kw.get("nstep", 0))
@@ -2764,6 +2768,13 @@ def minimize_with_mlpot(
 
         sync_charmm_positions(config.reference_positions)
 
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        ensure_domdec_off_for_mlpot_energy,
+    )
+
+    ensure_domdec_off_for_mlpot_energy(context="MLpot SD minimize")
+    recover_mpi_for_charmm_after_jax(phase="before MLpot SD minimize")
+
     dcd_file = None
     if config.save and config.dcd_path is not None and config.dcd_nsavc > 0:
         dcd_file = open_minimize_dcd(config.dcd_path, unit=config.dcd_unit)
@@ -2774,7 +2785,6 @@ def minimize_with_mlpot(
         if config.verbose and config.show_energy:
             print("CHARMM energy before minimization:")
             _maybe_show_energy(True)
-        recover_mpi_for_charmm_after_jax(phase="before MLpot SD minimize")
         if config.mlpot_ctx is not None:
             from mmml.interfaces.pycharmmInterface.mlpot.setup import (
                 assert_mlpot_user_active,

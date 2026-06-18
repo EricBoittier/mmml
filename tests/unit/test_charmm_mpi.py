@@ -69,6 +69,9 @@ def test_revalidate_mpi_after_cuda_trusts_mpirun_without_mpi4py(monkeypatch):
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
         return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._mpi4py_available",
+        return_value=False,
     ):
         assert charmm_mpi.revalidate_mpi_after_cuda(phase="test") is True
 

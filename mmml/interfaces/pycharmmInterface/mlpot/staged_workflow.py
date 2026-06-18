@@ -99,7 +99,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.minimize_artifacts import (
 from mmml.interfaces.pycharmmInterface.mlpot.setup import (
     assert_mlpot_user_active,
     verify_mlpot_charmm_atom_consistency,
-    disable_charmm_domdec,
+    ensure_domdec_off_for_mlpot_energy,
     get_charmm_positions_array,
     load_cluster_from_artifacts,
     save_cluster_topology_for_vmd,
@@ -1310,7 +1310,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         quiet=bool(args.quiet),
                         restart_path=restart_path,
                     )
-                    disable_charmm_domdec()
+                    ensure_domdec_off_for_mlpot_energy(context="staged NPT segment")
                     if seg_i == 0:
                         _reset_stage_restart(
                             Path(seg_io.restart_write) if seg_io.restart_write else None,
@@ -1533,7 +1533,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         quiet=bool(args.quiet),
                         restart_path=restart_path,
                     )
-                    disable_charmm_domdec()
+                    ensure_domdec_off_for_mlpot_energy(context="staged NPT segment")
                     _reset_stage_trajectory(
                         Path(seg_io.trajectory) if seg_io.trajectory else None,
                         rescue_old=bool(getattr(args, "rescue_old_dcd", False)),
@@ -1642,7 +1642,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         quiet=bool(args.quiet),
                         restart_path=restart_path,
                     )
-                    disable_charmm_domdec()
+                    ensure_domdec_off_for_mlpot_energy(context="staged NPT segment")
                     _reset_stage_trajectory(
                         Path(seg_io.trajectory) if seg_io.trajectory else None,
                         rescue_old=bool(getattr(args, "rescue_old_dcd", False)),
@@ -1756,7 +1756,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 quiet=bool(args.quiet),
                 restart_path=restart_path,
             )
-            disable_charmm_domdec()
+            ensure_domdec_off_for_mlpot_energy(context="staged dynamics")
             _reset_stage_restart(
                 Path(io.restart_write) if io.restart_write else None,
                 trajectory_path=Path(io.trajectory) if io.trajectory else None,

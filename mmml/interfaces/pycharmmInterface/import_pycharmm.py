@@ -218,21 +218,50 @@ def capture_neighbour_list():
 reset_block()
 
 _domdec_vacuum_disabled = False
+_domdec_disabled_early = False
 
 
-def disable_charmm_domdec() -> None:
-    """Turn off domdec once per process (repeat ``domdec off`` segfaults on DOMDEC builds)."""
-    global _domdec_vacuum_disabled
+def disable_charmm_domdec(*, when: str = "early") -> bool:
+    """Turn off domdec once per process (repeat ``domdec off`` segfaults on DOMDEC builds).
+
+    MPI MLpot workflows should defer the single call until after JAX GPU warmup
+    (``when="mlpot_energy"`` from :func:`ensure_domdec_off_for_mlpot_energy`). Calling
+    ``domdec off`` during PBC setup consumes the once-only slot; SD then hits
+    ``send_coord_to_recip`` / ``PMPI_Free_mem`` with domdec still active.
+    """
+    global _domdec_vacuum_disabled, _domdec_disabled_early
     if _domdec_vacuum_disabled:
-        return
+        if when == "mlpot_energy" and _domdec_disabled_early:
+            print(
+                "mmml: domdec off already ran before MLpot JAX warmup; cannot repeat "
+                "domdec off on DOMDEC builds. Sync mmml (defer setup-time domdec off) "
+                "and launch via scripts/mmml-charmm-mpirun.sh.",
+                file=sys.stderr,
+                flush=True,
+            )
+        return False
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
 
     try:
         with charmm_relaxed_bomlev():
             pycharmm.lingo.charmm_script("domdec off")
-    except Exception:
-        pass
+    except Exception as exc:
+        print(
+            f"mmml: domdec off failed ({when}): {exc}",
+            file=sys.stderr,
+            flush=True,
+        )
+        return False
     _domdec_vacuum_disabled = True
+    if when != "mlpot_energy":
+        _domdec_disabled_early = True
+    return True
+
+
+def ensure_domdec_off_for_mlpot_energy(*, context: str = "MLpot energy") -> bool:
+    """Preferred single ``domdec off`` before MLpot SD / dynamics (after JAX warmup)."""
+    del context  # reserved for future CHARMM-side diagnostics
+    return disable_charmm_domdec(when="mlpot_energy")
 
 
 def crystal_free_charmm() -> None:
@@ -244,13 +273,13 @@ def crystal_free_charmm() -> None:
 
 
 def force_charmm_vacuum_mode() -> None:
-    """Vacuum helpers: domdec off is once-only; crystal free may repeat."""
-    disable_charmm_domdec()
+    """Vacuum helpers: defer domdec off to MLpot energy; crystal free may repeat."""
     crystal_free_charmm()
 
 
 def _init_vacuum_charmm_state() -> None:
-    disable_charmm_domdec()
+    # Do not call disable_charmm_domdec() here. MPI-linked libcharmm.so can
+    # re-enable domdec after MPI_Init; domdec off is once-only per process.
     crystal_free_charmm()
 
 
