@@ -317,9 +317,9 @@ def explain_mpi_crash(exit_code: int, *, argv0: str = "mmml md-system") -> None:
         )
         lines.append(
             "  MLpot SD domdec/MPI segfaults (``send_coord_to_recip`` / ``PMPI_Free_mem``): "
-            "launch via mmml-charmm-mpirun.sh -np 1; sync mmml (defer JAX warmup until "
-            "after MLpot SD on MPI builds); keep MMML_NO_JAX_COMPILE_THREADS=1; "
-            "try OMP_NUM_THREADS=1; or rebuild with ./scripts/rebuild_charmm_mlpot.sh --no-domdec."
+            "sync mmml (default: skip ``domdec off`` — it can corrupt OpenMPI when DOMDEC "
+            "was never on); defer JAX warmup until after SD; rebuild with "
+            "./scripts/rebuild_charmm_mlpot.sh --no-domdec."
         )
     print("\n".join(lines), file=sys.stderr, flush=True)
 
