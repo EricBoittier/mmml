@@ -738,6 +738,13 @@ def main(argv: list[str] | None = None) -> int:
             )
 
     rng = np.random.default_rng(args.seed)
+    if not np.all(np.isfinite(atoms.get_positions())):
+        raise RuntimeError(
+            "Cannot initialize velocities: atomic positions contain NaN/Inf. "
+            "The upstream handoff is corrupted (often from a partial JAX-MD run after overlap "
+            "or numerical instability). Re-run the predecessor stage or point "
+            "--continue-from at an earlier valid frame."
+        )
     MaxwellBoltzmannDistribution(atoms, temperature_K=args.temperature, rng=rng)
     Stationary(atoms)
     ZeroRotation(atoms)
@@ -845,24 +852,31 @@ def main(argv: list[str] | None = None) -> int:
 
     if len(frames) > 0:
         last_xyz = np.asarray(frames[-1], dtype=np.float64)
-        last_box = None
-        if boxes is not None and len(boxes):
-            last_box = np.asarray(boxes[-1], dtype=np.float64)
-        out_atoms = Atoms(numbers=z, positions=last_xyz)
-        if last_box is not None:
-            out_atoms.set_cell(last_box)
-            out_atoms.set_pbc(True)
-        elif not free_space and L is not None:
-            out_atoms.set_cell([L, L, L])
-            out_atoms.set_pbc(True)
-        set_handoff_out(
-            handoff_from_atoms(
-                out_atoms,
-                temperature_K=float(args.temperature),
-                pressure_atm=float(args.pressure) if args.ensemble == "npt" else None,
-                metadata={"backend": "jaxmd", "ensemble": args.ensemble},
+        if np.all(np.isfinite(last_xyz)):
+            last_box = None
+            if boxes is not None and len(boxes):
+                last_box = np.asarray(boxes[-1], dtype=np.float64)
+            out_atoms = Atoms(numbers=z, positions=last_xyz)
+            if last_box is not None:
+                out_atoms.set_cell(last_box)
+                out_atoms.set_pbc(True)
+            elif not free_space and L is not None:
+                out_atoms.set_cell([L, L, L])
+                out_atoms.set_pbc(True)
+            set_handoff_out(
+                handoff_from_atoms(
+                    out_atoms,
+                    temperature_K=float(args.temperature),
+                    pressure_atm=float(args.pressure) if args.ensemble == "npt" else None,
+                    metadata={"backend": "jaxmd", "ensemble": args.ensemble},
+                )
             )
-        )
+        else:
+            print(
+                "mmml jaxmd: skipping handoff write — final frame has non-finite coordinates "
+                f"(status={run_status!r}).",
+                flush=True,
+            )
 
     traj_chunk_frames = int(max(0, args.traj_chunk_frames))
     traj_paths: list[Path] = []
