@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ctypes
+import inspect
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Optional, Sequence, Union
@@ -796,6 +797,22 @@ def _install_ml_exclusions(ml_selection: Any) -> None:
     pycharmm.psf.set_iblo_inb(ml_iblo, ml_inb)
 
 
+def _require_mlpot_skip_iblo_support(pycharmm: Any) -> None:
+    """PBC all-ML registration needs ``skip_iblo_inb_update`` on vendored PyCHARMM."""
+    try:
+        params = inspect.signature(pycharmm.MLpot.__init__).parameters
+    except (TypeError, ValueError):
+        params = {}
+    if "skip_iblo_inb_update" in params:
+        return
+    raise RuntimeError(
+        "PyCHARMM MLpot lacks skip_iblo_inb_update (upgrade the vendored pycharmm "
+        "package from this mmml repo via `uv sync`). PBC all-ML registration runs "
+        "upinb after BLOCK DELTIC without it and segfaults in __nbexcl_MOD_upinb. "
+        "Also launch under scripts/mmml-charmm-mpirun.sh for MPI-linked libcharmm.so."
+    )
+
+
 def register_mlpot(
     pyCModel: Any,
     ml_Z: Sequence[int],
@@ -825,6 +842,7 @@ def register_mlpot(
         if use_pbc:
             # PBC all-ML: ``upinb`` after BLOCK DELTIC (bond strip) can segfault in
             # ``__nbexcl_MOD_upinb``. Rebuild lists while PSF connectivity is intact.
+            _require_mlpot_skip_iblo_support(pycharmm)
             _install_ml_exclusions(ml_selection)
             skip_iblo_inb_update = True
         block_tag = apply_mlpot_energy_block(

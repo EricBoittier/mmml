@@ -431,8 +431,9 @@ def _register_mlpot_context(
         float(cubic_box_side_A) if cubic_box_side_A is not None else None
     )
     if mlpot_use_pbc and cubic_box_side_A is not None:
-        # PBC crystal/nbonds were installed in setup_charmm_environment; MLpot.__init__
-        # already rebuilds ML exclusions (upinb). Avoid a second forced upinb here.
+        # PBC crystal/nbonds were installed in setup_charmm_environment;
+        # register_mlpot installs ML exclusions (upinb) before BLOCK and skips a
+        # second upinb in MLpot.__init__. Avoid a forced rebuild here too.
         refresh_nbonds_after_mlpot_pbc(
             cubic_box_side_A=float(cubic_box_side_A),
             force=False,

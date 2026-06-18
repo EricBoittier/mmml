@@ -587,3 +587,30 @@ def test_register_mlpot_vacuum_skips_pre_block_exclusions():
 
     mock_install.assert_not_called()
     assert call_order == ["block", "mlpot"]
+
+
+def test_register_mlpot_pbc_requires_skip_iblo_parameter():
+    from mmml.interfaces.pycharmmInterface.mlpot import setup as mlpot_setup
+
+    fake_pycharmm = MagicMock()
+    fake_sel = MagicMock()
+    fake_sel.get_atom_indexes.return_value = [0, 1]
+
+    class _OldMLpot:
+        def __init__(self, **kwargs):
+            pass
+
+    fake_pycharmm.MLpot = _OldMLpot
+
+    with patch.object(mlpot_setup, "_import_pycharmm", return_value=fake_pycharmm), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits.validate_mlpot_system_size",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()),
+    ), pytest.raises(RuntimeError, match="skip_iblo_inb_update"):
+        mlpot_setup.register_mlpot(
+            MagicMock(),
+            [1, 1],
+            fake_sel,
+            use_pbc=True,
+        )
