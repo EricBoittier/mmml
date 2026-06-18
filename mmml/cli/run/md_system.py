@@ -531,6 +531,14 @@ def build_parser() -> argparse.ArgumentParser:
             "or MMML_MLPOT_N_GPUS). Set CUDA_VISIBLE_DEVICES to the GPU ids to use."
         ),
     )
+    parser.add_argument(
+        "--ml-spatial-mpi",
+        action="store_true",
+        help=(
+            "pycharmm: per-rank spatial ML decomposition when MPI size>1 (PBC only; "
+            "or MMML_MLPOT_SPATIAL_MPI=1). Use with MMML_MPI_NP>1 and --ml-gpu-count 1."
+        ),
+    )
     add_ml_compute_dtype_args(parser)
     parser.add_argument(
         "--ml-max-active-dimers",
@@ -1625,6 +1633,8 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd.extend(["--ml-batch-size", str(args.ml_batch_size)])
     if getattr(args, "ml_gpu_count", None) is not None:
         cmd.extend(["--ml-gpu-count", str(args.ml_gpu_count)])
+    if getattr(args, "ml_spatial_mpi", False):
+        cmd.append("--ml-spatial-mpi")
     if getattr(args, "ml_compute_dtype", None) is not None:
         cmd.extend(["--ml-compute-dtype", str(args.ml_compute_dtype)])
     if getattr(args, "ml_max_active_dimers", None) is not None:

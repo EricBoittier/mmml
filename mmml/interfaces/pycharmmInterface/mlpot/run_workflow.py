@@ -415,6 +415,20 @@ def _register_mlpot_context(
     from mmml.interfaces.pycharmmInterface.jax_device_policy import apply_mlpot_jax_platform_env
 
     apply_mlpot_jax_platform_env(quiet=not verbose)
+    from mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
+        pin_cuda_for_spatial_mpi,
+        spatial_mpi_enabled,
+    )
+
+    if spatial_mpi_enabled(
+        getattr(args, "ml_spatial_mpi", None) if args is not None else None
+    ):
+        if pin_cuda_for_spatial_mpi() and verbose:
+            print(
+                f"MLpot spatial MPI: pinned CUDA_VISIBLE_DEVICES="
+                f"{os.environ.get('CUDA_VISIBLE_DEVICES', '')}",
+                flush=True,
+            )
     if int(n_monomers) > 1:
         from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
             DecomposedMlpotModel,

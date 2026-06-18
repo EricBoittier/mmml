@@ -214,6 +214,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "Use with CUDA_VISIBLE_DEVICES."
         ),
     )
+    parser.add_argument(
+        "--ml-spatial-mpi",
+        action="store_true",
+        help=(
+            "Per-rank spatial ML when MPI size>1 (PBC; or MMML_MLPOT_SPATIAL_MPI=1). "
+            "Use MMML_MPI_NP>1 and --ml-gpu-count 1."
+        ),
+    )
     add_ml_compute_dtype_args(parser)
     parser.add_argument(
         "--ml-max-active-dimers",
