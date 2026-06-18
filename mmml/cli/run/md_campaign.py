@@ -77,6 +77,23 @@ _CAMPAIGN_ONLY_KEYS = frozenset(
     }
 )
 
+# Parent ``md-system`` CLI flags that override per-job YAML when explicitly set.
+_CAMPAIGN_CLI_OVERRIDE_KEYS: tuple[str, ...] = (
+    "ml_batch_size",
+    "ml_gpu_count",
+    "ml_max_active_dimers",
+)
+
+
+def apply_campaign_cli_overrides(merged: dict[str, Any], parent: Namespace) -> None:
+    """Merge top-level CLI flags into each campaign job before ``namespace_from_merged``."""
+    for key in _CAMPAIGN_CLI_OVERRIDE_KEYS:
+        val = getattr(parent, key, None)
+        if val is not None:
+            merged[key] = val
+    if getattr(parent, "ml_spatial_mpi", False):
+        merged["ml_spatial_mpi"] = True
+
 
 def namespace_from_merged(merged: dict[str, Any]) -> Namespace:
     from mmml.cli.run import md_system
@@ -223,6 +240,7 @@ def run_campaign(args: Namespace) -> int:
                 handoff_by_run[run_id] = load_handoff(out_dir / "handoff" / "state.npz")
             continue
 
+        apply_campaign_cli_overrides(merged, args)
         ns = namespace_from_merged(merged)
         ns.output_dir = out_dir
         ns.job_name = run_id
