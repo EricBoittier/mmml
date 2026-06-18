@@ -19,6 +19,25 @@ from mmml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
 )
 
 
+def test_per_atom_resids_expands_from_residue_table():
+    import sys
+
+    from mmml.interfaces.pycharmmInterface.mlpot.topology_recovery import _per_atom_resids
+
+    mock_atom_info = MagicMock()
+    mock_atom_info.get_res_ids.return_value = ["1", "1", "2", "2", "3"]
+    stub_pycharmm = MagicMock()
+    stub_pycharmm.atom_info = mock_atom_info
+    with patch.dict(
+        sys.modules,
+        {
+            "pycharmm": stub_pycharmm,
+            "pycharmm.atom_info": mock_atom_info,
+        },
+    ):
+        assert _per_atom_resids(5) == (1, 1, 2, 2, 3)
+
+
 def test_topology_fingerprint_path_sidecar():
     assert topology_fingerprint_path("/tmp/cluster_for_vmd_dcm.psf") == Path(
         "/tmp/cluster_for_vmd_dcm.topology.json"
