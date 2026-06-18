@@ -17,15 +17,20 @@ PMIX_LIB="${PMIX_LIB:-/opt/gcc-14.2.0/pmix-5.0.4/lib}"
 CLEAN=0
 USE_NFS_BUILD=0
 DEBUG=0
+SYNC_PATCHES=1
 CHARMM_BUILD_TYPE="${CHARMM_BUILD_TYPE:-Release}"
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") [--clean] [--use-nfs-build] [--debug]
+Usage: $(basename "$0") [--clean] [--use-nfs-build] [--debug] [--no-sync-patches]
 
-  --clean           Remove the cmake build directory and reconfigure from scratch.
-  --use-nfs-build   Build in setup/charmm/build/cmake (default: \$HOME/.cache/mmml-charmm-build).
-  --debug           RelWithDebInfo + -g -fbacktrace (readable gdb/addr2line on segfaults).
+  --clean             Remove the cmake build directory and reconfigure from scratch.
+  --use-nfs-build     Build in setup/charmm/build/cmake (default: \$HOME/.cache/mmml-charmm-build).
+  --debug             RelWithDebInfo + -g -fbacktrace (readable gdb/addr2line on segfaults).
+  --no-sync-patches   Skip copying setup/api/api_func.F90 into the CHARMM tree.
+
+Build profile (default): MPI + DOMDEC + COLFFT + KEY_LIBRARY (as_library=ON), domdec_gpu=OFF.
+MLpot workflows run with DOMDEC compiled in but disabled at runtime (domdec off, mpirun -np 1).
 
 Environment:
   CHARMM_HOME       CHARMM source tree (default: $ROOT/setup/charmm)
@@ -40,15 +45,24 @@ while [[ $# -gt 0 ]]; do
     --clean) CLEAN=1; shift ;;
     --use-nfs-build) USE_NFS_BUILD=1; shift ;;
     --debug) DEBUG=1; CHARMM_BUILD_TYPE=RelWithDebInfo; shift ;;
+    --no-sync-patches) SYNC_PATCHES=0; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
 
 F90="$CHARMM_HOME/source/api/api_func.F90"
+PATCH_F90="$ROOT/setup/api/api_func.F90"
 if [[ ! -f "$F90" ]]; then
   echo "rebuild_charmm_mlpot: missing $F90" >&2
   exit 1
+fi
+
+if [[ "$SYNC_PATCHES" == 1 && -f "$PATCH_F90" ]]; then
+  if ! cmp -s "$PATCH_F90" "$F90"; then
+    echo "Syncing MLpot limits from $PATCH_F90"
+    cp -f "$PATCH_F90" "$F90"
+  fi
 fi
 
 echo "MLpot limits in source:"

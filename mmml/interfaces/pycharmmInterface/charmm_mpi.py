@@ -315,6 +315,12 @@ def explain_mpi_crash(exit_code: int, *, argv0: str = "mmml md-system") -> None:
             "  MLpot ``upinb`` segfaults: use vendored pycharmm (skip_iblo_inb_update), "
             "OMP_NUM_THREADS=1, and mmml-charmm-mpirun.sh."
         )
+        lines.append(
+            "  MLpot SD domdec/MPI segfaults (``send_coord_to_recip`` / ``PMPI_Free_mem``): "
+            "launch via mmml-charmm-mpirun.sh -np 1; sync mmml (defer setup-time domdec off); "
+            "ensure domdec off runs after JAX warmup (before MLpot SD); "
+            "try MMML_NO_JAX_COMPILE_THREADS=1."
+        )
     print("\n".join(lines), file=sys.stderr, flush=True)
 
 
@@ -538,6 +544,9 @@ def recover_mpi_for_charmm_after_jax(*, phase: str = "after JAX warmup") -> bool
     if _truthy("MMML_NO_MPI_INIT") or not _needs_mpi_setup():
         return True
     if _under_mpirun():
+        # DOMDEC disable is deferred to ensure_domdec_off_for_mlpot_energy (after JAX).
+        if _mpi4py_available() and _mpi_comm_valid(barrier=True):
+            return True
         return True
 
     if _mpi4py_available() and _mpi_comm_valid(barrier=True):
