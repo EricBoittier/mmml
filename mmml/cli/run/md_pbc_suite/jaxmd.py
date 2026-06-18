@@ -255,8 +255,8 @@ def main(argv: list[str] | None = None) -> int:
         "--skip-jit-warmup",
         action="store_true",
         help=(
-            "Skip pre-JAX-MD hybrid energy/force warmup (may log XLA cuda_timer "
-            "delay-kernel warnings on first GPU compile)."
+            "Skip generic XLA GPU compile and pre-JAX-MD hybrid energy/force warmup "
+            "(may log XLA cuda_timer delay-kernel warnings on first GPU compile)."
         ),
     )
     p.add_argument(
@@ -515,6 +515,7 @@ def main(argv: list[str] | None = None) -> int:
         flat_bottom_radius=args.flat_bottom_radius,
         flat_bottom_force_const=args.flat_bottom_k,
         flat_bottom_mode=args.flat_bottom_mode,
+        defer_xla_gpu_warmup=bool(args.skip_jit_warmup),
     )
     cutoff = CutoffParameters(ml_switch_width=ml_w, mm_switch_on=mm_on, mm_switch_width=mm_w)
     calc_result = factory(

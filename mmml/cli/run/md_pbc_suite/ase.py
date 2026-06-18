@@ -685,6 +685,7 @@ def _factory_mmml(
     flat_bottom_radius: float | None = None,
     flat_bottom_force_const: float = 1.0,
     flat_bottom_mode: str = "system",
+    defer_xla_gpu_warmup: bool = False,
 ):
     at_codes = np.asarray(psf.get_iac(), dtype=int) - 1
     n_types = len(param.get_atc())
@@ -721,6 +722,7 @@ def _factory_mmml(
         flat_bottom_radius=flat_bottom_radius,
         flat_bottom_force_const=flat_bottom_force_const,
         flat_bottom_mode=flat_bottom_mode,
+        defer_xla_gpu_warmup=defer_xla_gpu_warmup,
     )
     t1 = _tmark()
     cutoff = CutoffParameters(ml_cutoff=ml_cut, mm_switch_on=mm_sw, mm_cutoff=mm_cut)
@@ -1459,7 +1461,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--skip-jit-warmup",
         action="store_true",
-        help="Do not run an extra energy eval before BFGS (mixes compile time into first BFGS steps).",
+        help=(
+            "Skip generic XLA GPU compile and pre-BFGS hybrid MMML energy/force warmup "
+            "(may log XLA cuda_timer delay-kernel warnings on first GPU compile)."
+        ),
     )
     parser.add_argument(
         "--quiet-bfgs",
@@ -1693,6 +1698,7 @@ def main(argv: list[str] | None = None) -> int:
             flat_bottom_radius=args.flat_bottom_radius,
             flat_bottom_force_const=args.flat_bottom_k,
             flat_bottom_mode=args.flat_bottom_mode,
+            defer_xla_gpu_warmup=bool(args.skip_jit_warmup),
         )
         atoms.calc = calc
         _save_cutoff_plot(

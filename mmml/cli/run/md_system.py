@@ -947,7 +947,14 @@ def build_parser() -> argparse.ArgumentParser:
             "(ignored when --composition is set; lambda_ti default MEOH)."
         ),
     )
-    parser.add_argument("--skip-jit-warmup", action="store_true", help="lambda_ti: skip first MMML energy eval per window.")
+    parser.add_argument(
+        "--skip-jit-warmup",
+        action="store_true",
+        help=(
+            "Skip JIT/XLA warmup. jaxmd/ase: generic XLA GPU compile and pre-MD hybrid "
+            "MMML eval; lambda_ti: skip first MMML energy eval per window."
+        ),
+    )
     parser.add_argument(
         "--resume",
         action="store_true",
@@ -1848,6 +1855,8 @@ def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
     if args.flat_bottom_radius is not None:
         cmd.extend(["--flat-bottom-k", str(args.flat_bottom_k)])
         cmd.extend(["--flat-bottom-mode", str(args.flat_bottom_mode)])
+    if getattr(args, "skip_jit_warmup", False):
+        cmd.append("--skip-jit-warmup")
     if args.extra_args:
         cmd.extend(_filter_campaign_flags_from_argv(list(args.extra_args)))
     return backend, cmd
