@@ -152,9 +152,9 @@ def add_dynamics_overlap_args(parser: argparse.ArgumentParser) -> None:
         "--dynamics-overlap-memory-handoff",
         action="store_true",
         help=(
-            "Continue overlap chunks in-process without READYN on scratch restarts "
-            "(legacy MLpot default). Default: alternate .overlap_a/.b.res files "
-            "with dyna restart between chunks."
+            "Continue overlap chunks in-process without READYN on scratch restarts. "
+            "Default on MPI-linked CHARMM under mpirun (set MMML_NO_OVERLAP_MEMORY_HANDOFF=1 "
+            "to force scratch .overlap_a/.b.res handoffs)."
         ),
     )
     group.add_argument(
@@ -191,6 +191,35 @@ def add_dynamics_overlap_args(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="Disable max monomer extent / fly-off guard.",
     )
+
+
+def _truthy_env(name: str) -> bool:
+    import os
+
+    return (os.environ.get(name) or "").strip().lower() in ("1", "yes", "true")
+
+
+def resolve_overlap_memory_handoff(args: argparse.Namespace) -> bool:
+    """Whether overlap chunks continue in-process without ``READYN`` on scratch restarts.
+
+    Explicit ``--dynamics-overlap-memory-handoff`` always wins.  Otherwise default on
+    MPI-linked CHARMM under ``mpirun`` (scratch ``.overlap_a/.b.res`` often get REST -1).
+    """
+    if bool(getattr(args, "dynamics_overlap_memory_handoff", False)):
+        return True
+    if _truthy_env("MMML_NO_OVERLAP_MEMORY_HANDOFF"):
+        return False
+    if _truthy_env("MMML_OVERLAP_MEMORY_HANDOFF"):
+        return True
+    try:
+        from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+            _under_mpirun,
+            charmm_lib_links_mpi,
+        )
+
+        return charmm_lib_links_mpi() and _under_mpirun()
+    except Exception:
+        return False
 
 
 def overlap_config_for_stage(
@@ -279,7 +308,7 @@ def resolve_dynamics_overlap_config(
             if bool(getattr(args, "no_dynamics_max_monomer_extent", False))
             else float(getattr(args, "dynamics_max_monomer_extent", 12.0))
         ),
-        memory_handoff=bool(getattr(args, "dynamics_overlap_memory_handoff", False)),
+        memory_handoff=resolve_overlap_memory_handoff(args),
     )
 
 

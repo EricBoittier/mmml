@@ -1044,6 +1044,18 @@ def _bonded_mm_skip_reason_after_heat_overlap(
     )
 
 
+def bonded_mm_mini_watches_stage(args: argparse.Namespace, stage: str) -> bool:
+    """Whether ``maybe_run_bonded_mm_mini_after_stage`` should run for ``stage``."""
+    if not getattr(args, "bonded_mm_mini", True):
+        return False
+    st = stage.strip().lower()
+    if st == "heat":
+        return True
+    raw = str(getattr(args, "bonded_mm_mini_after", "mini,heat") or "mini,heat")
+    watch = {s.strip().lower() for s in raw.split(",") if s.strip()}
+    return st in watch
+
+
 def maybe_run_bonded_mm_mini_after_stage(
     ctx: MlpotContext,
     args: argparse.Namespace,
@@ -1064,11 +1076,7 @@ def maybe_run_bonded_mm_mini_after_stage(
 
     Returns True when recovery SD ran (caller should hand off next stage from memory).
     """
-    if not getattr(args, "bonded_mm_mini", False):
-        return False
-    raw = str(getattr(args, "bonded_mm_mini_after", "mini") or "mini")
-    watch = {s.strip().lower() for s in raw.split(",") if s.strip()}
-    if stage.lower() not in watch:
+    if not bonded_mm_mini_watches_stage(args, stage):
         return False
     always = bonded_mm_mini_always(args)
     if baseline is None and not always:

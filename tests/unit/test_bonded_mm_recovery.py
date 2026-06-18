@@ -645,6 +645,21 @@ def test_restore_workflow_nbonds_skips_nbond_rebuild():
     mock_py.UpdateNonBondedScript.assert_not_called()
 
 
+def test_bonded_mm_mini_watches_heat_even_when_after_is_mini_only():
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        bonded_mm_mini_watches_stage,
+    )
+
+    args = argparse_namespace(bonded_mm_mini=True, bonded_mm_mini_after="mini")
+    assert bonded_mm_mini_watches_stage(args, "heat") is True
+    assert bonded_mm_mini_watches_stage(args, "mini") is True
+    assert bonded_mm_mini_watches_stage(args, "equi") is False
+    assert bonded_mm_mini_watches_stage(
+        argparse_namespace(bonded_mm_mini=False, bonded_mm_mini_after="heat"),
+        "heat",
+    ) is False
+
+
 def test_maybe_run_bonded_mm_mini_skips_when_grms_ok():
     from mmml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
 
