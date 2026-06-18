@@ -294,6 +294,32 @@ def ensure_jax_cuda_toolchain(*, required: bool = False) -> bool:
     return shutil.which("ptxas") is not None
 
 
+def sync_jax_gpu_before_charmm(*, phase: str = "before CHARMM") -> None:
+    """Drain JAX GPU work and release the CUDA context before Fortran MPI/CHARMM ENER.
+
+    JAX XLA compile (especially with raised OMP thread counts) can leave OpenMPI's
+    registered-memory pool in a bad state; the next CHARMM ``gete`` may segfault in
+    ``send_coord_to_recip`` / ``PMPI_Free_mem`` even after ``domdec off``.
+    """
+    del phase
+    try:
+        import jax
+        import jax.numpy as jnp
+    except ImportError:
+        return
+    try:
+        if jax.default_backend() != "gpu":
+            return
+    except Exception:
+        return
+    try:
+        for device in jax.local_devices():
+            with jax.default_device(device):
+                jax.block_until_ready(jnp.sum(jnp.ones((1,), dtype=jnp.float32)))
+    except Exception:
+        pass
+
+
 def apply_xla_cuda_timer_log_filter() -> None:
     """Suppress XLA ``cuda_timer.cc`` delay-kernel timeout noise (harmless autotuner warnings).
 

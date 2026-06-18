@@ -19,6 +19,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/resolve_mmml_env.sh"
 mmml_resolve_env "$ROOT"
 
+export OMPI_MCA_opal_cuda_support=0
+export MMML_NO_JAX_COMPILE_THREADS="${MMML_NO_JAX_COMPILE_THREADS:-1}"
 PY="${MMML_PYTHON}"
 while IFS= read -r line; do
   [[ -n "$line" ]] && eval "$line"

@@ -18,19 +18,22 @@ CLEAN=0
 USE_NFS_BUILD=0
 DEBUG=0
 SYNC_PATCHES=1
+NO_DOMDEC=0
 CHARMM_BUILD_TYPE="${CHARMM_BUILD_TYPE:-Release}"
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") [--clean] [--use-nfs-build] [--debug] [--no-sync-patches]
+Usage: $(basename "$0") [--clean] [--use-nfs-build] [--debug] [--no-sync-patches] [--no-domdec]
 
   --clean             Remove the cmake build directory and reconfigure from scratch.
   --use-nfs-build     Build in setup/charmm/build/cmake (default: \$HOME/.cache/mmml-charmm-build).
   --debug             RelWithDebInfo + -g -fbacktrace (readable gdb/addr2line on segfaults).
   --no-sync-patches   Skip copying setup/api/api_func.F90 into the CHARMM tree.
+  --no-domdec         CMake -Ddomdec=OFF (no DOMDEC send_coord_to_recip path; MPI MLpot SD).
 
 Build profile (default): MPI + DOMDEC + COLFFT + KEY_LIBRARY (as_library=ON), domdec_gpu=OFF.
 MLpot workflows run with DOMDEC compiled in but disabled at runtime (domdec off, mpirun -np 1).
+Use --no-domdec when MLpot SD still segfaults in send_coord_to_recip after JAX warmup.
 
 Environment:
   CHARMM_HOME       CHARMM source tree (default: $ROOT/setup/charmm)
@@ -46,6 +49,7 @@ while [[ $# -gt 0 ]]; do
     --use-nfs-build) USE_NFS_BUILD=1; shift ;;
     --debug) DEBUG=1; CHARMM_BUILD_TYPE=RelWithDebInfo; shift ;;
     --no-sync-patches) SYNC_PATCHES=0; shift ;;
+    --no-domdec) NO_DOMDEC=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -141,6 +145,7 @@ if [[ "$needs_configure" == 1 ]]; then
     -Das_library=ON
     -Din_place_install=ON
     -Dopenmm=OFF
+    -Ddomdec="$([[ "$NO_DOMDEC" == 1 ]] && echo OFF || echo ON)"
     -DMPI_C_COMPILER="$MPI_CC"
     -DMPI_CXX_COMPILER="$MPI_CXX"
     -DMPI_Fortran_COMPILER="$MPI_FC"
