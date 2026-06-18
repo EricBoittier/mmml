@@ -159,6 +159,128 @@ def restore_charmm_state_from_restart(
     sync_charmm_positions(pos)
 
 
+def _bonded_cfg_from_overlap_config(config: Any) -> BondedMmMiniConfig:
+    sd_steps = getattr(config, "intra_rescue_sd_steps", None)
+    if sd_steps is None:
+        sd_steps = config.rescue.nstep_sd
+    return BondedMmMiniConfig(
+        nstep_sd=int(sd_steps),
+        nprint=max(1, int(config.rescue.nprint)),
+        tolenr=float(config.rescue.tolenr),
+        tolgrd=float(config.rescue.tolgrd),
+        verbose=config.rescue.verbose,
+    )
+
+
+def _resolve_mlpot_recovery_nstep(
+    bonded_cfg: BondedMmMiniConfig,
+    config: Any | None = None,
+) -> int:
+    if config is not None:
+        n = getattr(config, "mlpot_rescue_mini_nstep", None)
+        if n is not None and int(n) > 0:
+            return int(n)
+    return max(1, int(bonded_cfg.nstep_sd))
+
+
+def _resolve_pyCModel(ctx: MlpotContext, config: Any | None = None) -> Any:
+    if config is not None:
+        model = getattr(config, "pyCModel", None)
+        if model is not None:
+            return model
+    model = getattr(ctx, "pyCModel", None)
+    if model is None:
+        raise RuntimeError("MLpot recovery requires pyCModel on overlap config or MlpotContext")
+    return model
+
+
+def _run_mlpot_recovery_mini(
+    ctx: MlpotContext,
+    bonded_cfg: BondedMmMiniConfig,
+    *,
+    pyCModel: Any,
+    context: str,
+    nstep: int | None = None,
+    clear_restraints: bool = True,
+) -> None:
+    """MLpot SD mini (all-ML and hybrid polish after bonded-MM)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        MinimizeWithMlpotConfig,
+        minimize_with_mlpot,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.restraints import clear_mmfp_restraints
+
+    steps = max(1, int(nstep if nstep is not None else bonded_cfg.nstep_sd))
+    if bonded_cfg.verbose:
+        print(f"{context}: MLpot SD mini ({steps} steps)", flush=True)
+    if clear_restraints:
+        clear_mmfp_restraints()
+    minimize_with_mlpot(
+        MinimizeWithMlpotConfig(
+            nstep=steps,
+            nprint=bonded_cfg.nprint,
+            tolenr=bonded_cfg.tolenr,
+            tolgrd=bonded_cfg.tolgrd,
+            verbose=bonded_cfg.verbose,
+            pyCModel=pyCModel,
+            mlpot_ctx=ctx,
+            save=False,
+            skip_if_crd_exists=False,
+        )
+    )
+
+
+def _run_all_ml_mlpot_recovery(
+    ctx: MlpotContext,
+    bonded_cfg: BondedMmMiniConfig,
+    *,
+    pyCModel: Any,
+    context: str,
+    config: Any | None = None,
+) -> None:
+    """All-ML recovery: MLpot SD only (CHARMM bonded terms inactive under ML BLOCK)."""
+    if bonded_cfg.verbose:
+        print(
+            f"{context}: skipping inplace CHARMM bonded SD (all-ML); "
+            "using MLpot SD mini",
+            flush=True,
+        )
+    _run_mlpot_recovery_mini(
+        ctx,
+        bonded_cfg,
+        pyCModel=pyCModel,
+        context=context,
+        nstep=_resolve_mlpot_recovery_nstep(bonded_cfg, config),
+    )
+
+
+def _run_hybrid_bonded_mlpot_recovery(
+    ctx: MlpotContext,
+    bonded_cfg: BondedMmMiniConfig,
+    *,
+    pyCModel: Any,
+    context: str,
+    config: Any | None = None,
+) -> None:
+    """Hybrid recovery: CHARMM bonded-MM SD, then MLpot SD mini."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import minimize_bonded_mm_recovery
+
+    if bonded_cfg.verbose:
+        print(
+            f"{context}: bonded-MM SD ({int(bonded_cfg.nstep_sd)} steps, MLpot detached)",
+            flush=True,
+        )
+    minimize_bonded_mm_recovery(ctx, bonded_cfg)
+    _run_mlpot_recovery_mini(
+        ctx,
+        bonded_cfg,
+        pyCModel=pyCModel,
+        context=context,
+        nstep=_resolve_mlpot_recovery_nstep(bonded_cfg, config),
+        clear_restraints=True,
+    )
+
+
 def _run_all_ml_extent_recovery(
     ctx: MlpotContext,
     config: Any,
@@ -166,17 +288,9 @@ def _run_all_ml_extent_recovery(
     *,
     positions: np.ndarray,
 ) -> None:
-    """Fly-off recovery for all-ML: inplace bonded SD on prior restart coords."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
-        MinimizeWithMlpotConfig,
-        minimize_with_mlpot,
-    )
+    """Fly-off recovery for all-ML: MLpot SD mini on prior restart coords."""
     from mmml.interfaces.pycharmmInterface.mlpot.restraints import clear_mmfp_restraints
     from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
-    from mmml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
-        BondedRecoveryMode,
-        run_bonded_recovery_inplace,
-    )
 
     topo = getattr(config, "topology_psf", None) or getattr(ctx, "topology_psf_path", None)
     if topo is None or not Path(topo).is_file():
@@ -186,38 +300,19 @@ def _run_all_ml_extent_recovery(
         )
     if bonded_cfg.verbose:
         print(
-            f"Fly-off recovery: inplace bonded SD with coords from prior restart "
+            f"Fly-off recovery: restoring coords from prior restart "
             f"(topology {Path(topo).name})",
             flush=True,
         )
     sync_charmm_positions(np.asarray(positions, dtype=float))
     clear_mmfp_restraints()
-    run_bonded_recovery_inplace(
+    _run_all_ml_mlpot_recovery(
         ctx,
-        BondedRecoveryMode.BONDED_ONLY,
         bonded_cfg,
-        topology_psf=topo,
+        pyCModel=_resolve_pyCModel(ctx, config),
+        context="Fly-off recovery",
+        config=config,
     )
-
-    n_mlpot = int(getattr(config, "mlpot_rescue_mini_nstep", 0) or 0)
-    pyCModel = getattr(config, "pyCModel", None)
-    if n_mlpot > 0 and pyCModel is not None:
-        if bonded_cfg.verbose:
-            print(
-                f"Fly-off recovery: MLpot SD mini ({n_mlpot} steps)",
-                flush=True,
-            )
-        minimize_with_mlpot(
-            MinimizeWithMlpotConfig(
-                nstep=n_mlpot,
-                nprint=bonded_cfg.nprint,
-                verbose=bonded_cfg.verbose,
-                pyCModel=pyCModel,
-                mlpot_ctx=ctx,
-                save=False,
-                skip_if_crd_exists=False,
-            )
-        )
 
 
 def run_extent_recovery_from_prior_restart(
@@ -226,8 +321,7 @@ def run_extent_recovery_from_prior_restart(
     *,
     prior_restart: PathLike,
 ) -> None:
-    """Restore the prior segment restart, then run bonded-MM SD on those coords."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import minimize_bonded_mm_recovery
+    """Restore the prior segment restart, then run bonded + MLpot recovery."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_restart_coordinates,
     )
@@ -243,7 +337,16 @@ def run_extent_recovery_from_prior_restart(
     if _mlpot_covers_all_atoms(ctx):
         _run_all_ml_extent_recovery(ctx, config, bonded_cfg, positions=pos)
         return
-    minimize_bonded_mm_recovery(ctx, bonded_cfg)
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+
+    sync_charmm_positions(np.asarray(pos, dtype=float))
+    _run_hybrid_bonded_mlpot_recovery(
+        ctx,
+        bonded_cfg,
+        pyCModel=_resolve_pyCModel(ctx, config),
+        context="Fly-off recovery",
+        config=config,
+    )
 
 
 def record_mm_baseline_strain(*, verbose: bool = False) -> MmStrainBaseline | None:
@@ -382,19 +485,6 @@ def assert_bonded_mm_energy_active(*, context: str = "bonded-MM rescue") -> None
             "(BOND/ANGL/GRMS). Use inplace recovery (BLOCK toggle + UPDATE) or "
             "set MMML_ALLOW_PSF_DELETE_RELOAD=1 for deprecated PSF reload."
         )
-
-
-def _bonded_cfg_from_overlap_config(config: Any) -> BondedMmMiniConfig:
-    sd_steps = getattr(config, "intra_rescue_sd_steps", None)
-    if sd_steps is None:
-        sd_steps = config.rescue.nstep_sd
-    return BondedMmMiniConfig(
-        nstep_sd=int(sd_steps),
-        nprint=max(1, int(config.rescue.nprint)),
-        tolenr=float(config.rescue.tolenr),
-        tolgrd=float(config.rescue.tolgrd),
-        verbose=config.rescue.verbose,
-    )
 
 
 def _run_all_ml_intra_overlap_rescue(
@@ -1108,7 +1198,7 @@ def maybe_run_bonded_mm_mini_after_stage(
         if not args.quiet:
             print(
                 f"bonded-MM-mini: always after {stage}; "
-                "running bonded SD (MLpot detached)",
+                "running bonded-MM SD + MLpot SD mini",
                 flush=True,
             )
     else:
@@ -1141,7 +1231,7 @@ def maybe_run_bonded_mm_mini_after_stage(
         if not args.quiet:
             print(
                 f"bonded-MM-mini: after {stage}: {'; '.join(reasons)}; "
-                "running bonded SD (MLpot detached, inplace recovery)",
+                "running bonded-MM SD + MLpot SD mini",
                 flush=True,
             )
     nstep = int(getattr(args, "bonded_mm_mini_steps", 50))
@@ -1152,20 +1242,21 @@ def maybe_run_bonded_mm_mini_after_stage(
         show_energy=bool(getattr(args, "show_energy", False)),
     )
     topo = topology_psf or getattr(ctx, "topology_psf_path", None)
+    pyCModel = _resolve_pyCModel(ctx, None)
     if _mlpot_covers_all_atoms(ctx) and topo is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
-            BondedRecoveryMode,
-            run_bonded_recovery_inplace,
-        )
-
-        run_bonded_recovery_inplace(
+        _run_all_ml_mlpot_recovery(
             ctx,
-            BondedRecoveryMode.BONDED_ONLY,
             bonded_cfg,
-            topology_psf=topo,
+            pyCModel=pyCModel,
+            context=f"bonded-MM-mini after {stage}",
         )
     else:
-        minimize_bonded_mm_recovery(ctx, bonded_cfg)
+        _run_hybrid_bonded_mlpot_recovery(
+            ctx,
+            bonded_cfg,
+            pyCModel=pyCModel,
+            context=f"bonded-MM-mini after {stage}",
+        )
     _record_bonded_snapshot()
     if not args.quiet:
         print(

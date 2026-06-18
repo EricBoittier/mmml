@@ -696,6 +696,7 @@ def test_maybe_run_bonded_mm_mini_always_runs_when_grms_ok():
     from mmml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
 
     ctx = MagicMock()
+    ctx.pyCModel = MagicMock()
     args = argparse_namespace(
         bonded_mm_mini=True,
         bonded_mm_mini_always=True,
@@ -709,11 +710,15 @@ def test_maybe_run_bonded_mm_mini_always_runs_when_grms_ok():
     baseline = MmStrainBaseline(grms_kcalmol_A=12.0, internal_kcalmol=24.0, angl_kcalmol=24.0)
     with patch.object(
         bonded_mm_recovery,
-        "measure_mm_bonded_strain_with_full_block",
+        "_mlpot_covers_all_atoms",
+        return_value=False,
+    ), patch.object(
+        bonded_mm_recovery,
+        "_measure_stage_bonded_strain",
     ) as measure, patch.object(
         bonded_mm_recovery,
-        "minimize_bonded_mm_recovery",
-    ) as mini:
+        "_run_hybrid_bonded_mlpot_recovery",
+    ) as hybrid:
         ran = bonded_mm_recovery.maybe_run_bonded_mm_mini_after_stage(
             ctx,
             args,
@@ -722,7 +727,7 @@ def test_maybe_run_bonded_mm_mini_always_runs_when_grms_ok():
             restart_path="/tmp/heat.res",
         )
     measure.assert_not_called()
-    mini.assert_called_once()
+    hybrid.assert_called_once()
     assert ran is True
 
 
@@ -745,7 +750,7 @@ def test_maybe_run_bonded_mm_mini_always_inplace_all_ml(tmp_path):
         "_mlpot_covers_all_atoms",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.topology_recovery.run_bonded_recovery_inplace",
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_all_ml_mlpot_recovery",
     ) as inplace:
         ran = bonded_mm_recovery.maybe_run_bonded_mm_mini_after_stage(
             ctx,
@@ -777,7 +782,7 @@ def test_maybe_run_bonded_mm_mini_always_all_ml_mini_uses_inplace(tmp_path):
         "_mlpot_covers_all_atoms",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.topology_recovery.run_bonded_recovery_inplace",
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_all_ml_mlpot_recovery",
     ) as inplace:
         ran = bonded_mm_recovery.maybe_run_bonded_mm_mini_after_stage(
             ctx,
@@ -809,6 +814,7 @@ def test_maybe_run_bonded_mm_mini_runs_when_grms_high():
     from mmml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
 
     ctx = MagicMock()
+    ctx.pyCModel = MagicMock()
     args = argparse_namespace(
         bonded_mm_mini=True,
         bonded_mm_mini_after="heat",
@@ -822,12 +828,16 @@ def test_maybe_run_bonded_mm_mini_runs_when_grms_high():
     current = MmStrainBaseline(grms_kcalmol_A=20.0)
     with patch.object(
         bonded_mm_recovery,
-        "measure_mm_bonded_strain_with_full_block",
+        "_mlpot_covers_all_atoms",
+        return_value=False,
+    ), patch.object(
+        bonded_mm_recovery,
+        "_measure_stage_bonded_strain",
         return_value=current,
     ), patch.object(
         bonded_mm_recovery,
-        "minimize_bonded_mm_recovery",
-    ) as mini:
+        "_run_hybrid_bonded_mlpot_recovery",
+    ) as hybrid:
         ran = bonded_mm_recovery.maybe_run_bonded_mm_mini_after_stage(
             ctx,
             args,
@@ -835,7 +845,7 @@ def test_maybe_run_bonded_mm_mini_runs_when_grms_high():
             baseline=baseline,
             restart_path="/tmp/heat.res",
         )
-    mini.assert_called_once()
+    hybrid.assert_called_once()
     assert ran is True
 
 
@@ -860,7 +870,7 @@ def test_maybe_run_bonded_mm_mini_skips_heavy_when_heat_overlap(tmp_path):
         "_bonded_mm_skip_reason_after_heat_overlap",
         return_value="worst inter-monomer distance 0.71 Å < 0.50 Å",
     ) as skip, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.topology_recovery.run_bonded_recovery_inplace",
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_all_ml_mlpot_recovery",
     ) as inplace:
         ran = bonded_mm_recovery.maybe_run_bonded_mm_mini_after_stage(
             ctx,
@@ -896,7 +906,7 @@ def test_maybe_run_bonded_mm_mini_all_ml_skips_when_strain_ok(tmp_path):
         "_measure_stage_bonded_strain",
         return_value=ok,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.topology_recovery.run_bonded_recovery_inplace",
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_all_ml_mlpot_recovery",
     ) as inplace:
         ran = bonded_mm_recovery.maybe_run_bonded_mm_mini_after_stage(
             ctx,
@@ -933,7 +943,7 @@ def test_maybe_run_bonded_mm_mini_all_ml_runs_inplace_when_strain_high(tmp_path)
         "_measure_stage_bonded_strain",
         return_value=high,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.topology_recovery.run_bonded_recovery_inplace",
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_all_ml_mlpot_recovery",
     ) as inplace:
         ran = bonded_mm_recovery.maybe_run_bonded_mm_mini_after_stage(
             ctx,
@@ -970,7 +980,7 @@ def test_maybe_run_bonded_mm_mini_all_ml_uses_inplace_recovery(tmp_path):
         "_measure_stage_bonded_strain",
         return_value=high,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.topology_recovery.run_bonded_recovery_inplace",
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_all_ml_mlpot_recovery",
     ) as inplace, patch.object(
         bonded_mm_recovery,
         "minimize_bonded_mm_recovery",
@@ -1113,12 +1123,9 @@ def test_all_ml_inter_overlap_rescue_uses_mlpot_sd_only():
         "mmml.interfaces.pycharmmInterface.mlpot.restraints.clear_mmfp_restraints",
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_with_mlpot",
-    ) as mini, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.topology_recovery.run_bonded_recovery_inplace",
-    ) as inplace:
+    ) as mini:
         _run_all_ml_inter_overlap_rescue(ctx, cfg)
     mini.assert_called_once()
-    inplace.assert_not_called()
 
 
 def test_run_inter_overlap_rescue_partial_ml_uses_light_path():
