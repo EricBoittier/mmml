@@ -316,3 +316,25 @@ def test_explain_mpi_crash_prints_for_sigsegv(capsys):
     assert "SIGSEGV" in err
     assert "Sphinx" in err
     assert "rebuild_charmm_mlpot.sh --debug" in err
+
+
+def test_defer_jax_warmup_until_after_mlpot_sd_mpi_mpirun(monkeypatch):
+    monkeypatch.delenv("MMML_NO_DEFER_JAX_WARMUP", raising=False)
+    monkeypatch.delenv("MMML_DEFER_JAX_WARMUP_UNTIL_AFTER_SD", raising=False)
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
+        return_value=True,
+    ):
+        assert charmm_mpi.defer_jax_warmup_until_after_mlpot_sd() is True
+
+
+def test_defer_jax_warmup_until_after_mlpot_sd_serial(monkeypatch):
+    monkeypatch.delenv("MMML_NO_DEFER_JAX_WARMUP", raising=False)
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        return_value=False,
+    ):
+        assert charmm_mpi.defer_jax_warmup_until_after_mlpot_sd() is False
