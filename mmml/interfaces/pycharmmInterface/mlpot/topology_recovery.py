@@ -64,21 +64,41 @@ def allow_psf_delete_reload() -> bool:
     )
 
 
+def _per_atom_resids(natom: int) -> tuple[int, ...]:
+    """Expand CHARMM per-residue ``resid`` to one integer per atom."""
+    import pycharmm.atom_info as atom_info
+
+    raw = atom_info.get_res_ids(list(range(int(natom))))
+    out: list[int] = []
+    for token in raw:
+        text = str(token).strip()
+        if not text:
+            out.append(0)
+            continue
+        try:
+            out.append(int(text))
+        except ValueError:
+            out.append(int(text, 16) if text.lower().startswith("0x") else 0)
+    if len(out) != natom:
+        raise RuntimeError(
+            f"PSF composition mismatch: natom={natom}, len(per_atom_resids)={len(out)}"
+        )
+    return tuple(out)
+
+
 def capture_topology_fingerprint_from_charmm() -> TopologyFingerprint:
     """Snapshot current CHARMM PSF composition (atom names, residue IDs, counts)."""
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-    import pycharmm
     import pycharmm.psf as psf
 
     natom = int(psf.get_natom())
     nres = int(psf.get_nres())
     nseg = int(psf.get_nseg())
     atom_names = tuple(str(x) for x in psf.get_atype())
-    resids = tuple(int(x) for x in psf.get_resid())
-    if len(atom_names) != natom or len(resids) != natom:
+    resids = _per_atom_resids(natom)
+    if len(atom_names) != natom:
         raise RuntimeError(
-            f"PSF composition mismatch: natom={natom}, "
-            f"len(atom_names)={len(atom_names)}, len(resids)={len(resids)}"
+            f"PSF composition mismatch: natom={natom}, len(atom_names)={len(atom_names)}"
         )
     return TopologyFingerprint(
         natom=natom,
