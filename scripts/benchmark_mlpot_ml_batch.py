@@ -49,6 +49,12 @@ def main() -> int:
         nargs="+",
         default=[64, 256, 512, 600],
     )
+    parser.add_argument(
+        "--ml-gpu-count",
+        type=int,
+        default=1,
+        help="Parallel PhysNet chunks across N local GPUs (default 1).",
+    )
     parser.add_argument("--repeats", type=int, default=3)
     args = parser.parse_args()
 
@@ -84,7 +90,7 @@ def main() -> int:
             per,
             n,
             ml_batch_size=bs,
-            ml_gpu_count=1,
+            ml_gpu_count=args.ml_gpu_count,
             verbose=False,
         )
         times = []
