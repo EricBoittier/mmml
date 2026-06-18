@@ -458,6 +458,7 @@ def build_decomposed_mlpot_model(
     ml_batch_size: Optional[int] = None,
     ml_gpu_count: Optional[int] = None,
     ml_max_active_dimers: Optional[int] = None,
+    ml_spatial_mpi: bool | None = None,
     cell: Union[float, bool] = False,
     verbose: bool = False,
     args: Any | None = None,
@@ -470,6 +471,14 @@ def build_decomposed_mlpot_model(
     cutoff_params = (
         cutoff_parameters_from_args(args) if args is not None else CutoffParameters()
     )
+    from mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
+        spatial_mpi_enabled,
+    )
+
+    _spatial_explicit: bool | None = ml_spatial_mpi
+    if args is not None and getattr(args, "ml_spatial_mpi", None) is not None:
+        _spatial_explicit = bool(args.ml_spatial_mpi)
+    spatial_mpi = spatial_mpi_enabled(_spatial_explicit)
     z = np.asarray(physnet_ml_atomic_numbers(atomic_numbers), dtype=int)
     per = [int(x) for x in atoms_per_monomer]
     max_atoms = max(per) * 2
@@ -570,6 +579,8 @@ def build_decomposed_mlpot_model(
             pending_do_ml=do_ml,
             pending_do_ml_dimer=do_ml_dimer,
             verbose=verbose,
+            spatial_mpi=spatial_mpi,
+            atoms_per_monomer=per,
         )
     r0 = np.zeros((len(z), 3), dtype=np.float64)
     from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_context
@@ -603,6 +614,8 @@ def build_decomposed_mlpot_model(
         do_mm=do_mm,
         get_update_fn=get_update_fn if do_mm else None,
         ml_compute_dtype=ml_compute_dtype,
+        spatial_mpi=spatial_mpi,
+        atoms_per_monomer=per,
     )
     return model
 
@@ -648,6 +661,9 @@ def _warmup_value_and_grad_for_model(
                 pair_idx,
                 pair_mask,
                 use_mm_pairs,
+                jnp.zeros((0,), dtype=jnp.int32),
+                jnp.zeros((0,), dtype=jnp.int32),
+                False,
             )
 
         run_jax_warmup_passes(
