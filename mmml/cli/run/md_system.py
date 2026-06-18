@@ -1519,10 +1519,23 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd.append("--pre-nve-charmm-update")
     if getattr(args, "bonded_mm_mini", True):
         cmd.append("--bonded-mm-mini")
-        cmd.extend(["--bonded-mm-mini-after", str(args.bonded_mm_mini_after)])
-        cmd.extend(["--bonded-mm-mini-steps", str(args.bonded_mm_mini_steps)])
         cmd.extend(
-            ["--bonded-mm-internal-margin", str(args.bonded_mm_internal_margin)]
+            [
+                "--bonded-mm-mini-after",
+                str(getattr(args, "bonded_mm_mini_after", "mini,heat")),
+            ]
+        )
+        cmd.extend(
+            [
+                "--bonded-mm-mini-steps",
+                str(getattr(args, "bonded_mm_mini_steps", 50)),
+            ]
+        )
+        cmd.extend(
+            [
+                "--bonded-mm-internal-margin",
+                str(getattr(args, "bonded_mm_internal_margin", 0.0)),
+            ]
         )
         if getattr(args, "bonded_mm_grms_margin", None) is not None:
             cmd.extend(

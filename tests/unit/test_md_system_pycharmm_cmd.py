@@ -103,6 +103,11 @@ def _pycharmm_args(**overrides) -> argparse.Namespace:
         packmol_cache_dir=None,
         save_run_state=False,
         run_state_dir=None,
+        bonded_mm_mini=True,
+        bonded_mm_mini_after="mini,heat",
+        bonded_mm_mini_steps=50,
+        bonded_mm_internal_margin=0.0,
+        bonded_mm_mini_always=False,
     )
     base.update(overrides)
     return argparse.Namespace(**base)
