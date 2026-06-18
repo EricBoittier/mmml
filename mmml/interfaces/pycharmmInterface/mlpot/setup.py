@@ -805,11 +805,14 @@ def _require_mlpot_skip_iblo_support(pycharmm: Any) -> None:
         params = {}
     if "skip_iblo_inb_update" in params:
         return
+    ml_module = getattr(pycharmm.MLpot, "__module__", "unknown")
     raise RuntimeError(
-        "PyCHARMM MLpot lacks skip_iblo_inb_update (upgrade the vendored pycharmm "
-        "package from this mmml repo via `uv sync`). PBC all-ML registration runs "
-        "upinb after BLOCK DELTIC without it and segfaults in __nbexcl_MOD_upinb. "
-        "Also launch under scripts/mmml-charmm-mpirun.sh for MPI-linked libcharmm.so."
+        "PyCHARMM MLpot lacks skip_iblo_inb_update "
+        f"(loaded from {ml_module}). Reinstall mmml from this repo (`uv sync`) so "
+        "import_pycharmm prefers the vendored pycharmm package over "
+        "$CHARMM_HOME/tool/pycharmm. PBC all-ML registration runs upinb after BLOCK "
+        "DELTIC without it and segfaults in __nbexcl_MOD_upinb. Also launch under "
+        "scripts/mmml-charmm-mpirun.sh for MPI-linked libcharmm.so."
     )
 
 
