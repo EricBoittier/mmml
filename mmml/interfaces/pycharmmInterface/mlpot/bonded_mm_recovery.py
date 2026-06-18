@@ -295,6 +295,39 @@ def bonded_mm_mini_always(args: argparse.Namespace) -> bool:
     return bool(getattr(args, "bonded_mm_mini_always", False))
 
 
+def _all_ml_mini_heavy_reload_policy(
+    args: argparse.Namespace,
+    *,
+    baseline: MmStrainBaseline,
+    stage: str,
+) -> tuple[str | None, str | None]:
+    """Decide whether all-ML ``DELETE ATOM`` PSF reload is needed/safe after MLpot mini.
+
+    Reloading ``cluster_for_vmd_*.psf`` via ``DELETE ATOM ALL`` after MLpot registration
+    segfaults on MPI-linked CHARMM (see intra overlap rescue).  When post-MLpot mini GRMS
+    is already within baseline margins, skip the heavy reload entirely.
+    """
+    if stage.lower() != "mini" or bonded_mm_mini_always(args):
+        return None, None
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+
+    grms_margin, _, _ = _bonded_strain_margins(args)
+    grms = float(charmm_grms())
+    grms_thr = float(baseline.grms_kcalmol_A) + grms_margin
+    if grms <= grms_thr:
+        return (
+            f"post-MLpot mini GRMS {grms:.4f} ≤ {grms_thr:.4f} kcal/mol/Å "
+            "(skipping DELETE ATOM PSF reload; unsafe on MPI-linked CHARMM after MLpot)",
+            None,
+        )
+    return None, (
+        f"bonded-MM-mini: post-MLpot mini GRMS {grms:.4f} > {grms_thr:.4f} kcal/mol/Å; "
+        "all-ML PSF reload (DELETE ATOM) is unsafe on MPI-linked CHARMM. "
+        "Increase --mini-nstep / --charmm-sd-steps, relax --bonded-mm-grms-margin, "
+        "or disable --bonded-mm-mini for large all-ML clusters."
+    )
+
+
 def _bonded_strain_margins(args: argparse.Namespace) -> tuple[float, float, float]:
     grms_margin = float(
         getattr(args, "bonded_mm_grms_margin", None)
@@ -1046,6 +1079,14 @@ def maybe_run_bonded_mm_mini_after_stage(
     if _mlpot_covers_all_atoms(ctx):
         if topology_psf is not None:
             skip_reason = _bonded_mm_skip_reason_after_heat_overlap(ctx, args, stage=stage)
+            if skip_reason is None and baseline is not None:
+                skip_reason, unsafe_err = _all_ml_mini_heavy_reload_policy(
+                    args,
+                    baseline=baseline,
+                    stage=stage,
+                )
+                if unsafe_err is not None:
+                    raise RuntimeError(unsafe_err)
             if skip_reason is not None:
                 if not args.quiet:
                     print(
