@@ -735,6 +735,7 @@ def load_physnet_mlpot_bundle(
     cell: float | None = None,
     verbose: bool = False,
     args: Any | None = None,
+    defer_jax_until_after_sd: bool = False,
 ) -> tuple[Any, Any, Any]:
     """Load PhysNet for MLpot. Multi-monomer clusters use monomer/dimer batches."""
     ckpt = Path(checkpoint).expanduser().resolve()
@@ -764,6 +765,7 @@ def load_physnet_mlpot_bundle(
             verbose=verbose,
             args=args,
             defer_jax_until_mlpot_registered=True,
+            defer_jax_until_after_sd=defer_jax_until_after_sd,
         )
         return None, None, pyCModel
 

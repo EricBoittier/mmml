@@ -118,6 +118,50 @@ def test_decomposed_mlpot_defers_jax_factory_until_get_calculator():
     assert model._spherical_fn is not None
 
 
+def test_decomposed_mlpot_sd_defer_uses_cpu_until_promote():
+    z = np.array([6, 1, 1, 1, 6, 1, 1, 1], dtype=int)
+    per = [4, 4]
+    factory = MagicMock(return_value=(None, MagicMock(), MagicMock()))
+    cpu_ctx = MagicMock(__enter__=MagicMock(), __exit__=MagicMock())
+    gpu_ctx = MagicMock(__enter__=MagicMock(), __exit__=MagicMock())
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.setup_calculator",
+        return_value=factory,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.unpack_factory_result",
+        return_value=(None, MagicMock(), MagicMock()),
+    ) as mock_unpack, patch(
+        "mmml.utils.jax_gpu_warmup.ensure_xla_gpu_warmed",
+    ) as mock_xla_warm, patch(
+        "mmml.interfaces.pycharmmInterface.jax_device_policy.jax_cpu_until_mlpot_registered",
+        return_value=cpu_ctx,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
+        return_value=gpu_ctx,
+    ):
+        model = build_decomposed_mlpot_model(
+            "/tmp/fake_ckpt.json",
+            z,
+            per,
+            2,
+            defer_jax_until_mlpot_registered=True,
+            defer_jax_until_after_sd=True,
+        )
+        model.get_pycharmm_calculator()
+        mock_xla_warm.assert_not_called()
+        cpu_ctx.__enter__.assert_called()
+        gpu_ctx.__enter__.assert_not_called()
+        assert model._jax_on_gpu is False
+        assert model._pending_factory is factory
+
+        model.promote_jax_factory_to_gpu()
+        mock_xla_warm.assert_called_once()
+        gpu_ctx.__enter__.assert_called()
+        assert model._jax_on_gpu is True
+        assert model._pending_factory is None
+        assert mock_unpack.call_count == 2
+
+
 def test_setup_calculator_defer_skips_terminal_xla_gpu_warmup():
     """Factory build with defer must not touch GPU before CHARMM register_mlpot."""
     ckpt = Path(__file__).resolve().parents[2] / "examples/ckpts_json/DESdimers_params.json"
