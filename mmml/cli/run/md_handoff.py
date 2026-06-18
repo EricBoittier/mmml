@@ -153,19 +153,41 @@ def cluster_geometry_from_handoff(
     r0 = np.asarray(handoff.positions, dtype=np.float64)
     if composition:
         atoms_per_list, residue_labels, composition_summary = (
-            cluster_layout_from_composition_string(composition, n_atoms=len(z))
+            cluster_layout_from_composition_string(composition, n_atoms=len(r0))
         )
     else:
         n_mol = int(n_molecules)
-        if len(z) % n_mol != 0:
+        if len(r0) % n_mol != 0:
             raise ValueError(
-                f"handoff has {len(z)} atoms but n_molecules={n_mol} "
+                f"handoff has {len(r0)} atoms but n_molecules={n_mol} "
                 "(atom count not divisible by monomer count)"
             )
-        per = len(z) // n_mol
+        per = len(r0) // n_mol
         atoms_per_list = [per] * n_mol
         residue_labels = ["MEOH"] * n_mol
         composition_summary = {"MEOH": n_mol}
+    if z.size != len(r0) or not int(np.asarray(z).sum()):
+        if not composition:
+            raise ValueError(
+                "handoff has no atomic numbers; set --composition when continuing from .res"
+            )
+        parts: list[tuple[str, int]] = []
+        for part in str(composition).split(","):
+            token = part.strip()
+            if not token:
+                continue
+            if ":" not in token:
+                raise ValueError(f"invalid composition token {token!r}; use RES:COUNT")
+            res, cnt = token.split(":", 1)
+            parts.append((res.strip().upper(), int(cnt)))
+        from mmml.cli.run.md_pbc_suite.ase import _build_cluster_psf_topology_only
+
+        z = _build_cluster_psf_topology_only(
+            parts,
+            expected_atoms=len(r0),
+            atoms_per_list=atoms_per_list,
+            residue_labels=residue_labels,
+        )
     return z, r0, atoms_per_list, residue_labels, composition_summary
 
 
@@ -472,6 +494,73 @@ def load_handoff(
   if fmt == "run_state":
     return load_run_state(path)
   raise ValueError(f"Unsupported handoff format: {fmt}")
+
+
+_RESTART_STAGE_PREFIXES: tuple[str, ...] = (
+    "prod_",
+    "equi_",
+    "nve_",
+    "heat_",
+    "charmm_mm_heat_",
+    "mini_",
+)
+
+
+def find_latest_charmm_restart_in_dir(out_dir: Path) -> Path | None:
+    """Return the best staged-workflow ``.res`` restart under a job output directory."""
+    root = Path(out_dir).expanduser().resolve()
+    if not root.is_dir():
+        return None
+    candidates: list[Path] = []
+    for path in root.glob("*.res"):
+        name = path.name.lower()
+        if "overlap" in name or name.startswith("continue_seed"):
+            continue
+        candidates.append(path)
+    handoff_res = root / "handoff" / "final.res"
+    if handoff_res.is_file():
+        candidates.append(handoff_res)
+    if not candidates:
+        return None
+
+    def _sort_key(path: Path) -> tuple[int, int, float]:
+        name = path.name.lower()
+        stage_rank = -1
+        for idx, prefix in enumerate(_RESTART_STAGE_PREFIXES):
+            if prefix in name:
+                stage_rank = len(_RESTART_STAGE_PREFIXES) - idx
+                break
+        seg = -1
+        match = re.search(r"\.(\d+)\.res$", name)
+        if match:
+            seg = int(match.group(1))
+        return (stage_rank, seg, path.stat().st_mtime)
+
+    return max(candidates, key=_sort_key)
+
+
+def load_dependency_handoff(
+    dep_dir: Path,
+    *,
+    quiet: bool = False,
+) -> MdHandoffState | None:
+    """Load handoff from a prior campaign job (``state.npz``, ``final.res``, or staged ``.res``)."""
+    root = Path(dep_dir).expanduser().resolve()
+    npz = root / "handoff" / "state.npz"
+    if npz.is_file():
+        return load_handoff(npz)
+    for res_path in (root / "handoff" / "final.res", find_latest_charmm_restart_in_dir(root)):
+        if res_path is None or not res_path.is_file():
+            continue
+        handoff = load_handoff_from_res(res_path)
+        if not quiet:
+            print(
+                f"Continuing from dependency restart {res_path} "
+                f"({len(handoff.positions)} atoms)",
+                flush=True,
+            )
+        return handoff
+    return None
 
 
 def handoff_to_npz_dict(handoff: MdHandoffState) -> dict[str, Any]:

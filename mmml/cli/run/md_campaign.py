@@ -17,8 +17,10 @@ from mmml.cli.run.md_config import (
 )
 from mmml.cli.run.md_handoff import (
     clear_handoff_context,
+    find_latest_charmm_restart_in_dir,
     get_handoff_out,
     handoff_is_valid,
+    load_dependency_handoff,
     load_handoff,
     save_handoff,
     set_handoff_in,
@@ -89,6 +91,8 @@ _CAMPAIGN_CLI_OVERRIDE_KEYS: tuple[str, ...] = (
     "ml_batch_size",
     "ml_gpu_count",
     "ml_max_active_dimers",
+    "skip_jit_warmup",
+    "handoff_pre_minimize",
 )
 
 
@@ -96,7 +100,12 @@ def apply_campaign_cli_overrides(merged: dict[str, Any], parent: Namespace) -> N
     """Merge top-level CLI flags into each campaign job before ``namespace_from_merged``."""
     for key in _CAMPAIGN_CLI_OVERRIDE_KEYS:
         val = getattr(parent, key, None)
-        if val is not None:
+        if val is None:
+            continue
+        if isinstance(val, bool):
+            if val or key == "handoff_pre_minimize":
+                merged[key] = val
+        else:
             merged[key] = val
     if getattr(parent, "ml_spatial_mpi", False):
         merged["ml_spatial_mpi"] = True
@@ -229,17 +238,21 @@ def run_campaign(args: Namespace) -> int:
                 dep_dir = _resolve_output_dir(
                     merge_campaign_job_config(campaign, dep_key), dep_key
                 )
+                handoff_in = load_dependency_handoff(
+                    dep_dir,
+                    quiet=bool(getattr(args, "quiet", False)),
+                )
+            if handoff_in is not None and not merged.get("continue_from"):
+                dep_dir = _resolve_output_dir(
+                    merge_campaign_job_config(campaign, dep_key), dep_key
+                )
                 npz = dep_dir / "handoff" / "state.npz"
                 if npz.is_file():
-                    handoff_in = load_handoff(npz)
-            if handoff_in is not None and not merged.get("continue_from"):
-                merged["continue_from"] = str(
-                    _resolve_output_dir(
-                        merge_campaign_job_config(campaign, dep_key), dep_key
-                    )
-                    / "handoff"
-                    / "state.npz"
-                )
+                    merged["continue_from"] = str(npz)
+                else:
+                    res = find_latest_charmm_restart_in_dir(dep_dir)
+                    if res is not None:
+                        merged["continue_from"] = str(res)
         if handoff_in is None and merged.get("continue_from"):
             handoff_in = load_handoff(Path(str(merged["continue_from"])))
 
