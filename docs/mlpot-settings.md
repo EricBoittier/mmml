@@ -92,3 +92,15 @@ mmml md-system ... --ml-compute-dtype float64
 `JAX_ENABLE_X64` must be set **before** Python starts (e.g. in the shell or `scripts/mmml-charmm-mpirun.sh`). f32 checkpoints are promoted to f64 on load when f64 is requested.
 
 If you saw smoother heating with “XLA” enabled, that was likely **`JAX_ENABLE_X64=1`**, not `XLA_FLAGS` compiler options alone — explicit `dtype=jnp.float32` in the ML path previously blocked x64 until this centralization.
+
+## Medium PBC dense liquids (500–2000 monomers)
+
+Before long production runs on equilibrated periodic boxes, validate the sparse dimer cap:
+
+```bash
+python scripts/validate_mlpot_sparse_dimers.py \
+  --crd path/to/mini_full_mlpot_TAG.crd \
+  --n-monomers 1000 --atoms-per-monomer 10 --box-size 40
+```
+
+See [Medium PBC workflow](mlpot-medium-pbc.md) for caps, `ml_batch_size` defaults, and JAX-MD handoff.

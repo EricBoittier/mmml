@@ -237,32 +237,46 @@ class DecomposedMlpotCalculator:
         if mlpot_profiling_enabled():
             get_mlpot_profile_stats().record_charmm_gap()
         t0 = time.perf_counter()
-        with mlpot_jax_device_context():
-            mm_pair_idx, mm_pair_mask, use_mm_pairs = self._resolve_mm_pairs(pos, box)
-            positions_jax = as_ml_array(
-                pos,
-                dtype=resolve_ml_compute_dtype(getattr(self, "_ml_compute_dtype", None)),
-            )
-            atomic_numbers_jax = jnp.asarray(self.atomic_numbers[:n])
-            value_and_grad_fn = self._get_value_and_grad_fn(
-                n_atoms=n,
-                atomic_numbers_jax=atomic_numbers_jax,
-                box_jax=box,
-            )
-            e_raw, grad = value_and_grad_fn(
-                positions_jax,
-                mm_pair_idx,
-                mm_pair_mask,
-                use_mm_pairs,
-            )
-            e_raw = jnp.where(jnp.isfinite(e_raw), e_raw, 0.0)
-            grad = jnp.where(jnp.isfinite(grad), grad, 0.0)
-            e_kcal = float(jax.device_get(e_raw)) * self.ev2kcal
-            forces = -np.asarray(jax.device_get(grad), dtype=np.float64) * self.ev2kcal
-            self.last_ml_forces = np.asarray(forces, dtype=np.float64, copy=True)
-            parent = getattr(self, "_parent_model", None)
-            if parent is not None:
-                parent._last_ml_forces = self.last_ml_forces
+        from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import (
+            broadcast_mlpot_result,
+            mlpot_runs_on_this_rank,
+        )
+
+        run_ml = mlpot_runs_on_this_rank()
+        e_kcal = 0.0
+        forces = np.zeros((n, 3), dtype=np.float64)
+        if run_ml:
+            with mlpot_jax_device_context():
+                mm_pair_idx, mm_pair_mask, use_mm_pairs = self._resolve_mm_pairs(pos, box)
+                positions_jax = as_ml_array(
+                    pos,
+                    dtype=resolve_ml_compute_dtype(getattr(self, "_ml_compute_dtype", None)),
+                )
+                atomic_numbers_jax = jnp.asarray(self.atomic_numbers[:n])
+                value_and_grad_fn = self._get_value_and_grad_fn(
+                    n_atoms=n,
+                    atomic_numbers_jax=atomic_numbers_jax,
+                    box_jax=box,
+                )
+                e_raw, grad = value_and_grad_fn(
+                    positions_jax,
+                    mm_pair_idx,
+                    mm_pair_mask,
+                    use_mm_pairs,
+                )
+                e_raw = jnp.where(jnp.isfinite(e_raw), e_raw, 0.0)
+                grad = jnp.where(jnp.isfinite(grad), grad, 0.0)
+                e_kcal = float(jax.device_get(e_raw)) * self.ev2kcal
+                forces = -np.asarray(jax.device_get(grad), dtype=np.float64) * self.ev2kcal
+                self.last_ml_forces = np.asarray(forces, dtype=np.float64, copy=True)
+                parent = getattr(self, "_parent_model", None)
+                if parent is not None:
+                    parent._last_ml_forces = self.last_ml_forces
+        forces, e_kcal = broadcast_mlpot_result(forces, e_kcal, n)
+        self.last_ml_forces = np.asarray(forces, dtype=np.float64, copy=True)
+        parent = getattr(self, "_parent_model", None)
+        if parent is not None:
+            parent._last_ml_forces = self.last_ml_forces
         if mlpot_profiling_enabled():
             get_mlpot_profile_stats().record_ml(time.perf_counter() - t0)
         for i in range(n):
