@@ -26,3 +26,4 @@ mkdocs serve
 
 - Keep pages focused and task-oriented.
 - Add new pages under `docs/` and wire them into `mkdocs.yml` under `nav`.
+- Medium PBC production: run `validate_mlpot_sparse_dimers.py` on equilibrated CRDs before long MD (see [Medium PBC](mlpot-medium-pbc.md)).

@@ -19,7 +19,6 @@ from typing import Optional, Sequence
 import numpy as np
 
 from mmml.interfaces.pycharmmInterface.cutoffs import DEFAULT_MM_SWITCH_ON
-from mmml.interfaces.pycharmmInterface.mlpot.mlpot_batch_policy import resolve_ml_batch_size
 from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
     resolve_max_active_dimers,
     validate_sparse_dimer_cap,
@@ -46,10 +45,8 @@ def suggest_medium_pbc_sizing(n_monomers: int) -> MediumPbcSizing:
     n = int(n_monomers)
     cap = resolve_max_active_dimers(n, free_space=False)
     upper = n + cap
-    batch = resolve_ml_batch_size(n, None)
-    # Documented defaults when env/device policy differs (see mlpot_batch_policy).
-    batch_gpu = 256 if n >= 40 else batch
-    batch_cpu = 64 if n >= 40 else batch
+    batch_gpu = 256 if n >= 40 else None
+    batch_cpu = 64 if n >= 40 else batch_gpu
     chunks = (upper + batch_gpu - 1) // batch_gpu if batch_gpu else None
     return MediumPbcSizing(
         n_monomers=n,
