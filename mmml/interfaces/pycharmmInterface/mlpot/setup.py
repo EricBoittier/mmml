@@ -770,6 +770,32 @@ def load_physnet_mlpot_bundle(
     return params, model, pyCModel
 
 
+def _build_ml_exclusion_lists(
+    ml_indices: Sequence[int],
+    *,
+    natom: int,
+) -> tuple[np.ndarray, list[int]]:
+    """PSF ``iblo``/``inb`` arrays for all ML–ML pair exclusions (1-based ``inb``)."""
+    ml_idx = np.asarray(ml_indices, dtype=int)
+    n_ml = int(ml_idx.size)
+    ml_iblo = np.zeros(int(natom), dtype=int)
+    ml_inb: list[int] = []
+    for ii, idx in enumerate(ml_idx):
+        ml_iblo[idx:] += n_ml - ii - 1
+        for jdx in ml_idx[(ii + 1) :]:
+            ml_inb.append(int(jdx) + 1)
+    return ml_iblo, ml_inb
+
+
+def _install_ml_exclusions(ml_selection: Any) -> None:
+    """Add ML–ML exclusions and rebuild CHARMM nonbond lists (``upinb``)."""
+    pycharmm = _import_pycharmm()
+    natom = int(pycharmm.coor.get_natom())
+    ml_indices = ml_selection.get_atom_indexes()
+    ml_iblo, ml_inb = _build_ml_exclusion_lists(ml_indices, natom=natom)
+    pycharmm.psf.set_iblo_inb(ml_iblo, ml_inb)
+
+
 def register_mlpot(
     pyCModel: Any,
     ml_Z: Sequence[int],
@@ -795,6 +821,12 @@ def register_mlpot(
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
 
     with charmm_relaxed_bomlev():
+        skip_iblo_inb_update = False
+        if use_pbc:
+            # PBC all-ML: ``upinb`` after BLOCK DELTIC (bond strip) can segfault in
+            # ``__nbexcl_MOD_upinb``. Rebuild lists while PSF connectivity is intact.
+            _install_ml_exclusions(ml_selection)
+            skip_iblo_inb_update = True
         block_tag = apply_mlpot_energy_block(
             ml_selection,
             mm_internal_scale=float(mm_internal_scale),
@@ -808,6 +840,7 @@ def register_mlpot(
             mlmm_ctonnb=mlmm_ctonnb,
             mlmm_ctofnb=mlmm_ctofnb,
             preserve_psf_internals=preserve_psf_internals,
+            skip_iblo_inb_update=skip_iblo_inb_update,
             **kwargs,
         )
         if not use_pbc:
