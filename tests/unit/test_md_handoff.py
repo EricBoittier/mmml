@@ -144,3 +144,33 @@ def test_load_dependency_handoff_falls_back_to_staged_res(
     handoff = load_dependency_handoff(dep)
     assert handoff is not None
     assert handoff.positions.shape == (20, 3)
+
+
+def test_apply_handoff_geometry_wraps_pbc_monomers() -> None:
+    from ase import Atoms
+
+    from mmml.cli.run.md_handoff import MdHandoffState, apply_handoff_geometry_to_atoms
+
+    L = 32.0
+    cell = np.diag([L, L, L])
+    pos = np.zeros((10, 3), dtype=float)
+    pos[0:5] = [1.0, 16.0, 16.0]
+    pos[5:10] = [33.0, 16.0, 16.0]
+    z = np.array([6, 1, 1, 1, 1] * 2, dtype=np.int32)
+    handoff = MdHandoffState(
+        positions=pos.copy(),
+        atomic_numbers=z,
+        cell=cell,
+        pbc=True,
+    )
+    atoms = Atoms(numbers=z, positions=pos)
+    atoms.set_cell(cell)
+    atoms.set_pbc(True)
+    offsets = np.array([0, 5, 10], dtype=int)
+    apply_handoff_geometry_to_atoms(
+        atoms, handoff, monomer_offsets=offsets, sync_charmm=False
+    )
+    wrapped = atoms.get_positions()
+    assert not np.allclose(wrapped, pos)
+    assert np.all(wrapped[:, 0] >= -1.0e-6)
+    assert np.all(wrapped[:, 0] < L + 1.0e-6)
