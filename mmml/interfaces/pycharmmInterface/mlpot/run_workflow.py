@@ -332,6 +332,7 @@ def _register_mlpot_context(
     mlpot_use_pbc: bool = False,
     verbose: bool = False,
     args: Any | None = None,
+    defer_jax_warmup: bool | None = None,
 ):
     import ase
 
@@ -349,9 +350,13 @@ def _register_mlpot_context(
 
     from mmml.interfaces.pycharmmInterface.charmm_mpi import (
         charmm_lib_links_mpi,
+        defer_jax_warmup_until_after_mlpot_sd,
         mpirun_launch_hint,
     )
     from mmml.interfaces.pycharmmInterface.charmm_mpi import _under_mpirun
+
+    if defer_jax_warmup is None:
+        defer_jax_warmup = defer_jax_warmup_until_after_mlpot_sd()
 
     if verbose and charmm_lib_links_mpi() and not _under_mpirun():
         print(
@@ -417,12 +422,20 @@ def _register_mlpot_context(
         )
 
         if isinstance(pyCModel, DecomposedMlpotModel):
-            warmup_decomposed_mlpot(
-                pyCModel,
-                r,
-                cell=ml_cell,
-                verbose=verbose,
-            )
+            if defer_jax_warmup:
+                if verbose:
+                    print(
+                        "Decomposed MLpot: deferring JAX GPU warmup until after MLpot SD "
+                        "(MPI-linked CHARMM)",
+                        flush=True,
+                    )
+            else:
+                warmup_decomposed_mlpot(
+                    pyCModel,
+                    r,
+                    cell=ml_cell,
+                    verbose=verbose,
+                )
     ctx.ml_Z = np.asarray(z, dtype=int)
     ctx.use_pbc = bool(mlpot_use_pbc)
     ctx.cubic_box_side_A = float(cubic_box_side_A) if mlpot_use_pbc and cubic_box_side_A else None
@@ -677,6 +690,11 @@ def run_dynamics_workflow(
     )
     sync_charmm_positions(r)
 
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+        defer_jax_warmup_until_after_mlpot_sd,
+    )
+
+    defer_jax_warmup = defer_jax_warmup_until_after_mlpot_sd()
     ctx, pyCModel = _register_mlpot_context(
         z,
         r,
@@ -690,8 +708,10 @@ def run_dynamics_workflow(
         mlpot_use_pbc=mlpot_pbc,
         verbose=not args.quiet,
         args=args,
+        defer_jax_warmup=defer_jax_warmup,
     )
     show_energy = resolve_show_energy(args)
+    ml_cell = float(box_side) if mlpot_pbc and box_side is not None else None
 
     try:
         if pre_minimize:
@@ -719,6 +739,20 @@ def run_dynamics_workflow(
             grms = charmm_grms()
             if not args.quiet:
                 print(f"Post MLpot mini GRMS: {grms:.4f} kcal/mol/Å")
+
+        if defer_jax_warmup and int(n_mol) > 1:
+            from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+                DecomposedMlpotModel,
+                warmup_decomposed_mlpot,
+            )
+
+            if isinstance(pyCModel, DecomposedMlpotModel):
+                warmup_decomposed_mlpot(
+                    pyCModel,
+                    get_charmm_positions_array(),
+                    cell=ml_cell,
+                    verbose=not args.quiet,
+                )
 
         # MMFP flat-bottom for dynamics only (avoid fighting SD on the initial Packmol cloud).
         apply_flat_bottom_from_args(args)

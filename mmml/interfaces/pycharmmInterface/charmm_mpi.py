@@ -317,8 +317,8 @@ def explain_mpi_crash(exit_code: int, *, argv0: str = "mmml md-system") -> None:
         )
         lines.append(
             "  MLpot SD domdec/MPI segfaults (``send_coord_to_recip`` / ``PMPI_Free_mem``): "
-            "launch via mmml-charmm-mpirun.sh -np 1; sync mmml; keep "
-            "MMML_NO_JAX_COMPILE_THREADS=1 (default under mpirun); "
+            "launch via mmml-charmm-mpirun.sh -np 1; sync mmml (defer JAX warmup until "
+            "after MLpot SD on MPI builds); keep MMML_NO_JAX_COMPILE_THREADS=1; "
             "try OMP_NUM_THREADS=1; or rebuild with ./scripts/rebuild_charmm_mlpot.sh --no-domdec."
         )
     print("\n".join(lines), file=sys.stderr, flush=True)
@@ -572,6 +572,21 @@ def mpirun_launch_hint(argv0: str = "mmml md-system") -> str:
     lines.append(f"{runner} -np 1 {argv0} ...")
     lines.append("# or: ./scripts/mmml-charmm-mpirun.sh md-system ...")
     return "\n".join(lines)
+
+
+def defer_jax_warmup_until_after_mlpot_sd() -> bool:
+    """Defer JAX GPU warmup until after CHARMM MLpot SD on MPI-linked builds.
+
+    JAX/CUDA activity before the first ``gete`` in MLpot SD can corrupt OpenMPI
+    registered-memory pools; the next CHARMM energy eval then segfaults in
+    ``send_coord_to_recip`` / ``PMPI_Free_mem`` even after ``domdec off``.
+    MM pretreat (no JAX) succeeds on the same system.
+    """
+    if _truthy("MMML_NO_DEFER_JAX_WARMUP"):
+        return False
+    if _truthy("MMML_DEFER_JAX_WARMUP_UNTIL_AFTER_SD"):
+        return True
+    return charmm_lib_links_mpi() and _under_mpirun()
 
 
 def maybe_rerun_md_system_under_mpirun(argv: list[str]) -> int | None:

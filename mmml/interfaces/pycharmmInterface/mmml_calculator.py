@@ -941,6 +941,8 @@ def setup_calculator(
         mm_pair_idx: Optional[Array] = None,
         mm_pair_mask: Optional[Array] = None,
         box: Optional[Array] = None,
+        spatial_monomer_indices: Optional[Array] = None,
+        spatial_dimer_indices: Optional[Array] = None,
     ) -> ModelOutput:
         """Calculates energy and forces using combined ML/MM potential.
         
@@ -1001,6 +1003,8 @@ def setup_calculator(
                 ml_energy_conversion_factor=ml_energy_conversion_factor,
                 ml_force_conversion_factor=ml_force_conversion_factor,
                 mic_pbc_cell=mic_pbc_cell,
+                spatial_monomer_indices=spatial_monomer_indices,
+                spatial_dimer_indices=spatial_dimer_indices,
             )
             # Get ML forces from calculate_ml_contributions
             # CRITICAL: These forces are ALREADY correctly mapped to atoms 0 to (total_atoms - 1)
@@ -1179,6 +1183,8 @@ def setup_calculator(
         BATCH_SIZE,
         cutoff_params: Optional[Any] = None,
         mic_pbc_cell: Optional[Array] = None,
+        spatial_monomer_indices: Optional[Array] = None,
+        spatial_dimer_indices: Optional[Array] = None,
     ) -> Tuple[Any, Dict[str, Array]]:
         """Prepares the ML model and batching for energy calculations.
 
@@ -1220,10 +1226,41 @@ def setup_calculator(
         dimer_positions = jnp.where(dimer_mask[:, :, None], dimer_positions, pad_positions[None, :, :])
         dimer_atomic = jnp.where(dimer_mask, dimer_atomic, 0)
 
-        # Sparse: only include dimers within mm_switch_on
-        use_sparse = ml_sparse_dimers and _max_active_dimers < n_dimers and cutoff_params is not None
+        use_spatial = (
+            spatial_monomer_indices is not None and spatial_dimer_indices is not None
+        )
+        # Sparse: only include dimers within mm_switch_on (or spatial subset)
+        use_sparse = (
+            not use_spatial
+            and ml_sparse_dimers
+            and _max_active_dimers < n_dimers
+            and cutoff_params is not None
+        )
         cell_for_mic = mic_pbc_cell if mic_pbc_cell is not None else pbc_cell
-        if use_sparse:
+        if use_spatial:
+            mono_idx = jnp.asarray(spatial_monomer_indices, dtype=jnp.int32)
+            dimer_idx = jnp.asarray(spatial_dimer_indices, dtype=jnp.int32)
+            n_mono_local = int(mono_idx.shape[0])
+            n_dimer_local = int(dimer_idx.shape[0])
+            monomer_positions = monomer_positions[mono_idx]
+            monomer_atomic = monomer_atomic[mono_idx]
+            monomer_N_arr = monomer_N_arr[mono_idx]
+            sparse_dimer_positions = dimer_positions[dimer_idx]
+            sparse_dimer_atomic = dimer_atomic[dimer_idx]
+            sparse_dimer_N = dimer_N_arr[dimer_idx]
+            batch_data["R"] = jnp.concatenate([monomer_positions, sparse_dimer_positions])
+            batch_data["Z"] = jnp.concatenate([monomer_atomic, sparse_dimer_atomic])
+            batch_data["N"] = jnp.concatenate([monomer_N_arr, sparse_dimer_N])
+            sparse_batch_size = n_mono_local + n_dimer_local
+            batches = prepare_batches_md(
+                batch_data, batch_size=sparse_batch_size, num_atoms=max_atoms
+            )[0]
+            batches["_sparse_active_indices"] = dimer_idx
+            batches["_sparse_n_dimers"] = jnp.array(n_dimers, dtype=jnp.int32)
+            batches["_spatial_monomer_indices"] = mono_idx
+            batches["_spatial_n_monomers_global"] = jnp.array(n_monomers, dtype=jnp.int32)
+            _effective_batch_size = sparse_batch_size
+        elif use_sparse:
             mm_switch_on = cutoff_params.mm_switch_on
             mic_fn = mic_displacement_smooth if use_smooth_mic else mic_displacement
 
@@ -1391,6 +1428,8 @@ def setup_calculator(
         ml_energy_conversion_factor: float = 1.0,
         ml_force_conversion_factor: float = 1.0,
         mic_pbc_cell: Optional[Array] = None,
+        spatial_monomer_indices: Optional[Array] = None,
+        spatial_dimer_indices: Optional[Array] = None,
     ) -> Dict[str, Array]:
         """Calculate ML energy and force contributions (heterogeneous-safe)."""
         # Calculate max atoms for consistent array shapes (heterogeneous)
@@ -1409,6 +1448,8 @@ def setup_calculator(
             n_dimers + n_monomers,
             cutoff_params,
             mic_pbc_cell=mic_pbc_cell,
+            spatial_monomer_indices=spatial_monomer_indices,
+            spatial_dimer_indices=spatial_dimer_indices,
         )
         output = apply_model(batches["Z"], batches["R"])
 
@@ -1419,17 +1460,34 @@ def setup_calculator(
         if "_sparse_active_indices" in batches:
             active_indices = batches["_sparse_active_indices"]
             n_dimers_full = batches["_sparse_n_dimers"]
-            n_mono = n_monomers
-            sparse_batch_size = n_mono + active_indices.shape[0]
-            e_mono = jnp.reshape(e[:n_mono], -1)
-            e_sparse_dimer = jnp.reshape(e[n_mono:], -1)  # flatten (batch,1)->(batch,) for scatter
-            f_mono = f[:n_mono * max_atoms]
-            f_sparse_dimer = f[n_mono * max_atoms:sparse_batch_size * max_atoms]
+            if "_spatial_monomer_indices" in batches:
+                mono_idx = batches["_spatial_monomer_indices"]
+                n_mono_global = int(batches["_spatial_n_monomers_global"])
+                n_mono_local = int(mono_idx.shape[0])
+            else:
+                mono_idx = None
+                n_mono_global = n_monomers
+                n_mono_local = n_monomers
+            sparse_batch_size = n_mono_local + active_indices.shape[0]
+            e_mono_local = jnp.reshape(e[:n_mono_local], -1)
+            e_sparse_dimer = jnp.reshape(e[n_mono_local:], -1)
+            f_mono_local = f[:n_mono_local * max_atoms]
+            f_sparse_dimer = f[n_mono_local * max_atoms : sparse_batch_size * max_atoms]
             f_sparse_dimer_2d = f_sparse_dimer.reshape(-1, max_atoms, 3)
+            if mono_idx is not None:
+                full_mono_e = jnp.zeros(n_mono_global + 1).at[mono_idx].set(e_mono_local)[:-1]
+                full_mono_f = jnp.zeros((n_mono_global + 1, max_atoms, 3)).at[mono_idx].set(
+                    f_mono_local.reshape(n_mono_local, max_atoms, 3)
+                )[:-1]
+            else:
+                full_mono_e = e_mono_local
+                full_mono_f = f_mono_local.reshape(n_mono_local, max_atoms, 3)
             full_dimer_e = jnp.zeros(n_dimers_full + 1).at[active_indices].set(e_sparse_dimer)[:-1]
-            full_dimer_f = jnp.zeros((n_dimers_full + 1, max_atoms, 3)).at[active_indices].set(f_sparse_dimer_2d)[:-1]
-            e = jnp.concatenate([e_mono, full_dimer_e])
-            f = jnp.concatenate([f_mono, full_dimer_f.reshape(-1, 3)])
+            full_dimer_f = jnp.zeros((n_dimers_full + 1, max_atoms, 3)).at[active_indices].set(
+                f_sparse_dimer_2d
+            )[:-1]
+            e = jnp.concatenate([full_mono_e, full_dimer_e])
+            f = jnp.concatenate([full_mono_f.reshape(-1, 3), full_dimer_f.reshape(-1, 3)])
 
         # Calculate monomer contributions (flatten variable-size monomer indices)
         monomer_atomic_numbers_flat = jnp.concatenate([

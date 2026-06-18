@@ -46,9 +46,15 @@ def mpi_rank_size(comm: Any = None) -> Tuple[int, int]:
 
 def mlpot_runs_on_this_rank(comm: Any = None) -> bool:
     """True when this rank should execute the MLpot JAX callback."""
+    from mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
+        spatial_mpi_enabled,
+    )
+
+    rank, size = mpi_rank_size(comm)
+    if size > 1 and spatial_mpi_enabled():
+        return True
     if not rank0_bridge_enabled():
         return True
-    rank, size = mpi_rank_size(comm)
     if size <= 1:
         return True
     return rank == 0
@@ -61,8 +67,23 @@ def broadcast_mlpot_result(
     *,
     comm: Any = None,
 ) -> Tuple[np.ndarray, float]:
-    """Broadcast ML forces and energy from rank 0 to all ranks."""
+    """Broadcast ML forces and energy from rank 0 to all ranks (rank-0 bridge only)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
+        spatial_mpi_enabled,
+    )
+
     rank, size = mpi_rank_size(comm)
+    if size > 1 and spatial_mpi_enabled():
+        if forces is None:
+            raise ValueError("forces required in spatial MPI mode")
+        from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.force_exchange import (
+            mpi_allreduce_energy,
+            mpi_allreduce_forces,
+        )
+
+        f_out = mpi_allreduce_forces(np.asarray(forces, dtype=np.float64), comm=comm)
+        e_out = mpi_allreduce_energy(float(energy_kcal), comm=comm)
+        return f_out[: int(n_atoms)], e_out
     if size <= 1:
         if forces is None:
             raise ValueError("forces required on single rank")

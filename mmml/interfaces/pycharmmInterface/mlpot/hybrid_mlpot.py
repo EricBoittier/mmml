@@ -91,6 +91,9 @@ class DecomposedMlpotCalculator:
         do_mm: bool = True,
         get_update_fn: Any | None = None,
         ml_compute_dtype: str | None = None,
+        *,
+        spatial_mpi: bool = False,
+        atoms_per_monomer: Sequence[int] | None = None,
     ) -> None:
         self.spherical_fn = spherical_fn
         self.cutoff_params = cutoff_params
@@ -98,6 +101,12 @@ class DecomposedMlpotCalculator:
         self.do_mm = bool(do_mm)
         self._get_update_fn = get_update_fn
         self._ml_compute_dtype = ml_compute_dtype
+        self._spatial_mpi = bool(spatial_mpi)
+        if atoms_per_monomer is None:
+            apm = max(1, len(atomic_numbers) // max(1, int(n_monomers)))
+            self._atoms_per_monomer = [apm] * int(n_monomers)
+        else:
+            self._atoms_per_monomer = [int(x) for x in atoms_per_monomer]
         self.atomic_numbers = np.asarray(
             physnet_ml_atomic_numbers(atomic_numbers), dtype=np.int32
         )
@@ -126,6 +135,7 @@ class DecomposedMlpotCalculator:
             bool(self.do_mm),
             dtype,
             _box_cache_key(box_jax),
+            bool(self._spatial_mpi),
         )
         owner = self._grad_cache_owner()
         if owner._vg_cache_key == cache_key and owner._value_and_grad_fn is not None:
@@ -141,6 +151,9 @@ class DecomposedMlpotCalculator:
             mm_pair_idx: jnp.ndarray,
             mm_pair_mask: jnp.ndarray,
             use_mm_pairs: bool,
+            spatial_monomer_indices: jnp.ndarray,
+            spatial_dimer_indices: jnp.ndarray,
+            use_spatial: bool,
         ) -> jnp.ndarray:
             kwargs: dict[str, Any] = dict(
                 positions=positions,
@@ -156,12 +169,15 @@ class DecomposedMlpotCalculator:
             if use_mm_pairs:
                 kwargs["mm_pair_idx"] = mm_pair_idx
                 kwargs["mm_pair_mask"] = mm_pair_mask
+            if use_spatial:
+                kwargs["spatial_monomer_indices"] = spatial_monomer_indices
+                kwargs["spatial_dimer_indices"] = spatial_dimer_indices
             out = spherical_fn(**kwargs)
             return jnp.reshape(out.energy, (-1,))[0]
 
         fn = jax.jit(
             jax.value_and_grad(energy_scalar, argnums=0),
-            static_argnums=(3,),
+            static_argnums=(3, 6),
         )
         owner._value_and_grad_fn = fn
         owner._vg_cache_key = cache_key
