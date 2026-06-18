@@ -6,7 +6,7 @@ Target architecture for multi-rank MLpot aligned with CHARMM DOMDEC and existing
 
 - **Single rank (`np=1`)** — global sparse dimers; dual-GPU pmap via `--ml-gpu-count 2`.
 - **Spatial MPI (`np>1`, `--ml-spatial-mpi`)** — per-rank owned monomers + dimers, force/energy Allreduce (opt-in).
-- **CHARMM domdec off** wherever MLpot runs (stability stopgap); Tier 3 spike in [`tests/functionality/mlpot/SPATIAL_MPI_DOMDEC.md`](../tests/functionality/mlpot/SPATIAL_MPI_DOMDEC.md).
+- **CHARMM domdec off** wherever MLpot runs (stability stopgap); Tier 3 spike in [`tests/functionality/mlpot/SPATIAL_MPI_DOMDEC.md`](https://github.com/EricBoittier/mmml/blob/main/tests/functionality/mlpot/SPATIAL_MPI_DOMDEC.md).
 
 ## Target (Phase 2+)
 
@@ -22,7 +22,7 @@ Neither rank-0-global-every-step nor full MLpot replication on all ranks.
 
 ## Module layout
 
-Python package: [`mmml/interfaces/pycharmmInterface/mlpot/mpi_spatial/`](../mmml/interfaces/pycharmmInterface/mlpot/mpi_spatial/)
+Python package: [`mmml/interfaces/pycharmmInterface/mlpot/mpi_spatial/`](https://github.com/EricBoittier/mmml/tree/main/mmml/interfaces/pycharmmInterface/mlpot/mpi_spatial)
 
 | Module | Role |
 |--------|------|
