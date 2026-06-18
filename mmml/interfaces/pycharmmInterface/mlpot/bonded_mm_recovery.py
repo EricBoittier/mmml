@@ -520,23 +520,18 @@ def _run_all_ml_inter_overlap_rescue(
     ctx: MlpotContext,
     config: Any,
 ) -> None:
-    """Inplace bonded+VDW SD/ABNR for all-ML inter-monomer overlap (no PSF reload)."""
+    """MLpot SD for all-ML inter-monomer overlap (no CHARMM bonded+VDW / upinb)."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         MinimizeWithMlpotConfig,
         minimize_with_mlpot,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.restraints import clear_mmfp_restraints
-    from mmml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
-        BondedRecoveryMode,
-        run_bonded_recovery_inplace,
-    )
 
-    topo = getattr(config, "topology_psf", None) or getattr(ctx, "topology_psf_path", None)
     rescue = config.rescue
-    if topo is None or not Path(topo).is_file():
+    pyCModel = getattr(config, "pyCModel", None)
+    if pyCModel is None:
         raise RuntimeError(
-            "all-ML inter-monomer rescue requires pre-MLpot topology PSF "
-            "(cluster_for_vmd_*.psf)"
+            "all-ML inter overlap rescue requires pyCModel on overlap config"
         )
 
     noise = float(getattr(config, "position_noise_A", 0.05) or 0.0)
@@ -550,48 +545,29 @@ def _run_all_ml_inter_overlap_rescue(
             )
         apply_charmm_position_noise(amplitude_A=noise, seed=seed)
 
-    bonded_cfg = BondedMmMiniConfig(
-        nstep_sd=int(rescue.nstep_sd),
-        nprint=max(1, int(rescue.nprint)),
-        tolenr=float(rescue.tolenr),
-        tolgrd=float(rescue.tolgrd),
-        verbose=bool(rescue.verbose),
-        show_energy=False,
+    sd_steps = int(
+        getattr(config, "mlpot_rescue_mini_nstep", None) or rescue.nstep_sd
     )
     if rescue.verbose:
         print(
-            f"Inter overlap rescue: inplace bonded+VDW recovery "
-            f"(topology {Path(topo).name})",
+            f"Inter overlap rescue (all-ML): MLpot SD {sd_steps} steps "
+            "(no CHARMM bonded+VDW; upinb unsafe on all-ML PBC)",
             flush=True,
         )
     clear_mmfp_restraints()
-    run_bonded_recovery_inplace(
-        ctx,
-        BondedRecoveryMode.BONDED_VDW,
-        bonded_cfg,
-        topology_psf=topo,
-        rescue=rescue,
-    )
-
-    n_mlpot = int(getattr(config, "mlpot_rescue_mini_nstep", 0) or 0)
-    pyCModel = getattr(config, "pyCModel", None)
-    if n_mlpot > 0 and pyCModel is not None:
-        if rescue.verbose:
-            print(
-                f"Inter overlap rescue: MLpot SD mini ({n_mlpot} steps)",
-                flush=True,
-            )
-        minimize_with_mlpot(
-            MinimizeWithMlpotConfig(
-                nstep=n_mlpot,
-                nprint=max(1, int(rescue.nprint)),
-                verbose=rescue.verbose,
-                pyCModel=pyCModel,
-                mlpot_ctx=ctx,
-                save=False,
-                skip_if_crd_exists=False,
-            )
+    minimize_with_mlpot(
+        MinimizeWithMlpotConfig(
+            nstep=sd_steps,
+            nprint=max(1, int(rescue.nprint)),
+            tolenr=float(rescue.tolenr),
+            tolgrd=float(rescue.tolgrd),
+            verbose=bool(rescue.verbose),
+            pyCModel=pyCModel,
+            mlpot_ctx=ctx,
+            save=False,
+            skip_if_crd_exists=False,
         )
+    )
 
 
 def run_inter_monomer_overlap_rescue(
