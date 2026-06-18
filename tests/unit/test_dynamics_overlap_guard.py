@@ -32,6 +32,8 @@ def _mock_bond_exclusion_pairs_unless_targeted(request):
         return_value=frozenset(),
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_restart_write_after_chunk",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.ensure_domdec_off_for_mlpot_energy",
     ):
         yield
 
