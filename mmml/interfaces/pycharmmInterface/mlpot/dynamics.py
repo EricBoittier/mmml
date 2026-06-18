@@ -2754,7 +2754,6 @@ def minimize_with_mlpot(
     Returns True if minimization ran, False if skipped because CRD exists.
     """
     pycharmm, cons_fix, energy, minimize, *_ = _import_pycharmm_modules()
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import recover_mpi_for_charmm_after_jax
 
     crd_path = Path(config.crd_path) if config.crd_path else None
     if config.skip_if_crd_exists and crd_path is not None and crd_path.exists():
@@ -2773,7 +2772,6 @@ def minimize_with_mlpot(
     )
 
     ensure_domdec_off_for_mlpot_energy(context="MLpot SD minimize")
-    recover_mpi_for_charmm_after_jax(phase="before MLpot SD minimize")
 
     dcd_file = None
     if config.save and config.dcd_path is not None and config.dcd_nsavc > 0:

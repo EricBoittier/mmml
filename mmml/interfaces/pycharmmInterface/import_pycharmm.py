@@ -260,8 +260,11 @@ def disable_charmm_domdec(*, when: str = "early") -> bool:
 
 def ensure_domdec_off_for_mlpot_energy(*, context: str = "MLpot energy") -> bool:
     """Preferred single ``domdec off`` before MLpot SD / dynamics (after JAX warmup)."""
-    del context  # reserved for future CHARMM-side diagnostics
-    return disable_charmm_domdec(when="mlpot_energy")
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import recover_mpi_for_charmm_after_jax
+
+    ok = disable_charmm_domdec(when="mlpot_energy")
+    recover_mpi_for_charmm_after_jax(phase=f"after domdec off ({context})")
+    return ok
 
 
 def crystal_free_charmm() -> None:

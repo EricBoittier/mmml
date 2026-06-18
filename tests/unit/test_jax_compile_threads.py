@@ -10,8 +10,20 @@ def test_resolve_jax_compile_thread_count_default(monkeypatch):
 
     monkeypatch.delenv("MMML_NO_JAX_COMPILE_THREADS", raising=False)
     monkeypatch.delenv("MMML_JAX_COMPILE_THREADS", raising=False)
+    monkeypatch.delenv("OMPI_COMM_WORLD_SIZE", raising=False)
+    monkeypatch.delenv("PMI_SIZE", raising=False)
     monkeypatch.setattr(jax_compile_threads.os, "cpu_count", lambda: 32)
     assert jax_compile_threads.resolve_jax_compile_thread_count() == 16
+
+
+def test_resolve_jax_compile_thread_count_zero_under_mpirun(monkeypatch):
+    from mmml.interfaces.pycharmmInterface import jax_compile_threads
+
+    monkeypatch.delenv("MMML_NO_JAX_COMPILE_THREADS", raising=False)
+    monkeypatch.delenv("MMML_JAX_COMPILE_THREADS", raising=False)
+    monkeypatch.delenv("MMML_FORCE_JAX_COMPILE_THREADS", raising=False)
+    monkeypatch.setenv("OMPI_COMM_WORLD_SIZE", "1")
+    assert jax_compile_threads.resolve_jax_compile_thread_count() == 0
 
 
 def test_resolve_jax_compile_thread_count_explicit(monkeypatch):

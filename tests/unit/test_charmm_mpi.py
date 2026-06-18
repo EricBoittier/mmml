@@ -72,8 +72,11 @@ def test_revalidate_mpi_after_cuda_trusts_mpirun_without_mpi4py(monkeypatch):
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi._mpi4py_available",
         return_value=False,
-    ):
+    ), mock.patch(
+        "mmml.utils.jax_gpu_warmup.sync_jax_gpu_before_charmm",
+    ) as mock_sync:
         assert charmm_mpi.revalidate_mpi_after_cuda(phase="test") is True
+    mock_sync.assert_called_once()
 
 
 def test_charmm_mpirun_path_from_ldd(monkeypatch, tmp_path):

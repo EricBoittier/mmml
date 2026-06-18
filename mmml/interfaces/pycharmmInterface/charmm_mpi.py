@@ -317,9 +317,9 @@ def explain_mpi_crash(exit_code: int, *, argv0: str = "mmml md-system") -> None:
         )
         lines.append(
             "  MLpot SD domdec/MPI segfaults (``send_coord_to_recip`` / ``PMPI_Free_mem``): "
-            "launch via mmml-charmm-mpirun.sh -np 1; sync mmml (defer setup-time domdec off); "
-            "ensure domdec off runs after JAX warmup (before MLpot SD); "
-            "try MMML_NO_JAX_COMPILE_THREADS=1."
+            "launch via mmml-charmm-mpirun.sh -np 1; sync mmml; keep "
+            "MMML_NO_JAX_COMPILE_THREADS=1 (default under mpirun); "
+            "try OMP_NUM_THREADS=1; or rebuild with ./scripts/rebuild_charmm_mlpot.sh --no-domdec."
         )
     print("\n".join(lines), file=sys.stderr, flush=True)
 
@@ -420,6 +420,8 @@ def prepare_serial_charmm_mpi_env() -> None:
 
     sanitize_xla_flags_env(quiet=True)
     prepare_charmm_mpi_runtime()
+    if charmm_lib_links_mpi():
+        os.environ.setdefault("MMML_NO_JAX_COMPILE_THREADS", "1")
     _pin_charmm_openmp_for_serial_mlpot()
     if not _under_mpirun():
         scrub_stale_openmpi_env()
@@ -541,10 +543,13 @@ def ensure_mpi_for_charmm_domdec(*, phase: str = "before PyCHARMM import") -> bo
 
 def recover_mpi_for_charmm_after_jax(*, phase: str = "after JAX warmup") -> bool:
     """Best-effort MPI sync after JAX — never ``MPI_Finalize`` while CHARMM is loaded."""
+    from mmml.utils.jax_gpu_warmup import sync_jax_gpu_before_charmm
+
+    sync_jax_gpu_before_charmm(phase=phase)
+    _pin_charmm_openmp_for_serial_mlpot()
     if _truthy("MMML_NO_MPI_INIT") or not _needs_mpi_setup():
         return True
     if _under_mpirun():
-        # DOMDEC disable is deferred to ensure_domdec_off_for_mlpot_energy (after JAX).
         if _mpi4py_available() and _mpi_comm_valid(barrier=True):
             return True
         return True

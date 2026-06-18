@@ -59,14 +59,27 @@ def jax_compile_threads_enabled() -> bool:
     return not _truthy("MMML_NO_JAX_COMPILE_THREADS")
 
 
+def _under_mpi_launcher() -> bool:
+    """True when the process was started under an MPI launcher (``mpirun``, Slurm PMI, …)."""
+    return bool(
+        os.environ.get("OMPI_COMM_WORLD_SIZE")
+        or os.environ.get("PMI_SIZE")
+        or os.environ.get("MPI_LOCALNRANKS")
+    )
+
+
 def resolve_jax_compile_thread_count() -> int:
     """Thread budget for JAX compile warmup (0 when disabled)."""
     if not jax_compile_threads_enabled():
         return 0
-    raw = (os.environ.get("MMML_JAX_COMPILE_THREADS") or "").strip()
-    if raw:
+    explicit = (os.environ.get("MMML_JAX_COMPILE_THREADS") or "").strip()
+    # MPI-linked CHARMM + JAX GPU warmup can corrupt OpenMPI allocators when compile
+    # bumps OMP to 16 (see send_coord_to_recip / PMPI_Free_mem after warmup).
+    if not explicit and _under_mpi_launcher() and not _truthy("MMML_FORCE_JAX_COMPILE_THREADS"):
+        return 0
+    if explicit:
         try:
-            n = int(raw)
+            n = int(explicit)
         except ValueError:
             n = 0
         return max(0, n)
