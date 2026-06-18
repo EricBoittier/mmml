@@ -221,15 +221,36 @@ _domdec_vacuum_disabled = False
 _domdec_disabled_early = False
 
 
+def _truthy_env(name: str) -> bool:
+    return (os.environ.get(name) or "").strip().lower() in ("1", "yes", "true")
+
+
+def _should_run_domdec_off() -> bool:
+    """Whether to send ``domdec off`` to CHARMM.
+
+    Default **skip**. ``q_domdec`` starts false on DOMDEC builds; MM pretreat ``gete``
+  works without ``domdec off``. Calling ``domdec off`` runs ``uninit_domdec`` even when
+    DOMDEC was never active, which can corrupt OpenMPI pools and segfault the next
+    ``gete`` in ``send_coord_to_recip`` / ``PMPI_Free_mem`` (benz100 MLpot SD on gpu09).
+
+    Set ``MMML_FORCE_DOMDEC_OFF=1`` only if your stream explicitly enabled domdec.
+    Prefer ``./scripts/rebuild_charmm_mlpot.sh --no-domdec`` for MPI MLpot campaigns.
+    """
+    if _truthy_env("MMML_NO_CHARMM_DOMDEC_OFF"):
+        return False
+    return _truthy_env("MMML_FORCE_DOMDEC_OFF")
+
+
 def disable_charmm_domdec(*, when: str = "early") -> bool:
     """Turn off domdec once per process (repeat ``domdec off`` segfaults on DOMDEC builds).
 
-    MPI MLpot workflows should defer the single call until after JAX GPU warmup
-    (``when="mlpot_energy"`` from :func:`ensure_domdec_off_for_mlpot_energy`). Calling
-    ``domdec off`` during PBC setup consumes the once-only slot; SD then hits
-    ``send_coord_to_recip`` / ``PMPI_Free_mem`` with domdec still active.
+    Skipped by default — see :func:`_should_run_domdec_off`. When enabled via
+    ``MMML_FORCE_DOMDEC_OFF=1``, defer the single call until MLpot SD/dynamics
+    (``when="mlpot_energy"``).
     """
     global _domdec_vacuum_disabled, _domdec_disabled_early
+    if not _should_run_domdec_off():
+        return False
     if _domdec_vacuum_disabled:
         if when == "mlpot_energy" and _domdec_disabled_early:
             print(
@@ -259,11 +280,12 @@ def disable_charmm_domdec(*, when: str = "early") -> bool:
 
 
 def ensure_domdec_off_for_mlpot_energy(*, context: str = "MLpot energy") -> bool:
-    """Preferred single ``domdec off`` before MLpot SD / dynamics (after JAX warmup)."""
+    """Optional ``domdec off`` before MLpot SD / dynamics (off by default)."""
     from mmml.interfaces.pycharmmInterface.charmm_mpi import recover_mpi_for_charmm_after_jax
 
     ok = disable_charmm_domdec(when="mlpot_energy")
-    recover_mpi_for_charmm_after_jax(phase=f"after domdec off ({context})")
+    if ok:
+        recover_mpi_for_charmm_after_jax(phase=f"after domdec off ({context})")
     return ok
 
 

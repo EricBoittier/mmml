@@ -19,10 +19,13 @@ def _load_import_pycharmm_stub():
     mod = type(mock.Mock())()
     mod._domdec_vacuum_disabled = False
     mod._domdec_disabled_early = False
+    mod._force_domdec_off = True
     mod.pycharmm = mock.Mock()
     mod.pycharmm.lingo.charmm_script = mock.Mock()
 
     def disable_charmm_domdec(*, when: str = "early"):
+        if not getattr(mod, "_force_domdec_off", True):
+            return False
         if mod._domdec_vacuum_disabled:
             return False
         mod.pycharmm.lingo.charmm_script("domdec off")
@@ -42,6 +45,18 @@ def test_disable_charmm_domdec_runs_once():
     mod.disable_charmm_domdec()
     assert mod.pycharmm.lingo.charmm_script.call_count == 1
     assert mod.pycharmm.lingo.charmm_script.call_args[0][0] == "domdec off"
+
+
+def test_disable_charmm_domdec_skipped_by_default():
+    path = (
+        Path(__file__).resolve().parents[2]
+        / "mmml/interfaces/pycharmmInterface/import_pycharmm.py"
+    )
+    source = path.read_text(encoding="utf-8")
+    assert "def _should_run_domdec_off()" in source
+    assert "MMML_FORCE_DOMDEC_OFF" in source
+    block = source.split("def disable_charmm_domdec(")[1].split("\ndef ")[0]
+    assert "if not _should_run_domdec_off():" in block
 
 
 def test_init_vacuum_charmm_state_does_not_disable_domdec():
