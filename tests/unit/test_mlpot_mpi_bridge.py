@@ -32,6 +32,15 @@ def test_mpi_rank_size_from_openmpi_env():
     assert size == 4
 
 
+def test_mlpot_runs_on_all_ranks_when_spatial_mpi(monkeypatch):
+    monkeypatch.setenv("MMML_MLPOT_SPATIAL_MPI", "1")
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        return_value=(2, 4),
+    ):
+        assert mpi_bridge.mlpot_runs_on_this_rank() is True
+
+
 def test_mlpot_runs_on_rank0_only_when_size_gt_1(monkeypatch):
     monkeypatch.delenv("MMML_MLPOT_RANK0_BRIDGE", raising=False)
     with mock.patch(

@@ -65,6 +65,7 @@ def _pycharmm_args(**overrides) -> argparse.Namespace:
         charmm_tolgrd=0.001,
         ml_batch_size=None,
         ml_gpu_count=None,
+        ml_spatial_mpi=False,
         ml_max_active_dimers=None,
         no_echeck=False,
         skip_energy_show=False,
@@ -175,6 +176,11 @@ def test_build_pycharmm_command_includes_ml_gpu_count_when_set():
     assert "--ml-gpu-count" in cmd
     idx = cmd.index("--ml-gpu-count")
     assert cmd[idx + 1] == "2"
+
+
+def test_build_pycharmm_command_includes_ml_spatial_mpi_when_set():
+    cmd = build_pycharmm_command(_pycharmm_args(ml_spatial_mpi=True))
+    assert "--ml-spatial-mpi" in cmd
 
 
 def test_build_pycharmm_command_forwards_ml_compute_dtype_when_set():

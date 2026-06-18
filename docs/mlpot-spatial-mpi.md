@@ -4,9 +4,9 @@ Target architecture for multi-rank MLpot aligned with CHARMM DOMDEC and existing
 
 ## Current state
 
-- **Single rank (`np=1`)** — global sparse dimers, local GPU chunking (`ml_batch_size`, `ml_gpu_count`).
-- **CHARMM domdec off** wherever MLpot runs (stability stopgap).
-- **`np>1`** — rank-0 MLpot bridge for correctness only; not a performance path.
+- **Single rank (`np=1`)** — global sparse dimers; dual-GPU pmap via `--ml-gpu-count 2`.
+- **Spatial MPI (`np>1`, `--ml-spatial-mpi`)** — per-rank owned monomers + dimers, force/energy Allreduce (opt-in).
+- **CHARMM domdec off** wherever MLpot runs (stability stopgap); Tier 3 spike in [`tests/functionality/mlpot/SPATIAL_MPI_DOMDEC.md`](../tests/functionality/mlpot/SPATIAL_MPI_DOMDEC.md).
 
 ## Target (Phase 2+)
 
