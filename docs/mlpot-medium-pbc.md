@@ -4,7 +4,7 @@ Workflow for single-rank GPU throughput with global sparse dimers before spatial
 
 ## Prerequisites
 
-- Launch via [`scripts/mmml-charmm-mpirun.sh`](../scripts/mmml-charmm-mpirun.sh) with **`MMML_MPI_NP=1`** (recommended).
+- Launch via [`scripts/mmml-charmm-mpirun.sh`](https://github.com/EricBoittier/mmml/blob/main/scripts/mmml-charmm-mpirun.sh) with **`MMML_MPI_NP=1`** (recommended).
 - Default cutoffs: `extended_mm5` (8 / 5 / 1.5 Å) — see [MLpot Settings](mlpot-settings.md).
 
 ## Sparse dimer cap validation (required before production)
@@ -57,7 +57,7 @@ MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh md-system ... \
   --ml-batch-size 128 --ml-gpu-count 2
 ```
 
-`ml_batch_size` must be small enough that `ceil(systems_per_step / ml_batch_size) >= 2` so both GPUs receive chunks (see `effective_ml_gpu_count` in [`mlpot_gpu_policy.py`](../mmml/interfaces/pycharmmInterface/mlpot/mlpot_gpu_policy.py)).
+`ml_batch_size` must be small enough that `ceil(systems_per_step / ml_batch_size) >= 2` so both GPUs receive chunks (see `effective_ml_gpu_count` in [`mlpot_gpu_policy.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/mlpot/mlpot_gpu_policy.py)).
 
 Benchmark guidance:
 
