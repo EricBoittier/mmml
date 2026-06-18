@@ -268,12 +268,70 @@ def _scrub_deprecated_openmpi_mca_env() -> None:
     os.environ.pop("OMPI_MCA_mpi_cuda_support", None)
 
 
+def mpi_diagnostic_env_defaults() -> None:
+    """OpenMPI MCA defaults for clearer fatal-error output (idempotent)."""
+    if _truthy("MMML_NO_MPI_ABORT_STACK"):
+        return
+    os.environ.setdefault("OMPI_MCA_orte_abort_print_stack", "1")
+    # Fewer aggregated PRRTE help blocks (often empty when PRRTE lacks Sphinx docs).
+    os.environ.setdefault("OMPI_MCA_orte_base_help_aggregate", "0")
+
+
+def mpi_mpirun_extra_args() -> list[str]:
+    """Extra ``mpirun`` argv tokens for crash diagnostics."""
+    if _truthy("MMML_NO_MPI_ABORT_STACK"):
+        return []
+    args = ["--mca", "orte_abort_print_stack", "1"]
+    if _truthy("MMML_MPI_VERBOSE"):
+        args.extend(
+            [
+                "--mca",
+                "plm_base_verbose",
+                "10",
+                "--mca",
+                "prte_base_verbose",
+                "10",
+            ]
+        )
+    return args
+
+
+def explain_mpi_crash(exit_code: int, *, argv0: str = "mmml md-system") -> None:
+    """Print actionable hints after SIGSEGV/SIGABRT under ``mpirun``."""
+    if exit_code not in (134, 139, -6, -11):
+        return
+    sig = "SIGABRT" if exit_code in (134, -6) else "SIGSEGV"
+    lines = [
+        f"mmml: MPI job ended with {sig} (exit {exit_code}).",
+        "  Ignore PRRTE 'built without Sphinx' help lines — they are launcher noise.",
+        "  For source-level backtraces:",
+        f"    1. ./scripts/rebuild_charmm_mlpot.sh --debug",
+        f"    2. MMML_MPI_GDB=1 ./scripts/mmml-charmm-mpirun.sh {argv0} ...",
+        "    3. gdb -batch -ex run -ex 'thread apply all bt' -ex quit --args \\",
+        "         <python> -m mmml.cli.__main__ md-system ...",
+    ]
+    if exit_code in (139, -11):
+        lines.append(
+            "  MLpot ``upinb`` segfaults: use vendored pycharmm (skip_iblo_inb_update), "
+            "OMP_NUM_THREADS=1, and mmml-charmm-mpirun.sh."
+        )
+    print("\n".join(lines), file=sys.stderr, flush=True)
+
+
 def mpi_shell_setup_lines() -> list[str]:
     """Shell ``export`` lines for LD_LIBRARY_PATH, PATH, and OpenMPI MCA vars."""
+    mpi_diagnostic_env_defaults()
     lines = [
         "unset OMPI_MCA_mpi_cuda_support",
         "export OMPI_MCA_opal_cuda_support=0",
     ]
+    if not _truthy("MMML_NO_MPI_ABORT_STACK"):
+        lines.extend(
+            [
+                "export OMPI_MCA_orte_abort_print_stack=1",
+                "export OMPI_MCA_orte_base_help_aggregate=0",
+            ]
+        )
     ld = mpi_library_path_export()
     if ld:
         lines.append(ld)
@@ -379,6 +437,7 @@ def _apply_cuda_mpi_env_defaults() -> None:
     os.environ.setdefault("OMPI_MCA_btl_vader_single_copy_mechanism", "none")
     os.environ.setdefault("OMPI_MCA_opal_cuda_support", "0")
     _scrub_deprecated_openmpi_mca_env()
+    mpi_diagnostic_env_defaults()
 
 
 def _mpi_comm_valid(*, barrier: bool = False) -> bool:
@@ -540,7 +599,16 @@ def maybe_rerun_md_system_under_mpirun(argv: list[str]) -> int | None:
     # without the ``md-system`` subcommand.
     if not tail or tail[0] != "md-system":
         tail = ["md-system", *tail]
-    cmd = [str(mpirun), "-np", "1", sys.executable, "-m", "mmml.cli.__main__", *tail]
+    cmd = [
+        str(mpirun),
+        "-np",
+        "1",
+        *mpi_mpirun_extra_args(),
+        sys.executable,
+        "-m",
+        "mmml.cli.__main__",
+        *tail,
+    ]
     env = os.environ.copy()
     bindir = str(mpirun.parent)
     path_parts = [p for p in env.get("PATH", "").split(os.pathsep) if p]
@@ -552,7 +620,9 @@ def maybe_rerun_md_system_under_mpirun(argv: list[str]) -> int | None:
         flush=True,
     )
     proc = subprocess.run(cmd, env=env)
-    return int(proc.returncode)
+    rc = int(proc.returncode)
+    explain_mpi_crash(rc, argv0="mmml md-system")
+    return rc
 
 
 _apply_cuda_mpi_env_defaults()
