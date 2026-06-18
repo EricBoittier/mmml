@@ -42,9 +42,15 @@ def test_disable_charmm_domdec_runs_once():
 
 def test_ensure_vendored_pycharmm_on_path_prefers_repo_root():
     import sys
-
-    from mmml.interfaces.pycharmmInterface import import_pycharmm
+    from pathlib import Path
 
     repo = Path(__file__).resolve().parents[2]
-    assert sys.path[0] == str(repo)
-    assert import_pycharmm._REPO_ROOT == repo
+    root = str(repo)
+    if root in sys.path:
+        sys.path.remove(root)
+    sys.path.append("/tmp/fake-charmm-pycharmm-tail")
+
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import _ensure_vendored_pycharmm_on_path
+
+    _ensure_vendored_pycharmm_on_path()
+    assert sys.path[0] == root
