@@ -454,20 +454,25 @@ def _configure_heat_dynamics_start(
         io.restart_read = None
         kw["restart"] = False
         kw["new"] = False
-        assign_velocities_at_temperature(
-            firstt,
-            timestep_ps=timestep_ps,
-            restart_path=None,
-            use_pbc=use_pbc,
-        )
         if hoover_cpt_heat:
+            assign_velocities_at_temperature(
+                firstt,
+                timestep_ps=timestep_ps,
+                restart_path=None,
+                use_pbc=use_pbc,
+            )
             # Continue in-memory velocities from the Boltzmann draw. Omit START
             # (start=False) and keep iasvel=1 so a lingering START flag cannot
             # fall back to COMP coordinates as velocities.
             kw["iasvel"] = 1
             kw["start"] = False
         else:
-            kw["start"] = False
+            # Single dyna: Boltzmann at FIRSTT (start=True) then ihtfrq scaling.
+            # Avoid a separate nstep=0 assign — it triggers a second dynamc/lambdata_init
+            # that can segfault on BLOCK builds after the main heat segment starts.
+            kw["iasvel"] = 1
+            kw["iasors"] = 0
+            kw["start"] = True
         if not quiet:
             if hoover_cpt_heat:
                 print(
@@ -478,7 +483,7 @@ def _configure_heat_dynamics_start(
                 )
             else:
                 print(
-                    f"HEAT: Boltzmann velocities at FIRSTT={firstt:.1f} K "
+                    f"HEAT: dyna start FIRSTT={firstt:.1f} K "
                     "(in-memory coords after mini); ihtfrq scales (iasors=0)",
                     flush=True,
                 )
