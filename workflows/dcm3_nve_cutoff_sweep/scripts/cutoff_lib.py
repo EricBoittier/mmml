@@ -237,6 +237,8 @@ def build_md_system_argv(
                 str(int(cfg.get("bonded_mm_mini_steps", 50))),
             ]
         )
+        if cfg.get("bonded_mm_mini_always"):
+            argv.append("--bonded-mm-mini-always")
 
     # Metadata for collectors (not md-system flags)
     _ = geom
