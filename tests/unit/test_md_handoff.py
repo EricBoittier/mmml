@@ -174,3 +174,74 @@ def test_apply_handoff_geometry_wraps_pbc_monomers() -> None:
     assert not np.allclose(wrapped, pos)
     assert np.all(wrapped[:, 0] >= -1.0e-6)
     assert np.all(wrapped[:, 0] < L + 1.0e-6)
+
+
+def test_resolve_handoff_restart_template_uses_continue_from_final_res(
+    nve_stub: Path, tmp_path: Path
+) -> None:
+    import argparse
+
+    from mmml.cli.run.md_handoff import resolve_handoff_restart_template
+
+    handoff_dir = tmp_path / "jaxmd_nve" / "handoff"
+    handoff_dir.mkdir(parents=True)
+    final_res = handoff_dir / "final.res"
+    final_res.write_text(nve_stub.read_text())
+    npz = handoff_dir / "state.npz"
+    npz.write_bytes(b"placeholder")
+
+    handoff = MdHandoffState(
+        positions=np.zeros((3, 3)),
+        atomic_numbers=np.array([1, 1, 1], dtype=int),
+    )
+    args = argparse.Namespace(
+        handoff_template_res=None,
+        continue_from=str(npz),
+    )
+    got = resolve_handoff_restart_template(handoff, args, {})
+    assert got == final_res.resolve()
+
+
+def test_prepare_pycharmm_handoff_continuation_writes_seed(
+    nve_stub: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import argparse
+
+    from mmml.cli.run.md_handoff import prepare_pycharmm_handoff_continuation
+
+    handoff_dir = tmp_path / "dep" / "handoff"
+    handoff_dir.mkdir(parents=True)
+    (handoff_dir / "final.res").write_text(nve_stub.read_text())
+
+    pos = np.random.default_rng(0).random((3, 3))
+    vel = np.random.default_rng(1).random((3, 3))
+    handoff = MdHandoffState(
+        positions=pos,
+        atomic_numbers=np.array([1, 1, 1], dtype=int),
+        velocities=vel,
+        cell=np.diag([32.0, 32.0, 32.0]),
+        pbc=True,
+    )
+    args = argparse.Namespace(
+        handoff_template_res=None,
+        continue_from=str(handoff_dir / "state.npz"),
+        continue_velocities=True,
+        restart_from=None,
+    )
+    restored: list[Path] = []
+
+    def _fake_restore(path: Path, *, read_unit: int = 93) -> None:
+        restored.append(Path(path))
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_restart",
+        _fake_restore,
+    )
+    seed = prepare_pycharmm_handoff_continuation(
+        handoff, args, tmp_path / "prod", {}, quiet=True
+    )
+    assert seed is not None
+    assert seed.name == "continue_seed.res"
+    assert seed.is_file()
+    assert restored == [seed]
+    assert args.restart_from == seed
