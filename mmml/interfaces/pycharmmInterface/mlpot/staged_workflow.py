@@ -779,20 +779,76 @@ def _seed_restart_for_memory_handoff(
     *,
     stage: MdStage,
 ) -> Path:
-    """Write in-memory state to ``restart_write`` and switch ``kw`` to ``restart -``."""
+    """Persist in-memory state to ``restart_write`` for on-disk checkpoint.
+
+    Used before overlap-chunked NPT stages after post-stage minimization (e.g.
+    bonded-MM mini).  Does **not** enable ``READYN``: static ``write restart``
+    lacks CPT barostat internals — callers must invoke
+    :func:`_configure_npt_dynamics_start` (or heat/NVE equivalents) for in-memory
+    ``dyna`` continuation.
+    """
     if io.restart_write is None:
         raise RuntimeError(
             f"memory handoff for stage {stage!r} requires restart_write on I/O"
         )
     rewrite_dynamics_restart_from_current_state(io.restart_write)
     seed = Path(io.restart_write)
-    io.restart_read = seed
-    kw["new"] = False
-    kw["start"] = False
-    kw["restart"] = True
+    kw.setdefault("new", False)
     if stage in ("equi", "prod"):
         kw.pop("firstt", None)
     return seed
+
+
+def _configure_npt_dynamics_start(
+    kw: dict[str, Any],
+    io: CharmmTrajectoryFiles,
+    *,
+    coords_in_memory: bool,
+    restart_from_file: bool,
+    timestep_ps: float,
+    use_pbc: bool,
+    quiet: bool,
+    temp: float,
+    box_side: float | None = None,
+) -> None:
+    """Fresh Boltzmann draw and CPT barostat for in-memory handoff after mini/rescue.
+
+    ``write restart`` after SD/minimization saves coordinates but not barostat
+    piston state; ``READYN`` then yields garbage ``PIXX``/``PRESSE``.  Match HEAT/NVE:
+    continue from RAM with ``restart=False``, ``start=False``, ``iasvel=1``.
+    """
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        assign_velocities_at_temperature,
+    )
+
+    if not coords_in_memory:
+        return
+
+    io.restart_read = None
+    kw["restart"] = False
+    kw["new"] = False
+    kw.pop("iunrea", None)
+    kw["iunrea"] = -1
+    target = float(kw.get("hoover reft", kw.get("treference", temp)))
+    use_cpt = bool(kw.get("cpt"))
+    if use_pbc and use_cpt and box_side is not None:
+        ensure_charmm_crystal_for_cpt(float(box_side), quiet=quiet)
+    assign_velocities_at_temperature(
+        target,
+        timestep_ps=timestep_ps,
+        restart_path=None,
+        use_pbc=use_pbc and use_cpt,
+    )
+    kw["start"] = False
+    kw["iasvel"] = 1
+    kw.pop("firstt", None)
+    if not quiet:
+        label = "NPT" if use_cpt else "NVT"
+        print(
+            f"{label}: Boltzmann velocities at {target:.1f} K "
+            "(in-memory coords after mini; fresh barostat, no READYN)",
+            flush=True,
+        )
 
 
 def _can_seed_stage_from_memory(
@@ -1525,6 +1581,17 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     kw["nsavc"] = dcd_nsavc
                     if use_memory:
                         restart_path = _seed_restart_for_memory_handoff(seg_io, kw, stage="equi")
+                        _configure_npt_dynamics_start(
+                            kw,
+                            seg_io,
+                            coords_in_memory=True,
+                            restart_from_file=False,
+                            timestep_ps=timestep_ps,
+                            use_pbc=charmm_pbc,
+                            quiet=bool(args.quiet),
+                            temp=temp,
+                            box_side=box_side,
+                        )
                     _sync_mlpot_cell_before_npt(
                         "equi",
                         mlpot_pbc=mlpot_pbc,
@@ -1634,6 +1701,17 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     if use_memory:
                         seed = _seed_restart_for_memory_handoff(seg_io, kw, stage="prod")
                         restart_path = seed
+                        _configure_npt_dynamics_start(
+                            kw,
+                            seg_io,
+                            coords_in_memory=True,
+                            restart_from_file=False,
+                            timestep_ps=timestep_ps,
+                            use_pbc=charmm_pbc,
+                            quiet=bool(args.quiet),
+                            temp=temp,
+                            box_side=box_side,
+                        )
                     _sync_mlpot_cell_before_npt(
                         "prod",
                         mlpot_pbc=mlpot_pbc,
@@ -1748,6 +1826,18 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             kw["nsavc"] = dcd_nsavc
             if use_memory:
                 restart_path = _seed_restart_for_memory_handoff(io, kw, stage=stage)
+                if stage in ("equi", "prod"):
+                    _configure_npt_dynamics_start(
+                        kw,
+                        io,
+                        coords_in_memory=True,
+                        restart_from_file=False,
+                        timestep_ps=timestep_ps,
+                        use_pbc=charmm_pbc,
+                        quiet=bool(args.quiet),
+                        temp=temp,
+                        box_side=box_side,
+                    )
             _sync_mlpot_cell_before_npt(
                 stage,
                 mlpot_pbc=mlpot_pbc,
@@ -1760,8 +1850,8 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 Path(io.restart_write) if io.restart_write else None,
                 trajectory_path=Path(io.trajectory) if io.trajectory else None,
                 restart_read=(
-                    Path(io.restart_read)
-                    if use_memory and io.restart_read is not None
+                    Path(io.restart_write)
+                    if use_memory and io.restart_write is not None
                     else (Path(rread) if restart and rread is not None else None)
                 ),
             )
