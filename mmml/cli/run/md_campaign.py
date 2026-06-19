@@ -17,6 +17,7 @@ from mmml.cli.run.md_config import (
 )
 from mmml.cli.run.md_handoff import (
     clear_handoff_context,
+    enrich_handoff_from_restart_files,
     find_latest_charmm_restart_in_dir,
     get_handoff_out,
     handoff_is_valid,
@@ -238,9 +239,21 @@ def run_campaign(args: Namespace) -> int:
                 dep_dir = _resolve_output_dir(
                     merge_campaign_job_config(campaign, dep_key), dep_key
                 )
+                dep_merged = merge_campaign_job_config(campaign, dep_key)
                 handoff_in = load_dependency_handoff(
                     dep_dir,
                     quiet=bool(getattr(args, "quiet", False)),
+                    fallback_box_side_A=dep_merged.get("box_size"),
+                )
+            elif dep:
+                dep_dir = _resolve_output_dir(
+                    merge_campaign_job_config(campaign, dep_key), dep_key
+                )
+                dep_merged = merge_campaign_job_config(campaign, dep_key)
+                handoff_in = enrich_handoff_from_restart_files(
+                    handoff_in,
+                    dep_dir,
+                    fallback_box_side_A=dep_merged.get("box_size"),
                 )
             if handoff_in is not None and not merged.get("continue_from"):
                 dep_dir = _resolve_output_dir(

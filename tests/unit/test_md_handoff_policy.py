@@ -96,3 +96,29 @@ def test_write_handoff_policy_json(tmp_path: Path) -> None:
     data = json.loads(path.read_text())
     assert data["box_side_A"] == 32.0
     assert data["velocity_policy"] == "maxwell_boltzmann"
+
+
+def test_enrich_handoff_from_restart_files_uses_staged_res(tmp_path: Path) -> None:
+    from mmml.cli.run.md_handoff import enrich_handoff_from_restart_files
+
+    heat_res = Path(
+        "examples/other/notebooks/ffFIT/example-general/heat.res"
+    ).resolve()
+    if not heat_res.is_file():
+        pytest.skip("heat.res fixture not available")
+
+    import shutil
+
+    dep = tmp_path / "equil"
+    dep.mkdir()
+    shutil.copy(heat_res, dep / "equi_DCM20.res")
+    handoff = MdHandoffState(
+        positions=np.zeros((20, 3), dtype=float),
+        atomic_numbers=np.ones(20, dtype=int),
+        metadata={"backend": "pycharmm"},
+    )
+    enriched = enrich_handoff_from_restart_files(handoff, dep, fallback_box_side_A=40.0)
+    assert enriched.cell is not None
+    assert float(enriched.cell[0, 0]) == pytest.approx(31.0)
+    assert enriched.pbc is True
+    assert enriched.metadata.get("box_side_source") == "restart_enrich"

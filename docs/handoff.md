@@ -61,6 +61,18 @@ Positive total MMML energy (eV) is normal — the hybrid calculator is not
 zero-referenced like CHARMM. High **\|F\|** (≫ 1 eV/Å) after handoff usually means
 cutoff mismatch or missing pre-min on the MMML surface.
 
+## Box and velocities on write (PyCHARMM)
+
+At the end of `pycharmm_equil`, `handoff_from_charmm` resolves the cubic cell as:
+
+1. Live CHARMM `pbound_get_size` (during/after CPT)
+2. `!CRYSTAL PARAMETERS` in the last stage restart (`equi_*.res`)
+3. Campaign `--box-size` fallback
+
+Velocities are taken from the live CHARMM coordinate set, then from the last restart `!VELOCITIES` block if needed.
+
+If an older `handoff/state.npz` lacks cell or velocities, `load_dependency_handoff` enriches from staged `.res` files in the predecessor job directory.
+
 ## Velocity carry-over (JAX-MD)
 
 Handoff velocities are applied to the JAX-MD integrator momentum (`mass × v`) when:

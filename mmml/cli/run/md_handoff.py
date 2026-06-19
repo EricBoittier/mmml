@@ -75,11 +75,16 @@ def handoff_from_atoms(
 def handoff_from_charmm(
     atomic_numbers: np.ndarray,
     *,
+    restart_path: Path | str | None = None,
+    fallback_box_side_A: float | None = None,
     temperature_K: float | None = None,
     pressure_atm: float | None = None,
     step: int | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> MdHandoffState:
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_restart_velocities,
+    )
     from mmml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (
         _charmm_velocities_array,
     )
@@ -87,20 +92,59 @@ def handoff_from_charmm(
 
     positions = get_charmm_positions_array()
     velocities = _charmm_velocities_array()
+    velocities_source = "charmm_live" if velocities is not None else None
+
+    restart_p: Path | None = None
+    if restart_path is not None:
+        cand = Path(restart_path).expanduser()
+        if cand.is_file():
+            restart_p = cand.resolve()
+
     cell = None
     pbc = False
+    box_side_source: str | None = None
     try:
         import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
         from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
-            get_charmm_cubic_box_side_A,
+            cubic_box_matrix_from_side,
+            resolve_charmm_cubic_box_side_A,
         )
 
-        side = get_charmm_cubic_box_side_A()
-        if side is not None and float(side) > 0:
-            cell = np.diag([float(side), float(side), float(side)])
-            pbc = True
+        side, box_side_source = resolve_charmm_cubic_box_side_A(
+            restart_path=restart_p,
+            fallback_side_A=fallback_box_side_A,
+        )
+        cell = cubic_box_matrix_from_side(side)
+        pbc = True
     except Exception:
-        pass
+        if restart_p is not None:
+            from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+                parse_cubic_box_side_from_charmm_restart,
+            )
+
+            box_a = parse_cubic_box_side_from_charmm_restart(restart_p)
+            cell = _cell_from_scalar(box_a)
+            if cell is not None:
+                pbc = True
+                box_side_source = "restart"
+        if cell is None and fallback_box_side_A is not None and float(fallback_box_side_A) > 0:
+            cell = _cell_from_scalar(float(fallback_box_side_A))
+            pbc = True
+            box_side_source = "fallback"
+
+    if velocities is None and restart_p is not None:
+        velocities = read_restart_velocities(restart_p)
+        if velocities is not None:
+            velocities_source = "restart"
+
+    meta = dict(metadata or {})
+    if restart_p is not None:
+        meta.setdefault("restart_path", str(restart_p))
+    if box_side_source is not None:
+        meta["box_side_source"] = box_side_source
+    if velocities_source is not None:
+        meta["velocities_source"] = velocities_source
+
     return MdHandoffState(
         positions=positions,
         atomic_numbers=np.asarray(atomic_numbers, dtype=np.int32),
@@ -110,7 +154,7 @@ def handoff_from_charmm(
         temperature_K=temperature_K,
         pressure_atm=pressure_atm,
         step=step,
-        metadata=dict(metadata or {}),
+        metadata=meta,
     )
 
 
@@ -570,12 +614,26 @@ def load_dependency_handoff(
     dep_dir: Path,
     *,
     quiet: bool = False,
+    fallback_box_side_A: float | None = None,
 ) -> MdHandoffState | None:
     """Load handoff from a prior campaign job (``state.npz``, ``final.res``, or staged ``.res``)."""
     root = Path(dep_dir).expanduser().resolve()
     npz = root / "handoff" / "state.npz"
     if npz.is_file():
-        return load_handoff(npz)
+        handoff = load_handoff(npz)
+        enriched = enrich_handoff_from_restart_files(
+            handoff,
+            root,
+            fallback_box_side_A=fallback_box_side_A,
+        )
+        if enriched is not handoff and not quiet:
+            print(
+                "Enriched handoff from restart files "
+                f"(cell={'yes' if enriched.cell is not None else 'no'}, "
+                f"vel={'yes' if enriched.velocities is not None else 'no'}).",
+                flush=True,
+            )
+        return enriched
     for res_path in (root / "handoff" / "final.res", find_latest_charmm_restart_in_dir(root)):
         if res_path is None or not res_path.is_file():
             continue
@@ -588,6 +646,93 @@ def load_dependency_handoff(
             )
         return handoff
     return None
+
+
+def enrich_handoff_from_restart_files(
+    handoff: MdHandoffState,
+    dep_dir: Path,
+    *,
+    fallback_box_side_A: float | None = None,
+) -> MdHandoffState:
+    """Fill missing cell/velocities on a loaded handoff from staged ``.res`` files."""
+    need_cell = handoff.cell is None or not handoff.pbc
+    need_vel = handoff.velocities is None
+    if not need_cell and not need_vel:
+        return handoff
+
+    from dataclasses import replace
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_restart_velocities,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        parse_cubic_box_side_from_charmm_restart,
+    )
+
+    root = Path(dep_dir).expanduser().resolve()
+    candidates: list[Path] = []
+    for key in ("path", "restart_path"):
+        raw = handoff.metadata.get(key)
+        if raw:
+            candidates.append(Path(str(raw)))
+    final_res = root / "handoff" / "final.res"
+    if final_res.is_file():
+        candidates.append(final_res)
+    latest = find_latest_charmm_restart_in_dir(root)
+    if latest is not None:
+        candidates.append(latest)
+
+    cell = handoff.cell
+    pbc = handoff.pbc
+    velocities = handoff.velocities
+    meta = dict(handoff.metadata)
+    box_side_source = meta.get("box_side_source")
+    velocities_source = meta.get("velocities_source")
+
+    for res_path in candidates:
+        if not res_path.is_file():
+            continue
+        if need_cell and cell is None:
+            box_a = parse_cubic_box_side_from_charmm_restart(res_path)
+            new_cell = _cell_from_scalar(box_a)
+            if new_cell is not None:
+                cell = new_cell
+                pbc = True
+                box_side_source = "restart_enrich"
+                meta["restart_path"] = str(res_path.resolve())
+        if need_vel and velocities is None:
+            vel = read_restart_velocities(res_path)
+            if vel is not None and len(vel) == len(handoff.positions):
+                velocities = vel
+                velocities_source = "restart_enrich"
+                meta["restart_path"] = str(res_path.resolve())
+        if cell is not None and velocities is not None:
+            break
+
+    if need_cell and cell is None and fallback_box_side_A is not None and float(fallback_box_side_A) > 0:
+        cell = _cell_from_scalar(float(fallback_box_side_A))
+        pbc = True
+        box_side_source = "yaml_fallback"
+
+    if box_side_source is not None:
+        meta["box_side_source"] = box_side_source
+    if velocities_source is not None:
+        meta["velocities_source"] = velocities_source
+
+    unchanged = (
+        handoff.cell is cell
+        or (handoff.cell is not None and cell is not None and np.array_equal(handoff.cell, cell))
+    ) and handoff.velocities is velocities and handoff.pbc == pbc
+    if unchanged:
+        return handoff
+
+    return replace(
+        handoff,
+        cell=cell,
+        pbc=pbc,
+        velocities=velocities,
+        metadata=meta,
+    )
 
 
 def handoff_to_npz_dict(handoff: MdHandoffState) -> dict[str, Any]:
@@ -846,6 +991,8 @@ def summarize_handoff_policy(
     """Structured handoff policy record for logs and ``handoff_policy.json``."""
     meta = dict(handoff.metadata) if handoff is not None else {}
     source_path = str(meta.get("path", "")) if meta.get("path") else None
+    if source_path is None and meta.get("restart_path"):
+        source_path = str(meta.get("restart_path"))
     handoff_format = None
     if source_path:
         try:
@@ -859,6 +1006,9 @@ def summarize_handoff_policy(
         "n_atoms": int(len(handoff.positions)) if handoff is not None else None,
         "prior_backend": meta.get("backend"),
         "prior_stages": meta.get("stages"),
+        "box_side_source": meta.get("box_side_source"),
+        "velocities_source": meta.get("velocities_source"),
+        "restart_path": meta.get("restart_path"),
         "box_side_A": box_side_A,
         "box_source": box_source,
         "box_warnings": list(box_warnings or []),
@@ -909,9 +1059,13 @@ def print_handoff_policy_panel(summary: dict[str, Any], *, quiet: bool = False) 
         table.add_row("Source", str(summary.get("source_path")))
     if summary.get("prior_backend"):
         table.add_row("Prior backend", str(summary.get("prior_backend")))
+    if summary.get("box_side_source"):
+        table.add_row("Box side source (write)", str(summary.get("box_side_source")))
     table.add_row("Box side (Å)", str(summary.get("box_side_A")))
-    table.add_row("Box source", str(summary.get("box_source")))
+    table.add_row("Box source (JAX-MD)", str(summary.get("box_source")))
     table.add_row("Velocities in handoff", str(summary.get("velocities_in_handoff")))
+    if summary.get("velocities_source"):
+        table.add_row("Velocities source (write)", str(summary.get("velocities_source")))
     table.add_row("Velocity policy", str(summary.get("velocity_policy")))
     table.add_row("Skip pre-min", str(summary.get("skip_pre_min")))
     cutoffs = summary.get("cutoffs") or {}
