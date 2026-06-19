@@ -17,7 +17,12 @@ from jax import random
 
 from mmml.cli.base import resolve_checkpoint_paths
 from mmml.cli.run.jaxmd_runner import set_up_nhc_sim_routine
-from mmml.interfaces.pycharmmInterface.cutoffs import handoff_widths_from_args
+from mmml.interfaces.pycharmmInterface.cutoffs import (
+    DEFAULT_ML_SWITCH_WIDTH,
+    DEFAULT_MM_SWITCH_ON,
+    DEFAULT_MM_SWITCH_WIDTH,
+    handoff_widths_from_args,
+)
 from mmml.interfaces.pycharmmInterface.mmml_calculator import CutoffParameters, setup_calculator
 from mmml.paths import default_meoh_template_pdb
 
@@ -229,9 +234,21 @@ def main(argv: list[str] | None = None) -> int:
         dest="flat_bottom_mode",
         help="system: cluster COM; monomer: sum over monomer COM restraints (same R, k).",
     )
-    p.add_argument("--ml-switch-width", "--ml-cutoff", dest="ml_switch_width", type=float, default=0.1)
-    p.add_argument("--mm-switch-on", type=float, default=7.0)
-    p.add_argument("--mm-switch-width", "--mm-cutoff", dest="mm_switch_width", type=float, default=5.0)
+    p.add_argument(
+        "--ml-switch-width",
+        "--ml-cutoff",
+        dest="ml_switch_width",
+        type=float,
+        default=DEFAULT_ML_SWITCH_WIDTH,
+    )
+    p.add_argument("--mm-switch-on", type=float, default=DEFAULT_MM_SWITCH_ON)
+    p.add_argument(
+        "--mm-switch-width",
+        "--mm-cutoff",
+        dest="mm_switch_width",
+        type=float,
+        default=DEFAULT_MM_SWITCH_WIDTH,
+    )
     p.add_argument("--max-pairs", type=int, default=20_000)
     p.add_argument("--pre-min-fmax", type=float, default=0.1)
     p.add_argument("--pre-min-steps", type=int, default=50)
@@ -343,6 +360,52 @@ def main(argv: list[str] | None = None) -> int:
         default=400,
         help="CHARMM ABNR steps for dynamics overlap rescue (default 400).",
     )
+    p.add_argument(
+        "--handoff-pre-minimize",
+        action="store_true",
+        help="Run pre-minimization even when continuing from a handoff.",
+    )
+    p.add_argument(
+        "--continue-velocities",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Use velocities from handoff when present (else re-thermalize).",
+    )
+    p.add_argument(
+        "--handoff-quality-gate",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Evaluate initial MMML |F| on handoff and optionally pre-minimize.",
+    )
+    p.add_argument(
+        "--handoff-quality-fmax-eVA",
+        type=float,
+        default=1.0,
+        help="|F| threshold (eV/Å) for --handoff-quality-gate.",
+    )
+    p.add_argument(
+        "--handoff-quality-action",
+        choices=("minimize", "warn", "error"),
+        default="minimize",
+        help="Action when handoff quality gate threshold is exceeded.",
+    )
+    p.add_argument(
+        "--handoff-velocity-remove-drift",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Remove net P/L from handoff velocities before MD.",
+    )
+    p.add_argument(
+        "--handoff-require-cell",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Require periodic cell in handoff for PBC runs.",
+    )
+    p.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Reduce console output.",
+    )
     args = p.parse_args(argv)
     if args.free_space and args.ensemble == "npt":
         raise ValueError("--free-space cannot be combined with NPT (--ensemble npt)")
@@ -363,12 +426,22 @@ def main(argv: list[str] | None = None) -> int:
         ensure_psf_for_handoff_cluster,
         get_handoff_in,
         handoff_from_atoms,
+        handoff_skip_pre_min,
+        print_handoff_policy_panel,
+        resolve_handoff_box,
+        resolve_handoff_velocity_policy,
         set_handoff_out,
+        summarize_handoff_policy,
+        write_handoff_policy_json,
     )
-    from mmml.cli.run.md_stage_summary import cubic_box_side_from_cell
 
     handoff_in = get_handoff_in()
-    skip_pre_min = bool(handoff_in is not None and not getattr(args, "handoff_pre_minimize", False))
+    saved_jaxmd_minimize_steps = int(args.jaxmd_minimize_steps)
+    saved_jaxmd_pbc_minimize_steps = int(args.jaxmd_pbc_minimize_steps)
+    skip_pre_min = handoff_skip_pre_min(
+        handoff_in, handoff_pre_minimize=bool(getattr(args, "handoff_pre_minimize", False))
+    )
+    quality_gate_triggered = False
 
     z, r0, atoms_per_list, residue_labels, _composition_summary = resolve_cluster_geometry(
         args,
@@ -406,25 +479,28 @@ def main(argv: list[str] | None = None) -> int:
         r0 = _enforce_min_com_separation(r0, monomer_offsets, args.min_com_start_distance)
     ml_w, mm_on, mm_w = handoff_widths_from_args(args)
     free_space = bool(args.free_space)
+    auto_L = None if free_space else float(_cubic_box_length(r0, ml_w))
+    L, box_source, box_warnings = resolve_handoff_box(
+        handoff_in,
+        yaml_box_size=args.box_size,
+        free_space=free_space,
+        auto_box_from_geometry=auto_L,
+        require_cell=bool(getattr(args, "handoff_require_cell", False)),
+    )
+    for msg in box_warnings:
+        print(f"Handoff box: {msg}", flush=True)
     if free_space:
         if args.box_size is not None:
             print(
                 "md_10mer_mmml_pbc_suite_jaxmd: note: ignoring --box-size with --free-space "
                 f"({float(args.box_size):g} Å)."
             )
-        L: float | None = None
         r = np.asarray(r0, dtype=float) if handoff_in is not None else r0 - r0.mean(axis=0)
     else:
-        L = float(args.box_size) if args.box_size is not None else float(_cubic_box_length(r0, ml_w))
-        if handoff_in is not None and handoff_in.cell is not None:
-            side = cubic_box_side_from_cell(handoff_in.cell)
-            if side is not None:
-                L = float(side)
         if handoff_in is not None:
-            # Use equilibrated restart coords as-is; recentering before apply_handoff
-            # can desync the box side from the .res CRYSTal record.
             r = np.asarray(r0, dtype=float)
         else:
+            assert L is not None
             r = r0 - r0.mean(axis=0) + 0.5 * L
     geom_tag = "vac" if free_space else "pbc"
     atoms = Atoms(numbers=z, positions=r)
@@ -438,12 +514,11 @@ def main(argv: list[str] | None = None) -> int:
         apply_handoff_geometry_to_atoms(
             atoms, handoff_in, monomer_offsets=monomer_offsets
         )
+        if not free_space and L is not None:
+            atoms.set_cell([L, L, L])
+            atoms.set_pbc(True)
     minimization_summary: dict[str, float | str] = {}
-    if skip_pre_min:
-        args.calculator_pre_minimize = False
-        args.jaxmd_minimize_steps = 0
-        args.jaxmd_pbc_minimize_steps = 0
-        args.charmm_pre_minimize = False
+    pre_min_ran = False
     if handoff_in is None or not skip_pre_min:
         _check_or_charmm_overlap_rescue(
             atoms,
@@ -462,13 +537,14 @@ def main(argv: list[str] | None = None) -> int:
             "Skipping initial overlap check (continuing from equilibrated handoff).",
             flush=True,
         )
+    if skip_pre_min and not getattr(args, "quiet", False):
         print(
             "Handoff: JAX-MD/FIRE pre-minimization skipped (default). "
             "If initial E_pot is high or |F| > ~1 eV/Å, set "
-            "handoff_pre_minimize: true and jaxmd_minimize_steps in the campaign YAML.",
+            "handoff_pre_minimize: true or handoff_quality_gate: true in the campaign YAML.",
             flush=True,
         )
-    if args.charmm_pre_minimize:
+    if args.charmm_pre_minimize and not skip_pre_min:
         print(
             f"CHARMM pre-minimization starting "
             f"(SD={args.charmm_sd_steps}, ABNR={args.charmm_abnr_steps})"
@@ -589,6 +665,78 @@ def main(argv: list[str] | None = None) -> int:
             mm_pair_mask=mm_pair_mask,
         )
         print("[jaxmd] hybrid JIT warmup complete (delay-kernel calibration)")
+
+    initial_energy_eV: float | None = None
+    initial_fmax_eVA: float | None = None
+    try:
+        initial_energy_eV = float(atoms.get_potential_energy())
+        initial_fmax_eVA = float(np.abs(atoms.get_forces()).max())
+    except Exception:
+        pass
+
+    if (
+        handoff_in is not None
+        and not getattr(args, "handoff_pre_minimize", False)
+        and getattr(args, "handoff_quality_gate", False)
+        and initial_fmax_eVA is not None
+    ):
+        threshold = float(getattr(args, "handoff_quality_fmax_eVA", 1.0))
+        action = str(getattr(args, "handoff_quality_action", "minimize")).lower()
+        if initial_fmax_eVA > threshold:
+            quality_gate_triggered = True
+            msg = (
+                f"Handoff quality gate: initial MMML max|F|={initial_fmax_eVA:.4f} eV/Å "
+                f"> threshold {threshold:.4f} eV/Å."
+            )
+            if action == "error":
+                raise RuntimeError(msg)
+            if action == "warn":
+                print(f"WARNING: {msg}", flush=True)
+            elif action == "minimize":
+                print(f"{msg} Enabling pre-minimization.", flush=True)
+                skip_pre_min = False
+                args.calculator_pre_minimize = True
+                args.jaxmd_minimize_steps = saved_jaxmd_minimize_steps
+                args.jaxmd_pbc_minimize_steps = saved_jaxmd_pbc_minimize_steps
+                _check_or_charmm_overlap_rescue(
+                    atoms,
+                    monomer_offsets,
+                    min_distance=args.min_intermonomer_atom_distance,
+                    context="handoff quality gate",
+                    nstep_sd=args.charmm_sd_steps,
+                    nstep_abnr=args.charmm_abnr_steps,
+                    tolenr=args.charmm_tolenr,
+                    tolgrd=args.charmm_tolgrd,
+                    nbxmod=args.charmm_nbxmod,
+                    timings=minimization_summary,
+                )
+
+    if skip_pre_min:
+        args.calculator_pre_minimize = False
+        args.jaxmd_minimize_steps = 0
+        args.jaxmd_pbc_minimize_steps = 0
+        args.charmm_pre_minimize = False
+
+    policy_summary = summarize_handoff_policy(
+        handoff_in,
+        skip_pre_min=skip_pre_min,
+        handoff_pre_minimize=bool(getattr(args, "handoff_pre_minimize", False)),
+        continue_velocities=bool(getattr(args, "continue_velocities", True)),
+        velocity_policy="pending",
+        use_handoff_velocities=False,
+        box_side_A=L,
+        box_source=box_source,
+        box_warnings=box_warnings,
+        ml_switch_width=ml_w,
+        mm_switch_on=mm_on,
+        mm_switch_width=mm_w,
+        initial_energy_eV=initial_energy_eV,
+        initial_fmax_eVA=initial_fmax_eVA,
+        quality_gate_enabled=bool(getattr(args, "handoff_quality_gate", False)),
+        quality_gate_triggered=quality_gate_triggered,
+    )
+    print_handoff_policy_panel(policy_summary, quiet=bool(getattr(args, "quiet", False)))
+    write_handoff_policy_json(policy_summary, out_dir / "handoff_policy.json")
 
     if args.calculator_pre_minimize:
         _ = float(atoms.get_potential_energy())
@@ -756,6 +904,7 @@ def main(argv: list[str] | None = None) -> int:
                 f"--max-fmax-after-min={args.max_fmax_after_min:.6f}. "
                 "Increase minimization steps or inspect the generated residue geometry."
             )
+        pre_min_ran = True
 
     rng = np.random.default_rng(args.seed)
     if not np.all(np.isfinite(atoms.get_positions())):
@@ -765,16 +914,21 @@ def main(argv: list[str] | None = None) -> int:
             "or numerical instability). Re-run the predecessor stage or point "
             "--continue-from at an earlier valid frame."
         )
-    use_handoff_velocities = (
-        handoff_in is not None
-        and handoff_in.velocities is not None
-        and getattr(args, "continue_velocities", True)
+    velocity_policy, use_handoff_velocities = resolve_handoff_velocity_policy(
+        handoff_in,
+        continue_velocities=bool(getattr(args, "continue_velocities", True)),
+        pre_min_ran=pre_min_ran,
     )
-    if use_handoff_velocities:
+    initial_velocities: np.ndarray | None = None
+    if use_handoff_velocities and handoff_in is not None and handoff_in.velocities is not None:
+        atoms.set_velocities(np.asarray(handoff_in.velocities, dtype=float))
+        if getattr(args, "handoff_velocity_remove_drift", True):
+            Stationary(atoms)
+            ZeroRotation(atoms)
+        initial_velocities = np.asarray(atoms.get_velocities(), dtype=float)
         if not getattr(args, "quiet", False):
             print(
-                "Using velocities from handoff "
-                f"({len(handoff_in.velocities)} atoms).",
+                f"Using handoff velocities ({len(initial_velocities)} atoms).",
                 flush=True,
             )
     else:
@@ -783,14 +937,23 @@ def main(argv: list[str] | None = None) -> int:
             and handoff_in.velocities is not None
             and not getattr(args, "quiet", False)
         ):
+            reason = (
+                "pre-minimization changed coordinates"
+                if pre_min_ran
+                else "handoff velocities ignored (--no-continue-velocities)"
+            )
             print(
-                "Re-initializing velocities (Maxwell–Boltzmann); "
-                "handoff velocities ignored (--no-continue-velocities).",
+                f"Re-initializing velocities (Maxwell–Boltzmann); {reason}.",
                 flush=True,
             )
         MaxwellBoltzmannDistribution(atoms, temperature_K=args.temperature, rng=rng)
         Stationary(atoms)
         ZeroRotation(atoms)
+
+    policy_summary["velocity_policy"] = velocity_policy
+    policy_summary["use_handoff_velocities"] = bool(use_handoff_velocities)
+    policy_summary["skip_pre_min"] = bool(skip_pre_min)
+    write_handoff_policy_json(policy_summary, out_dir / "handoff_policy.json")
 
     def _dynamics_overlap_charmm_rescue(pos_np: np.ndarray, cell_np: np.ndarray | None) -> np.ndarray:
         """CHARMM MM minimization using PyCHARMM / CGenFF; box matches passed MD cell."""
@@ -870,6 +1033,8 @@ def main(argv: list[str] | None = None) -> int:
         Si_mass=np.asarray(atoms.get_masses(), dtype=np.float32),
         atoms_template=atoms.copy(),
         overlap_charmm_rescue_fn=overlap_charmm_rescue_fn,
+        initial_velocities=initial_velocities,
+        minimization_skipped=bool(skip_pre_min),
     )
     # For NPT path in jaxmd_runner, neighbor list is refreshed once per recording block.
     if args.ensemble == "npt":
@@ -906,9 +1071,13 @@ def main(argv: list[str] | None = None) -> int:
             elif not free_space and L is not None:
                 out_atoms.set_cell([L, L, L])
                 out_atoms.set_pbc(True)
+            final_vel = getattr(run_sim, "last_velocities", None)
+            if final_vel is not None:
+                out_atoms.set_velocities(np.asarray(final_vel, dtype=float))
             set_handoff_out(
                 handoff_from_atoms(
                     out_atoms,
+                    velocities=final_vel,
                     temperature_K=float(args.temperature),
                     pressure_atm=float(args.pressure) if args.ensemble == "npt" else None,
                     metadata={"backend": "jaxmd", "ensemble": args.ensemble},

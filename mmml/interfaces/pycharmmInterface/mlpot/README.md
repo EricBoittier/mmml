@@ -205,6 +205,8 @@ mmml md-system --setup pbc_nvt --backend pycharmm \
   --mini-nstep 100 --output-dir artifacts/pycharmm_mlpot/dcm20_pbc
 ```
 
+**Cross-backend campaigns** (PyCHARMM equil → JAX-MD prod): see [docs/handoff.md](../../../../docs/handoff.md) for box/velocity carry-over, cutoff consistency, and `handoff_quality_gate`.
+
 ## Tests
 
 ```bash

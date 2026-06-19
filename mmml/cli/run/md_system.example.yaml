@@ -56,6 +56,10 @@ runs:
     pressure: 1.0
     output_dir: results/jaxmd_prod
     handoff_write_res: true
+    # Optional: auto pre-min when MMML |F| > 1 eV/Å at handoff (see docs/handoff.md)
+    # handoff_quality_gate: true
+    # handoff_quality_fmax_eVA: 1.0
+    # jaxmd_minimize_steps: 500
     extra_args:
       - "--steps-per-recording"
       - "800"
