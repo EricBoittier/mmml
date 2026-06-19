@@ -396,7 +396,7 @@ def test_check_overlap_rescue_runs_minimize_and_rechecks():
     assert dmin > 1.5
 
 
-def test_check_overlap_rescue_applies_separation_last_resort():
+def test_check_overlap_rescue_applies_repack_last_resort():
     cfg = DynamicsOverlapConfig(
         action="rescue",
         min_distance_A=1.5,
@@ -407,6 +407,8 @@ def test_check_overlap_rescue_applies_separation_last_resort():
         rescue=OverlapRescueConfig(nstep_sd=10, nstep_abnr=0, verbose=False),
         separate_on_rescue_fail=True,
         separate_margin_A=0.0,
+        repack_spacing_A=4.0,
+        recovery_seed=11,
     )
     pos_bad = np.array(
         [
