@@ -254,7 +254,9 @@ def prepare_pycharmm_handoff_continuation(
             f"Handoff continuation: loaded {seed} ({', '.join(parts)})",
             flush=True,
         )
-    return seed.resolve()
+    seed = seed.resolve()
+    args.restart_from = seed
+    return seed
 
 
 def cluster_layout_from_composition_string(

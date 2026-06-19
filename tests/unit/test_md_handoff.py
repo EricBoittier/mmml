@@ -207,17 +207,20 @@ def test_prepare_pycharmm_handoff_continuation_writes_seed(
 ) -> None:
     import argparse
 
-    from mmml.cli.run.md_handoff import prepare_pycharmm_handoff_continuation
+    from mmml.cli.run.md_handoff import (
+        prepare_pycharmm_handoff_continuation,
+        resolve_handoff_restart_template,
+    )
 
     handoff_dir = tmp_path / "dep" / "handoff"
     handoff_dir.mkdir(parents=True)
     (handoff_dir / "final.res").write_text(nve_stub.read_text())
 
-    pos = np.random.default_rng(0).random((3, 3))
-    vel = np.random.default_rng(1).random((3, 3))
+    pos = np.random.default_rng(0).random((20, 3))
+    vel = np.random.default_rng(1).random((20, 3))
     handoff = MdHandoffState(
         positions=pos,
-        atomic_numbers=np.array([1, 1, 1], dtype=int),
+        atomic_numbers=np.ones(20, dtype=int),
         velocities=vel,
         cell=np.diag([32.0, 32.0, 32.0]),
         pbc=True,
@@ -228,11 +231,23 @@ def test_prepare_pycharmm_handoff_continuation_writes_seed(
         continue_velocities=True,
         restart_from=None,
     )
+    (handoff_dir / "state.npz").write_bytes(b"npz")
+    template = resolve_handoff_restart_template(handoff, args, {})
+    assert template is not None
+
+    seed_path = tmp_path / "prod" / "handoff" / "continue_seed.res"
     restored: list[Path] = []
+
+    def _fake_save(handoff_obj, path, *, template_res=None):
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("restart stub")
+        return path
 
     def _fake_restore(path: Path, *, read_unit: int = 93) -> None:
         restored.append(Path(path))
 
+    monkeypatch.setattr("mmml.cli.run.md_handoff.save_handoff_to_res", _fake_save)
     monkeypatch.setattr(
         "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_restart",
         _fake_restore,
@@ -240,8 +255,6 @@ def test_prepare_pycharmm_handoff_continuation_writes_seed(
     seed = prepare_pycharmm_handoff_continuation(
         handoff, args, tmp_path / "prod", {}, quiet=True
     )
-    assert seed is not None
-    assert seed.name == "continue_seed.res"
-    assert seed.is_file()
-    assert restored == [seed]
-    assert args.restart_from == seed
+    assert seed == seed_path.resolve()
+    assert restored == [seed_path.resolve()]
+    assert args.restart_from == seed_path.resolve()
