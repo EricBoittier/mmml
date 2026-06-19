@@ -247,6 +247,8 @@ def set_up_nhc_sim_routine(
     overlap_charmm_rescue_fn: Optional[
         Callable[[np.ndarray, Optional[np.ndarray]], np.ndarray]
     ] = None,
+    initial_velocities: Optional[np.ndarray] = None,
+    minimization_skipped: bool = False,
 ):
     """Set up the Nose-Hoover chain simulation routine.
 
@@ -369,13 +371,18 @@ def set_up_nhc_sim_routine(
         "max|COM_m| (Å)" if flat_bottom_mode == "monomer" else "|COM| (Å)"
     )
     c.print(Panel(f"Compilation done in {elapsed:.2f} s", title="[bold green]JAX[/bold green]", border_style="green"))
+    _eval_label = (
+        "post-compile (initial R)"
+        if minimization_skipped
+        else "post-compile (ASE-minimized R)"
+    )
     print_forces_summary(init_forces, energy_eV=float(init_energy), console=c)
     print_flat_bottom_summary(
         result,
         flat_bottom_radius=flat_bottom_radius,
         flat_bottom_k=flat_bottom_k,
         flat_bottom_mode=flat_bottom_mode,
-        label="post-compile (ASE-minimized R)",
+        label=_eval_label,
         console=c,
     )
 
@@ -658,6 +665,7 @@ def set_up_nhc_sim_routine(
         run_sim.last_status = "running"
         run_sim.last_error = None
         run_sim.last_hdf5_path = None
+        run_sim.last_velocities = None
         total_records = total_steps // steps_per_recording
         _monomer_groups = [
             jnp.arange(int(monomer_offsets[m]), int(monomer_offsets[m + 1]))
@@ -999,8 +1007,18 @@ def set_up_nhc_sim_routine(
             state = init_fn(key, as_jaxmd_dtype(md_pos), kT, mass=Si_mass)
             npt_pair_idx, npt_pair_mask = None, None
             npt_pressure = None
+        if initial_velocities is not None:
+            state = state.set(
+                momentum=as_jaxmd_dtype(
+                    Si_mass[:, None] * jnp.asarray(initial_velocities, dtype=jnp.float32)
+                )
+            )
         state = normalize_jaxmd_state(state)
-        c.print(Panel(f"Momentum initialized for {T} K", title="[bold]JAX-MD[/bold]", border_style="green"))
+        if initial_velocities is not None:
+            mom_title = "Using handoff velocities"
+        else:
+            mom_title = f"Maxwell–Boltzmann momentum at {T} K"
+        c.print(Panel(mom_title, title="[bold]JAX-MD[/bold]", border_style="green"))
         nhc_positions = []
         nhc_boxes = []  # NPT: box at each record step (for frac→real when saving)
 
@@ -1449,6 +1467,12 @@ def set_up_nhc_sim_routine(
         run_sim.last_overlap_warning_count = overlap_warning_count
         run_sim.last_overlap_min_distance = overlap_min_seen
         run_sim.last_charmm_overlap_rescue_count = charmm_overlap_rescue_count
+        try:
+            run_sim.last_velocities = np.asarray(
+                jax.device_get(state.momentum / state.mass), dtype=float
+            )
+        except Exception:
+            run_sim.last_velocities = None
         completion_title = "Simulation complete" if run_status == "complete" else "Partial simulation saved"
         c.print(Panel(f"{steps_completed} steps ({steps_completed * dt:.2f} ps)", title=f"[bold]{completion_title}[/bold]", border_style="green"))
 

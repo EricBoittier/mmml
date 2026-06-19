@@ -740,3 +740,189 @@ def state_to_dict(handoff: MdHandoffState) -> dict[str, Any]:
   if handoff.cell is not None:
     d["cell"] = handoff.cell.tolist()
   return d
+
+
+def handoff_skip_pre_min(
+    handoff: MdHandoffState | None,
+    *,
+    handoff_pre_minimize: bool = False,
+) -> bool:
+    """True when continuing from handoff and pre-min was not explicitly requested."""
+    return handoff is not None and not bool(handoff_pre_minimize)
+
+
+def resolve_handoff_box(
+    handoff: MdHandoffState | None,
+    *,
+    yaml_box_size: float | None,
+    free_space: bool,
+    auto_box_from_geometry: float | None = None,
+    mismatch_tol_A: float = 0.01,
+    require_cell: bool = False,
+) -> tuple[float | None, str, list[str]]:
+    """Choose periodic box side (Å) and record source + warnings."""
+    warnings: list[str] = []
+    if free_space:
+        return None, "free_space", warnings
+
+    handoff_side: float | None = None
+    if handoff is not None and handoff.cell is not None:
+        from mmml.cli.run.md_stage_summary import cubic_box_side_from_cell
+
+        side = cubic_box_side_from_cell(handoff.cell)
+        if side is not None and float(side) > 0:
+            handoff_side = float(side)
+
+    yaml_side = float(yaml_box_size) if yaml_box_size is not None else None
+
+    if handoff_side is not None:
+        if yaml_side is not None and abs(yaml_side - handoff_side) > float(mismatch_tol_A):
+            warnings.append(
+                f"Handoff cell side {handoff_side:.4f} Å overrides campaign --box-size "
+                f"{yaml_side:.4f} Å (difference {abs(yaml_side - handoff_side):.4f} Å)."
+            )
+        return handoff_side, "handoff_cell", warnings
+
+    if handoff is not None:
+        if yaml_side is not None:
+            warnings.append(
+                f"Handoff has no periodic cell; using campaign --box-size {yaml_side:.4f} Å."
+            )
+            return yaml_side, "yaml_fallback", warnings
+        if require_cell:
+            raise ValueError(
+                "Handoff continuation requires a periodic cell in the handoff state "
+                "(missing cell in state.npz / restart CRYSTal). "
+                "Re-run the predecessor stage with PBC equilibration or set --handoff-require-cell false."
+            )
+        if auto_box_from_geometry is not None:
+            warnings.append(
+                "Handoff has no periodic cell; inferring box from initial geometry."
+            )
+            return float(auto_box_from_geometry), "auto_geometry", warnings
+
+    if yaml_side is not None:
+        return yaml_side, "yaml", warnings
+    if auto_box_from_geometry is not None:
+        return float(auto_box_from_geometry), "auto_geometry", warnings
+    return None, "unset", warnings
+
+
+def resolve_handoff_velocity_policy(
+    handoff: MdHandoffState | None,
+    *,
+    continue_velocities: bool = True,
+    pre_min_ran: bool = False,
+) -> tuple[str, bool]:
+    """Return (policy_label, use_handoff_velocities)."""
+    if handoff is None or handoff.velocities is None:
+        return "maxwell_boltzmann", False
+    if pre_min_ran:
+        return "rethermalize_after_pre_min", False
+    if continue_velocities:
+        return "continue", True
+    return "rethermalize", False
+
+
+def summarize_handoff_policy(
+    handoff: MdHandoffState | None,
+    *,
+    skip_pre_min: bool,
+    handoff_pre_minimize: bool,
+    continue_velocities: bool,
+    velocity_policy: str,
+    use_handoff_velocities: bool,
+    box_side_A: float | None,
+    box_source: str,
+    box_warnings: list[str] | None = None,
+    ml_switch_width: float | None = None,
+    mm_switch_on: float | None = None,
+    mm_switch_width: float | None = None,
+    initial_energy_eV: float | None = None,
+    initial_fmax_eVA: float | None = None,
+    quality_gate_enabled: bool = False,
+    quality_gate_triggered: bool = False,
+) -> dict[str, Any]:
+    """Structured handoff policy record for logs and ``handoff_policy.json``."""
+    meta = dict(handoff.metadata) if handoff is not None else {}
+    source_path = str(meta.get("path", "")) if meta.get("path") else None
+    handoff_format = None
+    if source_path:
+        try:
+            handoff_format = detect_handoff_format(Path(source_path))
+        except ValueError:
+            handoff_format = "unknown"
+    return {
+        "handoff_active": handoff is not None,
+        "source_path": source_path,
+        "handoff_format": handoff_format,
+        "n_atoms": int(len(handoff.positions)) if handoff is not None else None,
+        "prior_backend": meta.get("backend"),
+        "prior_stages": meta.get("stages"),
+        "box_side_A": box_side_A,
+        "box_source": box_source,
+        "box_warnings": list(box_warnings or []),
+        "velocities_in_handoff": bool(
+            handoff is not None and handoff.velocities is not None
+        ),
+        "continue_velocities": bool(continue_velocities),
+        "velocity_policy": velocity_policy,
+        "use_handoff_velocities": bool(use_handoff_velocities),
+        "skip_pre_min": bool(skip_pre_min),
+        "handoff_pre_minimize": bool(handoff_pre_minimize),
+        "quality_gate_enabled": bool(quality_gate_enabled),
+        "quality_gate_triggered": bool(quality_gate_triggered),
+        "cutoffs": {
+            "ml_switch_width": ml_switch_width,
+            "mm_switch_on": mm_switch_on,
+            "mm_switch_width": mm_switch_width,
+        },
+        "initial_mmml_energy_eV": initial_energy_eV,
+        "initial_mmml_fmax_eVA": initial_fmax_eVA,
+    }
+
+
+def write_handoff_policy_json(summary: dict[str, Any], path: Path) -> Path:
+    path = Path(path).expanduser().resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
+def print_handoff_policy_panel(summary: dict[str, Any], *, quiet: bool = False) -> None:
+    if quiet:
+        return
+    try:
+        from rich.console import Console
+        from rich.panel import Panel
+        from rich.table import Table
+    except ImportError:
+        print(f"Handoff policy: {json.dumps(summary, indent=2)}", flush=True)
+        return
+
+    c = Console()
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Field", style="cyan")
+    table.add_column("Value", style="white")
+    table.add_row("Handoff active", str(summary.get("handoff_active")))
+    if summary.get("source_path"):
+        table.add_row("Source", str(summary.get("source_path")))
+    if summary.get("prior_backend"):
+        table.add_row("Prior backend", str(summary.get("prior_backend")))
+    table.add_row("Box side (Å)", str(summary.get("box_side_A")))
+    table.add_row("Box source", str(summary.get("box_source")))
+    table.add_row("Velocities in handoff", str(summary.get("velocities_in_handoff")))
+    table.add_row("Velocity policy", str(summary.get("velocity_policy")))
+    table.add_row("Skip pre-min", str(summary.get("skip_pre_min")))
+    cutoffs = summary.get("cutoffs") or {}
+    if cutoffs:
+        table.add_row(
+            "Cutoffs (ml/mm_on/mm_w)",
+            f"{cutoffs.get('ml_switch_width')} / {cutoffs.get('mm_switch_on')} / "
+            f"{cutoffs.get('mm_switch_width')}",
+        )
+    if summary.get("initial_mmml_fmax_eVA") is not None:
+        table.add_row("Initial MMML |F|max (eV/Å)", f"{summary.get('initial_mmml_fmax_eVA'):.4f}")
+    for w in summary.get("box_warnings") or []:
+        table.add_row("Warning", w)
+    c.print(Panel(table, title="[bold]Handoff policy[/bold]", border_style="blue"))

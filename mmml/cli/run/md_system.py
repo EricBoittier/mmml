@@ -1026,6 +1026,51 @@ def build_parser() -> argparse.ArgumentParser:
         help="Run pre-minimization even when continuing from a handoff.",
     )
     parser.add_argument(
+        "--handoff-quality-gate",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "When continuing from handoff, evaluate initial MMML |F| and optionally "
+            "run pre-minimization if above --handoff-quality-fmax-eVA (default: off)."
+        ),
+    )
+    parser.add_argument(
+        "--handoff-quality-fmax-eVA",
+        type=float,
+        default=1.0,
+        help="|F| threshold (eV/Å) for --handoff-quality-gate (default: 1.0).",
+    )
+    parser.add_argument(
+        "--handoff-quality-action",
+        choices=("minimize", "warn", "error"),
+        default="minimize",
+        help="Action when quality gate threshold is exceeded (default: minimize).",
+    )
+    parser.add_argument(
+        "--handoff-velocity-remove-drift",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Remove net momentum and rotation from handoff velocities before MD (default: on).",
+    )
+    parser.add_argument(
+        "--handoff-require-cell",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Require periodic cell in handoff for PBC continuation (default: off).",
+    )
+    parser.add_argument(
+        "--jaxmd-minimize-steps",
+        type=int,
+        default=200,
+        help="FIRE minimization steps in JAX-MD runner before dynamics (default: 200).",
+    )
+    parser.add_argument(
+        "--jaxmd-pbc-minimize-steps",
+        type=int,
+        default=200,
+        help="PBC-aware FIRE steps after first minimization (default: 200).",
+    )
+    parser.add_argument(
         "--no-stage-summary",
         action="store_true",
         help="Do not write stage_summary.json (campaigns).",
@@ -1195,6 +1240,66 @@ def _append_boolean_optional_flag(cmd: list[str], flag: str, value: bool) -> Non
         cmd.append(f"--no-{flag.removeprefix('--')}")
 
 
+def _append_suite_mmml_handoff_args(cmd: list[str], args: argparse.Namespace) -> None:
+    """Forward MMML cutoffs and handoff/minimize flags to ASE/JAX-MD suite CLIs."""
+    cmd.extend(
+        ["--mm-switch-on", str(getattr(args, "mm_switch_on", DEFAULT_MM_SWITCH_ON))]
+    )
+    cmd.extend(
+        [
+            "--mm-switch-width",
+            str(
+                getattr(
+                    args,
+                    "mm_switch_width",
+                    getattr(args, "mm_cutoff", DEFAULT_MM_SWITCH_WIDTH),
+                )
+            ),
+        ]
+    )
+    cmd.extend(
+        ["--ml-switch-width", str(getattr(args, "ml_switch_width", DEFAULT_ML_SWITCH_WIDTH))]
+    )
+    if getattr(args, "handoff_pre_minimize", False):
+        cmd.append("--handoff-pre-minimize")
+    _append_boolean_optional_flag(
+        cmd, "--continue-velocities", bool(getattr(args, "continue_velocities", True))
+    )
+    _append_boolean_optional_flag(
+        cmd, "--handoff-quality-gate", bool(getattr(args, "handoff_quality_gate", False))
+    )
+    cmd.extend(
+        ["--handoff-quality-fmax-eVA", str(getattr(args, "handoff_quality_fmax_eVA", 1.0))]
+    )
+    cmd.extend(
+        ["--handoff-quality-action", str(getattr(args, "handoff_quality_action", "minimize"))]
+    )
+    _append_boolean_optional_flag(
+        cmd,
+        "--handoff-velocity-remove-drift",
+        bool(getattr(args, "handoff_velocity_remove_drift", True)),
+    )
+    _append_boolean_optional_flag(
+        cmd,
+        "--handoff-require-cell",
+        bool(getattr(args, "handoff_require_cell", False)),
+    )
+    cmd.extend(["--jaxmd-minimize-steps", str(getattr(args, "jaxmd_minimize_steps", 200))])
+    cmd.extend(
+        ["--jaxmd-pbc-minimize-steps", str(getattr(args, "jaxmd_pbc_minimize_steps", 200))]
+    )
+    _append_boolean_optional_flag(
+        cmd,
+        "--calculator-pre-minimize",
+        bool(getattr(args, "calculator_pre_minimize", True)),
+    )
+    _append_boolean_optional_flag(
+        cmd,
+        "--charmm-pre-minimize",
+        bool(getattr(args, "charmm_pre_minimize", True)),
+    )
+    cmd.extend(["--pre-min-fmax", str(getattr(args, "pre_min_fmax", 0.1))])
+    cmd.extend(["--pre-min-steps", str(getattr(args, "pre_min_steps", 50))])
 def _append_if_nonempty(cmd: list[str], flag: str, value: str | None) -> None:
     if value is None:
         return
@@ -1857,6 +1962,7 @@ def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
         cmd.extend(["--flat-bottom-mode", str(args.flat_bottom_mode)])
     if getattr(args, "skip_jit_warmup", False):
         cmd.append("--skip-jit-warmup")
+    _append_suite_mmml_handoff_args(cmd, args)
     if args.extra_args:
         cmd.extend(_filter_campaign_flags_from_argv(list(args.extra_args)))
     return backend, cmd

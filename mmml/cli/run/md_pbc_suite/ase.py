@@ -1456,6 +1456,52 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Hide ASE BFGS per-step output (default: print steps to stdout; large 10-mers can spend hours here before MD).",
     )
+    parser.add_argument(
+        "--handoff-pre-minimize",
+        action="store_true",
+        help="Run pre-minimization even when continuing from a handoff.",
+    )
+    parser.add_argument(
+        "--continue-velocities",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Use velocities from handoff when present (else re-thermalize).",
+    )
+    parser.add_argument(
+        "--handoff-quality-gate",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Evaluate initial MMML |F| on handoff and optionally pre-minimize.",
+    )
+    parser.add_argument(
+        "--handoff-quality-fmax-eVA",
+        type=float,
+        default=1.0,
+        help="|F| threshold (eV/Å) for --handoff-quality-gate.",
+    )
+    parser.add_argument(
+        "--handoff-quality-action",
+        choices=("minimize", "warn", "error"),
+        default="minimize",
+        help="Action when handoff quality gate threshold is exceeded.",
+    )
+    parser.add_argument(
+        "--handoff-velocity-remove-drift",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Remove net P/L from handoff velocities before MD.",
+    )
+    parser.add_argument(
+        "--handoff-require-cell",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Require periodic cell in handoff for PBC continuation.",
+    )
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Reduce console output.",
+    )
     args = parser.parse_args(argv)
     if args.box_size is not None and args.box_size <= 0:
         raise ValueError("--box-size must be positive")
@@ -1478,12 +1524,15 @@ def main(argv: list[str] | None = None) -> int:
         ensure_psf_for_handoff_cluster,
         get_handoff_in,
         handoff_from_atoms,
+        handoff_skip_pre_min,
+        resolve_handoff_box,
         set_handoff_out,
     )
-    from mmml.cli.run.md_stage_summary import cubic_box_side_from_cell
 
     handoff_in = get_handoff_in()
-    skip_pre_min = bool(handoff_in is not None and not getattr(args, "handoff_pre_minimize", False))
+    skip_pre_min = handoff_skip_pre_min(
+        handoff_in, handoff_pre_minimize=bool(getattr(args, "handoff_pre_minimize", False))
+    )
 
     z, r0, atoms_per_list, residue_labels, composition_summary = resolve_cluster_geometry(
         args,
@@ -1546,11 +1595,17 @@ def main(argv: list[str] | None = None) -> int:
         )
         r0 = initial_atoms.get_positions()
 
-    L = float(args.box_size) if args.box_size is not None else _cubic_box_length(r0, args.ml_cutoff)
-    if handoff_in is not None and handoff_in.cell is not None:
-        side = cubic_box_side_from_cell(handoff_in.cell)
-        if side is not None:
-            L = float(side)
+    auto_L = float(_cubic_box_length(r0, args.ml_cutoff))
+    L_resolved, box_source, box_warnings = resolve_handoff_box(
+        handoff_in,
+        yaml_box_size=args.box_size,
+        free_space=False,
+        auto_box_from_geometry=auto_L,
+        require_cell=bool(getattr(args, "handoff_require_cell", False)),
+    )
+    L = float(L_resolved) if L_resolved is not None else auto_L
+    for msg in box_warnings:
+        _tlog(f"Handoff box: {msg}", timing_log)
     r_pbc = r0 - r0.mean(axis=0) + 0.5 * L
 
     nsteps = int(round(args.ps * 1000.0 / args.dt_fs))
@@ -1733,9 +1788,30 @@ def main(argv: list[str] | None = None) -> int:
                 "(e.g., mixed composition path issue)."
             )
 
+        run_local_skip_pre_min = skip_pre_min
+        if (
+            handoff_in is not None
+            and not getattr(args, "handoff_pre_minimize", False)
+            and getattr(args, "handoff_quality_gate", False)
+        ):
+            threshold = float(getattr(args, "handoff_quality_fmax_eVA", 1.0))
+            if f0_max > threshold:
+                action = str(getattr(args, "handoff_quality_action", "minimize")).lower()
+                msg = (
+                    f"{key}: handoff quality gate: max|F|={f0_max:.4f} eV/Å "
+                    f"> threshold {threshold:.4f} eV/Å"
+                )
+                if action == "error":
+                    raise RuntimeError(msg)
+                if action == "warn":
+                    _tlog(f"WARNING: {msg}", timing_log)
+                elif action == "minimize":
+                    _tlog(f"{msg}; enabling BFGS pre-min.", timing_log)
+                    run_local_skip_pre_min = False
+
         t_b = _tmark()
-        fmin = float(np.abs(atoms.get_forces()).max()) if skip_pre_min else None
-        if not skip_pre_min:
+        fmin = float(np.abs(atoms.get_forces()).max()) if run_local_skip_pre_min else None
+        if not run_local_skip_pre_min:
             _tlog(
                 f"{key}: BFGS starting (max {args.pre_min_steps} steps, fmax={args.pre_min_fmax}; "
                 "this is pre-MD minimization, not dynamics yet)",
@@ -1781,7 +1857,7 @@ def main(argv: list[str] | None = None) -> int:
                 nbxmod=args.charmm_nbxmod,
                 timings=run_timings,
             )
-        if not skip_pre_min and fmin is not None and fmin > args.pre_min_fmax:
+        if not run_local_skip_pre_min and fmin is not None and fmin > args.pre_min_fmax:
             if args.rescue_minimize:
                 _tlog(
                     f"{key}: rescue minimization triggered (fmax={fmin:.6f} > {args.pre_min_fmax:.6f})",
@@ -1842,7 +1918,7 @@ def main(argv: list[str] | None = None) -> int:
                     f"--max-fmax-after-min={args.max_fmax_after_min:.6f} even after rescue. "
                     "Increase minimization steps, tighten cutoffs, and/or reduce initial temperature."
                 )
-        elif skip_pre_min:
+        elif run_local_skip_pre_min:
             fmin = float(np.abs(atoms.get_forces()).max())
 
         res = run_md(
