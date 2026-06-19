@@ -10,7 +10,7 @@ Campaign jobs chain via `depends_on`. Each completed stage writes
 | `cell` | 3×3 periodic cell from PBC equilibration |
 | `metadata` | Prior backend, stages, source path |
 
-See [`MdHandoffState`](../mmml/cli/run/md_handoff.py).
+See [`MdHandoffState`](https://github.com/EricBoittier/mmml/blob/main/mmml/cli/run/md_handoff.py).
 
 ## Default policy on handoff
 

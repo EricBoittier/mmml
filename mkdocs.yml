@@ -38,6 +38,7 @@ nav:
   - DCMNet Calculators: dcmnet_calculators.md
   - MLpot Settings: mlpot-settings.md
   - Medium PBC (500–2000 monomers): mlpot-medium-pbc.md
+  - Cross-backend MD handoff: handoff.md
   - Spatial ML MPI: mlpot-spatial-mpi.md
   - Development: development.md
   - Units Summary: UNITS_SUMMARY.md
