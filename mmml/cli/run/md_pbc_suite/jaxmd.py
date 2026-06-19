@@ -413,14 +413,19 @@ def main(argv: list[str] | None = None) -> int:
                 f"({float(args.box_size):g} Å)."
             )
         L: float | None = None
-        r = r0 - r0.mean(axis=0)
+        r = np.asarray(r0, dtype=float) if handoff_in is not None else r0 - r0.mean(axis=0)
     else:
         L = float(args.box_size) if args.box_size is not None else float(_cubic_box_length(r0, ml_w))
         if handoff_in is not None and handoff_in.cell is not None:
             side = cubic_box_side_from_cell(handoff_in.cell)
             if side is not None:
                 L = float(side)
-        r = r0 - r0.mean(axis=0) + 0.5 * L
+        if handoff_in is not None:
+            # Use equilibrated restart coords as-is; recentering before apply_handoff
+            # can desync the box side from the .res CRYSTal record.
+            r = np.asarray(r0, dtype=float)
+        else:
+            r = r0 - r0.mean(axis=0) + 0.5 * L
     geom_tag = "vac" if free_space else "pbc"
     atoms = Atoms(numbers=z, positions=r)
     if free_space:
@@ -455,6 +460,12 @@ def main(argv: list[str] | None = None) -> int:
     elif not getattr(args, "quiet", False):
         print(
             "Skipping initial overlap check (continuing from equilibrated handoff).",
+            flush=True,
+        )
+        print(
+            "Handoff: JAX-MD/FIRE pre-minimization skipped (default). "
+            "If initial E_pot is high or |F| > ~1 eV/Å, set "
+            "handoff_pre_minimize: true and jaxmd_minimize_steps in the campaign YAML.",
             flush=True,
         )
     if args.charmm_pre_minimize:
@@ -754,9 +765,32 @@ def main(argv: list[str] | None = None) -> int:
             "or numerical instability). Re-run the predecessor stage or point "
             "--continue-from at an earlier valid frame."
         )
-    MaxwellBoltzmannDistribution(atoms, temperature_K=args.temperature, rng=rng)
-    Stationary(atoms)
-    ZeroRotation(atoms)
+    use_handoff_velocities = (
+        handoff_in is not None
+        and handoff_in.velocities is not None
+        and getattr(args, "continue_velocities", True)
+    )
+    if use_handoff_velocities:
+        if not getattr(args, "quiet", False):
+            print(
+                "Using velocities from handoff "
+                f"({len(handoff_in.velocities)} atoms).",
+                flush=True,
+            )
+    else:
+        if (
+            handoff_in is not None
+            and handoff_in.velocities is not None
+            and not getattr(args, "quiet", False)
+        ):
+            print(
+                "Re-initializing velocities (Maxwell–Boltzmann); "
+                "handoff velocities ignored (--no-continue-velocities).",
+                flush=True,
+            )
+        MaxwellBoltzmannDistribution(atoms, temperature_K=args.temperature, rng=rng)
+        Stationary(atoms)
+        ZeroRotation(atoms)
 
     def _dynamics_overlap_charmm_rescue(pos_np: np.ndarray, cell_np: np.ndarray | None) -> np.ndarray:
         """CHARMM MM minimization using PyCHARMM / CGenFF; box matches passed MD cell."""
