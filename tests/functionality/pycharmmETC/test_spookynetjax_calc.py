@@ -57,9 +57,11 @@ def test_spookynetjax_calculator_smoke(tmp_path: Path):
     if ckpt is None:
         pytest.skip("No SpookyNet checkpoint found")
 
-    pdb_path = PROJECT_ROOT / "tests/pdb/init-packmol.pdb"
-    if not pdb_path.exists():
-        pytest.skip(f"Missing input pdb: {pdb_path}")
+    from tests.functionality.pycharmmETC._paths import fixture_pdb
+
+    pdb_path = fixture_pdb("init-packmol.pdb")
+    if not pdb_path.is_file():
+        pytest.skip(f"Missing input pdb fixture: {pdb_path}")
 
     import ase
     from ase.io import read

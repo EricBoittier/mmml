@@ -10,8 +10,11 @@ def _can_import(name: str) -> bool:
 
 
 @pytest.mark.skipif(not _can_import("pycharmm"), reason="pycharmm not available")
-def test_run_packmol_smoke():
+def test_run_packmol_smoke(pycharmm_workdir):
     from mmml.interfaces.pycharmmInterface import setupBox
+
+    if not (pycharmm_workdir / "pdb" / "initial.pdb").is_file():
+        pytest.skip("Missing initial.pdb seed in pycharmm_workdir")
 
     result = setupBox.run_packmol(10, 10)
     assert result is None or result is not False

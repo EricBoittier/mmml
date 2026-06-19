@@ -223,6 +223,13 @@ tests/pdb/tip3.pdb
 tests/psf/initial.psf
 tests/psf/system-tip3.psf
 tests/psf/tip3-1.psf
+# PyCHARMM ETC outputs (committed seeds: pdb/aco.pdb, initial.pdb, init-packmol.pdb)
+tests/functionality/pycharmmETC/packmol/
+tests/functionality/pycharmmETC/crystal_image.str
+tests/functionality/pycharmmETC/psf/*.psf
+!tests/functionality/pycharmmETC/psf/aco-1.psf
+tests/functionality/pycharmmETC/pdb/init-tip3.pdb
+tests/functionality/pycharmmETC/pdb/tip3.pdb
 examples/general/abdimers/AB_ACO_DCM_minimized_16:15:58.pdb
 examples/general/abdimers/AB_ACO_DCM_pbc_minimized_16:17:48.pdb
 .cursor/plans/jax_md_nl_and_npt_combined.plan.md
