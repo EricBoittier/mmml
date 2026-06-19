@@ -505,3 +505,27 @@ def test_reset_stage_restart_preserves_in_place_read(tmp_path):
 
     _reset_stage_restart(res)
     assert not res.is_file()
+
+
+def test_reset_stage_restart_preserves_memory_handoff_seed(tmp_path):
+    """Seeded restart_write must survive _reset_stage_restart (EQUI/HEAT handoff)."""
+    from unittest.mock import patch
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+    from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+        _reset_stage_restart,
+        _seed_restart_for_memory_handoff,
+    )
+
+    res = tmp_path / "equi_dcm_30.res"
+    io = CharmmTrajectoryFiles(restart_write=res)
+    kw: dict = {}
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.staged_workflow.rewrite_dynamics_restart_from_current_state"
+    ):
+        _seed_restart_for_memory_handoff(io, kw, stage="equi")
+    res.write_text("seeded restart\n", encoding="ascii")
+
+    _reset_stage_restart(res, restart_read=io.restart_read)
+    assert res.is_file()
+    assert res.read_text(encoding="ascii") == "seeded restart\n"
