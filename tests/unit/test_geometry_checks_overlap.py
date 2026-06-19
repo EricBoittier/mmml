@@ -18,6 +18,7 @@ _spec.loader.exec_module(_geom)
 assert_no_intermonomer_atom_overlap = _geom.assert_no_intermonomer_atom_overlap
 find_worst_intermonomer_overlap = _geom.find_worst_intermonomer_overlap
 separate_intermonomer_overlaps = _geom.separate_intermonomer_overlaps
+repack_monomers_clear_overlap = _geom.repack_monomers_clear_overlap
 
 
 def test_find_worst_intermonomer_overlap_reports_closest_pair():
@@ -77,5 +78,58 @@ def test_separate_intermonomer_overlaps_pbc_mic():
     )
     dmin = assert_no_intermonomer_atom_overlap(
         out, offsets, min_distance=1.5, cell=cell, context="pbc"
+    )
+    assert dmin >= 1.5
+
+
+def test_repack_monomers_clear_overlap_entangled_pair():
+    """Repack separates monomers that rigid COM push cannot fix easily."""
+    pos = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.5, 0.0, 0.0],
+            [2.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    offsets = np.array([0, 2, 4], dtype=int)
+    out = repack_monomers_clear_overlap(
+        pos,
+        offsets,
+        min_distance=1.5,
+        spacing=4.0,
+        margin=0.0,
+        seed=7,
+    )
+    dmin = assert_no_intermonomer_atom_overlap(
+        out, offsets, min_distance=1.5, context="repack"
+    )
+    assert dmin >= 1.5
+
+
+def test_repack_monomers_clear_overlap_pbc_dense():
+    pos = np.array(
+        [
+            [0.5, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [9.6, 0.0, 0.0],
+            [9.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    offsets = np.array([0, 2, 4], dtype=int)
+    cell = np.diag([10.0, 10.0, 10.0])
+    out = repack_monomers_clear_overlap(
+        pos,
+        offsets,
+        min_distance=1.5,
+        spacing=3.0,
+        margin=0.0,
+        seed=3,
+        cell=cell,
+    )
+    dmin = assert_no_intermonomer_atom_overlap(
+        out, offsets, min_distance=1.5, cell=cell, context="repack_pbc"
     )
     assert dmin >= 1.5

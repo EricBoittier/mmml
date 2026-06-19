@@ -212,6 +212,210 @@ def separate_intermonomer_overlaps(
     return pos
 
 
+def _monomer_internal_templates(
+    positions: np.ndarray,
+    monomer_offsets: np.ndarray,
+) -> tuple[list[np.ndarray], list[float]]:
+    """Per-monomer internal coords (COM-centered) and max radius (Å)."""
+    pos = np.asarray(positions, dtype=float)
+    offsets = np.asarray(monomer_offsets, dtype=int)
+    n_monomers = int(len(offsets) - 1)
+    templates: list[np.ndarray] = []
+    radii: list[float] = []
+    for mi in range(n_monomers):
+        s, e = int(offsets[mi]), int(offsets[mi + 1])
+        chunk = pos[s:e]
+        com = chunk.mean(axis=0)
+        internal = chunk - com
+        templates.append(internal)
+        radii.append(float(np.max(np.linalg.norm(internal, axis=1))))
+    return templates, radii
+
+
+def _mic_com_distance(
+    com_i: np.ndarray,
+    com_j: np.ndarray,
+    cell_mat: np.ndarray | None,
+) -> float:
+    return float(np.linalg.norm(_mic_displacement(com_i, com_j, cell_mat)))
+
+
+def _place_coms_free_cluster(
+    n_monomers: int,
+    min_com_distance: float,
+    rng: np.random.Generator,
+) -> np.ndarray:
+    """Random COM placement for non-PBC clusters (reproducible)."""
+    min_dist = float(max(0.0, min_com_distance))
+    side = max(min_dist, 1.0) * max(1.0, n_monomers ** (1.0 / 3.0))
+    max_attempts = 5000
+    while True:
+        targets: list[np.ndarray] = []
+        for _i in range(n_monomers):
+            for _attempt in range(max_attempts):
+                candidate = rng.uniform(0.0, side, size=3)
+                if all(
+                    float(np.linalg.norm(candidate - prev)) >= min_dist for prev in targets
+                ):
+                    targets.append(candidate)
+                    break
+            else:
+                break
+        if len(targets) == n_monomers:
+            break
+        side *= 1.25
+    target_arr = np.asarray(targets, dtype=float)
+    target_arr -= target_arr.mean(axis=0)
+    return target_arr
+
+
+def _place_coms_pbc_lattice(
+    n_monomers: int,
+    min_com_distance: float,
+    box_side: float,
+    pad: float,
+    rng: np.random.Generator,
+) -> np.ndarray:
+    """Lattice COM placement inside a cubic periodic box."""
+    avail = float(box_side) - 2.0 * float(pad)
+    if avail <= 0.0:
+        raise RuntimeError(
+            f"Periodic box side {box_side:.2f} Å too small for monomer repack "
+            f"(pad={pad:.2f} Å)"
+        )
+    step = float(max(min_com_distance, 1e-3))
+    n_per_side = max(1, int(np.floor(avail / step)))
+    while n_per_side**3 < n_monomers:
+        step *= 0.95
+        if step < 0.5:
+            raise RuntimeError(
+                f"Cannot place {n_monomers} monomers in {box_side:.2f} Å box "
+                f"with min COM spacing {min_com_distance:.2f} Å"
+            )
+        n_per_side = max(1, int(np.floor(avail / step)))
+    grid: list[np.ndarray] = []
+    for ix in range(n_per_side):
+        for iy in range(n_per_side):
+            for iz in range(n_per_side):
+                grid.append(
+                    np.array(
+                        [
+                            pad + ix * step,
+                            pad + iy * step,
+                            pad + iz * step,
+                        ],
+                        dtype=float,
+                    )
+                )
+    rng.shuffle(grid)
+    return np.asarray(grid[:n_monomers], dtype=float)
+
+
+def _place_coms_pbc_random(
+    n_monomers: int,
+    min_com_distance: float,
+    box_side: float,
+    pad: float,
+    rng: np.random.Generator,
+    cell_mat: np.ndarray,
+) -> np.ndarray:
+    """Random MIC-aware COM placement inside a cubic periodic box."""
+    lo, hi = float(pad), float(box_side) - float(pad)
+    if hi <= lo:
+        raise RuntimeError(
+            f"Periodic box side {box_side:.2f} Å too small for monomer repack "
+            f"(pad={pad:.2f} Å)"
+        )
+    max_attempts = 5000
+    coms: list[np.ndarray] = []
+    for _i in range(n_monomers):
+        for _attempt in range(max_attempts):
+            candidate = rng.uniform(lo, hi, size=3)
+            if all(
+                _mic_com_distance(candidate, prev, cell_mat) >= min_com_distance
+                for prev in coms
+            ):
+                coms.append(candidate)
+                break
+        else:
+            return _place_coms_pbc_lattice(
+                n_monomers, min_com_distance, box_side, pad, rng
+            )
+    return np.asarray(coms, dtype=float)
+
+
+def repack_monomers_clear_overlap(
+    positions: np.ndarray,
+    monomer_offsets: np.ndarray,
+    *,
+    min_distance: float,
+    spacing: float | None = None,
+    margin: float = 0.2,
+    seed: int | None = None,
+    cell: Any | None = None,
+) -> np.ndarray:
+    """Rebuild monomer placement: preserve internal geometry, re-place COMs apart.
+
+    Each monomer is translated as a rigid body.  COMs are placed with at least
+    ``spacing`` (or a derived minimum from ``min_distance`` and monomer radii).
+    For periodic boxes, COMs are distributed in the primary cell; monomers are
+    wrapped after rebuild.  A short rigid push pass polishes any remaining contacts.
+    """
+    pos = np.asarray(positions, dtype=float)
+    offsets = np.asarray(monomer_offsets, dtype=int)
+    n_monomers = int(len(offsets) - 1)
+    if n_monomers <= 1:
+        return pos.copy()
+
+    templates, radii = _monomer_internal_templates(pos, offsets)
+    max_radius = float(max(radii)) if radii else 0.0
+    threshold = float(min_distance)
+    extra = float(max(0.0, margin))
+
+    min_com_distance = float(spacing) if spacing is not None and float(spacing) > 0.0 else 0.0
+    if min_com_distance <= 0.0:
+        min_com_distance = max(
+            threshold + 2.0 * max_radius + extra,
+            threshold + extra,
+        )
+
+    cell_mat = _cell_matrix(cell)
+    rng = np.random.default_rng(None if seed is None else int(seed))
+
+    if cell_mat is not None:
+        box_side = float(cell_mat[0, 0])
+        pad = max(max_radius + 0.5, 1.0)
+        if n_monomers <= 8:
+            coms = _place_coms_pbc_random(
+                n_monomers, min_com_distance, box_side, pad, rng, cell_mat
+            )
+        else:
+            coms = _place_coms_pbc_lattice(
+                n_monomers, min_com_distance, box_side, pad, rng
+            )
+    else:
+        coms = _place_coms_free_cluster(n_monomers, min_com_distance, rng)
+
+    new_pos = np.zeros_like(pos)
+    for mi in range(n_monomers):
+        s, e = int(offsets[mi]), int(offsets[mi + 1])
+        new_pos[s:e] = templates[mi] + coms[mi]
+
+    if cell_mat is not None:
+        new_pos = wrap_monomers_primary_cell(new_pos, offsets, cell_mat)
+
+    best_dist, violation = find_worst_intermonomer_overlap(new_pos, offsets, cell=cell)
+    if violation is not None and best_dist < threshold:
+        new_pos = separate_intermonomer_overlaps(
+            new_pos,
+            offsets,
+            min_distance=threshold,
+            margin=extra,
+            cell=cell,
+        )
+    return new_pos
+
+
 def assert_no_intermonomer_atom_overlap(
     positions: np.ndarray,
     monomer_offsets: np.ndarray,
