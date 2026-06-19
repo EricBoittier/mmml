@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import importlib
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -247,14 +249,14 @@ def test_prepare_pycharmm_handoff_continuation_writes_seed(
     def _fake_restore(path: Path, *, read_unit: int = 93) -> None:
         restored.append(Path(path))
 
-    monkeypatch.setattr("mmml.cli.run.md_handoff.save_handoff_to_res", _fake_save)
-    monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_restart",
-        _fake_restore,
+    bonded_mm_recovery = importlib.import_module(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery"
     )
-    seed = prepare_pycharmm_handoff_continuation(
-        handoff, args, tmp_path / "prod", {}, quiet=True
-    )
+    monkeypatch.setattr(bonded_mm_recovery, "restore_charmm_state_from_restart", _fake_restore)
+    with patch("mmml.cli.run.md_handoff.save_handoff_to_res", _fake_save):
+        seed = prepare_pycharmm_handoff_continuation(
+            handoff, args, tmp_path / "prod", {}, quiet=True
+        )
     assert seed == seed_path.resolve()
     assert restored == [seed_path.resolve()]
     assert args.restart_from == seed_path.resolve()

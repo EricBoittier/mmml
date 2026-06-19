@@ -267,6 +267,48 @@ def test_build_stage_dynamics_kw_restart_false_sets_cold_start_flags():
     assert resumed["restart"] is True
 
 
+def test_build_stage_dynamics_kw_prod_restart_avoids_cold_start():
+    args = argparse.Namespace(
+        npt_thermostat="hoover",
+        npt_pressure=1.0,
+        npt_pgamma=5.0,
+    )
+    dyn_print = {"nprint": 100, "iprfrq": 500, "isvfrq": 500}
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.compute_cpt_piston_masses",
+        return_value=(80, 800),
+    ):
+        cold = _build_stage_dynamics_kw(
+            "prod",
+            args=args,
+            timestep_ps=0.0002,
+            nstep=1000,
+            save_interval_ps=0.02,
+            temp=80.0,
+            echeck=500.0,
+            dyn_print=dyn_print,
+            restart=False,
+            use_pbc=True,
+        )
+        assert cold["new"] is True
+        assert cold["start"] is True
+        resumed = _build_stage_dynamics_kw(
+            "prod",
+            args=args,
+            timestep_ps=0.0002,
+            nstep=1000,
+            save_interval_ps=0.02,
+            temp=80.0,
+            echeck=500.0,
+            dyn_print=dyn_print,
+            restart=True,
+            use_pbc=True,
+        )
+    assert resumed["new"] is False
+    assert resumed["start"] is False
+    assert resumed["restart"] is True
+
+
 def test_build_stage_dynamics_kw_heat_hoover_vacuum_uses_ihtfrq_fallback():
     args = argparse.Namespace(heat_thermostat="hoover", heat_firstt=0.0, heat_finalt=240.0)
     dyn_print = {"nprint": 100, "iprfrq": 500, "isvfrq": 500}
@@ -557,7 +599,54 @@ def test_reset_stage_restart_preserves_memory_handoff_seed(tmp_path):
     ):
         _seed_restart_for_memory_handoff(io, kw, stage="equi")
     res.write_text("seeded restart\n", encoding="ascii")
+    assert kw.get("restart") is not True
 
-    _reset_stage_restart(res, restart_read=io.restart_read)
+    _reset_stage_restart(res, restart_read=res)
     assert res.is_file()
     assert res.read_text(encoding="ascii") == "seeded restart\n"
+
+
+def test_configure_npt_dynamics_start_memory_handoff_no_readyn():
+    """EQUI/PROD after bonded-MM must not READYN static write-restart (no CPT state)."""
+    from unittest.mock import patch
+
+    io = CharmmTrajectoryFiles(restart_write=Path("/tmp/equi.res"))
+    kw = {
+        "restart": True,
+        "start": True,
+        "firstt": 280.0,
+        "cpt": True,
+        "hoover reft": 280.0,
+        "tmass": 500,
+        "iunrea": 3,
+    }
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.assign_velocities_at_temperature"
+    ) as assign, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.staged_workflow.ensure_charmm_crystal_for_cpt"
+    ) as crystal:
+        from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+            _configure_npt_dynamics_start,
+        )
+
+        _configure_npt_dynamics_start(
+            kw,
+            io,
+            coords_in_memory=True,
+            restart_from_file=False,
+            timestep_ps=0.0002,
+            use_pbc=True,
+            quiet=True,
+            temp=280.0,
+            box_side=32.0,
+        )
+
+    assign.assert_called_once()
+    crystal.assert_called_once()
+    assert kw["restart"] is False
+    assert kw["start"] is False
+    assert kw["iasvel"] == 1
+    assert kw["iunrea"] == -1
+    assert io.restart_read is None
+    assert "firstt" not in kw
