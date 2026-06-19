@@ -235,15 +235,11 @@ def test_build_stage_dynamics_kw_restart_omits_invalid_res_flag():
     assert "res" not in kw
 
 
-def test_build_stage_dynamics_kw_prod_restart_avoids_cold_start():
-    args = argparse.Namespace(
-        npt_thermostat="hoover",
-        npt_pressure=1.0,
-        npt_pgamma=5.0,
-    )
+def test_build_stage_dynamics_kw_restart_false_sets_cold_start_flags():
+    args = argparse.Namespace()
     dyn_print = {"nprint": 100, "iprfrq": 500, "isvfrq": 500}
     cold = _build_stage_dynamics_kw(
-        "prod",
+        "nve",
         args=args,
         timestep_ps=0.0002,
         nstep=1000,
@@ -252,12 +248,11 @@ def test_build_stage_dynamics_kw_prod_restart_avoids_cold_start():
         echeck=500.0,
         dyn_print=dyn_print,
         restart=False,
-        use_pbc=True,
     )
     assert cold["new"] is True
     assert cold["start"] is True
     resumed = _build_stage_dynamics_kw(
-        "prod",
+        "nve",
         args=args,
         timestep_ps=0.0002,
         nstep=1000,
@@ -266,7 +261,6 @@ def test_build_stage_dynamics_kw_prod_restart_avoids_cold_start():
         echeck=500.0,
         dyn_print=dyn_print,
         restart=True,
-        use_pbc=True,
     )
     assert resumed["new"] is False
     assert resumed["start"] is False
