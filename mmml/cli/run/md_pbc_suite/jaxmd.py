@@ -17,6 +17,7 @@ from jax import random
 
 from mmml.cli.base import resolve_checkpoint_paths
 from mmml.cli.run.jaxmd_runner import set_up_nhc_sim_routine
+from mmml.utils.geometry_checks import assert_no_intermonomer_atom_overlap
 from mmml.interfaces.pycharmmInterface.cutoffs import (
     DEFAULT_ML_SWITCH_WIDTH,
     DEFAULT_MM_SWITCH_ON,
@@ -427,6 +428,7 @@ def main(argv: list[str] | None = None) -> int:
         get_handoff_in,
         handoff_from_atoms,
         handoff_skip_pre_min,
+        resolve_jaxmd_minimize_steps_for_handoff,
         print_handoff_policy_panel,
         resolve_handoff_box,
         resolve_handoff_velocity_policy,
@@ -538,8 +540,14 @@ def main(argv: list[str] | None = None) -> int:
             flush=True,
         )
     if skip_pre_min and not getattr(args, "quiet", False):
+        pbc_note = (
+            f"PBC FIRE ({saved_jaxmd_pbc_minimize_steps} steps) still runs before dynamics."
+            if not free_space and saved_jaxmd_pbc_minimize_steps > 0
+            else "No PBC FIRE (free space or --jaxmd-pbc-minimize-steps 0)."
+        )
         print(
-            "Handoff: JAX-MD/FIRE pre-minimization skipped (default). "
+            "Handoff: vacuum/COM and ASE/CHARMM pre-min skipped (default). "
+            f"{pbc_note} "
             "If initial E_pot is high or |F| > ~1 eV/Å, set "
             "handoff_pre_minimize: true or handoff_quality_gate: true in the campaign YAML.",
             flush=True,
@@ -713,9 +721,15 @@ def main(argv: list[str] | None = None) -> int:
 
     if skip_pre_min:
         args.calculator_pre_minimize = False
-        args.jaxmd_minimize_steps = 0
-        args.jaxmd_pbc_minimize_steps = 0
         args.charmm_pre_minimize = False
+        args.jaxmd_minimize_steps, args.jaxmd_pbc_minimize_steps = (
+            resolve_jaxmd_minimize_steps_for_handoff(
+                skip_pre_min=True,
+                free_space=free_space,
+                jaxmd_minimize_steps=saved_jaxmd_minimize_steps,
+                jaxmd_pbc_minimize_steps=saved_jaxmd_pbc_minimize_steps,
+            )
+        )
 
     policy_summary = summarize_handoff_policy(
         handoff_in,
@@ -986,7 +1000,18 @@ def main(argv: list[str] | None = None) -> int:
             cubic_box_side_A=cubic_L,
             quiet=True,
         )
-        return np.asarray(atoms.get_positions(), dtype=float)
+        out = np.asarray(atoms.get_positions(), dtype=float)
+        min_dist = float(args.min_intermonomer_atom_distance)
+        if min_dist > 0.0:
+            cell = atoms.cell.array if atoms.pbc.any() else None
+            assert_no_intermonomer_atom_overlap(
+                out,
+                monomer_offsets,
+                min_distance=min_dist,
+                cell=cell,
+                context="after CHARMM overlap rescue",
+            )
+        return out
 
     overlap_charmm_rescue_fn = None
     if not args.no_dynamics_overlap_charmm_rescue:

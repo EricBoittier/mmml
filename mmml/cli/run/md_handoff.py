@@ -997,6 +997,24 @@ def handoff_skip_pre_min(
     return handoff is not None and not bool(handoff_pre_minimize)
 
 
+def resolve_jaxmd_minimize_steps_for_handoff(
+    *,
+    skip_pre_min: bool,
+    free_space: bool,
+    jaxmd_minimize_steps: int,
+    jaxmd_pbc_minimize_steps: int,
+) -> tuple[int, int]:
+    """JAX-MD runner FIRE step counts after handoff policy.
+
+    Handoff continuations skip vacuum/COM and ASE/CHARMM pre-min, but still run
+    PBC-aware FIRE so coordinates relax on the MMML surface in the periodic cell.
+    """
+    if not skip_pre_min:
+        return int(jaxmd_minimize_steps), int(jaxmd_pbc_minimize_steps)
+    pbc_steps = 0 if free_space else int(jaxmd_pbc_minimize_steps)
+    return 0, pbc_steps
+
+
 def resolve_handoff_box(
     handoff: MdHandoffState | None,
     *,

@@ -13,9 +13,37 @@ from mmml.cli.run.md_handoff import (
     handoff_skip_pre_min,
     resolve_handoff_box,
     resolve_handoff_velocity_policy,
+    resolve_jaxmd_minimize_steps_for_handoff,
     summarize_handoff_policy,
     write_handoff_policy_json,
 )
+
+
+def test_resolve_jaxmd_minimize_steps_keeps_pbc_fire_on_handoff() -> None:
+    vac, pbc = resolve_jaxmd_minimize_steps_for_handoff(
+        skip_pre_min=True,
+        free_space=False,
+        jaxmd_minimize_steps=500,
+        jaxmd_pbc_minimize_steps=300,
+    )
+    assert vac == 0
+    assert pbc == 300
+    vac_fs, pbc_fs = resolve_jaxmd_minimize_steps_for_handoff(
+        skip_pre_min=True,
+        free_space=True,
+        jaxmd_minimize_steps=500,
+        jaxmd_pbc_minimize_steps=300,
+    )
+    assert vac_fs == 0
+    assert pbc_fs == 0
+    full_vac, full_pbc = resolve_jaxmd_minimize_steps_for_handoff(
+        skip_pre_min=False,
+        free_space=False,
+        jaxmd_minimize_steps=500,
+        jaxmd_pbc_minimize_steps=300,
+    )
+    assert full_vac == 500
+    assert full_pbc == 300
 
 
 def test_handoff_skip_pre_min_defaults_true_without_flag() -> None:

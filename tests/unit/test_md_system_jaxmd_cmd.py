@@ -78,6 +78,8 @@ def test_build_command_jaxmd_forwards_handoff_and_cutoff_flags() -> None:
     assert "--handoff-quality-gate" in argv
     assert "--jaxmd-minimize-steps" in argv
     assert argv[argv.index("--jaxmd-minimize-steps") + 1] == "500"
+    assert "--jaxmd-pbc-minimize-steps" in argv
+    assert argv[argv.index("--jaxmd-pbc-minimize-steps") + 1] == "300"
     assert "--continue-velocities" in argv
 
 
