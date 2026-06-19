@@ -978,28 +978,17 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     sync_charmm_positions(r)
     if handoff_in is not None:
         sync_charmm_positions(handoff_in.positions)
-        if (
-            handoff_in.velocities is not None
-            and getattr(args, "continue_velocities", True)
-            and not getattr(args, "restart_from", None)
-        ):
-            seed_res = out_dir / "handoff" / "continue_seed.res"
-            seed_res.parent.mkdir(parents=True, exist_ok=True)
-            template = getattr(args, "handoff_template_res", None)
-            if template is None:
-                for cand in (
-                    paths.get("heat_res"),
-                    paths.get("equi_res"),
-                    paths.get("prod_res"),
-                ):
-                    if cand is not None and Path(cand).is_file():
-                        template = Path(cand)
-                        break
-            if template is not None:
-                from mmml.cli.run.md_handoff import save_handoff_to_res
+        from mmml.cli.run.md_handoff import prepare_pycharmm_handoff_continuation
 
-                save_handoff_to_res(handoff_in, seed_res, template_res=Path(template))
-                args.restart_from = seed_res
+        seed_restart = prepare_pycharmm_handoff_continuation(
+            handoff_in,
+            args,
+            out_dir,
+            paths,
+            quiet=bool(args.quiet),
+        )
+        if seed_restart is not None:
+            args.restart_from = seed_restart
 
     vmd_topo_psf = paths["vmd_psf"]
     if getattr(args, "skip_cluster_build", False) and getattr(args, "from_psf", None):

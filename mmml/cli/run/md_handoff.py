@@ -158,6 +158,105 @@ def handoff_from_charmm(
     )
 
 
+def resolve_handoff_restart_template(
+    handoff: MdHandoffState,
+    args: argparse.Namespace,
+    paths: dict[str, Path],
+) -> Path | None:
+    """Best restart template for patching handoff coords/velocities/cell into CHARMM format."""
+    explicit = getattr(args, "handoff_template_res", None)
+    if explicit:
+        path = Path(str(explicit)).expanduser()
+        if path.is_file():
+            return path.resolve()
+
+    meta = handoff.metadata or {}
+    for key in ("restart_path", "path"):
+        raw = meta.get(key)
+        if not raw:
+            continue
+        path = Path(str(raw)).expanduser()
+        if path.is_file() and path.suffix.lower() == ".res":
+            return path.resolve()
+
+    continue_from = getattr(args, "continue_from", None)
+    if continue_from:
+        cf = Path(str(continue_from)).expanduser()
+        if cf.is_file():
+            if cf.suffix.lower() == ".res":
+                return cf.resolve()
+            final_res = cf.parent / "final.res"
+            if final_res.is_file():
+                return final_res.resolve()
+
+    for cand in (paths.get("heat_res"), paths.get("equi_res"), paths.get("prod_res")):
+        if cand is not None and Path(cand).is_file():
+            return Path(cand).resolve()
+    return None
+
+
+def prepare_pycharmm_handoff_continuation(
+    handoff: MdHandoffState,
+    args: argparse.Namespace,
+    out_dir: Path,
+    paths: dict[str, Path],
+    *,
+    quiet: bool = False,
+) -> Path | None:
+    """Write ``handoff/continue_seed.res`` and ``READ restart`` it into CHARMM."""
+    if getattr(args, "restart_from", None):
+        path = Path(str(args.restart_from)).expanduser().resolve()
+        return path if path.is_file() else None
+
+    from dataclasses import replace
+
+    seed = Path(out_dir) / "handoff" / "continue_seed.res"
+    seed.parent.mkdir(parents=True, exist_ok=True)
+
+    payload = handoff
+    if handoff.velocities is not None and not getattr(args, "continue_velocities", True):
+        payload = replace(handoff, velocities=None)
+
+    template = resolve_handoff_restart_template(handoff, args, paths)
+    if template is not None:
+        save_handoff_to_res(payload, seed, template_res=template)
+    else:
+        try:
+            import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+            from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+                rewrite_dynamics_restart_from_current_state,
+            )
+            from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+
+            sync_charmm_positions(payload.positions)
+            rewrite_dynamics_restart_from_current_state(seed)
+        except Exception:
+            if not quiet:
+                print(
+                    "Handoff continuation: no restart template; "
+                    "PyCHARMM dynamics may cold-start velocities.",
+                    flush=True,
+                )
+            return None
+
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        restore_charmm_state_from_restart,
+    )
+
+    restore_charmm_state_from_restart(seed)
+    if not quiet:
+        parts = ["coordinates"]
+        if payload.velocities is not None:
+            parts.append("velocities")
+        if payload.cell is not None:
+            parts.append("cell")
+        print(
+            f"Handoff continuation: loaded {seed} ({', '.join(parts)})",
+            flush=True,
+        )
+    return seed.resolve()
+
+
 def cluster_layout_from_composition_string(
     composition: str,
     *,

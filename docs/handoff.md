@@ -73,6 +73,17 @@ Velocities are taken from the live CHARMM coordinate set, then from the last res
 
 If an older `handoff/state.npz` lacks cell or velocities, `load_dependency_handoff` enriches from staged `.res` files in the predecessor job directory.
 
+## PyCHARMM continuation (JAX-MD → prod)
+
+When a later campaign job runs PyCHARMM with a handoff, `prepare_pycharmm_handoff_continuation` patches coordinates (and velocities when `continue_velocities` is true) into a restart file using, in order:
+
+1. `--handoff-template-res`
+2. `restart_path` metadata on the handoff
+3. `handoff/final.res` next to `continue_from` / `state.npz`
+4. Local staged `heat` / `equi` / `prod` restarts
+
+The patched `handoff/continue_seed.res` is `READ restart` into CHARMM so the first dynamics stage uses `restart=True` (not `new` + Boltzmann assign).
+
 ## Velocity carry-over (JAX-MD)
 
 Handoff velocities are applied to the JAX-MD integrator momentum (`mass × v`) when:
