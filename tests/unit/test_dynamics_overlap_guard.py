@@ -838,7 +838,9 @@ def test_mlpot_overlap_chunks_continue_in_memory_without_readyn(tmp_path):
     assert calls[0]["restart"] is False
     assert calls[1]["restart"] is False
     assert calls[1].get("iunrea") == -1
+    assert calls[1]["iasvel"] == 0
     assert calls[2]["restart"] is False
+    assert calls[2]["iasvel"] == 0
 
 
 def test_mlpot_overlap_chunks_use_scratch_restart_handoff(tmp_path):
@@ -2005,4 +2007,6 @@ def test_prepare_post_rescue_overlap_handoff_assigns_velocities_in_memory():
     )
     ensure_crystal.assert_called_once_with(180.0, quiet=True)
     assert chunk_kw["restart"] is False
+    assert chunk_kw["iasvel"] == 0
     assert chunk_kw["iunrea"] == -1
+    assert "finalt" not in chunk_kw

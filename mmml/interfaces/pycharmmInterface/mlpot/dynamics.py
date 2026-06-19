@@ -1996,12 +1996,19 @@ def _prepare_post_rescue_overlap_handoff(
     read, matching normal MLpot overlap memory handoff.
     """
     _assign_post_rescue_velocities_and_crystal(chunk_kw, mlpot_ctx=mlpot_ctx)
+    bath = _post_rescue_bath_target_K(chunk_kw)
     chunk_kw["restart"] = False
     chunk_kw["new"] = False
     chunk_kw["start"] = False
-    chunk_kw["iasvel"] = 1
+    chunk_kw["iasvel"] = 0
     chunk_kw.pop("iunrea", None)
     chunk_kw["iunrea"] = -1
+    _strip_stale_heat_ramp_keywords(chunk_kw)
+    if int(chunk_kw.get("ihtfrq", 0) or 0) != 0:
+        chunk_kw["ihtfrq"] = 0
+    if "hoover reft" in chunk_kw:
+        chunk_kw["hoover reft"] = bath
+        chunk_kw.pop("firstt", None)
 
 
 def _overlap_rescue_restart_fallback_paths(
@@ -2088,6 +2095,12 @@ def _prepare_overlap_chunk_after_restart(
         pycharmm.lingo.charmm_script("UPDATE")
 
 
+def _strip_stale_heat_ramp_keywords(kw: dict[str, Any]) -> None:
+    """Remove HEAT ramp keywords that confuse Hoover CPT on later overlap chunks."""
+    for key in ("finalt", "TEMINC", "teminc"):
+        kw.pop(key, None)
+
+
 def _apply_overlap_chunk_dynamics_kw(
     chunk_kw: dict[str, Any],
     *,
@@ -2122,10 +2135,13 @@ def _apply_overlap_chunk_dynamics_kw(
         )
     )
     if not preserve_cold_start:
-        chunk_kw["iasvel"] = 1
+        # Chunk > 0 in-process continuation keeps velocities; HEAT ramp apply may
+        # override iasvel=1 afterward when a stage ramp is active.
+        chunk_kw["iasvel"] = 0 if chunk_index > 0 else 1
         chunk_kw["start"] = False
         if chunk_index > 0:
             chunk_kw.pop("firstt", None)
+            _strip_stale_heat_ramp_keywords(chunk_kw)
     elif preserve_ihtfrq_heat_ramp:
         # Boltzmann assign already ran (start=False); keep IHTFRQ / TEMINC / FIRSTT ramp.
         chunk_kw["iasvel"] = 1
