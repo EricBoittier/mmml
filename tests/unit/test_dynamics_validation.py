@@ -185,7 +185,16 @@ def test_release_charmm_dynamics_api_buffers_calls_del_routines():
     )
 
     fake_lib = MagicMock()
-    with patch.dict(sys.modules, {"pycharmm.lib": fake_lib}, clear=False):
+    fake_pycharmm = MagicMock()
+    fake_pycharmm.lib = fake_lib
+    # Patch both parent and submodule: if sys.modules["pycharmm"] is already a
+    # MagicMock from an earlier test, ``import pycharmm.lib`` resolves via the
+    # parent attribute and ignores sys.modules["pycharmm.lib"].
+    with patch.dict(
+        sys.modules,
+        {"pycharmm": fake_pycharmm, "pycharmm.lib": fake_lib},
+        clear=False,
+    ):
         _release_charmm_dynamics_api_buffers()
     fake_lib.charmm.lambdata_del.assert_called_once()
     fake_lib.charmm.ktable_del.assert_called_once()
