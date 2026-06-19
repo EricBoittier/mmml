@@ -720,7 +720,8 @@ def set_up_nhc_sim_routine(
                         new_pos = overlap_charmm_rescue_fn(pos_np, cell_np)
                         charmm_overlap_rescue_count += 1
                         c.print(Panel(
-                            f"{message}\nApplied CHARMM SD/ABNR overlap rescue (box synced to MD cell).",
+                            f"{message}\nApplied CHARMM SD/ABNR overlap rescue (box synced to MD cell); "
+                            "re-initializing Maxwell–Boltzmann velocities at target T.",
                             title="[bold green]JAX-MD overlap → CHARMM rescue[/bold green]",
                             border_style="green",
                         ))
@@ -741,7 +742,15 @@ def set_up_nhc_sim_routine(
         fire_positions = []
         if skip_minimization:
             minimized_pos = jnp.asarray(R, dtype=jnp.float32)
-            c.print(Panel("Skipping minimization (using ASE positions)", title="[bold]JAX-MD Minimization[/bold]", border_style="yellow"))
+            nmin_pbc_planned = int(getattr(args, "jaxmd_pbc_minimize_steps", 0) or 0)
+            if use_pbc and nmin_pbc_planned > 0:
+                skip_msg = (
+                    "Skipping vacuum/COM FIRE (handoff positions); "
+                    f"PBC FIRE ({nmin_pbc_planned} steps) follows."
+                )
+            else:
+                skip_msg = "Skipping minimization (using input positions)"
+            c.print(Panel(skip_msg, title="[bold]JAX-MD Minimization[/bold]", border_style="yellow"))
         else:
             # Translate to center of mass before minimization (use actual masses)
             com = jnp.sum(Si_mass[:, None] * R, axis=0) / Si_mass.sum()
@@ -926,7 +935,7 @@ def set_up_nhc_sim_routine(
                         "during JAX-MD PBC minimization",
                     )
                     if res_pb is not None:
-                        pbc_fire_state = pbc_fire_state.set(
+                        new_pbc_state = new_pbc_state.set(
                             position=jnp.asarray(res_pb, dtype=jnp.float32)
                         )
                     pbc_fire_state = new_pbc_state
@@ -1215,6 +1224,49 @@ def set_up_nhc_sim_routine(
         jaxmd_loop_start = time.perf_counter()
         run_status = "complete"
         run_error = None
+        rescue_rng = key
+
+        def _state_after_overlap_rescue(
+            pos,
+            *,
+            box_curr=None,
+            neighbor=None,
+        ):
+            """Fresh integrator state at rescued geometry (PyCHARMM-style velocity assign)."""
+            nonlocal rescue_rng, npt_pair_idx, npt_pair_mask
+            rescue_rng, subkey = jax.random.split(rescue_rng)
+            pos_j = as_jaxmd_dtype(pos)
+            if is_npt and box_curr is not None:
+                neigh = neighbor if neighbor is not None else (npt_pair_idx, npt_pair_mask)
+                st = init_fn(
+                    subkey,
+                    pos_j,
+                    box=box_curr,
+                    neighbor=neigh,
+                    kT=kT,
+                    mass=Si_mass,
+                )
+                npt_pair_idx, npt_pair_mask = neigh
+                return normalize_jaxmd_state(st)
+            if args.ensemble == "nve":
+                return normalize_jaxmd_state(
+                    init_fn(subkey, pos_j, kT, mass=Si_mass)
+                )
+            return normalize_jaxmd_state(init_fn(subkey, pos_j, mass=Si_mass))
+
+        def _rescued_state_energy_finite(st) -> bool:
+            if is_npt and npt_pair_idx is not None:
+                box_curr = simulate.npt_box(st)
+                e = float(
+                    npt_energy_fn(
+                        st.position,
+                        box=box_curr,
+                        neighbor=(npt_pair_idx, npt_pair_mask),
+                    )
+                )
+            else:
+                e = float(wrapped_energy_fn(st.position))
+            return bool(np.isfinite(e))
 
         try:
             for i in range(total_records):
@@ -1250,7 +1302,7 @@ def set_up_nhc_sim_routine(
                                 _real_cartesian_to_fractional(rescued, b_np),
                             )
                             new_frac = new_frac - jnp.floor(new_frac)
-                            state = state.set(position=new_frac)
+                            npt_neighbors = (npt_pair_idx, npt_pair_mask)
                             if update_fn is not None:
                                 box_nl = np.asarray(jax.device_get(box_curr))
                                 if box_nl.shape == (3, 3):
@@ -1258,9 +1310,26 @@ def set_up_nhc_sim_routine(
                                     box_nl = np.array([Ln, Ln, Ln], dtype=np.float64)
                                 elif box_nl.size >= 3:
                                     box_nl = np.asarray(box_nl, dtype=np.float64).reshape(-1)[:3]
-                                npt_pair_idx, npt_pair_mask = update_fn(
+                                npt_neighbors = update_fn(
                                     np.asarray(new_frac), box=box_nl
                                 )
+                            state = _state_after_overlap_rescue(
+                                new_frac,
+                                box_curr=box_curr,
+                                neighbor=npt_neighbors,
+                            )
+                            if not _rescued_state_energy_finite(state):
+                                run_status = "error"
+                                run_error = (
+                                    f"non-finite MMML energy after overlap rescue "
+                                    f"at record {i + 1}"
+                                )
+                                c.print(Panel(
+                                    run_error,
+                                    title="[bold red]JAX-MD overlap rescue[/bold red]",
+                                    border_style="red",
+                                ))
+                                break
                     else:
                         wrapped_pos = wrap_groups(
                             state.position, _monomer_groups, _cell_jax, mass=Si_mass
@@ -1268,17 +1337,41 @@ def set_up_nhc_sim_routine(
                         state = state.set(position=as_jaxmd_dtype(wrapped_pos))
                         rescued = _check_overlap(state.position, _cell_jax, f"JAX-MD dynamics record {i + 1}")
                         if rescued is not None:
-                            state = state.set(position=as_jaxmd_dtype(rescued))
+                            state = _state_after_overlap_rescue(rescued)
                             if update_fn is not None:
                                 pp_i, pp_m = update_fn(
                                     np.asarray(state.position), box=pbc_box_nl
                                 )
                                 _pbc_state["pair_idx"] = pp_i
                                 _pbc_state["pair_mask"] = pp_m
+                            if not _rescued_state_energy_finite(state):
+                                run_status = "error"
+                                run_error = (
+                                    f"non-finite MMML energy after overlap rescue "
+                                    f"at record {i + 1}"
+                                )
+                                c.print(Panel(
+                                    run_error,
+                                    title="[bold red]JAX-MD overlap rescue[/bold red]",
+                                    border_style="red",
+                                ))
+                                break
                 else:
                     rescued = _check_overlap(state.position, None, f"JAX-MD dynamics record {i + 1}")
                     if rescued is not None:
-                        state = state.set(position=as_jaxmd_dtype(rescued))
+                        state = _state_after_overlap_rescue(rescued)
+                        if not _rescued_state_energy_finite(state):
+                            run_status = "error"
+                            run_error = (
+                                f"non-finite MMML energy after overlap rescue "
+                                f"at record {i + 1}"
+                            )
+                            c.print(Panel(
+                                run_error,
+                                title="[bold red]JAX-MD overlap rescue[/bold red]",
+                                border_style="red",
+                            ))
+                            break
 
                 # Store current position (NPT: fractional + box for correct real coords at save)
                 if is_npt:
