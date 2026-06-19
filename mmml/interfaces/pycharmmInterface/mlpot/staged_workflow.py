@@ -1998,6 +1998,8 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     set_handoff_out(
         handoff_from_charmm(
             z,
+            restart_path=last_restart_path,
+            fallback_box_side_A=getattr(args, "box_size", None),
             temperature_K=float(getattr(args, "temperature", getattr(args, "temp", 300.0))),
             pressure_atm=float(args.pressure) if getattr(args, "pressure", None) is not None else None,
             step=(
