@@ -1324,9 +1324,13 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                                 Path(seg_io.trajectory) if seg_io.trajectory else None
                             ),
                             restart_read=(
-                                Path(rread)
-                                if restart and rread is not None
-                                else None
+                                Path(seg_io.restart_read)
+                                if use_memory and seg_io.restart_read is not None
+                                else (
+                                    Path(rread)
+                                    if restart and rread is not None
+                                    else None
+                                )
                             ),
                         )
                         _reset_stage_trajectory(
@@ -1766,7 +1770,11 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             _reset_stage_restart(
                 Path(io.restart_write) if io.restart_write else None,
                 trajectory_path=Path(io.trajectory) if io.trajectory else None,
-                restart_read=Path(rread) if restart and rread is not None else None,
+                restart_read=(
+                    Path(io.restart_read)
+                    if use_memory and io.restart_read is not None
+                    else (Path(rread) if restart and rread is not None else None)
+                ),
             )
             _reset_stage_trajectory(
                 Path(io.trajectory) if io.trajectory else None,
