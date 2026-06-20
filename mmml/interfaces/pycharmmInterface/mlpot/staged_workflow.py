@@ -129,8 +129,9 @@ def _artifact_paths(out_dir: Path, tag: str) -> dict[str, Path]:
         snapshot_file_paths,
     )
 
+    pretreat_dir = out_dir / "pretreat"
     legacy = legacy_mlpot_mini_paths(out_dir, tag)
-    mm = snapshot_file_paths(out_dir, CHARMM_MM_PRE, tag)
+    mm = snapshot_file_paths(pretreat_dir, CHARMM_MM_PRE, tag)
     mmml = snapshot_file_paths(out_dir, MLPOT_MMML, tag)
     bonded_mini = snapshot_file_paths(out_dir, BONDED_MM_AFTER_MINI, tag)
     bonded_heat = snapshot_file_paths(out_dir, BONDED_MM_AFTER_HEAT, tag)
@@ -139,7 +140,7 @@ def _artifact_paths(out_dir: Path, tag: str) -> dict[str, Path]:
         "mini_crd": legacy["mini_crd"],
         "mini_psf": legacy["mini_psf"],
         "mini_pdb": legacy["mini_pdb"],
-        "mini_charmm_dcd": legacy_charmm_mm_dcd(out_dir, tag),
+        "mini_charmm_dcd": legacy_charmm_mm_dcd(pretreat_dir, tag),
         "mini_dcd": legacy["mini_dcd"],
         "charmm_mm_crd": mm["crd"],
         "charmm_mm_pdb": mm["pdb"],
@@ -155,12 +156,12 @@ def _artifact_paths(out_dir: Path, tag: str) -> dict[str, Path]:
         "bonded_mm_after_mini_pdb": bonded_mini["pdb"],
         "bonded_mm_after_heat_crd": bonded_heat["crd"],
         "bonded_mm_after_heat_pdb": bonded_heat["pdb"],
-        "charmm_mm_heat_res": out_dir / f"charmm_mm_heat_{tag}.res",
-        "charmm_mm_heat_dcd": out_dir / f"charmm_mm_heat_{tag}.dcd",
-        "charmm_mm_equi_res": out_dir / f"charmm_mm_equi_{tag}.res",
-        "charmm_mm_equi_dcd": out_dir / f"charmm_mm_equi_{tag}.dcd",
-        "charmm_mm_prod_res": out_dir / f"charmm_mm_prod_{tag}.res",
-        "charmm_mm_prod_dcd": out_dir / f"charmm_mm_prod_{tag}.dcd",
+        "charmm_mm_heat_res": pretreat_dir / f"charmm_mm_heat_{tag}.res",
+        "charmm_mm_heat_dcd": pretreat_dir / f"charmm_mm_heat_{tag}.dcd",
+        "charmm_mm_equi_res": pretreat_dir / f"charmm_mm_equi_{tag}.res",
+        "charmm_mm_equi_dcd": pretreat_dir / f"charmm_mm_equi_{tag}.dcd",
+        "charmm_mm_prod_res": pretreat_dir / f"charmm_mm_prod_{tag}.res",
+        "charmm_mm_prod_dcd": pretreat_dir / f"charmm_mm_prod_{tag}.dcd",
         "heat_res": out_dir / f"heat_{tag}.res",
         "heat_dcd": out_dir / f"heat_{tag}.dcd",
         "nve_res": out_dir / f"nve_{tag}.res",
@@ -1068,7 +1069,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     recovery_topology_psf = vmd_topo_psf if Path(vmd_topo_psf).is_file() else None
 
     pretreat_mm = bool(getattr(args, "charmm_mm_pretreat", False))
-    if pretreat_mm and not getattr(args, "skip_cluster_build", False):
+    if pretreat_mm:
         r = run_charmm_mm_pretreat_before_mlpot(
             args,
             paths=paths,
@@ -1078,6 +1079,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             echeck=echeck,
             mini_nprint=mini_nprint,
             reference_positions=r,
+            skip_minimize=handoff_in is not None,
         )
         sync_charmm_positions(r)
     elif "mini" in stages and not getattr(args, "skip_cluster_build", False):

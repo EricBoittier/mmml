@@ -293,6 +293,7 @@ def run_charmm_mm_pretreat_before_mlpot(
     echeck: float,
     mini_nprint: int,
     reference_positions: np.ndarray | None = None,
+    skip_minimize: bool = False,
 ) -> np.ndarray:
     """CGENFF minimize + CHARMM heat/equi/prod on the built cluster before :func:`register_mlpot`.
 
@@ -300,6 +301,9 @@ def run_charmm_mm_pretreat_before_mlpot(
     relaxing Packmol clashes and classical MD before ML dynamics. Set
     ``charmm_mm_pretreat_ps_equi`` / ``charmm_mm_pretreat_ps_prod`` > 0 for NPT
     equilibration and production (PBC CPT when ``use_pbc``).
+
+    When ``skip_minimize`` is true (handoff continuations), skip CGENFF SD/ABNR and
+    run heat/equi/prod on coordinates already in CHARMM memory.
     """
     from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
@@ -320,9 +324,9 @@ def run_charmm_mm_pretreat_before_mlpot(
         else getattr(args, "charmm_abnr_steps", 100)
     )
     if not args.quiet:
+        mini_label = "skip mini" if skip_minimize else f"SD={n_sd} ABNR={n_abnr}"
         print(
-            f"\nCHARMM MM pretreat (no MLpot): SD={n_sd} ABNR={n_abnr}, "
-            f"heat nstep={n_heat}"
+            f"\nCHARMM MM pretreat (no MLpot): {mini_label}, heat nstep={n_heat}"
             + (f", equi={ps_equi:.2f} ps" if ps_equi > 0.0 else "")
             + (f", prod={ps_prod:.2f} ps" if ps_prod > 0.0 else ""),
             flush=True,
@@ -333,27 +337,35 @@ def run_charmm_mm_pretreat_before_mlpot(
         setup_default_nbonds()
 
     save = bool(getattr(args, "save", True))
+    pretreat_dir = paths["charmm_mm_heat_res"].parent
+    pretreat_dir.mkdir(parents=True, exist_ok=True)
     heat_dcd_nsavc = resolve_dcd_nsavc(dcd_nsavc=args.dcd_nsavc, nstep=n_heat)
-    minimize_charmm_mm_only(
-        CharmmMmMinimizeConfig(
-            nstep_sd=n_sd,
-            nstep_abnr=n_abnr,
-            nprint=mini_nprint,
-            tolenr=float(getattr(args, "charmm_tolenr", 1e-3)),
-            tolgrd=float(getattr(args, "charmm_tolgrd", 1e-3)),
-            verbose=not args.quiet,
-            show_energy=resolve_show_energy(args),
-            reference_positions=reference_positions,
-            dcd_path=paths.get("mini_charmm_dcd") if save else None,
-            dcd_nsavc=resolve_dcd_nsavc(dcd_nsavc=args.dcd_nsavc, nstep=max(n_sd, 1))
-            if save
-            else 0,
-            use_pbc=use_pbc,
+    if not skip_minimize:
+        minimize_charmm_mm_only(
+            CharmmMmMinimizeConfig(
+                nstep_sd=n_sd,
+                nstep_abnr=n_abnr,
+                nprint=mini_nprint,
+                tolenr=float(getattr(args, "charmm_tolenr", 1e-3)),
+                tolgrd=float(getattr(args, "charmm_tolgrd", 1e-3)),
+                verbose=not args.quiet,
+                show_energy=resolve_show_energy(args),
+                reference_positions=reference_positions,
+                dcd_path=paths.get("mini_charmm_dcd") if save else None,
+                dcd_nsavc=resolve_dcd_nsavc(dcd_nsavc=args.dcd_nsavc, nstep=max(n_sd, 1))
+                if save
+                else 0,
+                use_pbc=use_pbc,
+            )
         )
-    )
-    if not args.quiet:
+        if not args.quiet:
+            print(
+                f"CHARMM MM pretreat post-min GRMS: {charmm_grms():.4f} kcal/mol/Å",
+                flush=True,
+            )
+    elif not args.quiet:
         print(
-            f"CHARMM MM pretreat post-min GRMS: {charmm_grms():.4f} kcal/mol/Å",
+            "CHARMM MM pretreat: skip CGENFF mini (handoff coords in memory)",
             flush=True,
         )
 

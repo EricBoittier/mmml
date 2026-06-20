@@ -37,16 +37,23 @@ uv run --with snakemake --with snakemake-executor-plugin-slurm snakemake --versi
 | Monomer count | 10, 30, 50, 80, 100 |
 | Box | 32 Å cubic PBC |
 
-**10 jobs** with default [config.yaml](config.yaml). Outputs under repo root:
+**10 jobs** with default [config.yaml](config.yaml). Outputs under repo root (gitignored):
 
 ```
 artifacts/pbc_solvent_burst/dcm_30/
   campaign.yaml
   campaign_summary.json
+  .packmol_cache/
   pycharmm_init/
+    pretreat/              # CHARMM MM warm-up (heat/equi/prod)
+    packmol_cluster/
+    handoff/
+  pycharmm_equi_00/
   jaxmd_burst_01/ … jaxmd_burst_05/
   done.txt
 ```
+
+Legs never write to repo-root `results/`; each job has an explicit `output_dir` under the cell folder.
 
 ### Density warning
 

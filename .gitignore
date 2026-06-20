@@ -20,6 +20,7 @@ workflows/dcm_nve_scaling/results/
 workflows/dcm_nve_scaling/.snakemake/
 
 # Generated outputs and checkpoints (do not version large artifacts)
+results/
 *.h5
 *.hdf5
 outputs/
