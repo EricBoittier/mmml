@@ -1,0 +1,83 @@
+# DCM / ACO PBC burst campaign: gentle PyCHARMM heat + alternating JAX-MD / equil.
+# Checkpoint: DES dimers PhysNet JSON (DCM and ACO). Override with MMML_CKPT if
+# checkpoint is "${MMML_CKPT}".
+#
+# Output layout (repo root):
+#   artifacts/pbc_solvent_burst/{solvent}_{n}/campaign.yaml
+#   artifacts/pbc_solvent_burst/{solvent}_{n}/campaign_summary.json
+
+solvents: [DCM, ACO]
+cluster_sizes: [10, 30, 50, 80, 100]
+box_size: 32.0
+checkpoint: /mmhome/boittier/home/mmml/examples/ckpts_json/DESdimers_params.json
+output_root: artifacts/pbc_solvent_burst
+seed_base: 123456
+
+# Burst timing (per matrix cell)
+jaxmd_burst_ps: 200.0
+jaxmd_bursts: 5
+pycharmm_equi_ps: 10.0
+pycharmm_equi_legs: 5
+
+# Gentle heat (pycharmm_init)
+ps_heat: 30.0
+n_heat_segments: 8
+heat_firstt: 10.0
+heat_finalt: 300.0
+heat_thermostat: hoover
+dt_fs: 0.25
+temperature: 300.0
+pressure: 1.0
+
+# MM / ML cutoffs
+mm_switch_on: 8.0
+mm_switch_width: 5.0
+ml_switch_width: 1.5
+spacing: 5.0
+packmol_tolerance: 1.0
+
+# PyCHARMM repair
+dynamics_overlap_action: rescue
+dynamics_overlap_min_distance: 1.5
+dynamics_intra_min_distance: 0.5
+dynamics_overlap_check_interval: 500
+dynamics_overlap_charmm_sd_steps: 200
+dynamics_overlap_charmm_abnr_steps: 400
+bonded_mm_mini: true
+bonded_mm_mini_after: mini,heat
+bonded_mm_mini_steps: 100
+charmm_pre_minimize: true
+charmm_sd_steps: 200
+charmm_abnr_steps: 400
+mini_nstep: 150
+dcd_nsavc: 500
+dyn_nprint: 500
+
+# JAX-MD burst legs
+handoff_quality_gate: true
+handoff_quality_fmax_eVA: 1.0
+handoff_quality_action: minimize
+jaxmd_minimize_steps: 200
+jaxmd_pbc_minimize_steps: 200
+jaxmd_dynamics_overlap_action: warn
+steps_per_recording: 800
+jax_md_update_interval: 1
+
+ml_gpu_count: 1
+ml_batch_size: 1024
+
+mpirun_wrapper: ../../scripts/mmml-charmm-mpirun.sh
+
+# Slurm (snakemake-executor-plugin-slurm)
+slurm_partition: gpu
+slurm_nodes: 1
+slurm_ntasks: 1
+slurm_cpus_per_task: 4
+slurm_mem_mb_per_cpu: 3000
+slurm_runtime_min: 2880
+slurm_mail_user: ericdavid.boittier@unibas.ch
+slurm_nodelist: gpu08,gpu09
+slurm_gpu_nodes: [gpu08, gpu09]
+
+# Mark largest cells optional (dense 32 Å cube); Snakemake still runs them unless removed.
+optional_sizes: [100]

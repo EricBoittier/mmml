@@ -1,0 +1,93 @@
+configfile: "config.yaml"
+
+import os
+from pathlib import Path
+
+
+def _repo_python() -> str:
+    repo = Path(workflow.basedir).resolve().parents[1]
+    env_py = os.environ.get("MMML_PYTHON", "").strip()
+    if env_py:
+        return env_py
+    venv = repo / ".venv" / "bin" / "python"
+    if venv.is_file():
+        return str(venv)
+    conda_prefix = os.environ.get("CONDA_PREFIX", "").strip()
+    if conda_prefix:
+        conda_py = Path(conda_prefix) / "bin" / "python"
+        if conda_py.is_file():
+            return str(conda_py)
+    return "python3"
+
+
+_REPO_ROOT = Path(workflow.basedir).resolve().parents[1]
+_OUTPUT_ROOT = str(config.get("output_root", "artifacts/pbc_solvent_burst"))
+_ARTIFACT_ROOT = f"../../{_OUTPUT_ROOT}"
+_SOLVENTS = [str(s).strip().upper() for s in config["solvents"]]
+_SIZES = [int(n) for n in config["cluster_sizes"]]
+_GPU_NODES = [str(x) for x in (config.get("slurm_gpu_nodes") or ["gpu08", "gpu09"])]
+
+
+def _run_tag(solvent: str, n: int) -> str:
+    return f"{str(solvent).lower()}_{int(n)}"
+
+
+def _artifact_dir(wildcards) -> str:
+    return str(
+        _REPO_ROOT
+        / _OUTPUT_ROOT
+        / _run_tag(wildcards.solvent, int(wildcards.n))
+    )
+
+
+def _slurm_nodelist() -> str:
+    explicit = str(config.get("slurm_nodelist", "")).strip()
+    if explicit:
+        return explicit
+    return ",".join(_GPU_NODES)
+
+
+def _slurm_extra(wildcards) -> str:
+    mail = str(config.get("slurm_mail_user", "ericdavid.boittier@unibas.ch"))
+    nodelist = _slurm_nodelist()
+    if nodelist:
+        return f"--mail-user={mail} --mail-type=END,FAIL --nodelist={nodelist}"
+    return f"--mail-user={mail} --mail-type=END,FAIL"
+
+
+rule all:
+    input:
+        expand(
+            "{root}/{solvent}_{n}/done.txt",
+            root=_ARTIFACT_ROOT,
+            solvent=[s.lower() for s in _SOLVENTS],
+            n=_SIZES,
+        ),
+
+
+rule run_burst:
+    output:
+        touch("{root}/{solvent}_{n}/done.txt"),
+    log:
+        stdout="{root}/{solvent}_{n}/stdout.log",
+    params:
+        solvent=lambda wildcards: str(wildcards.solvent).upper(),
+        out_dir=_artifact_dir,
+        workflow_dir=workflow.basedir,
+    resources:
+        gpu=1,
+        charmm_slot=1,
+        runtime=int(config.get("slurm_runtime_min", 2880)),
+        mem_mb_per_cpu=int(config.get("slurm_mem_mb_per_cpu", 3000)),
+        tasks=int(config.get("slurm_ntasks", 1)),
+        cpus_per_task=int(config.get("slurm_cpus_per_task", 4)),
+        nodes=int(config.get("slurm_nodes", 1)),
+        slurm_partition=str(config.get("slurm_partition", "gpu")),
+        slurm_extra=_slurm_extra,
+    shell:
+        """
+        set -euo pipefail
+        mkdir -p {params.out_dir}
+        bash {params.workflow_dir}/scripts/job_shell.sh {params.solvent} {wildcards.n}
+        test -s {output}
+        """
