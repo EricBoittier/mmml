@@ -14,16 +14,20 @@ source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
 mmml_resolve_env "$REPO_ROOT"
 PY="${MMML_PYTHON}"
 
-read -r DEFAULT_JOBS DEFAULT_RES <<EOF
+IFS=$'\t' read -r DEFAULT_JOBS DEFAULT_RES <<EOF
 $("$PY" -c "
 import sys
 sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
 from campaign_lib import load_config, slurm_launch_jobs, slurm_resources_cli
 cfg = load_config()
-print(slurm_launch_jobs(cfg))
-print(slurm_resources_cli(cfg))
+print(f\"{slurm_launch_jobs(cfg)}\t{slurm_resources_cli(cfg)}\")
 ")
 EOF
+
+if [[ -z "${DEFAULT_RES:-}" ]]; then
+  echo "snakemake_slurm.sh: failed to resolve --resources from config.yaml" >&2
+  exit 1
+fi
 
 JOBS="${1:-$DEFAULT_JOBS}"
 shift || true
