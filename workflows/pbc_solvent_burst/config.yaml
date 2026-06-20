@@ -37,10 +37,10 @@ cleanup_strategy:
   name: pbc_hybrid_default
   charmm_mm:
     # CGENFF mini + CHARMM heat/equi/prod before each MLpot PyCHARMM leg
-    pretreat_on_pycharmm: false
-    ps_heat: 300.0
+    pretreat_on_pycharmm: true
+    ps_heat: 100.0
     ps_equi: 100.0
-    ps_prod: 500.0
+    ps_prod: 100.0
     overlap_rescue_sd_steps: 200
     overlap_rescue_abnr_steps: 400
   mlpot:
