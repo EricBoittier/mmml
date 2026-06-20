@@ -49,6 +49,9 @@ class DynamicsOverlapConfig:
     repack_spacing_A: float | None = None
     max_monomer_extent_A: float = 12.0
     prior_segment_restart: Path | None = None
+    segment_index: int | None = None
+    segment_out_dir: Path | None = None
+    segment_restart_prefix: str | None = None
     topology_psf: Path | None = None
     recovery_seed: int | None = None
     position_noise_A: float = 0.05
@@ -394,7 +397,7 @@ def resolve_prior_segment_restart_path(
 def attach_prior_segment_restart(
     overlap: DynamicsOverlapConfig | None,
     *,
-    segment_index: int = 0,
+    segment_index: int | None = None,
     prev_restart: Path | str | None = None,
     out_dir: Path | str | None = None,
     restart_prefix: str | None = None,
@@ -408,17 +411,31 @@ def attach_prior_segment_restart(
         return overlap
     from dataclasses import replace
 
+    seg_i = segment_index if segment_index is not None else overlap.segment_index
+    seg_out = out_dir if out_dir is not None else overlap.segment_out_dir
+    seg_prefix = restart_prefix if restart_prefix is not None else overlap.segment_restart_prefix
+    tagged = overlap
+    if seg_i is not None or seg_out is not None or seg_prefix is not None:
+        tagged = replace(
+            overlap,
+            segment_index=seg_i if seg_i is not None else overlap.segment_index,
+            segment_out_dir=Path(seg_out) if seg_out is not None else overlap.segment_out_dir,
+            segment_restart_prefix=(
+                str(seg_prefix) if seg_prefix is not None else overlap.segment_restart_prefix
+            ),
+        )
+
     prior = resolve_prior_segment_restart_path(
-        segment_index=segment_index,
+        segment_index=int(seg_i or 0),
         prev_restart=prev_restart,
-        out_dir=out_dir,
-        restart_prefix=restart_prefix,
+        out_dir=seg_out,
+        restart_prefix=seg_prefix,
     )
     if prior is None:
         prior = infer_prior_restart_from_write_path(restart_write)
     if prior is None:
-        return overlap
-    return replace(overlap, prior_segment_restart=prior)
+        return tagged
+    return replace(tagged, prior_segment_restart=prior)
 
 
 def monomer_offsets(n_atoms: int, n_monomers: int) -> np.ndarray:

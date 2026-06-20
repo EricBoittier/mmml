@@ -83,6 +83,26 @@ def rewrite_dynamics_restart_validated(
     return not restart_has_nonfinite_coordinates(Path(restart_path))
 
 
+def ensure_segment_restart_checkpoint(restart_path: PathLike | None) -> Path | None:
+    """Persist in-memory CHARMM state to a restartable segment ``.res`` when needed.
+
+    Overwrites coordinate-history WRIDYN junk with a proper ``write restart`` snapshot
+    so fly-off / extent recovery on the next segment can ``READYN`` the prior checkpoint.
+    """
+    if restart_path is None:
+        return None
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
+
+    path = Path(restart_path).expanduser()
+    validated = _valid_restart_file(path)
+    if validated is not None:
+        return validated.resolve()
+    if not rewrite_dynamics_restart_validated(path):
+        return None
+    validated = _valid_restart_file(path)
+    return validated.resolve() if validated is not None else None
+
+
 def restore_post_rescue_coordinates(
     *,
     rescued_positions: np.ndarray | None = None,

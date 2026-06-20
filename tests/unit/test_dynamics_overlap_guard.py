@@ -147,6 +147,135 @@ def test_infer_prior_restart_from_write_path(tmp_path):
     assert cfg.prior_segment_restart == prior.resolve()
 
 
+def test_attach_prior_requires_on_disk_checkpoint(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        attach_prior_segment_restart,
+    )
+
+    base = DynamicsOverlapConfig(action="rescue", n_monomers=2)
+    cfg = attach_prior_segment_restart(
+        base,
+        segment_index=1,
+        out_dir=tmp_path,
+        restart_prefix="heat_dcm_90",
+        restart_write=tmp_path / "heat_dcm_90.1.res",
+    )
+    assert cfg is not None
+    assert cfg.prior_segment_restart is None
+    assert cfg.segment_index == 1
+    assert cfg.segment_out_dir == tmp_path
+    assert cfg.segment_restart_prefix == "heat_dcm_90"
+
+    prior = tmp_path / "heat_dcm_90.0.res"
+    prior.write_text("prior restart\n")
+    cfg2 = attach_prior_segment_restart(
+        base,
+        segment_index=1,
+        prev_restart=prior,
+        out_dir=tmp_path,
+        restart_prefix="heat_dcm_90",
+        restart_write=tmp_path / "heat_dcm_90.1.res",
+    )
+    assert cfg2 is not None
+    assert cfg2.prior_segment_restart == prior.resolve()
+
+
+def test_attach_prior_keeps_staged_prior_when_rerun_attach_fails(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        attach_prior_segment_restart,
+    )
+
+    prior = tmp_path / "heat_dcm_90.0.res"
+    prior.write_text("prior\n")
+    staged = attach_prior_segment_restart(
+        DynamicsOverlapConfig(action="rescue", n_monomers=2),
+        segment_index=1,
+        prev_restart=prior,
+        out_dir=tmp_path,
+        restart_prefix="heat_dcm_90",
+        restart_write=tmp_path / "heat_dcm_90.1.res",
+    )
+    assert staged is not None
+    assert staged.prior_segment_restart == prior.resolve()
+    again = attach_prior_segment_restart(
+        staged,
+        restart_write=tmp_path / "heat_dcm_90.1.res",
+        prev_restart=tmp_path / "missing.res",
+    )
+    assert again is not None
+    assert again.prior_segment_restart == prior.resolve()
+
+
+def test_ensure_segment_restart_checkpoint_returns_existing(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        ensure_segment_restart_checkpoint,
+    )
+
+    path = tmp_path / "heat_dcm_10.0.res"
+    valid_path = path.resolve()
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._valid_restart_file",
+        return_value=valid_path,
+    ) as valid_fn, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.rewrite_dynamics_restart_validated",
+    ) as rewrite:
+        out = ensure_segment_restart_checkpoint(path)
+    valid_fn.assert_called_once_with(path)
+    rewrite.assert_not_called()
+    assert out == valid_path
+
+
+def test_ensure_segment_restart_checkpoint_writes_file(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        ensure_segment_restart_checkpoint,
+    )
+
+    path = tmp_path / "heat_dcm_10.0.res"
+    valid_path = path.resolve()
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._valid_restart_file",
+        side_effect=[None, valid_path],
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.rewrite_dynamics_restart_validated",
+        return_value=True,
+    ) as rewrite:
+        out = ensure_segment_restart_checkpoint(path)
+    rewrite.assert_called_once_with(path)
+    assert out == valid_path
+
+
+def test_extent_rescue_fails_clearly_without_prior():
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        min_distance_A=0.0,
+        intra_min_distance_A=0.0,
+        max_monomer_extent_A=12.0,
+        n_monomers=2,
+        use_pbc=False,
+        prior_segment_restart=None,
+    )
+    bad_pos = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [30.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+        ],
+        dtype=float,
+    )
+    ctx = mock.MagicMock()
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        return_value=bad_pos,
+    ):
+        with pytest.raises(RuntimeError, match="prior segment restart file"):
+            check_dynamics_overlap(
+                cfg, context="heat segment 2/10", step=1000, mlpot_ctx=ctx
+            )
+
+
 def test_resolve_intra_min_distance_zero_disables_intra_only():
     args = argparse.Namespace(dynamics_intra_min_distance=0.0)
     cfg = resolve_dynamics_overlap_config(args, n_monomers=4, use_pbc=False)
