@@ -9,6 +9,7 @@ from typing import Any, Iterator
 
 import yaml
 
+from bulk_density import matrix_cluster_sizes_for_cell, matrix_uses_bulk_density
 from cleanup_strategy import (
     jaxmd_job_flags,
     pretreat_job_flags,
@@ -86,17 +87,36 @@ def matrix_box_sizes(cfg: dict[str, Any]) -> list[float]:
 
 
 def iter_matrix_cells(cfg: dict[str, Any]) -> Iterator[RunCell]:
-    """Cartesian product of solvents × cluster_sizes × temperatures × box_sizes."""
+    """Cartesian product of solvents × N × temperatures × box_sizes.
+
+    ``N`` comes from ``cluster_sizes`` (legacy) or from ``bulk_density_fractions``
+    × bulk liquid density at 298 K per solvent and box (see ``bulk_density.py``).
+    """
     solvents = [str(s).strip().upper() for s in cfg.get("solvents", [])]
-    sizes = [int(n) for n in cfg.get("cluster_sizes", [])]
+    if matrix_uses_bulk_density(cfg):
+        if cfg.get("cluster_sizes"):
+            raise ValueError(
+                "Set either bulk_density_fractions or cluster_sizes, not both."
+            )
+    elif not cfg.get("cluster_sizes"):
+        raise ValueError("Matrix requires cluster_sizes or bulk_density_fractions.")
     skip = {str(t).strip() for t in (cfg.get("exclude_run_tags") or [])}
+    seen_tags: set[str] = set()
     for sol in solvents:
-        for n in sizes:
-            for temp in matrix_temperatures(cfg):
-                for box in matrix_box_sizes(cfg):
-                    cell = RunCell(solvent=sol, n_monomers=n, temperature=temp, box_size=box)
-                    if cell_run_tag(cell, cfg) in skip:
+        for box in matrix_box_sizes(cfg):
+            sizes = matrix_cluster_sizes_for_cell(cfg, solvent=sol, box_size=box)
+            for n in sizes:
+                for temp in matrix_temperatures(cfg):
+                    cell = RunCell(
+                        solvent=sol,
+                        n_monomers=n,
+                        temperature=temp,
+                        box_size=box,
+                    )
+                    tag = cell_run_tag(cell, cfg)
+                    if tag in skip or tag in seen_tags:
                         continue
+                    seen_tags.add(tag)
                     yield cell
 
 
@@ -176,6 +196,30 @@ def campaign_job_order(cfg: dict[str, Any] | None = None) -> list[str]:
     return order
 
 
+def cell_is_optional(cell: RunCell, cfg: dict[str, Any]) -> bool:
+    """True when the last JAX burst (or equi before it) may fail without aborting."""
+    if int(cell.n_monomers) in {int(x) for x in (cfg.get("optional_sizes") or [])}:
+        return True
+    if not matrix_uses_bulk_density(cfg):
+        return False
+    from bulk_density import n_monomers_at_bulk_density
+
+    min_n = int(cfg.get("bulk_density_n_min", 1))
+    max_raw = cfg.get("bulk_density_n_max")
+    max_n = int(max_raw) if max_raw is not None else None
+    for frac in cfg.get("optional_bulk_fractions") or [1.0]:
+        n = n_monomers_at_bulk_density(
+            cell.solvent,
+            cell.box_size,
+            float(frac),
+            min_n=min_n,
+            max_n=max_n,
+        )
+        if n == int(cell.n_monomers):
+            return True
+    return False
+
+
 def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
     """Build full campaign dict for one matrix cell."""
     comp = composition_string(cell)
@@ -184,7 +228,7 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
     burst_ps = float(cfg.get("jaxmd_burst_ps", 200.0))
     equi_ps = float(cfg.get("pycharmm_equi_ps", 10.0))
     n_bursts = int(cfg.get("jaxmd_bursts", 5))
-    optional_sizes = {int(x) for x in (cfg.get("optional_sizes") or [])}
+    optional_cell = cell_is_optional(cell, cfg)
     cell_root = run_output_dir(cfg, cell)
     strategy = resolve_cleanup_strategy(cfg)
 
@@ -285,12 +329,12 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
                 cell_root,
                 equi_id,
             )
-            if cell.n_monomers in optional_sizes:
+            if optional_cell:
                 equi_job["optional"] = True
             runs[equi_id] = equi_job
             prev = equi_id
         else:
-            if cell.n_monomers in optional_sizes:
+            if optional_cell:
                 runs[burst_id]["optional"] = True
             prev = burst_id
 
