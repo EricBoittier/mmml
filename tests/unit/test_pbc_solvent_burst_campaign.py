@@ -114,6 +114,8 @@ def test_cleanup_strategy_maps_to_pycharmm_and_jaxmd(cfg: dict) -> None:
     burst = campaign["runs"]["jaxmd_burst_01"]
     assert init["dynamics_overlap_action"] == "rescue"
     assert init["bonded_mm_mini"] is True
+    assert init["no_echeck_heat"] is True
+    assert init["heat_thermostat"] == "scale"
     assert burst["handoff_quality_gate"] is True
     assert burst["jaxmd_pbc_minimize_steps"] == 200
 
@@ -166,6 +168,17 @@ def test_build_md_system_campaign_argv(tmp_path: Path, cfg: dict, monkeypatch) -
     campaign_path = Path(argv[argv.index("--config") + 1])
     loaded = yaml.safe_load(campaign_path.read_text(encoding="utf-8"))
     assert loaded["defaults"]["composition"] == composition_string(cell)
+
+
+def test_namespace_from_merged_pycharmm_init_heat_flags(cfg: dict, cell: RunCell) -> None:
+    from mmml.cli.run.md_campaign import namespace_from_merged
+
+    merged = build_campaign(cfg, cell)["runs"]["pycharmm_init"]
+    merged.update(build_campaign(cfg, cell)["defaults"])
+    merged["job_id"] = "pycharmm_init"
+    ns = namespace_from_merged(merged)
+    assert ns.heat_thermostat == "scale"
+    assert ns.no_echeck_heat is True
 
 
 def test_namespace_from_merged_jaxmd_burst(cfg: dict, cell: RunCell) -> None:

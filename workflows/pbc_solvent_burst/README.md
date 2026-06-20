@@ -89,6 +89,17 @@ N=80–100 in a 32 Å cube is **extremely dense** (400–1000 atoms). Expect fre
 
 Tune or drop large sizes in `config.yaml` if placement fails.
 
+### MLpot heat stability (large N, cold T)
+
+Early heat abort (`restart step ~200 < nstep`, `echeck` stop, wild CPT piston) on **N≥80** / low-T cells is distinct from extent-recovery bugs. Defaults mitigate this:
+
+| Setting | Purpose |
+|---------|---------|
+| `heat_thermostat: scale` | IHTFRQ velocity ramp without Hoover CPT (avoids piston instability on ML USER-only heat) |
+| `cleanup_strategy.mlpot.no_echeck_heat: true` | Disables CHARMM ECHECK during heat only; equi/prod still use scaled `--echeck` |
+
+For heat-only screening with global echeck off, see [dcm_heat_scaling](../dcm_heat_scaling/) (`no_echeck: true`).
+
 ## Campaign timing (defaults)
 
 | Leg | Count | ps each | Total |

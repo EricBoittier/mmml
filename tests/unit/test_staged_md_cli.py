@@ -359,6 +359,46 @@ def test_build_stage_dynamics_kw_heat_hoover_pbc_disables_ihtfrq_ramp():
     assert "TEMINC" not in kw
 
 
+def test_build_stage_dynamics_kw_heat_no_echeck_heat_disables_echeck():
+    args = argparse.Namespace(heat_thermostat="scale", no_echeck_heat=True)
+    dyn_print = {"nprint": 100, "iprfrq": 500, "isvfrq": 500}
+    kw = _build_stage_dynamics_kw(
+        "heat",
+        args=args,
+        timestep_ps=0.00025,
+        nstep=80000,
+        save_interval_ps=0.125,
+        temp=300.0,
+        echeck=8000.0,
+        dyn_print=dyn_print,
+        restart=False,
+        use_pbc=True,
+    )
+    assert kw["echeck"] == -1.0
+    assert "cpt" not in kw
+    assert kw["ihtfrq"] > 0
+
+
+def test_build_stage_dynamics_kw_heat_scale_pbc_avoids_cpt():
+    args = argparse.Namespace(heat_thermostat="scale", heat_firstt=40.0, heat_finalt=200.0)
+    dyn_print = {"nprint": 100, "iprfrq": 500, "isvfrq": 500}
+    kw = _build_stage_dynamics_kw(
+        "heat",
+        args=args,
+        timestep_ps=0.00025,
+        nstep=40000,
+        save_interval_ps=0.125,
+        temp=200.0,
+        echeck=5000.0,
+        dyn_print=dyn_print,
+        restart=False,
+        use_pbc=True,
+    )
+    assert "cpt" not in kw
+    assert kw["ihtfrq"] > 0
+    assert kw["TEMINC"] > 0
+
+
 def test_build_hoover_heat_tmass_floor_for_small_psf_mass():
     with patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics.compute_cpt_piston_masses",

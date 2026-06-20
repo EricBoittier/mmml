@@ -78,6 +78,7 @@ def _from_legacy_flat_keys(cfg: dict[str, Any]) -> CleanupStrategy:
         "mini_nstep": cfg.get("mini_nstep", 150),
         "dcd_nsavc": cfg.get("dcd_nsavc", 500),
         "dyn_nprint": cfg.get("dyn_nprint", 500),
+        "no_echeck_heat": bool(cfg.get("no_echeck_heat", False)),
     }
     jaxmd_pbc: dict[str, Any] = {
         "handoff_quality_gate": cfg.get("handoff_quality_gate", True),
@@ -129,6 +130,7 @@ def pycharmm_job_flags(strategy: CleanupStrategy) -> dict[str, Any]:
         "mini_nstep": int(ml.get("mini_nstep", 150)),
         "dcd_nsavc": int(ml.get("dcd_nsavc", 500)),
         "dyn_nprint": int(ml.get("dyn_nprint", 500)),
+        "no_echeck_heat": bool(ml.get("no_echeck_heat", False)),
     }
 
 

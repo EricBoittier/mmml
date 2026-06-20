@@ -447,6 +447,10 @@ def build_benchmark_md_system_argv(
             argv.extend(["--ps-heat", str(job["ps_heat"])])
         if job.get("heat_thermostat"):
             argv.extend(["--heat-thermostat", str(job["heat_thermostat"])])
+        if job.get("no_echeck_heat") or cfg.get("no_echeck_heat"):
+            argv.append("--no-echeck-heat")
+        if job.get("no_echeck") or cfg.get("no_echeck"):
+            argv.append("--no-echeck")
         heat_ihtfrq = job.get("heat_ihtfrq")
         if heat_ihtfrq is not None:
             argv.extend(["--heat-ihtfrq", str(heat_ihtfrq)])

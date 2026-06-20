@@ -296,6 +296,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="pycharmm: disable CHARMM ECHECK early stop",
     )
     parser.add_argument(
+        "--no-echeck-heat",
+        action="store_true",
+        help=(
+            "pycharmm: disable CHARMM ECHECK during the heat stage only "
+            "(equi/prod still use --echeck)"
+        ),
+    )
+    parser.add_argument(
         "--allow-incomplete-dynamics",
         action="store_true",
         help=(

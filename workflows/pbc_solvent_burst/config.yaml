@@ -27,7 +27,8 @@ pycharmm_equi_legs: 5
 ps_heat: 10.0
 n_heat_segments: 10
 heat_firstt: 40.0
-heat_thermostat: hoover
+# Scale (IHTFRQ) avoids Hoover CPT piston instability on large ML USER-only clusters.
+heat_thermostat: scale
 dt_fs: 0.25
 pressure: 1.0
 
@@ -44,6 +45,8 @@ cleanup_strategy:
     overlap_rescue_sd_steps: 200
     overlap_rescue_abnr_steps: 400
   mlpot:
+    # ML USER-only heat (no SHAKE) can trip scaled echeck within ~200 steps on N≥80.
+    no_echeck_heat: true
     dynamics_overlap_action: rescue
     dynamics_overlap_min_distance: 1.5
     dynamics_intra_min_distance: 0.5
