@@ -136,6 +136,19 @@ def _resolve_charmm_mm_pretreat_heat_nstep(args: argparse.Namespace, *, timestep
     return max(1, int(getattr(args, "charmm_mm_pretreat_heat_nstep", 2000)))
 
 
+def _pretreat_use_fixed_box_nvt(args: argparse.Namespace, *, use_pbc: bool) -> bool:
+    """Pretreat equi/prod at explicit ``--box-size`` use Hoover NVT, not CPT NPT."""
+    if not use_pbc:
+        return False
+    raw = getattr(args, "box_size", None)
+    if raw is None:
+        return False
+    try:
+        return float(raw) > 0.0
+    except (TypeError, ValueError):
+        return False
+
+
 def _run_charmm_mm_pretreat_cpt_stage(
     stage: Literal["equi", "prod"],
     args: argparse.Namespace,
@@ -179,9 +192,10 @@ def _run_charmm_mm_pretreat_cpt_stage(
     save_interval_ps = timestep_ps * max(1, dcd_nsavc)
     dyn_print = resolve_dynamics_print_kwargs(args, nstep=nstep)
     stage_echeck = max(echeck, 500.0) if echeck > 0 else echeck
+    use_cpt = use_pbc and not _pretreat_use_fixed_box_nvt(args, use_pbc=use_pbc)
 
     if stage == "equi":
-        if use_pbc:
+        if use_cpt:
             kw = build_cpt_equilibration_dynamics(
                 timestep_ps=timestep_ps,
                 duration_ps=duration_ps,
@@ -203,7 +217,7 @@ def _run_charmm_mm_pretreat_cpt_stage(
                 include_firstt=include_firstt,
             )
     else:
-        if use_pbc:
+        if use_cpt:
             kw = build_cpt_production_dynamics(
                 timestep_ps=timestep_ps,
                 duration_ps=duration_ps,
@@ -299,8 +313,9 @@ def run_charmm_mm_pretreat_before_mlpot(
 
     Uses full MM terms (``apply_charmm_mm_block``), not MLpot USER. Intended for
     relaxing Packmol clashes and classical MD before ML dynamics. Set
-    ``charmm_mm_pretreat_ps_equi`` / ``charmm_mm_pretreat_ps_prod`` > 0 for NPT
-    equilibration and production (PBC CPT when ``use_pbc``).
+    ``charmm_mm_pretreat_ps_equi`` / ``charmm_mm_pretreat_ps_prod`` > 0 for equilibration
+    and production (CPT NPT when ``use_pbc`` and no ``--box-size``; fixed ``--box-size``
+    uses Hoover NVT at that L).
 
     When ``skip_minimize`` is true (handoff continuations), skip CGENFF SD/ABNR and
     run heat/equi/prod on coordinates already in CHARMM memory.
@@ -454,6 +469,19 @@ def run_charmm_mm_pretreat_before_mlpot(
         )
 
     box_side = resolve_pbc_box_side(args, get_charmm_positions_array()) if use_pbc else None
+    use_fixed_nvt = _pretreat_use_fixed_box_nvt(args, use_pbc=use_pbc)
+    if use_pbc and not args.quiet and (ps_equi > 0.0 or ps_prod > 0.0):
+        if use_fixed_nvt:
+            print(
+                f"CHARMM MM pretreat equi/prod: fixed box L={box_side:.3f} Å "
+                "(Hoover NVT; box size matches campaign --box-size)",
+                flush=True,
+            )
+        else:
+            print(
+                "CHARMM MM pretreat equi/prod: CPT NPT (box may drift; prod preserves equi box)",
+                flush=True,
+            )
     if ps_equi > 0.0:
         _run_charmm_mm_pretreat_cpt_stage(
             "equi",
@@ -470,6 +498,8 @@ def run_charmm_mm_pretreat_before_mlpot(
             include_firstt=False,
         )
     if ps_prod > 0.0:
+        # After NPT equi the live box differs from --box-size; do not reset crystal to config L.
+        prod_box_side = box_side if (use_fixed_nvt or ps_equi <= 0.0) else None
         _run_charmm_mm_pretreat_cpt_stage(
             "prod",
             args,
@@ -481,7 +511,7 @@ def run_charmm_mm_pretreat_before_mlpot(
             temp=temp,
             echeck=echeck,
             use_pbc=use_pbc,
-            box_side=box_side,
+            box_side=prod_box_side,
             include_firstt=False,
         )
 

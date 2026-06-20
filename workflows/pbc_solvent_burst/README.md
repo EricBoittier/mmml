@@ -74,6 +74,8 @@ cleanup_strategy:
     ps_prod: 5.0
 ```
 
+Pretreat equi/prod use **Hoover NVT at the matrix `box_size`** (fixed L), not NPT — so the cell stays at 32 Å (or whatever L you chose) and matches JAX-MD PBC.
+
 Sweep temperature / box:
 
 ```yaml
