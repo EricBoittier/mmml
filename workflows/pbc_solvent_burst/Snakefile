@@ -24,7 +24,12 @@ def _repo_python() -> str:
 _REPO_ROOT = Path(workflow.basedir).resolve().parents[1]
 _OUTPUT_ROOT = str(config.get("output_root", "artifacts/pbc_solvent_burst"))
 _ARTIFACT_ROOT = f"../../{_OUTPUT_ROOT}"
-_GPU_NODES = [str(x) for x in (config.get("slurm_gpu_nodes") or ["gpu08", "gpu09"])]
+_GPU_NODES_RAW = config.get("slurm_gpu_nodes")
+_GPU_NODES = (
+    [str(x) for x in _GPU_NODES_RAW]
+    if _GPU_NODES_RAW
+    else []
+)
 
 _SCRIPTS = Path(workflow.basedir) / "scripts"
 if str(_SCRIPTS) not in sys.path:
@@ -44,7 +49,9 @@ def _slurm_nodelist() -> str:
     explicit = str(config.get("slurm_nodelist", "")).strip()
     if explicit:
         return explicit
-    return ",".join(_GPU_NODES)
+    if _GPU_NODES:
+        return ",".join(_GPU_NODES)
+    return ""
 
 
 def _slurm_extra(wildcards) -> str:
