@@ -105,21 +105,24 @@ bash scripts/preflight.sh
 snakemake -n
 ```
 
-### Local (match GPU count on your machine)
+### Local (workstation with PyCHARMM + OpenCL on the same machine)
+
+On **pc-studix login nodes**, PyCHARMM fails with `libOpenCL.so.1: cannot open shared object file` — use the **Slurm** section below instead.
 
 ```bash
-# 4 GPUs → run 4 matrix cells at once
+# 4 GPUs → run 4 matrix cells at once (only where libOpenCL is available)
 snakemake -j4 --resources gpu=4 charmm_slot=4 --keep-going
 ```
 
-Single-cell smoke:
+Single-cell smoke on a **GPU node** (full tag when sweeping T/box):
 
 ```bash
-snakemake ../../artifacts/pbc_solvent_burst/dcm_10/done.txt -j1 \
-  --resources gpu=1 charmm_slot=1
+# Slurm (recommended on cluster):
+bash scripts/snakemake_slurm.sh 1 ../../artifacts/pbc_solvent_burst/dcm_10_t300_l32/done.txt
 
-# or directly:
-bash scripts/job_shell.sh dcm_10
+# Or srun one cell:
+srun --partition=gpu --gres=gpu:1 --cpus-per-task=4 \
+  bash scripts/job_shell.sh dcm_10_t300_l32
 ```
 
 ### Slurm (max throughput)

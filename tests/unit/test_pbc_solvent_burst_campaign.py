@@ -173,3 +173,8 @@ def test_slurm_max_concurrent(cfg: dict) -> None:
 def test_total_ps_budget(cfg: dict) -> None:
     assert total_jaxmd_ps(cfg) == pytest.approx(1000.0)
     assert total_pycharmm_equi_ps(cfg) == pytest.approx(50.0)
+
+
+def test_load_config_accepts_string_path() -> None:
+    cfg = load_config(str(WORKFLOW / "config.yaml"))
+    assert "solvents" in cfg
