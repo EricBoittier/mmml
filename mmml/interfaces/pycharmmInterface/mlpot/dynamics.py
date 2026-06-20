@@ -2625,6 +2625,10 @@ def run_dynamics_with_io(
                     flush=True,
                 )
             else:
+                print(
+                    f"overlap ({overlap_context}): geometry check at step {steps_done}",
+                    flush=True,
+                )
                 _, rescued = check_dynamics_overlap(
                     overlap,
                     context=overlap_context,

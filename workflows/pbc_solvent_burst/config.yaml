@@ -50,7 +50,8 @@ cleanup_strategy:
     dynamics_overlap_action: rescue
     dynamics_overlap_min_distance: 1.5
     dynamics_intra_min_distance: 0.5
-    dynamics_overlap_check_interval: 500
+    # Mid-segment extent/overlap checks (heat default; not end-of-segment only).
+    dynamics_overlap_check_interval: 250
     bonded_mm_mini: true
     bonded_mm_mini_after: mini,heat
     bonded_mm_mini_steps: 100
