@@ -40,8 +40,15 @@ from cleanup_strategy import resolve_cleanup_strategy  # noqa: E402
 @pytest.fixture
 def cfg() -> dict:
     raw = yaml.safe_load((WORKFLOW / "config.yaml").read_text(encoding="utf-8"))
-    # Unit tests assume one temperature and box unless a test overrides these lists.
-    return {**raw, "temperatures": [300.0], "box_sizes": [32.0], "pycharmm_equi_ps": 10.0}
+    # Unit tests use legacy fixed-N matrix unless testing bulk-density mode.
+    return {
+        **raw,
+        "cluster_sizes": [10, 30, 50, 80, 100],
+        "bulk_density_fractions": None,
+        "temperatures": [300.0],
+        "box_sizes": [32.0],
+        "pycharmm_equi_ps": 10.0,
+    }
 
 
 @pytest.fixture
@@ -234,3 +241,45 @@ def test_slurm_tier_resource_pools(cfg: dict) -> None:
     pools = slurm_tier_resource_pools(tiered)
     assert pools == {"gpu_fast": 4, "gpu_slow": 2, "charmm_slot": 6}
     assert slurm_launch_jobs(tiered) == 6
+
+
+def test_bulk_density_matrix_sizes() -> None:
+    from bulk_density import n_monomers_at_bulk_density
+
+    assert n_monomers_at_bulk_density("DCM", 28.0, 1.0) == 206
+    assert n_monomers_at_bulk_density("ACO", 28.0, 1.0) == 178
+    assert n_monomers_at_bulk_density("DCM", 28.0, 0.5) == 103
+
+
+def test_bulk_density_iter_matrix_cells() -> None:
+    raw = yaml.safe_load((WORKFLOW / "config.yaml").read_text(encoding="utf-8"))
+    cfg = {
+        **raw,
+        "temperatures": [300.0],
+        "box_sizes": [28.0],
+        "bulk_density_fractions": [0.5, 1.0],
+    }
+    cfg.pop("cluster_sizes", None)
+    cells = list(iter_matrix_cells(cfg))
+    tags = {cell_run_tag(c, cfg) for c in cells}
+    assert "dcm_103" in tags
+    assert "dcm_206" in tags
+    assert "aco_89" in tags  # round(0.5 * 178)
+    assert "aco_178" in tags
+    assert matrix_job_count(cfg) == 4  # 2 solvents × 2 fractions × 1 T × 1 L
+
+
+def test_bulk_density_optional_last_burst() -> None:
+    raw = yaml.safe_load((WORKFLOW / "config.yaml").read_text(encoding="utf-8"))
+    cfg = {
+        **raw,
+        "temperatures": [300.0],
+        "box_sizes": [28.0],
+        "bulk_density_fractions": [0.5, 1.0],
+        "optional_bulk_fractions": [1.0],
+    }
+    cfg.pop("cluster_sizes", None)
+    full = RunCell(solvent="DCM", n_monomers=206, temperature=300.0, box_size=28.0)
+    half = RunCell(solvent="DCM", n_monomers=103, temperature=300.0, box_size=28.0)
+    assert build_campaign(cfg, full)["runs"]["jaxmd_burst_05"].get("optional") is True
+    assert build_campaign(cfg, half)["runs"]["jaxmd_burst_05"].get("optional") is None

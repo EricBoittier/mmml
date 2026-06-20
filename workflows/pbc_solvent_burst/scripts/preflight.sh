@@ -13,6 +13,7 @@ PY="${MMML_PYTHON}"
 from pathlib import Path
 import sys
 sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
+from bulk_density import bulk_reference_table, matrix_uses_bulk_density
 from campaign_lib import (
     load_config,
     matrix_box_sizes,
@@ -36,8 +37,15 @@ print('cleanup_strategy:', strategy.name)
 print('matrix jobs:', matrix_job_count(cfg))
 print('temperatures:', matrix_temperatures(cfg))
 print('box_sizes:', matrix_box_sizes(cfg))
+if matrix_uses_bulk_density(cfg):
+    print('bulk_density_fractions:', cfg.get('bulk_density_fractions'))
+    print('bulk N at L (298 K liquid, monomers per box):')
+    print(bulk_reference_table(matrix_box_sizes(cfg)))
 print('solvents:', cfg['solvents'])
-print('cluster_sizes:', cfg['cluster_sizes'])
+if matrix_uses_bulk_density(cfg):
+    print('matrix mode: bulk-density fractions')
+else:
+    print('cluster_sizes:', cfg['cluster_sizes'])
 print('jaxmd total ps:', total_jaxmd_ps(cfg))
 print('pycharmm equi total ps:', total_pycharmm_equi_ps(cfg))
 print('slurm tiering:', slurm_tier_enabled(cfg))
@@ -57,4 +65,8 @@ fi
 
 max_n=100
 box=32
-echo "NOTE: ${max_n} monomers in ${box} Å cube is very dense; expect overlap rescue at large N."
+if matrix_uses_bulk_density(cfg):
+  echo "NOTE: bulk-density matrix targets 0.5–1.0× liquid N (see preflight N_bulk table)."
+else
+  echo "NOTE: ${max_n} monomers in ${box} Å cube is very dense; expect overlap rescue at large N."
+fi

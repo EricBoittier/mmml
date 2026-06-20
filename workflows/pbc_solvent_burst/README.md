@@ -1,6 +1,6 @@
 # PBC DCM / ACO burst campaign workflow
 
-Snakemake workflow for **DCM** and **ACO** clusters in a **32 Å** cubic PBC box at sizes **10, 30, 50, 80, 100**. Each matrix cell runs one in-process `mmml md-system --run-all` campaign:
+Snakemake workflow for **DCM** and **ACO** in cubic PBC boxes. Each matrix cell runs one in-process `mmml md-system --run-all` campaign:
 
 1. **PyCHARMM init** — MLpot mini + gentle segmented heat (overlap rescue + bonded-MM repair)
 2. **PyCHARMM equi** — 5 × 10 ps NPT equilibration segments (50 ps total)
@@ -34,11 +34,24 @@ uv run --with snakemake --with snakemake-executor-plugin-slurm snakemake --versi
 | Axis | Values (config keys) |
 |------|----------------------|
 | Solvent | `solvents` |
-| Monomer count | `cluster_sizes` |
+| Bulk density | `bulk_density_fractions` — N = fraction × 298 K liquid count per solvent/box |
+| Legacy fixed N | `cluster_sizes` — use instead of `bulk_density_fractions` (mutually exclusive) |
 | Temperature (K) | `temperatures` (list) |
 | Box (Å) | `box_sizes` (list) |
 
-Run tag: `{solvent}_{n}` when there is one temperature and one box (default). When sweeping `temperatures` or `box_sizes`, tags include T/L: `dcm_10_t300_l32`.
+**Bulk reference** (monomers at 100% liquid density):
+
+| L (Å) | DCM N | ACO N |
+|-------|-------|-------|
+| 28 | 206 | 178 |
+| 32 | 308 | 266 |
+| 36 | 439 | 379 |
+
+Default fractions `[0.5, 0.75, 1.0]` → e.g. `dcm_103_t200_l28` (50% bulk DCM), `dcm_206_t200_l28` (100%).
+
+Run `scripts/preflight.sh` to print the full table for configured `box_sizes`.
+
+Run tag: `{solvent}_{n}` when there is one temperature and one box (default). When sweeping `temperatures` or `box_sizes`, tags include T/L: `dcm_154_t300_l32`.
 
 Outputs:
 
@@ -85,7 +98,7 @@ box_sizes: [28, 32, 36]
 
 ### Density warning
 
-N=80–100 in a 32 Å cube is **extremely dense** (400–1000 atoms). Expect frequent overlap rescue; Packmol may fail at the largest sizes. Sizes listed in `optional_sizes: [100]` mark the final JAX-MD burst as `optional` in the campaign (failure does not abort earlier legs when using `--keep-going` at the Snakemake level; within-campaign abort still stops that cell).
+N=80–100 in a 32 Å cube is **extremely dense** when using legacy fixed `cluster_sizes`. With **bulk-density** sizing, 0.5× liquid (~154 DCM in L=32) is the moderate tier; 1.0× (~308) is full liquid and may stress Packmol or heat — those cells mark the final JAX burst `optional` via `optional_bulk_fractions: [1.0]`.
 
 Tune or drop large sizes in `config.yaml` if placement fails.
 
