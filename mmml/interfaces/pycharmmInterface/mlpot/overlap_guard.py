@@ -61,6 +61,9 @@ class DynamicsOverlapConfig:
     # When False (default), overlap chunks hand off via alternating scratch ``.res``
     # files and ``dyna restart``.  True keeps coords/vel in RAM (legacy MLpot path).
     memory_handoff: bool = False
+    # When True, heat uses one overlap chunk per segment (checks only at segment end).
+    # Default False: mid-segment checks every ``check_interval`` (extent/overlap early).
+    heat_segment_boundary_only: bool = False
 
     @property
     def enabled(self) -> bool:
@@ -147,9 +150,20 @@ def add_dynamics_overlap_args(parser: argparse.ArgumentParser) -> None:
         type=int,
         default=500,
         help=(
-            "Integration steps between overlap checks (default: 500). "
-            "Per stage, the effective interval is the largest divisor of the stage "
-            "step count not exceeding this value (and at least dcd-nsavc + 1 when set)."
+            "Integration steps between overlap/extent checks during dynamics "
+            "(default: 500). Effective interval is the largest divisor of the stage "
+            "step count not exceeding this value (and at least dcd-nsavc + 1 when set). "
+            "Heat uses this mid-segment interval by default; see "
+            "--heat-overlap-segment-boundary-only for legacy end-only checks."
+        ),
+    )
+    group.add_argument(
+        "--heat-overlap-segment-boundary-only",
+        action="store_true",
+        help=(
+            "Heat only: run one overlap chunk per heat segment (geometry check at "
+            "segment end only). Default runs checks every --dynamics-overlap-check-interval "
+            "inside each segment so extent/T blow-ups fail faster."
         ),
     )
     group.add_argument(
@@ -236,16 +250,19 @@ def overlap_config_for_stage(
 ) -> DynamicsOverlapConfig | None:
     """Per-stage overlap settings.
 
-    Heat (single or staged): one integration chunk per segment so overlap rescue
-    runs at segment boundaries (``--n-heat-segments`` chain restarts), not every
-    ``--dynamics-overlap-check-interval`` steps inside each segment.  Equi/prod
-    keep the configured interval.
+    Heat defaults to the configured ``check_interval`` inside each segment so
+    extent/overlap guards fire before segment end (CHARMM list-update storms /
+    T spikes).  Set ``heat_segment_boundary_only`` (CLI:
+    ``--heat-overlap-segment-boundary-only``) to restore one check per segment
+    (legacy Hoover / IHTFRQ handoff).
     """
     if overlap is None or not (
         overlap.enabled or overlap.intra_enabled or overlap.extent_enabled
     ):
         return overlap
     if stage.lower() != "heat":
+        return overlap
+    if not overlap.heat_segment_boundary_only:
         return overlap
     from dataclasses import replace
 
@@ -320,6 +337,9 @@ def resolve_dynamics_overlap_config(
             else float(getattr(args, "dynamics_max_monomer_extent", 12.0))
         ),
         memory_handoff=resolve_overlap_memory_handoff(args),
+        heat_segment_boundary_only=bool(
+            getattr(args, "heat_overlap_segment_boundary_only", False)
+        ),
     )
 
 

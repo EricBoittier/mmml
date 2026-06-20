@@ -2033,6 +2033,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 stage == "heat"
                 and n_heat_segments <= 1
                 and stage_overlap is not None
+                and stage_overlap.heat_segment_boundary_only
                 and stage_overlap.enabled
                 and int(stage_overlap.check_interval) >= nstep
                 and not args.quiet

@@ -1369,7 +1369,7 @@ def test_assign_velocities_at_temperature_uses_nstep_zero():
     assert float(kw["firstt"]) == 48.0
 
 
-def test_overlap_config_for_stage_heat_uses_single_segment():
+def test_overlap_config_for_stage_heat_uses_mid_segment_checks_by_default():
     from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         DynamicsOverlapConfig,
         overlap_config_for_stage,
@@ -1382,15 +1382,36 @@ def test_overlap_config_for_stage_heat_uses_single_segment():
     )
     heat_cfg = overlap_config_for_stage(cfg, stage="heat", nstep=4000)
     assert heat_cfg is not None
-    assert int(heat_cfg.check_interval) == 4000
+    assert int(heat_cfg.check_interval) == 500
     staged_heat = overlap_config_for_stage(
         cfg, stage="heat", nstep=1000, n_segments=4
     )
     assert staged_heat is not None
-    assert int(staged_heat.check_interval) == 1000
+    assert int(staged_heat.check_interval) == 500
     nve_cfg = overlap_config_for_stage(cfg, stage="nve", nstep=8000)
     assert nve_cfg is not None
     assert int(nve_cfg.check_interval) == 500
+
+
+def test_overlap_config_for_stage_heat_segment_boundary_only():
+    from dataclasses import replace
+
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        DynamicsOverlapConfig,
+        overlap_config_for_stage,
+    )
+
+    cfg = replace(
+        DynamicsOverlapConfig(
+            action="rescue",
+            check_interval=500,
+            n_monomers=30,
+        ),
+        heat_segment_boundary_only=True,
+    )
+    heat_cfg = overlap_config_for_stage(cfg, stage="heat", nstep=4000)
+    assert heat_cfg is not None
+    assert int(heat_cfg.check_interval) == 4000
 
 
 def test_overlap_should_split_trajectory_limits_chunk_dcd_count():
