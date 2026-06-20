@@ -63,6 +63,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
     DynamicsOverlapConfig,
     attach_prior_segment_restart,
     augment_overlap_config_for_rescue,
+    check_dynamics_overlap,
     overlap_config_for_stage,
     resolve_dynamics_overlap_config,
 )
@@ -1233,6 +1234,25 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         dyn_stages = [s for s in _STAGE_ORDER if s in stages and s != "mini"]
         if not dyn_stages:
             return 0
+
+        stage_overlap_pre = _overlap_for_stage(
+            "heat",
+            overlap_cfg,
+            ctx=ctx,
+            args=args,
+            topology_psf=recovery_topology_psf,
+            mini_registry=mini_registry,
+        )
+        if stage_overlap_pre is not None and (
+            stage_overlap_pre.enabled
+            or stage_overlap_pre.intra_enabled
+            or stage_overlap_pre.extent_enabled
+        ):
+            check_dynamics_overlap(
+                stage_overlap_pre,
+                context="after MLpot mini (pre-dynamics)",
+                mlpot_ctx=ctx,
+            )
 
         assert_mlpot_user_active(ctx, context="staged dynamics", quiet=bool(args.quiet))
         assert_dynamics_ready(
