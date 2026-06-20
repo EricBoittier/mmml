@@ -81,7 +81,8 @@ ml_batch_size: 1024
 
 mpirun_wrapper: ../../scripts/mmml-charmm-mpirun.sh
 
-slurm_max_concurrent: 10
+# Fast GPUs only (best → ok): 5090×8 + 4090×2 + 3090/Ti×4 = 14 GPUs max
+slurm_max_concurrent: 14
 slurm_partition: gpu
 slurm_nodes: 1
 slurm_ntasks: 1
@@ -89,7 +90,14 @@ slurm_cpus_per_task: 4
 slurm_mem_mb_per_cpu: 3000
 slurm_runtime_min: 2880
 slurm_mail_user: ericdavid.boittier@unibas.ch
-#slurm_nodelist: gpu08,gpu09
-#slurm_gpu_nodes: [gpu08, gpu09]
+slurm_gpu_nodes:
+  - gpu08   # RTX5090 ×2
+  - gpu09
+  - gpu10
+  - gpu11
+  - gpu06   # RTX4090 ×1
+  - gpu26
+  - gpu04   # RTX3090 ×2
+  - gpu25   # RTX3090 Ti ×2
 
 optional_sizes: [100]
