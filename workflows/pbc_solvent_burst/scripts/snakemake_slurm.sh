@@ -32,6 +32,23 @@ fi
 JOBS="${1:-$DEFAULT_JOBS}"
 shift || true
 
+if [[ "${MMML_SNAKEMAKE_FORCE:-}" != "1" ]]; then
+  _existing=()
+  while IFS= read -r _pid; do
+    _cwd="$(readlink -f "/proc/${_pid}/cwd" 2>/dev/null || true)"
+    if [[ "$_cwd" == "$WORKFLOW_ROOT" ]]; then
+      _existing+=("$_pid")
+    fi
+  done < <(pgrep -f 'snakemake --profile profiles/slurm|uv run --with snakemake' 2>/dev/null || true)
+  if ((${#_existing[@]} > 0)); then
+    echo "snakemake_slurm.sh: driver already running in ${WORKFLOW_ROOT} (PIDs: ${_existing[*]})." >&2
+    echo "  bash scripts/stop_snakemake.sh" >&2
+    echo "  snakemake --profile profiles/slurm --unlock" >&2
+    echo "  Or force a second driver: MMML_SNAKEMAKE_FORCE=1 bash scripts/snakemake_slurm.sh ..." >&2
+    exit 1
+  fi
+fi
+
 echo "Snakemake Slurm: -j${JOBS} --resources ${DEFAULT_RES}" >&2
 
 # shellcheck disable=SC2086

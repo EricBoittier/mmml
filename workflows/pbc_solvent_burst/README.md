@@ -136,12 +136,12 @@ Set **`slurm_max_concurrent_fast`** / **`slurm_max_concurrent_slow`** (or legacy
 ```bash
 bash scripts/preflight.sh   # prints tier pools and N threshold
 
-```bash
-# uses slurm_max_concurrent from config.yaml (default 10)
-nohup bash scripts/snakemake_slurm.sh > snakemake_slurm.log 2>&1 &
+# One driver only — stop old ones before relaunching:
+bash scripts/stop_snakemake.sh
+snakemake --profile profiles/slurm --unlock
 
-# or override for this launch only (e.g. 8 GPUs on gpu08+gpu09)
-nohup bash scripts/snakemake_slurm.sh 8 > snakemake_slurm.log 2>&1 &
+nohup bash scripts/snakemake_slurm.sh > snakemake_slurm.log 2>&1 &
+pgrep -af 'snakemake --profile profiles/slurm'   # expect exactly one uv + one python
 ```
 
 Or manually:
