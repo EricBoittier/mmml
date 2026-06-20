@@ -85,3 +85,27 @@ def test_assert_no_intramonomer_close_contact_raises():
         assert_no_intramonomer_close_contact(
             pos, offsets, excluded, min_distance=1.0, context="test"
         )
+
+
+def test_collapsed_1_3_geminal_hh_still_flagged():
+    """Geminal H–H (PSF 1–3) must not hide sub-threshold clashes."""
+    pos = np.array(
+        [
+            [0.0, 0.0, 0.0],   # C
+            [1.00, 0.0, 0.0],  # H
+            [1.40, 0.0, 0.0],  # H (0.40 Å from geminal partner)
+        ],
+        dtype=float,
+    )
+    offsets = np.array([0, 3], dtype=int)
+    excluded = build_bond_exclusion_pairs([1, 1], [2, 3], exclude_1_3=True)
+    assert (0, 1) in excluded and (0, 2) in excluded and (1, 2) in excluded
+    dist, violation = find_worst_intramonomer_close_contact(
+        pos, offsets, excluded, min_distance=0.5
+    )
+    assert violation is not None
+    assert dist == pytest.approx(0.40)
+    with pytest.raises(RuntimeError, match="intra-monomer close contact"):
+        assert_no_intramonomer_close_contact(
+            pos, offsets, excluded, min_distance=0.5, context="test"
+        )

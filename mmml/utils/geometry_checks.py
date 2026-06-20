@@ -489,8 +489,14 @@ def find_worst_intramonomer_close_contact(
     excluded_pairs: frozenset[tuple[int, int]] | set[tuple[int, int]],
     *,
     cell: Any | None = None,
+    min_distance: float | None = None,
 ) -> tuple[float, IntramonomerCloseContact | None]:
-    """Return the minimum non-excluded atom distance inside any monomer."""
+    """Return the minimum atom–atom distance inside any monomer.
+
+    PSF 1–2 / 1–3 pairs are normally skipped (``excluded_pairs``). When
+    ``min_distance`` is set, excluded pairs closer than that threshold are still
+    evaluated so collapsed geminal H–H (etc.) cannot hide behind 1–3 exclusions.
+    """
     pos = np.asarray(positions, dtype=float)
     offsets = np.asarray(monomer_offsets, dtype=int)
     n_monomers = int(len(offsets) - 1)
@@ -499,6 +505,7 @@ def find_worst_intramonomer_close_contact(
 
     cell_mat = _cell_matrix(cell)
     excluded = frozenset(excluded_pairs)
+    clash_floor = float(min_distance) if min_distance is not None else None
     best_dist = float("inf")
     best: IntramonomerCloseContact | None = None
 
@@ -512,10 +519,12 @@ def find_worst_intramonomer_close_contact(
             for local_j in range(local_i + 1, n_local):
                 gi = si + local_i
                 gj = si + local_j
-                if normalize_atom_pair(gi, gj) in excluded:
-                    continue
+                pair = normalize_atom_pair(gi, gj)
                 disp = _mic_displacement(block[local_i], block[local_j], cell_mat)
                 dist = float(np.linalg.norm(disp))
+                if pair in excluded:
+                    if clash_floor is None or dist >= clash_floor:
+                        continue
                 if dist < best_dist:
                     best_dist = dist
                     best = IntramonomerCloseContact(
@@ -613,6 +622,7 @@ def assert_no_intramonomer_close_contact(
         monomer_offsets,
         excluded_pairs,
         cell=cell,
+        min_distance=threshold,
     )
     if violation is not None and best_dist < threshold:
         raise RuntimeError(
