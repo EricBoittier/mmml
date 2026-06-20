@@ -77,6 +77,15 @@ def test_matrix_expands_temperature_and_box(sweep_cfg: dict) -> None:
     assert matrix_job_count(sweep_cfg) == 2 * 5 * 2 * 2
 
 
+def test_exclude_run_tags_skips_cells(sweep_cfg: dict) -> None:
+    cfg = {**sweep_cfg, "exclude_run_tags": ["dcm_10_t300_l32", "aco_10_t280_l28"]}
+    tags = {cell_run_tag(c, cfg) for c in iter_matrix_cells(cfg)}
+    assert "dcm_10_t300_l32" not in tags
+    assert "aco_10_t280_l28" not in tags
+    assert "dcm_10_t280_l28" in tags
+    assert matrix_job_count(cfg) == matrix_job_count(sweep_cfg) - 2
+
+
 def test_cell_from_tag_accepts_long_form_when_short_is_canonical(cfg: dict, cell: RunCell) -> None:
     assert cell_from_tag(cfg, "dcm_10") == cell
     assert cell_from_tag(cfg, "dcm_10_t300_l32") == cell

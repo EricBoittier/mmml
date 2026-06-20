@@ -89,11 +89,15 @@ def iter_matrix_cells(cfg: dict[str, Any]) -> Iterator[RunCell]:
     """Cartesian product of solvents × cluster_sizes × temperatures × box_sizes."""
     solvents = [str(s).strip().upper() for s in cfg.get("solvents", [])]
     sizes = [int(n) for n in cfg.get("cluster_sizes", [])]
+    skip = {str(t).strip() for t in (cfg.get("exclude_run_tags") or [])}
     for sol in solvents:
         for n in sizes:
             for temp in matrix_temperatures(cfg):
                 for box in matrix_box_sizes(cfg):
-                    yield RunCell(solvent=sol, n_monomers=n, temperature=temp, box_size=box)
+                    cell = RunCell(solvent=sol, n_monomers=n, temperature=temp, box_size=box)
+                    if cell_run_tag(cell, cfg) in skip:
+                        continue
+                    yield cell
 
 
 def matrix_tag_includes_TL(cfg: dict[str, Any]) -> bool:
