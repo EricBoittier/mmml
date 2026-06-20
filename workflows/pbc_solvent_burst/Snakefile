@@ -32,7 +32,8 @@ if str(_SCRIPTS) not in sys.path:
 from campaign_lib import cell_run_tag, iter_matrix_cells  # noqa: E402
 
 _MATRIX = list(iter_matrix_cells(dict(config)))
-_CELL_TAGS = [cell_run_tag(c) for c in _MATRIX]
+_CFG = dict(config)
+_CELL_TAGS = [cell_run_tag(c, _CFG) for c in _MATRIX]
 
 
 def _artifact_dir(wildcards) -> str:

@@ -45,7 +45,7 @@ def main() -> int:
         status = "done" if done and handoff else ("partial" if summary else "pending")
         rows.append(
             {
-                "run_tag": cell_run_tag(cell),
+                "run_tag": cell_run_tag(cell, cfg),
                 "solvent": cell.solvent,
                 "n_monomers": str(cell.n_monomers),
                 "temperature": str(cell.temperature),

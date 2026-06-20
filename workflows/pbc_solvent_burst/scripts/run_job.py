@@ -86,7 +86,7 @@ def main() -> int:
     os.chdir(_repo_root())
     cmd = _resolve_mmml_cmd(md_argv)
 
-    tag = cell_run_tag(cell)
+    tag = cell_run_tag(cell, cfg)
     print(f"Campaign jobs ({tag}): {campaign_job_order(cfg)}", flush=True)
     print(f"Running: {' '.join(cmd)}", flush=True)
     rc = subprocess.call(cmd)
