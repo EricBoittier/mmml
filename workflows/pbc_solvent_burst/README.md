@@ -145,7 +145,7 @@ Or manually:
 N=10   # GPUs available
 uv run --with snakemake --with snakemake-executor-plugin-slurm \
   snakemake --profile profiles/slurm -j"$N" \
-  --resources "gpu=${N} charmm_slot=${N}" --keep-going
+  --resources gpu="$N" charmm_slot="$N" --keep-going
 ```
 
 **Do not** use `--resources gpu=10 charmm_slot=1` for throughput — `charmm_slot=1` caps the workflow to **one** Snakemake job at a time even if GPUs are idle.
