@@ -38,7 +38,7 @@ uv run --with snakemake --with snakemake-executor-plugin-slurm snakemake --versi
 | Temperature (K) | `temperatures` (list) |
 | Box (Å) | `box_sizes` (list) |
 
-Run tag: `{solvent}_{n}_t{T}_l{L}` e.g. `dcm_10_t300_l32`.
+Run tag: `{solvent}_{n}` when there is one temperature and one box (default). When sweeping `temperatures` or `box_sizes`, tags include T/L: `dcm_10_t300_l32`.
 
 Outputs:
 
@@ -115,11 +115,11 @@ snakemake -j4 --resources gpu=4 charmm_slot=4 --keep-going
 Single-cell smoke:
 
 ```bash
-snakemake ../../artifacts/pbc_solvent_burst/dcm_10_t300_l32/done.txt -j1 \
+snakemake ../../artifacts/pbc_solvent_burst/dcm_10/done.txt -j1 \
   --resources gpu=1 charmm_slot=1
 
 # or directly:
-bash scripts/job_shell.sh dcm_10_t300_l32
+bash scripts/job_shell.sh dcm_10
 ```
 
 ### Slurm (max throughput)

@@ -19,6 +19,7 @@ from campaign_lib import (  # noqa: E402
     build_md_system_campaign_argv,
     campaign_job_order,
     cell_from_cli,
+    cell_from_tag,
     cell_run_tag,
     composition_string,
     iter_matrix_cells,
@@ -33,7 +34,18 @@ from cleanup_strategy import resolve_cleanup_strategy  # noqa: E402
 
 @pytest.fixture
 def cfg() -> dict:
-    return yaml.safe_load((WORKFLOW / "config.yaml").read_text(encoding="utf-8"))
+    raw = yaml.safe_load((WORKFLOW / "config.yaml").read_text(encoding="utf-8"))
+    # Unit tests assume one temperature and box unless a test overrides these lists.
+    return {**raw, "temperatures": [300.0], "box_sizes": [32.0], "pycharmm_equi_ps": 10.0}
+
+
+@pytest.fixture
+def sweep_cfg(cfg: dict) -> dict:
+    return {
+        **cfg,
+        "temperatures": [280.0, 300.0],
+        "box_sizes": [28.0, 32.0],
+    }
 
 
 @pytest.fixture
@@ -48,18 +60,29 @@ def test_campaign_job_order_has_eleven_legs(cfg: dict) -> None:
     assert order[-1] == "jaxmd_burst_05"
 
 
-def test_run_tag_includes_temperature_and_box(cell: RunCell) -> None:
-    assert cell_run_tag(cell) == "dcm_10_t300_l32"
+def test_run_tag_short_when_single_T_and_box(cfg: dict, cell: RunCell) -> None:
+    assert cell_run_tag(cell, cfg) == "dcm_10"
 
 
-def test_matrix_expands_temperature_and_box(cfg: dict) -> None:
-    expanded = dict(cfg)
-    expanded["temperatures"] = [280.0, 300.0]
-    expanded["box_sizes"] = [28.0, 32.0]
-    tags = {cell_run_tag(c) for c in iter_matrix_cells(expanded)}
+def test_matrix_expands_temperature_and_box(sweep_cfg: dict) -> None:
+    tags = {cell_run_tag(c, sweep_cfg) for c in iter_matrix_cells(sweep_cfg)}
     assert "dcm_10_t280_l28" in tags
     assert "dcm_10_t300_l32" in tags
-    assert matrix_job_count(expanded) == 2 * 5 * 2 * 2
+    assert "dcm_10" not in tags
+    assert matrix_job_count(sweep_cfg) == 2 * 5 * 2 * 2
+
+
+def test_cell_from_tag_accepts_long_form_when_short_is_canonical(cfg: dict, cell: RunCell) -> None:
+    assert cell_from_tag(cfg, "dcm_10") == cell
+    assert cell_from_tag(cfg, "dcm_10_t300_l32") == cell
+
+
+def test_cell_from_tag_full_tag_on_sweep(sweep_cfg: dict) -> None:
+    cell = cell_from_tag(sweep_cfg, "dcm_10_t300_l32")
+    assert cell.solvent == "DCM"
+    assert cell.n_monomers == 10
+    assert cell.temperature == pytest.approx(300.0)
+    assert cell.box_size == pytest.approx(32.0)
 
 
 def test_depends_on_chain(cfg: dict, cell: RunCell) -> None:
@@ -89,20 +112,20 @@ def test_pretreat_from_cleanup_strategy(cfg: dict, cell: RunCell) -> None:
     campaign = build_campaign(enabled, cell)
     init = campaign["runs"]["pycharmm_init"]
     assert init["charmm_mm_pretreat"] is True
-    assert init["charmm_mm_pretreat_ps_equi"] == pytest.approx(10.0)
+    assert init["charmm_mm_pretreat_ps_equi"] == pytest.approx(100.0)
     assert campaign["runs"]["pycharmm_equi_00"]["charmm_mm_pretreat"] is True
 
 
 def test_campaign_output_dirs_under_cell_tag(cfg: dict, cell: RunCell) -> None:
     campaign = build_campaign(cfg, cell)
-    assert campaign["defaults"]["output_root"].endswith("dcm_10_t300_l32")
+    assert campaign["defaults"]["output_root"].endswith("dcm_10")
     init = campaign["runs"]["pycharmm_init"]
-    assert init["output_dir"].endswith("dcm_10_t300_l32/pycharmm_init")
+    assert init["output_dir"].endswith("dcm_10/pycharmm_init")
     from mmml.cli.run.md_campaign import _resolve_output_dir, merge_campaign_job_config
 
     merged = merge_campaign_job_config(campaign, "pycharmm_init")
     out = _resolve_output_dir(merged, "pycharmm_init")
-    assert str(out).endswith("dcm_10_t300_l32/pycharmm_init")
+    assert str(out).endswith("dcm_10/pycharmm_init")
 
 
 def test_heat_finalt_follows_cell_temperature(cfg: dict) -> None:

@@ -96,8 +96,28 @@ def iter_matrix_cells(cfg: dict[str, Any]) -> Iterator[RunCell]:
                     yield RunCell(solvent=sol, n_monomers=n, temperature=temp, box_size=box)
 
 
-def cell_run_tag(cell: RunCell) -> str:
-    """Filesystem-safe run id, e.g. ``dcm_10_t300_l32``."""
+def matrix_tag_includes_TL(cfg: dict[str, Any]) -> bool:
+    """True when multiple temperatures or box sizes require T/L in the run tag."""
+    return len(matrix_temperatures(cfg)) > 1 or len(matrix_box_sizes(cfg)) > 1
+
+
+def cell_run_tag(cell: RunCell, cfg: dict[str, Any] | None = None) -> str:
+    """Filesystem-safe run id.
+
+    Single T and box in the matrix: ``dcm_10`` (backward compatible).
+    Sweeps: ``dcm_10_t300_l32``.
+    """
+    sol = solvent_slug(cell.solvent).lower()
+    base = f"{sol}_{int(cell.n_monomers)}"
+    if cfg is not None and not matrix_tag_includes_TL(cfg):
+        return base
+    t = int(round(cell.temperature))
+    box = int(round(cell.box_size))
+    return f"{base}_t{t}_l{box}"
+
+
+def cell_run_tag_long(cell: RunCell) -> str:
+    """Always include T/L suffix (for alias lookup)."""
     sol = solvent_slug(cell.solvent).lower()
     t = int(round(cell.temperature))
     box = int(round(cell.box_size))
@@ -110,7 +130,7 @@ def composition_string(cell: RunCell) -> str:
 
 def run_output_dir(cfg: dict[str, Any], cell: RunCell) -> Path:
     root = repo_root() / str(cfg.get("output_root", "artifacts/pbc_solvent_burst"))
-    return (root / cell_run_tag(cell)).resolve()
+    return (root / cell_run_tag(cell, cfg)).resolve()
 
 
 def run_seed(cell: RunCell, *, seed_base: int = 123456) -> int:
@@ -155,7 +175,7 @@ def campaign_job_order(cfg: dict[str, Any] | None = None) -> list[str]:
 def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
     """Build full campaign dict for one matrix cell."""
     comp = composition_string(cell)
-    tag = cell_run_tag(cell)
+    tag = cell_run_tag(cell, cfg)
     seed = run_seed(cell, seed_base=int(cfg.get("seed_base", 123456)))
     burst_ps = float(cfg.get("jaxmd_burst_ps", 200.0))
     equi_ps = float(cfg.get("pycharmm_equi_ps", 10.0))
@@ -342,11 +362,19 @@ def paths_for_run(cfg: dict[str, Any], cell: RunCell) -> dict[str, Path]:
 
 
 def cell_from_tag(cfg: dict[str, Any], tag: str) -> RunCell:
-    """Resolve a run tag back to a matrix cell (must exist in config matrix)."""
-    for cell in iter_matrix_cells(cfg):
-        if cell_run_tag(cell) == tag:
-            return cell
-    raise KeyError(f"run tag {tag!r} not in config matrix")
+    """Resolve a run tag back to a matrix cell."""
+    by_tag = {cell_run_tag(c, cfg): c for c in iter_matrix_cells(cfg)}
+    if tag in by_tag:
+        return by_tag[tag]
+    # Accept long-form tags when matrix uses short tags (single T/L).
+    if not matrix_tag_includes_TL(cfg):
+        for cell in iter_matrix_cells(cfg):
+            if cell_run_tag_long(cell) == tag:
+                return cell
+    raise KeyError(
+        f"run tag {tag!r} not in config matrix "
+        f"(examples: {', '.join(list(by_tag.keys())[:3])}…)"
+    )
 
 
 def cell_from_cli(
@@ -365,8 +393,8 @@ def cell_from_cli(
     if len(temps) != 1 or len(boxes) != 1:
         raise ValueError("Specify --temperature and --box-size when matrix lists have multiple values")
     cell = RunCell(solvent=sol, n_monomers=n, temperature=temps[0], box_size=boxes[0])
-    valid_tags = {cell_run_tag(c) for c in iter_matrix_cells(cfg)}
-    if cell_run_tag(cell) not in valid_tags:
+    valid_tags = {cell_run_tag(c, cfg) for c in iter_matrix_cells(cfg)}
+    if cell_run_tag(cell, cfg) not in valid_tags:
         raise ValueError(f"{cell} not in config matrix (valid tags: {len(valid_tags)})")
     return cell
 
@@ -375,7 +403,7 @@ def cell_from_cli(
 def run_tag(solvent: str, n_monomers: int) -> str:
     cfg = load_config()
     cell = cell_from_cli(cfg, solvent, n_monomers)
-    return cell_run_tag(cell)
+    return cell_run_tag(cell, cfg)
 
 
 def composition_string_legacy(solvent: str, n_monomers: int) -> str:
