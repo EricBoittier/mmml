@@ -63,7 +63,7 @@ cleanup_strategy:
     handoff_quality_action: minimize
     jaxmd_minimize_steps: 200
     jaxmd_pbc_minimize_steps: 200
-    dynamics_overlap_action: warn
+    dynamics_overlap_action: rescue
     overlap_rescue_sd_steps: 200
     overlap_rescue_abnr_steps: 400
     steps_per_recording: 800

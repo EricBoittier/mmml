@@ -707,7 +707,7 @@ def set_up_nhc_sim_routine(
                 if overlap_action == "error":
                     raise
                 if (
-                    overlap_action == "warn"
+                    overlap_action in ("warn", "rescue")
                     and overlap_charmm_rescue_fn is not None
                 ):
                     pos_np = np.asarray(jax.device_get(positions), dtype=float)

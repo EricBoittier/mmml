@@ -85,7 +85,7 @@ def _from_legacy_flat_keys(cfg: dict[str, Any]) -> CleanupStrategy:
         "handoff_quality_action": cfg.get("handoff_quality_action", "minimize"),
         "jaxmd_minimize_steps": cfg.get("jaxmd_minimize_steps", 200),
         "jaxmd_pbc_minimize_steps": cfg.get("jaxmd_pbc_minimize_steps", 200),
-        "dynamics_overlap_action": cfg.get("jaxmd_dynamics_overlap_action", "warn"),
+        "dynamics_overlap_action": cfg.get("jaxmd_dynamics_overlap_action", "rescue"),
         "overlap_rescue_sd_steps": cfg.get("dynamics_overlap_charmm_sd_steps", 200),
         "overlap_rescue_abnr_steps": cfg.get("dynamics_overlap_charmm_abnr_steps", 400),
         "steps_per_recording": cfg.get("steps_per_recording", 800),
@@ -142,7 +142,7 @@ def jaxmd_job_flags(strategy: CleanupStrategy) -> dict[str, Any]:
         "handoff_quality_action": str(jd.get("handoff_quality_action", "minimize")),
         "jaxmd_minimize_steps": int(jd.get("jaxmd_minimize_steps", 200)),
         "jaxmd_pbc_minimize_steps": int(jd.get("jaxmd_pbc_minimize_steps", 200)),
-        "dynamics_overlap_action": str(jd.get("dynamics_overlap_action", "warn")),
+        "dynamics_overlap_action": str(jd.get("dynamics_overlap_action", "rescue")),
         "dynamics_overlap_charmm_sd_steps": sd,
         "dynamics_overlap_charmm_abnr_steps": abnr,
         "extra_args": [
