@@ -15,6 +15,7 @@ from cleanup_strategy import (
     pretreat_job_flags,
     pycharmm_job_flags,
     resolve_cleanup_strategy,
+    resolve_pycharmm_heat_thermostat,
 )
 
 
@@ -231,6 +232,7 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
     optional_cell = cell_is_optional(cell, cfg)
     cell_root = run_output_dir(cfg, cell)
     strategy = resolve_cleanup_strategy(cfg)
+    heat_thermostat = resolve_pycharmm_heat_thermostat(cfg, strategy)
 
     defaults: dict[str, Any] = {
         "composition": comp,
@@ -275,7 +277,7 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
                 "n_heat_segments": int(cfg.get("n_heat_segments", 8)),
                 "heat_firstt": float(cfg.get("heat_firstt", 10.0)),
                 "heat_finalt": float(cell.temperature),
-                "heat_thermostat": str(cfg.get("heat_thermostat", "hoover")),
+                "heat_thermostat": heat_thermostat,
                 **repair,
                 **pretreat,
             },

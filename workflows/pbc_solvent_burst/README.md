@@ -108,9 +108,10 @@ Early heat abort (`restart step ~200 < nstep`, `echeck` stop, wild CPT piston) o
 
 | Setting | Purpose |
 |---------|---------|
-| `heat_thermostat: scale` | IHTFRQ velocity ramp without Hoover CPT (avoids piston instability on ML USER-only heat) |
+| `heat_thermostat: hoover` | MLpot heat uses Hoover CPT (required with pretreat + overlap chunks; campaign coerces `scale`→`hoover` when pretreat is on) |
 | `cleanup_strategy.mlpot.no_echeck_heat: true` | Disables CHARMM ECHECK during heat only; equi/prod still use scaled `--echeck` |
 | `dynamics_overlap_check_interval: 250` | Extent/overlap checks every ~250 steps **inside** each heat segment (not only at segment end) |
+| `dcd_nsavc: 100` | DCD save interval; must be `<` overlap interval so chunk DCDs get frames |
 
 For legacy Hoover heat that checks only at segment boundaries, pass `--heat-overlap-segment-boundary-only`.
 

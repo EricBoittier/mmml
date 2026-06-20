@@ -379,6 +379,26 @@ def test_build_stage_dynamics_kw_heat_no_echeck_heat_disables_echeck():
     assert kw["ihtfrq"] > 0
 
 
+def test_resolve_heat_thermostat_coerces_scale_after_pretreat():
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_heat_thermostat
+
+    args = argparse.Namespace(
+        heat_thermostat="scale",
+        charmm_mm_pretreat=True,
+        setup="pbc_npt",
+        quiet=True,
+    )
+    assert resolve_heat_thermostat(args) == "hoover"
+
+    args_no_pretreat = argparse.Namespace(
+        heat_thermostat="scale",
+        charmm_mm_pretreat=False,
+        setup="pbc_npt",
+        quiet=True,
+    )
+    assert resolve_heat_thermostat(args_no_pretreat) == "scale"
+
+
 def test_build_stage_dynamics_kw_heat_scale_pbc_avoids_cpt():
     args = argparse.Namespace(heat_thermostat="scale", heat_firstt=40.0, heat_finalt=200.0)
     dyn_print = {"nprint": 100, "iprfrq": 500, "isvfrq": 500}

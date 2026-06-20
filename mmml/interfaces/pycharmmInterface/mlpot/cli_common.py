@@ -437,12 +437,37 @@ def resolve_heat_comp_damp(args: argparse.Namespace) -> bool:
     return bool(getattr(args, "heat_comp_damp", False))
 
 
-def resolve_heat_thermostat(args: argparse.Namespace) -> str:
-    """Heat-stage thermostat: ``scale`` (IHTFRQ) or ``hoover`` (CHARMM Hoover NVT)."""
+def _requested_heat_thermostat(args: argparse.Namespace) -> str:
     raw = str(getattr(args, "heat_thermostat", "scale") or "scale").strip().lower()
     if raw not in ("scale", "hoover"):
         raise ValueError(f"unknown heat_thermostat: {raw!r}")
     return raw
+
+
+def heat_thermostat_requires_hoover_after_pretreat(args: argparse.Namespace) -> bool:
+    """True when MLpot heat must use Hoover to avoid two-nose CHARMM conflicts."""
+    if not bool(getattr(args, "charmm_mm_pretreat", False)):
+        return False
+    setup = str(getattr(args, "setup", "") or "").strip().lower()
+    return setup.startswith("pbc_")
+
+
+def resolve_heat_thermostat(args: argparse.Namespace) -> str:
+    """Heat-stage thermostat: ``scale`` (IHTFRQ) or ``hoover`` (CHARMM Hoover NVT).
+
+    After CHARMM MM pretreat (Hoover NVT equi/prod in-session), ``scale`` heat
+    triggers CHARMM ``Calling two different nose methods`` on overlap chunks.
+    """
+    requested = _requested_heat_thermostat(args)
+    if requested == "scale" and heat_thermostat_requires_hoover_after_pretreat(args):
+        if not bool(getattr(args, "quiet", False)):
+            print(
+                "HEAT: forcing heat_thermostat=hoover (CHARMM MM pretreat + PBC heat; "
+                "scale/ihtfrq conflicts with Hoover state on overlap restarts)",
+                flush=True,
+            )
+        return "hoover"
+    return requested
 
 
 def resolve_heat_hoover_tmass(
