@@ -1416,8 +1416,18 @@ def add_staged_md_args(parser: argparse.ArgumentParser) -> None:
         "--charmm-mm-pretreat",
         action="store_true",
         help=(
-            "Before MLpot: CGENFF SD/ABNR minimize + CHARMM heating (no USER/ML). "
+            "Before MLpot: CGENFF SD/ABNR minimize + CHARMM heat/equi/prod (no USER/ML). "
             "Coordinates feed MLpot mini/heat/NVE."
+        ),
+    )
+    pretreat.add_argument(
+        "--charmm-mm-pretreat-ps-heat",
+        type=float,
+        default=None,
+        metavar="PS",
+        help=(
+            "Pretreat CHARMM heat length in ps (overrides --charmm-mm-pretreat-heat-nstep "
+            "when set)"
         ),
     )
     pretreat.add_argument(
@@ -1426,6 +1436,20 @@ def add_staged_md_args(parser: argparse.ArgumentParser) -> None:
         default=2000,
         metavar="N",
         help="Integration steps for pretreat CHARMM heat (default: 2000)",
+    )
+    pretreat.add_argument(
+        "--charmm-mm-pretreat-ps-equi",
+        type=float,
+        default=0.0,
+        metavar="PS",
+        help="Pretreat CHARMM NPT equilibration in ps (0 skips; default: 0)",
+    )
+    pretreat.add_argument(
+        "--charmm-mm-pretreat-ps-prod",
+        type=float,
+        default=0.0,
+        metavar="PS",
+        help="Pretreat CHARMM NPT production in ps (0 skips; default: 0)",
     )
     pretreat.add_argument(
         "--charmm-mm-pretreat-mini-sd",

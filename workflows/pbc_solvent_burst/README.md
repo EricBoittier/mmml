@@ -72,10 +72,11 @@ bash scripts/preflight.sh
 snakemake -n
 ```
 
-### Local (limit concurrent GPU jobs)
+### Local (match GPU count on your machine)
 
 ```bash
-snakemake -j2 --resources gpu=1 charmm_slot=1 --keep-going
+# 4 GPUs → run 4 matrix cells at once
+snakemake -j4 --resources gpu=4 charmm_slot=4 --keep-going
 ```
 
 Single-cell smoke:
@@ -85,19 +86,30 @@ snakemake ../../artifacts/pbc_solvent_burst/dcm_10/done.txt -j1 \
   --resources gpu=1 charmm_slot=1
 ```
 
-### Slurm (up to 10 concurrent GPU jobs)
+### Slurm (max throughput)
+
+Set **`slurm_max_concurrent`** in [config.yaml](config.yaml) to the **total number of GPUs** you want to use across `slurm_gpu_nodes` (default **10** = all matrix cells at once). The launcher sets **`gpu` and `charmm_slot` pools to the same value** so Snakemake does not serialize jobs.
 
 ```bash
-nohup bash scripts/snakemake_slurm.sh 10 > snakemake_slurm.log 2>&1 &
+# uses slurm_max_concurrent from config.yaml (default 10)
+nohup bash scripts/snakemake_slurm.sh > snakemake_slurm.log 2>&1 &
+
+# or override for this launch only (e.g. 8 GPUs on gpu08+gpu09)
+nohup bash scripts/snakemake_slurm.sh 8 > snakemake_slurm.log 2>&1 &
 ```
 
 Or manually:
 
 ```bash
+N=10   # GPUs available
 uv run --with snakemake --with snakemake-executor-plugin-slurm \
-  snakemake --profile profiles/slurm -j10 \
-  --resources gpu=10 charmm_slot=10 --keep-going
+  snakemake --profile profiles/slurm -j"$N" \
+  --resources "gpu=${N}" "charmm_slot=${N}" --keep-going
 ```
+
+**Do not** use `--resources gpu=10 charmm_slot=1` for throughput — `charmm_slot=1` caps the workflow to **one** Snakemake job at a time even if GPUs are idle.
+
+Slurm may still queue jobs if `slurm_max_concurrent` exceeds free GPUs; that is normal. Multiple one-GPU jobs on the same node share CPU/RAM during PyCHARMM legs but use separate GPUs during JAX-MD bursts.
 
 Default runtime: **48 h** per job (`slurm_runtime_min: 2880`). Adjust in `config.yaml` if 1 ns JAX-MD per cell needs more wall time.
 

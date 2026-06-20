@@ -579,8 +579,18 @@ def build_parser() -> argparse.ArgumentParser:
         "--charmm-mm-pretreat",
         action="store_true",
         help=(
-            "pycharmm: CGENFF minimize + CHARMM heat before MLpot (no PhysNet); "
-            "see --charmm-mm-pretreat-heat-nstep"
+            "pycharmm: CGENFF minimize + CHARMM heat/equi/prod before MLpot (no PhysNet); "
+            "see --charmm-mm-pretreat-ps-* and --charmm-mm-pretreat-heat-nstep"
+        ),
+    )
+    parser.add_argument(
+        "--charmm-mm-pretreat-ps-heat",
+        type=float,
+        default=None,
+        metavar="PS",
+        help=(
+            "pycharmm: pretreat CHARMM heat length in ps "
+            "(overrides --charmm-mm-pretreat-heat-nstep when set)"
         ),
     )
     parser.add_argument(
@@ -589,6 +599,20 @@ def build_parser() -> argparse.ArgumentParser:
         default=2000,
         metavar="N",
         help="pycharmm: integration steps for pretreat CHARMM heat (default: 2000)",
+    )
+    parser.add_argument(
+        "--charmm-mm-pretreat-ps-equi",
+        type=float,
+        default=0.0,
+        metavar="PS",
+        help="pycharmm: pretreat CHARMM NPT equilibration in ps (0 skips; default: 0)",
+    )
+    parser.add_argument(
+        "--charmm-mm-pretreat-ps-prod",
+        type=float,
+        default=0.0,
+        metavar="PS",
+        help="pycharmm: pretreat CHARMM NPT production in ps (0 skips; default: 0)",
     )
     parser.add_argument(
         "--charmm-mm-pretreat-mini-sd",
@@ -1757,8 +1781,23 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd.append("--charmm-mm-pretreat")
     _append_optional(
         cmd,
+        "--charmm-mm-pretreat-ps-heat",
+        getattr(args, "charmm_mm_pretreat_ps_heat", None),
+    )
+    _append_optional(
+        cmd,
         "--charmm-mm-pretreat-heat-nstep",
         getattr(args, "charmm_mm_pretreat_heat_nstep", None),
+    )
+    _append_optional(
+        cmd,
+        "--charmm-mm-pretreat-ps-equi",
+        getattr(args, "charmm_mm_pretreat_ps_equi", None),
+    )
+    _append_optional(
+        cmd,
+        "--charmm-mm-pretreat-ps-prod",
+        getattr(args, "charmm_mm_pretreat_ps_prod", None),
     )
     _append_optional(
         cmd,

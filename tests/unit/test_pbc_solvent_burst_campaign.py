@@ -67,6 +67,37 @@ def test_pycharmm_init_gentle_heat_and_repair(cfg: dict) -> None:
     assert init["heat_thermostat"] == "hoover"
     assert init["dynamics_overlap_action"] == "rescue"
     assert init["bonded_mm_mini"] is True
+    assert "charmm_mm_pretreat" not in init
+
+
+def test_pycharmm_init_charmm_mm_pretreat_when_enabled(cfg: dict) -> None:
+    enabled = dict(cfg)
+    enabled["charmm_mm_pretreat"] = True
+    enabled["charmm_mm_pretreat_ps_equi"] = 10.0
+    enabled["charmm_mm_pretreat_ps_prod"] = 5.0
+    init = build_campaign(enabled, "DCM", 10)["runs"]["pycharmm_init"]
+    assert init["charmm_mm_pretreat"] is True
+    assert init["charmm_mm_pretreat_ps_heat"] == pytest.approx(30.0)
+    assert init["charmm_mm_pretreat_ps_equi"] == pytest.approx(10.0)
+    assert init["charmm_mm_pretreat_ps_prod"] == pytest.approx(5.0)
+    assert "CHARMM MM pretreat" in init["description"]
+
+
+def test_namespace_from_merged_pycharmm_init_pretreat(cfg: dict) -> None:
+    from mmml.cli.run.md_campaign import namespace_from_merged
+
+    enabled = dict(cfg)
+    enabled["charmm_mm_pretreat"] = True
+    enabled["charmm_mm_pretreat_ps_equi"] = 10.0
+    enabled["charmm_mm_pretreat_ps_prod"] = 5.0
+    merged = build_campaign(enabled, "DCM", 10)["runs"]["pycharmm_init"]
+    merged.update(build_campaign(enabled, "DCM", 10)["defaults"])
+    merged["job_id"] = "pycharmm_init"
+    ns = namespace_from_merged(merged)
+    assert ns.charmm_mm_pretreat is True
+    assert float(ns.charmm_mm_pretreat_ps_heat) == pytest.approx(30.0)
+    assert float(ns.charmm_mm_pretreat_ps_equi) == pytest.approx(10.0)
+    assert float(ns.charmm_mm_pretreat_ps_prod) == pytest.approx(5.0)
 
 
 def test_jaxmd_burst_quality_gate_and_pbc_fire(cfg: dict) -> None:
@@ -118,3 +149,16 @@ def test_load_config_matches_repo(cfg: dict) -> None:
     loaded = load_config(WORKFLOW / "config.yaml")
     assert loaded["solvents"] == ["DCM", "ACO"]
     assert loaded["cluster_sizes"] == [10, 30, 50, 80, 100]
+
+
+def test_slurm_max_concurrent(cfg: dict) -> None:
+    from campaign_lib import matrix_job_count, slurm_max_concurrent
+
+    assert matrix_job_count(cfg) == 10
+    assert slurm_max_concurrent(cfg) == 10
+    capped = dict(cfg)
+    capped["slurm_max_concurrent"] = 99
+    assert slurm_max_concurrent(capped) == 10
+    low = dict(cfg)
+    low["slurm_max_concurrent"] = 4
+    assert slurm_max_concurrent(low) == 4

@@ -1,4 +1,5 @@
 # Snakemake >=8.6: requires snakemake-executor-plugin-slurm (see README).
+# jobs: max Snakemake jobsteps in flight; match slurm_max_concurrent in config.yaml.
 executor: slurm
 jobs: 10
 latency-wait: 120

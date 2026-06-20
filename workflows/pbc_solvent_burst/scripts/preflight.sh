@@ -13,7 +13,13 @@ PY="${MMML_PYTHON}"
 from pathlib import Path
 import sys
 sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
-from campaign_lib import load_config, resolve_checkpoint, total_jaxmd_ps, total_pycharmm_equi_ps
+from campaign_lib import (
+    load_config,
+    resolve_checkpoint,
+    slurm_max_concurrent,
+    total_jaxmd_ps,
+    total_pycharmm_equi_ps,
+)
 cfg = load_config(Path('${WORKFLOW_ROOT}/config.yaml'))
 ckpt = resolve_checkpoint(str(cfg['checkpoint']))
 print('Preflight OK')
@@ -23,6 +29,7 @@ print('cluster_sizes:', cfg['cluster_sizes'])
 print('box_size:', cfg['box_size'])
 print('jaxmd total ps:', total_jaxmd_ps(cfg))
 print('pycharmm equi total ps:', total_pycharmm_equi_ps(cfg))
+print('slurm_max_concurrent:', slurm_max_concurrent(cfg))
 "
 
 if ! command -v packmol >/dev/null 2>&1; then

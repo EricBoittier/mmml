@@ -25,6 +25,13 @@ n_heat_segments: 8
 heat_firstt: 10.0
 heat_finalt: 300.0
 heat_thermostat: hoover
+
+# Optional CHARMM-only warm-up before MLpot registration (pycharmm_init only).
+# Off by default — enable to A/B test CGENFF mini + CHARMM heat/equi/prod first.
+# charmm_mm_pretreat: true
+# charmm_mm_pretreat_ps_heat: 30.0   # defaults to ps_heat
+# charmm_mm_pretreat_ps_equi: 10.0
+# charmm_mm_pretreat_ps_prod: 5.0
 dt_fs: 0.25
 temperature: 300.0
 pressure: 1.0
@@ -69,6 +76,10 @@ ml_batch_size: 1024
 mpirun_wrapper: ../../scripts/mmml-charmm-mpirun.sh
 
 # Slurm (snakemake-executor-plugin-slurm)
+# Throughput: set slurm_max_concurrent to total GPUs on slurm_gpu_nodes (cap is
+# matrix size = len(solvents)*len(cluster_sizes)). gpu and charmm_slot pools are
+# both set to this value so Snakemake never serializes burst jobs.
+slurm_max_concurrent: 10
 slurm_partition: gpu
 slurm_nodes: 1
 slurm_ntasks: 1
