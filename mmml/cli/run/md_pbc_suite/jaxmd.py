@@ -337,9 +337,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument(
         "--dynamics-overlap-action",
-        choices=["warn", "error", "off"],
+        choices=["warn", "rescue", "error", "off"],
         default="warn",
-        help="How to handle inter-monomer distance violations during production dynamics.",
+        help=(
+            "Inter-monomer overlap during JAX-MD: warn/rescue run CHARMM SD/ABNR "
+            "(unless --no-dynamics-overlap-charmm-rescue), rethermalize, continue; "
+            "error=abort; off=disable checks."
+        ),
     )
     p.add_argument(
         "--no-dynamics-overlap-charmm-rescue",
