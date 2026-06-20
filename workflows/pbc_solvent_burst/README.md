@@ -31,29 +31,55 @@ uv run --with snakemake --with snakemake-executor-plugin-slurm snakemake --versi
 
 ## Job matrix
 
-| Axis | Values |
-|------|--------|
-| Solvent | DCM, ACO |
-| Monomer count | 10, 30, 50, 80, 100 |
-| Box | 32 Å cubic PBC |
+| Axis | Values (config keys) |
+|------|----------------------|
+| Solvent | `solvents` |
+| Monomer count | `cluster_sizes` |
+| Temperature (K) | `temperatures` (list) |
+| Box (Å) | `box_sizes` (list) |
 
-**10 jobs** with default [config.yaml](config.yaml). Outputs under repo root (gitignored):
+Run tag: `{solvent}_{n}_t{T}_l{L}` e.g. `dcm_10_t300_l32`.
+
+Outputs:
 
 ```
-artifacts/pbc_solvent_burst/dcm_30/
+artifacts/pbc_solvent_burst/dcm_30_t320_l28/
   campaign.yaml
-  campaign_summary.json
-  .packmol_cache/
-  pycharmm_init/
-    pretreat/              # CHARMM MM warm-up (heat/equi/prod)
-    packmol_cluster/
-    handoff/
-  pycharmm_equi_00/
-  jaxmd_burst_01/ … jaxmd_burst_05/
+  pycharmm_init/pretreat/ …
+  jaxmd_burst_01/ …
   done.txt
 ```
 
-Legs never write to repo-root `results/`; each job has an explicit `output_dir` under the cell folder.
+Set `output_root` to an absolute path outside the repo if you prefer (e.g. `/mmhome/.../runs/pbc_burst`).
+
+## Cleanup strategy (`cleanup_strategy` in config.yaml)
+
+When geometry or handoff quality breaks, mmml already runs a hybrid recovery ladder. The workflow maps YAML to those hooks:
+
+| Step | YAML block | When it runs |
+|------|------------|--------------|
+| CHARMM MM heat/equi/prod | `charmm_mm.pretreat_on_pycharmm` | Before MLpot on each PyCHARMM leg (preventive) |
+| CHARMM overlap SD/ABNR | `charmm_mm.overlap_rescue_*` | During PyCHARMM dynamics overlap rescue |
+| MLpot bonded mini + rescue | `mlpot.*` | After mini/heat strain; overlap rescue on PyCHARMM |
+| JAX PBC FIRE + CHARMM rescue | `jaxmd_pbc.*` | Handoff quality gate; JAX-MD overlap → CHARMM |
+
+Enable pretreat for your A/B test:
+
+```yaml
+cleanup_strategy:
+  charmm_mm:
+    pretreat_on_pycharmm: true
+    ps_heat: 30.0
+    ps_equi: 10.0
+    ps_prod: 5.0
+```
+
+Sweep temperature / box:
+
+```yaml
+temperatures: [280, 300, 320]
+box_sizes: [28, 32, 36]
+```
 
 ### Density warning
 
@@ -89,8 +115,11 @@ snakemake -j4 --resources gpu=4 charmm_slot=4 --keep-going
 Single-cell smoke:
 
 ```bash
-snakemake ../../artifacts/pbc_solvent_burst/dcm_10/done.txt -j1 \
+snakemake ../../artifacts/pbc_solvent_burst/dcm_10_t300_l32/done.txt -j1 \
   --resources gpu=1 charmm_slot=1
+
+# or directly:
+bash scripts/job_shell.sh dcm_10_t300_l32
 ```
 
 ### Slurm (max throughput)

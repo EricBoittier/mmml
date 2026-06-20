@@ -82,6 +82,8 @@ _CAMPAIGN_ONLY_KEYS = frozenset(
         "resume_campaign",
         "campaign_output_dir",
         "output_root",
+        "cleanup_strategy_name",
+        "packmol_cache_dir",
         "job_id",
         "job_name",
         "continue_from",

@@ -15,18 +15,26 @@ import sys
 sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
 from campaign_lib import (
     load_config,
+    matrix_box_sizes,
+    matrix_job_count,
+    matrix_temperatures,
     resolve_checkpoint,
     slurm_max_concurrent,
     total_jaxmd_ps,
     total_pycharmm_equi_ps,
 )
+from cleanup_strategy import resolve_cleanup_strategy
 cfg = load_config(Path('${WORKFLOW_ROOT}/config.yaml'))
 ckpt = resolve_checkpoint(str(cfg['checkpoint']))
+strategy = resolve_cleanup_strategy(cfg)
 print('Preflight OK')
 print('checkpoint:', ckpt)
+print('cleanup_strategy:', strategy.name)
+print('matrix jobs:', matrix_job_count(cfg))
+print('temperatures:', matrix_temperatures(cfg))
+print('box_sizes:', matrix_box_sizes(cfg))
 print('solvents:', cfg['solvents'])
 print('cluster_sizes:', cfg['cluster_sizes'])
-print('box_size:', cfg['box_size'])
 print('jaxmd total ps:', total_jaxmd_ps(cfg))
 print('pycharmm equi total ps:', total_pycharmm_equi_ps(cfg))
 print('slurm_max_concurrent:', slurm_max_concurrent(cfg))
