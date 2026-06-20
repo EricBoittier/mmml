@@ -609,6 +609,35 @@ def test_assert_stage_dynamics_completed_accepts_stale_restart_after_rescue(tmp_
     )
 
 
+def test_assert_stage_dynamics_completed_accepts_empty_dcd_when_restart_complete(
+    tmp_path, capsys
+):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        assert_stage_dynamics_completed,
+    )
+
+    res = tmp_path / "heat.res"
+    res.write_text(
+        "REST    48     0\n"
+        "\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        "          25        4000        4000         500          10           0\n",
+        encoding="utf-8",
+    )
+    dcd = tmp_path / "heat.dcd"
+    dcd.write_bytes(b"")
+
+    assert_stage_dynamics_completed(
+        stage="heat",
+        expected_nstep=4000,
+        nsavc=500,
+        dcd_path=dcd,
+        restart_path=res,
+    )
+    out = capsys.readouterr().out
+    assert "accepting segment from checkpoint" in out
+
+
 def test_rewrite_dynamics_restart_validated_detects_nan(tmp_path, monkeypatch):
     from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         rewrite_dynamics_restart_validated,

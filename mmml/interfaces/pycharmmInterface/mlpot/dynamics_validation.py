@@ -481,10 +481,19 @@ def assert_stage_dynamics_completed(
             if chunk_paths
             else f" at nsavc={nsavc}"
         )
-        problems.append(
-            f"{label} has {n_frames} readable frame(s), "
-            f"expected >= {min_frames} (~{expected_frames} total{chunk_note})"
-        )
+        if restart_step is not None and restart_step >= min_steps:
+            print(
+                f"WARN: {stage.upper()} {label} has {n_frames} readable frame(s), "
+                f"expected >= {min_frames} (~{expected_frames} total{chunk_note}), "
+                f"but restart step {restart_step} >= {min_steps}; accepting segment "
+                "from checkpoint (common after overlap/extent rescue in-memory refresh)",
+                flush=True,
+            )
+        else:
+            problems.append(
+                f"{label} has {n_frames} readable frame(s), "
+                f"expected >= {min_frames} (~{expected_frames} total{chunk_note})"
+            )
 
     if not problems:
         print(
