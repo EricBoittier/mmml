@@ -25,8 +25,8 @@ def repo_root() -> Path:
     return workflow_root().parents[1]
 
 
-def load_config(config_path: Path | None = None) -> dict[str, Any]:
-    path = config_path or (workflow_root() / "config.yaml")
+def load_config(config_path: Path | str | None = None) -> dict[str, Any]:
+    path = Path(config_path) if config_path is not None else (workflow_root() / "config.yaml")
     with path.open(encoding="utf-8") as f:
         return yaml.safe_load(f)
 
