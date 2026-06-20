@@ -12,7 +12,12 @@ _SCRIPTS = Path(__file__).resolve().parent
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
-from campaign_lib import load_config, paths_for_run, repo_root  # noqa: E402
+from campaign_lib import (  # noqa: E402
+    cell_run_tag,
+    iter_matrix_cells,
+    load_config,
+    paths_for_run,
+)
 
 
 def main() -> int:
@@ -30,53 +35,54 @@ def main() -> int:
     args = parser.parse_args()
 
     cfg = load_config(args.config)
-    solvents = [str(s).strip().upper() for s in cfg.get("solvents", [])]
-    sizes = [int(x) for x in cfg.get("cluster_sizes", [])]
 
     rows: list[dict[str, str]] = []
-    for sol in solvents:
-        for n in sizes:
-            paths = paths_for_run(cfg, sol, n)
-            done = paths["done"].is_file()
-            summary = paths["campaign_summary"].is_file()
-            handoff = paths["final_handoff"].is_file()
-            status = "done" if done and handoff else ("partial" if summary else "pending")
-            rows.append(
-                {
-                    "solvent": sol,
-                    "n_monomers": str(n),
-                    "status": status,
-                    "done": str(done),
-                    "summary": str(summary),
-                    "final_handoff": str(handoff),
-                    "out_dir": str(paths["out_dir"]),
-                }
-            )
+    for cell in iter_matrix_cells(cfg):
+        paths = paths_for_run(cfg, cell)
+        done = paths["done"].is_file()
+        summary = paths["campaign_summary"].is_file()
+        handoff = paths["final_handoff"].is_file()
+        status = "done" if done and handoff else ("partial" if summary else "pending")
+        rows.append(
+            {
+                "run_tag": cell_run_tag(cell),
+                "solvent": cell.solvent,
+                "n_monomers": str(cell.n_monomers),
+                "temperature": str(cell.temperature),
+                "box_size": str(cell.box_size),
+                "status": status,
+                "done": str(done),
+                "summary": str(summary),
+                "final_handoff": str(handoff),
+                "out_dir": str(paths["out_dir"]),
+            }
+        )
 
     args.csv.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = [
+        "run_tag",
+        "solvent",
+        "n_monomers",
+        "temperature",
+        "box_size",
+        "status",
+        "done",
+        "summary",
+        "final_handoff",
+        "out_dir",
+    ]
     with args.csv.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(
-            f,
-            fieldnames=[
-                "solvent",
-                "n_monomers",
-                "status",
-                "done",
-                "summary",
-                "final_handoff",
-                "out_dir",
-            ],
-        )
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)
 
     for row in rows:
         print(
-            f"{row['solvent']}:{row['n_monomers']:>3}  {row['status']:7}  "
-            f"handoff={row['final_handoff']}  {row['out_dir']}"
+            f"{row['run_tag']:22}  {row['status']:7}  "
+            f"T={row['temperature']} L={row['box_size']}Å  handoff={row['final_handoff']}"
         )
     n_done = sum(1 for r in rows if r["status"] == "done")
-    print(f"\n{ n_done}/{len(rows)} complete", flush=True)
+    print(f"\n{n_done}/{len(rows)} complete", flush=True)
     return 0
 
 

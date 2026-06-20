@@ -1,6 +1,7 @@
 configfile: "config.yaml"
 
 import os
+import sys
 from pathlib import Path
 
 
@@ -23,21 +24,19 @@ def _repo_python() -> str:
 _REPO_ROOT = Path(workflow.basedir).resolve().parents[1]
 _OUTPUT_ROOT = str(config.get("output_root", "artifacts/pbc_solvent_burst"))
 _ARTIFACT_ROOT = f"../../{_OUTPUT_ROOT}"
-_SOLVENTS = [str(s).strip().upper() for s in config["solvents"]]
-_SIZES = [int(n) for n in config["cluster_sizes"]]
 _GPU_NODES = [str(x) for x in (config.get("slurm_gpu_nodes") or ["gpu08", "gpu09"])]
 
+_SCRIPTS = Path(workflow.basedir) / "scripts"
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+from campaign_lib import cell_run_tag, iter_matrix_cells  # noqa: E402
 
-def _run_tag(solvent: str, n: int) -> str:
-    return f"{str(solvent).lower()}_{int(n)}"
+_MATRIX = list(iter_matrix_cells(dict(config)))
+_CELL_TAGS = [cell_run_tag(c) for c in _MATRIX]
 
 
 def _artifact_dir(wildcards) -> str:
-    return str(
-        _REPO_ROOT
-        / _OUTPUT_ROOT
-        / _run_tag(wildcards.solvent, int(wildcards.n))
-    )
+    return str(_REPO_ROOT / _OUTPUT_ROOT / wildcards.tag)
 
 
 def _slurm_nodelist() -> str:
@@ -58,20 +57,18 @@ def _slurm_extra(wildcards) -> str:
 rule all:
     input:
         expand(
-            "{root}/{solvent}_{n}/done.txt",
+            "{root}/{tag}/done.txt",
             root=_ARTIFACT_ROOT,
-            solvent=[s.lower() for s in _SOLVENTS],
-            n=_SIZES,
+            tag=_CELL_TAGS,
         ),
 
 
 rule run_burst:
     output:
-        touch("{root}/{solvent}_{n}/done.txt"),
+        touch("{root}/{tag}/done.txt"),
     log:
-        stdout="{root}/{solvent}_{n}/stdout.log",
+        stdout="{root}/{tag}/stdout.log",
     params:
-        solvent=lambda wildcards: str(wildcards.solvent).upper(),
         out_dir=_artifact_dir,
         workflow_dir=workflow.basedir,
     resources:
@@ -88,6 +85,6 @@ rule run_burst:
         """
         set -euo pipefail
         mkdir -p {params.out_dir}
-        bash {params.workflow_dir}/scripts/job_shell.sh {params.solvent} {wildcards.n}
+        bash {params.workflow_dir}/scripts/job_shell.sh {wildcards.tag}
         test -s {output}
         """

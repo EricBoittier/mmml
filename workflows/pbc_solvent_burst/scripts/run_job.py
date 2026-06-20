@@ -17,10 +17,12 @@ if str(_SCRIPTS) not in sys.path:
 from campaign_lib import (  # noqa: E402
     build_md_system_campaign_argv,
     campaign_job_order,
+    cell_from_cli,
+    cell_from_tag,
+    cell_run_tag,
     load_config,
     paths_for_run,
     resolve_checkpoint,
-    run_tag,
     workflow_root,
 )
 
@@ -49,8 +51,11 @@ def _resolve_mmml_cmd(md_argv: list[str]) -> list[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("solvent", help="Residue prefix (DCM or ACO)")
-    parser.add_argument("n_monomers", type=int, help="Monomer count")
+    parser.add_argument("--tag", help="Run cell tag, e.g. dcm_10_t300_l32")
+    parser.add_argument("solvent", nargs="?", help="Residue prefix (DCM or ACO)")
+    parser.add_argument("n_monomers", nargs="?", type=int, help="Monomer count")
+    parser.add_argument("--temperature", type=float, default=None, help="Temperature (K)")
+    parser.add_argument("--box-size", type=float, default=None, help="Cubic box side (Å)")
     parser.add_argument(
         "--config",
         type=Path,
@@ -60,30 +65,34 @@ def main() -> int:
     args = parser.parse_args()
 
     cfg = load_config(args.config)
-    sol = str(args.solvent).strip().upper()
-    n = int(args.n_monomers)
-    solvents = [str(s).strip().upper() for s in cfg.get("solvents", [])]
-    sizes = [int(x) for x in cfg.get("cluster_sizes", [])]
-
-    if sol not in solvents:
-        raise SystemExit(f"solvent={sol!r} not in solvents {solvents}")
-    if n not in sizes:
-        raise SystemExit(f"n_monomers={n} not in cluster_sizes {sizes}")
+    if args.tag:
+        cell = cell_from_tag(cfg, args.tag)
+    else:
+        if args.solvent is None or args.n_monomers is None:
+            parser.error("Provide --tag or SOLVENT N_MONOMERS")
+        cell = cell_from_cli(
+            cfg,
+            args.solvent,
+            args.n_monomers,
+            temperature=args.temperature,
+            box_size=args.box_size,
+        )
 
     resolve_checkpoint(str(cfg["checkpoint"]))
-    paths = paths_for_run(cfg, sol, n)
+    paths = paths_for_run(cfg, cell)
     paths["out_dir"].mkdir(parents=True, exist_ok=True)
 
-    md_argv = build_md_system_campaign_argv(cfg, sol, n, out_dir=paths["out_dir"])
+    md_argv = build_md_system_campaign_argv(cfg, cell, out_dir=paths["out_dir"])
     os.chdir(_repo_root())
     cmd = _resolve_mmml_cmd(md_argv)
 
-    print(f"Campaign jobs ({run_tag(sol, n)}): {campaign_job_order(cfg)}", flush=True)
+    tag = cell_run_tag(cell)
+    print(f"Campaign jobs ({tag}): {campaign_job_order(cfg)}", flush=True)
     print(f"Running: {' '.join(cmd)}", flush=True)
     rc = subprocess.call(cmd)
     if rc != 0:
         print(
-            f"{sol}:{n} burst campaign failed with exit code {rc}",
+            f"{tag} burst campaign failed with exit code {rc}",
             file=sys.stderr,
         )
         return rc
@@ -114,7 +123,7 @@ def main() -> int:
         )
         return 1
 
-    paths["done"].write_text(f"ok {run_tag(sol, n)}\n", encoding="utf-8")
+    paths["done"].write_text(f"ok {tag}\n", encoding="utf-8")
     return 0
 
 
