@@ -21,11 +21,16 @@ from campaign_lib import (  # noqa: E402
     cell_from_cli,
     cell_from_tag,
     cell_run_tag,
+    cell_slurm_tier,
     composition_string,
     iter_matrix_cells,
     load_config,
     matrix_job_count,
+    slurm_launch_jobs,
     slurm_max_concurrent,
+    slurm_nodelist_for_tier,
+    slurm_tier_enabled,
+    slurm_tier_resource_pools,
     total_jaxmd_ps,
     total_pycharmm_equi_ps,
 )
@@ -178,3 +183,32 @@ def test_total_ps_budget(cfg: dict) -> None:
 def test_load_config_accepts_string_path() -> None:
     cfg = load_config(str(WORKFLOW / "config.yaml"))
     assert "solvents" in cfg
+
+
+def test_slurm_tier_routing(cfg: dict, cell: RunCell) -> None:
+    tiered = {
+        **cfg,
+        "slurm_gpu_nodes_fast": ["gpu08"],
+        "slurm_gpu_nodes_slow": ["gpu01"],
+        "slurm_small_cluster_max_n": 30,
+    }
+    small = RunCell(solvent="DCM", n_monomers=10, temperature=300.0, box_size=32.0)
+    large = RunCell(solvent="DCM", n_monomers=50, temperature=300.0, box_size=32.0)
+    assert slurm_tier_enabled(tiered)
+    assert cell_slurm_tier(small, tiered) == "slow"
+    assert cell_slurm_tier(large, tiered) == "fast"
+    assert "gpu01" in slurm_nodelist_for_tier(tiered, "slow")
+    assert "gpu08" in slurm_nodelist_for_tier(tiered, "fast")
+
+
+def test_slurm_tier_resource_pools(cfg: dict) -> None:
+    tiered = {
+        **cfg,
+        "slurm_gpu_nodes_fast": ["gpu08", "gpu09"],
+        "slurm_gpu_nodes_slow": ["gpu01"],
+        "slurm_max_concurrent_fast": 4,
+        "slurm_max_concurrent_slow": 2,
+    }
+    pools = slurm_tier_resource_pools(tiered)
+    assert pools == {"gpu_fast": 4, "gpu_slow": 2, "charmm_slot": 6}
+    assert slurm_launch_jobs(tiered) == 6

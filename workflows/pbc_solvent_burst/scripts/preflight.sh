@@ -19,7 +19,10 @@ from campaign_lib import (
     matrix_job_count,
     matrix_temperatures,
     resolve_checkpoint,
-    slurm_max_concurrent,
+    slurm_launch_jobs,
+    slurm_small_cluster_max_n,
+    slurm_tier_enabled,
+    slurm_tier_resource_pools,
     total_jaxmd_ps,
     total_pycharmm_equi_ps,
 )
@@ -37,7 +40,11 @@ print('solvents:', cfg['solvents'])
 print('cluster_sizes:', cfg['cluster_sizes'])
 print('jaxmd total ps:', total_jaxmd_ps(cfg))
 print('pycharmm equi total ps:', total_pycharmm_equi_ps(cfg))
-print('slurm_max_concurrent:', slurm_max_concurrent(cfg))
+print('slurm tiering:', slurm_tier_enabled(cfg))
+if slurm_tier_enabled(cfg):
+    print('slurm_small_cluster_max_n:', slurm_small_cluster_max_n(cfg))
+    print('slurm resource pools:', slurm_tier_resource_pools(cfg))
+print('slurm launch -j:', slurm_launch_jobs(cfg))
 "
 
 if ! command -v packmol >/dev/null 2>&1; then

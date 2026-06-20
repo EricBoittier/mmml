@@ -129,7 +129,12 @@ srun --partition=gpu --gres=gpu:1 --cpus-per-task=4 \
 
 ### Slurm (max throughput)
 
-Set **`slurm_max_concurrent`** in [config.yaml](config.yaml) to the **total number of GPUs** you want to use across `slurm_gpu_nodes` (default **10** = all matrix cells at once). The launcher sets **`gpu` and `charmm_slot` pools to the same value** so Snakemake does not serialize jobs.
+Set **`slurm_max_concurrent_fast`** / **`slurm_max_concurrent_slow`** (or legacy **`slurm_max_concurrent`**) so Snakemake job pools match GPU counts. The launcher sets **`gpu_fast`**, **`gpu_slow`**, and **`charmm_slot`** automatically.
+
+**Tiered scheduling** (default in `config.yaml`): matrix cells with **`N ≤ slurm_small_cluster_max_n`** (default 30) go to **`slurm_gpu_nodes_slow`** (3080); larger clusters go to **`slurm_gpu_nodes_fast`** (5090/4090/3090). Disable by removing `slurm_gpu_nodes_slow`.
+
+```bash
+bash scripts/preflight.sh   # prints tier pools and N threshold
 
 ```bash
 # uses slurm_max_concurrent from config.yaml (default 10)
@@ -154,7 +159,7 @@ Slurm may still queue jobs if `slurm_max_concurrent` exceeds free GPUs; that is 
 
 Default runtime: **48 h** per job (`slurm_runtime_min: 2880`). Adjust in `config.yaml` if 1 ns JAX-MD per cell needs more wall time.
 
-**Slurm nodelist:** omit both `slurm_nodelist` and `slurm_gpu_nodes` to let the `gpu` partition pick any node. Set either key to restrict (e.g. `slurm_nodelist: gpu08,gpu09`). Restart Snakemake after changing — jobs already submitted keep the old `--nodelist`.
+**Slurm nodelist:** per-job `--nodelist` comes from the tier (`slurm_gpu_nodes_fast` / `slurm_gpu_nodes_slow`). Omit both slow and fast lists and set only `slurm_gpu_nodes` for flat scheduling. Restart Snakemake after changing — jobs already submitted keep the old `--nodelist`.
 
 ## Resume
 

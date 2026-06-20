@@ -341,6 +341,84 @@ def slurm_max_concurrent(cfg: dict[str, Any]) -> int:
     return max(1, min(requested, cap))
 
 
+def _slurm_node_list(cfg: dict[str, Any], key: str) -> list[str]:
+    raw = cfg.get(key)
+    if not raw:
+        return []
+    return [str(x).strip() for x in raw if str(x).strip()]
+
+
+def slurm_gpu_nodes_fast(cfg: dict[str, Any]) -> list[str]:
+    nodes = _slurm_node_list(cfg, "slurm_gpu_nodes_fast")
+    if nodes:
+        return nodes
+    return _slurm_node_list(cfg, "slurm_gpu_nodes")
+
+
+def slurm_gpu_nodes_slow(cfg: dict[str, Any]) -> list[str]:
+    return _slurm_node_list(cfg, "slurm_gpu_nodes_slow")
+
+
+def slurm_tier_enabled(cfg: dict[str, Any]) -> bool:
+    return bool(slurm_gpu_nodes_slow(cfg)) and bool(slurm_gpu_nodes_fast(cfg))
+
+
+def slurm_small_cluster_max_n(cfg: dict[str, Any]) -> int:
+    return int(cfg.get("slurm_small_cluster_max_n", 30))
+
+
+def cell_slurm_tier(cell: RunCell, cfg: dict[str, Any]) -> str:
+    """``slow`` for small N (3080 pool); ``fast`` for large clusters."""
+    if not slurm_tier_enabled(cfg):
+        return "fast"
+    if int(cell.n_monomers) <= slurm_small_cluster_max_n(cfg):
+        return "slow"
+    return "fast"
+
+
+def slurm_nodelist_for_tier(cfg: dict[str, Any], tier: str) -> str:
+    explicit = str(cfg.get("slurm_nodelist", "")).strip()
+    if explicit and not slurm_tier_enabled(cfg):
+        return explicit
+    if tier == "slow":
+        nodes = slurm_gpu_nodes_slow(cfg)
+    else:
+        nodes = slurm_gpu_nodes_fast(cfg)
+    return ",".join(nodes)
+
+
+def slurm_tier_gpu_pool(cfg: dict[str, Any], tier: str) -> int:
+    tier_key = f"slurm_max_concurrent_{tier}"
+    if tier_key in cfg:
+        return max(1, int(cfg[tier_key]))
+    if tier == "fast":
+        return slurm_max_concurrent(cfg)
+    # Default slow pool: ~2 GPUs per listed node (3080 nodes are gpu:2).
+    return max(1, len(slurm_gpu_nodes_slow(cfg)) * 2)
+
+
+def slurm_tier_resource_pools(cfg: dict[str, Any]) -> dict[str, int]:
+    """Snakemake ``--resources`` pools for tiered or flat scheduling."""
+    if not slurm_tier_enabled(cfg):
+        n = slurm_max_concurrent(cfg)
+        return {"gpu_fast": n, "gpu_slow": 0, "charmm_slot": n}
+    fast = slurm_tier_gpu_pool(cfg, "fast")
+    slow = slurm_tier_gpu_pool(cfg, "slow")
+    return {"gpu_fast": fast, "gpu_slow": slow, "charmm_slot": fast + slow}
+
+
+def slurm_launch_jobs(cfg: dict[str, Any]) -> int:
+    """Max Snakemake jobsteps in flight (-j)."""
+    pools = slurm_tier_resource_pools(cfg)
+    return int(pools["gpu_fast"]) + int(pools["gpu_slow"])
+
+
+def slurm_resources_cli(cfg: dict[str, Any]) -> str:
+    """Space-separated ``NAME=N`` for ``snakemake --resources``."""
+    pools = slurm_tier_resource_pools(cfg)
+    return " ".join(f"{key}={value}" for key, value in pools.items())
+
+
 def total_jaxmd_ps(cfg: dict[str, Any]) -> float:
     return float(cfg.get("jaxmd_burst_ps", 200.0)) * int(cfg.get("jaxmd_bursts", 5))
 

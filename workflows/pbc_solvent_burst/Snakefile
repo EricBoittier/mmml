@@ -24,39 +24,52 @@ def _repo_python() -> str:
 _REPO_ROOT = Path(workflow.basedir).resolve().parents[1]
 _OUTPUT_ROOT = str(config.get("output_root", "artifacts/pbc_solvent_burst"))
 _ARTIFACT_ROOT = f"../../{_OUTPUT_ROOT}"
-_GPU_NODES_RAW = config.get("slurm_gpu_nodes")
-_GPU_NODES = (
-    [str(x) for x in _GPU_NODES_RAW]
-    if _GPU_NODES_RAW
-    else []
-)
 
 _SCRIPTS = Path(workflow.basedir) / "scripts"
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
-from campaign_lib import cell_run_tag, iter_matrix_cells  # noqa: E402
+from campaign_lib import (  # noqa: E402
+    cell_from_tag,
+    cell_run_tag,
+    cell_slurm_tier,
+    iter_matrix_cells,
+    slurm_nodelist_for_tier,
+    slurm_tier_enabled,
+)
 
 _MATRIX = list(iter_matrix_cells(dict(config)))
 _CFG = dict(config)
 _CELL_TAGS = [cell_run_tag(c, _CFG) for c in _MATRIX]
+_TIER_ENABLED = slurm_tier_enabled(_CFG)
 
 
 def _artifact_dir(wildcards) -> str:
     return str(_REPO_ROOT / _OUTPUT_ROOT / wildcards.tag)
 
 
-def _slurm_nodelist() -> str:
-    explicit = str(config.get("slurm_nodelist", "")).strip()
-    if explicit:
-        return explicit
-    if _GPU_NODES:
-        return ",".join(_GPU_NODES)
-    return ""
+def _burst_tier(wildcards) -> str:
+    cell = cell_from_tag(_CFG, wildcards.tag)
+    return cell_slurm_tier(cell, _CFG)
+
+
+def _sched_gpu_fast(wildcards) -> int:
+    if not _TIER_ENABLED:
+        return 1
+    return 0 if _burst_tier(wildcards) == "slow" else 1
+
+
+def _sched_gpu_slow(wildcards) -> int:
+    if not _TIER_ENABLED:
+        return 0
+    return 1 if _burst_tier(wildcards) == "slow" else 0
 
 
 def _slurm_extra(wildcards) -> str:
     mail = str(config.get("slurm_mail_user", "ericdavid.boittier@unibas.ch"))
-    nodelist = _slurm_nodelist()
+    if _TIER_ENABLED:
+        nodelist = slurm_nodelist_for_tier(_CFG, _burst_tier(wildcards))
+    else:
+        nodelist = slurm_nodelist_for_tier(_CFG, "fast")
     if nodelist:
         return f"--mail-user={mail} --mail-type=END,FAIL --nodelist={nodelist}"
     return f"--mail-user={mail} --mail-type=END,FAIL"
@@ -81,6 +94,8 @@ rule run_burst:
         workflow_dir=workflow.basedir,
     resources:
         gpu=1,
+        gpu_fast=_sched_gpu_fast,
+        gpu_slow=_sched_gpu_slow,
         charmm_slot=1,
         runtime=int(config.get("slurm_runtime_min", 2880)),
         mem_mb_per_cpu=int(config.get("slurm_mem_mb_per_cpu", 3000)),
