@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # Launch pbc_solvent_burst on Slurm via Snakemake executor plugin.
 #
-# Usage: snakemake_slurm.sh [MAX_CONCURRENT]
-#   MAX_CONCURRENT defaults to slurm_max_concurrent in config.yaml (capped at
-#   matrix size). Set gpu and charmm_slot pools to the same value for max throughput.
+# Usage: snakemake_slurm.sh [MAX_JOBS]
+#   MAX_JOBS defaults to tier pools from config.yaml (fast + slow when tiering on).
 set -euo pipefail
 
 WORKFLOW_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -15,21 +14,26 @@ source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
 mmml_resolve_env "$REPO_ROOT"
 PY="${MMML_PYTHON}"
 
-DEFAULT_JOBS="$("$PY" -c "
+read -r DEFAULT_JOBS DEFAULT_RES <<EOF
+$("$PY" -c "
 import sys
 sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
-from campaign_lib import load_config, slurm_max_concurrent
-print(slurm_max_concurrent(load_config()))
-")"
+from campaign_lib import load_config, slurm_launch_jobs, slurm_resources_cli
+cfg = load_config()
+print(slurm_launch_jobs(cfg))
+print(slurm_resources_cli(cfg))
+")
+EOF
 
 JOBS="${1:-$DEFAULT_JOBS}"
 shift || true
 
-echo "Snakemake Slurm: -j${JOBS} --resources gpu=${JOBS} charmm_slot=${JOBS}" >&2
+echo "Snakemake Slurm: -j${JOBS} --resources ${DEFAULT_RES}" >&2
 
+# shellcheck disable=SC2086
 exec uv run --with snakemake --with snakemake-executor-plugin-slurm snakemake \
   --profile profiles/slurm \
   -j"$JOBS" \
-  --resources gpu="$JOBS" charmm_slot="$JOBS" \
+  --resources ${DEFAULT_RES} \
   --keep-going \
   "$@"
