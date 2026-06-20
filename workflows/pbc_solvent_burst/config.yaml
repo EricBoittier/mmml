@@ -114,3 +114,12 @@ slurm_gpu_nodes_slow:
   - gpu23
 
 optional_sizes: [100]
+
+# Skip known-hard cells without editing cluster_sizes / box_sizes (Snakemake rule all
+# ignores excluded tags). Uncomment while debugging overlap / pretreat on large N.
+# exclude_run_tags:
+#   - dcm_100_t300_l28
+#   - dcm_100_t300_l32
+#   - aco_100_t100_l28
+#   - aco_80_t100_l28
+#   - aco_80_t100_l32
