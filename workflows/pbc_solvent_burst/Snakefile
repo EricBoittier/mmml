@@ -108,6 +108,7 @@ rule run_burst:
         """
         set -euo pipefail
         mkdir -p {params.out_dir}
-        bash {params.workflow_dir}/scripts/job_shell.sh {wildcards.tag}
+        bash {params.workflow_dir}/scripts/job_shell.sh {wildcards.tag} \
+          > {log.stdout} 2>&1
         test -s {output}
         """
