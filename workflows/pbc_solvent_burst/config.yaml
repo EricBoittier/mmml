@@ -32,8 +32,9 @@ pycharmm_equi_legs: 5
 ps_heat: 10.0
 n_heat_segments: 10
 heat_firstt: 40.0
-# Scale (IHTFRQ) avoids Hoover CPT piston instability on large ML USER-only clusters.
-heat_thermostat: scale
+# Hoover for MLpot heat when pretreat is on (campaign + staged_workflow coerce scale→hoover).
+# Use scale only with pretreat_on_pycharmm: false (no Hoover NVT in-session).
+heat_thermostat: hoover
 dt_fs: 0.25
 pressure: 1.0
 
@@ -64,7 +65,8 @@ cleanup_strategy:
     charmm_sd_steps: 200
     charmm_abnr_steps: 400
     mini_nstep: 150
-    dcd_nsavc: 500
+    # Keep below dynamics_overlap_check_interval so overlap chunks stay at 250 steps.
+    dcd_nsavc: 100
     dyn_nprint: 500
   jaxmd_pbc:
     handoff_quality_gate: true

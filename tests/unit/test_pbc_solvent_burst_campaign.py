@@ -35,6 +35,7 @@ from campaign_lib import (  # noqa: E402
     total_pycharmm_equi_ps,
 )
 from cleanup_strategy import resolve_cleanup_strategy  # noqa: E402
+from cleanup_strategy import resolve_pycharmm_heat_thermostat  # noqa: E402
 
 
 @pytest.fixture
@@ -122,7 +123,8 @@ def test_cleanup_strategy_maps_to_pycharmm_and_jaxmd(cfg: dict) -> None:
     assert init["dynamics_overlap_action"] == "rescue"
     assert init["bonded_mm_mini"] is True
     assert init["no_echeck_heat"] is True
-    assert init["heat_thermostat"] == "scale"
+    assert init["heat_thermostat"] == "hoover"
+    assert init["dcd_nsavc"] == 100
     assert burst["handoff_quality_gate"] is True
     assert burst["jaxmd_pbc_minimize_steps"] == 200
 
@@ -184,7 +186,7 @@ def test_namespace_from_merged_pycharmm_init_heat_flags(cfg: dict, cell: RunCell
     merged.update(build_campaign(cfg, cell)["defaults"])
     merged["job_id"] = "pycharmm_init"
     ns = namespace_from_merged(merged)
-    assert ns.heat_thermostat == "scale"
+    assert ns.heat_thermostat == "hoover"
     assert ns.no_echeck_heat is True
 
 
@@ -267,6 +269,27 @@ def test_bulk_density_iter_matrix_cells() -> None:
     assert "aco_89" in tags  # round(0.5 * 178)
     assert "aco_178" in tags
     assert matrix_job_count(cfg) == 4  # 2 solvents × 2 fractions × 1 T × 1 L
+
+
+def test_heat_thermostat_coerced_when_pretreat(cfg: dict, cell: RunCell) -> None:
+    cfg_scale = {**cfg, "heat_thermostat": "scale"}
+    init = build_campaign(cfg_scale, cell)["runs"]["pycharmm_init"]
+    assert init["charmm_mm_pretreat"] is True
+    assert init["heat_thermostat"] == "hoover"
+    assert resolve_pycharmm_heat_thermostat(cfg_scale, resolve_cleanup_strategy(cfg_scale)) == "hoover"
+
+
+def test_heat_thermostat_scale_without_pretreat(cfg: dict, cell: RunCell) -> None:
+    cfg_no_pretreat = dict(cfg)
+    cfg_no_pretreat["heat_thermostat"] = "scale"
+    cfg_no_pretreat["cleanup_strategy"] = dict(cfg["cleanup_strategy"])
+    cfg_no_pretreat["cleanup_strategy"]["charmm_mm"] = dict(
+        cfg["cleanup_strategy"]["charmm_mm"]
+    )
+    cfg_no_pretreat["cleanup_strategy"]["charmm_mm"]["pretreat_on_pycharmm"] = False
+    init = build_campaign(cfg_no_pretreat, cell)["runs"]["pycharmm_init"]
+    assert init.get("charmm_mm_pretreat") is None
+    assert init["heat_thermostat"] == "scale"
 
 
 def test_bulk_density_optional_last_burst() -> None:

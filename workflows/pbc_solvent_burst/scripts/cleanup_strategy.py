@@ -95,6 +95,23 @@ def _from_legacy_flat_keys(cfg: dict[str, Any]) -> CleanupStrategy:
     return CleanupStrategy(name="legacy_flat", charmm_mm=charmm_mm, mlpot=mlpot, jaxmd_pbc=jaxmd_pbc)
 
 
+def resolve_pycharmm_heat_thermostat(cfg: dict[str, Any], strategy: CleanupStrategy) -> str:
+    """Heat thermostat for ``pycharmm_init`` (and campaign defaults).
+
+    CHARMM MM pretreat runs Hoover NVT equi/prod in the same session before MLpot
+    heat.  ``scale`` (``ihtfrq`` velocity scaling) conflicts with leftover Hoover
+    state and overlap-chunk restarts (CHARMM: two nose methods).  Force ``hoover``
+    whenever pretreat is enabled on PBC legs.
+    """
+    requested = str(cfg.get("heat_thermostat", "hoover") or "hoover").strip().lower()
+    if requested not in ("scale", "hoover"):
+        requested = "hoover"
+    pretreat = bool(strategy.charmm_mm.get("pretreat_on_pycharmm", False))
+    if pretreat and requested == "scale":
+        return "hoover"
+    return requested
+
+
 def pretreat_job_flags(strategy: CleanupStrategy) -> dict[str, Any]:
     mm = strategy.charmm_mm
     if not bool(mm.get("pretreat_on_pycharmm", False)):
