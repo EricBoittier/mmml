@@ -129,6 +129,160 @@ def _charmm_pre_minimize_before_mlpot(
     return r_mm
 
 
+def _resolve_charmm_mm_pretreat_heat_nstep(args: argparse.Namespace, *, timestep_ps: float) -> int:
+    ps_heat = getattr(args, "charmm_mm_pretreat_ps_heat", None)
+    if ps_heat is not None and float(ps_heat) > 0.0:
+        return max(1, dynamics_nstep_from_ps(float(ps_heat), float(getattr(args, "dt_fs", 0.25))))
+    return max(1, int(getattr(args, "charmm_mm_pretreat_heat_nstep", 2000)))
+
+
+def _run_charmm_mm_pretreat_cpt_stage(
+    stage: Literal["equi", "prod"],
+    args: argparse.Namespace,
+    *,
+    paths: dict[str, Path],
+    res_key: str,
+    dcd_key: str,
+    timestep_ps: float,
+    duration_ps: float,
+    temp: float,
+    echeck: float,
+    use_pbc: bool,
+    box_side: float | None,
+    include_firstt: bool,
+) -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        build_cpt_equilibration_dynamics,
+        build_cpt_production_dynamics,
+        build_nvt_equilibration_dynamics,
+        build_nvt_production_dynamics,
+        ps_to_nsteps,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        assert_stage_dynamics_completed,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+        _configure_npt_dynamics_start,
+        _reset_stage_trajectory,
+        _seed_restart_for_memory_handoff,
+        _npt_cpt_options,
+    )
+
+    nstep = max(1, ps_to_nsteps(timestep_ps, duration_ps))
+    save = bool(getattr(args, "save", True))
+    dcd_nsavc = resolve_dcd_nsavc(
+        dcd_nsavc=args.dcd_nsavc,
+        dcd_interval_ps=getattr(args, "dcd_interval_ps", None),
+        timestep_ps=timestep_ps,
+        nstep=nstep,
+    )
+    save_interval_ps = timestep_ps * max(1, dcd_nsavc)
+    dyn_print = resolve_dynamics_print_kwargs(args, nstep=nstep)
+    stage_echeck = max(echeck, 500.0) if echeck > 0 else echeck
+
+    if stage == "equi":
+        if use_pbc:
+            kw = build_cpt_equilibration_dynamics(
+                timestep_ps=timestep_ps,
+                duration_ps=duration_ps,
+                save_interval_ps=save_interval_ps,
+                temp=temp,
+                restart=False,
+                echeck=stage_echeck,
+                include_firstt=include_firstt,
+                **_npt_cpt_options(args),
+            )
+        else:
+            kw = build_nvt_equilibration_dynamics(
+                timestep_ps=timestep_ps,
+                duration_ps=duration_ps,
+                save_interval_ps=save_interval_ps,
+                temp=temp,
+                restart=False,
+                echeck=stage_echeck,
+                include_firstt=include_firstt,
+            )
+    else:
+        if use_pbc:
+            kw = build_cpt_production_dynamics(
+                timestep_ps=timestep_ps,
+                duration_ps=duration_ps,
+                save_interval_ps=save_interval_ps,
+                temp=temp,
+                restart=False,
+                echeck=stage_echeck,
+                **_npt_cpt_options(args),
+            )
+        else:
+            kw = build_nvt_production_dynamics(
+                timestep_ps=timestep_ps,
+                duration_ps=duration_ps,
+                save_interval_ps=save_interval_ps,
+                temp=temp,
+                restart=False,
+                echeck=stage_echeck,
+            )
+
+    kw["nstep"] = nstep
+    kw["nprint"] = dyn_print["nprint"]
+    kw["iprfrq"] = dyn_print["iprfrq"]
+    kw["isvfrq"] = dyn_print["isvfrq"]
+    kw["new"] = False
+    kw["start"] = False
+    kw["restart"] = False
+
+    io = CharmmTrajectoryFiles(
+        restart_write=paths[res_key],
+        trajectory=paths[dcd_key] if save else None,
+    )
+    if save and io.trajectory is not None:
+        _reset_stage_trajectory(
+            Path(io.trajectory),
+            rescue_old=bool(getattr(args, "rescue_old_dcd", False)),
+        )
+    if not args.quiet:
+        print(
+            f"CHARMM MM pretreat {stage}: {duration_ps:.2f} ps "
+            f"({nstep} steps @ {timestep_ps} ps) | memory handoff",
+            flush=True,
+        )
+    _seed_restart_for_memory_handoff(io, kw, stage=stage)
+    _configure_npt_dynamics_start(
+        kw,
+        io,
+        coords_in_memory=True,
+        restart_from_file=False,
+        timestep_ps=timestep_ps,
+        use_pbc=use_pbc,
+        quiet=bool(args.quiet),
+        temp=temp,
+        box_side=box_side,
+    )
+    run_dynamics_with_io(
+        kw,
+        io,
+        overlap=None,
+        overlap_context=f"CHARMM_MM_PRETREAT_{stage.upper()}",
+        mlpot_ctx=None,
+        rng_base=getattr(args, "seed", None),
+    )
+    if save:
+        assert_stage_dynamics_completed(
+            stage=f"charmm_mm_{stage}",
+            expected_nstep=nstep,
+            nsavc=dcd_nsavc,
+            dcd_path=paths.get(dcd_key),
+            restart_path=paths.get(res_key),
+            allow_incomplete=bool(getattr(args, "allow_incomplete_dynamics", False)),
+        )
+    sync_charmm_positions(get_charmm_positions_array())
+    if not args.quiet:
+        print(
+            f"CHARMM MM pretreat {stage} done -> {paths[res_key]}",
+            flush=True,
+        )
+
+
 def run_charmm_mm_pretreat_before_mlpot(
     args: argparse.Namespace,
     *,
@@ -140,17 +294,21 @@ def run_charmm_mm_pretreat_before_mlpot(
     mini_nprint: int,
     reference_positions: np.ndarray | None = None,
 ) -> np.ndarray:
-    """CGENFF minimize + CHARMM heat on the built cluster before :func:`register_mlpot`.
+    """CGENFF minimize + CHARMM heat/equi/prod on the built cluster before :func:`register_mlpot`.
 
     Uses full MM terms (``apply_charmm_mm_block``), not MLpot USER. Intended for
-    relaxing Packmol clashes and a short classical heat before ML dynamics.
+    relaxing Packmol clashes and classical MD before ML dynamics. Set
+    ``charmm_mm_pretreat_ps_equi`` / ``charmm_mm_pretreat_ps_prod`` > 0 for NPT
+    equilibration and production (PBC CPT when ``use_pbc``).
     """
     from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         assert_stage_dynamics_completed,
     )
 
-    n_heat = max(1, int(getattr(args, "charmm_mm_pretreat_heat_nstep", 2000)))
+    n_heat = _resolve_charmm_mm_pretreat_heat_nstep(args, timestep_ps=timestep_ps)
+    ps_equi = float(getattr(args, "charmm_mm_pretreat_ps_equi", 0.0) or 0.0)
+    ps_prod = float(getattr(args, "charmm_mm_pretreat_ps_prod", 0.0) or 0.0)
     n_sd = int(
         getattr(args, "charmm_mm_pretreat_mini_sd", None)
         if getattr(args, "charmm_mm_pretreat_mini_sd", None) is not None
@@ -164,7 +322,9 @@ def run_charmm_mm_pretreat_before_mlpot(
     if not args.quiet:
         print(
             f"\nCHARMM MM pretreat (no MLpot): SD={n_sd} ABNR={n_abnr}, "
-            f"heat nstep={n_heat}",
+            f"heat nstep={n_heat}"
+            + (f", equi={ps_equi:.2f} ps" if ps_equi > 0.0 else "")
+            + (f", prod={ps_prod:.2f} ps" if ps_prod > 0.0 else ""),
             flush=True,
         )
 
@@ -276,6 +436,46 @@ def run_charmm_mm_pretreat_before_mlpot(
         )
     sync_charmm_positions(get_charmm_positions_array())
     if not args.quiet:
+        print(
+            f"CHARMM MM pretreat heat done -> {paths['charmm_mm_heat_res']}",
+            flush=True,
+        )
+
+    box_side = resolve_pbc_box_side(args, get_charmm_positions_array()) if use_pbc else None
+    if ps_equi > 0.0:
+        _run_charmm_mm_pretreat_cpt_stage(
+            "equi",
+            args,
+            paths=paths,
+            res_key="charmm_mm_equi_res",
+            dcd_key="charmm_mm_equi_dcd",
+            timestep_ps=timestep_ps,
+            duration_ps=ps_equi,
+            temp=temp,
+            echeck=echeck,
+            use_pbc=use_pbc,
+            box_side=box_side,
+            include_firstt=False,
+        )
+    if ps_prod > 0.0:
+        _run_charmm_mm_pretreat_cpt_stage(
+            "prod",
+            args,
+            paths=paths,
+            res_key="charmm_mm_prod_res",
+            dcd_key="charmm_mm_prod_dcd",
+            timestep_ps=timestep_ps,
+            duration_ps=ps_prod,
+            temp=temp,
+            echeck=echeck,
+            use_pbc=use_pbc,
+            box_side=box_side,
+            include_firstt=False,
+        )
+
+    if not args.quiet and (ps_equi > 0.0 or ps_prod > 0.0):
+        print("CHARMM MM pretreat complete (CGENFF mini + heat/equi/prod)", flush=True)
+    elif not args.quiet:
         print(
             f"CHARMM MM pretreat done -> {paths['charmm_mm_heat_res']}",
             flush=True,

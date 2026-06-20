@@ -97,6 +97,25 @@ def _pycharmm_repair_block(cfg: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _charmm_mm_pretreat_block(cfg: dict[str, Any]) -> dict[str, Any]:
+    """Optional CGENFF + CHARMM-only heat/equi/prod before MLpot on ``pycharmm_init``."""
+    if not bool(cfg.get("charmm_mm_pretreat", False)):
+        return {}
+    block: dict[str, Any] = {
+        "charmm_mm_pretreat": True,
+        "charmm_mm_pretreat_ps_heat": float(
+            cfg.get("charmm_mm_pretreat_ps_heat", cfg.get("ps_heat", 30.0))
+        ),
+    }
+    ps_equi = cfg.get("charmm_mm_pretreat_ps_equi")
+    if ps_equi is not None:
+        block["charmm_mm_pretreat_ps_equi"] = float(ps_equi)
+    ps_prod = cfg.get("charmm_mm_pretreat_ps_prod")
+    if ps_prod is not None:
+        block["charmm_mm_pretreat_ps_prod"] = float(ps_prod)
+    return block
+
+
 def _jaxmd_burst_block(cfg: dict[str, Any]) -> dict[str, Any]:
     return {
         "handoff_quality_gate": bool(cfg.get("handoff_quality_gate", True)),
@@ -173,11 +192,18 @@ def build_campaign(
     }
 
     repair = _pycharmm_repair_block(cfg)
+    pretreat = _charmm_mm_pretreat_block(cfg)
     jaxmd_extra = _jaxmd_burst_block(cfg)
+
+    init_desc = f"{comp} PBC init: MLpot mini + gentle heat"
+    if pretreat:
+        init_desc = (
+            f"{comp} PBC init: CHARMM MM pretreat + MLpot mini + gentle heat"
+        )
 
     runs: dict[str, Any] = {
         "pycharmm_init": {
-            "description": f"{comp} PBC init: MLpot mini + gentle heat",
+            "description": init_desc,
             "backend": "pycharmm",
             "setup": "pbc_npt",
             "md_stages": "mini,heat",
@@ -187,6 +213,7 @@ def build_campaign(
             "heat_finalt": float(cfg.get("heat_finalt", 300.0)),
             "heat_thermostat": str(cfg.get("heat_thermostat", "hoover")),
             **repair,
+            **pretreat,
         },
         "pycharmm_equi_00": {
             "description": f"{comp} first NPT equil segment ({equi_ps} ps)",
@@ -271,6 +298,17 @@ def build_md_system_campaign_argv(
         "--campaign-output-dir",
         str(root),
     ]
+
+
+def matrix_job_count(cfg: dict[str, Any]) -> int:
+    return len(cfg.get("solvents", [])) * len(cfg.get("cluster_sizes", []))
+
+
+def slurm_max_concurrent(cfg: dict[str, Any]) -> int:
+    """Concurrent Snakemake/Slurm jobs (gpu pool == charmm_slot pool)."""
+    cap = matrix_job_count(cfg)
+    requested = int(cfg.get("slurm_max_concurrent", cap))
+    return max(1, min(requested, cap))
 
 
 def total_jaxmd_ps(cfg: dict[str, Any]) -> float:
