@@ -53,6 +53,10 @@ if slurm_tier_enabled(cfg):
     print('slurm_small_cluster_max_n:', slurm_small_cluster_max_n(cfg))
     print('slurm resource pools:', slurm_tier_resource_pools(cfg))
 print('slurm launch -j:', slurm_launch_jobs(cfg))
+if matrix_uses_bulk_density(cfg):
+    print('NOTE: bulk-density matrix targets configured fractions of liquid N (see N_bulk table).')
+else:
+    print('NOTE: large cluster_sizes in a small box are very dense; expect overlap rescue at large N.')
 "
 
 if ! command -v packmol >/dev/null 2>&1; then
@@ -61,12 +65,4 @@ fi
 
 if [[ -n "${MMML_CKPT:-}" ]]; then
   echo "MMML_CKPT=${MMML_CKPT} (optional override when config uses \${MMML_CKPT})"
-fi
-
-max_n=100
-box=32
-if matrix_uses_bulk_density(cfg):
-  echo "NOTE: bulk-density matrix targets 0.5–1.0× liquid N (see preflight N_bulk table)."
-else
-  echo "NOTE: ${max_n} monomers in ${box} Å cube is very dense; expect overlap rescue at large N."
 fi
