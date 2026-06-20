@@ -1490,6 +1490,22 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         kw["iasors"] = 0
                         kw["start"] = False
                         kw["restart"] = True
+                    heat_mode = (
+                        "Hoover CPT"
+                        if heat_thermostat == "hoover" and kw.get("cpt")
+                        else (
+                            "scale ihtfrq"
+                            if int(kw.get("ihtfrq", 0) or 0) > 0
+                            else f"heat/{heat_thermostat}"
+                        )
+                    )
+                    print(
+                        f"HEAT segment {seg_i + 1}/{n_heat_segments}: "
+                        f"mode={heat_mode} echeck={kw.get('echeck')} "
+                        f"firstt={kw.get('firstt')} finalt={kw.get('finalt')} "
+                        + ("memory handoff" if use_memory else "READYN restart"),
+                        flush=True,
+                    )
                     if int(kw.get("ihtfrq", 0) or 0) > 0:
                         freq_changes = finalize_heat_dynamics_frequencies(kw)
                         if freq_changes and not seg_prep_quiet:
