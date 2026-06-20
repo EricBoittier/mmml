@@ -11,8 +11,8 @@
 
 solvents: [DCM, ACO]
 cluster_sizes: [10, 30, 50, 80, 100]
-temperatures: [300.0]
-box_sizes: [32.0]
+temperatures: [100.0, 200.0, 300.0]
+box_sizes: [28.0, 32.0, 36.0]
 checkpoint: /mmhome/boittier/home/mmml/examples/ckpts_json/DESdimers_params.json
 output_root: artifacts/pbc_solvent_burst
 seed_base: 123456
@@ -20,13 +20,13 @@ seed_base: 123456
 # Burst timing (per matrix cell)
 jaxmd_burst_ps: 200.0
 jaxmd_bursts: 5
-pycharmm_equi_ps: 10.0
+pycharmm_equi_ps: 5.0
 pycharmm_equi_legs: 5
 
 # Gentle MLpot heat (pycharmm_init); heat_finalt follows cell temperature
-ps_heat: 30.0
-n_heat_segments: 8
-heat_firstt: 10.0
+ps_heat: 10.0
+n_heat_segments: 10
+heat_firstt: 40.0
 heat_thermostat: hoover
 dt_fs: 0.25
 pressure: 1.0
@@ -38,9 +38,9 @@ cleanup_strategy:
   charmm_mm:
     # CGENFF mini + CHARMM heat/equi/prod before each MLpot PyCHARMM leg
     pretreat_on_pycharmm: false
-    ps_heat: 30.0
-    ps_equi: 10.0
-    ps_prod: 5.0
+    ps_heat: 300.0
+    ps_equi: 100.0
+    ps_prod: 500.0
     overlap_rescue_sd_steps: 200
     overlap_rescue_abnr_steps: 400
   mlpot:
@@ -70,8 +70,8 @@ cleanup_strategy:
     jax_md_update_interval: 1
 
 # MM / ML cutoffs
-mm_switch_on: 8.0
-mm_switch_width: 5.0
+mm_switch_on: 6.0
+mm_switch_width: 4.0
 ml_switch_width: 1.5
 spacing: 5.0
 packmol_tolerance: 1.0
@@ -89,7 +89,7 @@ slurm_cpus_per_task: 4
 slurm_mem_mb_per_cpu: 3000
 slurm_runtime_min: 2880
 slurm_mail_user: ericdavid.boittier@unibas.ch
-slurm_nodelist: gpu08,gpu09
-slurm_gpu_nodes: [gpu08, gpu09]
+#slurm_nodelist: gpu08,gpu09
+#slurm_gpu_nodes: [gpu08, gpu09]
 
 optional_sizes: [100]
