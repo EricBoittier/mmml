@@ -286,7 +286,10 @@ def _build_stage_dynamics_kw(
     if stage == "heat":
         heat_firstt, heat_finalt = resolve_heat_firstt_finalt(args, default_temp=temp)
         # ML USER-only heat (no SHAKE) often exceeds tight echeck before Hoover equilibrates.
-        heat_echeck = max(echeck, 5000.0) if echeck > 0 else echeck
+        if getattr(args, "no_echeck_heat", False) or getattr(args, "no_echeck", False):
+            heat_echeck = -1.0
+        else:
+            heat_echeck = max(echeck, 5000.0) if echeck > 0 else echeck
         if resolve_heat_thermostat(args) == "hoover":
             from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
                 build_hoover_heat_dynamics,
