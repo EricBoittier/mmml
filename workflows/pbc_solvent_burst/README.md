@@ -154,6 +154,8 @@ Slurm may still queue jobs if `slurm_max_concurrent` exceeds free GPUs; that is 
 
 Default runtime: **48 h** per job (`slurm_runtime_min: 2880`). Adjust in `config.yaml` if 1 ns JAX-MD per cell needs more wall time.
 
+**Slurm nodelist:** omit both `slurm_nodelist` and `slurm_gpu_nodes` to let the `gpu` partition pick any node. Set either key to restrict (e.g. `slurm_nodelist: gpu08,gpu09`). Restart Snakemake after changing — jobs already submitted keep the old `--nodelist`.
+
 ## Resume
 
 Each cell uses `mmml md-system --resume-campaign`, which skips legs whose output dirs already have valid handoffs. Re-run a single cell:
