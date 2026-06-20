@@ -60,7 +60,11 @@ def _resolve_output_dir(merged: dict[str, Any], run_id: str, *, rep: int = 0) ->
         if repeat > 1:
             return (base / f"rep{int(rep):02d}").resolve()
         return base
-    root = merged.get("output_root", "results")
+    root = merged.get("output_root")
+    if root is None and merged.get("campaign_output_dir"):
+        root = merged["campaign_output_dir"]
+    if root is None:
+        root = "results"
     return (Path(str(root)) / run_id).resolve()
 
 
@@ -77,6 +81,7 @@ _CAMPAIGN_ONLY_KEYS = frozenset(
         "run_all",
         "resume_campaign",
         "campaign_output_dir",
+        "output_root",
         "job_id",
         "job_name",
         "continue_from",

@@ -75,12 +75,30 @@ def test_pycharmm_init_charmm_mm_pretreat_when_enabled(cfg: dict) -> None:
     enabled["charmm_mm_pretreat"] = True
     enabled["charmm_mm_pretreat_ps_equi"] = 10.0
     enabled["charmm_mm_pretreat_ps_prod"] = 5.0
-    init = build_campaign(enabled, "DCM", 10)["runs"]["pycharmm_init"]
+    campaign = build_campaign(enabled, "DCM", 10)
+    init = campaign["runs"]["pycharmm_init"]
     assert init["charmm_mm_pretreat"] is True
     assert init["charmm_mm_pretreat_ps_heat"] == pytest.approx(30.0)
     assert init["charmm_mm_pretreat_ps_equi"] == pytest.approx(10.0)
     assert init["charmm_mm_pretreat_ps_prod"] == pytest.approx(5.0)
     assert "CHARMM MM pretreat" in init["description"]
+    for job_id in ("pycharmm_equi_00", "pycharmm_equi_01"):
+        equi = campaign["runs"][job_id]
+        assert equi["charmm_mm_pretreat"] is True
+        assert equi["charmm_mm_pretreat_ps_equi"] == pytest.approx(10.0)
+
+
+def test_campaign_output_root_under_cell_dir(cfg: dict) -> None:
+    campaign = build_campaign(cfg, "DCM", 10)
+    assert "output_root" in campaign["defaults"]
+    assert campaign["defaults"]["output_root"].endswith("artifacts/pbc_solvent_burst/dcm_10")
+    init = campaign["runs"]["pycharmm_init"]
+    assert init["output_dir"].endswith("artifacts/pbc_solvent_burst/dcm_10/pycharmm_init")
+    from mmml.cli.run.md_campaign import _resolve_output_dir, merge_campaign_job_config
+
+    merged = merge_campaign_job_config(campaign, "pycharmm_init")
+    out = _resolve_output_dir(merged, "pycharmm_init")
+    assert str(out).endswith("artifacts/pbc_solvent_burst/dcm_10/pycharmm_init")
 
 
 def test_namespace_from_merged_pycharmm_init_pretreat(cfg: dict) -> None:

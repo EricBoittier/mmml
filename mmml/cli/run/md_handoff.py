@@ -684,13 +684,14 @@ def find_latest_charmm_restart_in_dir(out_dir: Path) -> Path | None:
     if not root.is_dir():
         return None
     candidates: list[Path] = []
-    for path in root.glob("*.res"):
-        name = path.name.lower()
-        if "overlap" in name or name.startswith("continue_seed"):
-            continue
-        candidates.append(path)
+    for pattern in ("*.res", "pretreat/*.res", "handoff/*.res"):
+        for path in root.glob(pattern):
+            name = path.name.lower()
+            if "overlap" in name or name.startswith("continue_seed"):
+                continue
+            candidates.append(path)
     handoff_res = root / "handoff" / "final.res"
-    if handoff_res.is_file():
+    if handoff_res.is_file() and handoff_res not in candidates:
         candidates.append(handoff_res)
     if not candidates:
         return None

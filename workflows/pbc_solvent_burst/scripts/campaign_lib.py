@@ -98,7 +98,7 @@ def _pycharmm_repair_block(cfg: dict[str, Any]) -> dict[str, Any]:
 
 
 def _charmm_mm_pretreat_block(cfg: dict[str, Any]) -> dict[str, Any]:
-    """Optional CGENFF + CHARMM-only heat/equi/prod before MLpot on ``pycharmm_init``."""
+    """Optional CGENFF + CHARMM-only heat/equi/prod before MLpot on every PyCHARMM leg."""
     if not bool(cfg.get("charmm_mm_pretreat", False)):
         return {}
     block: dict[str, Any] = {
@@ -106,13 +106,13 @@ def _charmm_mm_pretreat_block(cfg: dict[str, Any]) -> dict[str, Any]:
         "charmm_mm_pretreat_ps_heat": float(
             cfg.get("charmm_mm_pretreat_ps_heat", cfg.get("ps_heat", 30.0))
         ),
+        "charmm_mm_pretreat_ps_equi": float(
+            cfg.get("charmm_mm_pretreat_ps_equi", 0.0)
+        ),
+        "charmm_mm_pretreat_ps_prod": float(
+            cfg.get("charmm_mm_pretreat_ps_prod", 0.0)
+        ),
     }
-    ps_equi = cfg.get("charmm_mm_pretreat_ps_equi")
-    if ps_equi is not None:
-        block["charmm_mm_pretreat_ps_equi"] = float(ps_equi)
-    ps_prod = cfg.get("charmm_mm_pretreat_ps_prod")
-    if ps_prod is not None:
-        block["charmm_mm_pretreat_ps_prod"] = float(ps_prod)
     return block
 
 
@@ -156,6 +156,15 @@ def campaign_job_order(cfg: dict[str, Any] | None = None) -> list[str]:
     return order
 
 
+def leg_output_dir(cell_root: Path, job_id: str) -> str:
+    """Absolute path for one campaign leg (never repo-root ``results/``)."""
+    return str((cell_root / job_id).resolve())
+
+
+def _attach_leg_output_dir(job: dict[str, Any], cell_root: Path, job_id: str) -> dict[str, Any]:
+    return {**job, "output_dir": leg_output_dir(cell_root, job_id)}
+
+
 def build_campaign(
     cfg: dict[str, Any],
     solvent: str,
@@ -171,11 +180,14 @@ def build_campaign(
     equi_ps = float(cfg.get("pycharmm_equi_ps", 10.0))
     n_bursts = int(cfg.get("jaxmd_bursts", 5))
     optional_sizes = {int(x) for x in (cfg.get("optional_sizes") or [])}
+    cell_root = run_output_dir(cfg, sol, n)
 
     defaults: dict[str, Any] = {
         "composition": comp,
         "checkpoint": str(cfg["checkpoint"]),
         "box_size": float(cfg["box_size"]),
+        "output_root": str(cell_root),
+        "packmol_cache_dir": str(cell_root / ".packmol_cache"),
         "spacing": float(cfg.get("spacing", 5.0)),
         "packmol_tolerance": float(cfg.get("packmol_tolerance", 1.0)),
         "dt_fs": float(cfg.get("dt_fs", 0.25)),
@@ -202,7 +214,8 @@ def build_campaign(
         )
 
     runs: dict[str, Any] = {
-        "pycharmm_init": {
+        "pycharmm_init": _attach_leg_output_dir(
+            {
             "description": init_desc,
             "backend": "pycharmm",
             "setup": "pbc_npt",
@@ -214,8 +227,12 @@ def build_campaign(
             "heat_thermostat": str(cfg.get("heat_thermostat", "hoover")),
             **repair,
             **pretreat,
-        },
-        "pycharmm_equi_00": {
+            },
+            cell_root,
+            "pycharmm_init",
+        ),
+        "pycharmm_equi_00": _attach_leg_output_dir(
+            {
             "description": f"{comp} first NPT equil segment ({equi_ps} ps)",
             "backend": "pycharmm",
             "setup": "pbc_npt",
@@ -223,23 +240,32 @@ def build_campaign(
             "ps_equi": equi_ps,
             "depends_on": "pycharmm_init",
             **repair,
-        },
+            **pretreat,
+            },
+            cell_root,
+            "pycharmm_equi_00",
+        ),
     }
 
     prev = "pycharmm_equi_00"
     for i in range(1, n_bursts + 1):
         burst_id = f"jaxmd_burst_{i:02d}"
-        runs[burst_id] = {
+        runs[burst_id] = _attach_leg_output_dir(
+            {
             "description": f"{comp} JAX-MD burst {i}/{n_bursts} ({burst_ps} ps)",
             "backend": "jaxmd",
             "setup": "pbc_nvt",
             "ps": burst_ps,
             "depends_on": prev,
             **jaxmd_extra,
-        }
+            },
+            cell_root,
+            burst_id,
+        )
         if i < n_bursts:
             equi_id = f"pycharmm_equi_{i:02d}"
-            equi_job: dict[str, Any] = {
+            equi_job: dict[str, Any] = _attach_leg_output_dir(
+                {
                 "description": f"{comp} NPT equil after burst {i} ({equi_ps} ps)",
                 "backend": "pycharmm",
                 "setup": "pbc_npt",
@@ -247,7 +273,11 @@ def build_campaign(
                 "ps_equi": equi_ps,
                 "depends_on": burst_id,
                 **repair,
-            }
+                **pretreat,
+                },
+                cell_root,
+                equi_id,
+            )
             if n in optional_sizes:
                 equi_job["optional"] = True
             runs[equi_id] = equi_job
@@ -260,7 +290,7 @@ def build_campaign(
 
     return {
         "defaults": defaults,
-        "campaign_output": str(run_output_dir(cfg, sol, n)),
+        "campaign_output": str(cell_root),
         "runs": runs,
     }
 
