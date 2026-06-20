@@ -2323,8 +2323,11 @@ def run_dynamics_with_io(
 
         overlap = attach_prior_segment_restart(
             overlap,
-            restart_write=io.restart_write if io is not None else None,
+            segment_index=overlap.segment_index,
             prev_restart=io.restart_read if io is not None else None,
+            out_dir=overlap.segment_out_dir,
+            restart_prefix=overlap.segment_restart_prefix,
+            restart_write=io.restart_write if io is not None else None,
         )
     if not guard_active or total_nstep <= 0:
         last_dyn = _run_dynamics_chunk(

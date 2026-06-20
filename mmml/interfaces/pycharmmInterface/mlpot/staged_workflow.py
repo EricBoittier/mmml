@@ -72,6 +72,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
 )
 from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
     assert_pre_min_bonded_geometry,
+    ensure_segment_restart_checkpoint,
     maybe_run_bonded_mm_mini_after_stage,
     record_mm_baseline_strain,
     rewrite_dynamics_restart_from_current_state,
@@ -1302,6 +1303,12 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     initial_restart=initial,
                 )
                 for seg_i, seg_io in enumerate(seg_chain):
+                    if (
+                        seg_i > 0
+                        and prev_restart_is_current_state
+                        and prev_restart is not None
+                    ):
+                        ensure_segment_restart_checkpoint(prev_restart)
                     seg_ps = _stage_ps(args, "heat") / n_heat_segments
                     nstep = dynamics_nstep_from_ps(seg_ps, dt_fs)
                     dcd_nsavc = resolve_dcd_nsavc_for_args(
@@ -1523,6 +1530,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         nsavc=dcd_nsavc,
                         io=seg_io,
                     )
+                    ensure_segment_restart_checkpoint(seg_io.restart_write)
                     memory_handoff_next = maybe_run_bonded_mm_mini_after_stage(
                         ctx,
                         args,
@@ -1560,6 +1568,12 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     initial_restart=initial,
                 )
                 for seg_i, seg_io in enumerate(seg_chain):
+                    if (
+                        seg_i > 0
+                        and prev_restart_is_current_state
+                        and prev_restart is not None
+                    ):
+                        ensure_segment_restart_checkpoint(prev_restart)
                     seg_ps = _stage_ps(args, "equi") / n_equi_segments
                     nstep = dynamics_nstep_from_ps(seg_ps, dt_fs)
                     dcd_nsavc = resolve_dcd_nsavc_for_args(
@@ -1658,6 +1672,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         nsavc=dcd_nsavc,
                         io=seg_io,
                     )
+                    ensure_segment_restart_checkpoint(seg_io.restart_write)
                     memory_handoff_next = maybe_run_bonded_mm_mini_after_stage(
                         ctx,
                         args,
@@ -1680,6 +1695,12 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     equi_restart=equi_restart_for_prod,
                 )
                 for seg_i, seg_io in enumerate(seg_chain):
+                    if (
+                        seg_i > 0
+                        and prev_restart_is_current_state
+                        and prev_restart is not None
+                    ):
+                        ensure_segment_restart_checkpoint(prev_restart)
                     seg_ps = _stage_ps(args, "prod") / n_prod_segments
                     nstep = dynamics_nstep_from_ps(seg_ps, dt_fs)
                     dcd_nsavc = resolve_dcd_nsavc_for_args(
@@ -1778,6 +1799,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         nsavc=dcd_nsavc,
                         io=seg_io,
                     )
+                    ensure_segment_restart_checkpoint(seg_io.restart_write)
                     memory_handoff_next = maybe_run_bonded_mm_mini_after_stage(
                         ctx,
                         args,
