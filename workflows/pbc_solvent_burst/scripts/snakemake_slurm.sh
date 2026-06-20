@@ -30,6 +30,6 @@ echo "Snakemake Slurm: -j${JOBS} --resources gpu=${JOBS} charmm_slot=${JOBS}" >&
 exec uv run --with snakemake --with snakemake-executor-plugin-slurm snakemake \
   --profile profiles/slurm \
   -j"$JOBS" \
-  --resources "gpu=${JOBS}" "charmm_slot=${JOBS}" \
+  --resources "gpu=${JOBS} charmm_slot=${JOBS}" \
   --keep-going \
   "$@"
