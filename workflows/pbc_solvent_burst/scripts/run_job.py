@@ -10,6 +10,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import yaml
+
 _SCRIPTS = Path(__file__).resolve().parent
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
@@ -32,21 +34,9 @@ def _repo_root() -> Path:
 
 
 def _resolve_mmml_cmd(md_argv: list[str]) -> list[str]:
-    mmml_bin = os.environ.get("MMML_BIN")
-    if mmml_bin:
-        return [mmml_bin, "md-system", *md_argv]
-
-    venv_mmml = _repo_root() / ".venv" / "bin" / "mmml"
-    if venv_mmml.is_file():
-        return [str(venv_mmml), "md-system", *md_argv]
-
-    from shutil import which
-
-    on_path = which("mmml")
-    if on_path:
-        return [on_path, "md-system", *md_argv]
-
-    return [sys.executable, "-m", "mmml.cli.__main__", "md-system", *md_argv]
+    """Invoke md-system with the workflow's Python (editable repo checkout)."""
+    py = os.environ.get("MMML_PYTHON", sys.executable)
+    return [py, "-m", "mmml.cli.__main__", "md-system", *md_argv]
 
 
 def main() -> int:
@@ -87,6 +77,16 @@ def main() -> int:
     cmd = _resolve_mmml_cmd(md_argv)
 
     tag = cell_run_tag(cell, cfg)
+    import mmml.interfaces.pycharmmInterface.mlpot.staged_workflow as _sw
+
+    print(f"mmml package: {_sw.__file__}", flush=True)
+    campaign = yaml.safe_load(paths["campaign_yaml"].read_text(encoding="utf-8"))
+    init_job = campaign["runs"]["pycharmm_init"]
+    print(
+        f"pycharmm_init heat: thermostat={init_job.get('heat_thermostat')} "
+        f"no_echeck_heat={init_job.get('no_echeck_heat')}",
+        flush=True,
+    )
     print(f"Campaign jobs ({tag}): {campaign_job_order(cfg)}", flush=True)
     print(f"Running: {' '.join(cmd)}", flush=True)
     rc = subprocess.call(cmd)

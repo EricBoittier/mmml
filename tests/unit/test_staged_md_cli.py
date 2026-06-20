@@ -466,7 +466,7 @@ def test_overlap_for_stage_enables_heat_chunking():
 
 
 def test_configure_heat_dynamics_start_hoover_memory_handoff_no_comp_velocities():
-    """Hoover CPT after mini must not use iasvel=0 + start (COMP holds coordinates)."""
+    """Hoover CPT after mini: assign at FIRSTT, then dyna with iasvel=0 (no TBATH re-draw)."""
     io = CharmmTrajectoryFiles()
     kw = {
         "firstt": 0.0,
@@ -495,7 +495,7 @@ def test_configure_heat_dynamics_start_hoover_memory_handoff_no_comp_velocities(
     assign.assert_called_once()
     assert kw["restart"] is False
     assert kw["start"] is False
-    assert kw["iasvel"] == 1
+    assert kw["iasvel"] == 0
 
 
 def test_configure_heat_dynamics_start_scale_memory_handoff_single_dyna():

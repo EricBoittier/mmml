@@ -471,10 +471,9 @@ def _configure_heat_dynamics_start(
                 restart_path=None,
                 use_pbc=use_pbc,
             )
-            # Continue in-memory velocities from the Boltzmann draw. Omit START
-            # (start=False) and keep iasvel=1 so a lingering START flag cannot
-            # fall back to COMP coordinates as velocities.
-            kw["iasvel"] = 1
+            # Velocities already drawn at FIRSTT; iasvel=1 on the main dyna would
+            # re-assign at TBATH/FINALT (CHARMM) and spike T on segment ≥1 handoff.
+            kw["iasvel"] = 0
             kw["start"] = False
         else:
             # Single dyna: Boltzmann at FIRSTT (start=True) then ihtfrq scaling.
@@ -533,7 +532,7 @@ def _configure_heat_dynamics_start(
         kw["restart"] = False
         kw["new"] = False
         if hoover_cpt_heat:
-            kw["iasvel"] = 1
+            kw["iasvel"] = 0
             kw["start"] = False
         else:
             kw["start"] = False
@@ -1296,6 +1295,15 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     args, default_temp=temp
                 )
                 heat_thermostat = resolve_heat_thermostat(args)
+                if not args.quiet:
+                    neh = bool(getattr(args, "no_echeck_heat", False))
+                    print(
+                        f"HEAT policy: thermostat={heat_thermostat} "
+                        f"no_echeck_heat={neh} "
+                        f"({n_heat_segments} segment(s), "
+                        f"{heat_firstt:.1f}→{heat_finalt:.1f} K)",
+                        flush=True,
+                    )
                 initial = prev_restart or _prior_restart_for_stage(
                     "heat", paths, restart_from=None
                 )
