@@ -77,3 +77,27 @@ def test_assert_monomer_extent_raises_on_nonfinite():
         assert_monomer_extent_within_limit(
             pos, offsets, max_extent_A=12.0, context="heat segment"
         )
+
+
+def test_assert_monomer_extent_unwraps_periodic():
+    # Stretched molecule in wrapped coordinates: first atom at 0, second at 29 in a cell of 30.0 Å
+    # Actual/unwrapped distance should be 1.0 Å
+    pos = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [29.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    offsets = monomer_offsets(len(pos), 1)
+    # Without cell, extent is 29.0, which exceeds 12.0
+    with pytest.raises(RuntimeError, match="monomer extent exceeded"):
+        assert_monomer_extent_within_limit(
+            pos, offsets, max_extent_A=12.0, context="test"
+        )
+    # With cell, unwrapped extent is 1.0, which is within 12.0
+    worst = assert_monomer_extent_within_limit(
+        pos, offsets, max_extent_A=12.0, cell=30.0, context="test"
+    )
+    assert worst == pytest.approx(1.0)
+
