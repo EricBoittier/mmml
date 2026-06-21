@@ -103,6 +103,8 @@ def _pycharmm_args(**overrides) -> argparse.Namespace:
         packmol_cache_dir=None,
         save_run_state=False,
         run_state_dir=None,
+        overlap_run_state_dir=None,
+        overlap_run_state_every_chunks=0,
         bonded_mm_mini=True,
         bonded_mm_mini_after="mini,heat",
         bonded_mm_mini_steps=50,
@@ -215,6 +217,7 @@ def test_build_pycharmm_command_forwards_packmol_cache_and_run_state_flags():
             save_run_state=True,
             packmol_cache_dir=Path("/tmp/mmml_packmol"),
             run_state_dir=Path("/tmp/run_state"),
+            overlap_run_state_every_chunks=4,
             reuse_packmol_cache=False,
         )
     )
@@ -225,6 +228,8 @@ def test_build_pycharmm_command_forwards_packmol_cache_and_run_state_flags():
     assert cmd[idx + 1] == "/tmp/mmml_packmol"
     idx = cmd.index("--run-state-dir")
     assert cmd[idx + 1] == "/tmp/run_state"
+    idx = cmd.index("--overlap-run-state-every-chunks")
+    assert cmd[idx + 1] == "4"
 
 
 def test_build_pycharmm_command_forwards_flat_bottom_selection():
