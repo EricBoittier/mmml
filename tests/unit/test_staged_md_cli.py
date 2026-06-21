@@ -693,6 +693,16 @@ def test_reset_stage_restart_preserves_memory_handoff_seed(tmp_path):
     assert res.read_text(encoding="ascii") == "seeded restart\n"
 
 
+def test_resolve_max_grms_before_dyn_scales_large_pbc_cluster():
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        resolve_max_grms_before_dyn,
+    )
+
+    args = argparse.Namespace(max_grms_before_dyn=50.0)
+    grms = resolve_max_grms_before_dyn(args, 206, 1030, pbc=True)
+    assert grms >= 175.0
+
+
 def test_heat_multiseg_memory_handoff_reset_then_seed(tmp_path):
     """Multi-segment HEAT resets scratch before seeding fly-off checkpoint."""
     from unittest.mock import patch

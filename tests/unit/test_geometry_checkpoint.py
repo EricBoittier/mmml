@@ -208,6 +208,22 @@ def test_build_geometry_recovery_candidates_prefers_baseline_over_scratch_prior(
     assert scratch not in ladder
 
 
+def test_build_geometry_recovery_candidates_skips_pretreat_mm(tmp_path):
+    baseline = tmp_path / "geometry_baseline_dcm_254.res"
+    pretreat = tmp_path / "pretreat" / "charmm_mm_prod_dcm_254.res"
+    pretreat.parent.mkdir()
+    heat = tmp_path / "heat_dcm_254.0.res"
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        n_monomers=2,
+        geometry_baseline_restart=baseline,
+        geometry_fallback_restarts=(pretreat, heat),
+    )
+    ladder = build_geometry_recovery_candidates(cfg)
+    assert ladder == [baseline, heat]
+    assert pretreat not in ladder
+
+
 def test_attempt_overlap_early_abort_recovery_uses_baseline_not_scratch(tmp_path):
     baseline = tmp_path / "geometry_baseline_dcm_155.res"
     baseline.write_text("baseline\n", encoding="utf-8")

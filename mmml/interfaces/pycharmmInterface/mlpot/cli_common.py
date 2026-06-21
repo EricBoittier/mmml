@@ -1336,6 +1336,40 @@ def resolve_echeck_for_cluster(
     return scaled
 
 
+def resolve_max_grms_before_dyn(
+    args: argparse.Namespace,
+    n_monomers: int,
+    n_atoms: int,
+    *,
+    pbc: bool = False,
+) -> float:
+    """Size-aware GRMS ceiling before MLpot dynamics (kcal/mol/Å).
+
+    CHARMM SD can report a stale low GRMS while MLpot USER forces are still large
+    on dense PBC clusters.  Scale the default 50 kcal/mol/Å floor with system size.
+    """
+    base = float(getattr(args, "max_grms_before_dyn", 50.0))
+    if getattr(args, "allow_high_grms", False) or getattr(args, "no_scale_max_grms", False):
+        return base
+    n_mol = max(1, int(n_monomers))
+    n_at = max(1, int(n_atoms))
+    if n_mol == 1 and n_at < 100:
+        return base
+    from_mol = float(n_mol) * 0.75
+    from_atoms = float(n_at) * 0.2
+    scaled = max(base, from_mol, from_atoms)
+    if pbc:
+        scaled = max(scaled, min(250.0, float(n_mol) * 0.85))
+    if scaled != base:
+        print(
+            f"max_grms_before_dyn scaled {base:.0f} -> {scaled:.0f} kcal/mol/Å for "
+            f"{n_mol} monomer(s) / {n_at} atoms"
+            + (" (PBC)" if pbc else ""),
+            flush=True,
+        )
+    return scaled
+
+
 def assert_dynamics_ready(
     *,
     max_grms: float = 50.0,
@@ -1350,14 +1384,15 @@ def assert_dynamics_ready(
     import pycharmm
     import pycharmm.energy as energy
 
-    if require_mlpot_user:
-        if mlpot_ctx is not None:
-            mlpot_ctx.reregister_mlpot()
+    user_kcal: float | None = None
+    if require_mlpot_user and mlpot_ctx is not None:
+        grms = refresh_mlpot_energy_and_grms(mlpot_ctx, context="")
+    elif require_mlpot_user:
         pycharmm.lingo.charmm_script("ENER FORCE")
+        grms = charmm_grms()
     else:
         pycharmm.lingo.charmm_script("ENER")
-    grms = charmm_grms()
-    user_kcal: float | None = None
+        grms = charmm_grms()
     if require_mlpot_user:
         try:
             user_kcal = float(energy.get_term_by_name("USER"))

@@ -63,13 +63,23 @@ from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import (
     select_npr_tier,
     validate_mlpot_system_size,
 )
-max_n_ml = max(
-    estimate_ml_atoms(c.n_monomers, solvent=c.solvent)
-    for c in __import__('campaign_lib', fromlist=['iter_matrix_cells']).iter_matrix_cells(cfg)
+from campaign_lib import iter_matrix_cells
+worst = max(
+    (
+        (
+            estimate_ml_atoms(c.n_monomers, solvent=c.solvent),
+            c.box_size,
+        )
+        for c in iter_matrix_cells(cfg)
+    ),
+    key=lambda item: select_npr_tier(
+        item[0], pbc=True, box_side_A=item[1]
+    ),
 )
-tier = select_npr_tier(max_n_ml, pbc=True)
-print(f'max matrix n_ml={max_n_ml} CHARMM tier={tier} (max_Npr={NPR_TIERS[tier]}, PBC pairs)')
-validate_mlpot_system_size(max_n_ml, pbc=True)
+max_n_ml, worst_box = worst
+tier = select_npr_tier(max_n_ml, pbc=True, box_side_A=worst_box)
+print(f'max matrix n_ml={max_n_ml} L={worst_box:g} CHARMM tier={tier} (max_Npr={NPR_TIERS[tier]}, PBC pairs)')
+validate_mlpot_system_size(max_n_ml, pbc=True, box_side_A=worst_box)
 "
 
 if ! command -v packmol >/dev/null 2>&1; then
