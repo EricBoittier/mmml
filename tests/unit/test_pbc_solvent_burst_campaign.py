@@ -36,6 +36,7 @@ from campaign_lib import (  # noqa: E402
 )
 from cleanup_strategy import resolve_cleanup_strategy  # noqa: E402
 from cleanup_strategy import resolve_pycharmm_heat_thermostat  # noqa: E402
+from cleanup_strategy import dense_cell_mlpot_overrides  # noqa: E402
 
 
 @pytest.fixture
@@ -332,3 +333,22 @@ def test_bulk_density_optional_last_burst() -> None:
     mid_burst = f"jaxmd_burst_{int(cfg['jaxmd_bursts']) // 2:02d}"
     assert build_campaign(cfg, full)["runs"][last_burst].get("optional") is True
     assert build_campaign(cfg, half)["runs"][mid_burst].get("optional") is None
+
+
+def test_dense_cell_mlpot_overrides_large_pbc(cfg: dict) -> None:
+    cell = RunCell(solvent="DCM", n_monomers=206, temperature=300.0, box_size=28.0)
+    overrides = dense_cell_mlpot_overrides(cell, cfg)
+    assert overrides["n_heat_segments"] <= 4
+    assert overrides["dynamics_overlap_check_interval"] >= 500
+    assert overrides["dynamics_overlap_memory_handoff"] is True
+    assert overrides["dynamics_overlap_charmm_sd_steps"] >= 400
+    init = build_campaign(cfg, cell)["runs"]["pycharmm_init"]
+    assert init["n_heat_segments"] <= 4
+    assert init["ml_batch_size"] <= 1024
+
+
+def test_exclude_run_prefixes_skips_hard_cells(sweep_cfg: dict) -> None:
+    cfg = {**sweep_cfg, "exclude_run_prefixes": ["dcm_231_", "aco_200_"]}
+    tags = {cell_run_tag(c, cfg) for c in iter_matrix_cells(cfg)}
+    assert not any(t.startswith("dcm_231_") for t in tags)
+    assert not any(t.startswith("aco_200_") for t in tags)

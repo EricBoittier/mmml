@@ -13,6 +13,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
     build_geometry_recovery_candidates,
     discover_resume_restart,
     first_valid_restart_path,
+    is_handoff_seed_restart_path,
     is_overlap_scratch_restart_path,
     pretreat_stage_complete,
     resolve_geometry_checkpoint_ladder,
@@ -73,6 +74,21 @@ def test_discover_resume_restart_prefers_baseline_over_pretreat(tmp_path):
     }
     found = discover_resume_restart(tmp_path, tag, paths=paths, n_heat_segments=10)
     assert found == baseline.resolve()
+
+
+def test_handoff_seed_excluded_from_recovery_ladder(tmp_path):
+    handoff = tmp_path / "handoff" / "continue_seed.res"
+    handoff.parent.mkdir()
+    handoff.write_text("seed\n", encoding="utf-8")
+    baseline = tmp_path / "geometry_baseline_dcm.res"
+    baseline.write_text("baseline\n", encoding="utf-8")
+    overlap = DynamicsOverlapConfig(
+        geometry_baseline_restart=baseline,
+        geometry_fallback_restarts=(handoff,),
+    )
+    cands = build_geometry_recovery_candidates(overlap)
+    assert handoff.resolve() not in [c.resolve() for c in cands]
+    assert is_handoff_seed_restart_path(handoff)
 
 
 def test_pretreat_resume_skips_completed_heat(tmp_path):

@@ -2368,3 +2368,20 @@ def test_prepare_post_rescue_overlap_handoff_assigns_velocities_in_memory():
     assert chunk_kw["iasvel"] == 0
     assert chunk_kw["iunrea"] == -1
     assert "finalt" not in chunk_kw
+
+
+def test_valid_overlap_chunk_restart_read_rejects_handoff_seed(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _overlap_chunk_uses_memory_handoff,
+        _valid_overlap_chunk_restart_read,
+    )
+
+    handoff = tmp_path / "handoff" / "continue_seed.res"
+    handoff.parent.mkdir()
+    handoff.write_text("seed\n", encoding="utf-8")
+    assert _valid_overlap_chunk_restart_read(handoff) is None
+
+    overlap = DynamicsOverlapConfig(memory_handoff=True)
+    assert _overlap_chunk_uses_memory_handoff(
+        object(), chunk_index=0, n_chunks=4, overlap=overlap
+    )
