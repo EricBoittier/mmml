@@ -750,7 +750,7 @@ def test_maybe_run_bonded_mm_mini_always_inplace_all_ml(tmp_path):
         "_mlpot_covers_all_atoms",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_all_ml_mlpot_recovery",
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_hybrid_bonded_mlpot_recovery",
     ) as inplace:
         ran = bonded_mm_recovery.maybe_run_bonded_mm_mini_after_stage(
             ctx,
@@ -782,7 +782,7 @@ def test_maybe_run_bonded_mm_mini_always_all_ml_mini_uses_inplace(tmp_path):
         "_mlpot_covers_all_atoms",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_all_ml_mlpot_recovery",
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_hybrid_bonded_mlpot_recovery",
     ) as inplace:
         ran = bonded_mm_recovery.maybe_run_bonded_mm_mini_after_stage(
             ctx,
@@ -870,7 +870,7 @@ def test_maybe_run_bonded_mm_mini_skips_heavy_when_heat_overlap(tmp_path):
         "_bonded_mm_skip_reason_after_heat_overlap",
         return_value="worst inter-monomer distance 0.71 Å < 0.50 Å",
     ) as skip, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_all_ml_mlpot_recovery",
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_hybrid_bonded_mlpot_recovery",
     ) as inplace:
         ran = bonded_mm_recovery.maybe_run_bonded_mm_mini_after_stage(
             ctx,
@@ -906,7 +906,7 @@ def test_maybe_run_bonded_mm_mini_all_ml_skips_when_strain_ok(tmp_path):
         "_measure_stage_bonded_strain",
         return_value=ok,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_all_ml_mlpot_recovery",
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_hybrid_bonded_mlpot_recovery",
     ) as inplace:
         ran = bonded_mm_recovery.maybe_run_bonded_mm_mini_after_stage(
             ctx,
@@ -943,7 +943,7 @@ def test_maybe_run_bonded_mm_mini_all_ml_runs_inplace_when_strain_high(tmp_path)
         "_measure_stage_bonded_strain",
         return_value=high,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_all_ml_mlpot_recovery",
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_hybrid_bonded_mlpot_recovery",
     ) as inplace:
         ran = bonded_mm_recovery.maybe_run_bonded_mm_mini_after_stage(
             ctx,
@@ -980,7 +980,7 @@ def test_maybe_run_bonded_mm_mini_all_ml_uses_inplace_recovery(tmp_path):
         "_measure_stage_bonded_strain",
         return_value=high,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_all_ml_mlpot_recovery",
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_hybrid_bonded_mlpot_recovery",
     ) as inplace, patch.object(
         bonded_mm_recovery,
         "minimize_bonded_mm_recovery",
@@ -1026,7 +1026,7 @@ def test_assert_pre_min_bonded_geometry_exits_on_high_angl():
         bonded_mm_recovery.assert_pre_min_bonded_geometry(args)
 
 
-def test_run_intra_overlap_rescue_all_ml_uses_mlpot_sd_path(tmp_path):
+def test_run_intra_overlap_rescue_all_ml_uses_bonded_sd_path(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         run_intra_monomer_overlap_rescue,
     )
@@ -1050,19 +1050,13 @@ def test_run_intra_overlap_rescue_all_ml_uses_mlpot_sd_path(tmp_path):
         pyCModel=model,
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._mlpot_covers_all_atoms",
-        return_value=True,
-    ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_all_ml_intra_overlap_rescue",
-    ) as light, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_bonded_mm_recovery",
-    ) as charmm_light:
+    ) as intra:
         run_intra_monomer_overlap_rescue(ctx, cfg)
-    light.assert_called_once()
-    charmm_light.assert_not_called()
+    intra.assert_called_once()
 
 
-def test_run_inter_overlap_rescue_all_ml_uses_heavy_path(tmp_path):
+def test_run_inter_overlap_rescue_all_ml_uses_bonded_vdw_path(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         run_inter_monomer_overlap_rescue,
     )
@@ -1086,19 +1080,13 @@ def test_run_inter_overlap_rescue_all_ml_uses_heavy_path(tmp_path):
         rescue=OverlapRescueConfig(nstep_sd=50, verbose=False),
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._mlpot_covers_all_atoms",
-        return_value=True,
-    ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_all_ml_inter_overlap_rescue",
-    ) as heavy, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_overlap_rescue",
-    ) as light:
+    ) as inter:
         run_inter_monomer_overlap_rescue(ctx, cfg)
-    heavy.assert_called_once()
-    light.assert_not_called()
+    inter.assert_called_once()
 
 
-def test_all_ml_inter_overlap_rescue_uses_mlpot_sd_only():
+def test_all_ml_inter_overlap_rescue_uses_bonded_vdw_sd():
     from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         _run_all_ml_inter_overlap_rescue,
     )
@@ -1120,15 +1108,13 @@ def test_all_ml_inter_overlap_rescue_uses_mlpot_sd_only():
     with patch(
         "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.apply_charmm_position_noise",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.restraints.clear_mmfp_restraints",
-    ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_with_mlpot",
-    ) as mini:
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_overlap_rescue",
+    ) as bonded_rescue:
         _run_all_ml_inter_overlap_rescue(ctx, cfg)
-    mini.assert_called_once()
+    bonded_rescue.assert_called_once_with(ctx, cfg.rescue)
 
 
-def test_run_inter_overlap_rescue_partial_ml_uses_light_path():
+def test_run_inter_overlap_rescue_calls_bonded_vdw_rescue():
     from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         run_inter_monomer_overlap_rescue,
     )
@@ -1147,16 +1133,10 @@ def test_run_inter_overlap_rescue_partial_ml_uses_light_path():
         rescue=OverlapRescueConfig(nstep_sd=50, verbose=False),
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._mlpot_covers_all_atoms",
-        return_value=False,
-    ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_overlap_rescue",
-    ) as light, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_all_ml_inter_overlap_rescue",
-    ) as heavy:
+    ) as inter:
         run_inter_monomer_overlap_rescue(ctx, cfg)
-    light.assert_called_once_with(ctx, cfg.rescue)
-    heavy.assert_not_called()
+    inter.assert_called_once()
 
 
 def test_run_intra_overlap_rescue_partial_ml_uses_light_path():
@@ -1179,16 +1159,10 @@ def test_run_intra_overlap_rescue_partial_ml_uses_light_path():
         rescue=OverlapRescueConfig(nstep_sd=50, verbose=False),
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._mlpot_covers_all_atoms",
-        return_value=False,
-    ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_bonded_mm_recovery",
-    ) as light, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_all_ml_intra_overlap_rescue",
-    ) as heavy:
+    ) as intra:
         run_intra_monomer_overlap_rescue(ctx, cfg)
-    light.assert_called_once()
-    heavy.assert_not_called()
+    intra.assert_called_once()
 
 
 def test_rewrite_dynamics_restart_writes_current_state(tmp_path):
@@ -1453,9 +1427,6 @@ def test_run_extent_recovery_passes_restart_coords_to_all_ml_path(tmp_path):
     with patch(
         "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_restart",
     ) as restore, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._mlpot_covers_all_atoms",
-        return_value=True,
-    ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_all_ml_extent_recovery",
     ) as extent_path, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_bonded_mm_recovery",

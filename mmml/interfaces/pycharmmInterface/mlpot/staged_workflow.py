@@ -1485,16 +1485,6 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         ihtfrq=resolve_heat_ihtfrq(args, nstep=nstep),
                     )
                     overlap_prior_restart = _overlap_extent_prior_restart(paths, prev_restart)
-                    if overlap_prior_restart is None and _should_seed_heat_prior_restart(
-                        seg_i=seg_i,
-                        prev_restart_is_current_state=prev_restart_is_current_state,
-                        use_memory=use_memory,
-                        memory_handoff_next=memory_handoff_next,
-                    ):
-                        overlap_prior_restart = _seed_restart_for_memory_handoff(
-                            seg_io, kw, stage="heat"
-                        )
-                        restart_path = overlap_prior_restart
                     _sync_mlpot_cell_before_npt(
                         "heat",
                         mlpot_pbc=mlpot_pbc,
@@ -1523,6 +1513,16 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                             Path(seg_io.trajectory) if seg_io.trajectory else None,
                             rescue_old=bool(getattr(args, "rescue_old_dcd", False)),
                         )
+                    if overlap_prior_restart is None and _should_seed_heat_prior_restart(
+                        seg_i=seg_i,
+                        prev_restart_is_current_state=prev_restart_is_current_state,
+                        use_memory=use_memory,
+                        memory_handoff_next=memory_handoff_next,
+                    ):
+                        overlap_prior_restart = _seed_restart_for_memory_handoff(
+                            seg_io, kw, stage="heat"
+                        )
+                        restart_path = overlap_prior_restart
                     assert_mlpot_user_active(
                         ctx,
                         context=f"heat segment {seg_i + 1}/{n_heat_segments}",
