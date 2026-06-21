@@ -686,6 +686,9 @@ def _factory_mmml(
     flat_bottom_force_const: float = 1.0,
     flat_bottom_mode: str = "system",
     defer_xla_gpu_warmup: bool = False,
+    ml_batch_size: Optional[int] = None,
+    ml_max_active_dimers: Optional[int] = None,
+    ml_compute_dtype: Optional[str] = None,
 ):
     at_codes = np.asarray(psf.get_iac(), dtype=int) - 1
     n_types = len(param.get_atc())
@@ -723,6 +726,9 @@ def _factory_mmml(
         flat_bottom_force_const=flat_bottom_force_const,
         flat_bottom_mode=flat_bottom_mode,
         defer_xla_gpu_warmup=defer_xla_gpu_warmup,
+        ml_batch_size=ml_batch_size,
+        ml_max_active_dimers=ml_max_active_dimers,
+        ml_compute_dtype=ml_compute_dtype,
     )
     t1 = _tmark()
     cutoff = CutoffParameters(ml_cutoff=ml_cut, mm_switch_on=mm_sw, mm_cutoff=mm_cut)
@@ -1436,6 +1442,22 @@ def main(argv: list[str] | None = None) -> int:
         default=20_000,
         help="Upper bound for MM pair slots (lower this to reduce XLA/GPU memory pressure).",
     )
+    parser.add_argument(
+        "--ml-batch-size",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Chunk PhysNet monomer/dimer batches (auto: 256 on GPU / 64 on CPU for n>=40)."
+    )
+    parser.add_argument(
+        "--ml-max-active-dimers",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Sparse ML dimer slot cap (PBC default max(1000, 6*n_monomers))."
+    )
+    from mmml.interfaces.pycharmmInterface.ml_dtypes import add_ml_compute_dtype_args
+    add_ml_compute_dtype_args(parser)
     parser.add_argument("--all", action="store_true", help="Run all 6 combinations")
     parser.add_argument(
         "--only",
@@ -1748,6 +1770,9 @@ def main(argv: list[str] | None = None) -> int:
             flat_bottom_force_const=args.flat_bottom_k,
             flat_bottom_mode=args.flat_bottom_mode,
             defer_xla_gpu_warmup=bool(args.skip_jit_warmup),
+            ml_batch_size=getattr(args, "ml_batch_size", None),
+            ml_max_active_dimers=getattr(args, "ml_max_active_dimers", None),
+            ml_compute_dtype=getattr(args, "ml_compute_dtype", None),
         )
         atoms.calc = calc
         _save_cutoff_plot(
