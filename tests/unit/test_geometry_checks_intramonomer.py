@@ -29,6 +29,35 @@ def test_build_bond_exclusion_pairs_includes_1_3():
     assert (0, 2) in excluded
 
 
+def test_separate_intramonomer_contacts_relieves_geminal_clash():
+    pos = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.09, 0.0, 0.0],
+            [0.003, 0.0, 0.0],
+            [10.0, 0.0, 0.0],
+            [11.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    offsets = np.array([0, 3, 5], dtype=int)
+    excluded = build_bond_exclusion_pairs([1, 2], [2, 3], exclude_1_3=True)
+    new_pos = _geom.separate_intramonomer_contacts(
+        pos,
+        offsets,
+        excluded,
+        min_distance=0.5,
+        margin=0.05,
+    )
+    dist, violation = find_worst_intramonomer_close_contact(
+        new_pos,
+        offsets,
+        excluded,
+        min_distance=0.5,
+    )
+    assert violation is None or dist >= 0.5
+
+
 def test_find_worst_intramonomer_close_contact_skips_bonded_pairs():
     pos = np.array(
         [

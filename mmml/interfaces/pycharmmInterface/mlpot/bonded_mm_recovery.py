@@ -522,6 +522,15 @@ def _run_all_ml_intra_overlap_rescue(
         MinimizeWithMlpotConfig,
         minimize_with_mlpot,
     )
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        relieve_intramonomer_clashes,
+    )
+
+    relieve_intramonomer_clashes(
+        config,
+        context="Intra overlap rescue preflight",
+        verbose=bool(bonded_cfg.verbose),
+    )
 
     noise = float(getattr(config, "position_noise_A", 0.05) or 0.0)
     seed = getattr(config, "recovery_seed", None)
@@ -533,6 +542,11 @@ def _run_all_ml_intra_overlap_rescue(
                 flush=True,
             )
         apply_charmm_position_noise(amplitude_A=noise, seed=seed)
+        relieve_intramonomer_clashes(
+            config,
+            context="Intra overlap rescue post-noise",
+            verbose=bool(bonded_cfg.verbose),
+        )
 
     pyCModel = getattr(config, "pyCModel", None)
     if pyCModel is None:
