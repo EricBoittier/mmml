@@ -31,10 +31,12 @@ except Exception:
 
 try:
     from mmml.interfaces.pycharmmInterface.cell_list import (
+        PairListTruncationError,
         cell_list_pairs as _cell_list_pairs,
         estimate_max_pairs as _estimate_max_pairs,
     )
 except Exception:
+    PairListTruncationError = RuntimeError  # type: ignore[misc, assignment]
     _cell_list_pairs = None
     _estimate_max_pairs = None
 
@@ -118,6 +120,87 @@ def _box_to_cell_3x3(box: Array) -> Array:
         jnp.asarray(b, dtype=b.dtype),
         jnp.where(b.ndim == 1, diag_3, diag_iso),
     )
+
+
+def _resolve_cell_list_max_pairs(
+    *,
+    total_atoms: int,
+    pbc_cell: np.ndarray | None,
+    cutoff: float,
+    max_pairs: int | None,
+    cell_list_safety_factor: float,
+    cell_list_density_estimate: float | None,
+) -> int:
+    if max_pairs is not None:
+        return int(max_pairs)
+    from mmml.interfaces.pycharmmInterface.cell_list import cubic_box_side_from_cell_matrix
+
+    box_side = cubic_box_side_from_cell_matrix(
+        np.asarray(pbc_cell) if pbc_cell is not None else None
+    )
+    return int(
+        _estimate_max_pairs(
+            total_atoms,
+            cutoff=cutoff,
+            safety_factor=cell_list_safety_factor,
+            density_estimate=cell_list_density_estimate,
+            box_side_A=box_side,
+        )
+    )
+
+
+def _build_cell_list_pairs_with_retry(
+    *,
+    positions: np.ndarray,
+    pbc_cell: np.ndarray,
+    cutoff: float,
+    max_pairs: int | None,
+    monomer_offsets: np.ndarray,
+    atoms_per_monomer_list: Sequence[int],
+    total_atoms: int,
+    cell_list_safety_factor: float,
+    cell_list_density_estimate: float | None,
+    debug: bool,
+):
+    """Build cell-list pairs; grow ``max_pairs`` if the first estimate is too small."""
+    import math
+
+    capacity = _resolve_cell_list_max_pairs(
+        total_atoms=total_atoms,
+        pbc_cell=pbc_cell,
+        cutoff=cutoff,
+        max_pairs=max_pairs,
+        cell_list_safety_factor=cell_list_safety_factor,
+        cell_list_density_estimate=cell_list_density_estimate,
+    )
+    last_exc: PairListTruncationError | None = None
+    for attempt in range(4):
+        try:
+            cl_i, cl_j, cl_mask, n_valid = _cell_list_pairs(
+                np.asarray(positions),
+                np.asarray(pbc_cell),
+                cutoff=cutoff,
+                max_pairs=capacity,
+                monomer_offsets=monomer_offsets,
+                atoms_per_monomer_list=list(atoms_per_monomer_list),
+                exclude_intra_monomer=True,
+            )
+            if debug and attempt > 0:
+                print(
+                    f"[get_MM] Cell list: max_pairs raised to {capacity} "
+                    f"({n_valid} valid pairs)",
+                    flush=True,
+                )
+            return cl_i, cl_j, cl_mask, n_valid, capacity
+        except PairListTruncationError as exc:
+            last_exc = exc
+            capacity = max(
+                int(math.ceil(exc.suggested_max_pairs)),
+                int(math.ceil(exc.n_found * 1.25)),
+            )
+    if last_exc is not None:
+        raise last_exc
+    raise RuntimeError("cell-list pair build failed without truncation error")
 
 
 def build_mm_energy_forces_fn(
@@ -278,24 +361,18 @@ def build_mm_energy_forces_fn(
 
     if _use_cell_list:
         _mm_switch_width_dist = mm_switch_on + mm_switch_width
-        if max_pairs is not None:
-            _max_pairs = int(max_pairs)
-        else:
-            _max_pairs = _estimate_max_pairs(
-                total_atoms,
-                cutoff=_mm_switch_width_dist,
-                safety_factor=cell_list_safety_factor,
-                density_estimate=cell_list_density_estimate,
-            )
         _offsets_np = np.array([int(monomer_offsets[k]) for k in range(len(monomer_offsets))])
-        _cl_i, _cl_j, _cl_mask, _n_valid = _cell_list_pairs(
-            np.asarray(R),
-            np.asarray(pbc_cell),
+        _cl_i, _cl_j, _cl_mask, _n_valid, _max_pairs = _build_cell_list_pairs_with_retry(
+            positions=np.asarray(R),
+            pbc_cell=np.asarray(pbc_cell),
             cutoff=_mm_switch_width_dist,
-            max_pairs=_max_pairs,
+            max_pairs=max_pairs,
             monomer_offsets=_offsets_np,
             atoms_per_monomer_list=atoms_per_monomer_list,
-            exclude_intra_monomer=True,
+            total_atoms=total_atoms,
+            cell_list_safety_factor=cell_list_safety_factor,
+            cell_list_density_estimate=cell_list_density_estimate,
+            debug=debug,
         )
         if mm_r_min is not None:
             _monomer_id_for_filter = np.empty(total_atoms, dtype=np.int32)
@@ -665,22 +742,17 @@ def build_mm_energy_forces_fn(
             ):
                 raise RuntimeError("Neighbor list failed and cell-list fallback is unavailable")
             cutoff = mm_switch_on + mm_switch_width
-            fallback_max_pairs = int(max_pairs) if max_pairs is not None else int(
-                _estimate_max_pairs(
-                    total_atoms,
-                    cutoff=cutoff,
-                    safety_factor=max(float(cell_list_safety_factor), 4.0),
-                    density_estimate=cell_list_density_estimate,
-                )
-            )
-            cl_i, cl_j, cl_mask, _ = _cell_list_pairs(
-                np.asarray(positions_in, dtype=np.float64),
-                np.asarray(pbc_cell),
+            cl_i, cl_j, cl_mask, _, fallback_max_pairs = _build_cell_list_pairs_with_retry(
+                positions=np.asarray(positions_in, dtype=np.float64),
+                pbc_cell=np.asarray(pbc_cell),
                 cutoff=cutoff,
-                max_pairs=fallback_max_pairs,
+                max_pairs=max_pairs,
                 monomer_offsets=_offsets_np,
                 atoms_per_monomer_list=atoms_per_monomer_list,
-                exclude_intra_monomer=True,
+                total_atoms=total_atoms,
+                cell_list_safety_factor=max(float(cell_list_safety_factor), 4.0),
+                cell_list_density_estimate=cell_list_density_estimate,
+                debug=_nbr_debug,
             )
             if mm_r_min is not None:
                 cl_mask = _filter_pairs_by_com_min(

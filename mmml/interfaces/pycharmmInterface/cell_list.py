@@ -31,6 +31,19 @@ except ModuleNotFoundError:
     jnp = None  # type: ignore[assignment]
 
 
+class PairListTruncationError(RuntimeError):
+    """Raised when the cell-list pair buffer is too small."""
+
+    def __init__(self, n_found: int, max_pairs: int) -> None:
+        self.n_found = int(n_found)
+        self.max_pairs = int(max_pairs)
+        self.suggested_max_pairs = int(np.ceil(self.n_found * 1.25))
+        super().__init__(
+            f"cell_list_pairs: found {self.n_found} pairs but max_pairs={self.max_pairs}. "
+            f"Increase max_pairs for correctness (suggested: {self.suggested_max_pairs})."
+        )
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -254,8 +267,6 @@ def cell_list_pairs(
 
     # Pad to max_pairs
     if n_valid > max_pairs:
-        # Truncate (shouldn't happen in practice if max_pairs is set correctly)
-        import warnings
         message = (
             f"cell_list_pairs: found {n_valid} pairs but max_pairs={max_pairs}. "
             "Truncating. Increase max_pairs for correctness."
@@ -276,14 +287,7 @@ def cell_list_pairs(
             )
         except Exception:
             pass
-        warnings.warn(
-            message,
-            RuntimeWarning,
-            stacklevel=2,
-        )
-        pair_i_list = pair_i_list[:max_pairs]
-        pair_j_list = pair_j_list[:max_pairs]
-        n_valid = max_pairs
+        raise PairListTruncationError(n_valid, max_pairs)
 
     pair_i = np.zeros(max_pairs, dtype=np.int32)
     pair_j = np.zeros(max_pairs, dtype=np.int32)
@@ -298,11 +302,28 @@ def cell_list_pairs(
     return pair_i, pair_j, pair_mask, n_valid
 
 
+def cubic_box_side_from_cell_matrix(cell_matrix: np.ndarray | float | None) -> float | None:
+    """Return a cubic box side (Å) from a scalar, diagonal, or 3×3 cell matrix."""
+    if cell_matrix is None:
+        return None
+    m = np.asarray(cell_matrix, dtype=float)
+    if m.ndim == 0:
+        return float(m)
+    if m.size == 1:
+        return float(m.flat[0])
+    if m.shape == (3,):
+        return float(np.mean(m))
+    if m.shape == (3, 3):
+        return float(np.linalg.norm(m[0]))
+    return None
+
+
 def estimate_max_pairs(
     n_atoms: int,
     density_estimate: Optional[float] = None,
     cutoff: float = 10.0,
     safety_factor: float = 1.5,
+    box_side_A: Optional[float] = None,
 ) -> int:
     """Heuristic for ``max_pairs`` based on expected atom density.
 
@@ -313,21 +334,41 @@ def estimate_max_pairs(
     density_estimate : float, optional
         Approximate number density (atoms / A^3).  Default 0.03 is reasonable
         for condensed-phase organic liquids.  Use higher values (e.g. 0.04-0.05)
-        for denser systems.
+        for denser systems.  Ignored when ``box_side_A`` is set (uses N/V).
     cutoff : float
         Pair cutoff in Angstroms.
     safety_factor : float
         Multiplicative safety margin.
+    box_side_A : float, optional
+        Cubic PBC box side (Å).  When the cutoff spans a large fraction of the
+        box, pair counts approach ``N*(N-1)/2`` (dense cluster under MIC).
 
     Returns
     -------
     int : suggested ``max_pairs``.
     """
     import math
-    if density_estimate is None:
-        density_estimate = 0.03
-    vol_sphere = (4.0 / 3.0) * math.pi * cutoff**3
-    avg_neighbours = density_estimate * vol_sphere
-    # Each atom has ~avg_neighbours neighbours; total unique pairs ~ N * avg / 2
-    est = int(n_atoms * avg_neighbours / 2.0 * safety_factor)
-    return max(est, n_atoms)  # at least n_atoms pairs
+
+    n = max(1, int(n_atoms))
+    sf = float(safety_factor)
+    r = float(cutoff)
+    max_all_pairs = n * (n - 1) // 2
+    vol_sphere = (4.0 / 3.0) * math.pi * r**3
+
+    if box_side_A is not None and float(box_side_A) > 0.0:
+        L = float(box_side_A)
+        rho = n / (L**3)
+        sphere_est = int(n * rho * vol_sphere / 2.0 * sf)
+        # MIC: large cutoff vs box side → most atom pairs can interact.
+        if 2.0 * r >= 0.35 * L:
+            cluster_est = int(math.ceil(max_all_pairs * sf))
+        else:
+            cluster_est = 0
+        est = max(sphere_est, cluster_est, n)
+        # Small headroom for geometry-dependent pair-count spikes.
+        return int(math.ceil(est * 1.1))
+
+    rho = float(density_estimate) if density_estimate is not None else 0.03
+    avg_neighbours = rho * vol_sphere
+    est = int(n * avg_neighbours / 2.0 * sf)
+    return max(est, n)

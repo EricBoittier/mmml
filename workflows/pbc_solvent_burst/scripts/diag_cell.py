@@ -14,12 +14,12 @@ if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
 from campaign_lib import cell_from_tag, load_config, paths_for_run  # noqa: E402
-
-_ERROR_MARKERS = re.compile(
-    r"pycharmm_mlpot: error:|intra-monomer|overlap|Traceback|"
-    r"FAIL:|ERROR|CANCELLED|Killed|exit code [1-9]",
-    re.IGNORECASE,
+from monitor_lib import (  # noqa: E402
+    grep_errors,
+    inspect_run,
+    read_text_tail,
 )
+
 _SLURM_LOG = re.compile(r"^\d+\.log$")
 
 
@@ -38,16 +38,6 @@ def _read_text_lines(path: Path, *, max_lines: int = 400) -> list[str]:
     if len(lines) > max_lines:
         return lines[-max_lines:]
     return lines
-
-
-def _grep_errors(path: Path, *, limit: int = 25) -> list[str]:
-    hits: list[str] = []
-    for line in _read_text_lines(path):
-        if _ERROR_MARKERS.search(line):
-            hits.append(line.rstrip())
-            if len(hits) >= limit:
-                break
-    return hits
 
 
 def _slurm_logs(workflow_root: Path, run_tag: str) -> list[Path]:
@@ -90,6 +80,19 @@ def main() -> int:
     done = paths["done"]
     print(f"done.txt: {done.is_file()} ({done.stat().st_size if done.is_file() else 0} B)")
 
+    monitor = inspect_run(cfg, cell)
+    print(f"monitor: status={monitor.status} health={monitor.health} {monitor.progress_note}")
+    if monitor.dyna.get("n_frames"):
+        print(
+            f"  DYNA: {monitor.dyna['n_frames']} frames, "
+            f"T_last={monitor.dyna.get('temperature_last_K', 0):.1f} K, "
+            f"E_drift={monitor.dyna.get('total_energy_drift_kcal', 0):.2f} kcal/mol"
+        )
+    if monitor.last_dyna_lines:
+        print("  last DYNA>:")
+        for ln in monitor.last_dyna_lines[-3:]:
+            print(f"    {ln.rstrip()}")
+
     summary_path = paths["campaign_summary"]
     if summary_path.is_file():
         jobs = json.loads(summary_path.read_text(encoding="utf-8")).get("jobs", [])
@@ -127,7 +130,18 @@ def main() -> int:
     if heat_segs:
         print("heat restarts:")
         for p in heat_segs[:12]:
-            print(f"  {p.name}: {p.stat().st_size} B")
+            step_note = ""
+            try:
+                from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+                    read_restart_last_step,
+                )
+
+                st = read_restart_last_step(p)
+                if st is not None:
+                    step_note = f" step={st}"
+            except Exception:
+                pass
+            print(f"  {p.name}: {p.stat().st_size} B{step_note}")
         if len(heat_segs) > 12:
             print(f"  ... {len(heat_segs) - 12} more")
     heat_dcds = sorted(init.glob("heat_*.dcd"))
@@ -158,7 +172,7 @@ def main() -> int:
 
     printed_tail = False
     for path in text_sources:
-        hits = _grep_errors(path)
+        hits = grep_errors(read_text_tail(path))
         if hits:
             print(f"\n--- errors in {path} ---")
             for line in hits:

@@ -534,6 +534,21 @@ def build_decomposed_mlpot_model(
         ml_max_active_dimers,
         free_space=free_space,
     )
+    max_pairs = None
+    if args is not None:
+        max_pairs = getattr(args, "max_pairs", None)
+    if max_pairs is None and not free_space and cell:
+        from mmml.interfaces.pycharmmInterface.cell_list import estimate_max_pairs
+
+        cutoff_a = float(cutoff_params.mm_switch_on) + float(cutoff_params.mm_switch_width)
+        n_atoms = int(sum(per))
+        safety = float(getattr(args, "cell_list_safety_factor", 3.0) or 3.0)
+        max_pairs = estimate_max_pairs(
+            n_atoms,
+            cutoff=cutoff_a,
+            safety_factor=safety,
+            box_side_A=float(cell),
+        )
     from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_local_gpu_count
 
     local_gpus = mlpot_local_gpu_count()
@@ -567,6 +582,11 @@ def build_decomposed_mlpot_model(
             f"Decomposed MLpot: MIC PBC cubic cell={float(cell):.3f} Å",
             flush=True,
         )
+    if verbose and max_pairs is not None:
+        print(
+            f"Decomposed MLpot: max_pairs={int(max_pairs)} (PBC cell-list buffer)",
+            flush=True,
+        )
     do_ml = True
     do_mm = True
     do_ml_dimer = True
@@ -583,6 +603,7 @@ def build_decomposed_mlpot_model(
         ml_gpu_count=gpu_count,
         ml_max_active_dimers=ml_max_active_dimers,
         cell=cell,
+        max_pairs=max_pairs,
         ml_compute_dtype=ml_compute_dtype,
         defer_xla_gpu_warmup=defer_jax_until_mlpot_registered,
     )

@@ -552,6 +552,16 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--max-pairs",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "PBC: cell-list MM pair buffer size (auto from N and box when unset). "
+            "Increase if you see 'MM Pair List Truncated' during MLpot mini/MD."
+        ),
+    )
+    parser.add_argument(
         "--ml-spatial-mpi",
         action="store_true",
         help=(
@@ -1839,6 +1849,8 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd.extend(["--ml-compute-dtype", str(args.ml_compute_dtype)])
     if getattr(args, "ml_max_active_dimers", None) is not None:
         cmd.extend(["--ml-max-active-dimers", str(args.ml_max_active_dimers)])
+    if getattr(args, "max_pairs", None) is not None:
+        cmd.extend(["--max-pairs", str(args.max_pairs)])
     if args.no_echeck:
         cmd.append("--no-echeck")
     if getattr(args, "allow_incomplete_dynamics", False):
