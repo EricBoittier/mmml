@@ -832,6 +832,7 @@ def setup_calculator(
             jax_md_skin_distance=_jax_md_skin_distance,
             debug=debug,
             ml_compute_dtype=ml_compute_dtype,
+            defer_xla_gpu_warmup=defer_xla_gpu_warmup,
         )
         if isinstance(result_jaxmd, tuple):
             mm_fn_jaxmd, update_fn = result_jaxmd
@@ -864,6 +865,7 @@ def setup_calculator(
                 jax_md_skin_distance=_jax_md_skin_distance,
                 debug=debug,
                 ml_compute_dtype=ml_compute_dtype,
+                defer_xla_gpu_warmup=defer_xla_gpu_warmup,
             )
             return (mm_fn_jaxmd, mm_fn_cell), update_fn
         return result_jaxmd, None

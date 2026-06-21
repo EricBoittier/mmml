@@ -536,6 +536,71 @@ def find_worst_intramonomer_close_contact(
     return best_dist, best
 
 
+def push_apart_intramonomer_contact(
+    positions: np.ndarray,
+    violation: IntramonomerCloseContact,
+    *,
+    min_distance: float,
+    margin: float = 0.05,
+    cell: Any | None = None,
+) -> np.ndarray:
+    """Push two intra-monomer atoms apart along their MIC separation vector."""
+    pos = np.asarray(positions, dtype=float).copy()
+    target = float(min_distance) + float(margin)
+    gap = target - float(violation.distance_A)
+    if gap <= 0.0:
+        return pos
+
+    cell_mat = _cell_matrix(cell)
+    unit = _mic_displacement(pos[violation.atom_i], pos[violation.atom_j], cell_mat)
+    norm = float(np.linalg.norm(unit))
+    if norm < 1.0e-12:
+        unit = np.array([1.0, 0.0, 0.0], dtype=float)
+    else:
+        unit = unit / norm
+
+    pos[int(violation.atom_i)] -= unit * (gap * 0.5)
+    pos[int(violation.atom_j)] += unit * (gap * 0.5)
+    return pos
+
+
+def separate_intramonomer_contacts(
+    positions: np.ndarray,
+    monomer_offsets: np.ndarray,
+    excluded_pairs: frozenset[tuple[int, int]] | set[tuple[int, int]],
+    *,
+    min_distance: float,
+    margin: float = 0.05,
+    cell: Any | None = None,
+    max_passes: int | None = None,
+) -> np.ndarray:
+    """Iteratively relieve intra-monomer atom clashes below ``min_distance``."""
+    pos = np.asarray(positions, dtype=float).copy()
+    offsets = np.asarray(monomer_offsets, dtype=int)
+    n_monomers = max(1, int(len(offsets) - 1))
+    passes = int(max_passes) if max_passes is not None else max(1, n_monomers * 4)
+    threshold = float(min_distance)
+
+    for _ in range(passes):
+        best_dist, violation = find_worst_intramonomer_close_contact(
+            pos,
+            offsets,
+            excluded_pairs,
+            cell=cell,
+            min_distance=threshold,
+        )
+        if violation is None or best_dist >= threshold:
+            break
+        pos = push_apart_intramonomer_contact(
+            pos,
+            violation,
+            min_distance=threshold,
+            margin=margin,
+            cell=cell,
+        )
+    return pos
+
+
 def monomer_axis_extent(positions: np.ndarray, monomer_offsets: np.ndarray, monomer: int) -> float:
     """Axis-aligned bounding-box span for one monomer (Å)."""
     pos = np.asarray(positions, dtype=float)

@@ -129,6 +129,45 @@ def test_write_geometry_baseline_restart(tmp_path):
     assert path == out / "geometry_baseline_dcm_10.res"
 
 
+def test_pretreat_resume_continues_partial_heat(tmp_path):
+    tag = "aco_266"
+    pretreat = tmp_path / "pretreat"
+    pretreat.mkdir()
+    heat = pretreat / f"charmm_mm_heat_{tag}.res"
+    heat.write_text("heat partial\n", encoding="utf-8")
+    paths = {
+        "charmm_mm_prod_res": pretreat / f"charmm_mm_prod_{tag}.res",
+        "charmm_mm_equi_res": pretreat / f"charmm_mm_equi_{tag}.res",
+        "charmm_mm_heat_res": heat,
+    }
+    args = argparse.Namespace(
+        charmm_mm_pretreat_ps_equi=2.0,
+        charmm_mm_pretreat_ps_prod=2.0,
+        charmm_mm_pretreat_ps_heat=2.0,
+        charmm_mm_pretreat_heat_nstep=10000,
+        dcd_nsavc=100,
+    )
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.pretreat_stage_complete",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.first_valid_restart_path",
+        return_value=heat.resolve(),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.resolve_integrated_restart_step",
+        return_value=1800,
+    ):
+        state = resume_charmm_mm_pretreat_if_available(
+            paths,
+            args,
+            timestep_ps=0.0002,
+        )
+    assert state.skip_heat is False
+    assert state.skip_minimize is True
+    assert state.heat_integrated_step == 1800
+    assert state.restart_read == heat.resolve()
+
+
 def test_pretreat_stage_complete_uses_integrated_step(tmp_path):
     res = tmp_path / "heat.res"
     res.write_text("REST\n", encoding="utf-8")

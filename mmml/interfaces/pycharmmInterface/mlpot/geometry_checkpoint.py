@@ -86,6 +86,7 @@ class PretreatResumeState:
     skip_heat: bool = False
     skip_equi: bool = False
     restart_read: Path | None = None
+    heat_integrated_step: int = 0
 
 
 def _pretreat_expected_nstep(args: Any, *, timestep_ps: float, ps: float) -> int:
@@ -177,6 +178,29 @@ def resume_charmm_mm_pretreat_if_available(
             skip_heat=True,
             restart_read=first_valid_restart_path([Path(heat_res)]),
         )
+
+    if heat_res is not None:
+        valid = first_valid_restart_path([Path(heat_res)])
+        if valid is not None:
+            from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+                read_restart_last_step,
+                resolve_integrated_restart_step,
+            )
+
+            step = resolve_integrated_restart_step(
+                valid,
+                expected_nstep=n_heat,
+                min_step_fraction=0.0,
+            )
+            if step is None:
+                step = read_restart_last_step(valid)
+            min_complete = max(1, int(n_heat * 0.95)) - 1
+            if step is not None and 0 < int(step) < min_complete:
+                return PretreatResumeState(
+                    skip_minimize=True,
+                    restart_read=valid,
+                    heat_integrated_step=int(step),
+                )
 
     return PretreatResumeState()
 

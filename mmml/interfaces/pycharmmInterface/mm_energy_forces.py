@@ -153,6 +153,7 @@ def build_mm_energy_forces_fn(
     jax_md_skin_distance: float = 0.0,
     debug: bool = False,
     ml_compute_dtype: str | None = None,
+    defer_xla_gpu_warmup: bool = False,
 ) -> Any:
     """Build MM energy/forces function with switching.
 
@@ -197,9 +198,12 @@ def build_mm_energy_forces_fn(
         reset_block()
         read_cgenff_toppar()
     # Recalibrate XLA delay kernel before hybrid JIT (post-PyCHARMM CGENFF param read).
-    from mmml.utils.jax_gpu_warmup import ensure_xla_gpu_warmed
+    # Skip when MPI-linked CHARMM defers GPU until after MLpot SD (CUDA before first
+    # gete corrupts OpenMPI registered-memory pools).
+    if not defer_xla_gpu_warmup:
+        from mmml.utils.jax_gpu_warmup import ensure_xla_gpu_warmed
 
-    ensure_xla_gpu_warmed(force=True)
+        ensure_xla_gpu_warmed(force=True)
 
     cgenff_rtf = open(CGENFF_RTF).readlines()
     atc = param.get_atc()

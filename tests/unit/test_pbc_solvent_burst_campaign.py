@@ -107,6 +107,22 @@ def test_cell_from_tag_full_tag_on_sweep(sweep_cfg: dict) -> None:
     assert cell.box_size == pytest.approx(32.0)
 
 
+def test_equi_jobs_declare_md_stage_equi(cfg: dict, cell: RunCell) -> None:
+    equi = build_campaign(cfg, cell)["runs"]["pycharmm_equi_00"]
+    assert equi.get("md_stage") == "equi"
+    assert "md_stages" not in equi
+
+
+def test_campaign_plan_shows_equi_not_dynamics(cfg: dict, cell: RunCell) -> None:
+    from mmml.cli.run.md_campaign import build_plan_rows
+
+    campaign = build_campaign(cfg, cell)
+    rows = build_plan_rows(campaign, ["pycharmm_equi_00"])
+    assert len(rows) == 1
+    assert rows[0].stage == "equi"
+    assert rows[0].ps_requested == pytest.approx(float(cfg["pycharmm_equi_ps"]))
+
+
 def test_depends_on_chain(cfg: dict, cell: RunCell) -> None:
     runs = build_campaign(cfg, cell)["runs"]
     assert runs["pycharmm_equi_00"]["depends_on"] == "pycharmm_init"

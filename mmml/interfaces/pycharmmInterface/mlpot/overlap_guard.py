@@ -677,6 +677,70 @@ def _intramonomer_check(
     )
 
 
+def relieve_intramonomer_clashes(
+    config: DynamicsOverlapConfig,
+    *,
+    context: str = "intra-monomer separation",
+    verbose: bool = False,
+    margin_A: float | None = None,
+) -> float:
+    """Push apart intra-monomer atom pairs below ``intra_min_distance_A``."""
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        get_charmm_positions_array,
+        sync_charmm_positions,
+    )
+    from mmml.utils.geometry_checks import (
+        find_worst_intramonomer_close_contact,
+        separate_intramonomer_contacts,
+    )
+
+    if not config.intra_enabled and config.intra_min_distance_A <= 0.0:
+        return float("inf")
+
+    pos = get_charmm_positions_array()
+    offsets = monomer_offsets(int(pos.shape[0]), config.n_monomers)
+    cell = _overlap_cell(
+        use_pbc=config.use_pbc,
+        fallback_box_side_A=config.fallback_box_side_A,
+    )
+    excluded = _bond_exclusion_pairs(exclude_1_3=config.intra_exclude_1_3)
+    threshold = float(config.intra_min_distance_A)
+    margin = float(margin_A if margin_A is not None else config.separate_margin_A)
+    before, violation = find_worst_intramonomer_close_contact(
+        pos,
+        offsets,
+        excluded,
+        cell=cell,
+        min_distance=threshold,
+    )
+    if violation is None or before >= threshold:
+        return float(before)
+
+    new_pos = separate_intramonomer_contacts(
+        pos,
+        offsets,
+        excluded,
+        min_distance=threshold,
+        margin=margin,
+        cell=cell,
+    )
+    sync_charmm_positions(new_pos)
+    after, _ = find_worst_intramonomer_close_contact(
+        new_pos,
+        offsets,
+        excluded,
+        cell=cell,
+        min_distance=threshold,
+    )
+    if verbose:
+        print(
+            f"{context}: intra-monomer distance {before:.4f} -> {after:.4f} Å "
+            f"(target {threshold:.4f} Å)",
+            flush=True,
+        )
+    return float(after)
+
+
 def _extent_check(
     config: DynamicsOverlapConfig,
     *,
@@ -807,6 +871,11 @@ def _apply_repack_or_raise(
         print(
             f"Overlap repack: min inter-monomer distance now {d_repack:.4f} Å",
             flush=True,
+        )
+        relieve_intramonomer_clashes(
+            config,
+            context=f"{label} after overlap repack (intra preflight)",
+            verbose=True,
         )
         return _overlap_check(
             config,

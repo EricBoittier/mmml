@@ -371,7 +371,9 @@ def run_charmm_mm_pretreat_before_mlpot(
     if not use_pbc:
         setup_default_nbonds()
 
-    if pretreat_resume.restart_read is not None:
+    if pretreat_resume.restart_read is not None and not (
+        pretreat_resume.heat_integrated_step > 0 and not pretreat_resume.skip_heat
+    ):
         restore_charmm_state_from_restart(pretreat_resume.restart_read)
         if not args.quiet:
             print(
@@ -415,65 +417,90 @@ def run_charmm_mm_pretreat_before_mlpot(
 
     if not pretreat_resume.skip_heat:
         heat_firstt, heat_finalt = resolve_heat_firstt_finalt(args, default_temp=temp)
+        heat_integrated = max(0, int(pretreat_resume.heat_integrated_step))
+        n_heat_run = max(1, n_heat - heat_integrated) if heat_integrated > 0 else n_heat
         save_interval_ps = timestep_ps * max(
             1,
             resolve_dcd_nsavc(
                 dcd_nsavc=args.dcd_nsavc,
                 dcd_interval_ps=getattr(args, "dcd_interval_ps", None),
                 timestep_ps=timestep_ps,
-                nstep=n_heat,
+                nstep=n_heat_run,
             ),
         )
         kw = build_heat_dynamics(
             timestep_ps=timestep_ps,
-            duration_ps=n_heat * timestep_ps,
+            duration_ps=n_heat_run * timestep_ps,
             save_interval_ps=save_interval_ps,
             temp=temp,
             firstt=heat_firstt,
             finalt=heat_finalt,
             echeck=echeck,
             use_pbc=use_pbc,
-            ihtfrq=resolve_heat_ihtfrq(args, nstep=n_heat),
+            ihtfrq=resolve_heat_ihtfrq(args, nstep=n_heat_run),
         )
-        dyn_print = resolve_dynamics_print_kwargs(args, nstep=n_heat)
-        kw["nstep"] = n_heat
+        dyn_print = resolve_dynamics_print_kwargs(args, nstep=n_heat_run)
+        kw["nstep"] = n_heat_run
         kw["nprint"] = dyn_print["nprint"]
         kw["iprfrq"] = dyn_print["iprfrq"]
         kw["isvfrq"] = dyn_print["isvfrq"]
         kw["iasors"] = 0
         kw["iasvel"] = 1
         apply_heat_ramp_frequencies(
-            kw, nstep=n_heat, ihtfrq=resolve_heat_ihtfrq(args, nstep=n_heat)
+            kw, nstep=n_heat_run, ihtfrq=resolve_heat_ihtfrq(args, nstep=n_heat_run)
         )
-        assign_velocities_at_temperature(
-            float(heat_firstt),
-            timestep_ps=timestep_ps,
-            restart_path=None,
-            use_pbc=use_pbc,
-        )
-        kw["restart"] = False
-        kw["new"] = False
-        kw["start"] = False
 
         io = CharmmTrajectoryFiles(
+            restart_read=paths["charmm_mm_heat_res"] if heat_integrated > 0 else None,
             restart_write=paths["charmm_mm_heat_res"],
             trajectory=paths["charmm_mm_heat_dcd"] if save else None,
         )
         from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+            _configure_heat_dynamics_start,
             _reset_stage_trajectory,
         )
 
-        if save and io.trajectory is not None:
+        if heat_integrated == 0:
+            assign_velocities_at_temperature(
+                float(heat_firstt),
+                timestep_ps=timestep_ps,
+                restart_path=None,
+                use_pbc=use_pbc,
+            )
+            kw["restart"] = False
+            kw["new"] = False
+            kw["start"] = False
+        else:
+            _configure_heat_dynamics_start(
+                kw,
+                io,
+                coords_in_memory=False,
+                restart_from_file=True,
+                timestep_ps=timestep_ps,
+                use_pbc=use_pbc,
+                quiet=bool(args.quiet),
+                heat_thermostat="scale",
+            )
+
+        if save and io.trajectory is not None and heat_integrated == 0:
             _reset_stage_trajectory(
                 Path(io.trajectory),
                 rescue_old=bool(getattr(args, "rescue_old_dcd", False)),
             )
         if not args.quiet:
-            print(
-                f"CHARMM MM pretreat heat: {heat_firstt:.1f} -> {heat_finalt:.1f} K, "
-                f"{n_heat} steps @ {timestep_ps} ps | ihtfrq={kw.get('ihtfrq')}",
-                flush=True,
-            )
+            if heat_integrated > 0:
+                print(
+                    f"CHARMM MM pretreat heat: resume step {heat_integrated}/{n_heat}, "
+                    f"{n_heat_run} steps remaining | "
+                    f"{heat_firstt:.1f} -> {heat_finalt:.1f} K @ {timestep_ps} ps",
+                    flush=True,
+                )
+            else:
+                print(
+                    f"CHARMM MM pretreat heat: {heat_firstt:.1f} -> {heat_finalt:.1f} K, "
+                    f"{n_heat_run} steps @ {timestep_ps} ps | ihtfrq={kw.get('ihtfrq')}",
+                    flush=True,
+                )
         run_dynamics_with_io(
             kw,
             io,
