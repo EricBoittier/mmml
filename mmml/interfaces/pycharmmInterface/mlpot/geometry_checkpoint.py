@@ -84,6 +84,12 @@ def is_pretreat_mm_restart_path(path: Path | str) -> bool:
     return name.startswith("charmm_mm_") and name.endswith(".res")
 
 
+def is_handoff_seed_restart_path(path: Path | str) -> bool:
+    """True for JAX/PyCHARMM handoff seeds (not valid overlap READYN sources)."""
+    name = Path(path).name.lower()
+    return name.startswith("continue_seed") and name.endswith(".res")
+
+
 def build_geometry_recovery_candidates(overlap: Any) -> list[Path]:
     """Ordered restart ladder for overlap recovery (baseline before segment tails).
 
@@ -100,6 +106,8 @@ def build_geometry_recovery_candidates(overlap: Any) -> list[Path]:
         if is_overlap_scratch_restart_path(p):
             return
         if is_pretreat_mm_restart_path(p):
+            return
+        if is_handoff_seed_restart_path(p):
             return
         key = str(p.expanduser())
         if key in seen:
@@ -291,13 +299,18 @@ def discover_resume_restart(
     found = first_valid_restart_path(ladder)
     if found is not None:
         baseline = paths.get("geometry_baseline_res")
-        if (
+        if is_handoff_seed_restart_path(found):
+            if baseline is not None and first_valid_restart_path([Path(baseline)]) is not None:
+                return Path(baseline)
+            found = None
+        elif (
             is_pretreat_mm_restart_path(found)
             and baseline is not None
             and first_valid_restart_path([Path(baseline)]) is not None
         ):
             return Path(baseline)
-        return found
+        if found is not None:
+            return found
 
     summary = out_dir / "stage_summary.json"
     if summary.is_file():
@@ -306,7 +319,7 @@ def discover_resume_restart(
             last_restart = payload.get("last_restart")
             if last_restart:
                 valid = first_valid_restart_path([Path(last_restart)])
-                if valid is not None:
+                if valid is not None and not is_handoff_seed_restart_path(valid):
                     return valid
         except (json.JSONDecodeError, OSError, TypeError):
             pass

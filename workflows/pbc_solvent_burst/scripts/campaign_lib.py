@@ -11,6 +11,7 @@ import yaml
 
 from bulk_density import matrix_cluster_sizes_for_cell, matrix_uses_bulk_density
 from cleanup_strategy import (
+    dense_cell_mlpot_overrides,
     jaxmd_job_flags,
     pretreat_job_flags,
     pycharmm_job_flags,
@@ -250,13 +251,18 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
         "mm_switch_width": float(cfg.get("mm_switch_width", 5.0)),
         "ml_switch_width": float(cfg.get("ml_switch_width", 1.5)),
         "ml_gpu_count": int(cfg.get("ml_gpu_count", 1)),
-        "ml_batch_size": int(cfg.get("ml_batch_size", 1024)),
+        "ml_batch_size": int(
+            dense_cell_mlpot_overrides(cell, cfg).get(
+                "ml_batch_size", cfg.get("ml_batch_size", 1024)
+            )
+        ),
         "handoff_write_res": True,
         "continue_velocities": True,
         "cleanup_strategy_name": strategy.name,
     }
 
     repair = pycharmm_job_flags(strategy)
+    repair.update(dense_cell_mlpot_overrides(cell, cfg))
     pretreat = pretreat_job_flags(strategy)
     jaxmd_extra = jaxmd_job_flags(strategy)
 
@@ -274,7 +280,11 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
                 "setup": "pbc_npt",
                 "md_stages": "mini,heat",
                 "ps_heat": float(cfg.get("ps_heat", 30.0)),
-                "n_heat_segments": int(cfg.get("n_heat_segments", 8)),
+                "n_heat_segments": int(
+                    dense_cell_mlpot_overrides(cell, cfg).get(
+                        "n_heat_segments", cfg.get("n_heat_segments", 8)
+                    )
+                ),
                 "heat_firstt": float(cfg.get("heat_firstt", 10.0)),
                 "heat_finalt": float(cell.temperature),
                 "heat_thermostat": heat_thermostat,

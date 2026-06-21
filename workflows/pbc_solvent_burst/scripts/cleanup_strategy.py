@@ -95,6 +95,40 @@ def _from_legacy_flat_keys(cfg: dict[str, Any]) -> CleanupStrategy:
     return CleanupStrategy(name="legacy_flat", charmm_mm=charmm_mm, mlpot=mlpot, jaxmd_pbc=jaxmd_pbc)
 
 
+def dense_cell_mlpot_overrides(cell: Any, cfg: dict[str, Any]) -> dict[str, Any]:
+    """Size/density-aware MLpot flags for large or tight PBC burst cells."""
+    from bulk_density import n_monomers_at_bulk_density
+
+    n = int(cell.n_monomers)
+    overrides: dict[str, Any] = {}
+    bulk_n = n_monomers_at_bulk_density(
+        cell.solvent,
+        float(cell.box_size),
+        1.0,
+        min_n=1,
+    )
+    bulk_fraction = float(n) / float(max(1, bulk_n))
+    dense = n >= 150 or bulk_fraction >= 0.75
+
+    if dense:
+        base_segments = int(cfg.get("n_heat_segments", 10))
+        overrides["n_heat_segments"] = min(4, base_segments)
+        base_interval = int(cfg.get("dynamics_overlap_check_interval", 250))
+        overrides["dynamics_overlap_check_interval"] = max(500, base_interval)
+        overrides["dynamics_overlap_memory_handoff"] = True
+        sd = int(cfg.get("dynamics_overlap_charmm_sd_steps", 200))
+        overrides["dynamics_overlap_charmm_sd_steps"] = max(400, sd)
+
+    if n >= 200:
+        overrides["ml_batch_size"] = min(int(cfg.get("ml_batch_size", 2048)), 1024)
+
+    if bulk_fraction >= 0.75 and dense:
+        intra = float(cfg.get("dynamics_intra_min_distance", 0.5))
+        overrides["dynamics_intra_min_distance"] = min(intra, 0.35)
+
+    return overrides
+
+
 def resolve_pycharmm_heat_thermostat(cfg: dict[str, Any], strategy: CleanupStrategy) -> str:
     """Heat thermostat for ``pycharmm_init`` (and campaign defaults).
 

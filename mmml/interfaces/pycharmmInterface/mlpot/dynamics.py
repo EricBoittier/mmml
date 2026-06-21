@@ -1752,19 +1752,19 @@ def _overlap_chunk_restart_paths(
     without an external read) so chunk 1 can ``READYN`` without EOF.
     """
     if io.restart_write is None:
-        return _valid_restart_file(io.restart_read), None
+        return _valid_overlap_chunk_restart_read(io.restart_read), None
     final = Path(io.restart_write)
     if n_chunks <= 1:
-        return _valid_restart_file(io.restart_read), final
+        return _valid_overlap_chunk_restart_read(io.restart_read), final
     slot_a, slot_b = _overlap_restart_slot_paths(final)
     if chunk_index == 0:
-        return _valid_restart_file(io.restart_read), slot_a
+        return _valid_overlap_chunk_restart_read(io.restart_read), slot_a
     if chunk_index == n_chunks - 1:
         prev = slot_a if (chunk_index % 2) == 1 else slot_b
-        return _valid_restart_file(prev), final
+        return _valid_overlap_chunk_restart_read(prev), final
     if chunk_index % 2 == 1:
-        return _valid_restart_file(slot_a), slot_b
-    return _valid_restart_file(slot_b), slot_a
+        return _valid_overlap_chunk_restart_read(slot_a), slot_b
+    return _valid_overlap_chunk_restart_read(slot_b), slot_a
 
 
 def _overlap_chunk_uses_memory_handoff(
@@ -1775,11 +1775,26 @@ def _overlap_chunk_uses_memory_handoff(
     overlap: Optional["DynamicsOverlapConfig"] = None,
 ) -> bool:
     """Continue overlap segments in-process (no ``READYN`` on scratch between chunks)."""
-    if mlpot_ctx is None or n_chunks <= 1 or chunk_index <= 0:
+    if mlpot_ctx is None or n_chunks <= 1:
         return False
     if overlap is not None and overlap.memory_handoff:
         return True
     return False
+
+
+def _valid_overlap_chunk_restart_read(path: PathLike | None) -> Path | None:
+    """Valid restart for overlap chunk READYN; excludes handoff/pretreat seeds."""
+    if path is None:
+        return None
+    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+        is_handoff_seed_restart_path,
+        is_pretreat_mm_restart_path,
+    )
+
+    p = Path(path)
+    if is_handoff_seed_restart_path(p) or is_pretreat_mm_restart_path(p):
+        return None
+    return _valid_restart_file(p)
 
 
 def _overlap_chunk_io(
