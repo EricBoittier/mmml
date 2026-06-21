@@ -18,7 +18,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
 )
 
 
-def test_geometry_ladder_prefers_pretreat_prod_over_baseline(tmp_path):
+def test_geometry_ladder_prefers_baseline_over_pretreat_prod(tmp_path):
     tag = "dcm_90"
     pretreat = tmp_path / "pretreat"
     pretreat.mkdir()
@@ -33,11 +33,11 @@ def test_geometry_ladder_prefers_pretreat_prod_over_baseline(tmp_path):
     paths["charmm_mm_prod_res"].write_text("prod\n", encoding="utf-8")
 
     ladder = resolve_geometry_checkpoint_ladder(paths, tag, n_heat_segments=1)
-    assert ladder.index(paths["charmm_mm_prod_res"]) < ladder.index(
-        paths["geometry_baseline_res"]
+    assert ladder.index(paths["geometry_baseline_res"]) < ladder.index(
+        paths["charmm_mm_prod_res"]
     )
     found = first_valid_restart_path(ladder)
-    assert found == paths["charmm_mm_prod_res"].resolve()
+    assert found == paths["geometry_baseline_res"].resolve()
 
 
 def test_discover_resume_restart_prefers_heat_segment(tmp_path):

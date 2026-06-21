@@ -20,9 +20,22 @@ def resolve_geometry_checkpoint_ladder(
     *,
     n_heat_segments: int = 1,
 ) -> list[Path]:
-    """Ordered restart candidates for fly-off / early-abort recovery (pretreat included)."""
+    """Ordered restart candidates for fly-off / early-abort recovery.
+
+    Post-mini ``geometry_baseline`` and in-session heat segment files precede
+    pretreat MM checkpoints.  Pretreat restarts use CGENFF coordinates that are
+    often a poor MLpot MIC reference after MLpot mini (USER energy explosions).
+    """
     out_dir = Path(paths.get("heat_res", Path("."))).parent
     candidates: list[Path] = []
+
+    baseline = paths.get("geometry_baseline_res")
+    if baseline is not None:
+        candidates.append(Path(baseline))
+
+    bonded_crd = paths.get("bonded_mm_after_mini_crd")
+    if bonded_crd is not None:
+        candidates.append(Path(bonded_crd))
 
     if n_heat_segments > 1:
         for seg_i in range(n_heat_segments - 1, -1, -1):
@@ -36,15 +49,10 @@ def resolve_geometry_checkpoint_ladder(
         "charmm_mm_prod_res",
         "charmm_mm_equi_res",
         "charmm_mm_heat_res",
-        "geometry_baseline_res",
     ):
         p = paths.get(key)
         if p is not None:
             candidates.append(Path(p))
-
-    bonded_crd = paths.get("bonded_mm_after_mini_crd")
-    if bonded_crd is not None:
-        candidates.append(Path(bonded_crd))
 
     seen: set[str] = set()
     ordered: list[Path] = []
