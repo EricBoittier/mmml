@@ -363,7 +363,11 @@ def attempt_overlap_early_abort_recovery(
         restore_geometry_from_ladder(candidates, label=label)
         return True
     except RuntimeError:
-        pass
+        tried = ", ".join(p.name for p in candidates) or "(none)"
+        print(
+            f"{label}: no valid restart among {len(candidates)} candidate(s): {tried}",
+            flush=True,
+        )
 
     if overlap_run_state_dir is not None:
         from mmml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (

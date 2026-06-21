@@ -693,6 +693,30 @@ def test_reset_stage_restart_preserves_memory_handoff_seed(tmp_path):
     assert res.read_text(encoding="ascii") == "seeded restart\n"
 
 
+def test_heat_multiseg_memory_handoff_reset_then_seed(tmp_path):
+    """Multi-segment HEAT resets scratch before seeding fly-off checkpoint."""
+    from unittest.mock import patch
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+    from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+        _reset_stage_restart,
+        _seed_restart_for_memory_handoff,
+    )
+
+    res = tmp_path / "heat_dcm_206.0.res"
+    io = CharmmTrajectoryFiles(restart_write=res)
+    kw: dict = {}
+    res.write_text("stale\n", encoding="ascii")
+    _reset_stage_restart(res, restart_read=None)
+    assert not res.is_file()
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.staged_workflow.rewrite_dynamics_restart_from_current_state"
+    ):
+        _seed_restart_for_memory_handoff(io, kw, stage="heat")
+    res.write_text("seeded restart\n", encoding="ascii")
+    assert res.is_file()
+
+
 def test_configure_npt_dynamics_start_memory_handoff_no_readyn():
     """EQUI/PROD after bonded-MM must not READYN static write-restart (no CPT state)."""
     from unittest.mock import patch
