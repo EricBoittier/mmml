@@ -164,6 +164,31 @@ def test_prior_restart_for_heat_uses_geometry_baseline(tmp_path: Path):
     assert got == paths["geometry_baseline_res"]
 
 
+def test_prior_restart_for_heat_ignores_pretreat_restart_from(tmp_path: Path):
+    paths = _artifact_paths(tmp_path, "dcm_155")
+    paths["geometry_baseline_res"].write_text("baseline\n", encoding="utf-8")
+    pretreat = paths["charmm_mm_prod_res"].parent
+    pretreat.mkdir(parents=True, exist_ok=True)
+    paths["charmm_mm_prod_res"].write_text("prod\n", encoding="utf-8")
+
+    got = _prior_restart_for_stage(
+        "heat", paths, restart_from=paths["charmm_mm_prod_res"]
+    )
+    assert got == paths["geometry_baseline_res"]
+
+
+def test_prior_restart_for_heat_rejects_pretreat_without_baseline(tmp_path: Path):
+    paths = _artifact_paths(tmp_path, "dcm_155")
+    pretreat = paths["charmm_mm_prod_res"].parent
+    pretreat.mkdir(parents=True, exist_ok=True)
+    paths["charmm_mm_prod_res"].write_text("prod\n", encoding="utf-8")
+
+    got = _prior_restart_for_stage(
+        "heat", paths, restart_from=paths["charmm_mm_prod_res"]
+    )
+    assert got is None
+
+
 def test_should_seed_heat_prior_restart_after_mini_in_memory():
     assert _should_seed_heat_prior_restart(
         seg_i=0,

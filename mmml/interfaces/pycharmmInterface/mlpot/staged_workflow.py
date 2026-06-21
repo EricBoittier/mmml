@@ -214,13 +214,19 @@ def _prior_restart_for_stage(
     tag: str | None = None,
     n_heat_segments: int = 1,
 ) -> Path | None:
-    if restart_from is not None:
-        return restart_from
     if stage == "heat":
+        from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+            is_pretreat_mm_restart_path,
+        )
+
         baseline = paths.get("geometry_baseline_res")
         if baseline is not None and Path(baseline).is_file():
             return Path(baseline)
+        if restart_from is not None and not is_pretreat_mm_restart_path(restart_from):
+            return restart_from
         return None
+    if restart_from is not None:
+        return restart_from
     if stage == "nve":
         heat_restart = _heat_restart_path(paths, tag or "", n_heat_segments)
         if heat_restart.is_file():
@@ -544,6 +550,8 @@ def _configure_heat_dynamics_start(
         io.restart_read = None
         kw["restart"] = False
         kw["new"] = False
+        kw.pop("iunrea", None)
+        kw["iunrea"] = -1
         if hoover_cpt_heat:
             kw["iasvel"] = 0
             kw["start"] = False
@@ -1384,10 +1392,13 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             dyn_stages = dyn_stages[:prod_idx] + ["prod"] * n_prod_segments
 
         equi_restart_for_prod = _equi_restart_name(tag, n_equi_segments)
+        # After MLpot mini, coordinates live in CHARMM.  Campaign resume may set
+        # ``restart_from`` to pretreat MM or a stale heat scratch before mini runs;
+        # that seed must not force READYN on pre-MLpot checkpoints for MLpot heat.
+        if "mini" in stages:
+            restart_from = None
         prev_restart: Path | None = restart_from
-        # After MLpot mini, coordinates live in CHARMM — heat should Boltzmann-assign
-        # from memory instead of dyna start with stripped firstt on overlap chunk 0.
-        prev_restart_is_current_state = "mini" in stages and restart_from is None
+        prev_restart_is_current_state = "mini" in stages
         memory_handoff_next = False
         for stage in dyn_stages:
             if stage == "heat" and n_heat_segments > 1:
@@ -1405,10 +1416,14 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         flush=True,
                     )
                 if prev_restart_is_current_state:
-                    initial = prev_restart
+                    initial = None
                 else:
-                    initial = prev_restart or _prior_restart_for_stage(
-                        "heat", paths, restart_from=None
+                    initial = _prior_restart_for_stage(
+                        "heat",
+                        paths,
+                        restart_from=prev_restart,
+                        tag=tag,
+                        n_heat_segments=n_heat_segments,
                     )
                 seg_chain = npt_restart_chain(
                     out_dir,

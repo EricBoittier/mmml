@@ -290,6 +290,13 @@ def discover_resume_restart(
     )
     found = first_valid_restart_path(ladder)
     if found is not None:
+        baseline = paths.get("geometry_baseline_res")
+        if (
+            is_pretreat_mm_restart_path(found)
+            and baseline is not None
+            and first_valid_restart_path([Path(baseline)]) is not None
+        ):
+            return Path(baseline)
         return found
 
     summary = out_dir / "stage_summary.json"

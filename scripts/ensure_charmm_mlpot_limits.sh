@@ -63,11 +63,11 @@ box = float(box_raw) if box_raw else None
 sys.path.insert(0, str(root))
 from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import (
     charmm_mlpot_limits_from_source,
-    select_npr_tier,
+    select_npr_tier_for_build,
     tier_max_npr,
 )
 
-tier = select_npr_tier(n_ml, pbc=pbc, box_side_A=box)
+tier = select_npr_tier_for_build(n_ml, pbc=pbc, box_side_A=box)
 target = tier_max_npr(tier)
 parsed = charmm_mlpot_limits_from_source()
 template = parsed[2] if parsed else root / "setup" / "api" / "api_func.F90"
