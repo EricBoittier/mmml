@@ -192,6 +192,10 @@ def resolve_handoff_restart_template(
     for cand in (paths.get("heat_res"), paths.get("equi_res"), paths.get("prod_res")):
         if cand is not None and Path(cand).is_file() and _is_usable_restart_template(Path(cand)):
             return Path(cand).resolve()
+
+    for backup in _overlap_scratch_restart_backups(paths):
+        if _is_usable_restart_template(backup):
+            return backup.resolve()
     return None
 
 
@@ -684,32 +688,41 @@ def find_latest_charmm_restart_in_dir(out_dir: Path) -> Path | None:
     if not root.is_dir():
         return None
     candidates: list[Path] = []
+    overlap_backups: list[Path] = []
     for pattern in ("*.res", "pretreat/*.res", "handoff/*.res"):
         for path in root.glob(pattern):
             name = path.name.lower()
-            if "overlap" in name or name.startswith("continue_seed"):
+            if name.startswith("continue_seed"):
                 continue
-            candidates.append(path)
+            if "overlap" in name:
+                overlap_backups.append(path)
+            else:
+                candidates.append(path)
     handoff_res = root / "handoff" / "final.res"
     if handoff_res.is_file() and handoff_res not in candidates:
         candidates.append(handoff_res)
-    if not candidates:
+    if not candidates and not overlap_backups:
         return None
 
-    def _sort_key(path: Path) -> tuple[int, int, float]:
+    def _sort_key(path: Path, *, overlap_backup: bool) -> tuple[int, int, float]:
         name = path.name.lower()
-        stage_rank = -1
-        for idx, prefix in enumerate(_RESTART_STAGE_PREFIXES):
-            if prefix in name:
-                stage_rank = len(_RESTART_STAGE_PREFIXES) - idx
-                break
+        if overlap_backup:
+            stage_rank = 0
+        else:
+            stage_rank = -1
+            for idx, prefix in enumerate(_RESTART_STAGE_PREFIXES):
+                if prefix in name:
+                    stage_rank = len(_RESTART_STAGE_PREFIXES) - idx
+                    break
         seg = -1
         match = re.search(r"\.(\d+)\.res$", name)
         if match:
             seg = int(match.group(1))
         return (stage_rank, seg, path.stat().st_mtime)
 
-    return max(candidates, key=_sort_key)
+    if candidates:
+        return max(candidates, key=lambda p: _sort_key(p, overlap_backup=False))
+    return max(overlap_backups, key=lambda p: _sort_key(p, overlap_backup=True))
 
 
 def load_dependency_handoff(
@@ -885,16 +898,47 @@ def _sync_charmm_velocities(velocities: np.ndarray) -> None:
     coor.set_velocity(v[:, 0], v[:, 1], v[:, 2])
 
 
+def _is_overlap_scratch_restart(path: Path) -> bool:
+    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+        is_overlap_scratch_restart_path,
+    )
+
+    return is_overlap_scratch_restart_path(path)
+
+
+def _overlap_scratch_restart_backups(paths: dict[str, Path]) -> list[Path]:
+    """Newest overlap chunk scratch restarts near staged workflow outputs (fallback only)."""
+    seen: set[str] = set()
+    found: list[Path] = []
+    parents = {
+        str(Path(p).expanduser().resolve().parent)
+        for p in paths.values()
+        if p is not None
+    }
+    for parent_s in parents:
+        parent = Path(parent_s)
+        if not parent.is_dir():
+            continue
+        for path in parent.glob("*.overlap_?.res"):
+            if not _is_overlap_scratch_restart(path):
+                continue
+            key = str(path.resolve())
+            if key in seen:
+                continue
+            seen.add(key)
+            found.append(path.resolve())
+    return sorted(found, key=lambda p: p.stat().st_mtime, reverse=True)
+
+
 def _is_usable_restart_template(path: Path) -> bool:
-    """Reject overlap scratch / corrupt templates before handoff patching."""
+    """Validate restart coordinates for handoff templating (content, not filename)."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_restart_coordinates,
         read_restart_natom,
         restart_has_nonfinite_coordinates,
     )
 
-    name = path.name.lower()
-    if "overlap" in name or name.startswith("continue_seed"):
+    if path.name.lower().startswith("continue_seed"):
         return False
     if restart_has_nonfinite_coordinates(path):
         return False
@@ -1005,7 +1049,7 @@ def save_handoff_to_res(
       if not _is_usable_restart_template(template):
           raise ValueError(
               f"restart template unusable for handoff: {template.name} "
-              "(overlap scratch or non-finite coordinates)"
+              "(non-finite coordinates or NATOM/coord mismatch)"
           )
       charmm_loaded = False
       try:
