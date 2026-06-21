@@ -1114,8 +1114,9 @@ def test_mlpot_overlap_chunks_continue_in_memory_without_readyn(tmp_path):
     assert calls[2]["iasvel"] == 0
 
 
-def test_mlpot_overlap_chunks_use_scratch_restart_handoff(tmp_path):
+def test_mlpot_overlap_chunks_use_scratch_restart_handoff(tmp_path, monkeypatch):
     """Default MLpot overlap uses dyna restart on alternating scratch .res files."""
+    monkeypatch.setenv("MMML_NO_OVERLAP_MEMORY_HANDOFF", "1")
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
     cfg = DynamicsOverlapConfig(
@@ -1571,7 +1572,8 @@ def test_overlap_should_split_trajectory_limits_chunk_dcd_count():
     assert _overlap_should_split_trajectory(n_chunks=3, traj_nsavc=100)
 
 
-def test_overlap_chunk_continues_velocity_scaling_heat_ramp(tmp_path):
+def test_overlap_chunk_continues_velocity_scaling_heat_ramp(tmp_path, monkeypatch):
+    monkeypatch.setenv("MMML_NO_OVERLAP_MEMORY_HANDOFF", "1")
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
     cfg = DynamicsOverlapConfig(
@@ -1646,7 +1648,7 @@ def test_apply_overlap_chunk_hoover_chunk0_omits_start_and_iasvel_one():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
 
     kw = {
-        "start": False,
+        "start": True,
         "firstt": 0.0,
         "finalt": 240.0,
         "cpt": True,
