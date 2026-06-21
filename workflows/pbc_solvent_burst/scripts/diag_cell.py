@@ -15,6 +15,8 @@ if str(_SCRIPTS) not in sys.path:
 
 from campaign_lib import cell_from_tag, load_config, paths_for_run  # noqa: E402
 from monitor_lib import (  # noqa: E402
+    classify_failure,
+    extract_campaign_markers,
     grep_errors,
     inspect_run,
     read_text_tail,
@@ -82,6 +84,16 @@ def main() -> int:
 
     monitor = inspect_run(cfg, cell)
     print(f"monitor: status={monitor.status} health={monitor.health} {monitor.progress_note}")
+
+    stdout = out / "stdout.log"
+    if stdout.is_file():
+        log_text = read_text_tail(stdout)
+        buckets = classify_failure(log_text)
+        if buckets:
+            print(f"failure_buckets: {', '.join(buckets)}")
+        markers = extract_campaign_markers(log_text)
+        if markers:
+            print("campaign_markers: " + " ".join(f"{k}={v}" for k, v in markers.items()))
     if monitor.dyna.get("n_frames"):
         print(
             f"  DYNA: {monitor.dyna['n_frames']} frames, "

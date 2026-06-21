@@ -14,6 +14,6 @@ default-resources:
   - runtime=2880
   - nodes=1
   - slurm_partition=gpu
-  - mem_mb_per_cpu=3000
+  - mem_mb_per_cpu=4000
   - cpus_per_task=4
   - tasks=1

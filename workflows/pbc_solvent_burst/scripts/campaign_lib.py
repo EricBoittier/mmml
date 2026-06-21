@@ -103,6 +103,7 @@ def iter_matrix_cells(cfg: dict[str, Any]) -> Iterator[RunCell]:
     elif not cfg.get("cluster_sizes"):
         raise ValueError("Matrix requires cluster_sizes or bulk_density_fractions.")
     skip = {str(t).strip() for t in (cfg.get("exclude_run_tags") or [])}
+    skip_prefixes = [str(p).strip() for p in (cfg.get("exclude_run_prefixes") or [])]
     seen_tags: set[str] = set()
     for sol in solvents:
         for box in matrix_box_sizes(cfg):
@@ -117,6 +118,8 @@ def iter_matrix_cells(cfg: dict[str, Any]) -> Iterator[RunCell]:
                     )
                     tag = cell_run_tag(cell, cfg)
                     if tag in skip or tag in seen_tags:
+                        continue
+                    if any(tag.startswith(p) for p in skip_prefixes if p):
                         continue
                     seen_tags.add(tag)
                     yield cell
@@ -201,6 +204,8 @@ def campaign_job_order(cfg: dict[str, Any] | None = None) -> list[str]:
 def cell_is_optional(cell: RunCell, cfg: dict[str, Any]) -> bool:
     """True when the last JAX burst (or equi before it) may fail without aborting."""
     if int(cell.n_monomers) in {int(x) for x in (cfg.get("optional_sizes") or [])}:
+        return True
+    if int(cell.n_monomers) >= 240:
         return True
     if not matrix_uses_bulk_density(cfg):
         return False

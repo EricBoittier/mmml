@@ -51,6 +51,48 @@ _LOG_ACTIVITY = re.compile(
     re.IGNORECASE,
 )
 
+_FAILURE_BUCKETS: list[tuple[str, re.Pattern[str]]] = [
+    ("A_grms_gate", re.compile(r"Pre-dynamics GRMS \d+.*> \d+", re.I)),
+    ("B_heat_readyn", re.compile(r"READYN restart|__dynio_MOD_readyn|pretreat/charmm_mm_prod", re.I)),
+    ("C_handoff_fortran", re.compile(r"Fortran runtime error: Bad value during floating point read|continue_seed\.res", re.I)),
+    ("D_mlpot_reg_sigsegv", re.compile(r"MLpot registration:.*\n.*Signal: Segmentation|Signal: Segmentation.*exit code -11", re.I)),
+    ("E_oom", re.compile(r"exit code -9|Killed", re.I)),
+    ("F_heat_overlap", re.compile(r"dynamics aborted after chunk|intra-monomer close contact|echeck or CHARMM abort", re.I)),
+    ("G_jax_compile", re.compile(r"MLpot USER active before MLpot SD minimize(?!.*SD pass)", re.I)),
+    ("H_memory_handoff_ok", re.compile(r"memory handoff|in-memory coords after mini", re.I)),
+]
+
+
+def classify_failure(text: str) -> list[str]:
+    """Return failure bucket labels (A–H) matched in campaign log text."""
+    hits: list[str] = []
+    for label, pat in _FAILURE_BUCKETS:
+        if pat.search(text):
+            hits.append(label)
+    if not hits and _ERROR_MARKERS.search(text):
+        hits.append("Z_other")
+    return hits
+
+
+def extract_campaign_markers(text: str) -> dict[str, str]:
+    """Parse tier, mini-nstep scaling, and heat handoff markers from stdout."""
+    out: dict[str, str] = {}
+    m = re.search(r"tier=(\w+)\s+max_Npr=(\d+)", text)
+    if m:
+        out["tier"] = m.group(1)
+        out["max_Npr"] = m.group(2)
+    m = re.search(r"mini-nstep scaled (\d+) -> (\d+)", text)
+    if m:
+        out["mini_nstep"] = f"{m.group(1)}->{m.group(2)}"
+    m = re.search(r"max_grms_before_dyn scaled [\d.]+ -> ([\d.]+)", text)
+    if m:
+        out["max_grms_limit"] = m.group(1)
+    if re.search(r"in-memory coords after mini", text):
+        out["heat_handoff"] = "memory"
+    elif re.search(r"coords from .*/pretreat/charmm_mm_", text):
+        out["heat_handoff"] = "pretreat_readyn"
+    return out
+
 
 def parse_dyna_lines(text: str) -> list[dict[str, float]]:
     rows: list[dict[str, float]] = []
