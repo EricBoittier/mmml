@@ -510,11 +510,18 @@ contains
   subroutine psf_set_iblo_inb(new_nnb, new_iblo, new_inb) bind(c)
     use, intrinsic :: iso_c_binding, only: c_int
     use psf, only: natom, nnb, iblo, inb
+#ifdef KEY_RESIZE
+    use resize, only: resize_psf
+#endif
 
     implicit none
 
     integer(c_int), intent(in) :: new_nnb
     integer(c_int), dimension(*), intent(in) :: new_iblo, new_inb
+
+#ifdef KEY_RESIZE
+    call resize_psf('api_psf.F90','psf_set_iblo_inb','NNB',int(new_nnb),.false.)
+#endif
 
     nnb = new_nnb
     iblo(1:natom) = new_iblo(1:natom)
