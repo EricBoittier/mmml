@@ -118,13 +118,14 @@ def build_pycharmm_plan_rows(
     *,
     description: str | None = None,
 ) -> list[MdStageSummary]:
-    """Expand PyCHARMM ``md_stages`` into plan rows with step counts."""
+    """Expand PyCHARMM ``md_stages`` / ``md_stage`` into plan rows with step counts."""
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
         dynamics_nstep_from_ps as _nstep,
         opt_attr,
         resolve_dcd_nsavc,
         resolve_dt_fs,
         resolve_heat_firstt_finalt,
+        resolve_md_stages,
         resolve_stage_pressure_atm,
         resolve_stage_ps,
         resolve_stage_temperature_K,
@@ -132,10 +133,7 @@ def build_pycharmm_plan_rows(
 
     dt = resolve_dt_fs(args)
     timestep_ps = float(dt) / 1000.0
-    stages = str(opt_attr(args, "md_stages", "") or "").split(",")
-    stages = [s.strip() for s in stages if s.strip()]
-    if not stages:
-        stages = ["dynamics"]
+    stages = resolve_md_stages(args)
     rows: list[MdStageSummary] = []
     for stage in stages:
         if stage == "mini":

@@ -138,7 +138,7 @@ def test_pretreat_from_cleanup_strategy(cfg: dict, cell: RunCell) -> None:
     init = campaign["runs"]["pycharmm_init"]
     assert init["charmm_mm_pretreat"] is True
     assert init["charmm_mm_pretreat_ps_equi"] == pytest.approx(100.0)
-    assert campaign["runs"]["pycharmm_equi_00"]["charmm_mm_pretreat"] is True
+    assert "charmm_mm_pretreat" not in campaign["runs"]["pycharmm_equi_00"]
 
 
 def test_campaign_output_dirs_under_cell_tag(cfg: dict, cell: RunCell) -> None:
