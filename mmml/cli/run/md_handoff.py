@@ -224,14 +224,14 @@ def _find_any_res_file_in_same_dir(raw_path: str | Path | None, handoff: MdHando
                 cand_dir = (repo_root / rel_dir).resolve()
                 if cand_dir.is_dir():
                     dirs_to_search.append(cand_dir)
-                    if cand_dir.name == "handoff" and cand_dir.parent.is_dir():
-                        dirs_to_search.append(cand_dir.parent)
+                if cand_dir.parent.is_dir():
+                    dirs_to_search.append(cand_dir.parent)
 
                 cand_cwd_dir = (Path.cwd() / rel_dir).resolve()
                 if cand_cwd_dir.is_dir():
                     dirs_to_search.append(cand_cwd_dir)
-                    if cand_cwd_dir.name == "handoff" and cand_cwd_dir.parent.is_dir():
-                        dirs_to_search.append(cand_cwd_dir.parent)
+                if cand_cwd_dir.parent.is_dir():
+                    dirs_to_search.append(cand_cwd_dir.parent)
     except Exception:
         pass
 
@@ -245,8 +245,8 @@ def _find_any_res_file_in_same_dir(raw_path: str | Path | None, handoff: MdHando
             cand_dir = (repo_root / "artifacts" / "pbc_solvent_burst" / grandparent_name / parent_name).resolve()
             if cand_dir.is_dir():
                 dirs_to_search.append(cand_dir)
-                if cand_dir.parent.is_dir():
-                    dirs_to_search.append(cand_dir.parent)
+            if cand_dir.parent.is_dir():
+                dirs_to_search.append(cand_dir.parent)
     except Exception:
         pass
 

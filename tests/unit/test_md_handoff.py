@@ -433,11 +433,13 @@ def test_resolve_handoff_restart_template_fallback_any_res(
 
     camp_dir = repo_root / "artifacts" / "pbc_solvent_burst" / "test_camp_fallback"
     camp_dir.mkdir(parents=True, exist_ok=True)
+    handoff_dir = camp_dir / "handoff"
+    handoff_dir.mkdir(parents=True, exist_ok=True)
 
     other_res = camp_dir / "some_other_step.res"
     other_res.write_text(nve_stub.read_text())
 
-    foreign_npz_path = str(camp_dir / "handoff" / "state.npz")
+    foreign_npz_path = str(handoff_dir / "state.npz")
 
     try:
         handoff = MdHandoffState(
@@ -454,10 +456,12 @@ def test_resolve_handoff_restart_template_fallback_any_res(
         if other_res.is_file():
             other_res.unlink()
         try:
+            handoff_dir.rmdir()
             camp_dir.rmdir()
             camp_dir.parent.rmdir()
         except OSError:
             pass
+
 
 
 
