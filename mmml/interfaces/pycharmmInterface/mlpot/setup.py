@@ -864,6 +864,19 @@ def register_mlpot(
     pycharmm = _import_pycharmm()
     z_ml = physnet_ml_atomic_numbers(ml_Z)
     n_ml = len(ml_selection.get_atom_indexes())
+    if use_pbc and n_ml >= 500:
+        from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import (
+            mlpot_limits_status,
+            required_max_npr,
+        )
+
+        status = mlpot_limits_status()
+        need = required_max_npr(n_ml, pbc=True)
+        print(
+            f"MLpot registration: n_ml={n_ml} PBC needs max_Npr>={need}; "
+            f"loaded lib max_Npr={status.max_npr} ({status.source})",
+            flush=True,
+        )
     validate_mlpot_system_size(n_ml, pbc=bool(use_pbc))
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
 
