@@ -523,5 +523,39 @@ def test_save_handoff_to_res_unusable_template_fallback_to_memory(
         sys.modules.update(orig_modules)
 
 
+def test_save_handoff_to_res_unusable_template_resolves_fallback(
+    nve_stub: Path, tmp_path: Path
+) -> None:
+    from mmml.cli.run.md_handoff import save_handoff_to_res, load_handoff_from_res
+
+    # Create directories for failed template and a fallback
+    bad_dir = tmp_path / "init" / "handoff"
+    bad_dir.mkdir(parents=True)
+    bad_template = bad_dir / "final.res"
+    # An unusable template: startswith continue_seed or has NaN or wrong natom (nve_stub has 20 atoms)
+    bad_template.write_text("continue_seed_style_invalid")
+
+    # A usable fallback template in same folder or parent folder
+    good_template = tmp_path / "init" / "fallback_good.res"
+    good_template.write_text(nve_stub.read_text(encoding="ascii"), encoding="ascii")
+
+    # State we want to save
+    pos = np.random.default_rng(2).random((20, 3))
+    state = MdHandoffState(
+        positions=pos,
+        atomic_numbers=np.ones(20, dtype=int),
+    )
+    out = tmp_path / "patched.res"
+
+    # Save handoff using bad template. It should find the good fallback and succeed!
+    res_path = save_handoff_to_res(state, out, template_res=bad_template)
+    assert res_path == out
+    assert out.is_file()
+
+    # Load and verify coordinates are patched from our state
+    reloaded = load_handoff_from_res(out)
+    np.testing.assert_allclose(reloaded.positions, pos, rtol=1e-5, atol=1e-5)
+
+
 
 

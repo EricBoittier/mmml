@@ -112,7 +112,7 @@ def _parse_fortran_d_float(token: str) -> float:
 
 
 _FORTRAN_FLOAT_RE = re.compile(
-    r"[+-]?(?:\d+\.\d*|\.\d+)[DEde][+-]?\d+",
+    r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[DEde][+-]?\d+)?",
     re.IGNORECASE,
 )
 
