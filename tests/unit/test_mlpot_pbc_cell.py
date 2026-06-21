@@ -163,27 +163,42 @@ def test_decomposed_mlpot_sd_defer_uses_cpu_until_promote():
 
 
 def test_setup_calculator_defer_skips_terminal_xla_gpu_warmup():
-    """Factory build with defer must not touch GPU before CHARMM register_mlpot."""
+    """Factory build with defer must not touch GPU before CHARMM MLpot SD gete."""
     ckpt = Path(__file__).resolve().parents[2] / "examples/ckpts_json/DESdimers_params.json"
     if not ckpt.is_file():
         pytest.skip("DESdimers_params.json checkpoint missing")
 
+    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
     from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
 
+    z = jnp.array([6, 1, 1, 1, 1, 6, 1, 1, 1, 1], dtype=jnp.int32)
+    r0 = np.zeros((10, 3), dtype=np.float64)
+
     with patch(
-        "mmml.interfaces.pycharmmInterface.mmml_calculator.ensure_xla_gpu_warmed",
+        "mmml.utils.jax_gpu_warmup.ensure_xla_gpu_warmed",
         return_value=False,
     ) as mock_warm:
         factory = setup_calculator(
             ATOMS_PER_MONOMER=5,
             N_MONOMERS=2,
             doML=True,
-            doMM=False,
+            doMM=True,
             model_restart_path=str(ckpt),
             MAX_ATOMS_PER_SYSTEM=10,
-            cell=38.0,
+            cell=32.0,
             defer_xla_gpu_warmup=True,
             verbose=False,
+        )
+        factory(
+            atomic_numbers=z,
+            atomic_positions=jnp.asarray(r0),
+            n_monomers=2,
+            cutoff_params=CutoffParameters(),
+            doML=True,
+            doMM=True,
+            doML_dimer=True,
+            backprop=False,
+            create_ase_calculator=False,
         )
     mock_warm.assert_not_called()
     assert callable(factory)
