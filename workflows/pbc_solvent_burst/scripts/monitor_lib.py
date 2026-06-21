@@ -37,6 +37,13 @@ _ERROR_MARKERS = re.compile(
     re.IGNORECASE,
 )
 
+_SNAKEMAKE_NOISE = re.compile(
+    r"Error in rule run_burst|CalledProcessError in file|WorkflowError:|"
+    r"slurmstepd: error:|srun: error:|Exiting because a job execution failed|"
+    r"pmixp_client_v2\.c:",
+    re.IGNORECASE,
+)
+
 _STAGE_MARKERS: list[tuple[str, re.Pattern[str]]] = [
     ("pretreat", re.compile(r"CHARMM MM pretreat|charmm_mm_pretreat", re.I)),
     ("mini", re.compile(r"MLpot SD minimize|minimize_with_mlpot", re.I)),
@@ -162,12 +169,20 @@ def read_text_tail(path: Path, *, max_bytes: int = 512_000) -> str:
 
 def grep_errors(text: str, *, limit: int = 8) -> list[str]:
     hits: list[str] = []
+    noise: list[str] = []
     for line in text.splitlines():
-        if _ERROR_MARKERS.search(line):
-            hits.append(line.rstrip()[:200])
-            if len(hits) >= limit:
-                break
-    return hits
+        if not _ERROR_MARKERS.search(line):
+            continue
+        stripped = line.rstrip()[:200]
+        if _SNAKEMAKE_NOISE.search(line):
+            noise.append(stripped)
+        else:
+            hits.append(stripped)
+        if len(hits) >= limit:
+            break
+    if not hits:
+        return noise[:limit]
+    return hits[:limit]
 
 
 def last_log_stage(text: str) -> str | None:

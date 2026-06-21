@@ -64,6 +64,11 @@ def main() -> int:
         type=Path,
         default=_SCRIPTS.parent / "config.yaml",
     )
+    parser.add_argument(
+        "--brief",
+        action="store_true",
+        help="One-line matrix triage (status, buckets, markers; no Slurm tail dump)",
+    )
     args = parser.parse_args()
 
     workflow = _SCRIPTS.parent
@@ -83,17 +88,34 @@ def main() -> int:
     print(f"done.txt: {done.is_file()} ({done.stat().st_size if done.is_file() else 0} B)")
 
     monitor = inspect_run(cfg, cell)
-    print(f"monitor: status={monitor.status} health={monitor.health} {monitor.progress_note}")
 
     stdout = out / "stdout.log"
-    if stdout.is_file():
-        log_text = read_text_tail(stdout)
-        buckets = classify_failure(log_text)
+    log_text = read_text_tail(stdout) if stdout.is_file() else ""
+    buckets = classify_failure(log_text) if log_text else []
+    markers = extract_campaign_markers(log_text) if log_text else {}
+
+    if args.brief:
+        parts = [
+            args.run_tag,
+            f"status={monitor.status}",
+            f"health={monitor.health}",
+        ]
+        if monitor.log_stage:
+            parts.append(f"log_stage={monitor.log_stage}")
         if buckets:
-            print(f"failure_buckets: {', '.join(buckets)}")
-        markers = extract_campaign_markers(log_text)
+            parts.append(f"buckets={','.join(buckets)}")
         if markers:
-            print("campaign_markers: " + " ".join(f"{k}={v}" for k, v in markers.items()))
+            parts.append(" ".join(f"{k}={v}" for k, v in markers.items()))
+        parts.append(monitor.progress_note)
+        print("  ".join(parts))
+        return 0
+
+    print(f"monitor: status={monitor.status} health={monitor.health} {monitor.progress_note}")
+
+    if buckets:
+        print(f"failure_buckets: {', '.join(buckets)}")
+    if markers:
+        print("campaign_markers: " + " ".join(f"{k}={v}" for k, v in markers.items()))
     if monitor.dyna.get("n_frames"):
         print(
             f"  DYNA: {monitor.dyna['n_frames']} frames, "
