@@ -9,13 +9,17 @@ from unittest import mock
 import pytest
 
 from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+    attempt_overlap_early_abort_recovery,
+    build_geometry_recovery_candidates,
     discover_resume_restart,
     first_valid_restart_path,
+    is_overlap_scratch_restart_path,
     pretreat_stage_complete,
     resolve_geometry_checkpoint_ladder,
     resume_charmm_mm_pretreat_if_available,
     write_geometry_baseline_restart,
 )
+from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import DynamicsOverlapConfig
 
 
 def test_geometry_ladder_prefers_baseline_over_pretreat_prod(tmp_path):
@@ -179,3 +183,56 @@ def test_pretreat_stage_complete_uses_integrated_step(tmp_path):
         return_value=950,
     ):
         assert pretreat_stage_complete(res, expected_nstep=1000) is True
+
+
+def test_is_overlap_scratch_restart_path():
+    assert is_overlap_scratch_restart_path("heat_dcm_90.0.overlap_a.res")
+    assert is_overlap_scratch_restart_path("/tmp/heat.overlap_b.res")
+    assert not is_overlap_scratch_restart_path("heat_dcm_90.0.res")
+    assert not is_overlap_scratch_restart_path("geometry_baseline_dcm_90.res")
+
+
+def test_build_geometry_recovery_candidates_prefers_baseline_over_scratch_prior(tmp_path):
+    baseline = tmp_path / "geometry_baseline_dcm_155.res"
+    scratch = tmp_path / "heat_dcm_155.0.overlap_a.res"
+    segment = tmp_path / "heat_dcm_155.0.res"
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        n_monomers=2,
+        geometry_baseline_restart=baseline,
+        prior_segment_restart=scratch,
+        geometry_fallback_restarts=(segment,),
+    )
+    ladder = build_geometry_recovery_candidates(cfg)
+    assert ladder == [baseline, segment]
+    assert scratch not in ladder
+
+
+def test_attempt_overlap_early_abort_recovery_uses_baseline_not_scratch(tmp_path):
+    baseline = tmp_path / "geometry_baseline_dcm_155.res"
+    baseline.write_text("baseline\n", encoding="utf-8")
+    scratch = tmp_path / "heat_dcm_155.0.overlap_a.res"
+    scratch.write_text("scratch\n", encoding="utf-8")
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        n_monomers=2,
+        geometry_baseline_restart=baseline,
+        prior_segment_restart=scratch,
+        geometry_fallback_restarts=(),
+    )
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.restore_geometry_from_ladder",
+        return_value=baseline,
+    ) as restore:
+        ok = attempt_overlap_early_abort_recovery(
+            cfg,
+            chunk_nstep=250,
+            steps_done=138,
+            steps_before_chunk=0,
+            overlap_context="heat segment 1/10",
+        )
+    assert ok is True
+    restore.assert_called_once()
+    called_candidates = restore.call_args[0][0]
+    assert called_candidates[0] == baseline
+    assert scratch not in called_candidates

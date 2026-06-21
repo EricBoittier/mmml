@@ -32,6 +32,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_echeck_for_cluster,
     resolve_fix_resids,
     resolve_mini_nstep,
+    refresh_mlpot_energy_and_grms,
     resolve_md_stages,
     resolve_pbc_box_side,
     resolve_show_energy,
@@ -1053,7 +1054,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     mini_nprint = apply_charmm_output_from_args(args)
     show_energy = resolve_show_energy(args)
     echeck = resolve_echeck_for_cluster(args, n_atoms=n_atoms, n_monomers=n_mol)
-    mini_nstep = resolve_mini_nstep(args, n_mol)
+    mini_nstep = resolve_mini_nstep(args, n_mol, n_atoms=n_atoms, pbc=mlpot_pbc)
     overlap_cfg = resolve_dynamics_overlap_config(
         args,
         n_monomers=n_mol,
@@ -1275,7 +1276,10 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 )
             sync_charmm_positions(get_charmm_positions_array())
             if not args.quiet:
-                print(f"Post MLpot mini GRMS: {charmm_grms():.4f} kcal/mol/Å", flush=True)
+                refresh_mlpot_energy_and_grms(
+                    ctx,
+                    context="Post MLpot mini",
+                )
             mini_trajectories = _trajectory_outputs(paths["mini_charmm_dcd"])
             mini_trajectories.extend(_trajectory_outputs(paths["mlpot_mmml_dcd"]))
             last_traj = mini_trajectories[-1] if mini_trajectories else None
@@ -1342,6 +1346,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             max_grms=float(getattr(args, "max_grms_before_dyn", 50.0)),
             abort=not getattr(args, "allow_high_grms", False),
             require_mlpot_user=True,
+            mlpot_ctx=ctx,
         )
         verify_mlpot_charmm_atom_consistency(
             ctx,

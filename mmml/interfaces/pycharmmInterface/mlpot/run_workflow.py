@@ -28,6 +28,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     charmm_grms,
     resolve_echeck_for_cluster,
     resolve_mini_nstep,
+    refresh_mlpot_energy_and_grms,
     resolve_fix_resids,
     resolve_pbc_box_side,
     resolve_show_energy,
@@ -985,10 +986,10 @@ def run_dynamics_workflow(
 
     if pre_minimize is None:
         pre_minimize = not getattr(args, "no_pre_minimize", False)
-    mini_nstep = resolve_mini_nstep(args, n_mol)
-    mini_dcd_nsavc = resolve_dcd_nsavc(dcd_nsavc=args.dcd_nsavc, nstep=mini_nstep)
     charmm_pbc = resolve_charmm_use_pbc(args)
     mlpot_pbc = resolve_mlpot_use_pbc(args)
+    mini_nstep = resolve_mini_nstep(args, n_mol, n_atoms=n_atoms, pbc=mlpot_pbc)
+    mini_dcd_nsavc = resolve_dcd_nsavc(dcd_nsavc=args.dcd_nsavc, nstep=mini_nstep)
     loose_pbc = resolve_loose_pbc(charmm_pbc, mlpot_pbc)
     box_side = _setup_charmm_nbonds_for_args(args, r)
     overlap_cfg = resolve_dynamics_overlap_config(
@@ -1062,9 +1063,8 @@ def run_dynamics_workflow(
                 )
             )
             sync_charmm_positions(get_charmm_positions_array())
-            grms = charmm_grms()
             if not args.quiet:
-                print(f"Post MLpot mini GRMS: {grms:.4f} kcal/mol/Å")
+                refresh_mlpot_energy_and_grms(ctx, context="Post MLpot mini")
 
         if defer_jax_warmup and int(n_mol) > 1:
             from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
@@ -1089,6 +1089,7 @@ def run_dynamics_workflow(
             max_grms=max_grms,
             abort=not getattr(args, "allow_high_grms", False),
             require_mlpot_user=True,
+            mlpot_ctx=ctx,
         )
         verify_mlpot_charmm_atom_consistency(
             ctx,

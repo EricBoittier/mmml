@@ -72,6 +72,42 @@ def resolve_geometry_checkpoint_ladder(
     return ordered
 
 
+def is_overlap_scratch_restart_path(path: Path | str) -> bool:
+    """True for alternating overlap chunk scratch files (not stage segment restarts)."""
+    name = Path(path).name
+    return name.endswith(".overlap_a.res") or name.endswith(".overlap_b.res")
+
+
+def build_geometry_recovery_candidates(overlap: Any) -> list[Path]:
+    """Ordered restart ladder for overlap recovery (baseline before segment tails).
+
+    Scratch ``.overlap_a/.b.res`` files are excluded: they carry stale CPT/image
+    internals and must not be used for early-abort or pre-chunk geometry reload.
+    """
+    seen: set[str] = set()
+    ordered: list[Path] = []
+
+    def add(path: Path | str | None) -> None:
+        if path is None:
+            return
+        p = Path(path)
+        if is_overlap_scratch_restart_path(p):
+            return
+        key = str(p.expanduser())
+        if key in seen:
+            return
+        seen.add(key)
+        ordered.append(p)
+
+    if overlap.geometry_baseline_restart is not None:
+        add(overlap.geometry_baseline_restart)
+    if overlap.prior_segment_restart is not None:
+        add(overlap.prior_segment_restart)
+    for cand in overlap.geometry_fallback_restarts:
+        add(cand)
+    return ordered
+
+
 def first_valid_restart_path(candidates: list[Path] | tuple[Path, ...]) -> Path | None:
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
 
@@ -317,15 +353,10 @@ def attempt_overlap_early_abort_recovery(
     if overlap is None or overlap.action != "rescue":
         return False
     integrated = int(steps_done) - int(steps_before_chunk)
-    threshold = max(1, int(chunk_nstep * 0.1))
-    if integrated >= threshold:
+    if integrated <= 0:
         return False
 
-    candidates: list[Path] = list(overlap.geometry_fallback_restarts)
-    if overlap.geometry_baseline_restart is not None:
-        candidates.append(Path(overlap.geometry_baseline_restart))
-    if overlap.prior_segment_restart is not None:
-        candidates.insert(0, Path(overlap.prior_segment_restart))
+    candidates = build_geometry_recovery_candidates(overlap)
 
     label = f"early-abort recovery ({overlap_context})"
     try:
@@ -363,11 +394,7 @@ def ensure_restartable_before_overlap_chunk(
     if _valid_restart_file(path) is not None and not restart_has_nonfinite_coordinates(path):
         return
 
-    candidates: list[Path] = list(overlap.geometry_fallback_restarts)
-    if overlap.geometry_baseline_restart is not None:
-        candidates.append(Path(overlap.geometry_baseline_restart))
-    if overlap.prior_segment_restart is not None:
-        candidates.insert(0, Path(overlap.prior_segment_restart))
+    candidates = build_geometry_recovery_candidates(overlap)
 
     label = f"pre-chunk geometry reload ({overlap_context})"
     try:

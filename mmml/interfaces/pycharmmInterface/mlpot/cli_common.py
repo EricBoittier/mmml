@@ -1246,15 +1246,54 @@ def charmm_grms() -> float:
     return float(energy.get_grms())
 
 
-def resolve_mini_nstep(args: argparse.Namespace, n_monomers: int) -> int:
+def refresh_mlpot_energy_and_grms(
+    mlpot_ctx: Any | None = None,
+    *,
+    context: str = "MLpot energy refresh",
+) -> float:
+    """Re-apply MLpot BLOCK, run ``ENER FORCE``, return GRMS (kcal/mol/Å).
+
+    CHARMM SD can leave a stale GRMS from the minimizer while MLpot USER forces
+    are not fully synchronized. Call before pre-dynamics gates and after MLpot mini.
+    """
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import pycharmm
+
+    if mlpot_ctx is not None:
+        mlpot_ctx.reregister_mlpot()
+    pycharmm.lingo.charmm_script("ENER FORCE")
+    grms = charmm_grms()
+    if context:
+        print(
+            f"{context}: GRMS={grms:.4f} kcal/mol/Å (after ENER FORCE)",
+            flush=True,
+        )
+    return grms
+
+
+def resolve_mini_nstep(
+    args: argparse.Namespace,
+    n_monomers: int,
+    *,
+    n_atoms: int | None = None,
+    pbc: bool = False,
+) -> int:
     """SD steps per pass; scale up for large Packmol clusters unless disabled."""
     base = int(getattr(args, "mini_nstep", 20))
     if getattr(args, "no_scale_mini_nstep", False):
         return max(1, base)
     # Heuristic: large clusters need more than 20 SD steps per pass.
     scaled = max(base, min(300, 8 * max(1, n_monomers)))
+    if pbc:
+        n_at = int(n_atoms) if n_atoms is not None else 5 * int(n_monomers)
+        pbc_floor = max(400, min(800, n_at // 2))
+        scaled = max(scaled, min(800, pbc_floor))
     if scaled != base:
-        print(f"mini-nstep scaled {base} -> {scaled} for {n_monomers} monomer(s)")
+        print(
+            f"mini-nstep scaled {base} -> {scaled} for {n_monomers} monomer(s)"
+            + (" (PBC)" if pbc else ""),
+            flush=True,
+        )
     return scaled
 
 
@@ -1303,6 +1342,7 @@ def assert_dynamics_ready(
     abort: bool = True,
     require_mlpot_user: bool = False,
     user_zero_tol_kcalmol: float = 1.0e-6,
+    mlpot_ctx: Any | None = None,
 ) -> float:
     """Warn or abort if gradients are still huge before starting dynamics."""
     import math
@@ -1311,6 +1351,8 @@ def assert_dynamics_ready(
     import pycharmm.energy as energy
 
     if require_mlpot_user:
+        if mlpot_ctx is not None:
+            mlpot_ctx.reregister_mlpot()
         pycharmm.lingo.charmm_script("ENER FORCE")
     else:
         pycharmm.lingo.charmm_script("ENER")
