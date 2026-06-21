@@ -876,6 +876,41 @@ def _format_coord_lines(flat: np.ndarray, *, per_line: int = 3) -> list[str]:
   return lines
 
 
+def _patch_handoff_into_restart_template(
+    handoff: MdHandoffState,
+    template: Path,
+    path: Path,
+) -> None:
+    """Patch handoff coords/velocities into a CHARMM restart template."""
+    text = template.read_text(errors="ignore")
+    coord_lines = _format_coord_lines(handoff.positions)
+    coord_block = " !X, Y, Z\n" + "\n".join(coord_lines) + "\n"
+    if " !X, Y, Z" in text:
+        text = re.sub(
+            r" !X, Y, Z.*?(?=\n !|\Z)",
+            coord_block.rstrip(),
+            text,
+            count=1,
+            flags=re.DOTALL,
+        )
+    else:
+        text = text.rstrip() + "\n" + coord_block
+    if handoff.velocities is not None:
+        vel_lines = _format_coord_lines(handoff.velocities)
+        vel_block = " !VELOCITIES\n" + "\n".join(vel_lines) + "\n"
+        if " !VELOCITIES" in text:
+            text = re.sub(
+                r" !VELOCITIES.*?(?=\n !|\Z)",
+                vel_block.rstrip(),
+                text,
+                count=1,
+                flags=re.DOTALL,
+            )
+        else:
+            text = text.rstrip() + "\n" + vel_block
+    path.write_text(text, encoding="ascii", errors="ignore")
+
+
 def save_handoff_to_res(
   handoff: MdHandoffState,
   path: Path,
@@ -883,58 +918,42 @@ def save_handoff_to_res(
   template_res: Path | None = None,
 ) -> Path:
   """Write CHARMM ``.res`` from handoff (template patch or in-memory CHARMM)."""
+  from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+      read_restart_coordinates,
+  )
+
   path = Path(path).expanduser().resolve()
   path.parent.mkdir(parents=True, exist_ok=True)
+
+  if template_res is not None:
+      template = Path(template_res).expanduser().resolve()
+      if not template.is_file():
+          raise FileNotFoundError(f"Restart template not found: {template}")
+      _patch_handoff_into_restart_template(handoff, template, path)
+      if read_restart_coordinates(path) is None:
+          raise ValueError(
+              f"patched restart {path.name} has no finite Cartesian coordinates "
+              f"(template {template.name})"
+          )
+      return path
 
   try:
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
-      rewrite_dynamics_restart_from_current_state,
+      rewrite_dynamics_restart_validated,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
     sync_charmm_positions(handoff.positions)
-    rewrite_dynamics_restart_from_current_state(path)
-    return path
+    if rewrite_dynamics_restart_validated(path):
+        return path
   except Exception:
     pass
 
-  if template_res is None:
-    raise ValueError(
-      "save_handoff_to_res requires template_res when CHARMM is not loaded"
-    )
-  template = Path(template_res).expanduser().resolve()
-  if not template.is_file():
-    raise FileNotFoundError(f"Restart template not found: {template}")
-  text = template.read_text(errors="ignore")
-  natom = int(handoff.positions.shape[0])
-  coord_lines = _format_coord_lines(handoff.positions)
-  coord_block = " !X, Y, Z\n" + "\n".join(coord_lines) + "\n"
-  if " !X, Y, Z" in text:
-    text = re.sub(
-      r" !X, Y, Z.*?(?=\n !|\Z)",
-      coord_block.rstrip(),
-      text,
-      count=1,
-      flags=re.DOTALL,
-    )
-  else:
-    text = text.rstrip() + "\n" + coord_block
-  if handoff.velocities is not None:
-    vel_lines = _format_coord_lines(handoff.velocities)
-    vel_block = " !VELOCITIES\n" + "\n".join(vel_lines) + "\n"
-    if " !VELOCITIES" in text:
-      text = re.sub(
-        r" !VELOCITIES.*?(?=\n !|\Z)",
-        vel_block.rstrip(),
-        text,
-        count=1,
-        flags=re.DOTALL,
-      )
-    else:
-      text = text.rstrip() + "\n" + vel_block
-  path.write_text(text, encoding="ascii", errors="ignore")
-  return path
+  raise ValueError(
+      "save_handoff_to_res requires template_res when CHARMM is not loaded "
+      "or in-memory restart write failed validation"
+  )
 
 
 def save_handoff(
