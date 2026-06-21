@@ -13,29 +13,29 @@
 
 solvents: [DCM, ACO]
 # Fractions of 298 K bulk liquid monomer count (per solvent, per box side).
-bulk_density_fractions: [0.25, 0.5, 0.75, 1.0]
+bulk_density_fractions: [0.25, 0.5, ]
 bulk_density_n_min: 10
 # cluster_sizes: [10, 30, 50, 80, 100]  # legacy fixed-N matrix
-temperatures: [50.0, 100.0, 150.0, 200.0]
+temperatures: [50.0, 100.0, 150.0,]
 box_sizes: [28.0, 30.0, 32.0]
 checkpoint: /mmhome/boittier/home/mmml/examples/ckpts_json/DESdimers_params.json
 output_root: artifacts/pbc_solvent_burst
 seed_base: 123
 
 # Burst timing (per matrix cell)
-jaxmd_burst_ps: 200.0
+jaxmd_burst_ps: 100.0
 jaxmd_bursts: 10
-pycharmm_equi_ps: 1.0
+pycharmm_equi_ps: 10.0
 pycharmm_equi_legs: 10
 
 # Gentle MLpot heat (pycharmm_init); heat_finalt follows cell temperature
-ps_heat: 1.0
-n_heat_segments: 10
-heat_firstt: 10.0
+ps_heat: 3.0
+n_heat_segments: 5
+heat_firstt: 20.0
 # Hoover for MLpot heat when pretreat is on (campaign + staged_workflow coerce scale→hoover).
 # Use scale only with pretreat_on_pycharmm: false (no Hoover NVT in-session).
 heat_thermostat: scale
-dt_fs: 0.2
+dt_fs: 0.1
 pressure: 1.0
 
 # Hybrid cleanup ladder (maps to existing mmml recovery hooks).
@@ -45,9 +45,9 @@ cleanup_strategy:
   charmm_mm:
     # CGENFF mini + CHARMM heat/equi/prod before each MLpot PyCHARMM leg
     pretreat_on_pycharmm: true
-    ps_heat: 2.0
-    ps_equi: 2.0
-    ps_prod: 2.0
+    ps_heat: 1.0
+    ps_equi: 1.0
+    ps_prod: 1.0
     overlap_rescue_sd_steps: 200
     overlap_rescue_abnr_steps: 400
   mlpot:
@@ -61,11 +61,11 @@ cleanup_strategy:
     dynamics_overlap_memory_handoff: true
     bonded_mm_mini: true
     bonded_mm_mini_after: mini,heat,equi
-    bonded_mm_mini_steps: 100
+    bonded_mm_mini_steps: 1000
     charmm_pre_minimize: true
-    charmm_sd_steps: 200
-    charmm_abnr_steps: 400
-    mini_nstep: 150
+    charmm_sd_steps: 1000
+    charmm_abnr_steps: 1000
+    mini_nstep: 500
     # Keep below dynamics_overlap_check_interval so overlap chunks stay at 250 steps.
     dcd_nsavc: 100
     dyn_nprint: 100
@@ -73,7 +73,7 @@ cleanup_strategy:
     overlap_run_state_every_chunks: 4
   jaxmd_pbc:
     handoff_quality_gate: true
-    handoff_quality_fmax_eVA: 1.0
+    handoff_quality_fmax_eVA: 10.0
     handoff_quality_action: minimize
     jaxmd_minimize_steps: 200
     jaxmd_pbc_minimize_steps: 200
@@ -106,7 +106,7 @@ slurm_ntasks: 1
 slurm_cpus_per_task: 4
 slurm_mem_mb_per_cpu: 3000
 slurm_runtime_min: 2880
-slurm_mail_user: ericdavid.boittier@unibas.ch
+#slurm_mail_user: ericdavid.boittier@unibas.ch
 slurm_gpu_nodes_fast:
   - gpu08   # RTX5090 ×2
   - gpu09
@@ -129,8 +129,8 @@ slurm_gpu_nodes_slow:
   - gpu23
 
 # Full-bulk cells (fraction 1.0) may fail Packmol or heat on tight L; last burst optional.
-optional_bulk_fractions: [0.95, 1.05]
-optional_sizes: []
+#optional_bulk_fractions: [0.95, 1.05]
+#optional_sizes: []
 
 # Skip known-hard cells without editing the matrix (Snakemake rule all ignores excluded tags).
 # exclude_run_tags:
