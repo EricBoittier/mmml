@@ -1413,6 +1413,18 @@ def assert_dynamics_ready(
                 raise RuntimeError(msg)
             print(f"WARN: {msg}", flush=True)
             return grms
+        if grms > max_grms and mlpot_ctx is not None:
+            stale_grms = float(grms)
+            grms = refresh_mlpot_energy_and_grms(
+                mlpot_ctx,
+                context="Pre-dynamics GRMS retry (stale MM block suspected)",
+            )
+            if grms <= max_grms:
+                print(
+                    f"Pre-dynamics GRMS recovered: {stale_grms:.2f} -> {grms:.4f} "
+                    f"kcal/mol/Å after MLpot reattach (limit {max_grms})",
+                    flush=True,
+                )
     if grms <= max_grms:
         extra = f", USER={user_kcal:.2f} kcal/mol" if user_kcal is not None else ""
         print(
