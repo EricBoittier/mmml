@@ -1281,6 +1281,10 @@ def save_handoff_to_res(
 
     sync_charmm_positions(handoff.positions)
     if rewrite_dynamics_restart_validated(path):
+        # Verify that the written restart contains finite coordinates
+        from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import read_restart_coordinates
+        if read_restart_coordinates(path) is None:
+            raise ValueError(f"In-memory restart {path.name} has no finite coordinates after rewrite validation")
         return path
   except Exception:
     pass
