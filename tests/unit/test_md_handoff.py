@@ -557,5 +557,52 @@ def test_save_handoff_to_res_unusable_template_resolves_fallback(
     np.testing.assert_allclose(reloaded.positions, pos, rtol=1e-5, atol=1e-5)
 
 
+def test_prepare_pycharmm_handoff_continuation_no_template_invalid_restart(
+    tmp_path: Path,
+) -> None:
+    import sys
+    import argparse
+    from unittest.mock import MagicMock, patch
+    from mmml.cli.run.md_handoff import prepare_pycharmm_handoff_continuation
+
+    pos = np.random.default_rng(0).random((20, 3))
+    handoff = MdHandoffState(
+        positions=pos,
+        atomic_numbers=np.ones(20, dtype=int),
+    )
+    args = argparse.Namespace(
+        handoff_template_res=None,
+        continue_from=None,
+        continue_velocities=True,
+        restart_from=None,
+    )
+
+    orig_modules = sys.modules.copy()
+    try:
+        sys.modules["mmml.interfaces.pycharmmInterface.import_pycharmm"] = MagicMock()
+
+        mock_recovery = MagicMock()
+        # Return False to simulate validation failure (e.g. uninitialized coords)
+        mock_recovery.rewrite_dynamics_restart_validated.return_value = False
+        sys.modules["mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery"] = mock_recovery
+
+        mock_setup = MagicMock()
+        sys.modules["mmml.interfaces.pycharmmInterface.mlpot.setup"] = mock_setup
+
+        with patch("mmml.cli.run.md_handoff.resolve_handoff_restart_template", return_value=None):
+            result = prepare_pycharmm_handoff_continuation(
+                handoff, args, tmp_path / "prod", {}, quiet=False
+            )
+
+        assert result is None
+        mock_setup.sync_charmm_positions.assert_called_once()
+        seed = tmp_path / "prod" / "handoff" / "continue_seed.res"
+        mock_recovery.rewrite_dynamics_restart_validated.assert_called_once_with(seed)
+    finally:
+        sys.modules.clear()
+        sys.modules.update(orig_modules)
+
+
+
 
 
