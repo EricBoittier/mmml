@@ -214,6 +214,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="pycharmm: run-state output directory (default: output-dir/run_state).",
     )
     parser.add_argument(
+        "--overlap-run-state-dir",
+        type=Path,
+        default=None,
+        help="pycharmm: overlap-chunk geometry sidecar directory (default: output-dir/run_state/overlap).",
+    )
+    parser.add_argument(
+        "--overlap-run-state-every-chunks",
+        type=int,
+        default=0,
+        help="pycharmm: save overlap run-state sidecar every N successful chunks (0=off).",
+    )
+    parser.add_argument(
         "--flat-bottom-radius",
         type=float,
         default=None,
@@ -1874,6 +1886,12 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     if getattr(args, "save_run_state", False):
         cmd.append("--save-run-state")
     _append_optional(cmd, "--run-state-dir", getattr(args, "run_state_dir", None))
+    _append_optional(
+        cmd, "--overlap-run-state-dir", getattr(args, "overlap_run_state_dir", None)
+    )
+    every_chunks = int(getattr(args, "overlap_run_state_every_chunks", 0) or 0)
+    if every_chunks > 0:
+        cmd.extend(["--overlap-run-state-every-chunks", str(every_chunks)])
     if getattr(args, "flat_bottom_radius", None) is not None:
         cmd.extend(["--flat-bottom-radius", str(args.flat_bottom_radius)])
     if args.extra_args:

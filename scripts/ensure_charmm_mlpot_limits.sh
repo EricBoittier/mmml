@@ -110,10 +110,14 @@ if [[ "$NEED_BUILD" == 1 ]]; then
   if [[ "$DRY_RUN" == 1 ]]; then
     echo "(dry-run) would rebuild CHARMM into ${TIER_DIR}"
   else
-    echo "Building CHARMM MLpot tier ${TIER} (max_Npr=${TARGET}) in ${TIER_DIR}"
-    CHARMM_BUILD_DIR="$TIER_DIR" "$ROOT/scripts/rebuild_charmm_mlpot.sh" --clean
+    CMAKE_BUILD_DIR="${CHARMM_CMAKE_BUILD_DIR:-${SLURM_TMPDIR:-/tmp}/mmml-charmm-cmake-${TARGET}}"
+    echo "Building CHARMM MLpot tier ${TIER} (max_Npr=${TARGET}); cmake in ${CMAKE_BUILD_DIR}"
+    rm -rf "$CMAKE_BUILD_DIR" 2>/dev/null || true
+    mkdir -p "$CMAKE_BUILD_DIR"
+    CHARMM_BUILD_DIR="$CMAKE_BUILD_DIR" "$ROOT/scripts/rebuild_charmm_mlpot.sh" --clean
     mkdir -p "$LIB_DIR"
     cp -f "${CHARMM_HOME:-$ROOT/setup/charmm}/libcharmm.so" "${LIB_DIR}/libcharmm.so"
+    rm -rf "$CMAKE_BUILD_DIR" 2>/dev/null || true
   fi
 else
   echo "Reusing existing tier build: ${LIB_DIR}/libcharmm.so"

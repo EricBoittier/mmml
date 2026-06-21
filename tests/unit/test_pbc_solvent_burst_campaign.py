@@ -188,6 +188,8 @@ def test_namespace_from_merged_pycharmm_init_heat_flags(cfg: dict, cell: RunCell
     ns = namespace_from_merged(merged)
     assert ns.heat_thermostat == "hoover"
     assert ns.no_echeck_heat is True
+    assert ns.save_run_state is True
+    assert ns.overlap_run_state_every_chunks == 4
 
 
 def test_namespace_from_merged_jaxmd_burst(cfg: dict, cell: RunCell) -> None:
