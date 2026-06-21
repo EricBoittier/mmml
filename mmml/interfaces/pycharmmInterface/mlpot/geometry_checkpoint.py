@@ -19,15 +19,25 @@ def resolve_geometry_checkpoint_ladder(
     tag: str,
     *,
     n_heat_segments: int = 1,
+    prefer_heat_segments: bool = False,
 ) -> list[Path]:
-    """Ordered restart candidates for fly-off / early-abort recovery.
+    """Ordered restart candidates for fly-off recovery or campaign resume.
 
-    Post-mini ``geometry_baseline`` and in-session heat segment files precede
-    pretreat MM checkpoints.  Pretreat restarts use CGENFF coordinates that are
-    often a poor MLpot MIC reference after MLpot mini (USER energy explosions).
+  When ``prefer_heat_segments`` is true (Snakemake retry), completed heat
+  segment files rank above ``geometry_baseline``.  Otherwise baseline and
+  bonded-mini snapshots precede pretreat MM checkpoints for MLpot recovery.
     """
     out_dir = Path(paths.get("heat_res", Path("."))).parent
     candidates: list[Path] = []
+
+    heat_paths: list[Path] = []
+    if n_heat_segments > 1:
+        for seg_i in range(n_heat_segments - 1, -1, -1):
+            heat_paths.append(out_dir / f"heat_{tag}.{seg_i}.res")
+    else:
+        heat_res = paths.get("heat_res")
+        if heat_res is not None:
+            heat_paths.append(Path(heat_res))
 
     baseline = paths.get("geometry_baseline_res")
     if baseline is not None:
@@ -37,13 +47,10 @@ def resolve_geometry_checkpoint_ladder(
     if bonded_crd is not None:
         candidates.append(Path(bonded_crd))
 
-    if n_heat_segments > 1:
-        for seg_i in range(n_heat_segments - 1, -1, -1):
-            candidates.append(out_dir / f"heat_{tag}.{seg_i}.res")
+    if prefer_heat_segments:
+        candidates = heat_paths + candidates
     else:
-        heat_res = paths.get("heat_res")
-        if heat_res is not None:
-            candidates.append(Path(heat_res))
+        candidates.extend(heat_paths)
 
     for key in (
         "charmm_mm_prod_res",
@@ -235,6 +242,7 @@ def discover_resume_restart(
         paths,
         tag,
         n_heat_segments=n_heat_segments,
+        prefer_heat_segments=True,
     )
     found = first_valid_restart_path(ladder)
     if found is not None:
