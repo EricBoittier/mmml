@@ -2330,7 +2330,12 @@ def run_dynamics_with_io(
         overlap = attach_prior_segment_restart(
             overlap,
             segment_index=overlap.segment_index,
-            prev_restart=io.restart_read if io is not None else None,
+            prev_restart=(
+                None
+                if overlap.prior_segment_restart is not None
+                and Path(overlap.prior_segment_restart).is_file()
+                else (io.restart_read if io is not None else None)
+            ),
             out_dir=overlap.segment_out_dir,
             restart_prefix=overlap.segment_restart_prefix,
             restart_write=io.restart_write if io is not None else None,

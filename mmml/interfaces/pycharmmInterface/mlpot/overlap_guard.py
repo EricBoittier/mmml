@@ -404,14 +404,17 @@ def resolve_prior_segment_restart_path(
 
     candidates: list[Path] = []
     seg_i = int(segment_index)
+    if geometry_baseline_restart is not None:
+        candidates.append(Path(geometry_baseline_restart))
     if seg_i > 0 and out_dir is not None and restart_prefix:
         candidates.append(Path(out_dir) / f"{restart_prefix}.{seg_i - 1}.res")
     if prev_restart is not None:
         candidates.append(Path(prev_restart))
     for cand in geometry_fallback_restarts:
-        candidates.append(Path(cand))
-    if geometry_baseline_restart is not None:
-        candidates.append(Path(geometry_baseline_restart))
+        p = Path(cand)
+        if geometry_baseline_restart is not None and p == Path(geometry_baseline_restart):
+            continue
+        candidates.append(p)
     seen: set[str] = set()
     for cand in candidates:
         p = cand.expanduser()

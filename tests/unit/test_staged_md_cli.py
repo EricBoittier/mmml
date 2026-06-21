@@ -153,13 +153,15 @@ def test_prior_restart_for_equi_prefers_nve_when_present(tmp_path: Path):
     assert got == paths["nve_res"]
 
 
-def test_prior_restart_for_heat_uses_pretreat_prod(tmp_path: Path):
+def test_prior_restart_for_heat_uses_geometry_baseline(tmp_path: Path):
     paths = _artifact_paths(tmp_path, "dcm_155")
-    paths["charmm_mm_prod_res"].parent.mkdir(parents=True, exist_ok=True)
+    paths["geometry_baseline_res"].write_text("baseline\n", encoding="utf-8")
+    pretreat = paths["charmm_mm_prod_res"].parent
+    pretreat.mkdir(parents=True, exist_ok=True)
     paths["charmm_mm_prod_res"].write_text("prod\n", encoding="utf-8")
 
     got = _prior_restart_for_stage("heat", paths, restart_from=None)
-    assert got == paths["charmm_mm_prod_res"]
+    assert got == paths["geometry_baseline_res"]
 
 
 def test_should_seed_heat_prior_restart_after_mini_in_memory():

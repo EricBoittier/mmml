@@ -215,9 +215,9 @@ def _prior_restart_for_stage(
     if restart_from is not None:
         return restart_from
     if stage == "heat":
-        prod = paths.get("charmm_mm_prod_res")
-        if prod is not None and Path(prod).is_file():
-            return Path(prod)
+        baseline = paths.get("geometry_baseline_res")
+        if baseline is not None and Path(baseline).is_file():
+            return Path(baseline)
         return None
     if stage == "nve":
         heat_restart = _heat_restart_path(paths, tag or "", n_heat_segments)
@@ -811,6 +811,17 @@ def _should_seed_heat_prior_restart(
     return bool(use_memory and (seg_i == 0 or memory_handoff_next))
 
 
+def _overlap_extent_prior_restart(
+    paths: dict[str, Path],
+    prev_restart: Path | None,
+) -> Path | None:
+    """Best on-disk checkpoint for extent fly-off (post-mini baseline wins)."""
+    baseline = paths.get("geometry_baseline_res")
+    if baseline is not None and Path(baseline).is_file():
+        return Path(baseline)
+    return prev_restart
+
+
 def _seed_restart_for_memory_handoff(
     io: CharmmTrajectoryFiles,
     kw: dict[str, Any],
@@ -1373,9 +1384,12 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         f"{heat_firstt:.1f}→{heat_finalt:.1f} K)",
                         flush=True,
                     )
-                initial = prev_restart or _prior_restart_for_stage(
-                    "heat", paths, restart_from=None
-                )
+                if prev_restart_is_current_state:
+                    initial = prev_restart
+                else:
+                    initial = prev_restart or _prior_restart_for_stage(
+                        "heat", paths, restart_from=None
+                    )
                 seg_chain = npt_restart_chain(
                     out_dir,
                     n_segments=n_heat_segments,
@@ -1397,7 +1411,9 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     dyn_print = resolve_dynamics_print_kwargs(args, nstep=nstep)
                     save_interval_ps = timestep_ps * dcd_nsavc
                     seg_prep_quiet = bool(args.quiet) or seg_i > 0
-                    use_memory = memory_handoff_next and seg_i == 0
+                    use_memory = (memory_handoff_next and seg_i == 0) or (
+                        seg_i == 0 and prev_restart_is_current_state
+                    )
                     if use_memory:
                         restart = False
                         rread = None
@@ -1463,8 +1479,8 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         nstep=nstep,
                         ihtfrq=resolve_heat_ihtfrq(args, nstep=nstep),
                     )
-                    overlap_prior_restart = prev_restart
-                    if _should_seed_heat_prior_restart(
+                    overlap_prior_restart = _overlap_extent_prior_restart(paths, prev_restart)
+                    if overlap_prior_restart is None and _should_seed_heat_prior_restart(
                         seg_i=seg_i,
                         prev_restart_is_current_state=prev_restart_is_current_state,
                         use_memory=use_memory,
@@ -1973,7 +1989,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 )
 
             restart_path = Path(rread) if restart and rread else None
-            overlap_prior_restart = prev_restart
+            overlap_prior_restart = _overlap_extent_prior_restart(paths, prev_restart)
 
             kw = _build_stage_dynamics_kw(
                 stage,
@@ -1989,7 +2005,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 memory_handoff=use_memory,
             )
             kw["nsavc"] = dcd_nsavc
-            if stage == "heat" and _should_seed_heat_prior_restart(
+            if stage == "heat" and overlap_prior_restart is None and _should_seed_heat_prior_restart(
                 seg_i=0,
                 prev_restart_is_current_state=prev_restart_is_current_state,
                 use_memory=use_memory,
