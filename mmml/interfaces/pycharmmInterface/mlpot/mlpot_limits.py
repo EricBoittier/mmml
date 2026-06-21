@@ -214,7 +214,27 @@ def max_mlpot_ml_pairs(n_ml_atoms: int) -> int:
     return n * (n - 1)
 
 
-def validate_mlpot_system_size(n_ml_atoms: int) -> None:
+def max_mlpot_ml_pairs_pbc(
+    n_ml_atoms: int,
+    *,
+    image_copies_per_atom: float = 5.0,
+) -> int:
+    """Upper-bound ML–ML pairs in ``mlpot_update`` when ``Ntrans != 0``.
+
+    Fortran builds ``Nmlp = Nml*(Nml-1) + Nml*Niml`` where ``Niml`` is the
+    count of periodic image atoms whose parent is an ML atom. Dense bulk PBC
+    liquids typically have ``Niml ~ image_copies_per_atom * Nml`` (observed
+    ~5× for N≈800 in 30 Å boxes).
+    """
+    n = int(n_ml_atoms)
+    if n <= 1:
+        return 0
+    central = n * (n - 1)
+    niml = int(n * float(image_copies_per_atom))
+    return central + n * niml
+
+
+def validate_mlpot_system_size(n_ml_atoms: int, *, pbc: bool = False) -> None:
     """Fail fast before ``mlpot_set_properties`` writes ``fort.104``."""
     status = mlpot_limits_status()
     n_ml = int(n_ml_atoms)
@@ -229,13 +249,21 @@ def validate_mlpot_system_size(n_ml_atoms: int) -> None:
             f"(source/api/api_func.F90 may already be patched; lib must be rebuilt.)\n"
             f"{detail}"
         )
-    n_pairs = max_mlpot_ml_pairs(n_ml)
+    n_pairs = (
+        max_mlpot_ml_pairs_pbc(n_ml) if pbc else max_mlpot_ml_pairs(n_ml)
+    )
     if n_pairs > status.max_npr:
+        rebuild = (
+            f"  ./scripts/ensure_charmm_mlpot_limits.sh --n-ml {n_ml}"
+            + (" --pbc" if pbc else "")
+            + "\n"
+        )
         raise ValueError(
             f"CHARMM MLpot pair buffers hold at most {status.max_npr} ML pairs "
-            f"(max_Npr); {n_ml} ML atoms need {n_pairs}. Rebuild with larger "
+            f"(max_Npr); {n_ml} ML atoms need {n_pairs}"
+            f"{' (PBC image pairs)' if pbc else ''}. Rebuild with larger "
             f"max_Npr:\n"
-            f"  ./scripts/rebuild_charmm_mlpot.sh\n"
+            f"{rebuild}"
             f"{status.message()}"
         )
 
@@ -248,18 +276,33 @@ NPR_TIERS: dict[str, int] = {
     "default": 4_000_000,
     "large": 8_000_000,
     "xlarge": 12_000_000,
+    "xxlarge": 36_000_000,
 }
 
 
-def required_max_npr(n_ml_atoms: int, *, margin: float = 1.15) -> int:
+def required_max_npr(
+    n_ml_atoms: int,
+    *,
+    margin: float = 1.15,
+    pbc: bool = False,
+) -> int:
     """Minimum ``max_Npr`` compile-time limit for ``n_ml_atoms`` ML atoms."""
-    pairs = max_mlpot_ml_pairs(int(n_ml_atoms))
+    pairs = (
+        max_mlpot_ml_pairs_pbc(int(n_ml_atoms))
+        if pbc
+        else max_mlpot_ml_pairs(int(n_ml_atoms))
+    )
     return int(pairs * float(margin))
 
 
-def select_npr_tier(n_ml_atoms: int, *, margin: float = 1.15) -> str:
+def select_npr_tier(
+    n_ml_atoms: int,
+    *,
+    margin: float = 1.15,
+    pbc: bool = False,
+) -> str:
     """Smallest tier name that fits ``n_ml_atoms``."""
-    needed = required_max_npr(n_ml_atoms, margin=margin)
+    needed = required_max_npr(n_ml_atoms, margin=margin, pbc=pbc)
     for name, cap in sorted(NPR_TIERS.items(), key=lambda item: item[1]):
         if needed <= cap:
             return name
@@ -276,18 +319,25 @@ def tier_max_npr(tier: str) -> int:
     return NPR_TIERS[key]
 
 
-def ensure_mlpot_limits_for_system(n_ml_atoms: int, *, margin: float = 1.15) -> None:
+def ensure_mlpot_limits_for_system(
+    n_ml_atoms: int,
+    *,
+    margin: float = 1.15,
+    pbc: bool = False,
+) -> None:
     """Raise with rebuild guidance when the loaded lib is too small."""
     status = mlpot_limits_status()
-    needed = required_max_npr(n_ml_atoms, margin=margin)
-    tier = select_npr_tier(n_ml_atoms, margin=margin)
+    needed = required_max_npr(n_ml_atoms, margin=margin, pbc=pbc)
+    tier = select_npr_tier(n_ml_atoms, margin=margin, pbc=pbc)
     target = tier_max_npr(tier)
     if needed > status.max_npr:
         raise ValueError(
             f"CHARMM MLpot pair buffers hold at most {status.max_npr} ML pairs "
-            f"(max_Npr); {n_ml_atoms} ML atoms need {needed}. "
+            f"(max_Npr); {n_ml_atoms} ML atoms need {needed}"
+            f"{' (PBC)' if pbc else ''}. "
             f"Select tier {tier!r} (max_Npr={target}):\n"
-            f"  ./scripts/ensure_charmm_mlpot_limits.sh --n-ml {int(n_ml_atoms)}\n"
+            f"  ./scripts/ensure_charmm_mlpot_limits.sh --n-ml {int(n_ml_atoms)}"
+            f"{' --pbc' if pbc else ''}\n"
             f"{status.message()}"
         )
 

@@ -96,9 +96,8 @@ def expected_overlap_chunk_dcd_frame_count(
     n_chunks = max(1, int(n_chunks))
     total = max(1, int(total_nstep))
     chunk_nstep = max(1, total // n_chunks)
-    # Use the configured nsavc (capped per chunk), not the harmonized divisor.
-    # Overlap chunks restart without a duplicate origin frame on each segment.
-    sav = max(1, min(int(nsavc), chunk_nstep - 1))
+    # Overlap chunks call harmonize_nsavc_frequency (see dynamics._harmonize_overlap_chunk_frequencies).
+    sav = harmonize_nsavc_frequency(int(nsavc), chunk_nstep)
     per_restart = max(1, chunk_nstep // sav)
     if cold_start_first_chunk and n_chunks > 1:
         per_cold = expected_dcd_frame_count(nstep=chunk_nstep, nsavc=sav)
@@ -408,6 +407,7 @@ def assert_stage_dynamics_completed(
     min_step_fraction: float = 0.95,
     min_frame_fraction: float = 0.90,
     allow_incomplete: bool = False,
+    segment_note: str | None = None,
 ) -> None:
     """Fail if dynamics stopped early or the stage DCD is nearly empty.
 
@@ -496,8 +496,11 @@ def assert_stage_dynamics_completed(
             )
 
     if not problems:
+        stage_label = stage.upper()
+        if segment_note:
+            stage_label = f"{stage_label} {segment_note}"
         print(
-            f"{stage.upper()} complete: "
+            f"{stage_label} complete: "
             f"restart_step={restart_step if restart_step is not None else '?'}, "
             f"dcd_frames={n_frames} readable"
             + (

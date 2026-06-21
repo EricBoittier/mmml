@@ -41,14 +41,32 @@ def test_harmonize_nsavc_frequency():
 def test_expected_overlap_chunk_dcd_frame_count_benz30_equi_case():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         expected_overlap_chunk_dcd_frame_count,
+        harmonize_nsavc_frequency,
     )
 
-    # 5000 steps, 10 × 500-step overlap chunks, nsavc=200 → 2 frames/chunk (restart).
+    # 5000 steps, 10 × 500-step overlap chunks; nsavc harmonized per chunk.
+    chunk_nstep = 500
+    sav = harmonize_nsavc_frequency(200, chunk_nstep)
+    per_chunk = max(1, chunk_nstep // sav)
     assert (
         expected_overlap_chunk_dcd_frame_count(
             total_nstep=5000, nsavc=200, n_chunks=10
         )
-        == 20
+        == per_chunk * 10
+    )
+
+
+def test_expected_overlap_chunk_dcd_frame_count_heat_segment_case():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        expected_overlap_chunk_dcd_frame_count,
+    )
+
+    # 500-step heat segment, 2 × 250-step overlap chunks, nsavc=100 → 50/chunk → 5 frames each.
+    assert (
+        expected_overlap_chunk_dcd_frame_count(
+            total_nstep=500, nsavc=100, n_chunks=2
+        )
+        == 10
     )
 
 
