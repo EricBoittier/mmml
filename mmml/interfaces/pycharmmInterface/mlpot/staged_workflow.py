@@ -216,6 +216,7 @@ def _prior_restart_for_stage(
 ) -> Path | None:
     if stage == "heat":
         from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+            is_handoff_seed_restart_path,
             is_pretreat_mm_restart_path,
         )
 
@@ -223,7 +224,8 @@ def _prior_restart_for_stage(
         if baseline is not None and Path(baseline).is_file():
             return Path(baseline)
         if restart_from is not None and not is_pretreat_mm_restart_path(restart_from):
-            return restart_from
+            if not is_handoff_seed_restart_path(restart_from):
+                return restart_from
         return None
     if restart_from is not None:
         return restart_from
@@ -1117,6 +1119,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
 
     setup_charmm_environment(use_pbc=charmm_pbc, cubic_box_side_A=box_side)
     sync_charmm_positions(r)
+    handoff_coords_in_memory = False
     if handoff_in is not None:
         sync_charmm_positions(handoff_in.positions)
         from mmml.cli.run.md_handoff import prepare_pycharmm_handoff_continuation
@@ -1130,6 +1133,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         )
         if seed_restart is not None:
             args.restart_from = seed_restart
+            handoff_coords_in_memory = True
 
     vmd_topo_psf = paths["vmd_psf"]
     if getattr(args, "skip_cluster_build", False) and getattr(args, "from_psf", None):
@@ -1401,8 +1405,12 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         # that seed must not force READYN on pre-MLpot checkpoints for MLpot heat.
         if "mini" in stages:
             restart_from = None
+        elif handoff_coords_in_memory:
+            restart_from = None
         prev_restart: Path | None = restart_from
-        prev_restart_is_current_state = "mini" in stages or pretreat_mm
+        prev_restart_is_current_state = (
+            "mini" in stages or pretreat_mm or handoff_coords_in_memory
+        )
         memory_handoff_next = False
         for stage in dyn_stages:
             if stage == "heat" and n_heat_segments > 1:
@@ -1993,7 +2001,9 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             dyn_print = resolve_dynamics_print_kwargs(args, nstep=nstep)
             save_interval_ps = timestep_ps * dcd_nsavc
 
-            use_memory = memory_handoff_next
+            use_memory = memory_handoff_next or (
+                handoff_coords_in_memory and stage in ("equi", "prod")
+            )
             if use_memory:
                 restart = False
                 rread = None
