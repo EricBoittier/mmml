@@ -121,6 +121,16 @@ _stamp_matches() {
   [[ -f "$STAMP_FILE" ]] && [[ "$(cat "$STAMP_FILE")" == "$TARGET" ]]
 }
 
+# Older ensure_charmm_mlpot_limits.sh left libcharmm.so but no tier metadata.
+_adopt_legacy_prebuild_if_needed() {
+  if [[ -f "${LIB_DIR}/libcharmm.so" ]] && [[ ! -f "$STAMP_FILE" ]]; then
+    echo "Adopting legacy tier prebuild (adding .max_npr stamp): ${LIB_DIR}/libcharmm.so"
+    _write_tier_f90
+  fi
+}
+
+_adopt_legacy_prebuild_if_needed
+
 NEED_BUILD=0
 if [[ ! -f "${LIB_DIR}/libcharmm.so" ]]; then
   NEED_BUILD=1
