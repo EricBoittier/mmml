@@ -42,7 +42,11 @@ cfg = load_config(Path('${WORKFLOW_ROOT}/config.yaml'))
 cell = cell_from_tag(cfg, '${RUN_TAG}')
 print(estimate_ml_atoms(cell.n_monomers))
 ")"
-eval "$("$REPO_ROOT/scripts/ensure_charmm_mlpot_limits.sh" --n-ml "$N_ML" --pbc | grep '^export ')"
+eval "$(
+  "$REPO_ROOT/scripts/ensure_charmm_mlpot_limits.sh" --n-ml "$N_ML" --pbc \
+    | tee /dev/stderr \
+    | grep '^export '
+)"
 
 "$PY" -c "
 import sys

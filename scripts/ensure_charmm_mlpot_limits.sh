@@ -94,6 +94,12 @@ STAMP_FILE="${TIER_DIR}/.max_npr"
 LOCK_FILE="${BUILD_ROOT}/.tier_${TARGET}_nodomdec.build.lock"
 mkdir -p "$LIB_DIR" "$BUILD_ROOT"
 
+_sync_tier_metadata_mtime() {
+  if [[ -f "${LIB_DIR}/libcharmm.so" ]]; then
+    touch -r "${LIB_DIR}/libcharmm.so" "$TIER_F90" "$STAMP_FILE" 2>/dev/null || true
+  fi
+}
+
 _write_tier_f90() {
   cp -f "$TEMPLATE_F90" "$TIER_F90"
   "$MMML_PY" - "$TIER_F90" "$TARGET" <<'PY'
@@ -126,6 +132,7 @@ _adopt_legacy_prebuild_if_needed() {
   if [[ -f "${LIB_DIR}/libcharmm.so" ]] && [[ ! -f "$STAMP_FILE" ]]; then
     echo "Adopting legacy tier prebuild (adding .max_npr stamp): ${LIB_DIR}/libcharmm.so"
     _write_tier_f90
+    _sync_tier_metadata_mtime
   fi
 }
 
@@ -137,9 +144,8 @@ if [[ ! -f "${LIB_DIR}/libcharmm.so" ]]; then
 elif ! _stamp_matches; then
   NEED_BUILD=1
 elif [[ ! -f "$TIER_F90" ]]; then
-  NEED_BUILD=1
-elif [[ "$TIER_F90" -nt "${LIB_DIR}/libcharmm.so" ]]; then
-  NEED_BUILD=1
+  _write_tier_f90
+  _sync_tier_metadata_mtime
 fi
 
 _run_tier_build() {
@@ -153,6 +159,7 @@ _run_tier_build() {
     "$ROOT/scripts/rebuild_charmm_mlpot.sh" --clean --no-domdec
   mkdir -p "$LIB_DIR"
   cp -f "${CHARMM_HOME:-$ROOT/setup/charmm}/libcharmm.so" "${LIB_DIR}/libcharmm.so"
+  _sync_tier_metadata_mtime
   rm -rf "$CMAKE_BUILD_DIR" 2>/dev/null || true
   echo "Installed tier lib: ${LIB_DIR}/libcharmm.so (max_Npr=${TARGET})"
 }
@@ -164,7 +171,7 @@ if [[ "$NEED_BUILD" == 1 ]]; then
     # Snakemake launches many cells at once; flock so only one cmake per tier runs.
     (
       flock -x 200
-      if [[ -f "${LIB_DIR}/libcharmm.so" ]] && _stamp_matches && [[ "$TIER_F90" -ot "${LIB_DIR}/libcharmm.so" ]]; then
+      if [[ -f "${LIB_DIR}/libcharmm.so" ]] && _stamp_matches; then
         echo "Reusing tier build (another job finished while waiting): ${LIB_DIR}/libcharmm.so"
       else
         _run_tier_build
