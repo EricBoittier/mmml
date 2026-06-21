@@ -56,10 +56,24 @@ def _charmm_lib_dir() -> Path | None:
     return None
 
 
+def _tier_api_func_for_lib_dir(lib_dir: Path) -> Path | None:
+    """``.../tier_*_nodomdec/lib`` → sibling ``api_func.F90`` patched for that tier."""
+    resolved = lib_dir.expanduser().resolve()
+    if resolved.name != "lib":
+        return None
+    candidate = resolved.parent / "api_func.F90"
+    return candidate if candidate.is_file() else None
+
+
 def _api_func_f90_candidates() -> list[Path]:
     repo = _repo_root()
     home = _charmm_home()
+    lib_dir = _charmm_lib_dir()
     paths: list[Path] = []
+    if lib_dir is not None:
+        tier_f90 = _tier_api_func_for_lib_dir(lib_dir)
+        if tier_f90 is not None:
+            paths.append(tier_f90)
     if home is not None:
         paths.append(home / "source" / "api" / "api_func.F90")
     paths.extend(
@@ -279,6 +293,12 @@ NPR_TIERS: dict[str, int] = {
     "xxlarge": 36_000_000,
 }
 
+# CGenFF all-atom monomer sizes for PBC burst solvents (DCM / ACO campaign).
+PBC_BURST_ML_ATOMS_PER_MONOMER: dict[str, int] = {
+    "DCM": 5,
+    "ACO": 10,
+}
+
 
 def required_max_npr(
     n_ml_atoms: int,
@@ -342,6 +362,21 @@ def ensure_mlpot_limits_for_system(
         )
 
 
-def estimate_ml_atoms(n_monomers: int, *, atoms_per_monomer: int = 5) -> int:
+def estimate_ml_atoms(
+    n_monomers: int,
+    *,
+    atoms_per_monomer: int | None = None,
+    solvent: str | None = None,
+) -> int:
     """Campaign helper: ML atom count from monomer count."""
-    return int(n_monomers) * int(atoms_per_monomer)
+    if solvent is not None:
+        key = str(solvent).strip().upper()
+        apm = PBC_BURST_ML_ATOMS_PER_MONOMER.get(key)
+        if apm is None:
+            raise ValueError(
+                f"Unknown solvent {solvent!r} for ML atom sizing; "
+                f"supported: {sorted(PBC_BURST_ML_ATOMS_PER_MONOMER)}"
+            )
+        return int(n_monomers) * int(apm)
+    apm = int(atoms_per_monomer) if atoms_per_monomer is not None else 5
+    return int(n_monomers) * apm

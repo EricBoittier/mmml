@@ -27,7 +27,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import (
 cfg = load_config(Path('${WORKFLOW_ROOT}/config.yaml'))
 by_cap: dict[int, int] = {}
 for cell in iter_matrix_cells(cfg):
-    n_ml = estimate_ml_atoms(cell.n_monomers)
+    n_ml = estimate_ml_atoms(cell.n_monomers, solvent=cell.solvent)
     cap = tier_max_npr(select_npr_tier(n_ml, pbc=True))
     by_cap[cap] = max(by_cap.get(cap, 0), n_ml)
 for cap in sorted(by_cap):

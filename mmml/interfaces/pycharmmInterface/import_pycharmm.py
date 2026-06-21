@@ -20,12 +20,11 @@ if chmh is None:
 if chml is None:
     raise ValueError("CHARMM_LIB_DIR is not set")
 
-os.environ["CHARMM_HOME"] = chmh
-os.environ["CHARMM_LIB_DIR"] = chml
-
-
-CHARMM_HOME = os.environ["CHARMM_HOME"]
-CHARMM_LIB_DIR = os.environ["CHARMM_LIB_DIR"]
+# job_shell / ensure_charmm_mlpot_limits.sh may export tier lib paths before import.
+CHARMM_HOME = os.environ.get("CHARMM_HOME") or chmh
+CHARMM_LIB_DIR = os.environ.get("CHARMM_LIB_DIR") or chml
+os.environ["CHARMM_HOME"] = CHARMM_HOME
+os.environ["CHARMM_LIB_DIR"] = CHARMM_LIB_DIR
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 
