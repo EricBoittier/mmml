@@ -373,12 +373,13 @@ def prepare_pycharmm_handoff_continuation(
         try:
             import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
             from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
-                rewrite_dynamics_restart_from_current_state,
+                rewrite_dynamics_restart_validated,
             )
             from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
             sync_charmm_positions(payload.positions)
-            rewrite_dynamics_restart_from_current_state(seed)
+            if not rewrite_dynamics_restart_validated(seed):
+                raise ValueError("in-memory restart validation failed")
         except Exception:
             if not quiet:
                 print(
