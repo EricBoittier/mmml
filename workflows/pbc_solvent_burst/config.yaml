@@ -68,6 +68,8 @@ cleanup_strategy:
     # Keep below dynamics_overlap_check_interval so overlap chunks stay at 250 steps.
     dcd_nsavc: 100
     dyn_nprint: 100
+    save_run_state: true
+    overlap_run_state_every_chunks: 4
   jaxmd_pbc:
     handoff_quality_gate: true
     handoff_quality_fmax_eVA: 1.0

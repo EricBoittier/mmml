@@ -148,6 +148,8 @@ def pycharmm_job_flags(strategy: CleanupStrategy) -> dict[str, Any]:
         "dcd_nsavc": int(ml.get("dcd_nsavc", 500)),
         "dyn_nprint": int(ml.get("dyn_nprint", 500)),
         "no_echeck_heat": bool(ml.get("no_echeck_heat", False)),
+        "save_run_state": bool(ml.get("save_run_state", False)),
+        "overlap_run_state_every_chunks": int(ml.get("overlap_run_state_every_chunks", 0)),
     }
 
 

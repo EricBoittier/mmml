@@ -32,6 +32,18 @@ echo "PY=${PY}"
 echo "MMML_CKPT=${MMML_CKPT:-<unset>}"
 echo "JAX_ENABLE_X64=${JAX_ENABLE_X64}"
 
+N_ML="$("$PY" -c "
+import sys
+from pathlib import Path
+sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
+from campaign_lib import load_config, cell_from_tag
+from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import estimate_ml_atoms
+cfg = load_config(Path('${WORKFLOW_ROOT}/config.yaml'))
+cell = cell_from_tag(cfg, '${RUN_TAG}')
+print(estimate_ml_atoms(cell.n_monomers))
+")"
+eval "$("$REPO_ROOT/scripts/ensure_charmm_mlpot_limits.sh" --n-ml "$N_ML" | grep '^export ')"
+
 "$PY" -c "
 import sys
 from pathlib import Path

@@ -242,3 +242,56 @@ def validate_mlpot_system_size(n_ml_atoms: int) -> None:
 
 def mlpot_limits_message() -> str:
     return mlpot_limits_status().message()
+
+
+NPR_TIERS: dict[str, int] = {
+    "default": 4_000_000,
+    "large": 8_000_000,
+    "xlarge": 12_000_000,
+}
+
+
+def required_max_npr(n_ml_atoms: int, *, margin: float = 1.15) -> int:
+    """Minimum ``max_Npr`` compile-time limit for ``n_ml_atoms`` ML atoms."""
+    pairs = max_mlpot_ml_pairs(int(n_ml_atoms))
+    return int(pairs * float(margin))
+
+
+def select_npr_tier(n_ml_atoms: int, *, margin: float = 1.15) -> str:
+    """Smallest tier name that fits ``n_ml_atoms``."""
+    needed = required_max_npr(n_ml_atoms, margin=margin)
+    for name, cap in sorted(NPR_TIERS.items(), key=lambda item: item[1]):
+        if needed <= cap:
+            return name
+    raise ValueError(
+        f"{n_ml_atoms} ML atoms need max_Npr>={needed} pairs; largest tier "
+        f"xlarge={NPR_TIERS['xlarge']} is insufficient"
+    )
+
+
+def tier_max_npr(tier: str) -> int:
+    key = str(tier).strip().lower()
+    if key not in NPR_TIERS:
+        raise KeyError(f"unknown NPR tier {tier!r}; choose from {sorted(NPR_TIERS)}")
+    return NPR_TIERS[key]
+
+
+def ensure_mlpot_limits_for_system(n_ml_atoms: int, *, margin: float = 1.15) -> None:
+    """Raise with rebuild guidance when the loaded lib is too small."""
+    status = mlpot_limits_status()
+    needed = required_max_npr(n_ml_atoms, margin=margin)
+    tier = select_npr_tier(n_ml_atoms, margin=margin)
+    target = tier_max_npr(tier)
+    if needed > status.max_npr:
+        raise ValueError(
+            f"CHARMM MLpot pair buffers hold at most {status.max_npr} ML pairs "
+            f"(max_Npr); {n_ml_atoms} ML atoms need {needed}. "
+            f"Select tier {tier!r} (max_Npr={target}):\n"
+            f"  ./scripts/ensure_charmm_mlpot_limits.sh --n-ml {int(n_ml_atoms)}\n"
+            f"{status.message()}"
+        )
+
+
+def estimate_ml_atoms(n_monomers: int, *, atoms_per_monomer: int = 5) -> int:
+    """Campaign helper: ML atom count from monomer count."""
+    return int(n_monomers) * int(atoms_per_monomer)

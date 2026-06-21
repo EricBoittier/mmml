@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from unittest import mock
 
+import pytest
+
 from mmml.interfaces.pycharmmInterface.mlpot import mlpot_limits
 
 
@@ -30,6 +32,26 @@ def test_validate_accepts_within_limits(monkeypatch):
 
 def test_max_mlpot_ml_pairs():
     assert mlpot_limits.max_mlpot_ml_pairs(450) == 450 * 449
+
+
+def test_select_npr_tier():
+    assert mlpot_limits.select_npr_tier(89) == "default"
+    assert mlpot_limits.select_npr_tier(2195) == "large"
+    assert mlpot_limits.select_npr_tier(2200) == "large"
+    assert mlpot_limits.select_npr_tier(3000) == "xlarge"
+    with pytest.raises(ValueError, match="largest tier"):
+        mlpot_limits.select_npr_tier(4390)
+
+
+def test_required_max_npr_margin():
+    assert mlpot_limits.required_max_npr(2195) > mlpot_limits.max_mlpot_ml_pairs(2195)
+
+
+def test_ensure_mlpot_limits_for_system_raises_with_tier(monkeypatch):
+    monkeypatch.setenv("MMML_CHARMM_MLPOT_MAX_ML", "50000")
+    monkeypatch.setenv("MMML_CHARMM_MLPOT_MAX_PAIRS", "3998000")
+    with pytest.raises(ValueError, match="ensure_charmm_mlpot_limits"):
+        mlpot_limits.ensure_mlpot_limits_for_system(2195)
 
 
 def test_limits_status_reads_charmmsetup_and_repo_api_func(tmp_path, monkeypatch):
