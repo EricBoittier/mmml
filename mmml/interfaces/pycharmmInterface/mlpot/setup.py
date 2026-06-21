@@ -864,7 +864,7 @@ def register_mlpot(
     pycharmm = _import_pycharmm()
     z_ml = physnet_ml_atomic_numbers(ml_Z)
     n_ml = len(ml_selection.get_atom_indexes())
-    validate_mlpot_system_size(n_ml)
+    validate_mlpot_system_size(n_ml, pbc=bool(use_pbc))
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
 
     with charmm_relaxed_bomlev():
