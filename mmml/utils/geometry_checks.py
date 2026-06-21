@@ -601,7 +601,12 @@ def separate_intramonomer_contacts(
     return pos
 
 
-def monomer_axis_extent(positions: np.ndarray, monomer_offsets: np.ndarray, monomer: int) -> float:
+def monomer_axis_extent(
+    positions: np.ndarray,
+    monomer_offsets: np.ndarray,
+    monomer: int,
+    cell: Any | None = None,
+) -> float:
     """Axis-aligned bounding-box span for one monomer (Å)."""
     pos = np.asarray(positions, dtype=float)
     offsets = np.asarray(monomer_offsets, dtype=int)
@@ -610,12 +615,22 @@ def monomer_axis_extent(positions: np.ndarray, monomer_offsets: np.ndarray, mono
     if ei <= si:
         return 0.0
     chunk = pos[si:ei]
+    cell_mat = _cell_matrix(cell)
+    if cell_mat is not None and len(chunk) > 1:
+        # Unwrap the chunk relative to chunk[0]
+        unwrapped = chunk.copy()
+        ref = chunk[0]
+        for j in range(1, len(chunk)):
+            disp = _mic_displacement(ref, chunk[j], cell_mat)
+            unwrapped[j] = ref + disp
+        chunk = unwrapped
     return float(np.linalg.norm(chunk.max(axis=0) - chunk.min(axis=0)))
 
 
 def find_worst_monomer_extent(
     positions: np.ndarray,
     monomer_offsets: np.ndarray,
+    cell: Any | None = None,
 ) -> tuple[float, MonomerExtentViolation | None]:
     """Return the largest monomer axis extent and the worst offender."""
     pos = np.asarray(positions, dtype=float)
@@ -627,7 +642,7 @@ def find_worst_monomer_extent(
     worst_extent = 0.0
     worst: MonomerExtentViolation | None = None
     for mi in range(n_monomers):
-        extent = monomer_axis_extent(pos, offsets, mi)
+        extent = monomer_axis_extent(pos, offsets, mi, cell=cell)
         if extent > worst_extent:
             worst_extent = extent
             worst = MonomerExtentViolation(
@@ -643,6 +658,7 @@ def assert_monomer_extent_within_limit(
     monomer_offsets: np.ndarray,
     *,
     max_extent_A: float,
+    cell: Any | None = None,
     context: str = "geometry",
 ) -> float:
     """Raise if any monomer span exceeds ``max_extent_A`` or coords are non-finite."""
@@ -655,10 +671,10 @@ def assert_monomer_extent_within_limit(
 
     limit = float(max_extent_A)
     if limit <= 0.0:
-        worst_extent, _ = find_worst_monomer_extent(pos, monomer_offsets)
+        worst_extent, _ = find_worst_monomer_extent(pos, monomer_offsets, cell=cell)
         return float(worst_extent)
 
-    worst_extent, violation = find_worst_monomer_extent(pos, monomer_offsets)
+    worst_extent, violation = find_worst_monomer_extent(pos, monomer_offsets, cell=cell)
     if violation is not None and worst_extent > limit:
         raise RuntimeError(
             f"{context}: monomer extent exceeded: "

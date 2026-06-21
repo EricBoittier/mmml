@@ -766,10 +766,15 @@ def _extent_check(
     pos = get_charmm_positions_array()
     offsets = monomer_offsets(int(pos.shape[0]), config.n_monomers)
     assert_monomer_extent_within_limit = _assert_monomer_extent_within_limit_fn()
+    cell = _overlap_cell(
+        use_pbc=config.use_pbc,
+        fallback_box_side_A=config.fallback_box_side_A,
+    )
     return assert_monomer_extent_within_limit(
         pos,
         offsets,
         max_extent_A=config.max_monomer_extent_A,
+        cell=cell,
         context=context,
     )
 
