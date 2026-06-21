@@ -1365,6 +1365,10 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             n_atoms,
             pbc=charmm_pbc,
         )
+        refresh_mlpot_energy_and_grms(
+            ctx,
+            context="Pre-dynamics gate" if not args.quiet else "",
+        )
         assert_dynamics_ready(
             max_grms=max_grms,
             abort=not getattr(args, "allow_high_grms", False),
