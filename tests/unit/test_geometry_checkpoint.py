@@ -157,13 +157,38 @@ def test_pretreat_resume_skips_completed_legs(tmp_path):
 def test_write_geometry_baseline_restart(tmp_path):
     out = tmp_path / "out"
     out.mkdir()
-    with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.rewrite_dynamics_restart_validated",
-        return_value=True,
-    ) as rewrite:
+    expected = out / "geometry_baseline_dcm_10.res"
+    with (
+        mock.patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.rewrite_dynamics_restart_validated",
+            return_value=True,
+        ) as rewrite,
+        mock.patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._valid_restart_file",
+            return_value=expected,
+        ),
+    ):
         path = write_geometry_baseline_restart(out, "dcm_10")
     rewrite.assert_called_once()
-    assert path == out / "geometry_baseline_dcm_10.res"
+    assert path == expected.resolve()
+
+
+def test_write_geometry_baseline_restart_unlinks_invalid_file(tmp_path):
+    out = tmp_path / "out"
+    out.mkdir()
+    with (
+        mock.patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.rewrite_dynamics_restart_validated",
+            return_value=True,
+        ),
+        mock.patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._valid_restart_file",
+            return_value=None,
+        ),
+    ):
+        path = write_geometry_baseline_restart(out, "dcm_10")
+    assert path is None
+    assert not (out / "geometry_baseline_dcm_10.res").exists()
 
 
 def test_pretreat_resume_continues_partial_heat(tmp_path):

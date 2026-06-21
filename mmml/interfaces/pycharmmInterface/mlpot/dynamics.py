@@ -2537,6 +2537,31 @@ def run_dynamics_with_io(
                     and getattr(chunk_io, "restart_read", None) is not None
                     and not mem_handoff
                 )
+                if (
+                    has_restart_read
+                    and chunk_io is not None
+                    and chunk_io.restart_read is not None
+                ):
+                    filtered = _valid_overlap_chunk_restart_read(chunk_io.restart_read)
+                    if filtered is None:
+                        has_restart_read = False
+                        chunk_io = CharmmTrajectoryFiles(
+                            restart_read=None,
+                            restart_write=chunk_io.restart_write,
+                            trajectory=chunk_io.trajectory,
+                            restart_read_unit=chunk_io.restart_read_unit,
+                            restart_write_unit=chunk_io.restart_write_unit,
+                            trajectory_unit=chunk_io.trajectory_unit,
+                        )
+                    elif filtered != chunk_io.restart_read:
+                        chunk_io = CharmmTrajectoryFiles(
+                            restart_read=filtered,
+                            restart_write=chunk_io.restart_write,
+                            trajectory=chunk_io.trajectory,
+                            restart_read_unit=chunk_io.restart_read_unit,
+                            restart_write_unit=chunk_io.restart_write_unit,
+                            trajectory_unit=chunk_io.trajectory_unit,
+                        )
                 if mem_handoff and chunk_index == 1 and not logged_mem_handoff:
                     print(
                         f"overlap ({overlap_context}): in-memory handoff between "

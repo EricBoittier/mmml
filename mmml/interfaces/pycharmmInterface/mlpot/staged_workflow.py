@@ -228,6 +228,15 @@ def _prior_restart_for_stage(
                 return restart_from
         return None
     if restart_from is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+            is_handoff_seed_restart_path,
+            is_pretreat_mm_restart_path,
+        )
+
+        if is_handoff_seed_restart_path(restart_from) or is_pretreat_mm_restart_path(
+            restart_from
+        ):
+            return None
         return restart_from
     if stage == "nve":
         heat_restart = _heat_restart_path(paths, tag or "", n_heat_segments)
@@ -828,10 +837,18 @@ def _overlap_extent_prior_restart(
     prev_restart: Path | None,
 ) -> Path | None:
     """Best on-disk checkpoint for extent fly-off (post-mini baseline wins)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
+
     baseline = paths.get("geometry_baseline_res")
-    if baseline is not None and Path(baseline).is_file():
-        return Path(baseline)
-    return prev_restart
+    if baseline is not None:
+        valid = _valid_restart_file(Path(baseline))
+        if valid is not None:
+            return valid
+    if prev_restart is not None:
+        valid = _valid_restart_file(Path(prev_restart))
+        if valid is not None:
+            return valid
+    return None
 
 
 def _seed_restart_for_memory_handoff(
@@ -1133,7 +1150,9 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         )
         if seed_restart is not None:
             args.restart_from = seed_restart
-            handoff_coords_in_memory = True
+        # Handoff positions are already in CHARMM; ``continue_seed.res`` is setup-only
+        # and must not be READYN'd during overlap dynamics (missing CPT/barostat fields).
+        handoff_coords_in_memory = True
 
     vmd_topo_psf = paths["vmd_psf"]
     if getattr(args, "skip_cluster_build", False) and getattr(args, "from_psf", None):
@@ -1405,12 +1424,13 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         # that seed must not force READYN on pre-MLpot checkpoints for MLpot heat.
         if "mini" in stages:
             restart_from = None
-        elif handoff_coords_in_memory:
+        elif handoff_in is not None or handoff_coords_in_memory:
             restart_from = None
         prev_restart: Path | None = restart_from
         prev_restart_is_current_state = (
             "mini" in stages or pretreat_mm or handoff_coords_in_memory
         )
+        handoff_leg = handoff_in is not None or handoff_coords_in_memory
         memory_handoff_next = False
         for stage in dyn_stages:
             if stage == "heat" and n_heat_segments > 1:
@@ -1758,7 +1778,9 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     )
                     dyn_print = resolve_dynamics_print_kwargs(args, nstep=nstep)
                     save_interval_ps = timestep_ps * dcd_nsavc
-                    use_memory = memory_handoff_next
+                    use_memory = memory_handoff_next or (
+                        seg_i == 0 and handoff_leg and stage == "equi"
+                    )
                     if use_memory:
                         restart = False
                         rread = None
@@ -1886,7 +1908,9 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     )
                     dyn_print = resolve_dynamics_print_kwargs(args, nstep=nstep)
                     save_interval_ps = timestep_ps * dcd_nsavc
-                    use_memory = memory_handoff_next
+                    use_memory = memory_handoff_next or (
+                        seg_i == 0 and handoff_leg
+                    )
                     if use_memory:
                         restart = False
                         rread = None
@@ -2002,7 +2026,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             save_interval_ps = timestep_ps * dcd_nsavc
 
             use_memory = memory_handoff_next or (
-                handoff_coords_in_memory and stage in ("equi", "prod")
+                handoff_leg and stage in ("equi", "prod")
             )
             if use_memory:
                 restart = False
@@ -2024,6 +2048,15 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     use_memory = True
                     restart = False
                     rread = None
+                elif rread is not None:
+                    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+                        is_handoff_seed_restart_path,
+                    )
+
+                    if is_handoff_seed_restart_path(rread):
+                        use_memory = True
+                        restart = False
+                        rread = None
             io = _io_for_stage(stage, paths)
             if restart and rread is not None:
                 io.restart_read = Path(rread)

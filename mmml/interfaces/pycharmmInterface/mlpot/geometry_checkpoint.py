@@ -139,11 +139,18 @@ def write_geometry_baseline_restart(out_dir: Path, tag: str) -> Path | None:
     from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         rewrite_dynamics_restart_validated,
     )
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
 
     path = geometry_baseline_path(out_dir, tag)
+    path.parent.mkdir(parents=True, exist_ok=True)
     if not rewrite_dynamics_restart_validated(path):
+        path.unlink(missing_ok=True)
         return None
-    return path
+    valid = _valid_restart_file(path)
+    if valid is None:
+        path.unlink(missing_ok=True)
+        return None
+    return valid
 
 
 @dataclass(frozen=True)
