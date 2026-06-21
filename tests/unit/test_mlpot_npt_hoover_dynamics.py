@@ -100,6 +100,7 @@ def test_hoover_heat_pbc_uses_cpt_hoover_nvt_at_constant_volume():
     assert kw["firstt"] == 10.0
     assert kw["finalt"] == 240.0
     assert kw["tbath"] == 240.0
+    assert int(kw["ixtfrq"]) > int(kw["nstep"])
     assert "TEMINC" not in kw
     assert "hoover reft" in script
     assert "cpt" in script
