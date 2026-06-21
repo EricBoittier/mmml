@@ -378,8 +378,22 @@ def prepare_pycharmm_handoff_continuation(
             from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
             sync_charmm_positions(payload.positions)
-            if not rewrite_dynamics_restart_validated(seed):
-                raise ValueError("in-memory restart validation failed")
+            if rewrite_dynamics_restart_validated(seed):
+                # In-memory restart is valid; continue normally
+                pass
+            else:
+                # Attempt to locate a fallback .res file in the same directory
+                fallback = _find_any_res_file_in_same_dir(seed, handoff)
+                if fallback is not None:
+                    seed = fallback
+                else:
+                    if not quiet:
+                        print(
+                            "Handoff continuation: in-memory restart invalid and no fallback .res found; "
+                            "PyCHARMM dynamics may cold-start velocities.",
+                            flush=True,
+                        )
+                    return None
         except Exception:
             if not quiet:
                 print(
