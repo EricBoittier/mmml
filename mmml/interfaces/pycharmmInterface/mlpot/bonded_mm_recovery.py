@@ -72,9 +72,10 @@ def rewrite_dynamics_restart_validated(
     *,
     write_unit: int = 92,
 ) -> bool:
-    """Write restart from memory; return False when Cartesian coords are non-finite."""
+    """Write restart from memory; return False when Cartesian coords are non-finite or missing."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         patch_restart_global_step,
+        read_restart_coordinates,
         read_restart_last_step,
         restart_has_nonfinite_coordinates,
     )
@@ -83,7 +84,7 @@ def rewrite_dynamics_restart_validated(
         return True
     path = Path(restart_path)
     rewrite_dynamics_restart_from_current_state(path, write_unit=write_unit)
-    if restart_has_nonfinite_coordinates(path):
+    if read_restart_coordinates(path) is None or restart_has_nonfinite_coordinates(path):
         return False
 
     step = read_restart_last_step(path)

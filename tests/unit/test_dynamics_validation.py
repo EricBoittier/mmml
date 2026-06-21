@@ -688,6 +688,24 @@ def test_rewrite_dynamics_restart_validated_detects_nan(tmp_path, monkeypatch):
     assert rewrite_dynamics_restart_validated(bad) is False
 
 
+def test_rewrite_dynamics_restart_validated_detects_missing(tmp_path, monkeypatch):
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        rewrite_dynamics_restart_validated,
+    )
+
+    bad = tmp_path / "missing.res"
+    bad.write_text("uninitialized restart file text", encoding="utf-8")
+
+    def fake_rewrite(path, *, write_unit=92):
+        Path(path).write_text("uninitialized restart file text", encoding="utf-8")
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.rewrite_dynamics_restart_from_current_state",
+        fake_rewrite,
+    )
+    assert rewrite_dynamics_restart_validated(bad) is False
+
+
 def test_restore_post_rescue_coordinates_prefers_memory(monkeypatch):
     from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         restore_post_rescue_coordinates,
