@@ -24,18 +24,18 @@ seed_base: 123
 
 # Burst timing (per matrix cell)
 jaxmd_burst_ps: 200.0
-jaxmd_bursts: 5
-pycharmm_equi_ps: 5.0
-pycharmm_equi_legs: 5
+jaxmd_bursts: 10
+pycharmm_equi_ps: 1.0
+pycharmm_equi_legs: 10
 
 # Gentle MLpot heat (pycharmm_init); heat_finalt follows cell temperature
-ps_heat: 10.0
+ps_heat: 1.0
 n_heat_segments: 10
-heat_firstt: 40.0
+heat_firstt: 10.0
 # Hoover for MLpot heat when pretreat is on (campaign + staged_workflow coerce scale→hoover).
 # Use scale only with pretreat_on_pycharmm: false (no Hoover NVT in-session).
-heat_thermostat: hoover
-dt_fs: 0.25
+heat_thermostat: scale
+dt_fs: 0.2
 pressure: 1.0
 
 # Hybrid cleanup ladder (maps to existing mmml recovery hooks).
