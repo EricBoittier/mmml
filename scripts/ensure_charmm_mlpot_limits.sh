@@ -104,7 +104,8 @@ fi
 BUILD_ROOT="${CHARMM_BUILD_DIR:-$HOME/.cache/mmml-charmm-build}"
 TIER_DIR="${BUILD_ROOT}/tier_${TARGET}_nodomdec"
 LIB_DIR="${TIER_DIR}/lib"
-mkdir -p "$LIB_DIR"
+LOCK_FILE="${BUILD_ROOT}/.tier_${TARGET}_nodomdec.build.lock"
+mkdir -p "$LIB_DIR" "$BUILD_ROOT"
 
 NEED_BUILD=0
 if [[ ! -f "${LIB_DIR}/libcharmm.so" ]]; then
@@ -113,18 +114,32 @@ elif [[ "$PATCH_DST" -nt "${LIB_DIR}/libcharmm.so" ]]; then
   NEED_BUILD=1
 fi
 
+_run_tier_build() {
+  CMAKE_BUILD_DIR="${CHARMM_CMAKE_BUILD_DIR:-${SLURM_TMPDIR:-/tmp}/mmml-charmm-cmake-${TARGET}-$$}"
+  echo "Building CHARMM MLpot tier ${TIER} (max_Npr=${TARGET}); cmake in ${CMAKE_BUILD_DIR}"
+  rm -rf "$CMAKE_BUILD_DIR" 2>/dev/null || true
+  mkdir -p "$CMAKE_BUILD_DIR"
+  CHARMM_BUILD_DIR="$CMAKE_BUILD_DIR" "$ROOT/scripts/rebuild_charmm_mlpot.sh" --clean --no-domdec
+  mkdir -p "$LIB_DIR"
+  cp -f "${CHARMM_HOME:-$ROOT/setup/charmm}/libcharmm.so" "${LIB_DIR}/libcharmm.so"
+  rm -rf "$CMAKE_BUILD_DIR" 2>/dev/null || true
+  echo "Installed tier lib: ${LIB_DIR}/libcharmm.so"
+}
+
 if [[ "$NEED_BUILD" == 1 ]]; then
   if [[ "$DRY_RUN" == 1 ]]; then
     echo "(dry-run) would rebuild CHARMM into ${TIER_DIR}"
   else
-    CMAKE_BUILD_DIR="${CHARMM_CMAKE_BUILD_DIR:-${SLURM_TMPDIR:-/tmp}/mmml-charmm-cmake-${TARGET}}"
-    echo "Building CHARMM MLpot tier ${TIER} (max_Npr=${TARGET}); cmake in ${CMAKE_BUILD_DIR}"
-    rm -rf "$CMAKE_BUILD_DIR" 2>/dev/null || true
-    mkdir -p "$CMAKE_BUILD_DIR"
-    CHARMM_BUILD_DIR="$CMAKE_BUILD_DIR" "$ROOT/scripts/rebuild_charmm_mlpot.sh" --clean --no-domdec
-    mkdir -p "$LIB_DIR"
-    cp -f "${CHARMM_HOME:-$ROOT/setup/charmm}/libcharmm.so" "${LIB_DIR}/libcharmm.so"
-    rm -rf "$CMAKE_BUILD_DIR" 2>/dev/null || true
+    # Snakemake launches many cells at once; without a lock, parallel cmake runs and
+    # api_func.F90 patches corrupt each other on NFS home.
+    (
+      flock -x 200
+      if [[ -f "${LIB_DIR}/libcharmm.so" ]] && [[ ! "$PATCH_DST" -nt "${LIB_DIR}/libcharmm.so" ]]; then
+        echo "Reusing tier build (another job finished while waiting): ${LIB_DIR}/libcharmm.so"
+      else
+        _run_tier_build
+      fi
+    ) 200>"$LOCK_FILE"
   fi
 else
   echo "Reusing existing tier build: ${LIB_DIR}/libcharmm.so"
