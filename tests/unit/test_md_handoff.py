@@ -491,5 +491,37 @@ def test_resolve_handoff_restart_template_fallback_any_res(
             pass
 
 
+def test_save_handoff_to_res_unusable_template_fallback_to_memory(
+    nve_stub: Path, tmp_path: Path
+) -> None:
+    import sys
+    from unittest.mock import MagicMock
+    from mmml.cli.run.md_handoff import save_handoff_to_res
+
+    state = MdHandoffState(
+        positions=np.zeros((3, 3)),
+        atomic_numbers=np.array([1, 1, 1], dtype=np.int32),
+    )
+    out = tmp_path / "fallback.res"
+
+    orig_modules = sys.modules.copy()
+    try:
+        sys.modules["mmml.interfaces.pycharmmInterface.import_pycharmm"] = MagicMock()
+        mock_recovery = MagicMock()
+        mock_recovery.rewrite_dynamics_restart_validated.return_value = True
+        sys.modules["mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery"] = mock_recovery
+
+        mock_setup = MagicMock()
+        sys.modules["mmml.interfaces.pycharmmInterface.mlpot.setup"] = mock_setup
+
+        res_path = save_handoff_to_res(state, out, template_res=nve_stub)
+        assert res_path == out
+        mock_setup.sync_charmm_positions.assert_called_once()
+        mock_recovery.rewrite_dynamics_restart_validated.assert_called_once_with(out)
+    finally:
+        sys.modules.clear()
+        sys.modules.update(orig_modules)
+
+
 
 
