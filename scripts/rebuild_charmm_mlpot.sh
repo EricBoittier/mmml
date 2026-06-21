@@ -72,6 +72,20 @@ elif [[ "$SYNC_PATCHES" == 1 ]]; then
   exit 1
 fi
 
+PSF_F90="$CHARMM_HOME/source/api/api_psf.F90"
+PATCH_PSF_F90="$ROOT/setup/api/api_psf.F90"
+if [[ ! -f "$PSF_F90" ]]; then
+  echo "rebuild_charmm_mlpot: missing $PSF_F90" >&2
+  exit 1
+fi
+
+if [[ "$SYNC_PATCHES" == 1 && -f "$PATCH_PSF_F90" ]]; then
+  if ! cmp -s "$PATCH_PSF_F90" "$PSF_F90"; then
+    echo "Syncing api_psf.F90 from $PATCH_PSF_F90"
+    cp -f "$PATCH_PSF_F90" "$PSF_F90"
+  fi
+fi
+
 echo "MLpot limits in source:"
 grep -E 'max_Nml|max_Npr' "$F90" || true
 

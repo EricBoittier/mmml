@@ -756,3 +756,33 @@ def test_refresh_segment_restart_after_overlap_rescue_recovers_from_memory(
     assert restored and np.allclose(restored[0], rescued)
     assert "restored from in-memory rescue positions" in out
     assert "post-rescue restart recovered" in out
+
+
+def test_rewrite_dynamics_restart_validated_patches_negative_step(tmp_path, monkeypatch):
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        rewrite_dynamics_restart_validated,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_restart_last_step,
+    )
+
+    path = tmp_path / "baseline.res"
+
+    def fake_rewrite(p, *, write_unit=92):
+        Path(p).write_text(
+            _minimal_restart_text(
+                natom=1,
+                coord_lines=[" 0.100000000000000D+00 0.200000000000000D+00 0.300000000000000D+00"],
+            ).replace("REST     0     1", "REST    48    -1"),
+            encoding="utf-8",
+        )
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.rewrite_dynamics_restart_from_current_state",
+        fake_rewrite,
+    )
+
+    assert rewrite_dynamics_restart_validated(path) is True
+    # Verify it has been patched to 0
+    assert read_restart_last_step(path) == 0
+
