@@ -1597,7 +1597,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     )
 
                     apply_dyn_imgfrq_from_args(kw, args, charmm_pbc=charmm_pbc)
-                    if (seg_i == 0 or use_memory) and (
+                    if not charmm_pbc and (seg_i == 0 or use_memory) and (
                         use_memory or prev_restart_is_current_state
                     ):
                         sync_charmm_lists_after_mini(quiet=seg_prep_quiet)
@@ -2146,10 +2146,10 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             apply_dyn_inbfrq_from_args(kw, args, charmm_pbc=charmm_pbc)
             apply_dyn_imgfrq_from_args(kw, args, charmm_pbc=charmm_pbc)
             if stage in ("heat", "nve") and (
-                stage == "heat"
-                or (
-                    not charmm_pbc
-                    and getattr(args, "pre_nve_charmm_update", True)
+                not charmm_pbc
+                and (
+                    stage == "heat"
+                    or getattr(args, "pre_nve_charmm_update", True)
                 )
             ):
                 from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
