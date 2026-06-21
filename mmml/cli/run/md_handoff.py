@@ -1195,11 +1195,7 @@ def save_handoff_to_res(
       template = Path(template_res).expanduser().resolve()
       if not template.is_file():
           raise FileNotFoundError(f"Restart template not found: {template}")
-      if not _is_usable_restart_template(template, expected_natom=len(handoff.positions)):
-          raise ValueError(
-              f"restart template unusable for handoff: {template.name} "
-              "(non-finite coordinates or NATOM/coord mismatch)"
-          )
+
       charmm_loaded = False
       try:
           import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
@@ -1207,19 +1203,30 @@ def save_handoff_to_res(
           charmm_loaded = True
       except Exception:
           charmm_loaded = False
-      if charmm_loaded:
-          return _write_handoff_restart_via_charmm(
-              handoff,
-              path,
-              template_res=template,
-          )
-      _patch_handoff_into_restart_template(handoff, template, path)
-      if read_restart_coordinates(path) is None:
-          raise ValueError(
-              f"patched restart {path.name} has no finite Cartesian coordinates "
-              f"(template {template.name})"
-          )
-      return path
+
+      if not _is_usable_restart_template(template, expected_natom=len(handoff.positions)):
+          if charmm_loaded:
+              template = None
+          else:
+              raise ValueError(
+                  f"restart template unusable for handoff: {template.name} "
+                  "(non-finite coordinates or NATOM/coord mismatch)"
+              )
+
+      if template is not None:
+          if charmm_loaded:
+              return _write_handoff_restart_via_charmm(
+                  handoff,
+                  path,
+                  template_res=template,
+              )
+          _patch_handoff_into_restart_template(handoff, template, path)
+          if read_restart_coordinates(path) is None:
+              raise ValueError(
+                  f"patched restart {path.name} has no finite Cartesian coordinates "
+                  f"(template {template.name})"
+              )
+          return path
 
   try:
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
