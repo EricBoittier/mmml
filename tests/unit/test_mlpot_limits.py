@@ -127,6 +127,15 @@ def test_select_npr_tier_aco_165_pbc():
     assert mlpot_limits.select_npr_tier(1650, pbc=True) == "xxlarge"
 
 
+def test_select_npr_tier_for_build_aco_266_dense_l32():
+    assert (
+        mlpot_limits.select_npr_tier_for_build(2660, pbc=True, box_side_A=32.0)
+        == "xxxlarge"
+    )
+    assert mlpot_limits.pbc_pair_budget_box_side_A(2660, 32.0) is None
+    assert mlpot_limits.pbc_pair_budget_box_side_A(2000, 32.0) == 32.0
+
+
 def test_validate_pbc_needs_larger_npr_than_vacuum(monkeypatch):
     monkeypatch.setenv("MMML_CHARMM_MLPOT_MAX_ML", "50000")
     monkeypatch.setenv("MMML_CHARMM_MLPOT_MAX_PAIRS", "12000000")

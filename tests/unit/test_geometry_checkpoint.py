@@ -58,6 +58,23 @@ def test_discover_resume_restart_prefers_heat_segment(tmp_path):
     assert found == heat_seg.resolve()
 
 
+def test_discover_resume_restart_prefers_baseline_over_pretreat(tmp_path):
+    tag = "dcm_52"
+    pretreat = tmp_path / "pretreat"
+    pretreat.mkdir()
+    prod = pretreat / f"charmm_mm_prod_{tag}.res"
+    prod.write_text("prod\n", encoding="utf-8")
+    baseline = tmp_path / f"geometry_baseline_{tag}.res"
+    baseline.write_text("baseline\n", encoding="utf-8")
+    paths = {
+        "heat_res": tmp_path / f"heat_{tag}.res",
+        "charmm_mm_prod_res": prod,
+        "geometry_baseline_res": baseline,
+    }
+    found = discover_resume_restart(tmp_path, tag, paths=paths, n_heat_segments=10)
+    assert found == baseline.resolve()
+
+
 def test_pretreat_resume_skips_completed_heat(tmp_path):
     tag = "dcm_190"
     pretreat = tmp_path / "pretreat"

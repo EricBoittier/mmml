@@ -388,6 +388,59 @@ def tier_max_npr(tier: str) -> int:
     return NPR_TIERS[key]
 
 
+def select_npr_tier_for_build(
+    n_ml_atoms: int,
+    *,
+    margin: float = 1.15,
+    pbc: bool = False,
+    box_side_A: float | None = None,
+) -> str:
+    """Smallest CHARMM rebuild tier for ``job_shell`` / prebuild.
+
+    When a box-aware estimate exceeds the largest compiled tier, fall back to
+    the ``n_ml``-only baseline (``pbc_image_copies_per_atom`` without box).
+    That estimate matches fort.104 calibration (~5× images at N≈800) and avoids
+    rejecting dense cells like ACO 266 @ L=32 where the density heuristic
+    overshoots.
+    """
+    if box_side_A is not None:
+        try:
+            return select_npr_tier(
+                n_ml_atoms, margin=margin, pbc=pbc, box_side_A=box_side_A
+            )
+        except ValueError:
+            pass
+    return select_npr_tier(
+        n_ml_atoms, margin=margin, pbc=pbc, box_side_A=None
+    )
+
+
+def pbc_pair_budget_box_side_A(
+    n_ml_atoms: int,
+    box_side_A: float | None,
+    *,
+    margin: float = 1.15,
+) -> float | None:
+    """Box side for MLpot pair-buffer preflight at registration time.
+
+    Uses the box-aware estimate only when it fits a compiled tier; otherwise
+    falls back to the ``n_ml``-only baseline (same policy as
+    :func:`select_npr_tier_for_build`).
+    """
+    if box_side_A is None or float(box_side_A) <= 0:
+        return None
+    try:
+        select_npr_tier(
+            int(n_ml_atoms),
+            margin=margin,
+            pbc=True,
+            box_side_A=float(box_side_A),
+        )
+        return float(box_side_A)
+    except ValueError:
+        return None
+
+
 def ensure_mlpot_limits_for_system(
     n_ml_atoms: int,
     *,

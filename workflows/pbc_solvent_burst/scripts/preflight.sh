@@ -60,8 +60,9 @@ else:
 from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import (
     NPR_TIERS,
     estimate_ml_atoms,
+    pbc_pair_budget_box_side_A,
     required_max_npr,
-    select_npr_tier,
+    select_npr_tier_for_build,
     validate_mlpot_system_size,
 )
 from campaign_lib import iter_matrix_cells
@@ -70,14 +71,21 @@ worst = max(
     key=lambda c: required_max_npr(
         estimate_ml_atoms(c.n_monomers, solvent=c.solvent),
         pbc=True,
-        box_side_A=c.box_size,
+        box_side_A=pbc_pair_budget_box_side_A(
+            estimate_ml_atoms(c.n_monomers, solvent=c.solvent),
+            c.box_size,
+        ),
     ),
 )
 max_n_ml = estimate_ml_atoms(worst.n_monomers, solvent=worst.solvent)
 worst_box = worst.box_size
-tier = select_npr_tier(max_n_ml, pbc=True, box_side_A=worst_box)
-print(f'max matrix n_ml={max_n_ml} L={worst_box:g} CHARMM tier={tier} (max_Npr={NPR_TIERS[tier]}, PBC pairs)')
-validate_mlpot_system_size(max_n_ml, pbc=True, box_side_A=worst_box)
+tier = select_npr_tier_for_build(max_n_ml, pbc=True, box_side_A=worst_box)
+budget_box = pbc_pair_budget_box_side_A(max_n_ml, worst_box)
+print(
+    f'max matrix n_ml={max_n_ml} L={worst_box:g} CHARMM tier={tier} '
+    f'(max_Npr={NPR_TIERS[tier]}, PBC pairs)'
+)
+validate_mlpot_system_size(max_n_ml, pbc=True, box_side_A=budget_box)
 "
 
 if ! command -v packmol >/dev/null 2>&1; then
