@@ -366,6 +366,10 @@ def prepare_pycharmm_handoff_continuation(
     if handoff.velocities is not None and not getattr(args, "continue_velocities", True):
         payload = replace(handoff, velocities=None)
 
+    # Whether we wrote the restart synthetically (bypasses CHARMM ``read restart``
+    # since CHARMM's Fortran reader may not accept the synthetic header).
+    _synthetic_restart = False
+
     template = resolve_handoff_restart_template(handoff, args, paths)
     if template is not None:
         save_handoff_to_res(payload, seed, template_res=template)
@@ -382,18 +386,31 @@ def prepare_pycharmm_handoff_continuation(
                 # In-memory restart is valid; continue normally
                 pass
             else:
-                # Attempt to locate a fallback .res file in the same directory
-                fallback = _find_any_res_file_in_same_dir(seed, handoff)
-                if fallback is not None:
-                    seed = fallback
-                else:
+                # CHARMM ``write restart`` wrote an empty coordinate section (no
+                # dynamics have run in this session yet).  Fall back to synthesising
+                # the restart file directly from handoff data.
+                if not quiet:
+                    print(
+                        "Handoff continuation: in-memory restart write produced no "
+                        "coordinates; writing synthetic restart from handoff positions.",
+                        flush=True,
+                    )
+                try:
+                    _write_synthetic_charmm_restart(payload, seed)
+                    _synthetic_restart = True
+                except Exception as exc:
                     if not quiet:
                         print(
-                            "Handoff continuation: in-memory restart invalid and no fallback .res found; "
+                            f"Handoff continuation: synthetic restart write failed ({exc}); "
                             "PyCHARMM dynamics may cold-start velocities.",
                             flush=True,
                         )
-                    return None
+                    # Try any .res in the same dir as a final fallback
+                    fallback = _find_any_res_file_in_same_dir(seed, handoff)
+                    if fallback is not None:
+                        seed = fallback
+                    else:
+                        return None
         except Exception:
             if not quiet:
                 print(
@@ -403,21 +420,47 @@ def prepare_pycharmm_handoff_continuation(
                 )
             return None
 
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
-        restore_charmm_state_from_restart,
-    )
+    if _synthetic_restart:
+        # Coordinates already in CHARMM from sync_charmm_positions above.
+        # Sync velocities if present; skip CHARMM ``read restart`` (incompatible
+        # with synthetic header format).
+        try:
+            from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
-    restore_charmm_state_from_restart(seed)
-    if not quiet:
-        parts = ["coordinates"]
-        if payload.velocities is not None:
-            parts.append("velocities")
-        if payload.cell is not None:
-            parts.append("cell")
-        print(
-            f"Handoff continuation: loaded {seed} ({', '.join(parts)})",
-            flush=True,
+            sync_charmm_positions(payload.positions)
+            if payload.velocities is not None:
+                try:
+                    _sync_charmm_velocities(payload.velocities)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        if not quiet:
+            parts = ["coordinates (synthetic restart)"]
+            if payload.velocities is not None:
+                parts.append("velocities")
+            if payload.cell is not None:
+                parts.append("cell")
+            print(
+                f"Handoff continuation: applied {seed.name} in-memory ({', '.join(parts)})",
+                flush=True,
+            )
+    else:
+        from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+            restore_charmm_state_from_restart,
         )
+
+        restore_charmm_state_from_restart(seed)
+        if not quiet:
+            parts = ["coordinates"]
+            if payload.velocities is not None:
+                parts.append("velocities")
+            if payload.cell is not None:
+                parts.append("cell")
+            print(
+                f"Handoff continuation: loaded {seed} ({', '.join(parts)})",
+                flush=True,
+            )
     seed = seed.resolve()
     args.restart_from = seed
     return seed
@@ -1036,6 +1079,81 @@ def save_handoff_npz(handoff: MdHandoffState, path: Path) -> Path:
   path.parent.mkdir(parents=True, exist_ok=True)
   np.savez(path, **handoff_to_npz_dict(handoff))
   return path
+
+
+def _write_synthetic_charmm_restart(
+    handoff: "MdHandoffState",
+    path: Path,
+) -> Path:
+    """Write a valid minimal CHARMM restart from handoff data without ``write restart``.
+
+    CHARMM ``write restart`` only writes non-zero ``!X, Y, Z`` when dynamics
+    have been run in the current session (it serialises the dynamics buffer,
+    not the MAIN coordinate set).  When continuing into a fresh equi/prod stage
+    with no prior dynamics in this Python process, ``write restart`` produces an
+    empty coordinate section.  This function bypasses that by writing the
+    restart text directly from the handoff positions/velocities/cell.
+    """
+    pos = np.asarray(handoff.positions, dtype=float)
+    n_atoms = int(pos.shape[0])
+    if pos.ndim != 2 or pos.shape[1] != 3:
+        raise ValueError(f"handoff positions must be (N,3), got {pos.shape}")
+    if not np.all(np.isfinite(pos)):
+        raise ValueError("handoff positions must be finite")
+
+    def _fmt(v: float) -> str:
+        return f"{float(v):.15E}".replace("E", "D")
+
+    def _coord_lines(arr: np.ndarray) -> list[str]:
+        flat = arr.reshape(-1)
+        lines: list[str] = []
+        for i in range(0, len(flat), 3):
+            lines.append(" " + " ".join(_fmt(flat[j]) for j in range(i, min(i + 3, len(flat)))))
+        return lines
+
+    # CHARMM restart header (minimal safe values)
+    lines: list[str] = [
+        "REST  SYNTHETIC-HANDOFF      0",
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,SEED,FIRSTT,FINALT,TBATH,TOL,IHTFRQ,IUNSAV",
+        f"  {n_atoms:8d}         0         0         1         0         0"
+        "         0  0.000000000000000D+00  3.000000000000000D+02"
+        "  3.000000000000000D+02  1.000000000000000D-10         0        -1",
+    ]
+    lines.append(" !X, Y, Z")
+    lines.extend(_coord_lines(pos))
+
+    vel = handoff.velocities
+    if vel is not None:
+        vel = np.asarray(vel, dtype=float)
+        if vel.shape == pos.shape and np.all(np.isfinite(vel)):
+            lines.append(" !VELOCITIES")
+            lines.extend(_coord_lines(vel))
+
+    cell = handoff.cell
+    if cell is not None and handoff.pbc:
+        cell_arr = np.asarray(cell, dtype=float)
+        if cell_arr.shape == (3, 3):
+            # Cubic: use diagonal element
+            side = float(np.mean(np.diag(cell_arr)))
+        else:
+            side = float(cell_arr.flat[0])
+        if side > 0.0:
+            lines.append(" !CRYSTAL PARAMETERS")
+            # 6 angles + 6 lengths: orthorhombic cubic
+            lines.append(
+                f" {_fmt(side)} {_fmt(0.0)} {_fmt(0.0)}"
+            )
+            lines.append(
+                f" {_fmt(0.0)} {_fmt(side)} {_fmt(0.0)}"
+            )
+            lines.append(
+                f" {_fmt(0.0)} {_fmt(0.0)} {_fmt(side)}"
+            )
+
+    path = Path(path).expanduser().resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines) + "\n", encoding="ascii", errors="ignore")
+    return path
 
 
 def _format_fortran_float(value: float) -> str:
