@@ -34,17 +34,32 @@ def test_max_mlpot_ml_pairs():
     assert mlpot_limits.max_mlpot_ml_pairs(450) == 450 * 449
 
 
+def test_max_mlpot_ml_pairs_pbc_aco_165():
+    # 165 monomers × 5 atoms; observed fort.104 at ~4.1M pairs with default max_Npr.
+    n = 825
+    pairs = mlpot_limits.max_mlpot_ml_pairs_pbc(n)
+    assert pairs > mlpot_limits.max_mlpot_ml_pairs(n)
+    assert pairs > 4_000_000
+
+
 def test_select_npr_tier():
     assert mlpot_limits.select_npr_tier(89) == "default"
     assert mlpot_limits.select_npr_tier(2195) == "large"
     assert mlpot_limits.select_npr_tier(2200) == "large"
     assert mlpot_limits.select_npr_tier(3000) == "xlarge"
+    assert mlpot_limits.select_npr_tier(4390) == "xxlarge"
     with pytest.raises(ValueError, match="largest tier"):
-        mlpot_limits.select_npr_tier(4390)
+        mlpot_limits.select_npr_tier(6000)
+
+
+def test_select_npr_tier_pbc():
+    assert mlpot_limits.select_npr_tier(825, pbc=True) == "large"
+    assert mlpot_limits.select_npr_tier(2200, pbc=True) == "xxlarge"
 
 
 def test_required_max_npr_margin():
     assert mlpot_limits.required_max_npr(2195) > mlpot_limits.max_mlpot_ml_pairs(2195)
+    assert mlpot_limits.required_max_npr(825, pbc=True) > 4_000_000
 
 
 def test_ensure_mlpot_limits_for_system_raises_with_tier(monkeypatch):

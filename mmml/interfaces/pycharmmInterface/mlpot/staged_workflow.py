@@ -761,6 +761,7 @@ def _validate_dyn_stage_completion(
     nstep: int,
     nsavc: int,
     io: CharmmTrajectoryFiles,
+    segment_note: str | None = None,
 ) -> None:
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         assert_stage_dynamics_completed,
@@ -775,6 +776,7 @@ def _validate_dyn_stage_completion(
         dcd_path=dcd_path,
         restart_path=restart_path,
         allow_incomplete=bool(getattr(args, "allow_incomplete_dynamics", False)),
+        segment_note=segment_note,
     )
 
 
@@ -1631,28 +1633,38 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         nstep=nstep,
                         nsavc=dcd_nsavc,
                         io=seg_io,
-                    )
-                    ensure_segment_restart_checkpoint(seg_io.restart_write)
-                    memory_handoff_next = maybe_run_bonded_mm_mini_after_stage(
-                        ctx,
-                        args,
-                        stage="heat",
-                        baseline=baseline,
-                        restart_path=seg_io.restart_write,
-                        topology_psf=recovery_topology_psf,
-                        mini_registry=mini_registry,
-                        snapshot_spec=(
-                            BONDED_MM_AFTER_HEAT if seg_i == n_heat_segments - 1 else None
-                        ),
-                        snapshot_paths=(
-                            {
-                                "pdb": paths["bonded_mm_after_heat_pdb"],
-                                "crd": paths["bonded_mm_after_heat_crd"],
-                            }
-                            if save_artifacts and seg_i == n_heat_segments - 1
+                        segment_note=(
+                            f"segment {seg_i + 1}/{n_heat_segments}"
+                            if n_heat_segments > 1
                             else None
                         ),
                     )
+                    ensure_segment_restart_checkpoint(seg_io.restart_write)
+                    if baseline is not None or seg_i == n_heat_segments - 1:
+                        memory_handoff_next = maybe_run_bonded_mm_mini_after_stage(
+                            ctx,
+                            args,
+                            stage="heat",
+                            baseline=baseline,
+                            restart_path=seg_io.restart_write,
+                            topology_psf=recovery_topology_psf,
+                            mini_registry=mini_registry,
+                            snapshot_spec=(
+                                BONDED_MM_AFTER_HEAT
+                                if seg_i == n_heat_segments - 1
+                                else None
+                            ),
+                            snapshot_paths=(
+                                {
+                                    "pdb": paths["bonded_mm_after_heat_pdb"],
+                                    "crd": paths["bonded_mm_after_heat_crd"],
+                                }
+                                if save_artifacts and seg_i == n_heat_segments - 1
+                                else None
+                            ),
+                        )
+                    else:
+                        memory_handoff_next = False
                     prev_restart = seg_io.restart_write
                     prev_restart_is_current_state = True
                     last_restart_path = prev_restart
