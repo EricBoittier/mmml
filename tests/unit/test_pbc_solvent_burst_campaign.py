@@ -42,12 +42,16 @@ from cleanup_strategy import resolve_pycharmm_heat_thermostat  # noqa: E402
 def cfg() -> dict:
     raw = yaml.safe_load((WORKFLOW / "config.yaml").read_text(encoding="utf-8"))
     # Unit tests use legacy fixed-N matrix unless testing bulk-density mode.
+    # Pin five burst legs so job-order / depends_on tests stay stable when
+    # config.yaml raises jaxmd_bursts for production campaigns.
     return {
         **raw,
         "cluster_sizes": [10, 30, 50, 80, 100],
         "bulk_density_fractions": None,
         "temperatures": [300.0],
         "box_sizes": [32.0],
+        "jaxmd_bursts": 5,
+        "pycharmm_equi_legs": 5,
         "pycharmm_equi_ps": 10.0,
     }
 
@@ -153,7 +157,8 @@ def test_pretreat_from_cleanup_strategy(cfg: dict, cell: RunCell) -> None:
     campaign = build_campaign(enabled, cell)
     init = campaign["runs"]["pycharmm_init"]
     assert init["charmm_mm_pretreat"] is True
-    assert init["charmm_mm_pretreat_ps_equi"] == pytest.approx(100.0)
+    ps_equi = float(enabled["cleanup_strategy"]["charmm_mm"]["ps_equi"])
+    assert init["charmm_mm_pretreat_ps_equi"] == pytest.approx(ps_equi)
     assert "charmm_mm_pretreat" not in campaign["runs"]["pycharmm_equi_00"]
 
 
@@ -322,5 +327,7 @@ def test_bulk_density_optional_last_burst() -> None:
     cfg.pop("cluster_sizes", None)
     full = RunCell(solvent="DCM", n_monomers=206, temperature=300.0, box_size=28.0)
     half = RunCell(solvent="DCM", n_monomers=103, temperature=300.0, box_size=28.0)
-    assert build_campaign(cfg, full)["runs"]["jaxmd_burst_05"].get("optional") is True
-    assert build_campaign(cfg, half)["runs"]["jaxmd_burst_05"].get("optional") is None
+    last_burst = f"jaxmd_burst_{int(cfg['jaxmd_bursts']):02d}"
+    mid_burst = f"jaxmd_burst_{int(cfg['jaxmd_bursts']) // 2:02d}"
+    assert build_campaign(cfg, full)["runs"][last_burst].get("optional") is True
+    assert build_campaign(cfg, half)["runs"][mid_burst].get("optional") is None
