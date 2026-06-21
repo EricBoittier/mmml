@@ -264,6 +264,33 @@ def test_resolve_handoff_restart_template_uses_continue_from_final_res(
     npz.write_bytes(b"placeholder")
 
     handoff = MdHandoffState(
+        positions=np.zeros((20, 3)),
+        atomic_numbers=np.array([1] * 20, dtype=int),
+    )
+    args = argparse.Namespace(
+        handoff_template_res=None,
+        continue_from=str(npz),
+    )
+    got = resolve_handoff_restart_template(handoff, args, {})
+    assert got == final_res.resolve()
+
+
+def test_resolve_handoff_restart_template_rejects_mismatched_atom_count(
+    nve_stub: Path, tmp_path: Path
+) -> None:
+    import argparse
+    from mmml.cli.run.md_handoff import resolve_handoff_restart_template
+
+    handoff_dir = tmp_path / "mismatch" / "handoff"
+    handoff_dir.mkdir(parents=True)
+    final_res = handoff_dir / "final.res"
+    # nve_stub has 20 atoms
+    final_res.write_text(nve_stub.read_text())
+    npz = handoff_dir / "state.npz"
+    npz.write_bytes(b"placeholder")
+
+    # handoff has 3 atoms, so it shouldn't match final_res with 20 atoms
+    handoff = MdHandoffState(
         positions=np.zeros((3, 3)),
         atomic_numbers=np.array([1, 1, 1], dtype=int),
     )
@@ -272,7 +299,8 @@ def test_resolve_handoff_restart_template_uses_continue_from_final_res(
         continue_from=str(npz),
     )
     got = resolve_handoff_restart_template(handoff, args, {})
-    assert got == final_res.resolve()
+    # Since final_res has 20 atoms, and handoff has 3 atoms, it should reject it and return None
+    assert got is None
 
 
 def test_prepare_pycharmm_handoff_continuation_writes_seed(

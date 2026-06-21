@@ -260,15 +260,11 @@ def _find_any_res_file_in_same_dir(raw_path: str | Path | None, handoff: MdHando
             seen_dirs.add(resolved_d)
 
             candidates = []
+            expected_natom = len(handoff.positions) if handoff is not None else None
             for file_path in resolved_d.glob("*.res"):
                 if file_path.is_file():
                     try:
-                        if _is_usable_restart_template(file_path):
-                            if handoff is not None:
-                                from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import read_restart_natom
-                                natom = read_restart_natom(file_path)
-                                if natom is not None and int(natom) != len(handoff.positions):
-                                    continue
+                        if _is_usable_restart_template(file_path, expected_natom=expected_natom):
                             name = file_path.name.lower()
                             if "overlap" not in name and not name.startswith("continue_seed"):
                                 candidates.append((0, file_path))
@@ -299,13 +295,14 @@ def resolve_handoff_restart_template(
         if resolved is not None:
             return resolved
 
+    expected_natom = len(handoff.positions)
     meta = handoff.metadata or {}
     for key in ("restart_path", "path"):
         raw = meta.get(key)
         if not raw:
             continue
         resolved = _resolve_existing_file_path(raw)
-        if resolved is not None and resolved.suffix.lower() == ".res":
+        if resolved is not None and resolved.suffix.lower() == ".res" and _is_usable_restart_template(resolved, expected_natom=expected_natom):
             return resolved
 
     continue_from = getattr(args, "continue_from", None)
@@ -313,21 +310,23 @@ def resolve_handoff_restart_template(
         cf = _resolve_existing_file_path(continue_from)
         if cf is not None:
             if cf.suffix.lower() == ".res":
-                return cf
-            final_res = cf.parent / "final.res"
-            resolved_final = _resolve_existing_file_path(final_res)
-            if resolved_final is not None:
-                return resolved_final
+                if _is_usable_restart_template(cf, expected_natom=expected_natom):
+                    return cf
+            else:
+                final_res = cf.parent / "final.res"
+                resolved_final = _resolve_existing_file_path(final_res)
+                if resolved_final is not None and _is_usable_restart_template(resolved_final, expected_natom=expected_natom):
+                    return resolved_final
 
     for cand in (paths.get("heat_res"), paths.get("equi_res"), paths.get("prod_res")):
         if cand is not None:
             resolved = _resolve_existing_file_path(cand)
-            if resolved is not None and _is_usable_restart_template(resolved):
+            if resolved is not None and _is_usable_restart_template(resolved, expected_natom=expected_natom):
                 return resolved
 
     for backup in _overlap_scratch_restart_backups(paths):
         resolved = _resolve_existing_file_path(backup)
-        if resolved is not None and _is_usable_restart_template(resolved):
+        if resolved is not None and _is_usable_restart_template(resolved, expected_natom=expected_natom):
             return resolved
 
     # Final fallback: search for ANY .res file in the directories of any reference paths we have
@@ -1077,7 +1076,7 @@ def _overlap_scratch_restart_backups(paths: dict[str, Path]) -> list[Path]:
     return sorted(found, key=lambda p: p.stat().st_mtime, reverse=True)
 
 
-def _is_usable_restart_template(path: Path) -> bool:
+def _is_usable_restart_template(path: Path, expected_natom: int | None = None) -> bool:
     """Validate restart coordinates for handoff templating (content, not filename)."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_restart_coordinates,
@@ -1090,10 +1089,13 @@ def _is_usable_restart_template(path: Path) -> bool:
     if restart_has_nonfinite_coordinates(path):
         return False
     natom = read_restart_natom(path)
+    if natom is None:
+        return False
+    if expected_natom is not None and int(natom) != int(expected_natom):
+        return False
     coords = read_restart_coordinates(path)
     return (
-        natom is not None
-        and coords is not None
+        coords is not None
         and int(coords.shape[0]) == int(natom)
     )
 
@@ -1112,7 +1114,7 @@ def _write_handoff_restart_via_charmm(
     from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
     template = Path(template_res).expanduser().resolve()
-    if not _is_usable_restart_template(template):
+    if not _is_usable_restart_template(template, expected_natom=len(handoff.positions)):
         raise ValueError(f"restart template unusable for handoff: {template.name}")
 
     restore_charmm_state_from_restart(template)
@@ -1193,7 +1195,7 @@ def save_handoff_to_res(
       template = Path(template_res).expanduser().resolve()
       if not template.is_file():
           raise FileNotFoundError(f"Restart template not found: {template}")
-      if not _is_usable_restart_template(template):
+      if not _is_usable_restart_template(template, expected_natom=len(handoff.positions)):
           raise ValueError(
               f"restart template unusable for handoff: {template.name} "
               "(non-finite coordinates or NATOM/coord mismatch)"
