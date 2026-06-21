@@ -60,23 +60,21 @@ else:
 from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import (
     NPR_TIERS,
     estimate_ml_atoms,
+    required_max_npr,
     select_npr_tier,
     validate_mlpot_system_size,
 )
 from campaign_lib import iter_matrix_cells
 worst = max(
-    (
-        (
-            estimate_ml_atoms(c.n_monomers, solvent=c.solvent),
-            c.box_size,
-        )
-        for c in iter_matrix_cells(cfg)
-    ),
-    key=lambda item: select_npr_tier(
-        item[0], pbc=True, box_side_A=item[1]
+    iter_matrix_cells(cfg),
+    key=lambda c: required_max_npr(
+        estimate_ml_atoms(c.n_monomers, solvent=c.solvent),
+        pbc=True,
+        box_side_A=c.box_size,
     ),
 )
-max_n_ml, worst_box = worst
+max_n_ml = estimate_ml_atoms(worst.n_monomers, solvent=worst.solvent)
+worst_box = worst.box_size
 tier = select_npr_tier(max_n_ml, pbc=True, box_side_A=worst_box)
 print(f'max matrix n_ml={max_n_ml} L={worst_box:g} CHARMM tier={tier} (max_Npr={NPR_TIERS[tier]}, PBC pairs)')
 validate_mlpot_system_size(max_n_ml, pbc=True, box_side_A=worst_box)

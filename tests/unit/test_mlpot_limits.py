@@ -42,14 +42,27 @@ def test_max_mlpot_ml_pairs_pbc_aco_165():
     assert pairs > 4_000_000
 
 
+def test_pbc_image_copies_dense_aco_200_l32():
+    copies = mlpot_limits.pbc_image_copies_per_atom(2000, 32.0)
+    assert copies > 5.0
+    pairs = mlpot_limits.max_mlpot_ml_pairs_pbc(2000, box_side_A=32.0)
+    assert pairs > mlpot_limits.max_mlpot_ml_pairs_pbc(2000)
+    assert mlpot_limits.required_max_npr(2000, pbc=True, box_side_A=32.0) > 36_000_000
+
+
+def test_select_npr_tier_aco_200_pbc_l32():
+    assert mlpot_limits.select_npr_tier(2000, pbc=True, box_side_A=32.0) == "xxxlarge"
+
+
 def test_select_npr_tier():
     assert mlpot_limits.select_npr_tier(89) == "default"
     assert mlpot_limits.select_npr_tier(2195) == "large"
     assert mlpot_limits.select_npr_tier(2200) == "large"
     assert mlpot_limits.select_npr_tier(3000) == "xlarge"
     assert mlpot_limits.select_npr_tier(4390) == "xxlarge"
+    assert mlpot_limits.select_npr_tier(6000) == "xxxlarge"
     with pytest.raises(ValueError, match="largest tier"):
-        mlpot_limits.select_npr_tier(6000)
+        mlpot_limits.select_npr_tier(7000)
 
 
 def test_select_npr_tier_pbc():
@@ -124,13 +137,24 @@ def test_validate_pbc_needs_larger_npr_than_vacuum(monkeypatch):
         mlpot_limits.validate_mlpot_system_size(1650, pbc=True)
 
 
+def test_validate_dense_aco_200_l32_needs_xxxlarge(monkeypatch):
+    monkeypatch.setenv("MMML_CHARMM_MLPOT_MAX_ML", "50000")
+    monkeypatch.setenv("MMML_CHARMM_MLPOT_MAX_PAIRS", "36000000")
+    _clear_limits_cache()
+    with pytest.raises(ValueError, match="max_Npr"):
+        mlpot_limits.validate_mlpot_system_size(2000, pbc=True, box_side_A=32.0)
+    monkeypatch.setenv("MMML_CHARMM_MLPOT_MAX_PAIRS", "56000000")
+    _clear_limits_cache()
+    mlpot_limits.validate_mlpot_system_size(2000, pbc=True, box_side_A=32.0)
+
+
 def test_register_mlpot_validates_pbc_pair_budget(monkeypatch):
     from mmml.interfaces.pycharmmInterface.mlpot.setup import register_mlpot
 
-    calls: list[tuple[int, bool]] = []
+    calls: list[tuple[int, bool, float | None]] = []
 
-    def _capture(n_ml: int, *, pbc: bool = False) -> None:
-        calls.append((n_ml, pbc))
+    def _capture(n_ml: int, *, pbc: bool = False, box_side_A: float | None = None) -> None:
+        calls.append((n_ml, pbc, box_side_A))
 
     monkeypatch.setattr(
         "mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits.validate_mlpot_system_size",
@@ -159,7 +183,7 @@ def test_register_mlpot_validates_pbc_pair_budget(monkeypatch):
         "mmml.interfaces.pycharmmInterface.mlpot.setup._install_ml_exclusions"
     ):
         register_mlpot(mock.MagicMock(), list(range(1650)), sel, use_pbc=True)
-    assert calls == [(1650, True)]
+    assert calls == [(1650, True, None)]
 
 
 def test_limits_status_reads_tier_api_func(tmp_path, monkeypatch):

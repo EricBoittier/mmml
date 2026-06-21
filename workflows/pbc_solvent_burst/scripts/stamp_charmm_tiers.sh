@@ -12,9 +12,10 @@ declare -A TIER_NML=(
   [8000000]=2200
   [12000000]=3000
   [36000000]=1330
+  [56000000]=2000
 )
 
-for cap in 4000000 8000000 12000000 36000000; do
+for cap in 4000000 8000000 12000000 36000000 56000000; do
   lib="${BUILD_ROOT}/tier_${cap}_nodomdec/lib/libcharmm.so"
   if [[ ! -f "$lib" ]]; then
     echo "skip tier_${cap}: ${lib} missing"

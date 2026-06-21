@@ -101,13 +101,68 @@ def test_format_fortran_float_rejects_non_finite() -> None:
         _format_fortran_float(float("nan"))
 
 
-def test_is_usable_restart_template_rejects_overlap(tmp_path: Path, nve_stub: Path) -> None:
+def test_is_usable_restart_template_accepts_valid_overlap(
+    tmp_path: Path, nve_stub: Path
+) -> None:
     from mmml.cli.run.md_handoff import _is_usable_restart_template
 
     overlap = tmp_path / "heat_tag.overlap_a.res"
     overlap.write_text(nve_stub.read_text(encoding="ascii"), encoding="ascii")
-    assert not _is_usable_restart_template(overlap)
+    assert _is_usable_restart_template(overlap)
     assert _is_usable_restart_template(nve_stub)
+    assert not _is_usable_restart_template(tmp_path / "continue_seed.res")
+
+
+def test_resolve_handoff_restart_template_prefers_heat_over_overlap(
+    nve_stub: Path, tmp_path: Path
+) -> None:
+    import argparse
+
+    from mmml.cli.run.md_handoff import (
+        MdHandoffState,
+        resolve_handoff_restart_template,
+    )
+
+    job = tmp_path / "init"
+    job.mkdir(parents=True)
+    heat = job / "heat_dcm_52.res"
+    overlap = job / "heat_dcm_52.overlap_a.res"
+    heat.write_text(nve_stub.read_text(encoding="ascii"), encoding="ascii")
+    overlap.write_text(nve_stub.read_text(encoding="ascii"), encoding="ascii")
+
+    handoff = MdHandoffState(
+        positions=np.zeros((20, 3)),
+        atomic_numbers=np.ones(20, dtype=int),
+    )
+    args = argparse.Namespace(handoff_template_res=None, continue_from=None)
+    paths = {"heat_res": heat, "equi_res": None, "prod_res": None}
+    got = resolve_handoff_restart_template(handoff, args, paths)
+    assert got == heat.resolve()
+
+
+def test_resolve_handoff_restart_template_falls_back_to_overlap_scratch(
+    nve_stub: Path, tmp_path: Path
+) -> None:
+    import argparse
+
+    from mmml.cli.run.md_handoff import (
+        MdHandoffState,
+        resolve_handoff_restart_template,
+    )
+
+    job = tmp_path / "init"
+    job.mkdir(parents=True)
+    overlap = job / "equi_dcm_52.overlap_b.res"
+    overlap.write_text(nve_stub.read_text(encoding="ascii"), encoding="ascii")
+
+    handoff = MdHandoffState(
+        positions=np.zeros((20, 3)),
+        atomic_numbers=np.ones(20, dtype=int),
+    )
+    args = argparse.Namespace(handoff_template_res=None, continue_from=None)
+    paths = {"heat_res": job / "missing.res", "equi_res": None, "prod_res": None}
+    got = resolve_handoff_restart_template(handoff, args, paths)
+    assert got == overlap.resolve()
 
 
 def test_save_handoff_to_res_with_template(nve_stub: Path, tmp_path: Path) -> None:
