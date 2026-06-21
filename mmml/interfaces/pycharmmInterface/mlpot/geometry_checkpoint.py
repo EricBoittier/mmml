@@ -78,6 +78,12 @@ def is_overlap_scratch_restart_path(path: Path | str) -> bool:
     return name.endswith(".overlap_a.res") or name.endswith(".overlap_b.res")
 
 
+def is_pretreat_mm_restart_path(path: Path | str) -> bool:
+    """True for CHARMM MM pretreat leg checkpoints (pre-MLpot topology/forces)."""
+    name = Path(path).name
+    return name.startswith("charmm_mm_") and name.endswith(".res")
+
+
 def build_geometry_recovery_candidates(overlap: Any) -> list[Path]:
     """Ordered restart ladder for overlap recovery (baseline before segment tails).
 
@@ -92,6 +98,8 @@ def build_geometry_recovery_candidates(overlap: Any) -> list[Path]:
             return
         p = Path(path)
         if is_overlap_scratch_restart_path(p):
+            return
+        if is_pretreat_mm_restart_path(p):
             return
         key = str(p.expanduser())
         if key in seen:

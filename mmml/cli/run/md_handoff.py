@@ -190,7 +190,7 @@ def resolve_handoff_restart_template(
                 return final_res.resolve()
 
     for cand in (paths.get("heat_res"), paths.get("equi_res"), paths.get("prod_res")):
-        if cand is not None and Path(cand).is_file():
+        if cand is not None and Path(cand).is_file() and _is_usable_restart_template(Path(cand)):
             return Path(cand).resolve()
     return None
 
@@ -865,7 +865,80 @@ def save_handoff_npz(handoff: MdHandoffState, path: Path) -> Path:
 
 
 def _format_fortran_float(value: float) -> str:
-  return f"{value:.15E}".replace("E", "D")
+    v = float(value)
+    if not np.isfinite(v):
+        raise ValueError(f"non-finite restart value: {v}")
+    return f"{v:.15E}".replace("E", "D")
+
+
+def _sync_charmm_velocities(velocities: np.ndarray) -> None:
+    """Push handoff velocities into CHARMM main set."""
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import pycharmm.coor as coor
+
+    v = np.asarray(velocities, dtype=float)
+    n = int(coor.get_natom())
+    if v.shape != (n, 3):
+        raise ValueError(f"handoff velocities shape {v.shape} != ({n}, 3)")
+    if not np.all(np.isfinite(v)):
+        raise ValueError("handoff velocities must be finite")
+    coor.set_velocity(v[:, 0], v[:, 1], v[:, 2])
+
+
+def _is_usable_restart_template(path: Path) -> bool:
+    """Reject overlap scratch / corrupt templates before handoff patching."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_restart_coordinates,
+        read_restart_natom,
+        restart_has_nonfinite_coordinates,
+    )
+
+    name = path.name.lower()
+    if "overlap" in name or name.startswith("continue_seed"):
+        return False
+    if restart_has_nonfinite_coordinates(path):
+        return False
+    natom = read_restart_natom(path)
+    coords = read_restart_coordinates(path)
+    return (
+        natom is not None
+        and coords is not None
+        and int(coords.shape[0]) == int(natom)
+    )
+
+
+def _write_handoff_restart_via_charmm(
+    handoff: MdHandoffState,
+    path: Path,
+    *,
+    template_res: Path,
+) -> Path:
+    """Load a Fortran-valid template in CHARMM, apply handoff state, native ``write restart``."""
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        restore_charmm_state_from_restart,
+        rewrite_dynamics_restart_validated,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+
+    template = Path(template_res).expanduser().resolve()
+    if not _is_usable_restart_template(template):
+        raise ValueError(f"restart template unusable for handoff: {template.name}")
+
+    restore_charmm_state_from_restart(template)
+    sync_charmm_positions(handoff.positions)
+    if handoff.velocities is not None:
+        _sync_charmm_velocities(handoff.velocities)
+    if handoff.cell is not None:
+        from mmml.cli.run.md_stage_summary import cubic_box_side_from_cell
+        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import prepare_charmm_pbc
+
+        side = cubic_box_side_from_cell(handoff.cell)
+        if side is not None and float(side) > 0.0:
+            prepare_charmm_pbc(float(side))
+
+    if not rewrite_dynamics_restart_validated(path):
+        raise ValueError(f"CHARMM restart write failed validation for {path.name}")
+    return path
 
 
 def _format_coord_lines(flat: np.ndarray, *, per_line: int = 3) -> list[str]:
@@ -929,6 +1002,24 @@ def save_handoff_to_res(
       template = Path(template_res).expanduser().resolve()
       if not template.is_file():
           raise FileNotFoundError(f"Restart template not found: {template}")
+      if not _is_usable_restart_template(template):
+          raise ValueError(
+              f"restart template unusable for handoff: {template.name} "
+              "(overlap scratch or non-finite coordinates)"
+          )
+      charmm_loaded = False
+      try:
+          import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+
+          charmm_loaded = True
+      except Exception:
+          charmm_loaded = False
+      if charmm_loaded:
+          return _write_handoff_restart_via_charmm(
+              handoff,
+              path,
+              template_res=template,
+          )
       _patch_handoff_into_restart_template(handoff, template, path)
       if read_restart_coordinates(path) is None:
           raise ValueError(

@@ -94,6 +94,22 @@ def test_npz_round_trip(tmp_path: Path) -> None:
     assert loaded.temperature_K == pytest.approx(300.0)
 
 
+def test_format_fortran_float_rejects_non_finite() -> None:
+    from mmml.cli.run.md_handoff import _format_fortran_float
+
+    with pytest.raises(ValueError, match="non-finite"):
+        _format_fortran_float(float("nan"))
+
+
+def test_is_usable_restart_template_rejects_overlap(tmp_path: Path, nve_stub: Path) -> None:
+    from mmml.cli.run.md_handoff import _is_usable_restart_template
+
+    overlap = tmp_path / "heat_tag.overlap_a.res"
+    overlap.write_text(nve_stub.read_text(encoding="ascii"), encoding="ascii")
+    assert not _is_usable_restart_template(overlap)
+    assert _is_usable_restart_template(nve_stub)
+
+
 def test_save_handoff_to_res_with_template(nve_stub: Path, tmp_path: Path) -> None:
     pos = load_handoff_from_res(nve_stub).positions
     shift = pos + 0.01

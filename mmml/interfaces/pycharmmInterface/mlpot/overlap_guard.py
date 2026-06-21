@@ -414,6 +414,12 @@ def resolve_prior_segment_restart_path(
         p = Path(cand)
         if geometry_baseline_restart is not None and p == Path(geometry_baseline_restart):
             continue
+        from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+            is_pretreat_mm_restart_path,
+        )
+
+        if is_pretreat_mm_restart_path(p):
+            continue
         candidates.append(p)
     seen: set[str] = set()
     for cand in candidates:

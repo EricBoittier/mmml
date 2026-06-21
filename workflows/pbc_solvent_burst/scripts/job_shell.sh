@@ -42,8 +42,17 @@ cfg = load_config(Path('${WORKFLOW_ROOT}/config.yaml'))
 cell = cell_from_tag(cfg, '${RUN_TAG}')
 print(estimate_ml_atoms(cell.n_monomers, solvent=cell.solvent))
 ")"
+BOX_SIZE="$("$PY" -c "
+from pathlib import Path
+import sys
+sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
+from campaign_lib import load_config, cell_from_tag
+cfg = load_config(Path('${WORKFLOW_ROOT}/config.yaml'))
+cell = cell_from_tag(cfg, '${RUN_TAG}')
+print(cell.box_size)
+")"
 eval "$(
-  "$REPO_ROOT/scripts/ensure_charmm_mlpot_limits.sh" --n-ml "$N_ML" --pbc \
+  "$REPO_ROOT/scripts/ensure_charmm_mlpot_limits.sh" --n-ml "$N_ML" --pbc --box-size "$BOX_SIZE" \
     | tee /dev/stderr \
     | grep '^export '
 )"

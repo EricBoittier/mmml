@@ -717,6 +717,7 @@ def _register_mlpot_context(
         select_all_atoms(),
         use_pbc=mlpot_use_pbc,
         mm_internal_scale=mm_internal_scale,
+        cubic_box_side_A=ml_cell,
     )
     from mmml.interfaces.pycharmmInterface.jax_device_policy import apply_mlpot_jax_platform_env
 
@@ -1084,7 +1085,16 @@ def run_dynamics_workflow(
         apply_flat_bottom_from_args(args)
 
         assert_mlpot_user_active(ctx, context="dynamics", quiet=bool(args.quiet))
-        max_grms = float(getattr(args, "max_grms_before_dyn", 50.0))
+        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+            resolve_max_grms_before_dyn,
+        )
+
+        max_grms = resolve_max_grms_before_dyn(
+            args,
+            n_mol,
+            n_atoms,
+            pbc=charmm_pbc,
+        )
         assert_dynamics_ready(
             max_grms=max_grms,
             abort=not getattr(args, "allow_high_grms", False),

@@ -857,6 +857,7 @@ def register_mlpot(
     preserve_psf_internals: bool = True,
     use_pbc: bool = False,
     mm_internal_scale: float = 0.0,
+    cubic_box_side_A: float | None = None,
     **kwargs: Any,
 ) -> MlpotContext:
     """Register ``pycharmm.MLpot`` and return a context manager-like handle."""
@@ -869,17 +870,26 @@ def register_mlpot(
     if use_pbc and n_ml >= 500:
         from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import (
             mlpot_limits_status,
+            pbc_image_copies_per_atom,
             required_max_npr,
         )
 
         status = mlpot_limits_status()
-        need = required_max_npr(n_ml, pbc=True)
+        need = required_max_npr(n_ml, pbc=True, box_side_A=cubic_box_side_A)
+        copies = pbc_image_copies_per_atom(n_ml, cubic_box_side_A)
+        box_note = (
+            f" L={float(cubic_box_side_A):g} Å ~{copies:.1f}× image copies"
+            if cubic_box_side_A is not None
+            else ""
+        )
         print(
-            f"MLpot registration: n_ml={n_ml} PBC needs max_Npr>={need}; "
-            f"loaded lib max_Npr={status.max_npr} ({status.source})",
+            f"MLpot registration: n_ml={n_ml} PBC needs max_Npr>={need};"
+            f"{box_note}; loaded lib max_Npr={status.max_npr} ({status.source})",
             flush=True,
         )
-    validate_mlpot_system_size(n_ml, pbc=bool(use_pbc))
+    validate_mlpot_system_size(
+        n_ml, pbc=bool(use_pbc), box_side_A=cubic_box_side_A
+    )
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
 
     with charmm_relaxed_bomlev():

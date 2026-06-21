@@ -9,13 +9,14 @@ source "$ROOT/scripts/resolve_mmml_env.sh"
 MMML_PY="$(mmml_resolve_python "$ROOT")"
 N_ML=""
 PBC=0
+BOX_SIZE=""
 DRY_RUN=0
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") --n-ml N_ML_ATOMS [--pbc] [--dry-run]
+Usage: $(basename "$0") --n-ml N_ML_ATOMS [--pbc] [--box-size L_ANGSTROM] [--dry-run]
 
-Selects the smallest local CHARMM build tier (default/large/xlarge/xxlarge), builds
+Selects the smallest local CHARMM build tier (default/large/xlarge/xxlarge/xxxlarge), builds
 a tier-local api_func.F90 with the matching max_Npr, and installs:
   \${CHARMM_BUILD_DIR:-\$HOME/.cache/mmml-charmm-build}/tier_\${MAX_NPR}_nodomdec/lib/libcharmm.so
 
@@ -36,6 +37,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --n-ml) N_ML="${2:?--n-ml requires value}"; shift 2 ;;
     --pbc) PBC=1; shift ;;
+    --box-size) BOX_SIZE="${2:?--box-size requires value}"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
@@ -49,13 +51,15 @@ if [[ -z "$N_ML" ]]; then
 fi
 
 read -r TIER TARGET TEMPLATE_F90 <<<"$(
-  "$MMML_PY" - "$N_ML" "$ROOT" "$PBC" <<'PY'
+  "$MMML_PY" - "$N_ML" "$ROOT" "$PBC" "$BOX_SIZE" <<'PY'
 import sys
 from pathlib import Path
 
 n_ml = int(sys.argv[1])
 root = Path(sys.argv[2])
 pbc = bool(int(sys.argv[3]))
+box_raw = sys.argv[4].strip() if len(sys.argv) > 4 else ""
+box = float(box_raw) if box_raw else None
 sys.path.insert(0, str(root))
 from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import (
     charmm_mlpot_limits_from_source,
@@ -63,7 +67,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import (
     tier_max_npr,
 )
 
-tier = select_npr_tier(n_ml, pbc=pbc)
+tier = select_npr_tier(n_ml, pbc=pbc, box_side_A=box)
 target = tier_max_npr(tier)
 parsed = charmm_mlpot_limits_from_source()
 template = parsed[2] if parsed else root / "setup" / "api" / "api_func.F90"
@@ -76,7 +80,7 @@ if [[ -z "${TIER:-}" || -z "${TARGET:-}" ]]; then
   exit 1
 fi
 
-echo "ML atoms=${N_ML} pbc=${PBC} -> tier=${TIER} max_Npr=${TARGET}"
+echo "ML atoms=${N_ML} pbc=${PBC} box=${BOX_SIZE:-<unset>} -> tier=${TIER} max_Npr=${TARGET}"
 
 if [[ ! -f "$TEMPLATE_F90" ]]; then
   TEMPLATE_F90="$ROOT/setup/api/api_func.F90"

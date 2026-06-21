@@ -31,6 +31,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_nve_boltzmann_temp,
     resolve_echeck_for_cluster,
     resolve_fix_resids,
+    resolve_max_grms_before_dyn,
     resolve_mini_nstep,
     refresh_mlpot_energy_and_grms,
     resolve_md_stages,
@@ -1054,7 +1055,9 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     mini_nprint = apply_charmm_output_from_args(args)
     show_energy = resolve_show_energy(args)
     echeck = resolve_echeck_for_cluster(args, n_atoms=n_atoms, n_monomers=n_mol)
-    mini_nstep = resolve_mini_nstep(args, n_mol, n_atoms=n_atoms, pbc=mlpot_pbc)
+    mini_nstep = resolve_mini_nstep(
+        args, n_mol, n_atoms=n_atoms, pbc=(mlpot_pbc or charmm_pbc)
+    )
     overlap_cfg = resolve_dynamics_overlap_config(
         args,
         n_monomers=n_mol,
@@ -1275,11 +1278,10 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     grms_kcalmol_A=charmm_grms(),
                 )
             sync_charmm_positions(get_charmm_positions_array())
-            if not args.quiet:
-                refresh_mlpot_energy_and_grms(
-                    ctx,
-                    context="Post MLpot mini",
-                )
+            refresh_mlpot_energy_and_grms(
+                ctx,
+                context="Post MLpot mini" if not args.quiet else "Post MLpot mini GRMS",
+            )
             mini_trajectories = _trajectory_outputs(paths["mini_charmm_dcd"])
             mini_trajectories.extend(_trajectory_outputs(paths["mlpot_mmml_dcd"]))
             last_traj = mini_trajectories[-1] if mini_trajectories else None
@@ -1314,16 +1316,23 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             topology_psf=recovery_topology_psf,
             mini_registry=mini_registry,
         )
+        overlap_rescued = False
         if stage_overlap_pre is not None and (
             stage_overlap_pre.enabled
             or stage_overlap_pre.intra_enabled
             or stage_overlap_pre.extent_enabled
         ):
-            check_dynamics_overlap(
+            _, overlap_rescued = check_dynamics_overlap(
                 stage_overlap_pre,
                 context="after MLpot mini (pre-dynamics)",
                 mlpot_ctx=ctx,
             )
+            if overlap_rescued:
+                ctx.reregister_mlpot()
+                refresh_mlpot_energy_and_grms(
+                    ctx,
+                    context="Post overlap rescue (pre-dynamics)",
+                )
 
         baseline_path = write_geometry_baseline_restart(out_dir, tag)
         if baseline_path is not None:
@@ -1342,8 +1351,14 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         )
 
         assert_mlpot_user_active(ctx, context="staged dynamics", quiet=bool(args.quiet))
+        max_grms = resolve_max_grms_before_dyn(
+            args,
+            n_mol,
+            n_atoms,
+            pbc=charmm_pbc,
+        )
         assert_dynamics_ready(
-            max_grms=float(getattr(args, "max_grms_before_dyn", 50.0)),
+            max_grms=max_grms,
             abort=not getattr(args, "allow_high_grms", False),
             require_mlpot_user=True,
             mlpot_ctx=ctx,
