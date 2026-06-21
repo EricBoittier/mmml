@@ -2158,7 +2158,7 @@ def _apply_overlap_chunk_dynamics_kw(
         "hoover reft" in chunk_kw or bool(chunk_kw.get("cpt"))
     ):
         # Hoover CPT chunk 0 after in-memory Boltzmann assign (see staged_workflow).
-        chunk_kw["iasvel"] = 1
+        chunk_kw["iasvel"] = 1 if bool(chunk_kw.get("start")) else 0
         chunk_kw["start"] = False
         if int(chunk_kw.get("ihtfrq", 0)) != 0:
             chunk_kw["ihtfrq"] = 0
@@ -2271,6 +2271,9 @@ def _run_dynamics_chunk(
     if extra_iokw:
         kw.update(extra_iokw)
         iokw = {**iokw, **extra_iokw}
+    if not kw.get("restart", False) and "iunrea" not in iokw:
+        kw.pop("iunrea", None)
+        kw["iunrea"] = -1
     _sync_dynamics_io_units(kw, iokw)
     try:
         from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
@@ -2322,6 +2325,25 @@ def run_dynamics_with_io(
         and isinstance(overlap, DynamicsOverlapConfig)
         and (overlap.enabled or overlap.intra_enabled or overlap.extent_enabled)
     )
+    if (
+        guard_active
+        and overlap is not None
+        and mlpot_ctx is not None
+        and total_nstep > 0
+        and not overlap.memory_handoff
+    ):
+        from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import _truthy_env
+
+        if not _truthy_env("MMML_NO_OVERLAP_MEMORY_HANDOFF"):
+            from dataclasses import replace
+
+            overlap = replace(overlap, memory_handoff=True)
+            if total_nstep > int(overlap.check_interval):
+                print(
+                    f"overlap ({overlap_context}): MLpot in-memory chunk handoff "
+                    f"(no READYN on scratch restarts)",
+                    flush=True,
+                )
     if guard_active and overlap is not None:
         from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
             attach_prior_segment_restart,
