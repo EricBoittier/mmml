@@ -520,7 +520,7 @@ contains
     integer(c_int), dimension(*), intent(in) :: new_iblo, new_inb
 
 #ifdef KEY_RESIZE
-    call resize_psf('api_psf.F90','psf_set_iblo_inb','NNB',int(new_nnb),.false.)
+    call resize_psf('api_psf.F90','psf_set_iblo_inb','NNB',int(new_nnb),.true.)
 #endif
 
     nnb = new_nnb
