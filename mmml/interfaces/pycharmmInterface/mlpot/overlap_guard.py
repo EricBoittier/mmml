@@ -414,6 +414,26 @@ def resolve_prior_segment_restart_path(
     return None
 
 
+def refresh_overlap_prior_segment_restart(
+    overlap: DynamicsOverlapConfig | None,
+    *,
+    restart_path: Path | str | None,
+) -> DynamicsOverlapConfig | None:
+    """Persist the last good geometry checkpoint for extent fly-off recovery."""
+    if overlap is None or not overlap.extent_enabled or restart_path is None:
+        return overlap
+    from dataclasses import replace
+
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        ensure_segment_restart_checkpoint,
+    )
+
+    prior = ensure_segment_restart_checkpoint(restart_path)
+    if prior is None:
+        return overlap
+    return replace(overlap, prior_segment_restart=prior)
+
+
 def attach_prior_segment_restart(
     overlap: DynamicsOverlapConfig | None,
     *,

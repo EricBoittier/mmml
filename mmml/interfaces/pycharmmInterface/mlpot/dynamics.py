@@ -2635,6 +2635,20 @@ def run_dynamics_with_io(
                     step=steps_done,
                     mlpot_ctx=mlpot_ctx,
                 )
+                if not rescued and overlap is not None and overlap.extent_enabled:
+                    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+                        refresh_overlap_prior_segment_restart,
+                    )
+
+                    refresh_path = (
+                        chunk_io.restart_write
+                        if chunk_io is not None
+                        else (io.restart_write if io is not None else None)
+                    )
+                    overlap = refresh_overlap_prior_segment_restart(
+                        overlap,
+                        restart_path=refresh_path,
+                    )
                 if rescued and chunk_io is not None and chunk_io.restart_write is not None:
                     from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
                         patch_restart_global_step,

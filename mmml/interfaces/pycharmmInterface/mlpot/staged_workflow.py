@@ -207,6 +207,9 @@ def _prior_restart_for_stage(
     if restart_from is not None:
         return restart_from
     if stage == "heat":
+        prod = paths.get("charmm_mm_prod_res")
+        if prod is not None and Path(prod).is_file():
+            return Path(prod)
         return None
     if stage == "nve":
         heat_restart = _heat_restart_path(paths, tag or "", n_heat_segments)
@@ -780,6 +783,19 @@ def _trajectory_outputs(path: Path | None) -> list[Path]:
         if chunk_path.is_file() and chunk_path.stat().st_size > 0:
             outputs.append(chunk_path)
     return outputs
+
+
+def _should_seed_heat_prior_restart(
+    *,
+    seg_i: int,
+    prev_restart_is_current_state: bool,
+    use_memory: bool,
+    memory_handoff_next: bool,
+) -> bool:
+    """True when heat starts from in-memory coords and needs a fly-off checkpoint."""
+    if seg_i == 0 and prev_restart_is_current_state:
+        return True
+    return bool(use_memory and (seg_i == 0 or memory_handoff_next))
 
 
 def _seed_restart_for_memory_handoff(
@@ -1394,10 +1410,17 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         nstep=nstep,
                         ihtfrq=resolve_heat_ihtfrq(args, nstep=nstep),
                     )
-                    if use_memory and (seg_i == 0 or memory_handoff_next):
-                        restart_path = _seed_restart_for_memory_handoff(
+                    overlap_prior_restart = prev_restart
+                    if _should_seed_heat_prior_restart(
+                        seg_i=seg_i,
+                        prev_restart_is_current_state=prev_restart_is_current_state,
+                        use_memory=use_memory,
+                        memory_handoff_next=memory_handoff_next,
+                    ):
+                        overlap_prior_restart = _seed_restart_for_memory_handoff(
                             seg_io, kw, stage="heat"
                         )
+                        restart_path = overlap_prior_restart
                     _sync_mlpot_cell_before_npt(
                         "heat",
                         mlpot_pbc=mlpot_pbc,
@@ -1534,7 +1557,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     stage_overlap = attach_prior_segment_restart(
                         stage_overlap,
                         segment_index=seg_i,
-                        prev_restart=prev_restart,
+                        prev_restart=overlap_prior_restart,
                         out_dir=out_dir,
                         restart_prefix=f"heat_{tag}",
                         restart_write=seg_io.restart_write,
@@ -1884,6 +1907,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 )
 
             restart_path = Path(rread) if restart and rread else None
+            overlap_prior_restart = prev_restart
 
             kw = _build_stage_dynamics_kw(
                 stage,
@@ -1899,7 +1923,17 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 memory_handoff=use_memory,
             )
             kw["nsavc"] = dcd_nsavc
-            if use_memory:
+            if stage == "heat" and _should_seed_heat_prior_restart(
+                seg_i=0,
+                prev_restart_is_current_state=prev_restart_is_current_state,
+                use_memory=use_memory,
+                memory_handoff_next=False,
+            ):
+                overlap_prior_restart = _seed_restart_for_memory_handoff(
+                    io, kw, stage="heat"
+                )
+                restart_path = overlap_prior_restart
+            elif use_memory:
                 restart_path = _seed_restart_for_memory_handoff(io, kw, stage=stage)
                 if stage in ("equi", "prod"):
                     _configure_npt_dynamics_start(
@@ -2061,7 +2095,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     )
             stage_overlap = attach_prior_segment_restart(
                 stage_overlap,
-                prev_restart=prev_restart,
+                prev_restart=overlap_prior_restart,
                 restart_write=io.restart_write,
             )
             run_dynamics_with_io(
