@@ -137,6 +137,23 @@ for wrapper in "$MPI_CC" "$MPI_CXX" "$MPI_FC"; do
   fi
 done
 
+# Large max_Npr tiers allocate multi-GB static arrays in api_func.F90 (.bss). On
+# x86_64 the default small code model cannot link libcharmm.so: R_X86_64_PC32
+# relocation truncated to fit against .bss (idxi/idxj and other module symbols).
+CODE_MODEL_FLAG=""
+if [[ "$(uname -m)" == "x86_64" ]]; then
+  CODE_MODEL_FLAG="-mcmodel=medium"
+fi
+
+if [[ "$needs_configure" == 0 && -n "$CODE_MODEL_FLAG" && -f "$BUILD_DIR/CMakeCache.txt" ]]; then
+  cached_fflags="$(grep '^CMAKE_Fortran_FLAGS:STRING=' "$BUILD_DIR/CMakeCache.txt" | cut -d= -f2- || true)"
+  if [[ "$cached_fflags" != *mcmodel=medium* ]]; then
+    echo "CMake cache lacks -mcmodel=medium; reconfiguring in $BUILD_DIR"
+    rm -rf "$BUILD_DIR"
+    needs_configure=1
+  fi
+fi
+
 if [[ "$needs_configure" == 1 ]]; then
   mkdir -p "$BUILD_DIR"
   echo "Configuring CHARMM library in $BUILD_DIR (OpenMPI: $OPENMPI_ROOT, build: $CHARMM_BUILD_TYPE) ..."
@@ -153,12 +170,22 @@ if [[ "$needs_configure" == 1 ]]; then
     -DMPI_CXX_COMPILER="$MPI_CXX"
     -DMPI_Fortran_COMPILER="$MPI_FC"
   )
+  FFLAGS="$CODE_MODEL_FLAG"
+  CFLAGS="$CODE_MODEL_FLAG"
+  CXXFLAGS="$CODE_MODEL_FLAG"
   if [[ "$DEBUG" == 1 ]]; then
+    FFLAGS+=" -g -fbacktrace -fno-omit-frame-pointer"
+    CFLAGS+=" -g -fno-omit-frame-pointer"
+    CXXFLAGS+=" -g -fno-omit-frame-pointer"
+  fi
+  if [[ -n "$FFLAGS" ]]; then
     CMAKE_ARGS+=(
-      -DCMAKE_Fortran_FLAGS="-g -fbacktrace -fno-omit-frame-pointer"
-      -DCMAKE_C_FLAGS="-g -fno-omit-frame-pointer"
-      -DCMAKE_CXX_FLAGS="-g -fno-omit-frame-pointer"
+      -DCMAKE_Fortran_FLAGS="$FFLAGS"
+      -DCMAKE_C_FLAGS="$CFLAGS"
+      -DCMAKE_CXX_FLAGS="$CXXFLAGS"
+      -DCMAKE_SHARED_LINKER_FLAGS="$CODE_MODEL_FLAG"
     )
+    echo "Using code model flags: $FFLAGS (linker: $CODE_MODEL_FLAG)"
   fi
   cmake "${CMAKE_ARGS[@]}"
 fi
