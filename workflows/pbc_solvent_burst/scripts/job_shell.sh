@@ -40,7 +40,7 @@ from campaign_lib import load_config, cell_from_tag
 from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import estimate_ml_atoms
 cfg = load_config(Path('${WORKFLOW_ROOT}/config.yaml'))
 cell = cell_from_tag(cfg, '${RUN_TAG}')
-print(estimate_ml_atoms(cell.n_monomers))
+print(estimate_ml_atoms(cell.n_monomers, solvent=cell.solvent))
 ")"
 eval "$(
   "$REPO_ROOT/scripts/ensure_charmm_mlpot_limits.sh" --n-ml "$N_ML" --pbc \

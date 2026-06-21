@@ -101,6 +101,54 @@ def test_limits_status_reads_charmmsetup_and_repo_api_func(tmp_path, monkeypatch
     assert "up to date" in status.source
 
 
+def test_estimate_ml_atoms_aco_solvent():
+    assert mlpot_limits.estimate_ml_atoms(110, solvent="ACO") == 1100
+    assert mlpot_limits.estimate_ml_atoms(110, solvent="DCM") == 550
+
+
+def test_select_npr_tier_aco_110_pbc():
+    assert mlpot_limits.select_npr_tier(1100, pbc=True) == "xlarge"
+
+
+def test_limits_status_reads_tier_api_func(tmp_path, monkeypatch):
+    import os
+
+    tier_dir = tmp_path / "tier_8000000_nodomdec"
+    lib_dir = tier_dir / "lib"
+    lib_dir.mkdir(parents=True)
+    lib = lib_dir / "libcharmm.so"
+    lib.write_bytes(b"so")
+    tier_f90 = tier_dir / "api_func.F90"
+    tier_f90.write_text(
+        "integer, parameter :: max_Nml = 50000\n"
+        "integer, parameter :: max_Npr = 8000000\n",
+        encoding="utf-8",
+    )
+    charmm_home = tmp_path / "setup" / "charmm"
+    repo_f90 = charmm_home / "source" / "api" / "api_func.F90"
+    repo_f90.parent.mkdir(parents=True)
+    repo_f90.write_text(
+        "integer, parameter :: max_Nml = 50000\n"
+        "integer, parameter :: max_Npr = 3998000\n",
+        encoding="utf-8",
+    )
+    stamp = old = lib.stat().st_mtime - 20
+    os.utime(tier_f90, (stamp, stamp))
+    os.utime(repo_f90, (stamp + 5, stamp + 5))
+    os.utime(lib, (stamp + 10, stamp + 10))
+
+    monkeypatch.setenv("CHARMM_LIB_DIR", str(lib_dir))
+    monkeypatch.setenv("CHARMM_HOME", str(charmm_home))
+    _clear_limits_cache()
+
+    status = mlpot_limits.mlpot_limits_status()
+    assert status.max_nml == 50000
+    assert status.max_npr == 8_000_000
+    assert status.api_func_f90 == tier_f90.resolve()
+    assert status.libcharmm == lib.resolve()
+    assert "up to date" in status.source
+
+
 def test_limits_status_stale_lib_uses_conservative_fallback(tmp_path, monkeypatch):
     repo = tmp_path / "repo"
     f90 = repo / "setup" / "charmm" / "source" / "api" / "api_func.F90"

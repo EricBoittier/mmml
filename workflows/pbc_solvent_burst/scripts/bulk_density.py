@@ -13,6 +13,13 @@ BULK_SOLVENTS: dict[str, dict[str, float]] = {
 AVOGADRO = 6.02214076e23
 
 
+def ml_atoms_for_cell(solvent: str, n_monomers: int) -> int:
+    """ML atom count for a burst matrix cell (CGenFF all-atom monomer)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import estimate_ml_atoms
+
+    return estimate_ml_atoms(int(n_monomers), solvent=solvent)
+
+
 def volume_per_molecule_ang3(*, mw_g_mol: float, rho_g_cm3: float) -> float:
     """Molecular volume (Å³) from bulk density and molecular weight."""
     molar_vol_cm3 = float(mw_g_mol) / float(rho_g_cm3)
