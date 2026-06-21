@@ -603,13 +603,15 @@ def get_iblo_inb():
 def _set_iblo_inb_arrays(new_inblo, new_inb):
   natom = get_natom()
   if natom > 0:
-    iblo = (ctypes.c_int * natom)(*new_inblo)
+    iblo = (ctypes.c_int * natom)()
+    iblo[:] = new_inblo
   else:
     iblo = list()
 
   nnb = len(new_inb)
   if nnb > 0:
-    inb = (ctypes.c_int * nnb)(*new_inb)
+    inb = (ctypes.c_int * nnb)()
+    inb[:] = new_inb
   else:
     inb = list()
 
