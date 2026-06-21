@@ -170,8 +170,10 @@ class MlpotContext:
         ml_indices = np.asarray(self.mlpot.ml_indices, dtype=int)
         ml_z = np.asarray(self.mlpot.ml_Z, dtype=int)
         n_ml = int(self.mlpot.ml_Natoms)
-        mlidx = (ctypes.c_int * n_ml)(*(ml_indices + 1))
-        mlidz = (ctypes.c_int * n_ml)(*ml_z)
+        mlidx = (ctypes.c_int * n_ml)()
+        mlidx[:] = ml_indices + 1
+        mlidz = (ctypes.c_int * n_ml)()
+        mlidz[:] = ml_z
         nml = (ctypes.c_int * 1)(n_ml)
         pycharmm.lib.charmm.mlpot_set_properties(nml, mlidx, mlidz)
         if hasattr(self.mlpot, "is_set"):

@@ -185,8 +185,10 @@ class MLpot():
 
         pycharmm.lib.charmm.mlpot_set_func(self.energy_func)
 
-        mlidx = (ctypes.c_int * self.ml_Natoms)(*(self.ml_indices + 1))
-        mlidz = (ctypes.c_int * self.ml_Natoms)(*ml_Z)
+        mlidx = (ctypes.c_int * self.ml_Natoms)()
+        mlidx[:] = self.ml_indices + 1
+        mlidz = (ctypes.c_int * self.ml_Natoms)()
+        mlidz[:] = ml_Z
         Nml = (ctypes.c_int * 1)(self.ml_Natoms)
         pycharmm.lib.charmm.mlpot_set_properties(
             Nml, mlidx, mlidz)
@@ -217,8 +219,10 @@ class MLpot():
         if self.is_set:
             return
         pycharmm.lib.charmm.mlpot_set_func(self.energy_func)
-        mlidx = (ctypes.c_int * self.ml_Natoms)(*(self.ml_indices + 1))
-        mlidz = (ctypes.c_int * self.ml_Natoms)(*self.ml_Z)
+        mlidx = (ctypes.c_int * self.ml_Natoms)()
+        mlidx[:] = self.ml_indices + 1
+        mlidz = (ctypes.c_int * self.ml_Natoms)()
+        mlidz[:] = self.ml_Z
         nml = (ctypes.c_int * 1)(self.ml_Natoms)
         pycharmm.lib.charmm.mlpot_set_properties(nml, mlidx, mlidz)
         self.is_set = True
