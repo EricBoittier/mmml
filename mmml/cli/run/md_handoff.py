@@ -193,6 +193,100 @@ def _resolve_existing_file_path(raw_path: str | Path | None) -> Path | None:
     return None
 
 
+def _find_any_res_file_in_same_dir(raw_path: str | Path | None, handoff: MdHandoffState | None = None) -> Path | None:
+    """Search for any usable .res file in the resolved directory of raw_path."""
+    if not raw_path:
+        return None
+    try:
+        path = Path(raw_path).expanduser()
+    except Exception:
+        return None
+
+    dirs_to_search: list[Path] = []
+
+    # 1. Direct parent if the directory exists
+    try:
+        if path.parent.is_dir():
+            dirs_to_search.append(path.parent)
+            if path.parent.name == "handoff" and path.parent.parent.is_dir():
+                dirs_to_search.append(path.parent.parent)
+    except Exception:
+        pass
+
+    # 2. Trigger-based resolution of parent directory
+    try:
+        parts = list(path.parts)
+        for trigger in ("artifacts", "workflows", "examples", "results"):
+            if trigger in parts:
+                idx = parts.index(trigger)
+                rel_dir = Path(*parts[idx:-1]) # up to the parent directory
+                repo_root = Path(__file__).resolve().parents[3]
+                cand_dir = (repo_root / rel_dir).resolve()
+                if cand_dir.is_dir():
+                    dirs_to_search.append(cand_dir)
+                    if cand_dir.name == "handoff" and cand_dir.parent.is_dir():
+                        dirs_to_search.append(cand_dir.parent)
+
+                cand_cwd_dir = (Path.cwd() / rel_dir).resolve()
+                if cand_cwd_dir.is_dir():
+                    dirs_to_search.append(cand_cwd_dir)
+                    if cand_cwd_dir.name == "handoff" and cand_cwd_dir.parent.is_dir():
+                        dirs_to_search.append(cand_cwd_dir.parent)
+    except Exception:
+        pass
+
+    # 3. Fallback based on grandparent/parent/filename structure
+    try:
+        parts = list(path.parts)
+        if len(parts) >= 3:
+            parent_name = parts[-2]
+            grandparent_name = parts[-3]
+            repo_root = Path(__file__).resolve().parents[3]
+            cand_dir = (repo_root / "artifacts" / "pbc_solvent_burst" / grandparent_name / parent_name).resolve()
+            if cand_dir.is_dir():
+                dirs_to_search.append(cand_dir)
+                if cand_dir.parent.is_dir():
+                    dirs_to_search.append(cand_dir.parent)
+    except Exception:
+        pass
+
+    # Search the collected directories for any usable .res file
+    seen_dirs = set()
+    for d in dirs_to_search:
+        try:
+            resolved_d = d.resolve()
+            if resolved_d in seen_dirs:
+                continue
+            seen_dirs.add(resolved_d)
+
+            candidates = []
+            for file_path in resolved_d.glob("*.res"):
+                if file_path.is_file():
+                    try:
+                        if _is_usable_restart_template(file_path):
+                            if handoff is not None:
+                                from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import read_restart_natom
+                                natom = read_restart_natom(file_path)
+                                if natom is not None and int(natom) != len(handoff.positions):
+                                    continue
+                            name = file_path.name.lower()
+                            if "overlap" not in name and not name.startswith("continue_seed"):
+                                candidates.append((0, file_path))
+                            elif "overlap" in name:
+                                candidates.append((1, file_path))
+                    except Exception:
+                        pass
+
+            if candidates:
+                # Sort by priority (normal res first, then overlap), then modified time (newest first)
+                candidates.sort(key=lambda item: (item[0], -item[1].stat().st_mtime))
+                return candidates[0][1]
+        except Exception:
+            pass
+
+    return None
+
+
 def resolve_handoff_restart_template(
     handoff: MdHandoffState,
     args: argparse.Namespace,
@@ -235,6 +329,19 @@ def resolve_handoff_restart_template(
         resolved = _resolve_existing_file_path(backup)
         if resolved is not None and _is_usable_restart_template(resolved):
             return resolved
+
+    # Final fallback: search for ANY .res file in the directories of any reference paths we have
+    for raw in [
+        explicit,
+        meta.get("restart_path"),
+        meta.get("path"),
+        continue_from,
+    ] + list(paths.values()):
+        if raw:
+            found = _find_any_res_file_in_same_dir(raw, handoff)
+            if found is not None:
+                return found
+
     return None
 
 
