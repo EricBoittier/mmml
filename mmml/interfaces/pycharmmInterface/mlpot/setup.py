@@ -80,17 +80,19 @@ def resolve_export_positions(
     reference_positions: Optional[np.ndarray] = None,
 ) -> Optional[np.ndarray]:
     """Best-effort positions for file export after minimization."""
+    charmm = get_charmm_positions_array()
+    if charmm.size and not np.allclose(charmm, 0.0):
+        # CHARMM SD is authoritative; calculator cache can lag or include image atoms.
+        return charmm
+
     if pyCModel is not None:
         calc = pyCModel.get_pycharmm_calculator()
         cached = getattr(calc, "last_full_positions", None)
         if cached is not None:
             cached = np.asarray(cached, dtype=float)
             if cached.size and not np.allclose(cached, 0.0):
-                return cached
-
-    charmm = get_charmm_positions_array()
-    if charmm.size and not np.allclose(charmm, 0.0):
-        return charmm
+                if cached.shape[0] == charmm.shape[0] or charmm.size == 0:
+                    return cached
 
     if reference_positions is not None:
         ref = np.asarray(reference_positions, dtype=float)

@@ -436,6 +436,12 @@ def refresh_overlap_prior_segment_restart(
     """Persist the last good geometry checkpoint for extent fly-off recovery."""
     if overlap is None or not overlap.extent_enabled or restart_path is None:
         return overlap
+    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+        is_overlap_scratch_restart_path,
+    )
+
+    if is_overlap_scratch_restart_path(restart_path):
+        return overlap
     from dataclasses import replace
 
     from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (

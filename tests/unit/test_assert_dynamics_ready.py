@@ -50,6 +50,12 @@ def test_assert_dynamics_ready_accepts_active_mlpot_low_grms(monkeypatch):
 
 def test_assert_dynamics_ready_calls_ener_force_when_mlpot_required(monkeypatch):
     scripts: list[str] = []
+    reregistered: list[str] = []
+
+    class _Ctx:
+        def reregister_mlpot(self) -> None:
+            reregistered.append("yes")
+
     fake_energy = types.ModuleType("pycharmm.energy")
     fake_energy.get_grms = lambda: 0.1
     fake_energy.get_term_by_name = lambda name: -100.0
@@ -65,7 +71,9 @@ def test_assert_dynamics_ready_calls_ener_force_when_mlpot_required(monkeypatch)
     monkeypatch.setitem(sys.modules, "pycharmm.energy", fake_energy)
     monkeypatch.setitem(sys.modules, "pycharmm.lingo", fake_lingo)
 
-    assert_dynamics_ready(max_grms=50.0, require_mlpot_user=True)
+    ctx = _Ctx()
+    assert_dynamics_ready(max_grms=50.0, require_mlpot_user=True, mlpot_ctx=ctx)
+    assert reregistered == ["yes"]
     assert scripts == ["ENER FORCE"]
 
 

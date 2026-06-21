@@ -2672,6 +2672,7 @@ def run_dynamics_with_io(
                     ):
                         chunk_retried = True
                         post_rescue_in_memory_mode = True
+                        post_rescue_handoff_applied = False
                         steps_done = steps_before_chunk
                         rerun_chunk = True
                         print(

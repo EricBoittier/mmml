@@ -154,7 +154,7 @@ def test_overlap_early_abort_recovery_retries_chunk(tmp_path):
         return_value=baseline,
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_post_rescue_overlap_handoff",
-    ):
+    ) as post_rescue:
         run_dynamics_with_io(
             {"nstep": 500},
             CharmmTrajectoryFiles(restart_write=tmp_path / "heat.res"),
@@ -163,6 +163,7 @@ def test_overlap_early_abort_recovery_retries_chunk(tmp_path):
         )
 
     assert len(calls) == 2
+    post_rescue.assert_called_once()
 
 
 def test_resolve_defaults_to_rescue_and_1p5A():
@@ -298,6 +299,25 @@ def test_refresh_overlap_prior_segment_restart(tmp_path):
     ensure.assert_called_once_with(path)
     assert updated is not None
     assert updated.prior_segment_restart == valid_path
+
+
+def test_refresh_overlap_prior_segment_restart_skips_scratch(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        refresh_overlap_prior_segment_restart,
+    )
+
+    scratch = tmp_path / "heat_dcm_10.0.overlap_a.res"
+    base = DynamicsOverlapConfig(
+        action="rescue",
+        n_monomers=2,
+        max_monomer_extent_A=12.0,
+    )
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
+    ) as ensure:
+        updated = refresh_overlap_prior_segment_restart(base, restart_path=scratch)
+    ensure.assert_not_called()
+    assert updated is base
 
 
 def test_attach_prior_keeps_staged_prior_when_rerun_attach_fails(tmp_path):
