@@ -331,3 +331,94 @@ def test_prepare_pycharmm_handoff_continuation_writes_seed(
     assert seed == seed_path.resolve()
     assert restored == [seed_path.resolve()]
     assert args.restart_from == seed_path.resolve()
+
+
+def test_resolve_existing_file_path(tmp_path: Path) -> None:
+    from mmml.cli.run.md_handoff import _resolve_existing_file_path
+    import mmml.cli.run.md_handoff as md_handoff
+
+    # 1. Test None or empty path
+    assert _resolve_existing_file_path(None) is None
+    assert _resolve_existing_file_path("") is None
+
+    # 2. Test an existing file at direct absolute path
+    test_file = tmp_path / "test_file.res"
+    test_file.write_text("dummy content")
+    assert _resolve_existing_file_path(test_file) == test_file.resolve()
+
+    # Get the repo root used by the helper
+    repo_root = Path(md_handoff.__file__).resolve().parents[3]
+
+    # 3. Test matching triggers (e.g. artifacts)
+    dummy_artifact = repo_root / "artifacts" / "test_dummy_artifact.res"
+    dummy_artifact.parent.mkdir(parents=True, exist_ok=True)
+    dummy_artifact.write_text("dummy artifact")
+    try:
+        # Resolve path using trigger
+        fake_mount_path = "/invalid_mount/root/artifacts/test_dummy_artifact.res"
+        resolved = _resolve_existing_file_path(fake_mount_path)
+        assert resolved == dummy_artifact.resolve()
+    finally:
+        if dummy_artifact.is_file():
+            dummy_artifact.unlink()
+
+    # 4. Test grandparent/parent/filename fallback
+    dummy_campaign_file = repo_root / "artifacts" / "pbc_solvent_burst" / "test_camp" / "handoff" / "final.res"
+    dummy_campaign_file.parent.mkdir(parents=True, exist_ok=True)
+    dummy_campaign_file.write_text("dummy campaign restart")
+    try:
+        fake_camp_path = "/invalid_mount/root/test_camp/handoff/final.res"
+        resolved = _resolve_existing_file_path(fake_camp_path)
+        assert resolved == dummy_campaign_file.resolve()
+    finally:
+        if dummy_campaign_file.is_file():
+            dummy_campaign_file.unlink()
+            # Clean up the directory structure we created if empty
+            try:
+                dummy_campaign_file.parent.rmdir()
+                dummy_campaign_file.parent.parent.rmdir()
+            except OSError:
+                pass
+
+
+def test_resolve_handoff_restart_template_resolves_varying_mount(
+    nve_stub: Path, tmp_path: Path
+) -> None:
+    import argparse
+    from mmml.cli.run.md_handoff import resolve_handoff_restart_template
+    import mmml.cli.run.md_handoff as md_handoff
+
+    repo_root = Path(md_handoff.__file__).resolve().parents[3]
+
+    dummy_camp_res = repo_root / "artifacts" / "pbc_solvent_burst" / "test_camp_mount" / "handoff" / "final.res"
+    dummy_camp_res.parent.mkdir(parents=True, exist_ok=True)
+    dummy_camp_res.write_text(nve_stub.read_text())
+
+    npz_path = repo_root / "artifacts" / "pbc_solvent_burst" / "test_camp_mount" / "handoff" / "state.npz"
+    npz_path.write_bytes(b"placeholder")
+
+    try:
+        handoff = MdHandoffState(
+            positions=np.zeros((20, 3)),
+            atomic_numbers=np.ones(20, dtype=int),
+        )
+        foreign_npz_path = "/foreign_mount_point/artifacts/pbc_solvent_burst/test_camp_mount/handoff/state.npz"
+        args = argparse.Namespace(
+            handoff_template_res=None,
+            continue_from=foreign_npz_path,
+        )
+        got = resolve_handoff_restart_template(handoff, args, {})
+        assert got == dummy_camp_res.resolve()
+    finally:
+        if dummy_camp_res.is_file():
+            dummy_camp_res.unlink()
+        if npz_path.is_file():
+            npz_path.unlink()
+        try:
+            dummy_camp_res.parent.rmdir()
+            dummy_camp_res.parent.parent.rmdir()
+            dummy_camp_res.parent.parent.parent.rmdir()
+        except OSError:
+            pass
+
+

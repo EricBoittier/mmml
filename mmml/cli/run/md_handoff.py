@@ -158,6 +158,41 @@ def handoff_from_charmm(
     )
 
 
+def _resolve_existing_file_path(raw_path: str | Path | None) -> Path | None:
+    """Robustly resolve path to an existing file, handling mount/node mismatches."""
+    if not raw_path:
+        return None
+    path = Path(raw_path).expanduser()
+    if path.is_file():
+        return path.resolve()
+
+    parts = list(path.parts)
+    # Find root directories at the base of the repository
+    for trigger in ("artifacts", "workflows", "examples", "results"):
+        if trigger in parts:
+            idx = parts.index(trigger)
+            rel_path = Path(*parts[idx:])
+            repo_root = Path(__file__).resolve().parents[3]
+            cand = (repo_root / rel_path).resolve()
+            if cand.is_file():
+                return cand
+
+            cand_cwd = (Path.cwd() / rel_path).resolve()
+            if cand_cwd.is_file():
+                return cand_cwd
+
+    filename = path.name
+    if len(parts) >= 3:
+        parent_name = parts[-2]
+        grandparent_name = parts[-3]
+        repo_root = Path(__file__).resolve().parents[3]
+        cand = (repo_root / "artifacts" / "pbc_solvent_burst" / grandparent_name / parent_name / filename).resolve()
+        if cand.is_file():
+            return cand
+
+    return None
+
+
 def resolve_handoff_restart_template(
     handoff: MdHandoffState,
     args: argparse.Namespace,
@@ -166,36 +201,40 @@ def resolve_handoff_restart_template(
     """Best restart template for patching handoff coords/velocities/cell into CHARMM format."""
     explicit = getattr(args, "handoff_template_res", None)
     if explicit:
-        path = Path(str(explicit)).expanduser()
-        if path.is_file():
-            return path.resolve()
+        resolved = _resolve_existing_file_path(explicit)
+        if resolved is not None:
+            return resolved
 
     meta = handoff.metadata or {}
     for key in ("restart_path", "path"):
         raw = meta.get(key)
         if not raw:
             continue
-        path = Path(str(raw)).expanduser()
-        if path.is_file() and path.suffix.lower() == ".res":
-            return path.resolve()
+        resolved = _resolve_existing_file_path(raw)
+        if resolved is not None and resolved.suffix.lower() == ".res":
+            return resolved
 
     continue_from = getattr(args, "continue_from", None)
     if continue_from:
-        cf = Path(str(continue_from)).expanduser()
-        if cf.is_file():
+        cf = _resolve_existing_file_path(continue_from)
+        if cf is not None:
             if cf.suffix.lower() == ".res":
-                return cf.resolve()
+                return cf
             final_res = cf.parent / "final.res"
-            if final_res.is_file():
-                return final_res.resolve()
+            resolved_final = _resolve_existing_file_path(final_res)
+            if resolved_final is not None:
+                return resolved_final
 
     for cand in (paths.get("heat_res"), paths.get("equi_res"), paths.get("prod_res")):
-        if cand is not None and Path(cand).is_file() and _is_usable_restart_template(Path(cand)):
-            return Path(cand).resolve()
+        if cand is not None:
+            resolved = _resolve_existing_file_path(cand)
+            if resolved is not None and _is_usable_restart_template(resolved):
+                return resolved
 
     for backup in _overlap_scratch_restart_backups(paths):
-        if _is_usable_restart_template(backup):
-            return backup.resolve()
+        resolved = _resolve_existing_file_path(backup)
+        if resolved is not None and _is_usable_restart_template(resolved):
+            return resolved
     return None
 
 
@@ -789,7 +828,8 @@ def enrich_handoff_from_restart_files(
     for key in ("path", "restart_path"):
         raw = handoff.metadata.get(key)
         if raw:
-            candidates.append(Path(str(raw)))
+            resolved = _resolve_existing_file_path(raw)
+            candidates.append(resolved if resolved is not None else Path(str(raw)))
     final_res = root / "handoff" / "final.res"
     if final_res.is_file():
         candidates.append(final_res)
