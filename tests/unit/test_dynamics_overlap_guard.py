@@ -1706,6 +1706,70 @@ def test_apply_overlap_chunk_preserves_heat_cold_start_kw():
     assert kw3["TEMINC"] == 48.0
 
 
+def test_apply_overlap_chunk_hoover_cpt_keeps_iasvel_zero_after_boltzmann():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
+
+    kw = {
+        "start": False,
+        "iasvel": 0,
+        "cpt": True,
+        "hoover reft": 10.0,
+        "firstt": 10.0,
+        "finalt": 24.0,
+    }
+    _apply_overlap_chunk_dynamics_kw(kw, chunk_index=0, has_restart_read=False)
+    assert kw["iasvel"] == 0
+    assert kw["restart"] is False
+    assert kw["iunrea"] == -1
+
+
+def test_run_dynamics_with_io_mlpot_defaults_overlap_memory_handoff(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        CharmmTrajectoryFiles,
+        run_dynamics_with_io,
+    )
+
+    cfg = DynamicsOverlapConfig(
+        action="error",
+        min_distance_A=0.5,
+        check_interval=2,
+        n_monomers=2,
+        use_pbc=False,
+        memory_handoff=False,
+        max_monomer_extent_A=0.0,
+    )
+    io = CharmmTrajectoryFiles(restart_write=tmp_path / "heat.res")
+    calls: list[dict] = []
+    mlpot_ctx = mock.Mock()
+
+    def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
+        calls.append(dict(kw))
+        return mock.Mock()
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        side_effect=fake_chunk,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+        return_value=(5.0, False),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
+        return_value=2,
+    ):
+        run_dynamics_with_io(
+            {"nstep": 6, "new": False, "start": False, "restart": False, "iasvel": 0},
+            io,
+            overlap=cfg,
+            overlap_context="heat segment 1/10",
+            mlpot_ctx=mlpot_ctx,
+        )
+    assert len(calls) == 3
+    assert all(call.get("restart") is False for call in calls)
+    assert all(call.get("iunrea") == -1 for call in calls)
+
+
 def test_ensure_valid_overlap_scratch_restart_raises_on_rest_minus_one(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _ensure_valid_overlap_scratch_restart,

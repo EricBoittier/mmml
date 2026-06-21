@@ -449,6 +449,8 @@ def build_benchmark_md_system_argv(
             argv.extend(["--heat-thermostat", str(job["heat_thermostat"])])
         if job.get("no_echeck_heat") or cfg.get("no_echeck_heat"):
             argv.append("--no-echeck-heat")
+        if job.get("dynamics_overlap_memory_handoff", cfg.get("dynamics_overlap_memory_handoff")):
+            argv.append("--dynamics-overlap-memory-handoff")
         if job.get("no_echeck") or cfg.get("no_echeck"):
             argv.append("--no-echeck")
         heat_ihtfrq = job.get("heat_ihtfrq")

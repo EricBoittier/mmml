@@ -58,6 +58,7 @@ cleanup_strategy:
     dynamics_intra_min_distance: 0.5
     # Mid-segment extent/overlap checks (heat default; not end-of-segment only).
     dynamics_overlap_check_interval: 250
+    dynamics_overlap_memory_handoff: true
     bonded_mm_mini: true
     bonded_mm_mini_after: mini,heat,equi
     bonded_mm_mini_steps: 100

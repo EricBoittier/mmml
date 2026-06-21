@@ -1398,7 +1398,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         if "mini" in stages:
             restart_from = None
         prev_restart: Path | None = restart_from
-        prev_restart_is_current_state = "mini" in stages
+        prev_restart_is_current_state = "mini" in stages or pretreat_mm
         memory_handoff_next = False
         for stage in dyn_stages:
             if stage == "heat" and n_heat_segments > 1:
