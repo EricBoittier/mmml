@@ -594,6 +594,12 @@ class MinimizeWithMlpotConfig:
     show_energy: bool = False
     verbose: bool = False
     test_first: Optional["TestFirstConfig"] = None
+    # When the MLpot USER energy before SD exceeds this threshold (kcal/mol),
+    # run a bonded-MM rescue pass (MLpot detached) before the main MLpot SD.
+    # None disables the check; 1e5 is a safe default for catching severe clashes.
+    pre_sd_bonded_recovery_energy_kcalmol: Optional[float] = None
+    # Number of bonded-MM SD steps to use for the pre-SD recovery pass.
+    pre_sd_bonded_recovery_nstep: int = 200
 
 
 def _import_pycharmm_modules():
@@ -2992,11 +2998,46 @@ def minimize_with_mlpot(
                 assert_mlpot_user_active,
             )
 
-            assert_mlpot_user_active(
+            pre_sd_user = assert_mlpot_user_active(
                 config.mlpot_ctx,
                 context="MLpot SD minimize",
                 quiet=not config.verbose,
             )
+            # If the USER energy is pathologically high (severe clashes from Packmol
+            # placement that CHARMM MM pre-min could not fully resolve), run a
+            # bonded-only rescue SD *before* the MLpot SD so the ML potential starts
+            # from a geometry it can actually minimize.
+            _threshold = config.pre_sd_bonded_recovery_energy_kcalmol
+            if _threshold is not None and pre_sd_user > float(_threshold):
+                print(
+                    f"Pre-SD bonded recovery: USER={pre_sd_user:.1f} kcal/mol "
+                    f"> threshold {float(_threshold):.1f} kcal/mol; "
+                    f"running bonded-MM SD ({config.pre_sd_bonded_recovery_nstep} steps) "
+                    "before MLpot SD minimize",
+                    flush=True,
+                )
+                minimize_bonded_mm_recovery(
+                    config.mlpot_ctx,
+                    BondedMmMiniConfig(
+                        nstep_sd=config.pre_sd_bonded_recovery_nstep,
+                        nprint=max(1, config.nprint),
+                        tolenr=config.tolenr,
+                        tolgrd=config.tolgrd,
+                        verbose=config.verbose,
+                        show_energy=config.show_energy,
+                    ),
+                )
+                # Re-check USER after bonded recovery to confirm MLpot is still active.
+                post_recover_user = assert_mlpot_user_active(
+                    config.mlpot_ctx,
+                    context="MLpot SD minimize (post bonded recovery)",
+                    quiet=not config.verbose,
+                )
+                print(
+                    f"Pre-SD bonded recovery done: USER {pre_sd_user:.1f} "
+                    f"-> {post_recover_user:.1f} kcal/mol",
+                    flush=True,
+                )
         if config.verbose:
             print(
                 f"SD pass 1 (free, all atoms): nstep={config.nstep} nprint={config.nprint}"

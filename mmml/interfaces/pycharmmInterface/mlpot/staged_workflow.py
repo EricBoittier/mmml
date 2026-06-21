@@ -1262,6 +1262,11 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     f"\nMLpot SD minimize: {mini_nstep} steps/pass, {n_atoms} atoms",
                     flush=True,
                 )
+            _pre_sd_threshold = getattr(args, "pre_sd_recovery_energy_threshold", None)
+            if _pre_sd_threshold is None and getattr(args, "bonded_mm_mini", True):
+                # Default: 100 kcal/mol per atom — catches severe Packmol clash energies
+                # (e.g. 17M kcal/mol for 890 atoms) while ignoring normal ML energies.
+                _pre_sd_threshold = 100.0 * float(n_atoms)
             minimize_with_mlpot(
                 MinimizeWithMlpotConfig(
                     fixed_ml_selection=fix_sel,
@@ -1283,6 +1288,10 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     skip_if_crd_exists=bool(getattr(args, "skip_if_crd_exists", False)),
                     test_first=resolve_test_first_config(args),
                     show_energy=show_energy,
+                    pre_sd_bonded_recovery_energy_kcalmol=_pre_sd_threshold,
+                    pre_sd_bonded_recovery_nstep=int(
+                        getattr(args, "bonded_mm_mini_steps", 200) or 200
+                    ),
                 )
             )
             if save_mini and legacy_mlpot is not None:
