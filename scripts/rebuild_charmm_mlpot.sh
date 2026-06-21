@@ -56,7 +56,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 F90="$CHARMM_HOME/source/api/api_func.F90"
-PATCH_F90="$ROOT/setup/api/api_func.F90"
+PATCH_F90="${MMML_PATCH_SOURCE:-$ROOT/setup/api/api_func.F90}"
 if [[ ! -f "$F90" ]]; then
   echo "rebuild_charmm_mlpot: missing $F90" >&2
   exit 1
@@ -67,6 +67,9 @@ if [[ "$SYNC_PATCHES" == 1 && -f "$PATCH_F90" ]]; then
     echo "Syncing MLpot limits from $PATCH_F90"
     cp -f "$PATCH_F90" "$F90"
   fi
+elif [[ "$SYNC_PATCHES" == 1 ]]; then
+  echo "rebuild_charmm_mlpot: patch source not found: $PATCH_F90" >&2
+  exit 1
 fi
 
 echo "MLpot limits in source:"

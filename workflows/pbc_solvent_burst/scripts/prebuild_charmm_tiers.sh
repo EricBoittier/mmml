@@ -49,3 +49,4 @@ for row in "${N_ML_LIST[@]}"; do
 done
 
 echo "Done. Tier libs under \${CHARMM_BUILD_DIR:-\$HOME/.cache/mmml-charmm-build}/tier_*_nodomdec/"
+echo "Each tier has lib/libcharmm.so, api_func.F90, and .max_npr stamp — jobs reuse these without rebuilding."
