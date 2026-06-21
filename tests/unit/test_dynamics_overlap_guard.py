@@ -67,6 +67,104 @@ def test_monomer_offsets_uniform():
     np.testing.assert_array_equal(off, [0, 5, 10])
 
 
+def test_attach_prior_uses_geometry_fallback_ladder(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        attach_prior_segment_restart,
+    )
+
+    baseline = tmp_path / "geometry_baseline_dcm_90.res"
+    baseline.write_text("baseline\n", encoding="utf-8")
+    base = DynamicsOverlapConfig(
+        action="rescue",
+        n_monomers=2,
+        geometry_fallback_restarts=(baseline,),
+    )
+    cfg = attach_prior_segment_restart(
+        base,
+        segment_index=0,
+        out_dir=tmp_path,
+        restart_prefix="heat_dcm_90",
+        restart_write=tmp_path / "heat_dcm_90.0.res",
+    )
+    assert cfg is not None
+    assert cfg.prior_segment_restart == baseline.resolve()
+
+
+def test_extent_rescue_succeeds_with_baseline_on_segment_zero(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        attach_prior_segment_restart,
+        check_dynamics_overlap,
+    )
+
+    baseline = tmp_path / "geometry_baseline_dcm_90.res"
+    baseline.write_text("baseline\n", encoding="utf-8")
+    cfg = attach_prior_segment_restart(
+        DynamicsOverlapConfig(
+            action="rescue",
+            min_distance_A=0.0,
+            intra_min_distance_A=0.0,
+            max_monomer_extent_A=12.0,
+            n_monomers=2,
+            geometry_fallback_restarts=(baseline,),
+        ),
+        segment_index=0,
+        out_dir=tmp_path,
+        restart_prefix="heat_dcm_90",
+        restart_write=tmp_path / "heat_dcm_90.0.res",
+    )
+    assert cfg is not None
+    assert cfg.prior_segment_restart == baseline.resolve()
+
+
+def test_overlap_early_abort_recovery_retries_chunk(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+
+    baseline = tmp_path / "geometry_baseline.res"
+    baseline.write_text("baseline\n", encoding="utf-8")
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        min_distance_A=0.5,
+        check_interval=500,
+        n_monomers=2,
+        use_pbc=False,
+        geometry_fallback_restarts=(baseline,),
+    )
+    calls: list[int] = []
+
+    def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
+        calls.append(int(kw["nstep"]))
+        if _io is not None and _io.restart_write is not None:
+            step = 40 if len(calls) == 1 else 500
+            Path(_io.restart_write).write_text(f"REST {step} 1\n", encoding="utf-8")
+        return mock.Mock()
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        side_effect=fake_chunk,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+        return_value=(5.0, False),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
+        side_effect=lambda path: int(Path(path).read_text().split()[1]),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.restore_geometry_from_ladder",
+        return_value=baseline,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_post_rescue_overlap_handoff",
+    ):
+        run_dynamics_with_io(
+            {"nstep": 500},
+            CharmmTrajectoryFiles(restart_write=tmp_path / "heat.res"),
+            overlap=cfg,
+            overlap_context="heat segment 1/8",
+        )
+
+    assert len(calls) == 2
+
+
 def test_resolve_defaults_to_rescue_and_1p5A():
     args = argparse.Namespace()
     cfg = resolve_dynamics_overlap_config(args, n_monomers=4, use_pbc=True)
@@ -797,12 +895,13 @@ def test_overlap_skips_check_when_chunk_aborts_early(tmp_path, capsys):
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
         return_value=300,
     ):
-        run_dynamics_with_io(
-            {"nstep": 500},
-            CharmmTrajectoryFiles(restart_write=tmp_path / "heat.res"),
-            overlap=cfg,
-            overlap_context="heat segment 1/8",
-        )
+        with pytest.raises(RuntimeError, match="dynamics aborted after chunk"):
+            run_dynamics_with_io(
+                {"nstep": 500},
+                CharmmTrajectoryFiles(restart_write=tmp_path / "heat.res"),
+                overlap=cfg,
+                overlap_context="heat segment 1/8",
+            )
 
     post_chunk_steps = [
         call.kwargs["step"]

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 from typing import Any, Literal
 
@@ -42,6 +43,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     setup_cons_fix_for_resids,
     timestep_ps_from_dt_fs,
     turn_off_cons_fix,
+    overlap_run_state_kwargs_from_args,
     validate_resids_for_cluster,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
@@ -76,6 +78,11 @@ from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
     maybe_run_bonded_mm_mini_after_stage,
     record_mm_baseline_strain,
     rewrite_dynamics_restart_from_current_state,
+)
+from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+    attach_geometry_checkpoints_to_overlap,
+    discover_resume_restart,
+    write_geometry_baseline_restart,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
     ensure_charmm_crystal_for_cpt,
@@ -164,6 +171,7 @@ def _artifact_paths(out_dir: Path, tag: str) -> dict[str, Path]:
         "charmm_mm_equi_dcd": pretreat_dir / f"charmm_mm_equi_{tag}.dcd",
         "charmm_mm_prod_res": pretreat_dir / f"charmm_mm_prod_{tag}.res",
         "charmm_mm_prod_dcd": pretreat_dir / f"charmm_mm_prod_{tag}.dcd",
+        "geometry_baseline_res": out_dir / f"geometry_baseline_{tag}.res",
         "heat_res": out_dir / f"heat_{tag}.res",
         "heat_dcd": out_dir / f"heat_{tag}.dcd",
         "nve_res": out_dir / f"nve_{tag}.res",
@@ -723,6 +731,9 @@ def _reset_stage_restart(
     if restart_path is None:
         return
     path = Path(restart_path)
+    if path.name.startswith("geometry_baseline_") and path.suffix == ".res":
+        print(f"Keeping geometry baseline restart: {path}", flush=True)
+        return
     preserve_main = (
         restart_read is not None
         and path.is_file()
@@ -978,6 +989,30 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     n_atoms = len(z)
     paths = _artifact_paths(out_dir, tag)
     save_artifacts = bool(getattr(args, "save", True))
+    n_heat_segments_early = max(1, int(getattr(args, "n_heat_segments", 1)))
+    if not getattr(args, "restart_from", None):
+        summary_path = out_dir / "stage_summary.json"
+        should_resume = False
+        if summary_path.is_file():
+            try:
+                payload = json.loads(summary_path.read_text(encoding="utf-8"))
+                should_resume = int(payload.get("exit_code", 0)) != 0
+            except (json.JSONDecodeError, OSError, TypeError, ValueError):
+                should_resume = False
+        if should_resume:
+            resume_restart = discover_resume_restart(
+                out_dir,
+                tag,
+                paths=paths,
+                n_heat_segments=n_heat_segments_early,
+            )
+            if resume_restart is not None:
+                args.restart_from = str(resume_restart)
+                if not args.quiet:
+                    print(
+                        f"Resuming staged workflow from {resume_restart.name}",
+                        flush=True,
+                    )
     mini_registry: MinimizeArtifactRegistry | None = (
         MinimizeArtifactRegistry(out_dir, tag) if save_artifacts else None
     )
@@ -1273,6 +1308,22 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 mlpot_ctx=ctx,
             )
 
+        baseline_path = write_geometry_baseline_restart(out_dir, tag)
+        if baseline_path is not None:
+            paths["geometry_baseline_res"] = baseline_path
+            if not args.quiet:
+                print(
+                    f"Geometry baseline restart -> {baseline_path.name}",
+                    flush=True,
+                )
+
+        overlap_cfg = attach_geometry_checkpoints_to_overlap(
+            overlap_cfg,
+            paths=paths,
+            tag=tag,
+            n_heat_segments=n_heat_segments_early,
+        )
+
         assert_mlpot_user_active(ctx, context="staged dynamics", quiet=bool(args.quiet))
         assert_dynamics_ready(
             max_grms=float(getattr(args, "max_grms_before_dyn", 50.0)),
@@ -1429,7 +1480,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         restart_path=restart_path,
                     )
                     ensure_domdec_off_for_mlpot_energy(context="staged NPT segment")
-                    if seg_i == 0:
+                    if seg_i == 0 and not _heat_in_place_restart(seg_io):
                         _reset_stage_restart(
                             Path(seg_io.restart_write) if seg_io.restart_write else None,
                             trajectory_path=(
@@ -1572,6 +1623,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         mlpot_ctx=ctx,
                         rng_base=getattr(args, "seed", None),
                         loose_pbc=loose_pbc,
+                        **overlap_run_state_kwargs_from_args(args),
                     )
                     _validate_dyn_stage_completion(
                         args,
@@ -1714,6 +1766,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         mlpot_ctx=ctx,
                         rng_base=getattr(args, "seed", None),
                         loose_pbc=loose_pbc,
+                        **overlap_run_state_kwargs_from_args(args),
                     )
                     _validate_dyn_stage_completion(
                         args,
@@ -1841,6 +1894,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         mlpot_ctx=ctx,
                         rng_base=getattr(args, "seed", None),
                         loose_pbc=loose_pbc,
+                        **overlap_run_state_kwargs_from_args(args),
                     )
                     _validate_dyn_stage_completion(
                         args,
@@ -2106,6 +2160,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 mlpot_ctx=ctx,
                 rng_base=getattr(args, "seed", None),
                 loose_pbc=loose_pbc,
+                **overlap_run_state_kwargs_from_args(args),
             )
             _validate_dyn_stage_completion(
                 args,

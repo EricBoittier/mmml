@@ -618,6 +618,33 @@ def add_run_state_checkpoint_args(parser: argparse.ArgumentParser) -> None:
         default=None,
         help="Run-state output directory (default: <output-dir>/run_state)",
     )
+    group.add_argument(
+        "--overlap-run-state-dir",
+        type=Path,
+        default=None,
+        help="Overlap-chunk geometry sidecar directory (default: <output-dir>/run_state/overlap)",
+    )
+    group.add_argument(
+        "--overlap-run-state-every-chunks",
+        type=int,
+        default=0,
+        help="Save overlap run-state sidecar every N successful chunks (0=off)",
+    )
+
+
+def overlap_run_state_kwargs_from_args(args: argparse.Namespace) -> dict[str, Any]:
+    every = int(getattr(args, "overlap_run_state_every_chunks", 0) or 0)
+    if every <= 0:
+        return {}
+    out_dir = getattr(args, "output_dir", None)
+    default_dir = (
+        Path(out_dir) / "run_state" / "overlap" if out_dir is not None else Path("run_state/overlap")
+    )
+    rs_dir = Path(getattr(args, "overlap_run_state_dir", None) or default_dir)
+    return {
+        "overlap_run_state_dir": rs_dir,
+        "overlap_run_state_every_chunks": every,
+    }
 
 
 def add_monomer_constraint_args(

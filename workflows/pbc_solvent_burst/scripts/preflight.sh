@@ -57,6 +57,17 @@ if matrix_uses_bulk_density(cfg):
     print('NOTE: bulk-density matrix targets configured fractions of liquid N (see N_bulk table).')
 else:
     print('NOTE: large cluster_sizes in a small box are very dense; expect overlap rescue at large N.')
+from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import (
+    NPR_TIERS,
+    estimate_ml_atoms,
+    select_npr_tier,
+    validate_mlpot_system_size,
+)
+max_n = max(int(c.n_monomers) for c in __import__('campaign_lib', fromlist=['iter_matrix_cells']).iter_matrix_cells(cfg))
+n_ml = estimate_ml_atoms(max_n)
+tier = select_npr_tier(n_ml)
+print(f'max matrix N={max_n} -> n_ml={n_ml} CHARMM tier={tier} (max_Npr={NPR_TIERS[tier]})')
+validate_mlpot_system_size(n_ml)
 "
 
 if ! command -v packmol >/dev/null 2>&1; then

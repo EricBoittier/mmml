@@ -49,6 +49,8 @@ class DynamicsOverlapConfig:
     repack_spacing_A: float | None = None
     max_monomer_extent_A: float = 12.0
     prior_segment_restart: Path | None = None
+    geometry_baseline_restart: Path | None = None
+    geometry_fallback_restarts: tuple[Path, ...] = ()
     segment_index: int | None = None
     segment_out_dir: Path | None = None
     segment_restart_prefix: str | None = None
@@ -394,14 +396,22 @@ def resolve_prior_segment_restart_path(
     prev_restart: Path | str | None = None,
     out_dir: Path | str | None = None,
     restart_prefix: str | None = None,
+    geometry_fallback_restarts: tuple[Path, ...] | list[Path] = (),
+    geometry_baseline_restart: Path | str | None = None,
 ) -> Path | None:
     """Return the best on-disk checkpoint before the current segment."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
+
     candidates: list[Path] = []
     seg_i = int(segment_index)
     if seg_i > 0 and out_dir is not None and restart_prefix:
         candidates.append(Path(out_dir) / f"{restart_prefix}.{seg_i - 1}.res")
     if prev_restart is not None:
         candidates.append(Path(prev_restart))
+    for cand in geometry_fallback_restarts:
+        candidates.append(Path(cand))
+    if geometry_baseline_restart is not None:
+        candidates.append(Path(geometry_baseline_restart))
     seen: set[str] = set()
     for cand in candidates:
         p = cand.expanduser()
@@ -409,8 +419,9 @@ def resolve_prior_segment_restart_path(
         if key in seen:
             continue
         seen.add(key)
-        if p.is_file():
-            return p.resolve()
+        valid = _valid_restart_file(p)
+        if valid is not None:
+            return valid
     return None
 
 
@@ -470,6 +481,8 @@ def attach_prior_segment_restart(
         prev_restart=prev_restart,
         out_dir=seg_out,
         restart_prefix=seg_prefix,
+        geometry_fallback_restarts=tagged.geometry_fallback_restarts,
+        geometry_baseline_restart=tagged.geometry_baseline_restart,
     )
     if prior is None:
         prior = infer_prior_restart_from_write_path(restart_write)

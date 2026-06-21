@@ -106,6 +106,115 @@ def load_run_state_tree(path: Path) -> dict[str, Any]:
     raise FileNotFoundError(f"No run state at {root}")
 
 
+def save_overlap_run_state(
+    directory: Path,
+    *,
+    step: int,
+    segment: str,
+    chunk_index: int,
+    positions: np.ndarray,
+    velocities: np.ndarray | None = None,
+    box: np.ndarray | None = None,
+    restart_path: Path | None = None,
+    quiet: bool = False,
+) -> Path:
+    """Persist overlap-chunk geometry sidecar (Orbax or NPZ)."""
+    directory = Path(directory).resolve()
+    directory.mkdir(parents=True, exist_ok=True)
+    metadata: dict[str, Any] = {
+        "step": int(step),
+        "segment": str(segment),
+        "chunk_index": int(chunk_index),
+        "restart_path": str(restart_path) if restart_path else None,
+    }
+    if box is not None:
+        metadata["box"] = np.asarray(box, dtype=np.float64).tolist()
+    tree = build_run_state_tree(
+        positions=positions,
+        atomic_numbers=np.zeros(len(positions), dtype=np.int32),
+        metadata=metadata,
+        velocities=velocities,
+    )
+    chunk_dir = directory / f"chunk_{int(chunk_index):04d}"
+    return save_run_state(chunk_dir, tree, quiet=quiet)
+
+
+def load_overlap_run_state(directory: Path) -> dict[str, Any]:
+    """Load the newest overlap run-state sidecar under ``directory``."""
+    root = Path(directory).expanduser().resolve()
+    if not root.is_dir():
+        raise FileNotFoundError(f"No overlap run state directory at {root}")
+    candidates = sorted(root.glob("chunk_*"))
+    if not candidates:
+        raise FileNotFoundError(f"No overlap chunk run state under {root}")
+    return load_run_state_tree(candidates[-1])
+
+
+def restore_positions_from_overlap_run_state(
+    directory: Path,
+    *,
+    label: str = "overlap run-state recovery",
+) -> bool:
+    """Reload CHARMM positions from the latest overlap sidecar."""
+    try:
+        tree = load_overlap_run_state(directory)
+    except FileNotFoundError:
+        return False
+    positions = tree.get("positions")
+    if positions is None:
+        return False
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+
+    sync_charmm_positions(np.asarray(positions, dtype=np.float64))
+    velocities = tree.get("velocities")
+    if velocities is not None:
+        try:
+            import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+            import pycharmm.coor as coor
+
+            v = np.asarray(velocities, dtype=np.float64)
+            coor.set_velocity(v[:, 0], v[:, 1], v[:, 2])
+        except Exception:
+            pass
+    print(f"{label}: restored positions from {directory}", flush=True)
+    return True
+
+
+def maybe_save_overlap_run_state(
+    directory: Path | None,
+    *,
+    step: int,
+    segment: str,
+    chunk_index: int,
+    restart_path: Path | None = None,
+    quiet: bool = True,
+) -> Path | None:
+    if directory is None:
+        return None
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+
+    positions = get_charmm_positions_array()
+    box = None
+    try:
+        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import _read_charmm_box_sides_A
+
+        sides = _read_charmm_box_sides_A()
+        if sides is not None:
+            box = np.asarray(sides, dtype=np.float64)
+    except Exception:
+        box = None
+    return save_overlap_run_state(
+        Path(directory),
+        step=step,
+        segment=segment,
+        chunk_index=chunk_index,
+        positions=positions,
+        box=box,
+        restart_path=restart_path,
+        quiet=quiet,
+    )
+
+
 def maybe_save_run_state_from_workflow(
     args: Any,
     *,
