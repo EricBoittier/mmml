@@ -322,6 +322,20 @@ class DecomposedMlpotCalculator:
                 parent = getattr(self, "_parent_model", None)
                 if parent is not None:
                     parent._last_ml_forces = self.last_ml_forces
+                try:
+                    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+                        charmm_lib_links_mpi,
+                    )
+                    from mmml.interfaces.pycharmmInterface.jax_device_policy import (
+                        mlpot_jax_device_name,
+                    )
+
+                    if charmm_lib_links_mpi() and mlpot_jax_device_name() == "gpu":
+                        from mmml.utils.jax_gpu_warmup import sync_jax_gpu_before_charmm
+
+                        sync_jax_gpu_before_charmm(phase="after MLpot gete")
+                except Exception:
+                    pass
         forces, e_kcal = broadcast_mlpot_result(forces, e_kcal, n)
         self.last_ml_forces = np.asarray(forces, dtype=np.float64, copy=True)
         parent = getattr(self, "_parent_model", None)

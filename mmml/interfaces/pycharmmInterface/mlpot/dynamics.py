@@ -1096,6 +1096,10 @@ def build_hoover_heat_dynamics(
         firstt=heat_firstt,
         hoover_reft=heat_firstt,
     )
+    # Constant-volume Hoover NVT (pmass=0): skip crystal resize updates. They are
+    # unnecessary for fixed-box heating and can segfault in libcharmm after MLpot
+    # PBC image/NB rebuilds on MPI-linked builds (aco/dcm clusters @ ~6k steps).
+    kw["ixtfrq"] = int(nstep) + 1
     return kw
 
 
