@@ -110,6 +110,58 @@ def test_select_npr_tier_aco_110_pbc():
     assert mlpot_limits.select_npr_tier(1100, pbc=True) == "xlarge"
 
 
+def test_select_npr_tier_aco_165_pbc():
+    assert mlpot_limits.select_npr_tier(1650, pbc=True) == "xxlarge"
+
+
+def test_validate_pbc_needs_larger_npr_than_vacuum(monkeypatch):
+    monkeypatch.setenv("MMML_CHARMM_MLPOT_MAX_ML", "50000")
+    monkeypatch.setenv("MMML_CHARMM_MLPOT_MAX_PAIRS", "12000000")
+    _clear_limits_cache()
+    # Vacuum estimate (~2.7M pairs) fits xlarge; PBC estimate (~16M) does not.
+    mlpot_limits.validate_mlpot_system_size(1650, pbc=False)
+    with pytest.raises(ValueError, match="max_Npr"):
+        mlpot_limits.validate_mlpot_system_size(1650, pbc=True)
+
+
+def test_register_mlpot_validates_pbc_pair_budget(monkeypatch):
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import register_mlpot
+
+    calls: list[tuple[int, bool]] = []
+
+    def _capture(n_ml: int, *, pbc: bool = False) -> None:
+        calls.append((n_ml, pbc))
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits.validate_mlpot_system_size",
+        _capture,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup._import_pycharmm",
+        lambda: mock.MagicMock(),
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.physnet_ml_atomic_numbers",
+        lambda z: z,
+    )
+    sel = mock.MagicMock()
+    sel.get_atom_indexes.return_value = list(range(1650))
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        return_value=mock.MagicMock(
+            __enter__=mock.Mock(return_value=None),
+            __exit__=mock.Mock(return_value=False),
+        ),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_mlpot_energy_block",
+        return_value="all",
+    ), mock.patch("mmml.interfaces.pycharmmInterface.mlpot.setup._require_mlpot_skip_iblo_support"), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup._install_ml_exclusions"
+    ):
+        register_mlpot(mock.MagicMock(), list(range(1650)), sel, use_pbc=True)
+    assert calls == [(1650, True)]
+
+
 def test_limits_status_reads_tier_api_func(tmp_path, monkeypatch):
     import os
 
