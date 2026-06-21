@@ -422,3 +422,42 @@ def test_resolve_handoff_restart_template_resolves_varying_mount(
             pass
 
 
+def test_resolve_handoff_restart_template_fallback_any_res(
+    nve_stub: Path, tmp_path: Path
+) -> None:
+    import argparse
+    from mmml.cli.run.md_handoff import resolve_handoff_restart_template
+    import mmml.cli.run.md_handoff as md_handoff
+
+    repo_root = Path(md_handoff.__file__).resolve().parents[3]
+
+    camp_dir = repo_root / "artifacts" / "pbc_solvent_burst" / "test_camp_fallback"
+    camp_dir.mkdir(parents=True, exist_ok=True)
+
+    other_res = camp_dir / "some_other_step.res"
+    other_res.write_text(nve_stub.read_text())
+
+    foreign_npz_path = str(camp_dir / "handoff" / "state.npz")
+
+    try:
+        handoff = MdHandoffState(
+            positions=np.zeros((20, 3)),
+            atomic_numbers=np.ones(20, dtype=int),
+        )
+        args = argparse.Namespace(
+            handoff_template_res=None,
+            continue_from=foreign_npz_path,
+        )
+        got = resolve_handoff_restart_template(handoff, args, {})
+        assert got == other_res.resolve()
+    finally:
+        if other_res.is_file():
+            other_res.unlink()
+        try:
+            camp_dir.rmdir()
+            camp_dir.parent.rmdir()
+        except OSError:
+            pass
+
+
+
