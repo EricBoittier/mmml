@@ -1351,6 +1351,7 @@ def _append_suite_mmml_handoff_args(cmd: list[str], args: argparse.Namespace) ->
         cmd,
         "--charmm-pre-minimize",
         bool(getattr(args, "charmm_pre_minimize", True)),
+    )
     cmd.extend(["--pre-min-fmax", str(getattr(args, "pre_min_fmax", 0.1))])
     cmd.extend(["--pre-min-steps", str(getattr(args, "pre_min_steps", 50))])
     if getattr(args, "ml_batch_size", None) is not None:
