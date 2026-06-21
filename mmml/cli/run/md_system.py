@@ -2143,9 +2143,14 @@ def run_backend(backend: str, argv: list[str], args: argparse.Namespace) -> int:
         out_dir = Path(args.output_dir) if args.output_dir is not None else None
         for row in plan:
             if row.stage != "mini":
-                row.nsteps_completed = row.nsteps_requested
-                row.ps_completed = row.ps_requested
-                row.status = "complete" if exit_code == 0 else "error"
+                if exit_code == 0:
+                    row.nsteps_completed = row.nsteps_requested
+                    row.ps_completed = row.ps_requested
+                    row.status = "complete"
+                else:
+                    row.nsteps_completed = 0
+                    row.ps_completed = 0.0
+                    row.status = "error"
                 if out_dir is not None and row.stage in {"heat", "equi", "nve", "prod"}:
                     row.frames_written = pycharmm_stage_dcd_frames(out_dir, row.stage, tag)
                     row.record_every_steps = max(1, int(row.record_every_steps or 1))
