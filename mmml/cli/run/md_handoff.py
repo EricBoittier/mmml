@@ -1082,22 +1082,31 @@ def _is_usable_restart_template(path: Path, expected_natom: int | None = None) -
         read_restart_coordinates,
         read_restart_natom,
         restart_has_nonfinite_coordinates,
+        _restart_coordinate_values,
     )
+    import sys
 
     if path.name.lower().startswith("continue_seed"):
         return False
     if restart_has_nonfinite_coordinates(path):
+        print(f"DEBUG restart_template: {path} contains non-finite coordinates or parse failed.", file=sys.stderr, flush=True)
         return False
     natom = read_restart_natom(path)
     if natom is None:
+        print(f"DEBUG restart_template: {path} NATOM could not be parsed.", file=sys.stderr, flush=True)
         return False
     if expected_natom is not None and int(natom) != int(expected_natom):
+        print(f"DEBUG restart_template: {path} NATOM mismatch: parsed {natom}, expected {expected_natom}", file=sys.stderr, flush=True)
         return False
     coords = read_restart_coordinates(path)
-    return (
-        coords is not None
-        and int(coords.shape[0]) == int(natom)
-    )
+    if coords is None:
+        flat_len = len(_restart_coordinate_values(path))
+        print(f"DEBUG restart_template: {path} read_restart_coordinates returned None. NATOM is {natom}, parsed {flat_len} coords (expected {3 * natom})", file=sys.stderr, flush=True)
+        return False
+    if int(coords.shape[0]) != int(natom):
+        print(f"DEBUG restart_template: {path} coords shape mismatch: shape {coords.shape}, NATOM {natom}", file=sys.stderr, flush=True)
+        return False
+    return True
 
 
 def _write_handoff_restart_via_charmm(
@@ -1177,6 +1186,33 @@ def _patch_handoff_into_restart_template(
     path.write_text(text, encoding="ascii", errors="ignore")
 
 
+def _find_usable_fallback_template(failed_template: Path, expected_natom: int) -> Path | None:
+    """Search for a usable fallback restart template in the vicinity of failed_template."""
+    try:
+        search_dirs = [failed_template.parent]
+        if failed_template.parent.name == "handoff":
+            search_dirs.append(failed_template.parent.parent)
+
+        curr = failed_template.parent
+        for _ in range(3):
+            curr = curr.parent
+            if curr == curr.parent:
+                break
+            search_dirs.append(curr)
+
+        for sdir in search_dirs:
+            if not sdir.is_dir():
+                continue
+            for res_file in sdir.rglob("*.res"):
+                if res_file.name.lower().startswith("continue_seed"):
+                    continue
+                if _is_usable_restart_template(res_file, expected_natom=expected_natom):
+                    return res_file
+    except Exception:
+        pass
+    return None
+
+
 def save_handoff_to_res(
   handoff: MdHandoffState,
   path: Path,
@@ -1205,7 +1241,14 @@ def save_handoff_to_res(
           charmm_loaded = False
 
       if not _is_usable_restart_template(template, expected_natom=len(handoff.positions)):
-          if charmm_loaded:
+          fallback = _find_usable_fallback_template(template, expected_natom=len(handoff.positions))
+          if fallback is not None:
+              print(
+                  f"WARNING: template {template} is unusable, but found usable fallback: {fallback}",
+                  flush=True,
+              )
+              template = fallback
+          elif charmm_loaded:
               template = None
           else:
               raise ValueError(
