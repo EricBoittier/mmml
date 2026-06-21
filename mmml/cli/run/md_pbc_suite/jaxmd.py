@@ -251,6 +251,22 @@ def main(argv: list[str] | None = None) -> int:
         default=DEFAULT_MM_SWITCH_WIDTH,
     )
     p.add_argument("--max-pairs", type=int, default=20_000)
+    p.add_argument(
+        "--ml-batch-size",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Chunk PhysNet monomer/dimer batches (auto: 256 on GPU / 64 on CPU for n>=40)."
+    )
+    p.add_argument(
+        "--ml-max-active-dimers",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Sparse ML dimer slot cap (PBC default max(1000, 6*n_monomers))."
+    )
+    from mmml.interfaces.pycharmmInterface.ml_dtypes import add_ml_compute_dtype_args
+    add_ml_compute_dtype_args(p)
     p.add_argument("--pre-min-fmax", type=float, default=0.1)
     p.add_argument("--pre-min-steps", type=int, default=50)
     p.add_argument("--bfgs-maxstep", type=float, default=0.05)
@@ -623,6 +639,9 @@ def main(argv: list[str] | None = None) -> int:
         flat_bottom_force_const=args.flat_bottom_k,
         flat_bottom_mode=args.flat_bottom_mode,
         defer_xla_gpu_warmup=bool(args.skip_jit_warmup),
+        ml_batch_size=getattr(args, "ml_batch_size", None),
+        ml_max_active_dimers=getattr(args, "ml_max_active_dimers", None),
+        ml_compute_dtype=getattr(args, "ml_compute_dtype", None),
     )
     cutoff = CutoffParameters(ml_switch_width=ml_w, mm_switch_on=mm_on, mm_switch_width=mm_w)
     calc_result = factory(

@@ -1351,9 +1351,14 @@ def _append_suite_mmml_handoff_args(cmd: list[str], args: argparse.Namespace) ->
         cmd,
         "--charmm-pre-minimize",
         bool(getattr(args, "charmm_pre_minimize", True)),
-    )
     cmd.extend(["--pre-min-fmax", str(getattr(args, "pre_min_fmax", 0.1))])
     cmd.extend(["--pre-min-steps", str(getattr(args, "pre_min_steps", 50))])
+    if getattr(args, "ml_batch_size", None) is not None:
+        cmd.extend(["--ml-batch-size", str(args.ml_batch_size)])
+    if getattr(args, "ml_max_active_dimers", None) is not None:
+        cmd.extend(["--ml-max-active-dimers", str(args.ml_max_active_dimers)])
+    if getattr(args, "ml_compute_dtype", None) is not None:
+        cmd.extend(["--ml-compute-dtype", str(args.ml_compute_dtype)])
 def _append_if_nonempty(cmd: list[str], flag: str, value: str | None) -> None:
     if value is None:
         return
