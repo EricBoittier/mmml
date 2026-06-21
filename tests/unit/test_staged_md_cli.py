@@ -189,6 +189,16 @@ def test_prior_restart_for_heat_rejects_pretreat_without_baseline(tmp_path: Path
     assert got is None
 
 
+def test_prior_restart_for_equi_rejects_handoff_seed_restart_from(tmp_path: Path):
+    handoff = tmp_path / "handoff" / "continue_seed.res"
+    handoff.parent.mkdir(parents=True)
+    handoff.write_text("seed\n", encoding="utf-8")
+    got = _prior_restart_for_stage(
+        "equi", {}, restart_from=handoff, tag="dcm_52", n_heat_segments=1
+    )
+    assert got is None
+
+
 def test_should_seed_heat_prior_restart_after_mini_in_memory():
     assert _should_seed_heat_prior_restart(
         seg_i=0,
