@@ -213,9 +213,23 @@ print(write_campaign_yaml(cfg, 'DCM', 30))
 
 ## Status
 
+Health dashboard for the full matrix (leg progress, DYNA energy/T from `stdout.log`, restart steps):
+
 ```bash
 bash scripts/status.sh
-# writes workflows/pbc_solvent_burst/results/status.csv
+bash scripts/status.sh -v                      # last DYNA> lines per run
+bash scripts/status.sh --failed -v             # failures only
+bash scripts/status.sh --tag dcm_154_t150_l32  # one-cell deep dive
+bash scripts/status.sh --plot-dir results/plots  # PNG time series (needs matplotlib)
+bash scripts/status.sh --json results/status.json
+```
+
+Writes `results/status.csv` with extended columns (`health`, `dyna_n_frames`, `temperature_last_K`, …).
+
+Post-mortem for a failed Slurm cell (errors, tail log, restarts):
+
+```bash
+bash scripts/diag_cell.sh dcm_154_t150_l32
 ```
 
 ## Configuration
