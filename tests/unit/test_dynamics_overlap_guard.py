@@ -180,6 +180,28 @@ def test_attach_prior_requires_on_disk_checkpoint(tmp_path):
     assert cfg2.prior_segment_restart == prior.resolve()
 
 
+def test_refresh_overlap_prior_segment_restart(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        refresh_overlap_prior_segment_restart,
+    )
+
+    path = tmp_path / "heat_dcm_10.0.res"
+    valid_path = path.resolve()
+    base = DynamicsOverlapConfig(
+        action="rescue",
+        n_monomers=2,
+        max_monomer_extent_A=12.0,
+    )
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
+        return_value=valid_path,
+    ) as ensure:
+        updated = refresh_overlap_prior_segment_restart(base, restart_path=path)
+    ensure.assert_called_once_with(path)
+    assert updated is not None
+    assert updated.prior_segment_restart == valid_path
+
+
 def test_attach_prior_keeps_staged_prior_when_rerun_attach_fails(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         attach_prior_segment_restart,
@@ -922,6 +944,7 @@ def test_mlpot_overlap_chunks_continue_in_memory_without_readyn(tmp_path):
         n_monomers=2,
         use_pbc=False,
         memory_handoff=True,
+        max_monomer_extent_A=0.0,
     )
     pos_ok = np.array(
         [
@@ -1598,6 +1621,7 @@ def test_overlap_refresh_scratch_restart_fixes_invalid_handoff(tmp_path):
         check_interval=2,
         n_monomers=2,
         use_pbc=False,
+        max_monomer_extent_A=0.0,
     )
     pos_ok = np.array(
         [
@@ -1714,6 +1738,7 @@ def test_overlap_single_chunk_uses_stage_dcd_directly(tmp_path):
         check_interval=10,
         n_monomers=2,
         use_pbc=False,
+        max_monomer_extent_A=0.0,
     )
     pos_ok = np.array(
         [
