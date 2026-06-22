@@ -1167,6 +1167,8 @@ def _sync_charmm_velocities(velocities: np.ndarray) -> None:
     """Push handoff velocities into CHARMM main set."""
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm.coor as coor
+    import pycharmm.lingo
+    import pandas as pd
 
     v = np.asarray(velocities, dtype=float)
     n = int(coor.get_natom())
@@ -1174,7 +1176,32 @@ def _sync_charmm_velocities(velocities: np.ndarray) -> None:
         raise ValueError(f"handoff velocities shape {v.shape} != ({n}, 3)")
     if not np.all(np.isfinite(v)):
         raise ValueError("handoff velocities must be finite")
-    coor.set_velocity(v[:, 0], v[:, 1], v[:, 2])
+        
+    comp_vel = pd.DataFrame(
+        {
+            "x": v[:, 0],
+            "y": v[:, 1],
+            "z": v[:, 2],
+            "w": np.zeros(n, dtype=float),
+        }
+    )
+    coor.set_comparison(comp_vel)
+    
+    pycharmm.lingo.charmm_script(
+        "scalar vx copy x comp\n"
+        "scalar vy copy y comp\n"
+        "scalar vz copy z comp\n"
+    )
+    
+    comp_zero = pd.DataFrame(
+        {
+            "x": np.zeros(n, dtype=float),
+            "y": np.zeros(n, dtype=float),
+            "z": np.zeros(n, dtype=float),
+            "w": np.zeros(n, dtype=float),
+        }
+    )
+    coor.set_comparison(comp_zero)
 
 
 def _is_overlap_scratch_restart(path: Path) -> bool:
