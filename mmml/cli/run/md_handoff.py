@@ -1421,6 +1421,16 @@ def save_handoff_to_res(
   except Exception:
     pass
 
+  try:
+      _write_synthetic_charmm_restart(handoff, path)
+      from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import read_restart_coordinates
+      if read_restart_coordinates(path) is not None:
+          import sys
+          print(f"save_handoff_to_res: fell back to synthetic restart {path.name}", file=sys.stderr, flush=True)
+          return path
+  except Exception:
+      pass
+
   raise ValueError(
       "save_handoff_to_res requires template_res when CHARMM is not loaded "
       "or in-memory restart write failed validation"
