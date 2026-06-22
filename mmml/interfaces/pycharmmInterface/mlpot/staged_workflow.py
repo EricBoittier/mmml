@@ -1857,17 +1857,30 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         context=f"equi segment {seg_i + 1}/{n_equi_segments}",
                         quiet=bool(args.quiet),
                     )
+                    stage_overlap = _overlap_for_stage(
+                        "equi",
+                        overlap_cfg,
+                        ctx=ctx,
+                        args=args,
+                        topology_psf=recovery_topology_psf,
+                        mini_registry=mini_registry,
+                    )
+                    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+                        attach_prior_segment_restart,
+                    )
+                    overlap_prior_restart = _overlap_extent_prior_restart(paths, prev_restart)
+                    stage_overlap = attach_prior_segment_restart(
+                        stage_overlap,
+                        segment_index=seg_i,
+                        prev_restart=overlap_prior_restart,
+                        out_dir=out_dir,
+                        restart_prefix=f"equi_{tag}",
+                        restart_write=seg_io.restart_write,
+                    )
                     run_dynamics_with_io(
                         kw,
                         seg_io,
-                        overlap=_overlap_for_stage(
-                            "equi",
-                            overlap_cfg,
-                            ctx=ctx,
-                            args=args,
-                            topology_psf=recovery_topology_psf,
-                            mini_registry=mini_registry,
-                        ),
+                        overlap=stage_overlap,
                         overlap_context=f"equi segment {seg_i + 1}/{n_equi_segments}",
                         mlpot_ctx=ctx,
                         rng_base=getattr(args, "seed", None),
@@ -1987,17 +2000,30 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         context=f"prod segment {seg_i + 1}/{n_prod_segments}",
                         quiet=bool(args.quiet),
                     )
+                    stage_overlap = _overlap_for_stage(
+                        "prod",
+                        overlap_cfg,
+                        ctx=ctx,
+                        args=args,
+                        topology_psf=recovery_topology_psf,
+                        mini_registry=mini_registry,
+                    )
+                    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+                        attach_prior_segment_restart,
+                    )
+                    overlap_prior_restart = _overlap_extent_prior_restart(paths, prev_restart)
+                    stage_overlap = attach_prior_segment_restart(
+                        stage_overlap,
+                        segment_index=seg_i,
+                        prev_restart=overlap_prior_restart,
+                        out_dir=out_dir,
+                        restart_prefix=f"prod_{tag}",
+                        restart_write=seg_io.restart_write,
+                    )
                     run_dynamics_with_io(
                         kw,
                         seg_io,
-                        overlap=_overlap_for_stage(
-                            "prod",
-                            overlap_cfg,
-                            ctx=ctx,
-                            args=args,
-                            topology_psf=recovery_topology_psf,
-                            mini_registry=mini_registry,
-                        ),
+                        overlap=stage_overlap,
                         overlap_context=f"prod segment {seg_i + 1}/{n_prod_segments}",
                         mlpot_ctx=ctx,
                         rng_base=getattr(args, "seed", None),

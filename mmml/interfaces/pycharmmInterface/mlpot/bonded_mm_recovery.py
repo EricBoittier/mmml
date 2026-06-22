@@ -1229,10 +1229,41 @@ def maybe_run_bonded_mm_mini_after_stage(
         context=f"bonded-MM-mini after {stage}",
     )
     _record_bonded_snapshot()
+    # Measure post-recovery strain to verify if it is low enough
+    low_enough = True
+    if baseline is not None:
+        post_recovery_strain = _measure_stage_bonded_strain(
+            ctx,
+            topology_psf=topology_psf or getattr(ctx, "topology_psf_path", None),
+        )
+        grms_margin, internal_margin, angl_margin = _bonded_strain_margins(args)
+        reasons = _recovery_reasons(
+            post_recovery_strain,
+            baseline,
+            grms_margin=grms_margin,
+            internal_margin=internal_margin,
+            angl_margin=angl_margin,
+        )
+        if reasons:
+            low_enough = False
+
+    restart_updated = False
+    if (low_enough or always) and restart_path is not None:
+        p = Path(restart_path)
+        if not args.quiet:
+            print(
+                f"bonded-MM-mini: recovery successful. "
+                f"Updating restart file {p.name} with minimized coordinates.",
+                flush=True,
+            )
+        rewrite_dynamics_restart_validated(p)
+        restart_updated = True
+
     if not args.quiet:
+        status_msg = "restart file updated on disk" if restart_updated else "restart file unchanged"
         print(
             f"bonded-MM-mini: next stage will continue from in-memory coordinates "
-            f"(restart file unchanged)",
+            f"({status_msg})",
             flush=True,
         )
     return True
