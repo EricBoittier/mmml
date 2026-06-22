@@ -1865,9 +1865,6 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         topology_psf=recovery_topology_psf,
                         mini_registry=mini_registry,
                     )
-                    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
-                        attach_prior_segment_restart,
-                    )
                     overlap_prior_restart = _overlap_extent_prior_restart(paths, prev_restart)
                     stage_overlap = attach_prior_segment_restart(
                         stage_overlap,
@@ -2007,9 +2004,6 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         args=args,
                         topology_psf=recovery_topology_psf,
                         mini_registry=mini_registry,
-                    )
-                    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
-                        attach_prior_segment_restart,
                     )
                     overlap_prior_restart = _overlap_extent_prior_restart(paths, prev_restart)
                     stage_overlap = attach_prior_segment_restart(
