@@ -692,17 +692,19 @@ def test_calculator_wrapping_translation_invariance():
             self.natoms = 8
             self.use_pbc = False
             
-        def apply(self, params, Z, R):
-            # R shape: (batch_size, natoms, 3)
-            # Atom 0 (monomer A) and Atom 4 (monomer B)
-            r = R[:, 0] - R[:, 4]
+        def apply(self, params, **kwargs):
+            R = kwargs.get("positions")
+            # R shape: (batch_size * natoms, 3)
+            R_3d = R.reshape(-1, self.natoms, 3)
+            r = R_3d[:, 0] - R_3d[:, 4]
             dist = jnp.linalg.norm(r, axis=-1)
-            energy = dist
+            
             grad = r / jnp.expand_dims(jnp.maximum(dist, 1e-10), -1)
-            forces = jnp.zeros_like(R)
-            forces = forces.at[:, 0].set(-grad)
-            forces = forces.at[:, 4].set(grad)
-            return {"energy": energy, "forces": forces}
+            forces_3d = jnp.zeros_like(R_3d)
+            forces_3d = forces_3d.at[:, 0].set(-grad)
+            forces_3d = forces_3d.at[:, 4].set(grad)
+            
+            return {"energy": dist, "forces": forces_3d.reshape(-1, 3)}
 
     dummy_checkpoint = {
         "params": {},
@@ -726,21 +728,6 @@ def test_calculator_wrapping_translation_invariance():
         }
     }
 
-    restart_path = MagicMock(spec=Path)
-    restart_path.is_file.return_value = True
-    restart_path.suffix = ".json"
-    restart_path.resolve.return_value = restart_path
-
-    with patch("mmml.utils.model_checkpoint.load_model_checkpoint", return_value=dummy_checkpoint), \
-         patch("mmml.models.physnetjax.physnetjax.models.model.EF", DummyModel):
-        calculator, configured_spherical_cutoff, update_fn_factory = setup_calculator(
-            ATOMS_PER_MONOMER=[4, 4],
-            N_MONOMERS=2,
-            cell=30.0,
-            model_restart_path=restart_path,
-            doMM=False,
-        )
-
     # 2. Evaluate energy and forces for initial coordinates
     atomic_numbers = jnp.array([6, 1, 1, 1, 6, 1, 1, 1], dtype=jnp.int32)
     # Monomer A around [0, 0, 0], Monomer B around [29, 0, 0] (distance 1 across periodic boundary of size 30)
@@ -754,6 +741,27 @@ def test_calculator_wrapping_translation_invariance():
         [29.2, 0.0, 0.0],
         [29.3, 0.0, 0.0],
     ], dtype=jnp.float32)
+
+    restart_path = MagicMock(spec=Path)
+    restart_path.is_file.return_value = True
+    restart_path.suffix = ".json"
+    restart_path.resolve.return_value = restart_path
+
+    with patch("mmml.utils.model_checkpoint.load_model_checkpoint", return_value=dummy_checkpoint), \
+         patch("mmml.models.physnetjax.physnetjax.models.model.EF", DummyModel):
+        factory = setup_calculator(
+            ATOMS_PER_MONOMER=[4, 4],
+            N_MONOMERS=2,
+            cell=30.0,
+            model_restart_path=restart_path,
+            doMM=False,
+        )
+        calculator, configured_spherical_cutoff, update_fn_factory = factory(
+            atomic_numbers,
+            R_initial,
+            2,
+            create_ase_calculator=True,
+        )
 
     # Reconstruct box as passed in JAX-MD
     box = jnp.array([30.0, 30.0, 30.0], dtype=jnp.float32)
