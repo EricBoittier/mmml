@@ -620,6 +620,11 @@ def build_decomposed_mlpot_model(
         max_pairs=max_pairs,
         ml_compute_dtype=ml_compute_dtype,
         defer_xla_gpu_warmup=defer_jax_until_mlpot_registered,
+        ml_switch_width=cutoff_params.ml_switch_width,
+        mm_switch_on=cutoff_params.mm_switch_on,
+        mm_switch_width=cutoff_params.mm_switch_width,
+        complementary_handoff=cutoff_params.complementary_handoff,
+        mm_r_min=getattr(args, "mm_r_min", None) if args is not None else None,
     )
     if verbose:
         _print_setup_calculator_factory_summary(
