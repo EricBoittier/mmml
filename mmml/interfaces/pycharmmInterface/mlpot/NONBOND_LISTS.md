@@ -180,13 +180,29 @@ Pair **contributions** taper via `s_MM(r)` and complementary ML/MM handoff ([`cu
 
 ### PBC: jax-md neighbor lists
 
-When `pbc_cell` is set and jax-md is available:
+When `pbc_cell` is set and jax-md is available, neighbor lists culling is performed:
 
-- Outer list radius: `mm_switch_on + mm_switch_width` (default 12 Å).
-- Internal rebuild trigger: `dr_threshold=0.5` Å ([`jax_md_neighbor_list.py`](../jax_md_neighbor_list.py)).
-- Optional caching in `update_mm_pairs`:
-  - `jax_md_update_interval` (default 1): skip rebuild every N calls.
+- **Outer list radius**: `mm_switch_on + mm_switch_width` (default 12 Å).
+- **Internal rebuild trigger**: `dr_threshold=0.5` Å ([`jax_md_neighbor_list.py`](../jax_md_neighbor_list.py)).
+- **Optional caching** in `update_mm_pairs`:
+  - `jax_md_update_interval` (default 1): skip rebuild check every N calls.
   - `jax_md_skin_distance` (default 0): reuse list until max atom displacement ≤ skin.
+
+The cadence and method of updating these lists depend on the **simulation runner/backend**:
+
+#### 1. ASE Calculator (`AseDimerCalculator`)
+- **Cadence**: Re-evaluated on **every single step** of MD or minimization within the calculator's `calculate()` method.
+- **Mechanism**: The calculator calls the Python-level `update_mm_pairs` function directly on each callback, which leverages the caching logic (interval/skin) to skip rebuilds if allowed. Since it is run inside a step-by-step Python integrator loop, there is no JIT compilation stale-list issue.
+
+#### 2. Pure JAX-MD Simulations (`jaxmd_runner.py`)
+- **JIT Compilation Constraint**: The cell-list building logic in `update_fn` is Python/NumPy-based (to handle exclusion mapping and memory allocation) and cannot be run inside a GPU/CPU JIT-compiled `fori_loop` or `scan`. Thus, neighbor list updates must occur at the outer Python loop level at block boundaries (`steps_per_recording`).
+- **NPT Ensemble**:
+  - **Cadence**: Refreshed once per recording block (typically every 25 steps) using fractional coordinates.
+  - **Mechanism**: The box changes at every step. At block boundaries, the outer Python loop queries the current box matrix, converts coordinates to fractional, calls `update_fn(pos, box=box)`, and passes the resulting neighbor list tuple (`neighbor`) to the compiled JAX step.
+- **NVT & NVE Ensembles**:
+  - **Cadence**: Refreshed once per recording block (defaults to 100/1000 steps depending on arguments) using real coordinates.
+  - **Mechanism**: The outer loop calls `update_fn(pos, box=pbc_box_nl)` to calculate the updated neighbor lists at block boundaries.
+  - **Compilation Staleness Fix**: JAX's JIT compiler captures closure dictionary variables like `_pbc_state` as static constants at JIT time. If the dynamic neighbor lists are not explicitly passed as arguments to the JITted step, the compiled graph freezes the first neighbor list forever. We resolved this by modifying the JAX-MD integrators (`sim`), the force function (`wrapped_force_fn`), and the energy function (`wrapped_energy_fn`) to accept `neighbor` as an explicit, dynamic keyword argument.
 
 ### Decomposed callback ignores Fortran pair indices
 
