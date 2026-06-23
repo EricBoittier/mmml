@@ -1404,7 +1404,6 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             context="Pre-dynamics gate" if not args.quiet else "",
         )
 
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
         current_grms = float(charmm_grms())
         if current_grms > max_grms:
             if not args.quiet:
