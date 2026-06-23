@@ -184,6 +184,7 @@ def _build_cell_list_pairs_with_retry(
                 monomer_offsets=monomer_offsets,
                 atoms_per_monomer_list=list(atoms_per_monomer_list),
                 exclude_intra_monomer=True,
+                suppress_warning=(attempt < 3),
             )
             if debug and attempt > 0:
                 print(
@@ -729,6 +730,7 @@ def build_mm_energy_forces_fn(
         }
         _last_positions = [None]
         _last_box = [None]
+        _fallback_max_pairs_cell = [max_pairs]
 
         def calculate_mm_pair_energies_dynamic(
             positions: Array,
@@ -811,7 +813,11 @@ def build_mm_energy_forces_fn(
             switched_energy = jnp.where(jnp.isfinite(switched_energy), switched_energy, 0.0)
             return switched_energy, forces
 
-        def _cell_list_fallback_pairs(positions_in: np.ndarray, _nbr_debug: bool) -> Tuple[Array, Array]:
+        def _cell_list_fallback_pairs(
+            positions_in: np.ndarray,
+            _nbr_debug: bool,
+            box_in: Optional[np.ndarray] = None,
+        ) -> Tuple[Array, Array]:
             if (
                 not jax_md_overflow_fallback_to_cell_list
                 or _cell_list_pairs is None
@@ -819,11 +825,19 @@ def build_mm_energy_forces_fn(
             ):
                 raise RuntimeError("Neighbor list failed and cell-list fallback is unavailable")
             cutoff = mm_switch_on + mm_switch_width
+            # Use dynamic box_in if available, otherwise fall back to setup pbc_cell
+            current_pbc_cell = pbc_cell
+            if box_in is not None:
+                box_np = np.asarray(box_in, dtype=np.float64)
+                if box_np.ndim == 1:
+                    current_pbc_cell = np.diag(box_np)
+                else:
+                    current_pbc_cell = box_np
             cl_i, cl_j, cl_mask, _, fallback_max_pairs = _build_cell_list_pairs_with_retry(
                 positions=np.asarray(positions_in, dtype=np.float64),
-                pbc_cell=np.asarray(pbc_cell),
+                pbc_cell=np.asarray(current_pbc_cell),
                 cutoff=cutoff,
-                max_pairs=max_pairs,
+                max_pairs=_fallback_max_pairs_cell[0],
                 monomer_offsets=_offsets_np,
                 atoms_per_monomer_list=atoms_per_monomer_list,
                 total_atoms=total_atoms,
@@ -831,6 +845,7 @@ def build_mm_energy_forces_fn(
                 cell_list_density_estimate=cell_list_density_estimate,
                 debug=_nbr_debug,
             )
+            _fallback_max_pairs_cell[0] = fallback_max_pairs
             if mm_r_min is not None:
                 cl_mask = _filter_pairs_by_com_min(
                     np.asarray(positions_in, dtype=np.float64),
@@ -840,7 +855,7 @@ def build_mm_energy_forces_fn(
                     _offsets_np,
                     np.asarray(_monomer_id_jnp),
                     mm_r_min,
-                    pbc_cell=np.asarray(pbc_cell) if pbc_cell is not None else None,
+                    pbc_cell=np.asarray(current_pbc_cell) if current_pbc_cell is not None else None,
                 )
             if _nbr_debug:
                 print(f"[nbr] fallback to cell-list max_pairs={fallback_max_pairs}")
@@ -894,7 +909,7 @@ def build_mm_energy_forces_fn(
             except Exception as e:
                 if _nbr_debug:
                     print(f"[nbr] update failed before overflow check ({type(e).__name__}): {e}")
-                return _cell_list_fallback_pairs(np.asarray(positions, dtype=np.float64), _nbr_debug)
+                return _cell_list_fallback_pairs(np.asarray(positions, dtype=np.float64), _nbr_debug, box_in=box)
             realloc_count = 0
             for _ in range(int(jax_md_max_overflow_retries)):
                 overflow = np.asarray(jax.device_get(nbrs.did_buffer_overflow))
@@ -923,11 +938,11 @@ def build_mm_energy_forces_fn(
                             f"[nbr] allocate/update failed during retry {realloc_count} "
                             f"({type(e).__name__}): {e}"
                         )
-                    return _cell_list_fallback_pairs(np.asarray(positions, dtype=np.float64), _nbr_debug)
+                    return _cell_list_fallback_pairs(np.asarray(positions, dtype=np.float64), _nbr_debug, box_in=box)
             else:
                 if _nbr_debug:
                     print("[nbr] persistent overflow after retries; attempting cell-list fallback")
-                return _cell_list_fallback_pairs(np.asarray(positions, dtype=np.float64), _nbr_debug)
+                return _cell_list_fallback_pairs(np.asarray(positions, dtype=np.float64), _nbr_debug, box_in=box)
             _nbrs[0] = nbrs
             pair_i, pair_j, mask = _filter_fn_cell[0](nbrs.idx)
             if mm_r_min is not None:

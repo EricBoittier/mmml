@@ -166,6 +166,7 @@ def cell_list_pairs(
     monomer_offsets: Optional[np.ndarray] = None,
     atoms_per_monomer_list: Optional[list[int]] = None,
     exclude_intra_monomer: bool = True,
+    suppress_warning: bool = False,
 ) -> Tuple:
     """Generate inter-monomer atom-atom pairs within *cutoff* using a cell list.
 
@@ -271,22 +272,23 @@ def cell_list_pairs(
             f"cell_list_pairs: found {n_valid} pairs but max_pairs={max_pairs}. "
             "Truncating. Increase max_pairs for correctness."
         )
-        try:
-            from rich.console import Console
-            from rich.panel import Panel
+        if not suppress_warning:
+            try:
+                from rich.console import Console
+                from rich.panel import Panel
 
-            Console(stderr=True).print(
-                Panel(
-                    (
-                        f"[bold red]{message}[/bold red]\n\n"
-                        f"Suggested value: [bold]--max-pairs {int(np.ceil(n_valid * 1.25))}[/bold]"
-                    ),
-                    title="[bold red]MM Pair List Truncated[/bold red]",
-                    border_style="red",
+                Console(stderr=True).print(
+                    Panel(
+                        (
+                            f"[bold red]{message}[/bold red]\n\n"
+                            f"Suggested value: [bold]--max-pairs {int(np.ceil(n_valid * 1.25))}[/bold]"
+                        ),
+                        title="[bold red]MM Pair List Truncated[/bold red]",
+                        border_style="red",
+                    )
                 )
-            )
-        except Exception:
-            pass
+            except Exception:
+                pass
         raise PairListTruncationError(n_valid, max_pairs)
 
     pair_i = np.zeros(max_pairs, dtype=np.int32)
