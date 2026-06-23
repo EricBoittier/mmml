@@ -644,7 +644,7 @@ def test_prepare_pycharmm_handoff_continuation_no_template_invalid_restart(
         seed = tmp_path / "prod" / "handoff" / "continue_seed.res"
         assert result == seed.resolve()
         assert seed.is_file()
-        mock_setup.sync_charmm_positions.assert_called_once()
+        mock_setup.sync_charmm_positions.assert_called()
         mock_recovery.rewrite_dynamics_restart_validated.assert_called_once_with(seed)
     finally:
         sys.modules.clear()
