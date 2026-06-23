@@ -1403,6 +1403,30 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             ctx,
             context="Pre-dynamics gate" if not args.quiet else "",
         )
+
+        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+        current_grms = float(charmm_grms())
+        if current_grms > max_grms:
+            if not args.quiet:
+                print(f"\nInstability detected (GRMS {current_grms:.4f} > max {max_grms:.4f}). Attempting jiggle and minimize recovery...", flush=True)
+            from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import apply_charmm_position_noise
+            import pycharmm.lingo
+            
+            # Pass 1: nbxmod 1 (include all pairs) and minimize
+            pycharmm.lingo.charmm_script("nbonds nbxmod 1\nmini sd nstep 50\n")
+            
+            # Apply uniform noise (amplitude 0.05 Å) to break symmetry
+            apply_charmm_position_noise(amplitude_A=0.05, distribution="uniform")
+            
+            # Pass 2: nbxmod 5 (standard exclusions) and minimize
+            pycharmm.lingo.charmm_script("nbonds nbxmod 5\nmini sd nstep 50\nenergy\n")
+            
+            # Refresh GRMS after recovery attempt
+            refresh_mlpot_energy_and_grms(
+                ctx,
+                context="Pre-dynamics gate (post-jiggle recovery)" if not args.quiet else "",
+            )
+
         assert_dynamics_ready(
             max_grms=max_grms,
             abort=not getattr(args, "allow_high_grms", False),
