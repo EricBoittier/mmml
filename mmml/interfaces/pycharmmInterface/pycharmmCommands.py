@@ -207,7 +207,7 @@ endif
 
 dyna restart leap res nstep 10000 timestp 0.002 -
   nprint 100 nsavc 10 ntrfrq 200 -
-  iprfrq 1000 inbfrq -1 imgfrq 50 ixtfrq 1000 -
+  iprfrq 1000 inbfrq 10 imgfrq 50 ixtfrq 1000 -
   ihtfrq 0 ieqfrq 0 -
   cpt pint pconst pref 1 pgamma 0 pmass @pmass -
   hoover reft 300 tmass @tmass -
@@ -268,7 +268,7 @@ nbonds_script = """!#########################################
 ! Non-bonding parameters
  nbonds atom cutnb 14.0  ctofnb 12.0 ctonnb 10.0 -
    lrc vdw fswitch vswitch -
-   inbfrq -1 imgfrq -1
+   inbfrq 1 imgfrq 1
 
 ! Constrain all X-H bonds
 !shake bonh para sele all end

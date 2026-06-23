@@ -387,7 +387,7 @@ def _bonded_recovery_sd_kwargs(ctx: "MlpotContext", config: BondedMmMiniConfig) 
         # Always use heuristic NB updates during rescue SD. Heat/production dyna sets
         # imgfrq=50 via _base_dyn_kwargs even for vacuum clusters; inbfrq=0 then
         # triggers FINCYC "INBFRQ is zero when IMGFRQ is not" at BOMLev -2.
-        "inbfrq": -1,
+        "inbfrq": 50,
         "ihbfrq": 50 if ctx.use_pbc else 0,
     }
     return kw
@@ -734,7 +734,7 @@ def _base_dyn_kwargs(
     timestep: float,
     nstep: int,
     nsavc: int,
-    inbfrq: int = -1,
+    inbfrq: int = 50,
     ihbfrq: int = 50,
     ilbfrq: int = 50,
     imgfrq: int = 50,
@@ -2933,7 +2933,7 @@ def _prepare_mlpot_sd_list_frequencies(pycharmm: Any, *, sd_kw: dict[str, Any]) 
     ``imgfrq`` left from production ``dyna`` kwargs triggers BOMLev -2:
     "INBFRQ is zero when IMGFRQ is not".
     """
-    if int(sd_kw.get("inbfrq", -1)) != 0:
+    if int(sd_kw.get("inbfrq", 1)) != 0:
         return
     pycharmm.nbonds.set_imgfrq(0)
     pycharmm.nbonds.set_inbfrq(0)
@@ -2948,8 +2948,8 @@ def _sd_kwargs_from_config(config: MinimizeWithMlpotConfig) -> dict[str, Any]:
         "tolgrd": config.tolgrd,
         # Do not rebuild nonbond/MLpot pair lists each SD step (mlpot_update can
         # segfault when all atoms are ML and the atom-pair list is empty).
-        "inbfrq": 0,
-        "ihbfrq": 0,
+        "inbfrq":1,
+        "ihbfrq":1,
     }
     if config.save and config.dcd_path is not None and config.dcd_nsavc > 0:
         kw["iuncrd"] = config.dcd_unit

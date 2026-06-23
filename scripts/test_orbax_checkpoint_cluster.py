@@ -135,7 +135,7 @@ def run(args: argparse.Namespace) -> int:
     ! Non-bonding parameters
     nbonds atom cutnb 14.0  ctofnb 12.0 ctonnb 10.0 -
     vswitch NBXMOD 3 -
-    inbfrq -1 imgfrq -1
+    inbfrq 50 imgfrq 50
     """
     pycharmm.lingo.charmm_script(nbonds)
     charmm_pre = _collect_charmm_terms()
