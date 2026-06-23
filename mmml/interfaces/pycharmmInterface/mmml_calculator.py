@@ -1222,6 +1222,29 @@ def setup_calculator(
         # --- Dimer data (vectorized gather) ---
         n_dimers = len(all_dimer_idxs)
         dimer_positions = positions[dimer_idx_arr_jnp]  # (n_dimers, max_atoms, 3)
+
+        cell_for_mic = mic_pbc_cell if mic_pbc_cell is not None else pbc_cell
+        if cell_for_mic is not None:
+            mic_fn = mic_displacement_smooth if use_smooth_mic else mic_displacement
+
+            def _wrap_dimer_coords(pos_di, na, nb):
+                max_n = pos_di.shape[0]
+                i = jnp.arange(max_n, dtype=jnp.int32)
+                mask_a = (i < na).astype(pos_di.dtype)
+                mask_b = ((i >= na) & (i < na + nb)).astype(pos_di.dtype)
+                n_a = jnp.maximum(jnp.sum(mask_a), 1e-10)
+                n_b = jnp.maximum(jnp.sum(mask_b), 1e-10)
+                com_a = jnp.sum(pos_di * mask_a[:, None], axis=0) / n_a
+                com_b = jnp.sum(pos_di * mask_b[:, None], axis=0) / n_b
+                d = mic_fn(com_a, com_b, cell_for_mic)
+                shift_b = com_a + d - com_b
+                shift_b = jax.lax.stop_gradient(shift_b)
+                return pos_di + shift_b * mask_b[:, None]
+
+            dimer_positions = jax.vmap(_wrap_dimer_coords, in_axes=(0, 0, 0))(
+                dimer_positions, dimer_n_a, dimer_n_b
+            )
+
         dimer_atomic = atomic_numbers[dimer_idx_arr_jnp]
         dimer_N_arr = jnp.array(_dimer_atom_counts)
         dimer_mask = jnp.arange(max_atoms)[None, :] < dimer_N_arr[:, None]
@@ -2454,6 +2477,27 @@ def setup_calculator(
 
         # Gather dimer positions: (n_dimers, max_atoms, 3)
         dimer_pos_padded = positions[padded_dimer_idx_arr_jnp]
+
+        if cell_for_mic is not None:
+            mic_fn = mic_displacement_smooth if use_smooth_mic else mic_displacement
+
+            def _wrap_dimer_coords(pos_di, na, nb):
+                max_n = pos_di.shape[0]
+                i = jnp.arange(max_n, dtype=jnp.int32)
+                mask_a = (i < na).astype(pos_di.dtype)
+                mask_b = ((i >= na) & (i < na + nb)).astype(pos_di.dtype)
+                n_a = jnp.maximum(jnp.sum(mask_a), 1e-10)
+                n_b = jnp.maximum(jnp.sum(mask_b), 1e-10)
+                com_a = jnp.sum(pos_di * mask_a[:, None], axis=0) / n_a
+                com_b = jnp.sum(pos_di * mask_b[:, None], axis=0) / n_b
+                d = mic_fn(com_a, com_b, cell_for_mic)
+                shift_b = com_a + d - com_b
+                shift_b = jax.lax.stop_gradient(shift_b)
+                return pos_di + shift_b * mask_b[:, None]
+
+            dimer_pos_padded = jax.vmap(_wrap_dimer_coords, in_axes=(0, 0, 0))(
+                dimer_pos_padded, jnp.array(dimer_n_atoms_a), jnp.array(dimer_n_atoms_b)
+            )
 
         # vmap switch_ML over dimers (avoids Python loop)
         na_arr = jnp.array(dimer_n_atoms_a)
