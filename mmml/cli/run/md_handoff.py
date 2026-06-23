@@ -1207,47 +1207,6 @@ def _format_fortran_float(value: float) -> str:
     return f"{v:.15E}".replace("E", "D")
 
 
-def _sync_charmm_velocities(velocities: np.ndarray) -> None:
-    """Push handoff velocities into CHARMM main set."""
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-    import pycharmm.coor as coor
-    import pycharmm.lingo
-    import pandas as pd
-
-    v = np.asarray(velocities, dtype=float)
-    n = int(coor.get_natom())
-    if v.shape != (n, 3):
-        raise ValueError(f"handoff velocities shape {v.shape} != ({n}, 3)")
-    if not np.all(np.isfinite(v)):
-        raise ValueError("handoff velocities must be finite")
-        
-    comp_vel = pd.DataFrame(
-        {
-            "x": v[:, 0],
-            "y": v[:, 1],
-            "z": v[:, 2],
-            "w": np.zeros(n, dtype=float),
-        }
-    )
-    coor.set_comparison(comp_vel)
-    
-    pycharmm.lingo.charmm_script(
-        "scalar vx copy x comp\n"
-        "scalar vy copy y comp\n"
-        "scalar vz copy z comp\n"
-    )
-    
-    comp_zero = pd.DataFrame(
-        {
-            "x": np.zeros(n, dtype=float),
-            "y": np.zeros(n, dtype=float),
-            "z": np.zeros(n, dtype=float),
-            "w": np.zeros(n, dtype=float),
-        }
-    )
-    coor.set_comparison(comp_zero)
-
-
 def _is_overlap_scratch_restart(path: Path) -> bool:
     from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
         is_overlap_scratch_restart_path,
@@ -1332,8 +1291,6 @@ def _write_handoff_restart_via_charmm(
 
     restore_charmm_state_from_restart(template)
     sync_charmm_positions(handoff.positions)
-    if handoff.velocities is not None:
-        _sync_charmm_velocities(handoff.velocities)
     if handoff.cell is not None:
         from mmml.cli.run.md_stage_summary import cubic_box_side_from_cell
         from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import prepare_charmm_pbc
