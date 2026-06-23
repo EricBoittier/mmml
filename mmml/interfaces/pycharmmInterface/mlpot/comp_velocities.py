@@ -241,10 +241,9 @@ def prepare_comp_for_heat(
 
 def clear_comp_for_production(*, quiet: bool = False) -> None:
     """Clear comparison coords + scalars before dynamics (no COMP-velocity path)."""
-    pass
-    # clear_comparison_coordinates()
-    # zero_comparison_scalars("all", quiet=quiet)
-    # run_charmm_script("scalar wcomp set 0 select all end", quiet=quiet)
+    clear_comparison_coordinates()
+    zero_comparison_scalars("all", quiet=quiet)
+    run_charmm_script("scalar wcomp set 0 select all end", quiet=quiet)
 
 
 _COMP_CLEARED_STAGES = frozenset({"nve", "equi", "prod"})

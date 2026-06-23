@@ -459,9 +459,6 @@ def prepare_pycharmm_handoff_continuation(
         # Sync velocities if present; skip CHARMM ``read restart`` (incompatible
         # with synthetic header format).
         try:
-            from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
-
-            sync_charmm_positions(payload.positions)
             if payload.velocities is not None:
                 try:
                     _sync_charmm_velocities(payload.velocities)
@@ -1317,7 +1314,7 @@ def _patch_handoff_into_restart_template(
     template: Path,
     path: Path,
 ) -> None:
-    """Patch handoff coords/velocities into a CHARMM restart template."""
+    """Patch handoff coords/velocities/crystal parameters into a CHARMM restart template."""
     text = template.read_text(errors="ignore")
     coord_lines = _format_coord_lines(handoff.positions)
     coord_block = " !X, Y, Z\n" + "\n".join(coord_lines) + "\n"
@@ -1344,6 +1341,44 @@ def _patch_handoff_into_restart_template(
             )
         else:
             text = text.rstrip() + "\n" + vel_block
+
+    if handoff.cell is not None and handoff.pbc:
+        cell_arr = np.asarray(handoff.cell, dtype=float)
+        if cell_arr.shape == (3, 3):
+            # Cubic: use diagonal element
+            side = float(np.mean(np.diag(cell_arr)))
+        else:
+            side = float(cell_arr.flat[0])
+        if side > 0.0:
+            def _fmt(v: float) -> str:
+                return f"{float(v):.15E}".replace("E", "D")
+            crystal_block = " !CRYSTAL PARAMETERS\n" + "\n".join([
+                f" {_fmt(side)} {_fmt(0.0)} {_fmt(0.0)}",
+                f" {_fmt(0.0)} {_fmt(side)} {_fmt(0.0)}",
+                f" {_fmt(0.0)} {_fmt(0.0)} {_fmt(side)}"
+            ]) + "\n"
+            if " !CRYSTAL PARAMETERS" in text:
+                text = re.sub(
+                    r" !CRYSTAL PARAMETERS.*?(?=\n !|\Z)",
+                    crystal_block.rstrip(),
+                    text,
+                    count=1,
+                    flags=re.DOTALL,
+                )
+            else:
+                if " !X, Y, Z" in text:
+                    text = text.replace(" !X, Y, Z", crystal_block + " !X, Y, Z", 1)
+                else:
+                    text = text.rstrip() + "\n" + crystal_block
+    else:
+        if " !CRYSTAL PARAMETERS" in text:
+            text = re.sub(
+                r"\n\s*!CRYSTAL PARAMETERS.*?(?=\n !|\Z)",
+                "",
+                text,
+                count=1,
+                flags=re.DOTALL,
+            )
     path.write_text(text, encoding="ascii", errors="ignore")
 
 
