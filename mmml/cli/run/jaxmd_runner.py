@@ -520,10 +520,20 @@ def set_up_nhc_sim_routine(
         getattr(args, "steps_per_recording", None)
         or (25 if (args.ensemble == "npt" and use_pbc) else 1000)
     )
+    # Define steps_per_loop_call as a divisor of steps_per_recording close to target jax_md_update_interval (default 100)
+    target_update_interval = getattr(args, "jax_md_update_interval", 100) or 100
+    if target_update_interval <= 0:
+        target_update_interval = 100
+    steps_per_loop_call = min(target_update_interval, steps_per_recording)
+    for d in range(steps_per_loop_call, 0, -1):
+        if steps_per_recording % d == 0:
+            steps_per_loop_call = d
+            break
+
     kT = as_jaxmd_dtype(T * unit['temperature'])
     jax.random.PRNGKey(0)
     c.print(Panel(
-        f"Ensemble: {args.ensemble.upper()} | dt={dt} ps ({dt_fs} fs) | kT={kT} ({T} K) | steps_per_recording={steps_per_recording}",
+        f"Ensemble: {args.ensemble.upper()} | dt={dt} ps ({dt_fs} fs) | kT={kT} ({T} K) | steps_per_recording={steps_per_recording} | steps_per_loop_call={steps_per_loop_call}",
         title="[bold]JAX-MD Simulation[/bold]",
         border_style="cyan",
     ))
@@ -544,7 +554,7 @@ def set_up_nhc_sim_routine(
             return _cast_state(apply_fn(s, neighbor=neighbor, pressure=pressure))
 
         step_fn = step_npt if (neighbor is not None and pressure is not None) else step_nve
-        return lax.fori_loop(0, steps_per_recording, step_fn, state)
+        return lax.fori_loop(0, steps_per_loop_call, step_fn, state)
 
     # Select integrator based on ensemble
     if args.ensemble == "npt" and use_pbc:
@@ -1293,30 +1303,33 @@ def set_up_nhc_sim_routine(
 
         try:
             for i in range(total_records):
-                if is_npt and update_fn is not None:
-                    box_curr = simulate.npt_box(state)
-                    # Neighbor list with fractional_coordinates expects frac pos and box [L,L,L]
-                    box_nl = np.asarray(box_curr)
-                    if box_nl.shape == (1,) or box_nl.ndim == 0:
-                        L = float(box_nl.reshape(-1)[0])
-                        box_nl = np.array([L, L, L], dtype=np.float64)
-                    if getattr(args, "debug", False) and (i < 3 or i % 50 == 0):
-                        print(f"[nbr] NPT record {i}: updating neighbor list, box L={float(box_nl[0]):.4f}")
-                    npt_pair_idx, npt_pair_mask = update_fn(
-                        np.asarray(state.position), box=box_nl
-                    )
-                    current_neighbors = (npt_pair_idx, npt_pair_mask)
-                    state = sim(state, neighbor=current_neighbors, pressure=npt_pressure)
-                elif use_pbc and update_fn is not None:
-                    if getattr(args, "debug", False) and (i < 3 or i % 50 == 0):
-                        print(f"[nbr] NVT/NVE record {i}: updating neighbor list")
-                    nvt_neighbors = update_fn(np.asarray(state.position), box=pbc_box_nl)
-                    _pbc_state["pair_idx"] = nvt_neighbors[0]
-                    _pbc_state["pair_mask"] = nvt_neighbors[1]
-                    current_neighbors = nvt_neighbors
-                    state = sim(state, neighbor=current_neighbors)
-                else:
-                    state = sim(state, neighbor=current_neighbors)
+                steps_done = 0
+                while steps_done < steps_per_recording:
+                    if is_npt and update_fn is not None:
+                        box_curr = simulate.npt_box(state)
+                        # Neighbor list with fractional_coordinates expects frac pos and box [L,L,L]
+                        box_nl = np.asarray(box_curr)
+                        if box_nl.shape == (1,) or box_nl.ndim == 0:
+                            L = float(box_nl.reshape(-1)[0])
+                            box_nl = np.array([L, L, L], dtype=np.float64)
+                        if getattr(args, "debug", False) and (i < 3 or i % 50 == 0) and steps_done == 0:
+                            print(f"[nbr] NPT record {i}: updating neighbor list, box L={float(box_nl[0]):.4f}")
+                        npt_pair_idx, npt_pair_mask = update_fn(
+                            np.asarray(state.position), box=box_nl
+                        )
+                        current_neighbors = (npt_pair_idx, npt_pair_mask)
+                        state = sim(state, neighbor=current_neighbors, pressure=npt_pressure)
+                    elif use_pbc and update_fn is not None:
+                        if getattr(args, "debug", False) and (i < 3 or i % 50 == 0) and steps_done == 0:
+                            print(f"[nbr] NVT/NVE record {i} (step {steps_done}): updating neighbor list")
+                        nvt_neighbors = update_fn(np.asarray(state.position), box=pbc_box_nl)
+                        _pbc_state["pair_idx"] = nvt_neighbors[0]
+                        _pbc_state["pair_mask"] = nvt_neighbors[1]
+                        current_neighbors = nvt_neighbors
+                        state = sim(state, neighbor=current_neighbors)
+                    else:
+                        state = sim(state, neighbor=current_neighbors)
+                    steps_done += steps_per_loop_call
 
                 if use_pbc:
                     if is_npt:
