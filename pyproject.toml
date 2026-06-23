@@ -28,6 +28,7 @@ dependencies = [
     "jax",
     "jaxlib",
     "jax-md",
+    "jax-pme",
     "flax",
     "optax",
     "jaxtyping",
@@ -223,6 +224,7 @@ all-cpu = [
 [tool.uv.sources]
 # jax-md 0.2.29+ (type-checking / API cleanup, PR #408)
 jax-md = { git = "https://github.com/google/jax-md.git", rev = "a722def5f2c30bd9dceb5fcc5c2a8d19f3cba2b6" }
+jax-pme = { git = "https://github.com/EricBoittier/jax-pme.git", rev = "c5f82726840de0abe29e3074adfaac8c826ffb85" }
 
 [[tool.uv.index]]
 name = "jax-cuda"

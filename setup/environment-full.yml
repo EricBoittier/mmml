@@ -78,6 +78,7 @@ dependencies:
       - jraph
       - orbax-checkpoint
       - jax-md @ git+https://github.com/google/jax-md.git@a722def5f2c30bd9dceb5fcc5c2a8d19f3cba2b6
+      - jax-pme @ git+https://github.com/EricBoittier/jax-pme.git@c5f82726840de0abe29e3074adfaac8c826ffb85
       
       # cuEquivariance (JAX frontend + core + CUDA ops for CUDA 13)
       - cuequivariance
