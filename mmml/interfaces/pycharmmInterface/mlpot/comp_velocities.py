@@ -80,7 +80,18 @@ def zero_comparison_scalars(sele: str = "all", *, quiet: bool = False) -> None:
     """Zero COMP scalar components via ``scalar xcomp/ycomp/zcomp/wcomp set 0``."""
     for comp in _COMP_COMPONENTS:
         run_charmm_script(f"scalar {comp} set 0 select {sele} end", quiet=quiet)
+# open read unit 21 card name equi_dcm_10.res
 
+# ! Check coordinates from restart
+# read coor dynr curr unit 21
+
+# ! Then reopen, because restart reads can consume the stream
+# close unit 21
+# open read unit 21 card name equi_dcm_10.res
+
+# ! Check whether velocities are readable
+# read coor dynr vel unit 21 comp
+# Then inspect COMP coordinates. The VEL values are stored as a coordinate-like set in AKMA velocity units, not as scalar vx/vy/vz fields.
 
 def clear_comparison_coordinates() -> None:
     """Zero the comparison **coordinate** set (``coor set comp``), not just scalars."""
@@ -230,9 +241,10 @@ def prepare_comp_for_heat(
 
 def clear_comp_for_production(*, quiet: bool = False) -> None:
     """Clear comparison coords + scalars before dynamics (no COMP-velocity path)."""
-    clear_comparison_coordinates()
-    zero_comparison_scalars("all", quiet=quiet)
-    run_charmm_script("scalar wcomp set 0 select all end", quiet=quiet)
+    pass
+    # clear_comparison_coordinates()
+    # zero_comparison_scalars("all", quiet=quiet)
+    # run_charmm_script("scalar wcomp set 0 select all end", quiet=quiet)
 
 
 _COMP_CLEARED_STAGES = frozenset({"nve", "equi", "prod"})
