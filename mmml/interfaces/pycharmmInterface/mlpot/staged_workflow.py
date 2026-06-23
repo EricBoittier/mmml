@@ -501,7 +501,9 @@ def _configure_heat_dynamics_start(
                 restart_path=None,
                 use_pbc=use_pbc,
             )
-            kw["iasvel"] = 1
+            # Velocities already drawn at FIRSTT; iasvel=1 on the main dyna would
+            # re-assign at TBATH/FINALT (CHARMM) and spike T on segment ≥1 handoff.
+            kw["iasvel"] = 0
             kw["start"] = False
         else:
             # Single dyna: Boltzmann at FIRSTT (start=True) then ihtfrq scaling.
@@ -562,7 +564,7 @@ def _configure_heat_dynamics_start(
         kw.pop("iunrea", None)
         kw["iunrea"] = -1
         if hoover_cpt_heat:
-            kw["iasvel"] = 1
+            kw["iasvel"] = 0
             kw["start"] = False
         else:
             kw["start"] = False
@@ -1679,7 +1681,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                             heat_thermostat=heat_thermostat,
                         )
                     elif restart:
-                        kw["iasvel"] = 1
+                        kw["iasvel"] = 0
                         kw["iasors"] = 0
                         kw["start"] = False
                         kw["restart"] = True

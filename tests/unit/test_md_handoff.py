@@ -181,6 +181,53 @@ def test_save_handoff_to_res_with_template(nve_stub: Path, tmp_path: Path) -> No
     np.testing.assert_allclose(reloaded.positions, shift, rtol=0, atol=1e-10)
 
 
+def test_save_handoff_to_res_crystal_parameters_patching(tmp_path: Path) -> None:
+    # 1. Create a dummy template containing crystal parameters
+    template_content = """REST  SYNTHETIC-HANDOFF      0
+ !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,SEED,FIRSTT,FINALT,TBATH,TOL,IHTFRQ,IUNSAV
+         2         0         0         1         0         0         0  0.000000000000000D+00  3.000000000000000D+02  3.000000000000000D+02  1.000000000000000D-10         0        -1
+ !CRYSTAL PARAMETERS
+ 1.225025245184120D+02 0.000000000000000D+00 0.000000000000000D+00
+ 0.000000000000000D+00 1.225025245184120D+02 0.000000000000000D+00
+ 0.000000000000000D+00 0.000000000000000D+00 1.225025245184120D+02
+ !X, Y, Z
+  1.0D+00 2.0D+00 3.0D+00
+  4.0D+00 5.0D+00 6.0D+00
+"""
+    template_res = tmp_path / "template.res"
+    template_res.write_text(template_content, encoding="ascii")
+
+    # 2. Handoff state with a different box size (25.0) and positions
+    positions = np.array([[1.1, 2.1, 3.1], [4.1, 5.1, 6.1]], dtype=float)
+    state = MdHandoffState(
+        positions=positions,
+        atomic_numbers=np.array([1, 1], dtype=np.int32),
+        cell=np.diag([25.0, 25.0, 25.0]),
+        pbc=True,
+    )
+
+    out = tmp_path / "patched.res"
+    save_handoff_to_res(state, out, template_res=template_res)
+    
+    # Reload and check crystal parameters are updated
+    content = out.read_text(encoding="ascii")
+    assert " !CRYSTAL PARAMETERS" in content
+    assert "2.500000000000000D+01" in content
+    assert "1.225025245184120D+02" not in content
+
+    # 3. Test that if pbc is False/cell is None, the !CRYSTAL PARAMETERS section is removed
+    state_vac = MdHandoffState(
+        positions=positions,
+        atomic_numbers=np.array([1, 1], dtype=np.int32),
+        cell=None,
+        pbc=False,
+    )
+    out_vac = tmp_path / "patched_vac.res"
+    save_handoff_to_res(state_vac, out_vac, template_res=template_res)
+    content_vac = out_vac.read_text(encoding="ascii")
+    assert " !CRYSTAL PARAMETERS" not in content_vac
+
+
 def test_handoff_to_npz_dict_serializes_metadata() -> None:
     state = MdHandoffState(
         positions=np.zeros((2, 3)),
@@ -594,9 +641,10 @@ def test_prepare_pycharmm_handoff_continuation_no_template_invalid_restart(
                 handoff, args, tmp_path / "prod", {}, quiet=False
             )
 
-        assert result is None
-        mock_setup.sync_charmm_positions.assert_called_once()
         seed = tmp_path / "prod" / "handoff" / "continue_seed.res"
+        assert result == seed.resolve()
+        assert seed.is_file()
+        assert mock_setup.sync_charmm_positions.call_count == 2
         mock_recovery.rewrite_dynamics_restart_validated.assert_called_once_with(seed)
     finally:
         sys.modules.clear()

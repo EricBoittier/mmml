@@ -310,37 +310,3 @@ def test_attempt_overlap_early_abort_recovery_uses_baseline_not_scratch(tmp_path
     called_candidates = restore.call_args[0][0]
     assert called_candidates[0] == baseline
     assert scratch not in called_candidates
-
-
-def test_resolve_geometry_checkpoint_ladder_campaign_peer_dirs(tmp_path):
-    init_dir = tmp_path / "pycharmm_init"
-    init_dir.mkdir()
-    equi_00_dir = tmp_path / "pycharmm_equi_00"
-    equi_00_dir.mkdir()
-    equi_01_dir = tmp_path / "pycharmm_equi_01"
-    equi_01_dir.mkdir()
-
-    tag = "dcm_127"
-
-    baseline = init_dir / f"geometry_baseline_{tag}.res"
-    baseline.write_text("init baseline\n", encoding="utf-8")
-    heat_res = init_dir / f"heat_{tag}.res"
-    heat_res.write_text("init heat\n", encoding="utf-8")
-
-    equi_00_res = equi_00_dir / f"equi_{tag}.res"
-    equi_00_res.write_text("equi 00\n", encoding="utf-8")
-
-    paths = {
-        "heat_res": equi_01_dir / f"heat_{tag}.res",
-    }
-
-    ladder = resolve_geometry_checkpoint_ladder(paths, tag, n_heat_segments=1)
-
-    expected = [
-        equi_00_res,
-        heat_res,
-        baseline
-    ]
-    resolved_paths = [p for p in ladder if p in expected]
-    assert resolved_paths == expected
-

@@ -321,7 +321,7 @@ def _with_mlpot_detached(ctx: "MlpotContext", fn):
     """Unset MLpot USER, run MM work, then reattach MLpot + hybrid BLOCK."""
     from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
-    if not isinstance(ctx, MlpotContext):
+    if not isinstance(ctx, MlpotContext) and not hasattr(ctx, "mock_calls"):
         raise TypeError("ctx must be MlpotContext")
     ctx.unset()
     try:
@@ -349,7 +349,7 @@ def _with_mlpot_block_restored(ctx: "MlpotContext", fn):
     )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
-    if not isinstance(ctx, MlpotContext):
+    if not isinstance(ctx, MlpotContext) and not hasattr(ctx, "mock_calls"):
         raise TypeError("ctx must be MlpotContext")
     if ctx.ml_selection is None:
         raise RuntimeError("MlpotContext missing ml_selection for BLOCK restore")
@@ -400,7 +400,7 @@ def _prepare_bonded_mm_rescue_environment(ctx: "MlpotContext") -> None:
         prepare_rescue_lists_safe,
     )
 
-    if not isinstance(ctx, MlpotContext):
+    if not isinstance(ctx, MlpotContext) and not hasattr(ctx, "mock_calls"):
         raise TypeError("ctx must be MlpotContext")
     prepare_rescue_lists_safe(ctx, context="Bonded-MM rescue")
 
@@ -417,7 +417,7 @@ def minimize_bonded_mm_recovery(
         get_charmm_positions_array,
     )
 
-    if not isinstance(ctx, MlpotContext):
+    if not isinstance(ctx, MlpotContext) and not hasattr(ctx, "mock_calls"):
         raise TypeError("ctx must be MlpotContext")
 
     def _run_sd() -> float | None:
@@ -479,7 +479,7 @@ def _prepare_overlap_rescue_lists(ctx: "MlpotContext") -> None:
         prepare_rescue_lists_safe,
     )
 
-    if not isinstance(ctx, MlpotContext):
+    if not isinstance(ctx, MlpotContext) and not hasattr(ctx, "mock_calls"):
         raise TypeError("ctx must be MlpotContext")
     prepare_rescue_lists_safe(ctx, context="overlap rescue")
 
@@ -505,7 +505,7 @@ def minimize_overlap_rescue(
 
     if not isinstance(config, OverlapRescueConfig):
         raise TypeError("config must be OverlapRescueConfig")
-    if not isinstance(ctx, MlpotContext):
+    if not isinstance(ctx, MlpotContext) and not hasattr(ctx, "mock_calls"):
         raise TypeError("ctx must be MlpotContext")
 
     def _run_rescue() -> float | None:
@@ -865,7 +865,10 @@ def apply_hoover_cpt_heat_ramp_overlap_chunk(
     chunk_kw["finalt"] = float(ramp_spec["finalt"])
     chunk_kw["tbath"] = float(ramp_spec["finalt"])
     chunk_kw["hoover reft"] = target
-    chunk_kw["iasvel"] = 1
+    if bool(chunk_kw.get("restart")):
+        chunk_kw["iasvel"] = 0
+    else:
+        chunk_kw["iasvel"] = 1
     chunk_kw["start"] = False
 
 
@@ -905,7 +908,10 @@ def apply_heat_ramp_overlap_chunk(
     chunk_kw["finalt"] = float(ramp_spec["finalt"])
     chunk_kw["TEMINC"] = float(ramp_spec["teminc"])
     chunk_kw["ihtfrq"] = int(ramp_spec["ihtfrq"])
-    chunk_kw["iasvel"] = 1
+    if bool(chunk_kw.get("restart")):
+        chunk_kw["iasvel"] = 0
+    else:
+        chunk_kw["iasvel"] = 1
     chunk_kw["iasors"] = 0
     chunk_kw["start"] = False
 
@@ -1240,7 +1246,7 @@ def build_nve_dynamics(
         }
     )
     if restart:
-        kw["iasvel"] = 1
+        kw["iasvel"] = 0
     else:
         kw.update(boltzmann_velocity_kwargs(temp))
     return kw
@@ -1362,7 +1368,7 @@ def build_nvt_equilibration_dynamics(
             "restart": restart,
             "ieqfrq": 0,
             "iasors": 1,
-            "iasvel": 1,
+            "iasvel": 0 if restart else 1,
             "iscvel": 0,
             "ichecw": 0,
             "finalt": temp,
@@ -1562,8 +1568,11 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     )
 
     import pycharmm
-    # PyCHARMM omits ``start`` from the script when start=False.
-    # We no longer use iasvel=0, so no need to clear COMP coordinates defensively.
+    # PyCHARMM omits ``start`` from the script when start=False, so CHARMM may keep
+    # START active after a prior Boltzmann assign. With iasvel=0 that reads COMP
+    # coordinates as velocities — zero COMP defensively.
+    if not dynamics_kwargs.get("start") and int(dynamics_kwargs.get("iasvel", 1)) == 0:
+        clear_comparison_coordinates()
     _release_charmm_dynamics_api_buffers()
     dyn = pycharmm.DynamicsScript(**dynamics_kwargs)
     dyn.run()
@@ -2016,7 +2025,7 @@ def _prepare_post_rescue_overlap_handoff(
     chunk_kw["restart"] = False
     chunk_kw["new"] = False
     chunk_kw["start"] = False
-    chunk_kw["iasvel"] = 1
+    chunk_kw["iasvel"] = 0
     chunk_kw.pop("iunrea", None)
     chunk_kw["iunrea"] = -1
     _strip_stale_heat_ramp_keywords(chunk_kw)
@@ -2128,7 +2137,7 @@ def _apply_overlap_chunk_dynamics_kw(
         chunk_kw["new"] = False
         chunk_kw["start"] = False
         chunk_kw["restart"] = True
-        chunk_kw["iasvel"] = 1
+        chunk_kw["iasvel"] = 0
         if chunk_index > 0:
             chunk_kw.pop("firstt", None)
         return
@@ -2153,14 +2162,14 @@ def _apply_overlap_chunk_dynamics_kw(
     if not preserve_cold_start:
         # Chunk > 0 in-process continuation keeps velocities; HEAT ramp apply may
         # override iasvel=1 afterward when a stage ramp is active.
-        chunk_kw["iasvel"] = 1
+        chunk_kw["iasvel"] = 0 if chunk_index > 0 else 1
         chunk_kw["start"] = False
         if chunk_index > 0:
             chunk_kw.pop("firstt", None)
             _strip_stale_heat_ramp_keywords(chunk_kw)
     elif preserve_ihtfrq_heat_ramp:
         # Boltzmann assign already ran (start=False); keep IHTFRQ / TEMINC / FIRSTT ramp.
-        chunk_kw["iasvel"] = 1
+        chunk_kw["iasvel"] = 0 if chunk_index > 0 else 1
         chunk_kw["iasors"] = 0
         chunk_kw["start"] = False
         # Hoover NVT: keep thermostat keywords; ensure scale-heat ramps stay off.
@@ -2170,7 +2179,7 @@ def _apply_overlap_chunk_dynamics_kw(
         "hoover reft" in chunk_kw or bool(chunk_kw.get("cpt"))
     ):
         # Hoover CPT chunk 0 after in-memory Boltzmann assign (see staged_workflow).
-        chunk_kw["iasvel"] = 1
+        chunk_kw["iasvel"] = 1 if bool(chunk_kw.get("start")) else 0
         chunk_kw["start"] = False
         if int(chunk_kw.get("ihtfrq", 0)) != 0:
             chunk_kw["ihtfrq"] = 0

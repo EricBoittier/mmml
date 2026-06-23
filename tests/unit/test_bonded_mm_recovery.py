@@ -715,10 +715,15 @@ def test_maybe_run_bonded_mm_mini_always_runs_when_grms_ok():
     ), patch.object(
         bonded_mm_recovery,
         "_measure_stage_bonded_strain",
+        return_value=MmStrainBaseline(grms_kcalmol_A=0.1, internal_kcalmol=1.0, angl_kcalmol=1.0),
     ) as measure, patch.object(
         bonded_mm_recovery,
         "_run_hybrid_bonded_mlpot_recovery",
-    ) as hybrid:
+    ) as hybrid, patch.object(
+        bonded_mm_recovery,
+        "rewrite_dynamics_restart_validated",
+        return_value=True,
+    ) as rewrite:
         ran = bonded_mm_recovery.maybe_run_bonded_mm_mini_after_stage(
             ctx,
             args,
@@ -726,7 +731,7 @@ def test_maybe_run_bonded_mm_mini_always_runs_when_grms_ok():
             baseline=baseline,
             restart_path="/tmp/heat.res",
         )
-    measure.assert_not_called()
+    measure.assert_called_once()
     hybrid.assert_called_once()
     assert ran is True
 
@@ -783,7 +788,11 @@ def test_maybe_run_bonded_mm_mini_always_all_ml_mini_uses_inplace(tmp_path):
         return_value=True,
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_hybrid_bonded_mlpot_recovery",
-    ) as inplace:
+    ) as inplace, patch.object(
+        bonded_mm_recovery,
+        "_measure_stage_bonded_strain",
+        return_value=MmStrainBaseline(grms_kcalmol_A=0.1, internal_kcalmol=1.0, angl_kcalmol=1.0),
+    ):
         ran = bonded_mm_recovery.maybe_run_bonded_mm_mini_after_stage(
             ctx,
             args,
