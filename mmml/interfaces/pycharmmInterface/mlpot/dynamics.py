@@ -865,10 +865,7 @@ def apply_hoover_cpt_heat_ramp_overlap_chunk(
     chunk_kw["finalt"] = float(ramp_spec["finalt"])
     chunk_kw["tbath"] = float(ramp_spec["finalt"])
     chunk_kw["hoover reft"] = target
-    if bool(chunk_kw.get("restart")):
-        chunk_kw["iasvel"] = 0
-    else:
-        chunk_kw["iasvel"] = 1
+    chunk_kw["iasvel"] = 1
     chunk_kw["start"] = False
 
 
@@ -908,10 +905,7 @@ def apply_heat_ramp_overlap_chunk(
     chunk_kw["finalt"] = float(ramp_spec["finalt"])
     chunk_kw["TEMINC"] = float(ramp_spec["teminc"])
     chunk_kw["ihtfrq"] = int(ramp_spec["ihtfrq"])
-    if bool(chunk_kw.get("restart")):
-        chunk_kw["iasvel"] = 0
-    else:
-        chunk_kw["iasvel"] = 1
+    chunk_kw["iasvel"] = 1
     chunk_kw["iasors"] = 0
     chunk_kw["start"] = False
 
@@ -1246,7 +1240,7 @@ def build_nve_dynamics(
         }
     )
     if restart:
-        kw["iasvel"] = 0
+        kw["iasvel"] = 1
     else:
         kw.update(boltzmann_velocity_kwargs(temp))
     return kw
@@ -1368,7 +1362,7 @@ def build_nvt_equilibration_dynamics(
             "restart": restart,
             "ieqfrq": 0,
             "iasors": 1,
-            "iasvel": 0 if restart else 1,
+            "iasvel": 1,
             "iscvel": 0,
             "ichecw": 0,
             "finalt": temp,
@@ -1568,11 +1562,8 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     )
 
     import pycharmm
-    # PyCHARMM omits ``start`` from the script when start=False, so CHARMM may keep
-    # START active after a prior Boltzmann assign. With iasvel=0 that reads COMP
-    # coordinates as velocities — zero COMP defensively.
-    if not dynamics_kwargs.get("start") and int(dynamics_kwargs.get("iasvel", 1)) == 0:
-        clear_comparison_coordinates()
+    # PyCHARMM omits ``start`` from the script when start=False.
+    # We no longer use iasvel=0, so no need to clear COMP coordinates defensively.
     _release_charmm_dynamics_api_buffers()
     dyn = pycharmm.DynamicsScript(**dynamics_kwargs)
     dyn.run()
@@ -2025,7 +2016,7 @@ def _prepare_post_rescue_overlap_handoff(
     chunk_kw["restart"] = False
     chunk_kw["new"] = False
     chunk_kw["start"] = False
-    chunk_kw["iasvel"] = 0
+    chunk_kw["iasvel"] = 1
     chunk_kw.pop("iunrea", None)
     chunk_kw["iunrea"] = -1
     _strip_stale_heat_ramp_keywords(chunk_kw)
@@ -2137,7 +2128,7 @@ def _apply_overlap_chunk_dynamics_kw(
         chunk_kw["new"] = False
         chunk_kw["start"] = False
         chunk_kw["restart"] = True
-        chunk_kw["iasvel"] = 0
+        chunk_kw["iasvel"] = 1
         if chunk_index > 0:
             chunk_kw.pop("firstt", None)
         return
@@ -2162,7 +2153,7 @@ def _apply_overlap_chunk_dynamics_kw(
     if not preserve_cold_start:
         # Chunk > 0 in-process continuation keeps velocities; HEAT ramp apply may
         # override iasvel=1 afterward when a stage ramp is active.
-        chunk_kw["iasvel"] = 0 if chunk_index > 0 else 1
+        chunk_kw["iasvel"] = 1
         chunk_kw["start"] = False
         if chunk_index > 0:
             chunk_kw.pop("firstt", None)
@@ -2179,7 +2170,7 @@ def _apply_overlap_chunk_dynamics_kw(
         "hoover reft" in chunk_kw or bool(chunk_kw.get("cpt"))
     ):
         # Hoover CPT chunk 0 after in-memory Boltzmann assign (see staged_workflow).
-        chunk_kw["iasvel"] = 1 if bool(chunk_kw.get("start")) else 0
+        chunk_kw["iasvel"] = 1
         chunk_kw["start"] = False
         if int(chunk_kw.get("ihtfrq", 0)) != 0:
             chunk_kw["ihtfrq"] = 0

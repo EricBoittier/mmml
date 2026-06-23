@@ -61,38 +61,7 @@ def resolve_geometry_checkpoint_ladder(
         if p is not None:
             candidates.append(Path(p))
 
-    # Discover peer campaign directories for fallback candidates
-    parent = out_dir.parent
-    if parent.is_dir() and (parent / "pycharmm_init").is_dir():
-        import re
-        current_name = out_dir.name
-        peer_dirs = []
-        m = re.match(r"pycharmm_equi_(\d+)", current_name)
-        if m:
-            current_idx = int(m.group(1))
-            for idx in range(current_idx - 1, -1, -1):
-                pdir = parent / f"pycharmm_equi_{idx:02d}"
-                if pdir.is_dir():
-                    peer_dirs.append(pdir)
-        init_dir = parent / "pycharmm_init"
-        if init_dir.is_dir() and current_name != "pycharmm_init":
-            peer_dirs.append(init_dir)
-
-        for pdir in peer_dirs:
-            if pdir.name == "pycharmm_init":
-                candidates.append(pdir / f"heat_{tag}.res")
-                candidates.append(pdir / f"geometry_baseline_{tag}.res")
-                candidates.append(pdir / f"bonded_mm_after_mini_{tag}.crd")
-                candidates.append(pdir / f"bonded_mm_after_heat_{tag}.crd")
-                if n_heat_segments > 1:
-                    for seg_i in range(n_heat_segments - 1, -1, -1):
-                        candidates.append(pdir / f"heat_{tag}.{seg_i}.res")
-                pretreat_dir = pdir / "pretreat"
-                candidates.append(pretreat_dir / f"charmm_mm_prod_{tag}.res")
-                candidates.append(pretreat_dir / f"charmm_mm_equi_{tag}.res")
-                candidates.append(pretreat_dir / f"charmm_mm_heat_{tag}.res")
-            elif pdir.name.startswith("pycharmm_equi_"):
-                candidates.append(pdir / f"equi_{tag}.res")
+    # Removed peer directory fallback logic as per user request
 
     seen: set[str] = set()
     ordered: list[Path] = []
@@ -159,10 +128,16 @@ def build_geometry_recovery_candidates(overlap: Any) -> list[Path]:
 
 def first_valid_restart_path(candidates: list[Path] | tuple[Path, ...]) -> Path | None:
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import restart_has_nonfinite_coordinates
+    import sys
 
     for cand in candidates:
         valid = _valid_restart_file(cand)
         if valid is not None:
+            if restart_has_nonfinite_coordinates(valid):
+                print(f"WARN: Invalidating corrupt restart file {valid} (non-finite or all zero coords)", file=sys.stderr, flush=True)
+                valid.rename(valid.with_suffix(".res.corrupt"))
+                continue
             return valid
     return None
 
