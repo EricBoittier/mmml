@@ -182,3 +182,73 @@ def test_cli_unwraps_coordinate_only_h5_with_reference(tmp_path: Path, monkeypat
     frames = read(str(output), index=":")
     assert len(frames) == 2
     assert np.allclose([frame.positions[0, 0] for frame in frames], [9.5, 10.2])
+
+
+def test_cli_dcd_and_psf(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # 1. Create a dummy PSF file
+    psf_path = tmp_path / "reference.psf"
+    psf_content = """* Remarks...
+       2 !NATOM
+       1 ACO  1    ACO  C1   CH3    -0.270000       12.0110           0
+       2 ACO  1    ACO  H11  H       0.090000        1.0080           0
+"""
+    psf_path.write_text(psf_content, encoding="utf-8")
+
+    # Verify PSF parsing
+    parsed_numbers = unwrap_traj._read_psf_atomic_numbers(psf_path)
+    assert np.array_equal(parsed_numbers, [6, 1])
+
+    # 2. Create input h5 coords
+    h5_path = tmp_path / "coords.h5"
+    with h5py.File(h5_path, "w") as handle:
+        handle.create_dataset("positions", data=np.array([
+            [[9.5, 0.0, 0.0], [0.2, 0.0, 0.0]],
+            [[0.2, 0.0, 0.0], [9.8, 0.0, 0.0]],
+        ]))
+        handle.create_dataset("cell", data=np.array([[10.0, 0.0, 0.0], [0.0, 10.0, 0.0], [0.0, 0.0, 10.0]]))
+
+    # 3. Write to DCD using unwrap-traj
+    dcd_output = tmp_path / "unwrapped.dcd"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "mmml unwrap-traj",
+            str(h5_path),
+            "-o",
+            str(dcd_output),
+            "--reference",
+            str(psf_path),
+            "--format",
+            "dcd",
+            "--quiet",
+        ],
+    )
+    assert unwrap_traj.main() == 0
+    assert dcd_output.exists()
+
+    # 4. Now read the DCD back using unwrap-traj and write to xyz
+    xyz_output = tmp_path / "unwrapped.xyz"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "mmml unwrap-traj",
+            str(dcd_output),
+            "-o",
+            str(xyz_output),
+            "--reference",
+            str(psf_path),
+            "--cell",
+            "10.0,10.0,10.0",
+            "--format",
+            "xyz",
+            "--fast",
+            "--quiet",
+        ],
+    )
+    assert unwrap_traj.main() == 0
+    frames = read(str(xyz_output), index=":")
+    assert len(frames) == 2
+    assert np.allclose([frame.positions[0, 0] for frame in frames], [9.5, 10.2])
+    assert np.allclose([frame.positions[1, 0] for frame in frames], [10.2, 9.8])

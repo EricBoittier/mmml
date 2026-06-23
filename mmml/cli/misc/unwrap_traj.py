@@ -337,9 +337,47 @@ def _write_fast_xyz(path: Path, frames: Iterator[Any], extended: bool) -> int:
     return n_frames
 
 
+def _read_psf_atomic_numbers(path: Path) -> np.ndarray:
+    """Parse atomic numbers from a CHARMM PSF file based on atom masses."""
+    masses = []
+    with path.open("r", encoding="utf-8") as f:
+        lines = f.readlines()
+        natom = None
+        atom_start_idx = None
+        for idx, line in enumerate(lines):
+            if "!NATOM" in line:
+                natom = int(line.split()[0])
+                atom_start_idx = idx + 1
+                break
+        if natom is None or atom_start_idx is None:
+            raise ValueError(f"Could not find !NATOM section in PSF file {path}")
+
+        for i in range(natom):
+            line = lines[atom_start_idx + i]
+            parts = line.split()
+            if len(parts) >= 8:
+                mass = float(parts[7])
+                masses.append(mass)
+            else:
+                raise ValueError(f"Malformed atom line in PSF file: {line}")
+
+    from ase.data import atomic_masses
+    masses_arr = np.array(masses)
+    diffs = np.abs(atomic_masses[1:, np.newaxis] - masses_arr)
+    numbers = np.argmin(diffs, axis=0) + 1
+    return np.asarray(numbers, dtype=int)
+
+
 def _read_reference(path: Path | None) -> tuple[np.ndarray | None, np.ndarray | None]:
     if path is None:
         return None, None
+
+    if path.suffix.lower() == ".psf":
+        try:
+            numbers = _read_psf_atomic_numbers(path)
+            return numbers, None
+        except Exception as e:
+            raise ValueError(f"Failed to parse PSF reference file {path}: {e}")
 
     from ase.io import read
 
@@ -399,6 +437,49 @@ def _h5_atoms_iter(path: Path, args: argparse.Namespace, override_cell: np.ndarr
         yield atoms
 
 
+def _dcd_atoms_iter(path: Path, args: argparse.Namespace, override_cell: np.ndarray | None) -> Iterator[Any]:
+    from ase import Atoms
+    from mmml.utils.dcd_reader import read_dcd_trajectory
+
+    if args.reference is None:
+        raise ValueError("Reading a .dcd file requires a topology reference file via --reference")
+
+    ref_numbers, ref_cell = _read_reference(args.reference)
+    if ref_numbers is None:
+        raise ValueError(
+            "Could not read atomic numbers from reference; supply an ASE-readable PDB/structure file via --reference"
+        )
+
+    coords, hdr = read_dcd_trajectory(path)
+    if ref_numbers.shape[-1] != coords.shape[1]:
+        raise ValueError(
+            f"atomic-number count ({ref_numbers.shape[-1]}) does not match DCD atom count ({coords.shape[1]})"
+        )
+
+    cell = override_cell if override_cell is not None else ref_cell
+    groups = None
+    if not args.no_molecules and args.group_size is None and args.n_groups is None:
+        first_numbers = ref_numbers[0] if ref_numbers.ndim == 2 else ref_numbers
+        groups = _infer_molecule_groups(first_numbers, coords[0], cell)
+
+    unwrapped = unwrap_positions(
+        coords,
+        cell=cell,
+        group_size=args.group_size,
+        n_groups=args.n_groups,
+        groups=groups,
+    )
+
+    for i, positions in enumerate(unwrapped):
+        frame_numbers = ref_numbers[i] if ref_numbers.ndim == 2 else ref_numbers
+        mask = frame_numbers > 0
+        atoms = Atoms(numbers=frame_numbers[mask], positions=positions[mask])
+        if cell is not None:
+            atoms.set_cell(cell)
+            atoms.pbc = True
+        yield atoms
+
+
 def _infer_format(output: Path, fmt: str | None) -> str:
     if fmt and fmt != "auto":
         return fmt
@@ -409,6 +490,8 @@ def _infer_format(output: Path, fmt: str | None) -> str:
         return "extxyz"
     if suffix == ".traj":
         return "traj"
+    if suffix == ".dcd":
+        return "dcd"
     return suffix.lstrip(".") or "traj"
 
 
@@ -416,6 +499,28 @@ def _write_frames(output: Path, frames: Iterator[Any], fmt: str, fast: bool) -> 
     output.parent.mkdir(parents=True, exist_ok=True)
     if fmt == "xyz" or (fast and fmt == "extxyz"):
         return _write_fast_xyz(output, frames, extended=fmt == "extxyz")
+
+    if fmt == "dcd":
+        from mmml.utils.dcd_writer import save_trajectory_dcd
+        atoms_list = list(frames)
+        if not atoms_list:
+            return 0
+        first_atoms = atoms_list[0]
+        positions = np.stack([atoms.get_positions() for atoms in atoms_list])
+        boxes = []
+        for atoms in atoms_list:
+            if atoms.pbc.any():
+                boxes.append(atoms.cell.array)
+            else:
+                boxes.append(None)
+        has_boxes = any(b is not None for b in boxes)
+        save_trajectory_dcd(
+            path=output,
+            positions=positions,
+            atoms=first_atoms,
+            boxes=boxes if has_boxes else None,
+        )
+        return len(atoms_list)
 
     from ase.io import write
     from ase.io.trajectory import Trajectory
@@ -444,7 +549,7 @@ def main() -> int:
     )
     parser.add_argument("input", type=Path, help="Input trajectory (.traj/.xyz/.extxyz/etc.) or .h5/.hdf5 file")
     parser.add_argument("-o", "--output", type=Path, required=True, help="Output file")
-    parser.add_argument("--format", choices=("auto", "traj", "xyz", "extxyz"), default="auto", help="Output format (default: infer from suffix)")
+    parser.add_argument("--format", choices=("auto", "traj", "xyz", "extxyz", "dcd"), default="auto", help="Output format (default: infer from suffix)")
     parser.add_argument("--fast", action="store_true", help="Use direct streaming writer for xyz/extxyz outputs")
     parser.add_argument("--index", default=":", help="ASE input frame index/slice for non-HDF5 inputs (default: :)")
     parser.add_argument("--cell", help="Override cell as 'a,b,c' or 9 matrix values")
@@ -471,8 +576,11 @@ def main() -> int:
         override_cell = _parse_cell(args.cell)
         fmt = _infer_format(args.output, args.format)
         is_h5 = args.input.suffix.lower() in {".h5", ".hdf5"}
+        is_dcd = args.input.suffix.lower() == ".dcd"
         if is_h5:
             frames = _h5_atoms_iter(args.input, args, override_cell)
+        elif is_dcd:
+            frames = _dcd_atoms_iter(args.input, args, override_cell)
         else:
             frames = _iter_unwrapped_ase_frames(
                 args.input,
