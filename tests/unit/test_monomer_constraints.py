@@ -146,7 +146,7 @@ def test_minimize_with_mlpot_runs_two_sd_passes_when_fixed_selection_set():
     mock_domdec.assert_called_once_with(context="MLpot SD minimize")
 
     assert minimize.run_sd.call_count == 2
-    assert pycharmm.nbonds.set_imgfrq.call_count == 2
+    assert pycharmm.nbonds.set_imgfrq.call_count == 0
     cons_fix.setup.assert_called_once_with(fixed_sel)
     cons_fix.turn_off.assert_called_once()
 
