@@ -203,6 +203,83 @@ def _build_cell_list_pairs_with_retry(
     raise RuntimeError("cell-list pair build failed without truncation error")
 
 
+def _get_actual_psf_charges(total_atoms: int) -> np.ndarray:
+    """Fallback mechanism to recover original PSF charges when they have been zeroed.
+
+    Loads charges from `psf.get_charges()`. If any charges are zero (or if we need to recover),
+    we parse the CGENFF_RTF file and map the charges back to atoms by residue name and atom type name.
+    """
+    import pycharmm.psf as psf
+    try:
+        import pycharmm.atom_info as atom_info
+    except ImportError:
+        atom_info = None
+
+    charges = np.array(psf.get_charges(), dtype=np.float64)
+    if charges.size == 0:
+        return charges
+
+    # Read and parse CGENFF_RTF to map residue_name -> {atom_name: charge}
+    rtf_charges = {}
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_RTF
+    import os
+
+    if CGENFF_RTF and os.path.exists(CGENFF_RTF):
+        try:
+            current_res = None
+            with open(CGENFF_RTF, "r", encoding="utf-8", errors="replace") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("!"):
+                        continue
+                    if "!" in line:
+                        line = line.split("!")[0].strip()
+                    tokens = line.split()
+                    if not tokens:
+                        continue
+                    if tokens[0] in ("RESI", "PRES"):
+                        current_res = tokens[1].upper()
+                        rtf_charges[current_res] = {}
+                    elif tokens[0] == "ATOM":
+                        if current_res is not None and len(tokens) >= 4:
+                            atom_name = tokens[1].upper()
+                            try:
+                                q_val = float(tokens[3])
+                                rtf_charges[current_res][atom_name] = q_val
+                            except ValueError:
+                                pass
+        except Exception as e:
+            print(f"WARNING: Failed to parse charges from CGENFF_RTF: {e}", flush=True)
+
+    # Get residue name and atom name for every atom
+    n_atoms = charges.size
+    atom_res_names = None
+    if atom_info is not None:
+        try:
+            atom_res_names = atom_info.get_res_names(list(range(n_atoms)))
+        except Exception as e:
+            print(f"WARNING: Failed to get residue names using atom_info: {e}", flush=True)
+
+    try:
+        atom_names = psf.get_atype()
+    except Exception as e:
+        print(f"WARNING: Failed to get atom types using psf.get_atype(): {e}", flush=True)
+        atom_names = None
+
+    recovered_charges = charges.copy()
+    if atom_res_names and atom_names:
+        for i in range(n_atoms):
+            # Only override if the active charge is zero (or very close to it)
+            if abs(charges[i]) < 1e-9:
+                res_name = atom_res_names[i].upper()
+                atom_name = atom_names[i].upper()
+                rtf_q = rtf_charges.get(res_name, {}).get(atom_name, None)
+                if rtf_q is not None:
+                    recovered_charges[i] = rtf_q
+
+    return recovered_charges
+
+
 def build_mm_energy_forces_fn(
     R: np.ndarray,
     *,
@@ -468,7 +545,7 @@ def build_mm_energy_forces_fn(
         pair_dimer_idx = None
 
     import pycharmm.psf as psf
-    charges_full = np.array(psf.get_charges(), dtype=np.float64)
+    charges_full = _get_actual_psf_charges(total_atoms)
     at_codes_full = np.array(psf.get_iac(), dtype=np.int32)
     if charges_full.size == 0:
         raise RuntimeError(

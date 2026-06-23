@@ -56,6 +56,7 @@ from mmml.interfaces.pycharmmInterface.cutoffs import (
     DEFAULT_MM_SWITCH_WIDTH,
 )
 from mmml.interfaces.pycharmmInterface.mmml_calculator import CutoffParameters, setup_calculator
+from mmml.interfaces.pycharmmInterface.mm_energy_forces import _get_actual_psf_charges
 from mmml.utils.geometry_checks import assert_no_intermonomer_atom_overlap
 from mmml.utils.jax_gpu_warmup import warmup_ase_mmml_energy_forces
 import pycharmm.param as param
@@ -764,7 +765,7 @@ def _validate_psf_charges(
     total_atoms: int,
     log_lines: list[str] | None = None,
 ) -> dict:
-    charges = np.asarray(psf.get_charges(), dtype=float)[:total_atoms]
+    charges = _get_actual_psf_charges(total_atoms)[:total_atoms]
     atom_types = np.asarray(psf.get_atype(), dtype=str)[:total_atoms]
     if charges.shape[0] != total_atoms:
         raise RuntimeError(
