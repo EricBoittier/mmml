@@ -1146,6 +1146,24 @@ def main(argv: list[str] | None = None) -> int:
         n_parts = max(1, int(np.ceil(len(frames) / traj_chunk_frames)))
         traj_paths = [out_dir / f"{geom_tag}_{args.ensemble}.part{i:04d}.traj" for i in range(n_parts)]
 
+    import h5py
+    from ase.calculators.singlepoint import SinglePointCalculator
+
+    velocities_data = None
+    potential_energy_data = None
+    forces_data = None
+    if hdf5_path.exists():
+        try:
+            with h5py.File(hdf5_path, "r") as h5_f:
+                if "velocities" in h5_f:
+                    velocities_data = np.asarray(h5_f["velocities"])
+                if "potential_energy" in h5_f:
+                    potential_energy_data = np.asarray(h5_f["potential_energy"])
+                if "forces" in h5_f:
+                    forces_data = np.asarray(h5_f["forces"])
+        except Exception as e:
+            print(f"[warning] Failed to read energies/velocities/forces from HDF5: {e}")
+
     for part_idx, traj_path in enumerate(traj_paths):
         start = part_idx * traj_chunk_frames if traj_chunk_frames > 0 else 0
         stop = min(len(frames), start + traj_chunk_frames) if traj_chunk_frames > 0 else len(frames)
@@ -1163,6 +1181,19 @@ def main(argv: list[str] | None = None) -> int:
                 assert L is not None
                 f.set_cell([L, L, L])
                 f.set_pbc(True)
+
+            if velocities_data is not None and i < len(velocities_data):
+                f.set_velocities(np.asarray(velocities_data[i]))
+
+            results = {}
+            if potential_energy_data is not None and i < len(potential_energy_data):
+                results["energy"] = float(potential_energy_data[i])
+            if forces_data is not None and i < len(forces_data):
+                results["forces"] = np.asarray(forces_data[i])
+
+            if results:
+                f.calc = SinglePointCalculator(f, **results)
+
             traj.write(f)
         traj.close()
 
