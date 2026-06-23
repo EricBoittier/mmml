@@ -808,11 +808,11 @@ class Coordinates:
         self.pull()  
   
     def pull(self):  
-        if self.which_set is 'main':  
+        if self.which_set == 'main':  
             self.coords = get_main()  
-        elif self.which_set is 'comp':  
+        elif self.which_set == 'comp':  
             self.coords = get_comparison()  
-        elif self.which_set is 'comp2':  
+        elif self.which_set == 'comp2':  
             self.coords = get_comp2()  
         else:  
             msg = '{} is not a valid coordinate set'.format(self.which_set)  
@@ -822,11 +822,11 @@ class Coordinates:
         return self  
   
     def push(self):  
-        if self.which_set is 'main':  
+        if self.which_set == 'main':  
             set_main(self.coords)  
-        elif self.which_set is 'comp':  
+        elif self.which_set == 'comp':  
             set_comparison(self.coords)  
-        elif self.which_set is 'comp2':  
+        elif self.which_set == 'comp2':  
             set_comp2(self.coords)  
         else:  
             msg = '{} is not a valid coordinate set'.format(self.which_set)  
