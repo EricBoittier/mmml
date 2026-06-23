@@ -1153,7 +1153,9 @@ def _write_synthetic_charmm_restart(
             lines.append(" " + " ".join(_fmt(flat[j]) for j in range(i, min(i + 3, len(flat)))))
         return lines
 
-    # CHARMM restart header (minimal safe values)
+# REST 48 1 CUBI 2 !NTITLE followed by title <<--- note format
+
+#     # CHARMM restart header (minimal safe values)
     lines: list[str] = [
         "REST  SYNTHETIC-HANDOFF      0",
         " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,SEED,FIRSTT,FINALT,TBATH,TOL,IHTFRQ,IUNSAV",
