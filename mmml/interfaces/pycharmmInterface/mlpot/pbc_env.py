@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import ctypes
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, Union
 
 import numpy as np
 
-PathLike = str | Path
+PathLike = Union[str, Path]
 BoxSideSource = Literal["pbound", "restart", "fallback"]
 
 
