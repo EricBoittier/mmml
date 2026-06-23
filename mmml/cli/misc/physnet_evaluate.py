@@ -92,29 +92,38 @@ def _metrics_extra_kcal_to_ev(mae_kcal: float, rmse_kcal: float) -> Dict[str, fl
     }
 
 
+def _resolve_physnet_json_path(checkpoint: Path) -> Path | None:
+    """Return a portable params JSON path when ``checkpoint`` is a file or run dir."""
+    ckpt = checkpoint.resolve()
+    if ckpt.is_file() and ckpt.suffix == ".json":
+        return ckpt
+    if ckpt.is_dir():
+        candidates = sorted(ckpt.glob("params*.json"))
+        if len(candidates) == 1:
+            return candidates[0]
+        params_json = ckpt / "params.json"
+        if params_json.is_file():
+            return params_json
+    return None
+
+
 def _load_physnet_checkpoint(checkpoint: Path, natoms: int):
     """Load (checkpoint_path, params, model) from Orbax or portable/legacy JSON."""
     import json
 
     from mmml.models.physnetjax.physnetjax.models.model import EF as StandardEF
-    from mmml.utils.model_checkpoint import json_to_params, normalize_flax_params_for_apply
+    from mmml.utils.model_checkpoint import (
+        assert_flax_variables_for_apply,
+        json_to_params,
+        normalize_flax_params_for_apply,
+    )
 
-    ckpt = checkpoint.resolve()
-    json_path: Path | None = None
-    if ckpt.is_file() and ckpt.suffix == ".json":
-        json_path = ckpt
-    elif ckpt.is_dir():
-        candidates = sorted(ckpt.glob("params*.json"))
-        if len(candidates) == 1:
-            json_path = candidates[0]
-        elif (ckpt / "params.json").is_file():
-            json_path = ckpt / "params.json"
+    json_path = _resolve_physnet_json_path(checkpoint)
 
     if json_path is not None:
         loaded = json_to_params(json_path, backend="jax")
         config = loaded.get("config")
         params_raw = loaded.get("params")
-        # A portable file may have been nested again under `params` during manual merge.
         if isinstance(params_raw, dict) and "params" in params_raw and not config:
             nested_config = params_raw.get("config") or params_raw.get("model_attributes")
             if nested_config:
@@ -140,8 +149,10 @@ def _load_physnet_checkpoint(checkpoint: Path, natoms: int):
         if "zbl" in config:
             model.zbl = bool(config["zbl"])
         params = normalize_flax_params_for_apply(params_raw, backend="jax")
+        assert_flax_variables_for_apply(params, context=str(json_path))
         return json_path, params, model
 
+    ckpt = checkpoint.resolve()
     from mmml.models.physnetjax.physnetjax.restart.restart import get_last, get_params_model
 
     restart_path = get_last(str(ckpt))
@@ -151,6 +162,8 @@ def _load_physnet_checkpoint(checkpoint: Path, natoms: int):
             f"Orbax checkpoint {restart_path} has no model_attributes. "
             "Export with mmml orbax-to-json or re-train with checkpoint saving enabled."
         )
+    params = normalize_flax_params_for_apply(params, backend="jax")
+    assert_flax_variables_for_apply(params, context=str(restart_path))
     return restart_path, params, model
 
 

@@ -164,6 +164,14 @@ def test_normalize_flax_params_strips_config_sibling():
     assert "embedding" in out["params"]
 
 
+def test_assert_flax_variables_rejects_bare_module_tree():
+    bare = _create_synthetic_params()
+    with pytest.raises(ValueError, match="missing top-level 'params'"):
+        from mmml.utils.model_checkpoint import assert_flax_variables_for_apply
+
+        assert_flax_variables_for_apply(bare, context="test.ckpt")
+
+
 def test_orbax_to_json_with_config_and_metadata(temp_dir):
     """orbax_to_json includes config and metadata when provided."""
     pytest.importorskip("orbax")
