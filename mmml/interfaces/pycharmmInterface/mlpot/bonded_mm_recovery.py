@@ -460,6 +460,7 @@ def apply_charmm_position_noise(
     *,
     amplitude_A: float,
     seed: int | None = None,
+    distribution: str = "normal",
 ) -> None:
     """Perturb in-memory coordinates (Å) to escape bad local minima before MM rescue."""
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
@@ -472,7 +473,11 @@ def apply_charmm_position_noise(
         return
     pos = get_charmm_positions_array()
     rng = np.random.default_rng(None if seed is None else int(seed))
-    sync_charmm_positions(pos + rng.normal(0.0, amp, pos.shape))
+    if distribution == "uniform":
+        noise = rng.uniform(-amp, amp, pos.shape)
+    else:
+        noise = rng.normal(0.0, amp, pos.shape)
+    sync_charmm_positions(pos + noise)
 
 
 def assert_bonded_mm_energy_active(*, context: str = "bonded-MM rescue") -> None:
