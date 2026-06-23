@@ -473,7 +473,7 @@ def minimize_box(skip_energy_show: bool = False, nbxmod: int = 3):
 ! Non-bonding parameters
 nbonds atom cutnb 14.0  ctofnb 12.0 ctonnb 10.0 -
 fswitch vswitch NBXMOD {nbxmod} -
-inbfrq -1 imgfrq -1
+inbfrq 1 imgfrq 1
 """
     pycharmm.lingo.charmm_script(nbonds)
     # equivalent CHARMM scripting command: minimize abnr nstep 1000 tole 1e-3 tolgr 1e-3

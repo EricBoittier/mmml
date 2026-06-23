@@ -1667,7 +1667,7 @@ def add_staged_md_args(parser: argparse.ArgumentParser) -> None:
     )
     group.add_argument(
         "--dyn-inbfrq",
-        type=int,
+        type=50,
         default=None,
         help=(
             "CHARMM nonbond list rebuild cadence for dynamics (inbfrq). "

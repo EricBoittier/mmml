@@ -168,8 +168,8 @@ def pbc_nbond_kwargs(
     if ctexnb is not None:
         kw["ctexnb"] = float(ctexnb)
     # setupBox / crystal IMAGE scripts
-    kw["inbfrq"] = -1
-    kw["imgfrq"] = -1
+    kw["inbfrq"] = 50
+    kw["imgfrq"] = 50
     return kw
 
 
