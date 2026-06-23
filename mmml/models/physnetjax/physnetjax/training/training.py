@@ -129,7 +129,7 @@ def train_model(
     init_params=None,
     rot_augment: bool = False,
     rot_perturbation: float = 1.0,
-    save_every_epoch: bool = False,
+    save_every_epoch: bool = True,
 ):
     """
     Train a PhysNetJax model with comprehensive logging and checkpointing.
