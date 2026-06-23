@@ -1320,6 +1320,11 @@ def set_up_nhc_sim_routine(
                         current_neighbors = (npt_pair_idx, npt_pair_mask)
                         state = sim(state, neighbor=current_neighbors, pressure=npt_pressure)
                     elif use_pbc and update_fn is not None:
+                        # Wrap coordinates first so neighbor list binning (cell list) is correct!
+                        wrapped_pos = wrap_groups(
+                            state.position, _monomer_groups, _cell_jax, mass=Si_mass
+                        )
+                        state = state.set(position=as_jaxmd_dtype(wrapped_pos))
                         if getattr(args, "debug", False) and (i < 3 or i % 50 == 0) and steps_done == 0:
                             print(f"[nbr] NVT/NVE record {i} (step {steps_done}): updating neighbor list")
                         nvt_neighbors = update_fn(np.asarray(state.position), box=pbc_box_nl)
