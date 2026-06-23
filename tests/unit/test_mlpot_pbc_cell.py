@@ -680,3 +680,110 @@ def test_register_mlpot_pbc_requires_skip_iblo_parameter():
             fake_sel,
             use_pbc=True,
         )
+
+
+def test_calculator_wrapping_translation_invariance():
+    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+
+    # 1. Setup a dummy model that computes a distance-based energy
+    class DummyModel:
+        def __init__(self, **kwargs):
+            self.natoms = 8
+            self.use_pbc = False
+            
+        def apply(self, params, Z, R):
+            # R shape: (batch_size, natoms, 3)
+            # Atom 0 (monomer A) and Atom 4 (monomer B)
+            r = R[:, 0] - R[:, 4]
+            dist = jnp.linalg.norm(r, axis=-1)
+            energy = dist
+            grad = r / jnp.expand_dims(jnp.maximum(dist, 1e-10), -1)
+            forces = jnp.zeros_like(R)
+            forces = forces.at[:, 0].set(-grad)
+            forces = forces.at[:, 4].set(grad)
+            return {"energy": energy, "forces": forces}
+
+    dummy_checkpoint = {
+        "params": {},
+        "config": {
+            "features": 32,
+            "max_degree": 3,
+            "num_iterations": 2,
+            "num_basis_functions": 16,
+            "cutoff": 6.0,
+            "max_atomic_number": 118,
+            "charges": False,
+            "include_electrostatics": False,
+            "natoms": 8,
+            "total_charge": 0,
+            "n_res": 3,
+            "zbl": True,
+            "debug": False,
+            "efa": False,
+            "use_energy_bias": False,
+            "use_pbc": True,
+        }
+    }
+
+    restart_path = MagicMock(spec=Path)
+    restart_path.is_file.return_value = True
+    restart_path.suffix = ".json"
+    restart_path.resolve.return_value = restart_path
+
+    with patch("mmml.utils.model_checkpoint.load_model_checkpoint", return_value=dummy_checkpoint), \
+         patch("mmml.models.physnetjax.physnetjax.models.model.EF", DummyModel):
+        calculator, configured_spherical_cutoff, update_fn_factory = setup_calculator(
+            ATOMS_PER_MONOMER=[4, 4],
+            N_MONOMERS=2,
+            cell=30.0,
+            model_restart_path=restart_path,
+            doMM=False,
+        )
+
+    # 2. Evaluate energy and forces for initial coordinates
+    atomic_numbers = jnp.array([6, 1, 1, 1, 6, 1, 1, 1], dtype=jnp.int32)
+    # Monomer A around [0, 0, 0], Monomer B around [29, 0, 0] (distance 1 across periodic boundary of size 30)
+    R_initial = jnp.array([
+        [0.0, 0.0, 0.0],
+        [0.1, 0.0, 0.0],
+        [0.2, 0.0, 0.0],
+        [0.3, 0.0, 0.0],
+        [29.0, 0.0, 0.0],
+        [29.1, 0.0, 0.0],
+        [29.2, 0.0, 0.0],
+        [29.3, 0.0, 0.0],
+    ], dtype=jnp.float32)
+
+    # Reconstruct box as passed in JAX-MD
+    box = jnp.array([30.0, 30.0, 30.0], dtype=jnp.float32)
+
+    cutoff_params = CutoffParameters(
+        ml_switch_width=0.5,
+        mm_switch_on=6.0,
+        mm_switch_width=4.0,
+    )
+
+    out_initial = configured_spherical_cutoff(
+        positions=R_initial,
+        atomic_numbers=atomic_numbers,
+        n_monomers=2,
+        cutoff_params=cutoff_params,
+        box=box,
+    )
+
+    # 3. Evaluate on shifted coordinates (Monomer B shifted by [30.0, 0, 0])
+    R_shifted = R_initial.at[4:8].add(jnp.array([30.0, 0.0, 0.0]))
+
+    out_shifted = configured_spherical_cutoff(
+        positions=R_shifted,
+        atomic_numbers=atomic_numbers,
+        n_monomers=2,
+        cutoff_params=cutoff_params,
+        box=box,
+    )
+
+    # Assert energy and forces are exactly the same
+    assert np.allclose(out_initial.energy, out_shifted.energy, atol=1e-5)
+    assert np.allclose(out_initial.forces, out_shifted.forces, atol=1e-5)
+
