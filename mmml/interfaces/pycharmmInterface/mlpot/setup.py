@@ -62,7 +62,15 @@ def sync_charmm_positions(positions: np.ndarray) -> None:
 
 
 def get_charmm_positions_array() -> np.ndarray:
-    """Read CHARMM coordinates as ``(N, 3)`` (main set, then positions, then comparison)."""
+    """Read CHARMM coordinates as ``(N, 3)`` (main set, then positions, then comparison).
+
+    Returns all-zero array when no coordinates are loaded yet (e.g., after a freshly
+    built PSF with no subsequent coor read).  Callers that use these positions as a
+    restart seed should check ``np.allclose(pos, 0.0)`` and raise if they do not
+    expect a fresh start.
+    """
+    import warnings
+
     import pycharmm.coor as coor
 
     for getter in (coor.get_main, coor.get_positions, coor.get_comparison):
@@ -71,6 +79,13 @@ def get_charmm_positions_array() -> np.ndarray:
         if pos.shape[0] and not np.allclose(pos, 0.0):
             return pos
     n = coor.get_natom()
+    if n > 0:
+        warnings.warn(
+            f"get_charmm_positions_array: all {n} CHARMM atom coordinates are zero "
+            "(PSF loaded but no coordinates set). Returning zero array — this will "
+            "produce an invalid restart if used as initial positions.",
+            stacklevel=2,
+        )
     return np.zeros((n, 3), dtype=float)
 
 

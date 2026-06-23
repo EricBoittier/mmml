@@ -83,6 +83,7 @@ def handoff_from_charmm(
     metadata: dict[str, Any] | None = None,
 ) -> MdHandoffState:
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_restart_coordinates,
         read_restart_velocities,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (
@@ -99,6 +100,39 @@ def handoff_from_charmm(
         cand = Path(restart_path).expanduser()
         if cand.is_file():
             restart_p = cand.resolve()
+
+    # Guard: if CHARMM returned all-zero positions, try to recover from the restart
+    # file before using the zeros (which would produce an invalid simulation).
+    if positions.size > 0 and np.allclose(positions, 0.0):
+        recovered = None
+        if restart_p is not None:
+            try:
+                recovered = read_restart_coordinates(restart_p)
+            except Exception:
+                pass
+        if recovered is not None and not np.allclose(recovered, 0.0):
+            import warnings
+            warnings.warn(
+                "handoff_from_charmm: CHARMM in-memory positions are all zero; "
+                f"recovered non-zero coordinates from restart file {restart_p}. "
+                "This usually means CHARMM PSF was rebuilt but 'read coor' was not called.",
+                stacklevel=2,
+            )
+            positions = recovered
+        else:
+            raise RuntimeError(
+                "handoff_from_charmm: CHARMM returned all-zero positions "
+                f"({positions.shape[0]} atoms). "
+                "The PSF may have been rebuilt without loading coordinates "
+                "(no 'read coor' / DCD frame read). "
+                "Ensure coordinates are synced before capturing the handoff state, "
+                "or pass a valid restart_path with non-zero coordinates."
+                + (
+                    f" Restart file {restart_p} also has zero/missing coordinates."
+                    if restart_p is not None
+                    else " No restart file was provided for fallback."
+                )
+            )
 
     cell = None
     pbc = False
