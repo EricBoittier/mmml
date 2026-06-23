@@ -56,6 +56,51 @@ def _normalize_config_key(key: str) -> str:
     return CONFIG_ALIASES.get(key, key).replace("-", "_")
 
 
+def _parse_dict_option(val: Any) -> Optional[Dict[str, Any]]:
+    if val is None:
+        return None
+    if isinstance(val, dict):
+        return val
+    if isinstance(val, str):
+        val_stripped = val.strip()
+        if not val_stripped:
+            return None
+        if val_stripped.startswith("{"):
+            try:
+                return json.loads(val_stripped)
+            except Exception as e:
+                raise ValueError(f"Failed to parse JSON dict from: {val}. Error: {e}")
+        path = Path(val_stripped)
+        if path.is_file():
+            with path.open() as f:
+                if path.suffix in (".yaml", ".yml"):
+                    return yaml.safe_load(f)
+                else:
+                    return json.load(f)
+        raise ValueError(f"Expected a JSON string or file path for dictionary option, got: {val}")
+    return val
+
+
+def _parse_list_option(val: Any) -> Optional[Sequence[Any]]:
+    if val is None:
+        return None
+    if isinstance(val, (list, tuple)):
+        return list(val)
+    if isinstance(val, str):
+        val_stripped = val.strip()
+        if not val_stripped:
+            return None
+        if val_stripped.startswith("[") or val_stripped.startswith("("):
+            try:
+                return json.loads(val_stripped)
+            except Exception as e:
+                pass
+        if "," in val_stripped:
+            return [x.strip() for x in val_stripped.split(",")]
+        return val_stripped.split()
+    return val
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Train a PhysNetJAX EF model from NPZ data.",
@@ -163,8 +208,35 @@ See mmml/cli/misc/physnet_train.example.yaml for a template.
         default=28,
         dest="max_atomic_number",
     )
-    parser.add_argument("--zbl", action="store_true", default=False)
-    parser.add_argument("--use-pbc", "--use_pbc", action="store_true", default=False, dest="use_pbc")
+    parser.add_argument(
+        "--zbl",
+        action="store_true",
+        dest="zbl",
+        help="Enable ZBL repulsion in EF model",
+    )
+    parser.add_argument(
+        "--no-zbl",
+        action="store_false",
+        dest="zbl",
+        help="Disable ZBL repulsion in EF model",
+    )
+    parser.set_defaults(zbl=False)
+
+    parser.add_argument(
+        "--use-pbc",
+        "--use_pbc",
+        action="store_true",
+        default=False,
+        dest="use_pbc",
+        help="Use periodic boundary conditions",
+    )
+    parser.add_argument(
+        "--no-pbc",
+        action="store_false",
+        dest="use_pbc",
+        help="Disable periodic boundary conditions",
+    )
+
     parser.add_argument(
         "--no-energy-bias",
         action="store_false",
@@ -172,6 +244,173 @@ See mmml/cli/misc/physnet_train.example.yaml for a template.
         help="Disable per-element energy bias in the model",
     )
     parser.set_defaults(use_energy_bias=True)
+
+    # Optimizer & Schedule Options
+    parser.add_argument(
+        "--optimizer",
+        type=str,
+        default=None,
+        help="Optimizer string (e.g. 'adam', 'adamw', 'amsgrad')",
+    )
+    parser.add_argument(
+        "--transform",
+        type=str,
+        default=None,
+        help="Transform string (e.g. 'reduce_on_plateau')",
+    )
+    parser.add_argument(
+        "--schedule-fn",
+        "--schedule_fn",
+        type=str,
+        default=None,
+        dest="schedule_fn",
+        help="Learning rate schedule string (e.g. 'warmup', 'cosine')",
+    )
+
+    # Training Control Options
+    parser.add_argument(
+        "--early-stop-patience",
+        "--early_stop_patience",
+        type=int,
+        default=None,
+        dest="early_stop_patience",
+        help="Number of epochs to wait for improvement before stopping training",
+    )
+    parser.add_argument(
+        "--best",
+        action="store_true",
+        default=False,
+        help="Only save checkpoint when objective improves",
+    )
+    parser.add_argument(
+        "--no-save-every-epoch",
+        action="store_false",
+        dest="save_every_epoch",
+        help="Disable saving a checkpoint at every epoch",
+    )
+    parser.set_defaults(save_every_epoch=True)
+    parser.add_argument(
+        "--print-freq",
+        "--print_freq",
+        type=int,
+        default=1,
+        dest="print_freq",
+        help="Printing frequency in epochs",
+    )
+
+    # Data & Batching Options
+    parser.add_argument(
+        "--batch-method",
+        "--batch_method",
+        type=str,
+        default="default",
+        dest="batch_method",
+        help="Batching method ('default' or 'advanced')",
+    )
+    parser.add_argument(
+        "--batch-args-dict",
+        "--batch_args_dict",
+        type=str,
+        default=None,
+        dest="batch_args_dict",
+        help="JSON string or file path for advanced batch arguments",
+    )
+    parser.add_argument(
+        "--data-keys",
+        "--data_keys",
+        type=str,
+        nargs="+",
+        default=None,
+        dest="data_keys",
+        help="Keys to load from NPZ file",
+    )
+    parser.add_argument(
+        "--conversion",
+        type=str,
+        default=None,
+        help="JSON string or file path for conversion factors dictionary",
+    )
+    parser.add_argument(
+        "--init-params",
+        "--init_params",
+        type=str,
+        default=None,
+        dest="init_params",
+        help="JSON string or file path to initialize flax parameters",
+    )
+
+    # Data Augmentation Options
+    parser.add_argument(
+        "--rot-augment",
+        "--rot_augment",
+        action="store_true",
+        default=False,
+        dest="rot_augment",
+        help="Apply random rotation augmentation to inputs",
+    )
+    parser.add_argument(
+        "--rot-perturbation",
+        "--rot_perturbation",
+        type=float,
+        default=1.0,
+        dest="rot_perturbation",
+        help="Magnitude of rotation perturbation",
+    )
+
+    # Additional Model Options
+    parser.add_argument(
+        "--charges",
+        action="store_true",
+        default=False,
+        help="Predict atomic charges (useful for dipoles and electrostatics)",
+    )
+    parser.add_argument(
+        "--no-charges",
+        action="store_false",
+        dest="charges",
+        help="Do not predict atomic charges",
+    )
+    parser.add_argument(
+        "--total-charge",
+        "--total_charge",
+        type=float,
+        default=0.0,
+        dest="total_charge",
+        help="Total charge constraint of the molecular system",
+    )
+    parser.add_argument(
+        "--no-electrostatics",
+        action="store_false",
+        dest="include_electrostatics",
+        help="Disable electrostatics layer in EF model",
+    )
+    parser.set_defaults(include_electrostatics=True)
+    parser.add_argument(
+        "--efa",
+        action="store_true",
+        default=False,
+        help="Enable Euclidean Fast Attention (EFA) in the model",
+    )
+    parser.add_argument(
+        "--no-efa",
+        action="store_false",
+        dest="efa",
+        help="Disable Euclidean Fast Attention (EFA)",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        default=False,
+        help="Enable debug flags in EF model",
+    )
+    parser.add_argument(
+        "--no-debug",
+        action="store_false",
+        dest="debug",
+        help="Disable debug flags in EF model",
+    )
+    parser.set_defaults(debug=False)
+
     parser.add_argument(
         "--save-config",
         "--save_config",
@@ -420,10 +659,15 @@ def main_loop(args):
             n_res=args.n_res,
             cutoff=args.cutoff,
             max_atomic_number=args.max_atomic_number,
-            zbl=args.zbl, # TODO: add zbl
-            efa=False, # TODO: add efa
+            zbl=args.zbl,
+            efa=args.efa,
             use_pbc=args.use_pbc,
             use_energy_bias=args.use_energy_bias,
+            charges=args.charges,
+            total_charge=args.total_charge,
+            include_electrostatics=args.include_electrostatics,
+            natoms=natoms,
+            debug=args.debug,
         )
         try:
             # save the model to a file
@@ -435,6 +679,15 @@ def main_loop(args):
             print(e)
             pass
     
+    conversion = _parse_dict_option(args.conversion) or {'energy': 1, 'forces': 1}
+    batch_args_dict = _parse_dict_option(args.batch_args_dict)
+    data_keys_list = _parse_list_option(args.data_keys)
+    if data_keys_list is not None:
+        data_keys = tuple(data_keys_list)
+    else:
+        data_keys = ('R', 'Z', 'F', "N", 'E', 'D', 'batch_segments')
+    init_params = _parse_dict_option(args.init_params)
+
     params_out = train_model(
         train_key,
         model,
@@ -448,20 +701,25 @@ def main_loop(args):
         dipole_weight=args.dipole_weight,
         charges_weight=args.charges_weight,
         restart=args.restart,
-        conversion={'energy': 1, 'forces': 1},
-        print_freq=1,
+        conversion=conversion,
+        print_freq=args.print_freq,
         name=args.tag,
-        best=False,
-        optimizer=None,
-        transform=None,
-        schedule_fn=None,
+        best=args.best,
+        optimizer=args.optimizer,
+        transform=args.transform,
+        schedule_fn=args.schedule_fn,
         objective=args.objective,
         ckpt_dir=ckpt_dir,  # Use absolute path
         log_tb=False,
-        batch_method="default",
-        batch_args_dict=None,
-        data_keys=('R', 'Z', 'F', "N", 'E', 'D', 'batch_segments'),
+        batch_method=args.batch_method,
+        batch_args_dict=batch_args_dict,
+        data_keys=data_keys,
         num_epochs=args.num_epochs,
+        early_stop_patience=args.early_stop_patience,
+        init_params=init_params,
+        rot_augment=args.rot_augment,
+        rot_perturbation=args.rot_perturbation,
+        save_every_epoch=args.save_every_epoch,
     )
 
     # save portable JSON (params + architecture) for inference / physnet-evaluate

@@ -104,3 +104,111 @@ def test_save_train_config_roundtrip(tmp_path: Path):
     loaded = namespace_from_yaml(out)
     assert loaded.data == "train.npz"
     assert loaded.tag == "roundtrip"
+
+
+def test_new_config_and_cli_options(tmp_path: Path):
+    # Test parsed CLI arguments
+    args = parse_train_args(
+        [
+            "--optimizer", "adamw",
+            "--transform", "reduce_on_plateau",
+            "--schedule-fn", "cosine",
+            "--early-stop-patience", "10",
+            "--best",
+            "--no-save-every-epoch",
+            "--print-freq", "5",
+            "--batch-method", "advanced",
+            "--batch-args-dict", '{"batch_shape": 60, "batch_nbl_len": 120}',
+            "--data-keys", "R", "Z", "F", "D",
+            "--conversion", '{"energy": 2.0}',
+            "--init-params", '{"params": {}}',
+            "--rot-augment",
+            "--rot-perturbation", "0.5",
+            "--charges",
+            "--total-charge", "1.0",
+            "--no-electrostatics",
+            "--efa",
+            "--no-zbl",
+            "--no-pbc",
+            "--debug",
+        ]
+    )
+    assert args.optimizer == "adamw"
+    assert args.transform == "reduce_on_plateau"
+    assert args.schedule_fn == "cosine"
+    assert args.early_stop_patience == 10
+    assert args.best is True
+    assert args.save_every_epoch is False
+    assert args.print_freq == 5
+    assert args.batch_method == "advanced"
+    assert args.batch_args_dict == '{"batch_shape": 60, "batch_nbl_len": 120}'
+    assert args.data_keys == ["R", "Z", "F", "D"]
+    assert args.conversion == '{"energy": 2.0}'
+    assert args.init_params == '{"params": {}}'
+    assert args.rot_augment is True
+    assert args.rot_perturbation == 0.5
+    assert args.charges is True
+    assert args.total_charge == 1.0
+    assert args.include_electrostatics is False
+    assert args.efa is True
+    assert args.zbl is False
+    assert args.use_pbc is False
+    assert args.debug is True
+
+    # Test loading from YAML
+    cfg = tmp_path / "extended.yaml"
+    cfg.write_text(
+        """
+data: train.npz
+optimizer: adamw
+transform: reduce_on_plateau
+schedule_fn: cosine
+early_stop_patience: 15
+best: true
+save_every_epoch: false
+print_freq: 2
+batch_method: advanced
+batch_args_dict:
+  batch_shape: 40
+  batch_nbl_len: 100
+data_keys:
+  - R
+  - Z
+conversion:
+  energy: 0.5
+init_params:
+  params:
+    layer: 1
+rot_augment: true
+rot_perturbation: 0.1
+charges: true
+total_charge: -1.0
+include_electrostatics: true
+efa: true
+zbl: true
+use_pbc: true
+debug: false
+""".strip()
+    )
+    loaded = namespace_from_yaml(cfg)
+    assert loaded.optimizer == "adamw"
+    assert loaded.early_stop_patience == 15
+    assert loaded.best is True
+    assert loaded.save_every_epoch is False
+    assert loaded.print_freq == 2
+    assert loaded.batch_method == "advanced"
+    assert isinstance(loaded.batch_args_dict, dict)
+    assert loaded.batch_args_dict["batch_shape"] == 40
+    assert loaded.data_keys == ["R", "Z"]
+    assert loaded.conversion == {"energy": 0.5}
+    assert loaded.init_params == {"params": {"layer": 1}}
+    assert loaded.rot_augment is True
+    assert loaded.rot_perturbation == 0.1
+    assert loaded.charges is True
+    assert loaded.total_charge == -1.0
+    assert loaded.include_electrostatics is True
+    assert loaded.efa is True
+    assert loaded.zbl is True
+    assert loaded.use_pbc is True
+    assert loaded.debug is False
+
