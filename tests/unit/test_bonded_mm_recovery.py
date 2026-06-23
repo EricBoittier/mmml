@@ -53,10 +53,10 @@ def test_bonded_recovery_sd_kwargs_pbc_vs_vacuum():
     pbc_kw = _bonded_recovery_sd_kwargs(pbc_ctx, cfg)
     vac_kw = _bonded_recovery_sd_kwargs(vac_ctx, cfg)
     assert pbc_kw["nstep"] == 10
-    assert pbc_kw["inbfrq"] == -1
+    assert pbc_kw["inbfrq"] == 50
     assert pbc_kw["ihbfrq"] == 50
     assert "imgfrq" not in pbc_kw
-    assert vac_kw["inbfrq"] == -1
+    assert vac_kw["inbfrq"] == 50
     assert vac_kw["ihbfrq"] == 0
     assert "imgfrq" not in vac_kw
 
