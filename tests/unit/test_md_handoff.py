@@ -603,6 +603,98 @@ def test_prepare_pycharmm_handoff_continuation_no_template_invalid_restart(
         sys.modules.update(orig_modules)
 
 
+def test_handoff_from_charmm_raises_on_all_zero_positions() -> None:
+    import sys
+    from unittest.mock import MagicMock
+    from mmml.cli.run.md_handoff import handoff_from_charmm
+
+    orig_modules = sys.modules.copy()
+    try:
+        # Mock setup to return zeros
+        mock_setup = MagicMock()
+        mock_setup.get_charmm_positions_array.return_value = np.zeros((10, 3))
+        sys.modules["mmml.interfaces.pycharmmInterface.mlpot.setup"] = mock_setup
+
+        # Mock run_state_checkpoint to return velocities or None
+        mock_checkpoint = MagicMock()
+        mock_checkpoint._charmm_velocities_array.return_value = None
+        sys.modules["mmml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint"] = mock_checkpoint
+
+        # Mock dynamics_validation
+        mock_validation = MagicMock()
+        sys.modules["mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation"] = mock_validation
+
+        # Call and expect RuntimeError
+        with pytest.raises(RuntimeError, match="handoff_from_charmm: CHARMM returned all-zero positions"):
+            handoff_from_charmm(
+                atomic_numbers=np.ones(10, dtype=int),
+                restart_path=None,
+            )
+    finally:
+        sys.modules.clear()
+        sys.modules.update(orig_modules)
+
+
+def test_handoff_from_charmm_recovers_from_restart(tmp_path: Path) -> None:
+    import sys
+    from unittest.mock import MagicMock
+    from mmml.cli.run.md_handoff import handoff_from_charmm
+
+    orig_modules = sys.modules.copy()
+    try:
+        # Mock setup to return zeros
+        mock_setup = MagicMock()
+        mock_setup.get_charmm_positions_array.return_value = np.zeros((10, 3))
+        sys.modules["mmml.interfaces.pycharmmInterface.mlpot.setup"] = mock_setup
+
+        # Mock run_state_checkpoint to return velocities or None
+        mock_checkpoint = MagicMock()
+        mock_checkpoint._charmm_velocities_array.return_value = None
+        sys.modules["mmml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint"] = mock_checkpoint
+
+        # Mock dynamics_validation to return valid coordinates from read_restart_coordinates
+        mock_validation = MagicMock()
+        valid_coords = np.ones((10, 3))
+        mock_validation.read_restart_coordinates.return_value = valid_coords
+        sys.modules["mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation"] = mock_validation
+
+        # Mock import_pycharmm and pbc_env so the rest of handoff_from_charmm works or falls back
+        sys.modules["mmml.interfaces.pycharmmInterface.import_pycharmm"] = MagicMock()
+        mock_pbc = MagicMock()
+        mock_pbc.resolve_charmm_cubic_box_side_A.return_value = (None, None)
+        mock_pbc.parse_cubic_box_side_from_charmm_restart.return_value = None
+        sys.modules["mmml.interfaces.pycharmmInterface.mlpot.pbc_env"] = mock_pbc
+
+        # Write a dummy restart file so cand.is_file() is True
+        dummy_restart = tmp_path / "dummy.res"
+        dummy_restart.write_text("dummy restart")
+
+        with pytest.warns(UserWarning, match="handoff_from_charmm: CHARMM in-memory positions are all zero"):
+            state = handoff_from_charmm(
+                atomic_numbers=np.ones(10, dtype=int),
+                restart_path=dummy_restart,
+            )
+        np.testing.assert_allclose(state.positions, valid_coords)
+
+    finally:
+        sys.modules.clear()
+        sys.modules.update(orig_modules)
+
+
+def test_cluster_geometry_from_handoff_warns_on_all_zeros() -> None:
+    from mmml.cli.run.md_handoff import MdHandoffState, cluster_geometry_from_handoff
+
+    handoff = MdHandoffState(
+        positions=np.zeros((10, 3)),
+        atomic_numbers=np.ones(10, dtype=int),
+    )
+    with pytest.warns(UserWarning, match="cluster_geometry_from_handoff: handoff positions are all zero"):
+        cluster_geometry_from_handoff(
+            handoff,
+            n_molecules=2,
+        )
+
+
 
 
 

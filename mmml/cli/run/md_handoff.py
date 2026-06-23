@@ -537,6 +537,14 @@ def cluster_geometry_from_handoff(
     """Positions/Z and per-monomer layout from handoff (no Packmol)."""
     z = np.asarray(handoff.atomic_numbers, dtype=np.int32)
     r0 = np.asarray(handoff.positions, dtype=np.float64)
+    if r0.size > 0 and np.allclose(r0, 0.0):
+        import warnings
+        warnings.warn(
+            f"cluster_geometry_from_handoff: handoff positions are all zero "
+            f"({len(r0)} atoms). This restart was likely saved with invalid "
+            "coordinates. Check the source handoff file.",
+            stacklevel=2,
+        )
     if composition:
         atoms_per_list, residue_labels, composition_summary = (
             cluster_layout_from_composition_string(composition, n_atoms=len(r0))
