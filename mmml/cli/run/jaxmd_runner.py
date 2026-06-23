@@ -408,31 +408,35 @@ def set_up_nhc_sim_routine(
         @jax.custom_vjp
         def wrapped_energy_fn(position, **kwargs):
             pos = jnp.array(position)
+            neighbor = kwargs.get("neighbor", None)
+            pair_idx, pair_mask = neighbor if neighbor is not None else (_pbc_state["pair_idx"], _pbc_state["pair_mask"])
             return jax_md_energy_fn(
                 pbc_map_fn(pos),
-                mm_pair_idx=_pbc_state["pair_idx"],
-                mm_pair_mask=_pbc_state["pair_mask"],
+                mm_pair_idx=pair_idx,
+                mm_pair_mask=pair_mask,
                 box=_pbc_state["box"],
             )
 
         def wrapped_energy_fn_fwd(position, **kwargs):
             pos = jnp.array(position)
             R_mapped = pbc_map_fn(pos)
+            neighbor = kwargs.get("neighbor", None)
+            pair_idx, pair_mask = neighbor if neighbor is not None else (_pbc_state["pair_idx"], _pbc_state["pair_mask"])
             E = jax_md_energy_fn(
                 R_mapped,
-                mm_pair_idx=_pbc_state["pair_idx"],
-                mm_pair_mask=_pbc_state["pair_mask"],
+                mm_pair_idx=pair_idx,
+                mm_pair_mask=pair_mask,
                 box=_pbc_state["box"],
             )
-            return E, (pos, R_mapped)
+            return E, (pos, R_mapped, pair_idx, pair_mask)
 
         def wrapped_energy_fn_bwd(res, g, **kwargs):
-            pos, R_mapped = res
+            pos, R_mapped, pair_idx, pair_mask = res
             result = evaluate_energies_and_forces(
                 atomic_numbers=atomic_numbers,
                 positions=R_mapped,
-                mm_pair_idx=_pbc_state["pair_idx"],
-                mm_pair_mask=_pbc_state["pair_mask"],
+                mm_pair_idx=pair_idx,
+                mm_pair_mask=pair_mask,
                 box=_pbc_state["box"],
             )
             F_mapped = result.forces
@@ -446,10 +450,12 @@ def set_up_nhc_sim_routine(
         def wrapped_force_fn(position, **kwargs):
             pos = jnp.array(position)
             R_mapped = pbc_map_fn(pos)
+            neighbor = kwargs.get("neighbor", None)
+            pair_idx, pair_mask = neighbor if neighbor is not None else (_pbc_state["pair_idx"], _pbc_state["pair_mask"])
             F_mapped = jax_md_force_fn(
                 R_mapped,
-                mm_pair_idx=_pbc_state["pair_idx"],
-                mm_pair_mask=_pbc_state["pair_mask"],
+                mm_pair_idx=pair_idx,
+                mm_pair_mask=pair_mask,
                 box=_pbc_state["box"],
             )
             return as_jaxmd_dtype(pbc_map_fn.transform_forces(pos, F_mapped))
@@ -457,19 +463,23 @@ def set_up_nhc_sim_routine(
         # MIC-only: capture box and pairs for PBC minimization (Fix A)
         @jit
         def wrapped_energy_fn(position, **kwargs):
+            neighbor = kwargs.get("neighbor", None)
+            pair_idx, pair_mask = neighbor if neighbor is not None else (_pbc_state["pair_idx"], _pbc_state["pair_mask"])
             return jax_md_energy_fn(
                 jnp.array(position),
-                mm_pair_idx=_pbc_state["pair_idx"],
-                mm_pair_mask=_pbc_state["pair_mask"],
+                mm_pair_idx=pair_idx,
+                mm_pair_mask=pair_mask,
                 box=_pbc_state["box"],
             )
 
         @jit
         def wrapped_force_fn(position, **kwargs):
+            neighbor = kwargs.get("neighbor", None)
+            pair_idx, pair_mask = neighbor if neighbor is not None else (_pbc_state["pair_idx"], _pbc_state["pair_mask"])
             return jax_md_force_fn(
                 jnp.array(position),
-                mm_pair_idx=_pbc_state["pair_idx"],
-                mm_pair_mask=_pbc_state["pair_mask"],
+                mm_pair_idx=pair_idx,
+                mm_pair_mask=pair_mask,
                 box=_pbc_state["box"],
             )
 
@@ -520,12 +530,14 @@ def set_up_nhc_sim_routine(
 
     @jit
     def sim(state, neighbor=None, pressure=None):
-        """Step function: for NPT pass neighbor and pressure; for NVT/NVE no kwargs."""
+        """Step function: pass neighbor and pressure to apply_fn if available."""
 
         def _cast_state(s):
             return normalize_jaxmd_state(s)
 
         def step_nve(i, s):
+            if neighbor is not None:
+                return _cast_state(apply_fn(s, neighbor=neighbor))
             return _cast_state(apply_fn(s))
 
         def step_npt(i, s):
@@ -987,6 +999,10 @@ def set_up_nhc_sim_routine(
             md_pos = jnp.asarray(res_pre, dtype=jnp.float32)
             atoms.set_positions(np.asarray(res_pre, dtype=float))
 
+        current_neighbors = None
+        if use_pbc and update_fn is not None:
+            current_neighbors = (_pbc_state["pair_idx"], _pbc_state["pair_mask"])
+
         if args.ensemble == "npt" and use_pbc:
             # NPT: positions in fractional coords; wrap md_pos into cell first, then convert to fractional
             box_curr = box_npt
@@ -1007,6 +1023,7 @@ def set_up_nhc_sim_routine(
                 neighbor=(pair_idx, pair_mask), kT=kT, mass=Si_mass
             )
             npt_pair_idx, npt_pair_mask = pair_idx, pair_mask
+            current_neighbors = (npt_pair_idx, npt_pair_mask)
             npt_pressure = pressure  # Use same pressure as NPT block (handles --pressure 0)
         elif args.ensemble == "nvt":
             state = init_fn(key, as_jaxmd_dtype(md_pos), mass=Si_mass)
@@ -1036,10 +1053,11 @@ def set_up_nhc_sim_routine(
             box_curr = simulate.npt_box(state)
             energy_initial = float(npt_energy_fn(state.position, box=box_curr, neighbor=(npt_pair_idx, npt_pair_mask)))
         else:
+            pair_idx, pair_mask = current_neighbors if current_neighbors is not None else (None, None)
             out_init = jax_md_eval_fn(
                 state.position,
-                mm_pair_idx=_pbc_state["pair_idx"],
-                mm_pair_mask=_pbc_state["pair_mask"],
+                mm_pair_idx=pair_idx,
+                mm_pair_mask=pair_mask,
                 box=_pbc_state["box"],
             )
             energy_initial = float(out_init.energy)
@@ -1062,7 +1080,7 @@ def set_up_nhc_sim_routine(
                 box=box_curr,
             )
         else:
-            forces_jax = wrapped_force_fn(state.position)
+            forces_jax = wrapped_force_fn(state.position, neighbor=current_neighbors)
         print_forces_summary(np.asarray(forces_jax), energy_eV=energy_initial, console=c)
         # velocity = momentum / mass; position update = R + dt * v (half-step in VV)
         vel = state.momentum / state.mass
@@ -1103,14 +1121,14 @@ def set_up_nhc_sim_routine(
                 state, neighbor=(npt_pair_idx, npt_pair_mask), pressure=npt_pressure
             )
         else:
-            _warm_state = apply_fn(state)
+            _warm_state = apply_fn(state, neighbor=current_neighbors)
         block_jax_values(_warm_state.position, _warm_state.momentum)
 
         # Single-step diagnostic: catch NaN on first step (common with wrong mass/units)
         if is_npt and npt_pair_idx is not None:
             state_one = apply_fn(state, neighbor=(npt_pair_idx, npt_pair_mask), pressure=npt_pressure)
         else:
-            state_one = apply_fn(state)
+            state_one = apply_fn(state, neighbor=current_neighbors)
         if not jnp.all(jnp.isfinite(state_one.position)):
             t_err = Table(title="First step NaN")
             t_err.add_column("Check", style="red")
@@ -1133,7 +1151,12 @@ def set_up_nhc_sim_routine(
                     pair_mask=npt_pair_mask,
                 )
             else:
-                out1 = _eval_at_position(state_one.position)
+                pair_idx, pair_mask = current_neighbors if current_neighbors is not None else (None, None)
+                out1 = _eval_at_position(
+                    state_one.position,
+                    pair_idx=pair_idx,
+                    pair_mask=pair_mask,
+                )
             e1 = float(out1.energy)
             c.print(
                 Panel(
@@ -1148,7 +1171,7 @@ def set_up_nhc_sim_routine(
             e1 = float(npt_energy_fn(state_one.position, box=box_one, neighbor=(npt_pair_idx, npt_pair_mask)))
             c.print(Panel(f"First step OK: E_pot={e1:.6f} eV", title="[bold green]JAX-MD[/bold green]", border_style="green"))
         else:
-            e1 = float(wrapped_energy_fn(state_one.position))
+            e1 = float(wrapped_energy_fn(state_one.position, neighbor=current_neighbors))
             c.print(Panel(f"First step OK: E_pot={e1:.6f} eV", title="[bold green]JAX-MD[/bold green]", border_style="green"))
 
         nbr_monitor = getattr(args, "nbr_monitor", False)
@@ -1265,7 +1288,7 @@ def set_up_nhc_sim_routine(
                     )
                 )
             else:
-                e = float(wrapped_energy_fn(st.position))
+                e = float(wrapped_energy_fn(st.position, neighbor=current_neighbors))
             return bool(np.isfinite(e))
 
         try:
@@ -1282,9 +1305,18 @@ def set_up_nhc_sim_routine(
                     npt_pair_idx, npt_pair_mask = update_fn(
                         np.asarray(state.position), box=box_nl
                     )
-                    state = sim(state, neighbor=(npt_pair_idx, npt_pair_mask), pressure=npt_pressure)
+                    current_neighbors = (npt_pair_idx, npt_pair_mask)
+                    state = sim(state, neighbor=current_neighbors, pressure=npt_pressure)
+                elif use_pbc and update_fn is not None:
+                    if getattr(args, "debug", False) and (i < 3 or i % 50 == 0):
+                        print(f"[nbr] NVT/NVE record {i}: updating neighbor list")
+                    nvt_neighbors = update_fn(np.asarray(state.position), box=pbc_box_nl)
+                    _pbc_state["pair_idx"] = nvt_neighbors[0]
+                    _pbc_state["pair_mask"] = nvt_neighbors[1]
+                    current_neighbors = nvt_neighbors
+                    state = sim(state, neighbor=current_neighbors)
                 else:
-                    state = sim(state)
+                    state = sim(state, neighbor=current_neighbors)
 
                 if use_pbc:
                     if is_npt:
@@ -1313,10 +1345,12 @@ def set_up_nhc_sim_routine(
                                 npt_neighbors = update_fn(
                                     np.asarray(new_frac), box=box_nl
                                 )
+                            npt_pair_idx, npt_pair_mask = npt_neighbors
+                            current_neighbors = npt_neighbors
                             state = _state_after_overlap_rescue(
                                 new_frac,
                                 box_curr=box_curr,
-                                neighbor=npt_neighbors,
+                                neighbor=current_neighbors,
                             )
                             if not _rescued_state_energy_finite(state):
                                 run_status = "error"
@@ -1344,6 +1378,7 @@ def set_up_nhc_sim_routine(
                                 )
                                 _pbc_state["pair_idx"] = pp_i
                                 _pbc_state["pair_mask"] = pp_m
+                                current_neighbors = (pp_i, pp_m)
                             if not _rescued_state_energy_finite(state):
                                 run_status = "error"
                                 run_error = (
@@ -1417,7 +1452,12 @@ def set_up_nhc_sim_routine(
                                 pair_mask=npt_pair_mask,
                             )
                         else:
-                            out_dyn = _eval_at_position(state.position)
+                            pair_idx, pair_mask = current_neighbors if current_neighbors is not None else (None, None)
+                            out_dyn = _eval_at_position(
+                                state.position,
+                                pair_idx=pair_idx,
+                                pair_mask=pair_mask,
+                            )
                         e_pot = float(out_dyn.energy)
                         com_dist_report = float(out_dyn.com_dist)
                         e_fb_report = float(out_dyn.flat_bottom_E)
@@ -1425,7 +1465,7 @@ def set_up_nhc_sim_routine(
                         box_curr = simulate.npt_box(state)
                         e_pot = float(npt_energy_fn(state.position, box=box_curr, neighbor=(npt_pair_idx, npt_pair_mask)))
                     else:
-                        e_pot = float(wrapped_energy_fn(state.position))
+                        e_pot = float(wrapped_energy_fn(state.position, neighbor=current_neighbors))
                     e_kin = float(jax_md.quantity.kinetic_energy(
                         momentum=state.momentum,
                         mass=state.mass
