@@ -738,10 +738,10 @@ def _base_dyn_kwargs(
     ihbfrq: int = 50,
     ilbfrq: int = 50,
     imgfrq: int = 50,
-    ixtfrq: int = 1000,
-    nprint: int = 100,
+    ixtfrq: int = 50,
+    nprint: int = 50,
     iprfrq: int = 500,
-    isvfrq: int = 1000,
+    isvfrq: int = 50,
     ntrfrq: int = 0,
     echeck: float = 100.0,
 ) -> dict[str, Any]:
