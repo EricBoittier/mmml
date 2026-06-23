@@ -690,6 +690,35 @@ def normalize_flax_params_for_apply(
     return params
 
 
+def assert_flax_variables_for_apply(
+    variables: Any,
+    *,
+    context: str = "checkpoint",
+) -> None:
+    """Raise ``ValueError`` when ``variables`` is not a valid Flax apply dict.
+
+    Batched PhysNet inference requires a top-level ``params`` collection.
+    Loading a bare module tree (e.g. ``Embed_0``, ``Dense_0``, …) without that
+    wrapper triggers ``ApplyScopeInvalidVariablesTypeError`` at runtime.
+    """
+    if not isinstance(variables, dict):
+        raise ValueError(
+            f"{context}: expected dict of Flax collections, got {type(variables).__name__}"
+        )
+    if "params" not in variables:
+        keys = list(variables.keys())[:12]
+        raise ValueError(
+            f"{context}: missing top-level 'params' collection (keys={keys}). "
+            "Sync mmml to the latest checkpoint-loading fix, or re-save the portable JSON."
+        )
+    inner = variables["params"]
+    if not isinstance(inner, dict):
+        raise ValueError(
+            f"{context}: variables['params'] must be a module dict, "
+            f"got {type(inner).__name__}"
+        )
+
+
 # Convenience function for quick load
 def quick_load(
     checkpoint_path: Union[str, Path],
