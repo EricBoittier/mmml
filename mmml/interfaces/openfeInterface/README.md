@@ -42,4 +42,4 @@ See [OpenFE installation docs](https://docs.openfree.energy/en/stable/installati
 
 ## Python version note
 
-mmml requires Python 3.13. OpenFE from conda-forge typically uses Python 3.11 or 3.12. To use both, run the ABFE interface from a separate OpenFE conda environment, or install mmml into that environment if you can relax the Python constraint.
+mmml requires Python 3.14. OpenFE from conda-forge typically uses Python 3.11 or 3.12. To use both, run the ABFE interface from a separate OpenFE conda environment, or install mmml into that environment if you can relax the Python constraint.
