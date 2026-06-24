@@ -538,8 +538,12 @@ def resolve_dynamics_print_kwargs(
     args: argparse.Namespace,
     *,
     nstep: int,
+    nsavc: int | None = None,
 ) -> dict[str, int]:
     nstep = max(1, int(nstep))
+    if nsavc is not None:
+        ns = max(1, int(nsavc))
+        return {"nprint": ns, "iprfrq": ns, "isvfrq": ns}
     if getattr(args, "quiet", False):
         return {"nprint": nstep, "iprfrq": nstep, "isvfrq": nstep}
     nprint = max(1, int(getattr(args, "dyn_nprint", 500)))
@@ -549,6 +553,7 @@ def resolve_dynamics_print_kwargs(
     iprfrq = min(iprfrq, nstep)
     isvfrq = min(isvfrq, nstep)
     return {"nprint": nprint, "iprfrq": iprfrq, "isvfrq": isvfrq}
+
 
 
 def add_cluster_args(parser: argparse.ArgumentParser) -> None:

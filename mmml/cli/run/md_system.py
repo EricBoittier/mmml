@@ -1345,7 +1345,7 @@ def _append_suite_mmml_handoff_args(cmd: list[str], args: argparse.Namespace) ->
     )
     cmd.extend(["--jaxmd-minimize-steps", str(getattr(args, "jaxmd_minimize_steps", 200))])
     cmd.extend(
-        ["--jaxmd-pbc-minimize-steps", str(getattr(args, "jaxmd_pbc_minimize_steps", 200))]
+        ["--jaxmd-pbc-minimize-steps", str(getattr(args, "jaxmd_pbc_minimize_steps", 2000))]
     )
     _append_boolean_optional_flag(
         cmd,
