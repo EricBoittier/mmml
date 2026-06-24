@@ -87,6 +87,23 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--packmol-radius", type=float, default=None)
     p.add_argument("--packmol-tolerance", type=float, default=2.0)
     p.add_argument("--flat-bottom-radius", type=float, default=None)
+    p.add_argument(
+        "--min-com-restraint-distance",
+        type=float,
+        default=None,
+        metavar="Å",
+        help=(
+            "Enable a pairwise inter-monomer COM lower-wall restraint below "
+            "this distance in Å."
+        ),
+    )
+    p.add_argument(
+        "--min-com-restraint-k",
+        type=float,
+        default=1.0,
+        metavar="eV/Å²",
+        help="Force constant for --min-com-restraint-distance.",
+    )
     p.add_argument("--seed", type=int, default=123)
     p.add_argument("--free-space", action="store_true")
     p.add_argument("--box-size", type=float, default=None)
@@ -396,6 +413,12 @@ def _run_one_scan(args: argparse.Namespace, composition: str) -> Path:
         "mm_switch_on": np.float64(getattr(args, "mm_switch_on", np.nan)),
         "mm_switch_width": np.float64(getattr(args, "mm_switch_width", np.nan)),
         "ml_switch_width": np.float64(getattr(args, "ml_switch_width", np.nan)),
+        "min_com_restraint_distance": np.float64(
+            np.nan
+            if getattr(args, "min_com_restraint_distance", None) is None
+            else args.min_com_restraint_distance
+        ),
+        "min_com_restraint_k": np.float64(getattr(args, "min_com_restraint_k", np.nan)),
         "do_mm": np.bool_(not args.no_mm),
         "scan_2d_d01_A": d1.astype(np.float64),
         "scan_2d_d02_A": d2.astype(np.float64),
