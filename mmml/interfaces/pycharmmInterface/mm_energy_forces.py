@@ -867,9 +867,9 @@ def build_mm_energy_forces_fn(
 
         def update_mm_pairs(positions: np.ndarray, box: Optional[np.ndarray] = None) -> Tuple[Array, Array]:
             R = np.asarray(positions, dtype=np.float64)
-            _nbr_debug = debug  # capture for closure
+            _nbr_debug = debug
             _pair_stats["calls"] += 1
-            # When fractional_coordinates=True but box is None (ASE calculator), convert Cartesian to fractional
+
             if fractional_coordinates and box is None:
                 cell_np = np.asarray(pbc_cell, dtype=np.float64)
                 if cell_np.ndim == 0:
@@ -882,46 +882,72 @@ def build_mm_energy_forces_fn(
                     cell_3x3 = np.diag(cell_np)
                 else:
                     cell_3x3 = cell_np
+
                 inv_cell = np.linalg.inv(cell_3x3)
-                R_frac = (R @ inv_cell.T) - np.floor(R @ inv_cell.T)
-                R = np.asarray(R_frac, dtype=np.float64)
+                R_frac = R @ inv_cell.T
+                R = np.asarray(R_frac - np.floor(R_frac), dtype=np.float64)
                 box = np.diagonal(cell_3x3).astype(np.float64)
+
             interval = int(max(1, jax_md_update_interval))
             skin = float(max(0.0, jax_md_skin_distance))
-            have_cache = (_pair_idx_cell[0] is not None) and (_pair_mask_cell[0] is not None)
+
+            have_cache = (
+                _pair_idx_cell[0] is not None
+                and _pair_mask_cell[0] is not None
+            )
+
             if have_cache:
                 if skin > 0.0 and _last_positions[0] is not None:
                     max_disp = float(np.max(np.linalg.norm(R - _last_positions[0], axis=1)))
+
                     box_delta = 0.0
                     if box is not None and _last_box[0] is not None:
                         box_delta = float(np.max(np.abs(np.asarray(box) - _last_box[0])))
+
                     if max_disp <= skin and box_delta <= 1e-8:
                         _pair_stats["reused"] += 1
                         return _pair_idx_cell[0], _pair_mask_cell[0]
+
                 elif skin == 0.0 and (_pair_stats["calls"] % interval != 0):
                     _pair_stats["reused"] += 1
                     return _pair_idx_cell[0], _pair_mask_cell[0]
+
             nbrs = _nbrs[0]
-            # jax_md: box keyword only allowed when fractional_coordinates=True (NPT)
             kwargs = {} if (box is None or not fractional_coordinates) else {"box": jnp.asarray(box)}
+
             try:
                 nbrs = nbrs.update(R, **kwargs)
             except Exception as e:
                 if _nbr_debug:
                     print(f"[nbr] update failed before overflow check ({type(e).__name__}): {e}")
-                return _cell_list_fallback_pairs(np.asarray(positions, dtype=np.float64), _nbr_debug, box_in=box)
+                return _cell_list_fallback_pairs(
+                    np.asarray(positions, dtype=np.float64),
+                    _nbr_debug,
+                    box_in=box,
+                )
+
             realloc_count = 0
             for _ in range(int(jax_md_max_overflow_retries)):
                 overflow = np.asarray(jax.device_get(nbrs.did_buffer_overflow))
                 did_overflow = bool(overflow) if overflow.ndim == 0 else bool(overflow.any())
+
                 if _nbr_debug:
-                    print(f"[nbr] update: overflow={did_overflow}, realloc={realloc_count}, "
-                          f"box={'None' if box is None else np.asarray(box).tolist()}")
+                    print(
+                        f"[nbr] update: overflow={did_overflow}, realloc={realloc_count}, "
+                        f"box={'None' if box is None else np.asarray(box).tolist()}"
+                    )
+
                 if not did_overflow:
                     break
+
                 realloc_count += 1
                 _pair_stats["reallocs"] += 1
-                next_multiplier = _current_capacity_multiplier[0] * float(jax_md_capacity_growth_factor)
+
+                next_multiplier = (
+                    _current_capacity_multiplier[0]
+                    * float(jax_md_capacity_growth_factor)
+                )
+
                 rebuilt = _create_jax_md_bundle(next_multiplier)
                 if rebuilt is not None:
                     _neighbor_fn_new, _filter_fn_new, _ = rebuilt
@@ -929,6 +955,7 @@ def build_mm_energy_forces_fn(
                     _filter_fn_cell[0] = _filter_fn_new
                     _current_capacity_multiplier[0] = next_multiplier
                     _pair_stats["capacity_multiplier"] = float(next_multiplier)
+
                 try:
                     nbrs = _neighbor_fn_cell[0].allocate(R, **kwargs)
                     nbrs = nbrs.update(R, **kwargs)
@@ -938,23 +965,34 @@ def build_mm_energy_forces_fn(
                             f"[nbr] allocate/update failed during retry {realloc_count} "
                             f"({type(e).__name__}): {e}"
                         )
-                    return _cell_list_fallback_pairs(np.asarray(positions, dtype=np.float64), _nbr_debug, box_in=box)
+                    return _cell_list_fallback_pairs(
+                        np.asarray(positions, dtype=np.float64),
+                        _nbr_debug,
+                        box_in=box,
+                    )
             else:
                 if _nbr_debug:
                     print("[nbr] persistent overflow after retries; attempting cell-list fallback")
-                return _cell_list_fallback_pairs(np.asarray(positions, dtype=np.float64), _nbr_debug, box_in=box)
+                return _cell_list_fallback_pairs(
+                    np.asarray(positions, dtype=np.float64),
+                    _nbr_debug,
+                    box_in=box,
+                )
+
             _nbrs[0] = nbrs
+
             pair_i, pair_j, mask = _filter_fn_cell[0](nbrs.idx)
+
             if mm_r_min is not None:
                 _pair_stats["com_filter_calls"] += 1
+
                 R_for_filter = np.asarray(R, dtype=np.float64)
+
                 if fractional_coordinates and box is not None:
                     cell_np = np.asarray(box, dtype=np.float64)
-                    if cell_np.ndim == 1:
-                        cell_3x3 = np.diag(cell_np)
-                    else:
-                        cell_3x3 = cell_np
+                    cell_3x3 = np.diag(cell_np) if cell_np.ndim == 1 else cell_np
                     R_for_filter = np.asarray(R_for_filter @ cell_3x3, dtype=np.float64)
+
                 elif fractional_coordinates and box is None:
                     cell_np = np.asarray(pbc_cell, dtype=np.float64)
                     if cell_np.ndim == 0:
@@ -964,9 +1002,12 @@ def build_mm_energy_forces_fn(
                     else:
                         cell_3x3 = cell_np
                     R_for_filter = np.asarray(R_for_filter @ cell_3x3, dtype=np.float64)
+
                 pbc_for_filter = np.asarray(pbc_cell) if pbc_cell is not None else None
                 if fractional_coordinates and box is not None:
-                    pbc_for_filter = np.diag(box) if np.asarray(box).ndim == 1 else np.asarray(box)
+                    box_np = np.asarray(box)
+                    pbc_for_filter = np.diag(box_np) if box_np.ndim == 1 else box_np
+
                 mask = _filter_pairs_by_com_min(
                     R_for_filter,
                     np.asarray(jax.device_get(pair_i)),
@@ -977,21 +1018,29 @@ def build_mm_energy_forces_fn(
                     mm_r_min,
                     pbc_cell=pbc_for_filter,
                 )
+
             pair_idx = jnp.stack([pair_i, pair_j], axis=1)
             pair_mask = jnp.asarray(mask, dtype=ml_jnp_dtype)
+
             _pair_idx_cell[0] = pair_idx
             _pair_mask_cell[0] = pair_mask
             _last_positions[0] = np.asarray(R, dtype=np.float64)
             _last_box[0] = None if box is None else np.asarray(box, dtype=np.float64).copy()
             _pair_stats["updates"] += 1
-            n_valid = int(np.sum(np.asarray(jax.device_get(mask))))
+
             if _nbr_debug:
-                capacity = pair_idx.shape[0] if hasattr(pair_idx, 'shape') else len(pair_i)
-                print(f"[nbr] pairs: n_valid={n_valid}, capacity={capacity}, "
-                      f"frac_coords={fractional_coordinates}")
+                n_valid = int(np.sum(np.asarray(jax.device_get(mask))))
+                capacity = pair_idx.shape[0] if hasattr(pair_idx, "shape") else len(pair_i)
+                print(
+                    f"[nbr] pairs: n_valid={n_valid}, capacity={capacity}, "
+                    f"frac_coords={fractional_coordinates}"
+                )
+
             return pair_idx, pair_mask
+        
         def _get_pair_update_stats() -> dict:
             return dict(_pair_stats)
+
         update_mm_pairs.get_stats = _get_pair_update_stats
 
         return (calculate_mm_energy_and_forces_dynamic, update_mm_pairs)
