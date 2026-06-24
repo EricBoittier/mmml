@@ -1247,7 +1247,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
 
     # Dummy SD step to ensure CHARMM neighbor list is configured for MLPot
     import pycharmm.lingo
-    pycharmm.lingo.charmm_script("mini sd nstep 1\nenergy\n")
+    pycharmm.lingo.charmm_script("mini sd nstep 0\nenergy\n")
 
     restart_from = (
         Path(args.restart_from).expanduser().resolve()
