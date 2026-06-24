@@ -743,6 +743,97 @@ def test_cluster_geometry_from_handoff_warns_on_all_zeros() -> None:
         )
 
 
+def test_synthetic_restart_usability_and_round_trip(tmp_path: Path) -> None:
+    from mmml.cli.run.md_handoff import (
+        _write_synthetic_charmm_restart,
+        _is_usable_restart_template,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_restart_coordinates,
+        read_restart_velocities,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        parse_cubic_box_side_from_charmm_restart,
+    )
+
+    positions = np.array([
+        [1.0, 2.0, 3.0],
+        [4.0, 5.0, 6.0],
+        [7.0, 8.0, 9.0],
+    ], dtype=float)
+    velocities = np.array([
+        [-0.1, -0.2, -0.3],
+        [-0.4, -0.5, -0.6],
+        [-0.7, -0.8, -0.9],
+    ], dtype=float)
+    cell = np.diag([30.0, 30.0, 30.0])
+    handoff = MdHandoffState(
+        positions=positions,
+        atomic_numbers=np.array([6, 1, 1], dtype=np.int32),
+        velocities=velocities,
+        cell=cell,
+        pbc=True,
+    )
+
+    out_file = tmp_path / "synthetic.res"
+    _write_synthetic_charmm_restart(handoff, out_file)
+
+    assert out_file.is_file()
+    
+    # 1. Verify coordinate parsing
+    coords = read_restart_coordinates(out_file)
+    assert coords is not None
+    np.testing.assert_allclose(coords, positions, rtol=1e-10, atol=1e-10)
+
+    # 2. Verify velocity parsing
+    vels = read_restart_velocities(out_file)
+    assert vels is not None
+    np.testing.assert_allclose(vels, velocities, rtol=1e-10, atol=1e-10)
+
+    # 3. Verify box side parsing
+    side = parse_cubic_box_side_from_charmm_restart(out_file)
+    assert side is not None
+    assert side == pytest.approx(30.0)
+
+    # 4. Verify template validation check passes
+    assert _is_usable_restart_template(out_file, expected_natom=3)
+
+    # 5. Verify load_handoff_from_res parses it properly
+    reloaded = load_handoff_from_res(out_file, atomic_numbers=handoff.atomic_numbers)
+    np.testing.assert_allclose(reloaded.positions, positions, rtol=1e-10, atol=1e-10)
+    np.testing.assert_allclose(reloaded.velocities, velocities, rtol=1e-10, atol=1e-10)
+    assert reloaded.cell is not None
+    np.testing.assert_allclose(reloaded.cell, cell, rtol=1e-10, atol=1e-10)
+    assert reloaded.pbc is True
+
+
+def test_save_handoff_automatically_resolves_template(nve_stub: Path, tmp_path: Path) -> None:
+    from mmml.cli.run.md_handoff import save_handoff, load_handoff_from_res
+
+    # Create a valid stage restart file in the output directory
+    (tmp_path / "heat_DCM.res").write_text(nve_stub.read_text(encoding="ascii"), encoding="ascii")
+
+    # Call save_handoff with template_res=None
+    pos = np.random.default_rng(3).random((20, 3))
+    state = MdHandoffState(
+        positions=pos,
+        atomic_numbers=np.ones(20, dtype=int),
+    )
+    
+    paths = save_handoff(state, tmp_path, template_res=None)
+    
+    assert "res" in paths
+    final_res = paths["res"]
+    assert final_res.name == "final.res"
+    assert final_res.is_file()
+
+    # Load and verify coordinates are patched from our state
+    reloaded = load_handoff_from_res(final_res)
+    np.testing.assert_allclose(reloaded.positions, pos, rtol=1e-5, atol=1e-5)
+
+
+
+
 
 
 

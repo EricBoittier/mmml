@@ -1514,15 +1514,18 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     dyn_print = resolve_dynamics_print_kwargs(args, nstep=nstep)
                     save_interval_ps = timestep_ps * dcd_nsavc
                     seg_prep_quiet = bool(args.quiet) or seg_i > 0
+                    rread = seg_io.restart_read
+                    restart = rread is not None and Path(rread).is_file()
                     use_memory = (memory_handoff_next and seg_i == 0) or (
                         seg_i == 0 and prev_restart_is_current_state
                     )
+                    if use_memory and not memory_handoff_next and restart and _valid_restart_file(rread) is not None:
+                        use_memory = False
+
                     if use_memory:
                         restart = False
                         rread = None
                     else:
-                        rread = seg_io.restart_read
-                        restart = rread is not None and Path(rread).is_file()
                         if (
                             seg_i == 0
                             and _can_seed_stage_from_memory(
@@ -1814,15 +1817,18 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     )
                     dyn_print = resolve_dynamics_print_kwargs(args, nstep=nstep)
                     save_interval_ps = timestep_ps * dcd_nsavc
+                    rread = seg_io.restart_read
+                    restart = rread is not None and Path(rread).is_file()
                     use_memory = memory_handoff_next or (
                         seg_i == 0 and handoff_leg and stage == "equi"
                     )
+                    if use_memory and not memory_handoff_next and restart and _valid_restart_file(rread) is not None:
+                        use_memory = False
+
                     if use_memory:
                         restart = False
                         rread = None
                     else:
-                        rread = seg_io.restart_read
-                        restart = rread is not None and Path(rread).is_file()
                         if _can_seed_stage_from_memory(
                             Path(rread) if rread is not None else None,
                             prev_restart=prev_restart,
@@ -1954,15 +1960,18 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     )
                     dyn_print = resolve_dynamics_print_kwargs(args, nstep=nstep)
                     save_interval_ps = timestep_ps * dcd_nsavc
+                    rread = seg_io.restart_read
+                    restart = rread is not None and Path(rread).is_file()
                     use_memory = memory_handoff_next or (
                         seg_i == 0 and handoff_leg
                     )
+                    if use_memory and not memory_handoff_next and restart and _valid_restart_file(rread) is not None:
+                        use_memory = False
+
                     if use_memory:
                         restart = False
                         rread = None
                     else:
-                        rread = seg_io.restart_read
-                        restart = rread is not None and Path(rread).is_file()
                         if _can_seed_stage_from_memory(
                             Path(rread) if rread is not None else None,
                             prev_restart=prev_restart,
@@ -2081,21 +2090,24 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             dyn_print = resolve_dynamics_print_kwargs(args, nstep=nstep)
             save_interval_ps = timestep_ps * dcd_nsavc
 
+            rread = prev_restart or _prior_restart_for_stage(
+                stage,
+                paths,
+                restart_from=None,
+                tag=tag,
+                n_heat_segments=n_heat_segments,
+            )
+            restart = rread is not None and Path(rread).is_file()
             use_memory = memory_handoff_next or (
                 handoff_leg and stage in ("equi", "prod")
             )
+            if use_memory and not memory_handoff_next and restart and _valid_restart_file(rread) is not None:
+                use_memory = False
+
             if use_memory:
                 restart = False
                 rread = None
             else:
-                rread = prev_restart or _prior_restart_for_stage(
-                    stage,
-                    paths,
-                    restart_from=None,
-                    tag=tag,
-                    n_heat_segments=n_heat_segments,
-                )
-                restart = rread is not None and Path(rread).is_file()
                 if _can_seed_stage_from_memory(
                     Path(rread) if rread is not None else None,
                     prev_restart=prev_restart,
