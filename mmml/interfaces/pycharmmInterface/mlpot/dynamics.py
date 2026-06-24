@@ -866,7 +866,7 @@ def apply_hoover_cpt_heat_ramp_overlap_chunk(
     chunk_kw["tbath"] = float(ramp_spec["finalt"])
     chunk_kw["hoover reft"] = target
     if bool(chunk_kw.get("restart")):
-        chunk_kw["iasvel"] = 0
+        chunk_kw["iasvel"] = 1
     else:
         chunk_kw["iasvel"] = 1
     chunk_kw["start"] = False
@@ -1234,7 +1234,7 @@ def build_nve_dynamics(
         nprint=max(1, nprint),
         iprfrq=max(1, iprfrq),
         isvfrq=max(1, isvfrq),
-        ntrfrq=0,
+        ntrfrq=100,
         echeck=echeck,
         **freq_kwargs,
     )
@@ -1252,7 +1252,7 @@ def build_nve_dynamics(
         }
     )
     if restart:
-        kw["iasvel"] = 0
+        kw["iasvel"] = 1
     else:
         kw.update(boltzmann_velocity_kwargs(temp))
     return kw
