@@ -5,7 +5,7 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - python-freethreading>=3.14,<3.15
+  - python-freethreading>=3.13,<3.15
   
   # Core scientific computing
   - numpy

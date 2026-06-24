@@ -6,7 +6,7 @@ channels:
   - nvidia
   - defaults
 dependencies:
-  - python-freethreading>=3.14,<3.15
+  - python-freethreading>=3.13,<3.15
   
   # CUDA toolkit
   - cuda-toolkit=13
