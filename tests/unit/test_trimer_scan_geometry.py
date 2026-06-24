@@ -74,6 +74,71 @@ def test_run_scan_2d_collects_metrics() -> None:
     assert np.all(out["min_inter_01"] > 0.0)
 
 
+def test_run_scan_2d_accepts_dimer_cluster() -> None:
+    atoms_per = [1, 1]
+    ref = np.array([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]], dtype=float)
+    d1_grid = np.array([3.0, 4.0])
+    d2_grid = np.array([5.0, 6.0])
+
+    def eval_fn(pos: np.ndarray) -> dict[str, float]:
+        return {"energy_kcal": float(distance_report(pos, atoms_per)["com_d01"])}
+
+    out = run_scan_2d(
+        eval_fn,
+        ref,
+        atoms_per,
+        d1_grid,
+        d2_grid,
+        angle_02_deg=90.0,
+        metric_keys=("energy_kcal", "min_inter_01", "min_inter_02"),
+    )
+    assert out["energy_kcal"].shape == (2, 2)
+    assert np.all(out["energy_kcal"] == d1_grid[:, None])
+    assert np.all(out["min_inter_01"] == d1_grid[:, None])
+    assert np.all(np.isnan(out["min_inter_02"]))
+
+
+def test_run_scan_2d_accepts_more_than_three_monomers() -> None:
+    atoms_per = [1, 1, 1, 1]
+    ref = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [9.0, 9.0, 0.0],
+        ],
+        dtype=float,
+    )
+
+    out = run_scan_2d(
+        lambda pos: {"energy_kcal": float(distance_report(pos, atoms_per)["com_d03"])},
+        ref,
+        atoms_per,
+        np.array([3.0]),
+        np.array([4.0]),
+        angle_02_deg=90.0,
+        metric_keys=("energy_kcal", "min_inter_03", "min_inter_23"),
+    )
+    assert out["energy_kcal"][0, 0] == pytest.approx(np.sqrt(162.0))
+    assert out["min_inter_03"][0, 0] == pytest.approx(np.sqrt(162.0))
+    assert out["min_inter_23"][0, 0] == pytest.approx(np.sqrt(106.0))
+
+
 def test_scan_mlpot_dimer_2d_pycharmm_batch_parse() -> None:
     mod = _load_scan_script()
-    assert mod._parse_batch_compositions("DCM:3, ACO:3") == ["DCM:3", "ACO:3"]
+    assert mod._parse_batch_compositions("DCM:2, ACO:4") == ["DCM:2", "ACO:4"]
+
+
+def test_scan_mlpot_dimer_2d_pycharmm_help_accepts_dimer_example(capsys) -> None:
+    mod = _load_scan_script()
+    with pytest.raises(SystemExit) as exc:
+        mod._parse_args(
+            [
+                "DCM:2",
+                "--output-dir",
+                "artifacts/pycharmm_mlpot/dimer_2d_scan/dcm2",
+                "-h",
+            ]
+        )
+    assert exc.value.code == 0
+    assert "DCM:2" in capsys.readouterr().out
