@@ -889,7 +889,7 @@ def build_mm_energy_forces_fn(
             interval = int(max(1, jax_md_update_interval))
             skin = float(max(0.0, jax_md_skin_distance))
             have_cache = (_pair_idx_cell[0] is not None) and (_pair_mask_cell[0] is not None)
-            if have_cache and (_pair_stats["calls"] % interval != 0):
+            if have_cache:
                 if skin > 0.0 and _last_positions[0] is not None:
                     max_disp = float(np.max(np.linalg.norm(R - _last_positions[0], axis=1)))
                     box_delta = 0.0
@@ -898,7 +898,7 @@ def build_mm_energy_forces_fn(
                     if max_disp <= skin and box_delta <= 1e-8:
                         _pair_stats["reused"] += 1
                         return _pair_idx_cell[0], _pair_mask_cell[0]
-                else:
+                elif skin == 0.0 and (_pair_stats["calls"] % interval != 0):
                     _pair_stats["reused"] += 1
                     return _pair_idx_cell[0], _pair_mask_cell[0]
             nbrs = _nbrs[0]
