@@ -1003,7 +1003,7 @@ def build_heat_dynamics(
         timestep=timestep_ps,
         nstep=nstep,
         nsavc=nsavc,
-        nprint=100,
+        nprint=50,
         echeck=echeck,
         **freq_kwargs,
     )
