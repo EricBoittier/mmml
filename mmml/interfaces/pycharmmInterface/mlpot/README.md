@@ -216,3 +216,46 @@ python tests/functionality/mlpot/05_mlpot_dynamics_stub.py --run
 pytest tests/functionality/mlpot/test_mlpot_energy_matches_ase.py -q
 pytest tests/unit/test_mlpot_pbc_cell.py -q
 ```
+
+## Profiling
+
+### Built-in MLpot Profiling
+To enable lightweight timing metrics showing callback counts, JAX/ML evaluation time, and CHARMM overhead:
+```bash
+export MMML_MLPOT_PROFILE=1
+export MMML_JAX_COMPILE_TIMERS=1
+```
+
+### Python cProfile on MD System CLI
+You can profile the python-level code (coordinate synchronizations, exclusions setup, CLI arguments parsing) when running standard configs:
+```bash
+./.venv/bin/python -m cProfile -o md_system.prof -m mmml.cli md-system <arguments>
+```
+Analyze the results using `snakeviz`:
+```bash
+./.venv/bin/pip install snakeviz
+./.venv/bin/snakeviz md_system.prof
+```
+
+### Deep JAX Device Profiling
+If you need to profile GPU kernel dispatch overhead, host-device transfers, or JIT compilation bottlenecks inside the JAX network itself:
+
+**JAX Profiler API:** Wrap the region of interest in your script (e.g. inside a test, script, or workflow driver):
+```python
+import jax
+
+# Start the trace server (writes to the specified directory)
+jax.profiler.start_trace("/tmp/tensorboard_logs")
+
+# Run steps to profile (e.g. step dynamics or evaluation)
+# ...
+
+# Stop tracing
+jax.profiler.stop_trace()
+```
+You can then visualize the profile using TensorBoard:
+```bash
+pip install tensorboard tensorboard-plugin-profile
+tensorboard --logdir /tmp/tensorboard_logs
+```
+

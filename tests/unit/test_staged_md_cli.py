@@ -806,3 +806,31 @@ def test_configure_npt_dynamics_start_memory_handoff_no_readyn():
     assert kw["iunrea"] == -1
     assert io.restart_read is None
     assert "firstt" not in kw
+
+
+def test_mlpot_profile_propagation(monkeypatch):
+    from mmml.cli.run.md_system import parse_md_system_args, build_pycharmm_command
+    from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import run_staged_workflow
+    import os
+
+    # 1. Test parser registers the flag
+    args = parse_md_system_args(["--mlpot-profile", "--setup", "free_nve"])
+    assert args.mlpot_profile is True
+
+    # 2. Test that build_pycharmm_command forwards it
+    cmd = build_pycharmm_command(args)
+    assert "--mlpot-profile" in cmd
+
+    # 3. Test that run_staged_workflow sets the env vars
+    monkeypatch.delenv("MMML_MLPOT_PROFILE", raising=False)
+    monkeypatch.delenv("MMML_JAX_COMPILE_TIMERS", raising=False)
+
+    with patch("mmml.interfaces.pycharmmInterface.mlpot.staged_workflow._load_or_build_cluster", side_effect=ValueError("abort")):
+        try:
+            run_staged_workflow(args)
+        except ValueError:
+            pass
+
+    assert os.environ.get("MMML_MLPOT_PROFILE") == "1"
+    assert os.environ.get("MMML_JAX_COMPILE_TIMERS") == "1"
+

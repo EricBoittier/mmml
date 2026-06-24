@@ -994,6 +994,10 @@ def _load_or_build_cluster(
 
 
 def run_staged_workflow(args: argparse.Namespace) -> int:
+    if getattr(args, "mlpot_profile", False):
+        import os
+        os.environ["MMML_MLPOT_PROFILE"] = "1"
+        os.environ["MMML_JAX_COMPILE_TIMERS"] = "1"
     from mmml.cli.run.md_handoff import get_handoff_in, handoff_from_charmm, set_handoff_out
     from mmml.cli.run.md_stage_summary import cubic_box_side_from_cell
 

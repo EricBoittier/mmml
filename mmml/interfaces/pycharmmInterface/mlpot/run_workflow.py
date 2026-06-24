@@ -1234,6 +1234,10 @@ def run_workflow(
     phase: Phase,
     ensemble: Ensemble = "nve",
 ) -> int:
+    if getattr(args, "mlpot_profile", False):
+        import os
+        os.environ["MMML_MLPOT_PROFILE"] = "1"
+        os.environ["MMML_JAX_COMPILE_TIMERS"] = "1"
     setattr(args, "ensemble", ensemble)
     if phase == "minimize":
         setattr(args, "setup", getattr(args, "setup", None) or "pycharmm_minimize")
