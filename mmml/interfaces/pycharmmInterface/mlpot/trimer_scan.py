@@ -104,9 +104,24 @@ def atoms_per_monomer_from_psf() -> list[int]:
     """Return atom counts per CHARMM resid (one monomer per resid)."""
     import pycharmm.psf as psf
 
-    resids = np.asarray(psf.get_resid(), dtype=int)
+    natom = int(psf.get_natom()) if hasattr(psf, "get_natom") else 0
+    ibase = np.asarray(psf.get_ibase(), dtype=int) if hasattr(psf, "get_ibase") else np.asarray([], dtype=int)
+    if ibase.size:
+        counts = np.diff(np.concatenate(([0], ibase))).astype(int).tolist()
+        if natom > 0 and sum(counts) != natom:
+            raise ValueError(f"Invalid PSF residue boundaries from ibase={ibase.tolist()}, natom={natom}")
+        if any(c <= 0 for c in counts):
+            raise ValueError(f"Invalid resid atom counts from PSF ibase={ibase.tolist()}: {counts}")
+        return counts
+
+    resids = np.asarray(psf.get_resid(), dtype=int) if hasattr(psf, "get_resid") else np.asarray([], dtype=int)
     if resids.size == 0:
         raise ValueError("PSF has no atoms")
+    if natom > 0 and resids.size != natom:
+        raise ValueError(
+            f"PSF get_resid returned {resids.size} entries for {natom} atoms; "
+            "get_ibase is required to recover residue atom counts on this PyCHARMM build"
+        )
     n_res = int(resids.max())
     counts = [int(np.sum(resids == resid)) for resid in range(1, n_res + 1)]
     if any(c <= 0 for c in counts):

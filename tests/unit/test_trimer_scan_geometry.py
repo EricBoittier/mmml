@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+import types
 from pathlib import Path
 
 import numpy as np
 import pytest
 
 from mmml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
+    atoms_per_monomer_from_psf,
     com_distances,
     distance_report,
     place_trimer,
@@ -122,6 +124,32 @@ def test_run_scan_2d_accepts_more_than_three_monomers() -> None:
     assert out["energy_kcal"][0, 0] == pytest.approx(np.sqrt(162.0))
     assert out["min_inter_03"][0, 0] == pytest.approx(np.sqrt(162.0))
     assert out["min_inter_23"][0, 0] == pytest.approx(np.sqrt(106.0))
+
+
+def test_atoms_per_monomer_from_psf_uses_ibase(monkeypatch) -> None:
+    fake_psf = types.SimpleNamespace(
+        get_natom=lambda: 15,
+        get_ibase=lambda: [5, 10, 15],
+        get_resid=lambda: [1, 2, 3],
+    )
+    fake_pycharmm = types.SimpleNamespace(psf=fake_psf)
+    monkeypatch.setitem(sys.modules, "pycharmm", fake_pycharmm)
+    monkeypatch.setitem(sys.modules, "pycharmm.psf", fake_psf)
+
+    assert atoms_per_monomer_from_psf() == [5, 5, 5]
+
+
+def test_atoms_per_monomer_from_psf_rejects_residue_table_as_atom_resids(monkeypatch) -> None:
+    fake_psf = types.SimpleNamespace(
+        get_natom=lambda: 15,
+        get_resid=lambda: [1, 2, 3],
+    )
+    fake_pycharmm = types.SimpleNamespace(psf=fake_psf)
+    monkeypatch.setitem(sys.modules, "pycharmm", fake_pycharmm)
+    monkeypatch.setitem(sys.modules, "pycharmm.psf", fake_psf)
+
+    with pytest.raises(ValueError, match="get_ibase is required"):
+        atoms_per_monomer_from_psf()
 
 
 def test_scan_mlpot_dimer_2d_pycharmm_batch_parse() -> None:
