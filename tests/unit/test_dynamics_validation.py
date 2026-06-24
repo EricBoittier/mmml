@@ -804,3 +804,47 @@ def test_rewrite_dynamics_restart_validated_patches_negative_step(tmp_path, monk
     # Verify it has been patched to 0
     assert read_restart_last_step(path) == 0
 
+
+def test_integrated_step_from_restart_negative_aborted_step(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        CharmmTrajectoryFiles,
+        _integrated_step_from_restart,
+    )
+
+    res = tmp_path / "heat.res"
+    # CHARMM writes REST with a negative step counter on abort (e.g., REST 48 -344).
+    # JHSTRT is also often 0 or negative.
+    res.write_text(
+        "REST    48    -344\n"
+        "\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        "          25         500         500         500          10           0\n",
+        encoding="utf-8",
+    )
+    io = CharmmTrajectoryFiles(restart_write=res)
+    
+    # CASE 1: With steps_before_chunk = 2000, expected global step is 2000 + 344 = 2344
+    assert (
+        _integrated_step_from_restart(
+            chunk_io=io,
+            final_restart=res,
+            fallback_steps=2500,
+            steps_before_chunk=2000,
+        )
+        == 2344
+    )
+
+    # CASE 2: If the step is absolute (not chunk-relative, i.e., >= steps_before_chunk)
+    # E.g. steps_before_chunk = 100, abort is at 344 (which is >= 100).
+    # Then it returns the absolute step itself.
+    assert (
+        _integrated_step_from_restart(
+            chunk_io=io,
+            final_restart=res,
+            fallback_steps=2500,
+            steps_before_chunk=100,
+        )
+        == 344
+    )
+
+

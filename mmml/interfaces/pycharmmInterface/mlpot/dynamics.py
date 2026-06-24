@@ -2246,6 +2246,7 @@ def _integrated_step_from_restart(
     chunk_io: Optional[CharmmTrajectoryFiles],
     final_restart: Path | None,
     fallback_steps: int,
+    steps_before_chunk: int = 0,
 ) -> int:
     """Read global dynamics step (``JHSTRT``) from the latest restart write."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
@@ -2260,17 +2261,28 @@ def _integrated_step_from_restart(
         if candidate is None:
             continue
         step = read_restart_last_step(Path(candidate))
-        if step is None or int(step) <= 0:
+        if step is None:
             continue
         step = int(step)
-        if step >= fb - 1:
-            return step
-        # CHARMM coord-history / scratch restarts often leave NSTEP at the last
-        # overlap sub-chunk size (e.g. 500) while the integrated segment ran longer
-        # (e.g. 2500).  Trust ``fallback_steps`` when the header divides evenly.
-        if fb > step and fb % step == 0 and fb // step >= 2:
-            return fb
-        return step
+        abs_step = abs(step)
+        if abs_step <= 0:
+            continue
+
+        if abs_step < steps_before_chunk:
+            global_step = steps_before_chunk + abs_step
+        else:
+            global_step = abs_step
+
+        if step > 0:
+            if global_step >= fb - 1:
+                return global_step
+            # CHARMM coord-history / scratch restarts often leave NSTEP at the last
+            # overlap sub-chunk size (e.g. 500) while the integrated segment ran longer
+            # (e.g. 2500).  Trust ``fallback_steps`` when the header divides evenly.
+            if fb > global_step and fb % global_step == 0 and fb // global_step >= 2:
+                return fb
+        
+        return global_step
     return fb
 
 
@@ -2689,6 +2701,7 @@ def run_dynamics_with_io(
                     chunk_io=chunk_io,
                     final_restart=final_restart,
                     fallback_steps=expected_after,
+                    steps_before_chunk=steps_before_chunk,
                 )
                 if reported_steps >= expected_after - 1:
                     steps_done = max(reported_steps, expected_after)
