@@ -60,7 +60,7 @@ class PbcNbondCutoffs:
             cutim=self.cutim,
             ctonnb=self.ctonnb,
             ctofnb=self.ctofnb,
-            ctexnb=self.ctexnb,
+            ctexnb=self.ctexnb+1.0, # fix for CHARMM segfault
         )
 
 
