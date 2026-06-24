@@ -1454,11 +1454,20 @@ def save_handoff_to_res(
 
       if template is not None:
           if charmm_loaded:
-              return _write_handoff_restart_via_charmm(
-                  handoff,
-                  path,
-                  template_res=template,
-              )
+              try:
+                  return _write_handoff_restart_via_charmm(
+                      handoff,
+                      path,
+                      template_res=template,
+                  )
+              except Exception as e:
+                  import sys
+                  print(
+                      f"WARNING: _write_handoff_restart_via_charmm failed: {e}. "
+                      f"Falling back to offline restart text patching.",
+                      file=sys.stderr,
+                      flush=True,
+                  )
           _patch_handoff_into_restart_template(handoff, template, path)
           if read_restart_coordinates(path) is None:
               raise ValueError(
