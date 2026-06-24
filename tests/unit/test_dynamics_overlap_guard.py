@@ -2058,7 +2058,7 @@ def test_harmonize_dynamics_frequency_for_remainder_chunk():
     _harmonize_overlap_chunk_frequencies(kw, 40)
     assert kw["ihbfrq"] == 40
     assert kw["imgfrq"] == 40
-    assert kw["isvfrq"] == 40
+    assert kw["isvfrq"] == 10
     assert kw["nsavc"] == 10
     assert kw["inbfrq"] == -1
 
@@ -2166,7 +2166,7 @@ def test_harmonize_overlap_chunk_loose_pbc_disables_image_freqs():
     assert kw["imgfrq"] == 41
     assert kw["ixtfrq"] == 41
     assert kw["ilbfrq"] == 41
-    assert kw["isvfrq"] == 40
+    assert kw["isvfrq"] == 10
     assert kw["inbfrq"] == -1
 
 

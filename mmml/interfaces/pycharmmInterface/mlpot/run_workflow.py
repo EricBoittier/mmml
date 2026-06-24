@@ -191,7 +191,7 @@ def _run_charmm_mm_pretreat_cpt_stage(
         nstep=nstep,
     )
     save_interval_ps = timestep_ps * max(1, dcd_nsavc)
-    dyn_print = resolve_dynamics_print_kwargs(args, nstep=nstep)
+    dyn_print = resolve_dynamics_print_kwargs(args, nstep=nstep, nsavc=dcd_nsavc)
     stage_echeck = max(echeck, 500.0) if echeck > 0 else echeck
     use_cpt = use_pbc and not _pretreat_use_fixed_box_nvt(args, use_pbc=use_pbc)
 
@@ -440,7 +440,7 @@ def run_charmm_mm_pretreat_before_mlpot(
             use_pbc=use_pbc,
             ihtfrq=resolve_heat_ihtfrq(args, nstep=n_heat_run),
         )
-        dyn_print = resolve_dynamics_print_kwargs(args, nstep=n_heat_run)
+        dyn_print = resolve_dynamics_print_kwargs(args, nstep=n_heat_run, nsavc=dcd_nsavc)
         kw["nstep"] = n_heat_run
         kw["nprint"] = dyn_print["nprint"]
         kw["iprfrq"] = dyn_print["iprfrq"]
@@ -969,7 +969,6 @@ def run_dynamics_workflow(
     temp = float(getattr(args, "temperature", getattr(args, "temp", 300.0)))
 
     mini_nprint = apply_charmm_output_from_args(args)
-    dyn_print = resolve_dynamics_print_kwargs(args, nstep=nstep)
     echeck = resolve_echeck_for_cluster(args, n_atoms=n_atoms, n_monomers=n_mol)
     dcd_nsavc = resolve_dcd_nsavc(
         dcd_nsavc=args.dcd_nsavc,
@@ -977,6 +976,7 @@ def run_dynamics_workflow(
         timestep_ps=timestep_ps,
         nstep=nstep,
     )
+    dyn_print = resolve_dynamics_print_kwargs(args, nstep=nstep, nsavc=dcd_nsavc)
 
     stem = "nve" if ensemble == "nve" else "nvt"
     res_path = out_dir / f"{stem}_{tag}.res"

@@ -411,9 +411,10 @@ def _build_stage_dynamics_kw(
             )
     else:
         raise ValueError(stage)
-    kw["nprint"] = dyn_print["nprint"]
-    kw["iprfrq"] = dyn_print["iprfrq"]
-    kw["isvfrq"] = dyn_print["isvfrq"]
+    ns = kw["nsavc"]
+    kw["nprint"] = ns
+    kw["iprfrq"] = ns
+    kw["isvfrq"] = ns
     kw["nstep"] = nstep
     if stage == "heat":
         from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
@@ -1515,7 +1516,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     dcd_nsavc = resolve_dcd_nsavc_for_args(
                         args, timestep_ps=timestep_ps, nstep=nstep
                     )
-                    dyn_print = resolve_dynamics_print_kwargs(args, nstep=nstep)
+                    dyn_print = resolve_dynamics_print_kwargs(args, nstep=nstep, nsavc=dcd_nsavc)
                     save_interval_ps = timestep_ps * dcd_nsavc
                     seg_prep_quiet = bool(args.quiet) or seg_i > 0
                     rread = seg_io.restart_read
@@ -1819,7 +1820,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     dcd_nsavc = resolve_dcd_nsavc_for_args(
                         args, timestep_ps=timestep_ps, nstep=nstep
                     )
-                    dyn_print = resolve_dynamics_print_kwargs(args, nstep=nstep)
+                    dyn_print = resolve_dynamics_print_kwargs(args, nstep=nstep, nsavc=dcd_nsavc)
                     save_interval_ps = timestep_ps * dcd_nsavc
                     rread = seg_io.restart_read
                     restart = rread is not None and Path(rread).is_file()
@@ -1962,7 +1963,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     dcd_nsavc = resolve_dcd_nsavc_for_args(
                         args, timestep_ps=timestep_ps, nstep=nstep
                     )
-                    dyn_print = resolve_dynamics_print_kwargs(args, nstep=nstep)
+                    dyn_print = resolve_dynamics_print_kwargs(args, nstep=nstep, nsavc=dcd_nsavc)
                     save_interval_ps = timestep_ps * dcd_nsavc
                     rread = seg_io.restart_read
                     restart = rread is not None and Path(rread).is_file()
@@ -2091,7 +2092,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             dcd_nsavc = resolve_dcd_nsavc_for_args(
                 args, timestep_ps=timestep_ps, nstep=nstep
             )
-            dyn_print = resolve_dynamics_print_kwargs(args, nstep=nstep)
+            dyn_print = resolve_dynamics_print_kwargs(args, nstep=nstep, nsavc=dcd_nsavc)
             save_interval_ps = timestep_ps * dcd_nsavc
 
             rread = prev_restart or _prior_restart_for_stage(

@@ -971,6 +971,12 @@ def finalize_heat_dynamics_frequencies(kw: dict[str, Any]) -> dict[str, tuple[in
         if new != old:
             changes[key] = (old, new)
         kw[key] = new
+    if "nsavc" in kw:
+        ns = int(kw["nsavc"])
+        for key in ("nprint", "iprfrq", "isvfrq"):
+            if key in kw and int(kw[key]) != ns:
+                changes[key] = (int(kw[key]), ns)
+                kw[key] = ns
     apply_heat_ramp_frequencies(kw, nstep=nstep, ihtfrq=int(kw["ihtfrq"]))
     return changes
 
@@ -1962,6 +1968,9 @@ def _harmonize_overlap_chunk_frequencies(
                     flush=True,
                 )
             chunk_kw[key] = new
+            for k in ("nprint", "iprfrq", "isvfrq"):
+                if k in chunk_kw:
+                    chunk_kw[k] = new
         else:
             chunk_kw[key] = _harmonize_dynamics_frequency(int(chunk_kw[key]), n)
     if loose_pbc:

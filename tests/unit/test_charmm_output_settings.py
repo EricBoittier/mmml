@@ -52,7 +52,7 @@ def test_build_stage_heat_ihtfrq_matches_dyn_nprint():
         use_pbc=False,
     )
     assert kw["ihtfrq"] == 250
-    assert kw["nprint"] == 250
+    assert kw["nprint"] == 200
 
 
 def test_apply_heat_ramp_frequencies_recomputes_teminc():
