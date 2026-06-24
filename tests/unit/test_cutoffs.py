@@ -88,6 +88,30 @@ def test_ml_scale_matches_calculator_sharpstep(default_cp: CutoffParameters) -> 
     )
 
 
+def test_cutoff_helper_defaults_use_production_gamma(default_cp: CutoffParameters) -> None:
+    r = np.linspace(0.0, 8.0, 50)
+    np.testing.assert_allclose(
+        default_cp.ml_scale(r),
+        default_cp.ml_scale(r, gamma_ml=GAMMA_ON),
+        rtol=1e-12,
+        atol=1e-12,
+    )
+    np.testing.assert_allclose(
+        default_cp.mm_scale_complementary(r),
+        default_cp.mm_scale_complementary(
+            r, gamma_ml=GAMMA_ON, gamma_mm_off=GAMMA_OFF
+        ),
+        rtol=1e-12,
+        atol=1e-12,
+    )
+    np.testing.assert_allclose(
+        default_cp.mm_scale(r),
+        default_cp.mm_scale(r, gamma_on=GAMMA_ON, gamma_off=GAMMA_OFF),
+        rtol=1e-12,
+        atol=1e-12,
+    )
+
+
 @pytest.mark.unit
 def test_complementary_scales_match_jax_sharpstep(default_cp: CutoffParameters) -> None:
     """NumPy CutoffParameters scales match JAX _sharpstep (MM/jax-md switching path)."""

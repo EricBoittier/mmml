@@ -159,14 +159,17 @@ def parse_args() -> argparse.Namespace:
         dest="ml_switch_width",
         type=float,
         default=0.1,
-        help="ML taper width in Å over [mm_switch_on - width, mm_switch_on] (default: 0.1).",
+        help=(
+            "COM-distance width (Å) of the ML→MM handoff; ML tapers to zero at "
+            "mm_switch_on (default: 0.1)."
+        ),
     )
     parser.add_argument(
         "--mm-switch-on",
         type=float,
         default=DEFAULT_MM_SWITCH_ON,
         help=(
-            f"Distance (Å) where ML→0 and MM→1 in complementary handoff "
+            f"COM distance (Å) where ML→0 and MM→1 in complementary handoff "
             f"(default: {DEFAULT_MM_SWITCH_ON:g})."
         ),
     )
@@ -177,15 +180,18 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=DEFAULT_MM_SWITCH_WIDTH,
         help=(
-            f"MM outer taper width in Å past mm_switch_on "
+            f"COM-distance width (Å) of the MM outer tail past mm_switch_on "
             f"(default: {DEFAULT_MM_SWITCH_WIDTH:g})."
         ),
     )
     parser.add_argument(
         "--no-complementary-handoff",
         action="store_true",
-        help="Use legacy MM switching (MM only in [mm_switch_on, mm_switch_on+mm_switch_width]). "
-        "When set, mm_r_min defaults to mm_switch_on to exclude close monomers.",
+        help=(
+            "Use legacy MM switching: MM starts at mm_switch_on instead of filling "
+            "the ML taper handoff. When set, mm_r_min defaults to mm_switch_on to "
+            "exclude close monomers."
+        ),
     )
     parser.add_argument(
         "--include-mm",
