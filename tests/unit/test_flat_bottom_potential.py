@@ -10,6 +10,7 @@ import jax.numpy as jnp
 
 from mmml.interfaces.pycharmmInterface.calculator_utils import (
     FLAT_BOTTOM_MODES,
+    apply_com_lower_wall,
     apply_flat_bottom,
 )
 from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
@@ -54,6 +55,55 @@ def test_flat_bottom_system_vs_monomer(mode, expected_e, expected_com_dist) -> N
     assert float(com_dist) == pytest.approx(expected_com_dist)
     if mode == "monomer":
         assert float(jnp.max(jnp.abs(flat_f))) > 0.0
+
+
+@pytest.mark.unit
+def test_com_lower_wall_penalizes_close_monomers() -> None:
+    positions = jnp.array([[0.0, 0.0, 0.0], [3.0, 0.0, 0.0]], dtype=jnp.float32)
+    atomic_numbers = jnp.array([1, 1], dtype=jnp.int32)
+    base_forces = jnp.zeros((2, 3), dtype=jnp.float32)
+    monomer_offsets = jnp.array([0, 1, 2], dtype=jnp.int32)
+
+    wall_e, wall_f, min_dist = apply_com_lower_wall(
+        positions,
+        atomic_numbers,
+        base_forces,
+        min_distance=5.0,
+        k=2.0,
+        monomer_offsets=monomer_offsets,
+        n_monomers=2,
+        pbc_cell=None,
+        mic_fn=_mic_identity,
+    )
+
+    assert float(wall_e) == pytest.approx(4.0)
+    assert float(min_dist) == pytest.approx(3.0)
+    assert np.asarray(wall_f)[0, 0] < 0.0
+    assert np.asarray(wall_f)[1, 0] > 0.0
+
+
+@pytest.mark.unit
+def test_com_lower_wall_zero_outside_threshold() -> None:
+    positions = jnp.array([[0.0, 0.0, 0.0], [6.0, 0.0, 0.0]], dtype=jnp.float32)
+    atomic_numbers = jnp.array([1, 1], dtype=jnp.int32)
+    base_forces = jnp.zeros((2, 3), dtype=jnp.float32)
+    monomer_offsets = jnp.array([0, 1, 2], dtype=jnp.int32)
+
+    wall_e, wall_f, min_dist = apply_com_lower_wall(
+        positions,
+        atomic_numbers,
+        base_forces,
+        min_distance=5.0,
+        k=2.0,
+        monomer_offsets=monomer_offsets,
+        n_monomers=2,
+        pbc_cell=None,
+        mic_fn=_mic_identity,
+    )
+
+    assert float(wall_e) == pytest.approx(0.0)
+    assert float(min_dist) == pytest.approx(6.0)
+    np.testing.assert_allclose(np.asarray(wall_f), 0.0)
 
 
 @pytest.mark.unit

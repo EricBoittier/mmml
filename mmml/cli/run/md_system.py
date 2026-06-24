@@ -258,6 +258,23 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--min-com-restraint-distance",
+        type=float,
+        default=None,
+        metavar="Å",
+        help=(
+            "Pairwise inter-monomer COM lower wall. Adds 0.5*k*(r_min-r)^2 when "
+            "COM distance r < r_min (default: disabled)."
+        ),
+    )
+    parser.add_argument(
+        "--min-com-restraint-k",
+        type=float,
+        default=1.0,
+        metavar="eV/Å²",
+        help="Force constant for --min-com-restraint-distance (default: 1.0).",
+    )
+    parser.add_argument(
         "--extra-args",
         nargs=argparse.REMAINDER,
         default=[],
@@ -1813,6 +1830,12 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     scale = float(getattr(args, "mlpot_mm_internal_scale", 0.0) or 0.0)
     if scale > 0.0:
         cmd.extend(["--mlpot-mm-internal-scale", str(scale)])
+    _append_optional(
+        cmd,
+        "--min-com-restraint-distance",
+        getattr(args, "min_com_restraint_distance", None),
+    )
+    cmd.extend(["--min-com-restraint-k", str(getattr(args, "min_com_restraint_k", 1.0))])
     if args.charmm_pre_minimize is False:
         cmd.append("--no-charmm-pre-minimize")
     cmd.extend(["--charmm-sd-steps", str(args.charmm_sd_steps)])
@@ -2051,6 +2074,12 @@ def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
     if args.flat_bottom_radius is not None:
         cmd.extend(["--flat-bottom-k", str(args.flat_bottom_k)])
         cmd.extend(["--flat-bottom-mode", str(args.flat_bottom_mode)])
+    _append_optional(
+        cmd,
+        "--min-com-restraint-distance",
+        getattr(args, "min_com_restraint_distance", None),
+    )
+    cmd.extend(["--min-com-restraint-k", str(getattr(args, "min_com_restraint_k", 1.0))])
     if getattr(args, "skip_jit_warmup", False):
         cmd.append("--skip-jit-warmup")
     _append_suite_mmml_handoff_args(cmd, args)

@@ -34,6 +34,24 @@ For the default `8 / 5 / 1.5 Å`, this means:
 
 The switching functions are scale factors on the **pair interaction energy**, so a plotted “potential” will only look smooth if you plot `s_ML(r) * E_ML(r) + s_MM(r) * E_MM(r)`. Plotting the raw scales alone only shows the handoff weights.
 
+## Preventing Collapsed COM Contacts
+
+The handoff switches do not stop monomers from entering unphysical short-COM geometries. If the ML dimer surface has a deep collapsed/reactive basin, add a pairwise inter-monomer COM lower wall:
+
+```text
+V_COM(r) = 0.5 * k * (r_min - r)^2   if r < r_min
+         = 0                         otherwise
+```
+
+Use:
+
+```bash
+--min-com-restraint-distance 6.0 \
+--min-com-restraint-k 1.0
+```
+
+Start with `r_min = 5.5–6.5 Å` for DCM testing, then tune from scan plots. This restraint is independent of `--flat-bottom-radius`: the flat-bottom sphere keeps the cluster/droplet contained, while the COM lower wall prevents two monomers from collapsing into each other.
+
 ## Current Equations
 
 Default runs use complementary handoff:

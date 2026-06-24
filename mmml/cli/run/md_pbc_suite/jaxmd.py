@@ -236,6 +236,23 @@ def main(argv: list[str] | None = None) -> int:
         help="system: cluster COM; monomer: sum over monomer COM restraints (same R, k).",
     )
     p.add_argument(
+        "--min-com-restraint-distance",
+        type=float,
+        default=None,
+        metavar="Å",
+        help=(
+            "Pairwise inter-monomer COM lower wall. Adds 0.5*k*(r_min-r)^2 "
+            "when COM distance r < r_min (default: disabled)."
+        ),
+    )
+    p.add_argument(
+        "--min-com-restraint-k",
+        type=float,
+        default=1.0,
+        metavar="eV/Å²",
+        help="Force constant for --min-com-restraint-distance (default: 1.0).",
+    )
+    p.add_argument(
         "--ml-switch-width",
         "--ml-cutoff",
         dest="ml_switch_width",
@@ -638,6 +655,8 @@ def main(argv: list[str] | None = None) -> int:
         flat_bottom_radius=args.flat_bottom_radius,
         flat_bottom_force_const=args.flat_bottom_k,
         flat_bottom_mode=args.flat_bottom_mode,
+        min_com_restraint_distance=args.min_com_restraint_distance,
+        min_com_restraint_force_const=args.min_com_restraint_k,
         defer_xla_gpu_warmup=bool(args.skip_jit_warmup),
         ml_batch_size=getattr(args, "ml_batch_size", None),
         ml_max_active_dimers=getattr(args, "ml_max_active_dimers", None),
@@ -1265,4 +1284,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

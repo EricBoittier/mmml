@@ -137,6 +137,23 @@ def parse_args() -> argparse.Namespace:
         default="system",
         help="system: cluster COM; monomer: sum over per-monomer COM restraints (same R, k).",
     )
+    parser.add_argument(
+        "--min-com-restraint-distance",
+        type=float,
+        default=None,
+        metavar="Å",
+        help=(
+            "Pairwise inter-monomer COM lower wall. Adds 0.5*k*(r_min-r)^2 "
+            "when COM distance r < r_min (default: disabled)."
+        ),
+    )
+    parser.add_argument(
+        "--min-com-restraint-k",
+        type=float,
+        default=1.0,
+        metavar="eV/Å²",
+        help="Force constant for --min-com-restraint-distance (default: 1.0).",
+    )
 
     parser.add_argument(
         "--n-monomers",
@@ -550,6 +567,8 @@ def run(args: argparse.Namespace) -> int:
         flat_bottom_radius=getattr(args, "flat_bottom_radius", None),
         flat_bottom_force_const=getattr(args, "flat_bottom_k", 1.0),
         flat_bottom_mode=getattr(args, "flat_bottom_mode", "system"),
+        min_com_restraint_distance=getattr(args, "min_com_restraint_distance", None),
+        min_com_restraint_force_const=getattr(args, "min_com_restraint_k", 1.0),
         ensemble=getattr(args, "ensemble", "nve"),
         ml_batch_size=getattr(args, "ml_batch_size", None),
         ml_gpu_count=_resolve_ml_gpu_count(getattr(args, "ml_gpu_count", None)),

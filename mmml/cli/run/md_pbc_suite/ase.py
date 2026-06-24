@@ -686,6 +686,8 @@ def _factory_mmml(
     flat_bottom_radius: float | None = None,
     flat_bottom_force_const: float = 1.0,
     flat_bottom_mode: str = "system",
+    min_com_restraint_distance: float | None = None,
+    min_com_restraint_force_const: float = 1.0,
     defer_xla_gpu_warmup: bool = False,
     ml_batch_size: Optional[int] = None,
     ml_max_active_dimers: Optional[int] = None,
@@ -726,6 +728,8 @@ def _factory_mmml(
         flat_bottom_radius=flat_bottom_radius,
         flat_bottom_force_const=flat_bottom_force_const,
         flat_bottom_mode=flat_bottom_mode,
+        min_com_restraint_distance=min_com_restraint_distance,
+        min_com_restraint_force_const=min_com_restraint_force_const,
         defer_xla_gpu_warmup=defer_xla_gpu_warmup,
         ml_batch_size=ml_batch_size,
         ml_max_active_dimers=ml_max_active_dimers,
@@ -1391,6 +1395,23 @@ def main(argv: list[str] | None = None) -> int:
             "Vacuum: anchor at origin; PBC: MIC to box center."
         ),
     )
+    parser.add_argument(
+        "--min-com-restraint-distance",
+        type=float,
+        default=None,
+        metavar="Å",
+        help=(
+            "Pairwise inter-monomer COM lower wall. Adds 0.5*k*(r_min-r)^2 "
+            "when COM distance r < r_min (default: disabled)."
+        ),
+    )
+    parser.add_argument(
+        "--min-com-restraint-k",
+        type=float,
+        default=1.0,
+        metavar="eV/Å²",
+        help="Force constant for --min-com-restraint-distance (default: 1.0).",
+    )
     parser.add_argument("--verbose-calc", action="store_true")
     parser.add_argument(
         "--allow-ml-on-mixed",
@@ -1770,6 +1791,8 @@ def main(argv: list[str] | None = None) -> int:
             flat_bottom_radius=args.flat_bottom_radius,
             flat_bottom_force_const=args.flat_bottom_k,
             flat_bottom_mode=args.flat_bottom_mode,
+            min_com_restraint_distance=args.min_com_restraint_distance,
+            min_com_restraint_force_const=args.min_com_restraint_k,
             defer_xla_gpu_warmup=bool(args.skip_jit_warmup),
             ml_batch_size=getattr(args, "ml_batch_size", None),
             ml_max_active_dimers=getattr(args, "ml_max_active_dimers", None),
