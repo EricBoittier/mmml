@@ -77,7 +77,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environ
 
 Phase = Literal["minimize", "dynamics", "full", "staged"]
 Ensemble = Literal["nve", "nvt"]
-
+dcd_nsavc = 100
 
 def _charmm_pre_minimize_before_mlpot(
     args: argparse.Namespace,
