@@ -104,7 +104,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Angle (deg) of monomer-2 COM from +x in the 2D scan",
     )
     p.add_argument("--no-mm", action="store_true", help="Skip MM terms in decomposed eval")
-    p.add_argument("--quiet", action="store_true")
+    # p.add_argument("--quiet", action="store_true")
     args = p.parse_args(argv)
 
     if args.composition_arg:
