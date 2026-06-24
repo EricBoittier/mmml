@@ -240,14 +240,19 @@ def _eval_decomposed(
 
     e_fields = {
         "energy": _scalar(full.energy),
+        "hybrid_energy": _scalar(full.hybrid_energy),
         "internal_E": _scalar(full.internal_E),
         "ml_2b_E": _scalar(full.ml_2b_E),
         "dH": _scalar(full.dH),
         "mm_E": _scalar(full.mm_E) if do_mm else 0.0,
+        "flat_bottom_E": _scalar(full.flat_bottom_E),
+        "com_restraint_E": _scalar(full.com_restraint_E),
         "ml_internal_only": _scalar(ml_internal.internal_E),
         "ml_2b_contrib": _scalar(ml_dimer_only.ml_2b_E),
     }
-    return {f"{k}_kcal": float(v) * EV_PER_KCAL for k, v in e_fields.items()}
+    rec = {f"{k}_kcal": float(v) * EV_PER_KCAL for k, v in e_fields.items()}
+    rec["com_restraint_min_dist_A"] = _scalar(full.com_restraint_min_dist)
+    return rec
 
 
 def _make_evaluator(
