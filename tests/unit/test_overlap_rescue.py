@@ -8,6 +8,25 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import minimize_overlap_re
 from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import OverlapRescueConfig
 
 
+def test_apply_recovery_nbonds_skips_all_ml_pbc_upinb():
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext, apply_recovery_nbonds
+
+    ctx = MagicMock(spec=MlpotContext)
+    ctx.use_pbc = True
+    ctx.ml_selection.get_atom_indexes.return_value = list(range(450))
+    pycharmm = MagicMock()
+    pycharmm.coor.get_natom.return_value = 450
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup._import_pycharmm",
+        return_value=pycharmm,
+    ):
+        apply_recovery_nbonds(ctx)
+
+    pycharmm.nbonds.update_bnbnd.assert_not_called()
+    pycharmm.UpdateNonBondedScript.assert_not_called()
+
+
 def test_minimize_overlap_rescue_uses_vdw_block_and_restores_nbonds():
     from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
