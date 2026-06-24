@@ -192,15 +192,15 @@ class DecomposedMlpotCalculator:
                 current_box = getattr(self, "_current_box", None)
                 if current_box is None:
                     current_box = box_jax
-                print(f"[DEBUG SHAPES] positions={positions.shape} dtype={positions.dtype}", flush=True)
-                if current_box is not None:
-                    print(f"[DEBUG SHAPES] box={current_box.shape} values={current_box.tolist()}", flush=True)
-                else:
-                    print("[DEBUG SHAPES] box=None", flush=True)
-                print(f"[DEBUG SHAPES] mm_pair_idx={mm_pair_idx.shape} mm_pair_mask={mm_pair_mask.shape}", flush=True)
-                print(f"[DEBUG SHAPES] use_mm_pairs={use_mm_pairs} (static)", flush=True)
-                print(f"[DEBUG SHAPES] spatial_monomer_indices={spatial_monomer_indices.shape} spatial_dimer_indices={spatial_dimer_indices.shape}", flush=True)
-                print(f"[DEBUG SHAPES] use_spatial={use_spatial} (static)", flush=True)
+                # print(f"[DEBUG SHAPES] positions={positions.shape} dtype={positions.dtype}", flush=True)
+                # if current_box is not None:
+                    # print(f"[DEBUG SHAPES] box={current_box.shape} values={current_box.tolist()}", flush=True)
+                # else:
+                    # print("[DEBUG SHAPES] box=None", flush=True)
+                # print(f"[DEBUG SHAPES] mm_pair_idx={mm_pair_idx.shape} mm_pair_mask={mm_pair_mask.shape}", flush=True)
+                # print(f"[DEBUG SHAPES] use_mm_pairs={use_mm_pairs} (static)", flush=True)
+                # print(f"[DEBUG SHAPES] spatial_monomer_indices={spatial_monomer_indices.shape} spatial_dimer_indices={spatial_dimer_indices.shape}", flush=True)
+                # print(f"[DEBUG SHAPES] use_spatial={use_spatial} (static)", flush=True)
                 return fn(
                     positions,
                     current_box,
