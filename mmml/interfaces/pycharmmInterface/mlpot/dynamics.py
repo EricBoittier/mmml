@@ -1252,7 +1252,7 @@ def build_nve_dynamics(
         }
     )
     if restart:
-        kw["iasvel"] = 1
+        kw["iasvel"] = 0
     else:
         kw.update(boltzmann_velocity_kwargs(temp))
     return kw
