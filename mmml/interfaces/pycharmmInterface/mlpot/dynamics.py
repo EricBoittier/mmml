@@ -2022,7 +2022,7 @@ def _prepare_post_rescue_overlap_handoff(
     """
     _assign_post_rescue_velocities_and_crystal(chunk_kw, mlpot_ctx=mlpot_ctx)
     bath = _post_rescue_bath_target_K(chunk_kw)
-    chunk_kw["restart"] = False
+    chunk_kw["restart"] = True
     chunk_kw["new"] = False
     chunk_kw["start"] = False
     chunk_kw["iasvel"] = 0
@@ -2190,10 +2190,11 @@ def _apply_overlap_chunk_dynamics_kw(
         return
     chunk_kw["new"] = False
     chunk_kw["start"] = False
-    if has_restart_read:
+    if has_restart_read or chunk_index > 0:
         chunk_kw["restart"] = True
     else:
         chunk_kw["restart"] = False
+    if not has_restart_read:
         chunk_kw.pop("iunrea", None)
         chunk_kw["iunrea"] = -1
 
