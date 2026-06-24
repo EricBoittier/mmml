@@ -984,10 +984,10 @@ def test_overlap_post_rescue_handoff_continues_in_memory(tmp_path, capsys):
 
     assert len(calls) == 3
     assert calls[0][0]["restart"] is False
-    assert calls[1][0]["restart"] is True
+    assert calls[1][0]["restart"] is False
     assert calls[1][1] is not None and calls[1][1].restart_read is None
     assert calls[2][0]["restart"] is True
-    assert calls[2][1] is not None and calls[2][1].restart_read is None
+    assert calls[2][1] is not None and calls[2][1].restart_read is not None
     post_rescue.assert_called_once()
     out = capsys.readouterr().out
     assert "post-rescue in-memory handoff at global step 500" in out
@@ -1080,9 +1080,11 @@ def test_mlpot_overlap_chunks_continue_in_memory_without_readyn(tmp_path):
     mlpot_ctx = mock.Mock()
 
     def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
+        if _io is not None and getattr(_io, "restart_read", None) is not None:
+            kw["iunrea"] = _io.restart_read_unit
         calls.append(dict(kw))
         if _io is not None and _io.restart_write is not None:
-            Path(_io.restart_write).write_text("REST 48 -1\n", encoding="utf-8")
+            Path(_io.restart_write).write_text("REST 48 2\n", encoding="utf-8")
         return mock.Mock()
 
     with mock.patch(
@@ -1108,10 +1110,10 @@ def test_mlpot_overlap_chunks_continue_in_memory_without_readyn(tmp_path):
     assert [c["nstep"] for c in calls] == [2, 2, 2]
     assert calls[0]["restart"] is False
     assert calls[1]["restart"] is True
-    assert calls[1].get("iunrea") == -1
-    assert calls[1]["iasvel"] == 0
+    assert calls[1].get("iunrea") == 3
+    assert calls[1].get("iasvel") == 0
     assert calls[2]["restart"] is True
-    assert calls[2]["iasvel"] == 0
+    assert calls[2].get("iasvel") == 0
 
 
 def test_mlpot_overlap_chunks_use_scratch_restart_handoff(tmp_path, monkeypatch):
@@ -1745,7 +1747,11 @@ def test_run_dynamics_with_io_mlpot_defaults_overlap_memory_handoff(tmp_path):
     mlpot_ctx = mock.Mock()
 
     def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
+        if _io is not None and getattr(_io, "restart_read", None) is not None:
+            kw["iunrea"] = _io.restart_read_unit
         calls.append(dict(kw))
+        if _io is not None and _io.restart_write is not None:
+            Path(_io.restart_write).write_text("REST 48 2\n", encoding="utf-8")
         return mock.Mock()
 
     with mock.patch(
@@ -1771,7 +1777,9 @@ def test_run_dynamics_with_io_mlpot_defaults_overlap_memory_handoff(tmp_path):
     assert calls[0]["restart"] is False
     assert calls[1]["restart"] is True
     assert calls[2]["restart"] is True
-    assert all(call.get("iunrea") == -1 for call in calls)
+    assert calls[0].get("iunrea") == -1
+    assert calls[1].get("iunrea") == 3
+    assert calls[2].get("iunrea") == 3
 
 
 def test_ensure_valid_overlap_scratch_restart_raises_on_rest_minus_one(tmp_path):
@@ -2368,8 +2376,8 @@ def test_prepare_post_rescue_overlap_handoff_assigns_velocities_in_memory():
         use_pbc=True,
     )
     ensure_crystal.assert_called_once_with(180.0, quiet=True)
-    assert chunk_kw["restart"] is True
-    assert chunk_kw["iasvel"] == 0
+    assert chunk_kw["restart"] is False
+    assert chunk_kw["iasvel"] == 1
     assert chunk_kw["iunrea"] == -1
     assert "finalt" not in chunk_kw
 
