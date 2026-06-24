@@ -669,7 +669,7 @@ def _configure(**kwargs):
     """
     valid_opts = dict(
         [('ieqfrq', 0),
-         ('ntrfrq', 0),
+         ('ntrfrq', 100),
          ('ichecw', 0),
          ('tbath', 298.0),
          ('iasors', 0),
