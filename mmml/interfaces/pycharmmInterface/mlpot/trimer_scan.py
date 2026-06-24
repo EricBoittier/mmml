@@ -1,4 +1,4 @@
-"""Rigid trimer placement and 2D COM-distance scan grids (d01 × d02)."""
+"""Rigid dimer/trimer placement and 2D COM-distance scan grids."""
 
 from __future__ import annotations
 
@@ -54,26 +54,31 @@ def place_trimer(
     d02: float,
     angle_02_rad: float,
 ) -> np.ndarray:
-    """Rigid-body move monomers 1 and 2 relative to monomer 0 COM."""
+    """Rigid-body move monomers 1 and, when present, 2 relative to monomer 0 COM."""
+    if len(atoms_per) < 2:
+        raise ValueError(f"scan requires at least 2 monomers, got {len(atoms_per)}")
     pos = np.array(ref, dtype=np.float64, copy=True)
     off = monomer_offsets(atoms_per)
     com0 = monomer_com(ref, int(off[0]), int(atoms_per[0]))
     target1 = com0 + np.array([d01, 0.0, 0.0], dtype=float)
-    target2 = com0 + d02 * np.array(
-        [np.cos(angle_02_rad), np.sin(angle_02_rad), 0.0], dtype=float
-    )
     rigid_shift_monomer(pos, ref, int(off[1]), int(atoms_per[1]), target1)
-    rigid_shift_monomer(pos, ref, int(off[2]), int(atoms_per[2]), target2)
+    if len(atoms_per) >= 3:
+        target2 = com0 + d02 * np.array(
+            [np.cos(angle_02_rad), np.sin(angle_02_rad), 0.0], dtype=float
+        )
+        rigid_shift_monomer(pos, ref, int(off[2]), int(atoms_per[2]), target2)
     return pos
 
 
 def com_distances(pos: np.ndarray, atoms_per: list[int]) -> np.ndarray:
     off = monomer_offsets(atoms_per)
-    coms = [monomer_com(pos, int(off[i]), int(atoms_per[i])) for i in range(3)]
-    d01 = float(np.linalg.norm(coms[1] - coms[0]))
-    d02 = float(np.linalg.norm(coms[2] - coms[0]))
-    d12 = float(np.linalg.norm(coms[2] - coms[1]))
-    return np.array([d01, d02, d12], dtype=np.float64)
+    coms = [monomer_com(pos, int(off[i]), int(atoms_per[i])) for i in range(len(atoms_per))]
+    pairs = [
+        float(np.linalg.norm(coms[b] - coms[a]))
+        for a in range(len(coms))
+        for b in range(a + 1, len(coms))
+    ]
+    return np.array(pairs, dtype=np.float64)
 
 
 def distance_report(pos: np.ndarray, atoms_per: list[int]) -> dict[str, float]:
@@ -81,15 +86,17 @@ def distance_report(pos: np.ndarray, atoms_per: list[int]) -> dict[str, float]:
     out: dict[str, float] = {}
     for i, n in enumerate(atoms_per):
         out[f"min_intra_m{i}"] = min_intra_dist(pos, int(off[i]), int(n))
-    pairs = [(0, 1), (0, 2), (1, 2)]
-    for a, b in pairs:
-        out[f"min_inter_{a}{b}"] = min_inter_dist(
-            pos, int(off[a]), int(atoms_per[a]), int(off[b]), int(atoms_per[b])
-        )
+    for a in range(len(atoms_per)):
+        for b in range(a + 1, len(atoms_per)):
+            out[f"min_inter_{a}{b}"] = min_inter_dist(
+                pos, int(off[a]), int(atoms_per[a]), int(off[b]), int(atoms_per[b])
+            )
     com_d = com_distances(pos, atoms_per)
-    out["com_d01"] = float(com_d[0])
-    out["com_d02"] = float(com_d[1])
-    out["com_d12"] = float(com_d[2])
+    pair_index = 0
+    for a in range(len(atoms_per)):
+        for b in range(a + 1, len(atoms_per)):
+            out[f"com_d{a}{b}"] = float(com_d[pair_index])
+            pair_index += 1
     return out
 
 
@@ -119,10 +126,10 @@ def run_scan_2d(
     progress: Callable[[int, int], None] | None = None,
 ) -> dict[str, np.ndarray]:
     """Evaluate ``eval_fn(pos)`` on a d01 × d02 grid; store selected metric keys."""
-    if len(atoms_per) != 3:
-        raise ValueError(f"trimer scan requires 3 monomers, got {len(atoms_per)}")
+    if len(atoms_per) < 2:
+        raise ValueError(f"scan requires at least 2 monomers, got {len(atoms_per)}")
     n1, n2 = len(d1_grid), len(d2_grid)
-    store = {k: np.zeros((n1, n2), dtype=np.float64) for k in metric_keys}
+    store = {k: np.full((n1, n2), np.nan, dtype=np.float64) for k in metric_keys}
     angle = np.deg2rad(float(angle_02_deg))
     for i, d01 in enumerate(d1_grid):
         for j, d02 in enumerate(d2_grid):

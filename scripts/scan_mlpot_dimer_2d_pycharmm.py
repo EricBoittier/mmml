@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""PyCHARMM MLpot 2D trimer scan (d01 × d02) with component energies.
+"""PyCHARMM MLpot 2D dimer/trimer scan with component energies.
 
-Builds a three-monomer cluster via the same CLI/cluster path as
+Builds an N-monomer cluster via the same CLI/cluster path as
 ``mmml md-system --backend pycharmm``, registers ``MLpot``, and records
-energies on a 2D grid of COM separations (monomer 0–1 vs monomer 0–2).
+energies on a 2D grid of COM separations. For dimers only d01 changes
+geometry; d02 is retained as a grid axis for a consistent output shape.
 
 For each grid point the script saves:
   * decomposed ML/MM hybrid terms (same model as MLpot USER)
@@ -53,7 +54,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument(
         "composition_arg",
         nargs="?",
-        help="Shortcut for --composition, e.g. DCM:3 (exactly 3 monomers).",
+        help="Shortcut for --composition, e.g. DCM:2 or DCM:3.",
     )
     add_cluster_args(p)
     add_charmm_output_args(p)
@@ -75,7 +76,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--batch-compositions",
         type=str,
         default="",
-        help="Comma-separated RES:N entries to scan in one invocation (each needs N=3)",
+        help="Comma-separated RES:N entries to scan in one invocation (each needs N>=2)",
     )
     p.add_argument(
         "--packmol-sphere",
@@ -288,10 +289,10 @@ def _run_one_scan(args: argparse.Namespace, composition: str) -> Path:
         run_scan_2d,
     )
 
-    if _composition_monomer_count(composition) != 3:
+    if _composition_monomer_count(composition) < 2:
         raise SystemExit(
-            f"2D trimer scan requires exactly 3 monomers; got {composition!r}. "
-            "Use e.g. DCM:3 or ACO:3."
+            f"2D dimer scan requires at least 2 monomers; got {composition!r}. "
+            "Use e.g. DCM:2, DCM:3, or ACO:3."
         )
 
     args.composition = composition
@@ -301,11 +302,11 @@ def _run_one_scan(args: argparse.Namespace, composition: str) -> Path:
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
 
     z, ref_pos, n_mol, tag = build_cluster_from_args_with_tag(args)
-    if n_mol != 3:
-        raise SystemExit(f"Expected 3 monomers after build, got {n_mol}")
+    if n_mol < 2:
+        raise SystemExit(f"Expected at least 2 monomers after build, got {n_mol}")
 
     atoms_per = atoms_per_monomer_from_psf()
-    if len(atoms_per) != 3 or sum(atoms_per) != len(z):
+    if len(atoms_per) != n_mol or sum(atoms_per) != len(z):
         raise SystemExit(f"PSF monomer layout mismatch: atoms_per={atoms_per}, natoms={len(z)}")
 
     if not args.quiet:
@@ -351,8 +352,12 @@ def _run_one_scan(args: argparse.Namespace, composition: str) -> Path:
         ref_dist = distance_report(ref_pos, atoms_per)
         if not args.quiet:
             print(
-                f"Reference COM (Å): d01={ref_dist['com_d01']:.3f} "
-                f"d02={ref_dist['com_d02']:.3f} d12={ref_dist['com_d12']:.3f}",
+                "Reference COM (Å): "
+                + " ".join(
+                    f"{key[4:]}={value:.3f}"
+                    for key, value in sorted(ref_dist.items())
+                    if key.startswith("com_")
+                ),
                 flush=True,
             )
 
@@ -417,7 +422,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.composition:
         compositions = [args.composition]
     else:
-        raise SystemExit("Provide --composition RES:3 (exactly 3 monomers) or --batch-compositions")
+        raise SystemExit("Provide --composition RES:N (N>=2) or --batch-compositions")
 
     for comp in compositions:
         _run_one_scan(args, comp)
