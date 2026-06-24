@@ -107,7 +107,8 @@ def atoms_per_monomer_from_psf() -> list[int]:
     natom = int(psf.get_natom()) if hasattr(psf, "get_natom") else 0
     ibase = np.asarray(psf.get_ibase(), dtype=int) if hasattr(psf, "get_ibase") else np.asarray([], dtype=int)
     if ibase.size:
-        counts = np.diff(np.concatenate(([0], ibase))).astype(int).tolist()
+        boundaries = ibase[1:] if int(ibase[0]) == 0 else ibase
+        counts = np.diff(np.concatenate(([0], boundaries))).astype(int).tolist()
         if natom > 0 and sum(counts) != natom:
             raise ValueError(f"Invalid PSF residue boundaries from ibase={ibase.tolist()}, natom={natom}")
         if any(c <= 0 for c in counts):

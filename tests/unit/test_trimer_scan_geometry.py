@@ -139,6 +139,19 @@ def test_atoms_per_monomer_from_psf_uses_ibase(monkeypatch) -> None:
     assert atoms_per_monomer_from_psf() == [5, 5, 5]
 
 
+def test_atoms_per_monomer_from_psf_accepts_leading_zero_ibase(monkeypatch) -> None:
+    fake_psf = types.SimpleNamespace(
+        get_natom=lambda: 15,
+        get_ibase=lambda: [0, 5, 10, 15],
+        get_resid=lambda: [1, 2, 3],
+    )
+    fake_pycharmm = types.SimpleNamespace(psf=fake_psf)
+    monkeypatch.setitem(sys.modules, "pycharmm", fake_pycharmm)
+    monkeypatch.setitem(sys.modules, "pycharmm.psf", fake_psf)
+
+    assert atoms_per_monomer_from_psf() == [5, 5, 5]
+
+
 def test_atoms_per_monomer_from_psf_rejects_residue_table_as_atom_resids(monkeypatch) -> None:
     fake_psf = types.SimpleNamespace(
         get_natom=lambda: 15,
