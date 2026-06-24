@@ -268,7 +268,7 @@ nbonds_script = """!#########################################
 ! Non-bonding parameters
  nbonds atom cutnb 14.0  ctofnb 12.0 ctonnb 10.0 -
    lrc vdw fswitch vswitch -
-   inbfrq 1 imgfrq 1
+   inbfrq 50 imgfrq 50
 
 ! Constrain all X-H bonds
 !shake bonh para sele all end
