@@ -1628,6 +1628,23 @@ def add_staged_md_args(parser: argparse.ArgumentParser) -> None:
         ),
     )
     group.add_argument(
+        "--min-com-restraint-distance",
+        type=float,
+        default=None,
+        metavar="Å",
+        help=(
+            "Pairwise inter-monomer COM lower wall for ML/MM dynamics. Adds "
+            "0.5*k*(r_min-r)^2 when COM distance r < r_min (default: disabled)."
+        ),
+    )
+    group.add_argument(
+        "--min-com-restraint-k",
+        type=float,
+        default=1.0,
+        metavar="eV/Å²",
+        help="Force constant for --min-com-restraint-distance (default: 1.0).",
+    )
+    group.add_argument(
         "--restart-from",
         type=Path,
         default=None,

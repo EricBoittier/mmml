@@ -695,6 +695,12 @@ def build_decomposed_mlpot_model(
         mm_switch_width=cutoff_params.mm_switch_width,
         complementary_handoff=cutoff_params.complementary_handoff,
         mm_r_min=getattr(args, "mm_r_min", None) if args is not None else None,
+        min_com_restraint_distance=(
+            getattr(args, "min_com_restraint_distance", None) if args is not None else None
+        ),
+        min_com_restraint_force_const=(
+            getattr(args, "min_com_restraint_k", 1.0) if args is not None else 1.0
+        ),
     )
     if verbose:
         _print_setup_calculator_factory_summary(

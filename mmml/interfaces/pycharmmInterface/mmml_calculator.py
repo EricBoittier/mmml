@@ -31,6 +31,7 @@ from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
 from mmml.interfaces.pycharmmInterface.calculator_utils import (
     FLAT_BOTTOM_MODES,
     ModelOutput,
+    apply_com_lower_wall,
     apply_flat_bottom,
     box_vectors_from_atoms_or_cell,
     debug_print,
@@ -332,6 +333,8 @@ def setup_calculator(
     flat_bottom_radius: float | None = None,
     flat_bottom_force_const: float = 1.0,
     flat_bottom_mode: str = "system",
+    min_com_restraint_distance: float | None = None,
+    min_com_restraint_force_const: float = 1.0,
     use_smooth_mic: Optional[bool] = None,
     ensemble: str = "nve",
     ml_sparse_dimers: bool = True,
@@ -394,6 +397,11 @@ def setup_calculator(
             Intermediate calls reuse cached pairs.
         jax_md_skin_distance: Additional displacement threshold (Å). When >0, cached pairs are
             reused while max displacement since last update stays below this value.
+        min_com_restraint_distance: Optional pairwise inter-monomer COM lower wall (Å).
+            Adds ``0.5*k*(r_min-r)^2`` when a monomer-pair COM distance is below
+            ``r_min``. Use to prevent collapsed/reactive monomer encounters.
+        min_com_restraint_force_const: Force constant for ``min_com_restraint_distance``
+            in eV/Å².
         ml_compute_dtype: ``float32`` (default) or ``float64`` for JAX ML/MM interior.
             float64 also requires ``JAX_ENABLE_X64=1`` before Python starts. Overridden by
             ``MMML_ML_DTYPE`` when unset.
@@ -427,6 +435,18 @@ def setup_calculator(
         print(
             "[setup_calculator] flat_bottom mode=%s R=%.4f Å k=%.4f eV/Å²"
             % (_fb_mode, float(flat_bottom_radius), float(flat_bottom_force_const))
+        )
+    _min_com_distance = (
+        float(min_com_restraint_distance)
+        if min_com_restraint_distance is not None
+        and float(min_com_restraint_distance) > 0.0
+        else None
+    )
+    _min_com_k = float(min_com_restraint_force_const)
+    if _min_com_distance is not None:
+        print(
+            "[setup_calculator] pairwise COM lower-wall r_min=%.4f Å k=%.4f eV/Å²"
+            % (_min_com_distance, _min_com_k)
         )
 
     # Cumulative atom offsets: monomer_offsets[i] is the global index of the
@@ -1136,8 +1156,10 @@ def setup_calculator(
         # Flat bottom: system COM or sum over per-monomer COMs (same R, k).
         hybrid_energy = final_energy
         flat_E = jnp.array(0.0, dtype=ml_jnp_dtype)
+        com_restraint_E = jnp.array(0.0, dtype=ml_jnp_dtype)
         com = jnp.zeros(3, dtype=ml_jnp_dtype)
         com_dist = jnp.array(0.0, dtype=ml_jnp_dtype)
+        com_restraint_min_dist = jnp.array(0.0, dtype=ml_jnp_dtype)
         if flat_bottom_radius is not None and flat_bottom_radius > 0:
             mic_fn = mic_displacement_smooth if use_smooth_mic else mic_displacement
             flat_E, flat_F, com, com_dist = apply_flat_bottom(
@@ -1154,6 +1176,21 @@ def setup_calculator(
             )
             final_energy = final_energy + flat_E
             final_forces = final_forces + flat_F
+        if _min_com_distance is not None:
+            mic_fn = mic_displacement_smooth if use_smooth_mic else mic_displacement
+            com_restraint_E, com_restraint_F, com_restraint_min_dist = apply_com_lower_wall(
+                positions,
+                atomic_numbers,
+                final_forces,
+                min_distance=_min_com_distance,
+                k=_min_com_k,
+                monomer_offsets=monomer_offsets,
+                n_monomers=n_monomers,
+                pbc_cell=mic_pbc_cell,
+                mic_fn=mic_fn,
+            )
+            final_energy = final_energy + com_restraint_E
+            final_forces = final_forces + com_restraint_F
         
         # Compute energy sum safely
         if hasattr(final_energy, 'sum'):
@@ -1175,8 +1212,10 @@ def setup_calculator(
             mm_F=outputs.get("mm_F", 0),
             hybrid_energy=hybrid_sum,
             flat_bottom_E=flat_E,
+            com_restraint_E=com_restraint_E,
             com=com,
             com_dist=com_dist,
+            com_restraint_min_dist=com_restraint_min_dist,
         )
 
     def get_ML_energy_fn(

@@ -391,6 +391,15 @@ def build_benchmark_md_system_argv(
         "--ml-switch-width",
         str(cfg["ml_switch_width"]),
     ]
+    if cfg.get("min_com_restraint_distance") is not None:
+        argv.extend(
+            [
+                "--min-com-restraint-distance",
+                str(cfg["min_com_restraint_distance"]),
+                "--min-com-restraint-k",
+                str(cfg.get("min_com_restraint_k", 1.0)),
+            ]
+        )
 
     if job.get("pbc"):
         box_size = job.get("box_size", cfg["box_size"])

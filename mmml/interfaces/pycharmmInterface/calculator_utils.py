@@ -37,6 +37,7 @@ __all__ = [
     "GAMMA_OFF",
     "GAMMA_ON",
     "ModelOutput",
+    "apply_com_lower_wall",
     "apply_flat_bottom",
     "debug_print",
     "dimer_permutations",
@@ -178,11 +179,92 @@ class ModelOutput(NamedTuple):
     ml_2b_F: Array
     hybrid_energy: Array  # ML+MM before flat-bottom (eV)
     flat_bottom_E: Array  # flat-bottom contribution (eV)
+    com_restraint_E: Array  # pairwise COM lower-wall contribution (eV)
     com: Array  # mass-weighted system COM (3,); zeros in monomer mode
     com_dist: Array  # |COM - center| (Å), or max_m |COM_m - center| in monomer mode
+    com_restraint_min_dist: Array  # minimum inter-monomer COM distance (Å)
 
 
 FLAT_BOTTOM_MODES = ("system", "monomer")
+
+
+def _monomer_coms(
+    positions: Array,
+    masses: Array,
+    *,
+    monomer_offsets: Array,
+    n_monomers: int,
+) -> list[Array]:
+    mo_np = np.asarray(monomer_offsets, dtype=np.int32)
+    coms: list[Array] = []
+    for m in range(int(n_monomers)):
+        s = int(mo_np[m])
+        e = int(mo_np[m + 1])
+        pos_m = positions[s:e]
+        mass_m = masses[s:e]
+        M_m = jnp.sum(mass_m)
+        coms.append(jnp.sum(pos_m * mass_m[:, None], axis=0) / M_m)
+    return coms
+
+
+def apply_com_lower_wall(
+    positions: Array,
+    atomic_numbers: Array,
+    base_forces: Array,
+    *,
+    min_distance: float,
+    k: float,
+    monomer_offsets: Array,
+    n_monomers: int,
+    pbc_cell: Array | None,
+    mic_fn,
+) -> Tuple[Array, Array, Array]:
+    """Pairwise harmonic lower wall on monomer COM distances.
+
+    ``V = 0.5 * k * (min_distance - r)^2`` for COM-COM distance ``r < min_distance``.
+    Returns ``(E, F, min_com_distance)``.
+    """
+    if jnp is None:
+        raise RuntimeError("apply_com_lower_wall requires JAX")
+    from ase.data import atomic_masses as ase_atomic_masses
+
+    masses = jnp.take(jnp.array(ase_atomic_masses, dtype=positions.dtype), atomic_numbers)
+    coms = _monomer_coms(
+        positions,
+        masses,
+        monomer_offsets=monomer_offsets,
+        n_monomers=n_monomers,
+    )
+    flat_E = jnp.array(0.0, dtype=positions.dtype)
+    flat_F = jnp.zeros_like(base_forces)
+    min_dist = jnp.array(jnp.inf, dtype=positions.dtype)
+    mo_np = np.asarray(monomer_offsets, dtype=np.int32)
+    for i in range(int(n_monomers)):
+        for j in range(i + 1, int(n_monomers)):
+            if pbc_cell is not None:
+                d = mic_fn(coms[i], coms[j], pbc_cell)
+            else:
+                d = coms[j] - coms[i]
+            dist = jnp.linalg.norm(d)
+            min_dist = jnp.minimum(min_dist, dist)
+            excess = jnp.maximum(0.0, float(min_distance) - dist)
+            flat_E = flat_E + 0.5 * float(k) * excess ** 2
+            unit_d = d / (dist + 1e-12)
+            force_i = -float(k) * excess * unit_d
+            force_j = float(k) * excess * unit_d
+            si, ei = int(mo_np[i]), int(mo_np[i + 1])
+            sj, ej = int(mo_np[j]), int(mo_np[j + 1])
+            mass_i = masses[si:ei]
+            mass_j = masses[sj:ej]
+            flat_F = flat_F.at[si:ei].add(
+                (mass_i[:, None] / jnp.sum(mass_i)) * force_i[None, :]
+            )
+            flat_F = flat_F.at[sj:ej].add(
+                (mass_j[:, None] / jnp.sum(mass_j)) * force_j[None, :]
+            )
+    if int(n_monomers) < 2:
+        min_dist = jnp.array(0.0, dtype=positions.dtype)
+    return flat_E, flat_F, min_dist
 
 
 def apply_flat_bottom(
