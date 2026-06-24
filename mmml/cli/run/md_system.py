@@ -1129,6 +1129,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Do not write stage_summary.json (campaigns).",
     )
+    parser.add_argument(
+        "--mlpot-profile",
+        action="store_true",
+        help="Enable profiling of MLpot callbacks and JAX/XLA compilation timers",
+    )
 
     return parser
 
@@ -1869,6 +1874,8 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd.append("--no-show-energy")
     if args.quiet:
         cmd.append("--quiet")
+    if getattr(args, "mlpot_profile", False):
+        cmd.append("--mlpot-profile")
     if getattr(args, "save_forces_npz", False):
         cmd.append("--save-forces-npz")
         cmd.extend(["--forces-npz-interval", str(args.forces_npz_interval)])

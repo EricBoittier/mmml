@@ -43,6 +43,11 @@ def add_charmm_output_args(parser: argparse.ArgumentParser) -> None:
         help="CHARMM BOMBlev (default: -2; use 0 to stop on any warning)",
     )
     group.add_argument(
+        "--mlpot-profile",
+        action="store_true",
+        help="Enable profiling of MLpot callbacks and JAX/XLA compilation timers",
+    )
+    group.add_argument(
         "--nprint",
         type=int,
         default=50,
