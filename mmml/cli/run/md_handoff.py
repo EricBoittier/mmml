@@ -1510,6 +1510,8 @@ def save_handoff(
   out_dir = Path(out_dir).expanduser().resolve()
   handoff_dir = out_dir / "handoff"
   handoff_dir.mkdir(parents=True, exist_ok=True)
+  if template_res is None:
+      template_res = find_latest_charmm_restart_in_dir(out_dir)
   paths: dict[str, Path] = {}
   paths["npz"] = save_handoff_npz(handoff, handoff_dir / "state.npz")
   if write_res:
