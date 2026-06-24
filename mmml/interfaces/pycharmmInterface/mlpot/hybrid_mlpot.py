@@ -28,10 +28,8 @@ _DUMMY_MM_PAIR_IDX = jnp.zeros((1, 2), dtype=jnp.int32)
 _DUMMY_MM_PAIR_MASK = jnp.zeros((1,), dtype=jnp.bool_)
 
 
-def _box_cache_key(box: jnp.ndarray | None) -> tuple[float, float, float] | None:
-    if box is None:
-        return None
-    return (float(box[0, 0]), float(box[1, 1]), float(box[2, 2]))
+def _box_cache_key(box: jnp.ndarray | None) -> bool:
+    return box is not None
 
 
 def _box_numpy_for_update(box: jnp.ndarray | None) -> np.ndarray | None:
@@ -129,12 +127,13 @@ class DecomposedMlpotCalculator:
     ) -> Any:
         """Return a cached ``jit(value_and_grad)`` for MLpot SD/dynamics callbacks."""
         dtype = resolve_ml_compute_dtype(self._ml_compute_dtype)
+        box_present = box_jax is not None
         cache_key = (
             int(n_atoms),
             int(self.n_monomers),
             bool(self.do_mm),
             dtype,
-            _box_cache_key(box_jax),
+            box_present,
             bool(self._spatial_mpi),
         )
         owner = self._grad_cache_owner()
@@ -146,42 +145,100 @@ class DecomposedMlpotCalculator:
         n_monomers = self.n_monomers
         do_mm = self.do_mm
 
-        def energy_scalar(
-            positions: jnp.ndarray,
-            mm_pair_idx: jnp.ndarray,
-            mm_pair_mask: jnp.ndarray,
-            use_mm_pairs: bool,
-            spatial_monomer_indices: jnp.ndarray,
-            spatial_dimer_indices: jnp.ndarray,
-            use_spatial: bool,
-        ) -> jnp.ndarray:
-            kwargs: dict[str, Any] = dict(
-                positions=positions,
-                atomic_numbers=atomic_numbers_jax,
-                n_monomers=n_monomers,
-                cutoff_params=cutoff_params,
-                doML=True,
-                doMM=do_mm,
-                doML_dimer=True,
-            )
-            if box_jax is not None:
-                kwargs["box"] = box_jax
-            if use_mm_pairs:
-                kwargs["mm_pair_idx"] = mm_pair_idx
-                kwargs["mm_pair_mask"] = mm_pair_mask
-            if use_spatial:
-                kwargs["spatial_monomer_indices"] = spatial_monomer_indices
-                kwargs["spatial_dimer_indices"] = spatial_dimer_indices
-            out = spherical_fn(**kwargs)
-            return jnp.reshape(out.energy, (-1,))[0]
+        if box_present:
+            def energy_scalar(
+                positions: jnp.ndarray,
+                box: jnp.ndarray,
+                mm_pair_idx: jnp.ndarray,
+                mm_pair_mask: jnp.ndarray,
+                use_mm_pairs: bool,
+                spatial_monomer_indices: jnp.ndarray,
+                spatial_dimer_indices: jnp.ndarray,
+                use_spatial: bool,
+            ) -> jnp.ndarray:
+                kwargs: dict[str, Any] = dict(
+                    positions=positions,
+                    atomic_numbers=atomic_numbers_jax,
+                    n_monomers=n_monomers,
+                    cutoff_params=cutoff_params,
+                    doML=True,
+                    doMM=do_mm,
+                    doML_dimer=True,
+                    box=box,
+                )
+                if use_mm_pairs:
+                    kwargs["mm_pair_idx"] = mm_pair_idx
+                    kwargs["mm_pair_mask"] = mm_pair_mask
+                if use_spatial:
+                    kwargs["spatial_monomer_indices"] = spatial_monomer_indices
+                    kwargs["spatial_dimer_indices"] = spatial_dimer_indices
+                out = spherical_fn(**kwargs)
+                return jnp.reshape(out.energy, (-1,))[0]
 
-        fn = jax.jit(
-            jax.value_and_grad(energy_scalar, argnums=0),
-            static_argnums=(3, 6),
-        )
-        owner._value_and_grad_fn = fn
+            fn = jax.jit(
+                jax.value_and_grad(energy_scalar, argnums=0),
+                static_argnums=(4, 7),
+            )
+
+            def wrapper(
+                positions,
+                mm_pair_idx,
+                mm_pair_mask,
+                use_mm_pairs,
+                spatial_monomer_indices,
+                spatial_dimer_indices,
+                use_spatial,
+            ):
+                current_box = getattr(self, "_current_box", None)
+                if current_box is None:
+                    current_box = box_jax
+                return fn(
+                    positions,
+                    current_box,
+                    mm_pair_idx,
+                    mm_pair_mask,
+                    use_mm_pairs,
+                    spatial_monomer_indices,
+                    spatial_dimer_indices,
+                    use_spatial,
+                )
+            owner._value_and_grad_fn = wrapper
+        else:
+            def energy_scalar(
+                positions: jnp.ndarray,
+                mm_pair_idx: jnp.ndarray,
+                mm_pair_mask: jnp.ndarray,
+                use_mm_pairs: bool,
+                spatial_monomer_indices: jnp.ndarray,
+                spatial_dimer_indices: jnp.ndarray,
+                use_spatial: bool,
+            ) -> jnp.ndarray:
+                kwargs: dict[str, Any] = dict(
+                    positions=positions,
+                    atomic_numbers=atomic_numbers_jax,
+                    n_monomers=n_monomers,
+                    cutoff_params=cutoff_params,
+                    doML=True,
+                    doMM=do_mm,
+                    doML_dimer=True,
+                )
+                if use_mm_pairs:
+                    kwargs["mm_pair_idx"] = mm_pair_idx
+                    kwargs["mm_pair_mask"] = mm_pair_mask
+                if use_spatial:
+                    kwargs["spatial_monomer_indices"] = spatial_monomer_indices
+                    kwargs["spatial_dimer_indices"] = spatial_dimer_indices
+                out = spherical_fn(**kwargs)
+                return jnp.reshape(out.energy, (-1,))[0]
+
+            fn = jax.jit(
+                jax.value_and_grad(energy_scalar, argnums=0),
+                static_argnums=(3, 6),
+            )
+            owner._value_and_grad_fn = fn
+
         owner._vg_cache_key = cache_key
-        return fn
+        return owner._value_and_grad_fn
 
     def _resolve_mm_pairs(
         self,
@@ -244,6 +301,7 @@ class DecomposedMlpotCalculator:
             except Exception:
                 side = float(self._cell)
             box = jnp.asarray(cubic_box_matrix_from_side(side))
+        self._current_box = box
         from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_context
         from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
             get_mlpot_profile_stats,
