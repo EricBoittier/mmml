@@ -1414,13 +1414,13 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             import pycharmm.lingo
             
             # Pass 1: nbxmod 1 (include all pairs) and minimize
-            pycharmm.lingo.charmm_script("nbonds nbxmod 1\nmini sd nstep 50\n")
+            pycharmm.lingo.charmm_script(f"nbonds nbxmod 1\nmini sd nstep {mini_nstep}\n")
             
             # Apply uniform noise (amplitude 0.05 Å) to break symmetry
             apply_charmm_position_noise(amplitude_A=0.05, distribution="uniform")
             
             # Pass 2: nbxmod 5 (standard exclusions) and minimize
-            pycharmm.lingo.charmm_script("nbonds nbxmod 5\nmini sd nstep 50\nenergy\n")
+            pycharmm.lingo.charmm_script(f"nbonds nbxmod 5\nmini sd nstep {mini_nstep}\nenergy\n")
             
             # Refresh GRMS after recovery attempt
             refresh_mlpot_energy_and_grms(
