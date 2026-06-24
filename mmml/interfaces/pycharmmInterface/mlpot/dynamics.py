@@ -2361,8 +2361,7 @@ def run_dynamics_with_io(
             overlap = replace(overlap, memory_handoff=True)
             if total_nstep > int(overlap.check_interval):
                 print(
-                    f"overlap ({overlap_context}): MLpot in-memory chunk handoff "
-                    f"(no READYN on scratch restarts)",
+                    f"overlap ({overlap_context}): MLpot in-memory chunk handoff",
                     flush=True,
                 )
     if guard_active and overlap is not None:
@@ -2571,7 +2570,7 @@ def run_dynamics_with_io(
                 if mem_handoff and chunk_index == 1 and not logged_mem_handoff:
                     print(
                         f"overlap ({overlap_context}): in-memory handoff between "
-                        f"{n_chunks} chunks (no READYN on scratch restarts)",
+                        f"{n_chunks} chunks",
                         flush=True,
                     )
                     logged_mem_handoff = True
