@@ -958,7 +958,8 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=DEFAULT_ML_SWITCH_WIDTH,
         help=(
-            "ML taper width (Å) over [mm_switch_on - width, mm_switch_on] for pycharmm/MMML handoff "
+            "COM-distance width (Å) of the ML→MM handoff for pycharmm/MMML; ML is "
+            "fully on below mm_switch_on - width and reaches zero at mm_switch_on "
             f"(default: {DEFAULT_ML_SWITCH_WIDTH:g}). Does not affect lambda_ti (see --ml-cutoff)."
         ),
     )
@@ -967,7 +968,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=DEFAULT_MM_SWITCH_ON,
         help=(
-            f"MM handoff distance (Å); ML→0 / MM→1 at this COM separation "
+            f"COM handoff distance (Å); ML→0 / MM→1 at this separation "
             f"(default: {DEFAULT_MM_SWITCH_ON:g})."
         ),
     )
@@ -978,7 +979,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=DEFAULT_MM_SWITCH_WIDTH,
         help=(
-            f"MM outer taper width (Å) past mm_switch_on "
+            f"COM-distance width (Å) of the MM outer tail past mm_switch_on "
             f"(default: {DEFAULT_MM_SWITCH_WIDTH:g})."
         ),
     )

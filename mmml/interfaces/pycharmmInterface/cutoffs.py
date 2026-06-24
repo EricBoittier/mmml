@@ -77,7 +77,8 @@ def add_handoff_cutoff_args(parser: argparse.ArgumentParser) -> None:
         type=float,
         default=DEFAULT_ML_SWITCH_WIDTH,
         help=(
-            "ML taper width in Å over [mm_switch_on - width, mm_switch_on] "
+            "COM-distance width (Å) of the ML→MM handoff. ML is fully on below "
+            "mm_switch_on - width and tapers to zero at mm_switch_on "
             f"(default: {DEFAULT_ML_SWITCH_WIDTH:g})."
         ),
     )
@@ -85,7 +86,10 @@ def add_handoff_cutoff_args(parser: argparse.ArgumentParser) -> None:
         "--mm-switch-on",
         type=float,
         default=DEFAULT_MM_SWITCH_ON,
-        help=f"Distance (Å) where ML→0 and MM→1 in complementary handoff (default: {DEFAULT_MM_SWITCH_ON:g}).",
+        help=(
+            "COM distance (Å) where the complementary handoff ends: ML scale reaches "
+            f"0 and MM scale reaches 1 (default: {DEFAULT_MM_SWITCH_ON:g})."
+        ),
     )
     parser.add_argument(
         "--mm-switch-width",
@@ -93,12 +97,16 @@ def add_handoff_cutoff_args(parser: argparse.ArgumentParser) -> None:
         dest="mm_switch_width",
         type=float,
         default=DEFAULT_MM_SWITCH_WIDTH,
-        help=f"MM outer taper width in Å past mm_switch_on (default: {DEFAULT_MM_SWITCH_WIDTH:g}).",
+        help=(
+            "COM-distance width (Å) of the MM outer tail after mm_switch_on. "
+            "Switched MM reaches zero at mm_switch_on + width "
+            f"(default: {DEFAULT_MM_SWITCH_WIDTH:g})."
+        ),
     )
     parser.add_argument(
         "--no-complementary-handoff",
         action="store_true",
-        help="Legacy MM window (not complementary with ML taper).",
+        help="Legacy MM window: MM starts at mm_switch_on instead of filling the ML taper handoff.",
     )
 
 
@@ -142,12 +150,12 @@ class CutoffParameters:
     ):
         """
         Args:
-            ml_switch_width: Width (Å) of the ML taper; handoff runs
-                [mm_switch_on - ml_switch_width, mm_switch_on].
-            mm_switch_on: Distance (Å) where ML reaches 0 and MM reaches 1
-                in complementary mode.
-            mm_switch_width: Width (Å) of the MM outer taper past mm_switch_on
-                (and MM ramp width in legacy mode).
+            ml_switch_width: COM-distance width (Å) of the ML taper; handoff
+                runs [mm_switch_on - ml_switch_width, mm_switch_on].
+            mm_switch_on: COM distance (Å) where ML reaches 0 and MM reaches
+                1 in complementary mode.
+            mm_switch_width: COM-distance width (Å) of the MM outer taper past
+                mm_switch_on (and MM ramp width in legacy mode).
             complementary_handoff: If True, use s_MM = 1 - s_ML over the handoff
                 interval [mm_switch_on - ml_switch_width, mm_switch_on].
         """
@@ -246,14 +254,16 @@ class CutoffParameters:
         s = s ** gamma
         return CutoffParameters._smoothstep01(s)
 
-    def ml_scale(self, r, gamma_ml: float = 5.0):
+    def ml_scale(self, r, gamma_ml: float = GAMMA_ON):
         """ML taper: 1→0 over [mm_switch_on - ml_switch_width, mm_switch_on]."""
         r = np.asarray(r, dtype=float)
         start = float(self.mm_switch_on) - float(self.ml_switch_width)
         stop = float(self.mm_switch_on)
         return 1.0 - self._sharpstep(r, start, stop, gamma=gamma_ml)
 
-    def ml_mm_scales_complementary(self, r, gamma_ml: float = 5.0, gamma_mm_off: float = 3.0):
+    def ml_mm_scales_complementary(
+        self, r, gamma_ml: float = GAMMA_ON, gamma_mm_off: float = GAMMA_OFF
+    ):
         """(s_ML, s_MM): s_ML + s_MM = 1 over handoff; s_MM tapers to 0 at mm_switch_on + mm_switch_width."""
         s_ml = self.ml_scale(r, gamma_ml=gamma_ml)
         handoff = 1.0 - s_ml
@@ -266,14 +276,16 @@ class CutoffParameters:
         s_mm = handoff * np.asarray(mm_taper, dtype=float)
         return s_ml, s_mm
 
-    def mm_scale_complementary(self, r, gamma_ml: float = 5.0, gamma_mm_off: float = 3.0):
+    def mm_scale_complementary(
+        self, r, gamma_ml: float = GAMMA_ON, gamma_mm_off: float = GAMMA_OFF
+    ):
         """MM scale: (1 - s_ML) over handoff, tapered to 0 at mm_switch_on + mm_switch_width."""
         _, s_mm = self.ml_mm_scales_complementary(
             r, gamma_ml=gamma_ml, gamma_mm_off=gamma_mm_off
         )
         return s_mm
 
-    def mm_scale(self, r, gamma_on: float = 0.001, gamma_off: float = 3.0):
+    def mm_scale(self, r, gamma_on: float = GAMMA_ON, gamma_off: float = GAMMA_OFF):
         """MM window (legacy): 0→1 over [mm_switch_on, mm_switch_on+mm_switch_width], then 1→0."""
         r = np.asarray(r, dtype=float)
         mm_on = self._sharpstep(
