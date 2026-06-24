@@ -1780,10 +1780,10 @@ def _overlap_chunk_uses_memory_handoff(
     n_chunks: int,
     overlap: Optional["DynamicsOverlapConfig"] = None,
 ) -> bool:
-    """Continue overlap segments in-process (no ``READYN`` on scratch between chunks)."""
+    """Continue overlap segments in-process. Only chunk 0 uses in-memory handoff."""
     if mlpot_ctx is None or n_chunks <= 1:
         return False
-    if overlap is not None and overlap.memory_handoff:
+    if chunk_index == 0 and overlap is not None and overlap.memory_handoff:
         return True
     return False
 
@@ -2022,10 +2022,10 @@ def _prepare_post_rescue_overlap_handoff(
     """
     _assign_post_rescue_velocities_and_crystal(chunk_kw, mlpot_ctx=mlpot_ctx)
     bath = _post_rescue_bath_target_K(chunk_kw)
-    chunk_kw["restart"] = True
+    chunk_kw["restart"] = False
     chunk_kw["new"] = False
     chunk_kw["start"] = False
-    chunk_kw["iasvel"] = 0
+    chunk_kw["iasvel"] = 1
     chunk_kw.pop("iunrea", None)
     chunk_kw["iunrea"] = -1
     _strip_stale_heat_ramp_keywords(chunk_kw)
@@ -2033,7 +2033,7 @@ def _prepare_post_rescue_overlap_handoff(
         chunk_kw["ihtfrq"] = 0
     if "hoover reft" in chunk_kw:
         chunk_kw["hoover reft"] = bath
-        chunk_kw.pop("firstt", None)
+        chunk_kw["firstt"] = bath
 
 
 def _overlap_rescue_restart_fallback_paths(
@@ -2190,11 +2190,10 @@ def _apply_overlap_chunk_dynamics_kw(
         return
     chunk_kw["new"] = False
     chunk_kw["start"] = False
-    if has_restart_read or chunk_index > 0:
+    if has_restart_read:
         chunk_kw["restart"] = True
     else:
         chunk_kw["restart"] = False
-    if not has_restart_read:
         chunk_kw.pop("iunrea", None)
         chunk_kw["iunrea"] = -1
 
@@ -2448,6 +2447,7 @@ def run_dynamics_with_io(
     n_chunks = total_nstep // interval
     post_rescue_in_memory_mode = False
     post_rescue_handoff_applied = False
+    any_post_rescue_in_memory = False
     if (
         n_chunks > 20
         and "heat" in str(overlap_context).lower()
@@ -2665,6 +2665,7 @@ def run_dynamics_with_io(
                         mlpot_ctx=mlpot_ctx,
                     )
                     post_rescue_handoff_applied = True
+                    post_rescue_in_memory_mode = False
                 if chunk_io is None or chunk_io.restart_write is None:
                     chunk_kw.pop("iunwri", None)
 
@@ -2754,6 +2755,7 @@ def run_dynamics_with_io(
                         chunk_retried = True
                         post_rescue_in_memory_mode = True
                         post_rescue_handoff_applied = False
+                        any_post_rescue_in_memory = True
                         steps_done = steps_before_chunk
                         rerun_chunk = True
                         print(
@@ -2803,6 +2805,8 @@ def run_dynamics_with_io(
                         )
                         if chunk_index + 1 < n_chunks:
                             post_rescue_in_memory_mode = True
+                            post_rescue_handoff_applied = False
+                            any_post_rescue_in_memory = True
                             print(
                                 f"overlap ({overlap_context}): post-rescue in-memory handoff "
                                 f"at global step {steps_done} for remaining chunks "
@@ -2872,7 +2876,7 @@ def run_dynamics_with_io(
             chunk_index += 1
         completed = True
         if (
-            post_rescue_in_memory_mode
+            any_post_rescue_in_memory
             and io is not None
             and io.restart_write is not None
             and steps_done >= total_nstep - 1
