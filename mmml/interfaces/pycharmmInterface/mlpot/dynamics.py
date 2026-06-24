@@ -2969,8 +2969,8 @@ def _sd_kwargs_from_config(config: MinimizeWithMlpotConfig) -> dict[str, Any]:
         "tolgrd": config.tolgrd,
         # Do not rebuild nonbond/MLpot pair lists each SD step (mlpot_update can
         # segfault when all atoms are ML and the atom-pair list is empty).
-        "inbfrq":1,
-        "ihbfrq":1,
+        "inbfrq": 50,
+        "ihbfrq": 50,
     }
     if config.save and config.dcd_path is not None and config.dcd_nsavc > 0:
         kw["iuncrd"] = config.dcd_unit
