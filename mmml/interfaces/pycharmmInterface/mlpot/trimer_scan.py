@@ -165,9 +165,13 @@ def run_scan_2d(
 def default_scan_2d_metric_keys(*, include_mm: bool = True) -> tuple[str, ...]:
     keys = (
         "energy_kcal",
+        "hybrid_energy_kcal",
         "internal_E_kcal",
         "ml_2b_E_kcal",
         "dH_kcal",
+        "flat_bottom_E_kcal",
+        "com_restraint_E_kcal",
+        "com_restraint_min_dist_A",
         "charmm_ENER_kcal",
         "charmm_USER_kcal",
         "callback_energy_kcal",
