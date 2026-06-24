@@ -53,7 +53,7 @@ class PbcNbondCutoffs:
             "(CHARMM requires cutoffs < L/2)"
         )
 
-    def as_pbc_nbond_kwargs(self, *, nbxmod: int = 5) -> dict[str, Any]:
+    def as_pbc_nbond_kwargs(self, *, nbxmod: int = 1) -> dict[str, Any]:
         return pbc_nbond_kwargs(
             nbxmod=nbxmod,
             cutnb=self.cutnb,
@@ -127,7 +127,7 @@ def pbc_nbond_cutoffs(
 
 def vacuum_nbond_kwargs(
     *,
-    nbxmod: int = 5,
+    nbxmod: int = 1,
     cutnb: float = VACUUM_CUTNB,
     ctonnb: float = VACUUM_CTONNB,
     ctofnb: float = VACUUM_CTOFNB,
@@ -149,7 +149,7 @@ def vacuum_nbond_kwargs(
 
 def pbc_nbond_kwargs(
     *,
-    nbxmod: int = 5,
+    nbxmod: int = 1,
     cutnb: float = VACUUM_CUTNB,
     cutim: float | None = None,
     ctonnb: float = VACUUM_CTONNB,
