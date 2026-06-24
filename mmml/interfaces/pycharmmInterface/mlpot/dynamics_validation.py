@@ -250,6 +250,17 @@ def read_restart_last_step(path: Path) -> int | None:
     if not lines:
         return None
 
+    # Check for negative step counter on the REST line first (indicates an abort)
+    if lines[0].strip().upper().startswith("REST"):
+        header = lines[0].split()
+        if len(header) >= 3:
+            try:
+                val = int(header[2])
+                if val < 0:
+                    return val
+            except ValueError:
+                pass
+
     for i, raw in enumerate(lines):
         tag = raw.strip().split()[0] if raw.strip() else ""
         if not (tag.startswith("!NATOM") or tag.startswith("NATOM")):
