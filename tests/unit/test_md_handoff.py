@@ -832,6 +832,38 @@ def test_save_handoff_automatically_resolves_template(nve_stub: Path, tmp_path: 
     np.testing.assert_allclose(reloaded.positions, pos, rtol=1e-5, atol=1e-5)
 
 
+def test_save_handoff_to_res_charmm_write_fails_falls_back_to_patching(
+    nve_stub: Path, tmp_path: Path
+) -> None:
+    from unittest.mock import patch
+    from mmml.cli.run.md_handoff import save_handoff_to_res, load_handoff_from_res
+
+    # State we want to save (20 atoms to match nve_stub)
+    pos = np.random.default_rng(42).random((20, 3))
+    state = MdHandoffState(
+        positions=pos,
+        atomic_numbers=np.ones(20, dtype=int),
+    )
+    out = tmp_path / "patched_fallback.res"
+
+    # Mock _write_handoff_restart_via_charmm to raise ValueError
+    with patch(
+        "mmml.cli.run.md_handoff._write_handoff_restart_via_charmm",
+        side_effect=ValueError("Simulated validation failure"),
+    ), patch(
+        "mmml.cli.run.md_handoff.pycharmm",
+        create=True,
+    ):
+        res_path = save_handoff_to_res(state, out, template_res=nve_stub)
+        assert res_path == out
+        assert out.is_file()
+
+        # It should have successfully patched using the fallback offline path!
+        reloaded = load_handoff_from_res(out)
+        np.testing.assert_allclose(reloaded.positions, pos, rtol=1e-5, atol=1e-5)
+
+
+
 
 
 
