@@ -247,7 +247,10 @@ class DecomposedMlpotCalculator:
     ) -> tuple[jnp.ndarray, jnp.ndarray, bool]:
         if not self.do_mm or self._get_update_fn is None:
             return _DUMMY_MM_PAIR_IDX, _DUMMY_MM_PAIR_MASK, False
-        update_fn = self._get_update_fn(pos, self.cutoff_params, box=box)
+        update_fn = getattr(self, "_cached_update_fn", None)
+        if update_fn is None:
+            update_fn = self._get_update_fn(pos, self.cutoff_params, box=box)
+            self._cached_update_fn = update_fn
         if update_fn is None:
             return _DUMMY_MM_PAIR_IDX, _DUMMY_MM_PAIR_MASK, False
         box_np = _box_numpy_for_update(box)
