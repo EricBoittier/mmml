@@ -1416,19 +1416,24 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             if not args.quiet:
                 print(f"\nInstability detected (GRMS {current_grms:.4f} > max {max_grms:.4f}). Attempting jiggle and minimize recovery...", flush=True)
             from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import apply_charmm_position_noise
-            from mmml.interfaces.pycharmmInterface.mlpot.setup import RECOVERY_NBXMOD
-            import pycharmm.lingo
-            
-            pycharmm.lingo.charmm_script(
-                f"nbonds nbxmod {RECOVERY_NBXMOD}\nmini sd nstep {mini_nstep}\n"
+            from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+                BondedMmMiniConfig,
+                minimize_bonded_mm_recovery,
             )
+            recovery_config = BondedMmMiniConfig(
+                nstep_sd=mini_nstep,
+                nprint=max(1, int(getattr(args, "nprint", 100))),
+                tolenr=float(getattr(args, "charmm_tolenr", 1e-3)),
+                tolgrd=float(getattr(args, "charmm_tolgrd", 1e-3)),
+                verbose=not bool(args.quiet),
+                show_energy=False,
+            )
+            minimize_bonded_mm_recovery(ctx, recovery_config)
             
             # Apply uniform noise (amplitude 0.05 Å) to break symmetry
             apply_charmm_position_noise(amplitude_A=0.05, distribution="uniform")
             
-            pycharmm.lingo.charmm_script(
-                f"nbonds nbxmod {RECOVERY_NBXMOD}\nmini sd nstep {mini_nstep}\nenergy\n"
-            )
+            minimize_bonded_mm_recovery(ctx, recovery_config)
             
             # Refresh GRMS after recovery attempt
             refresh_mlpot_energy_and_grms(

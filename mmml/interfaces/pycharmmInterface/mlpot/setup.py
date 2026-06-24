@@ -592,11 +592,27 @@ RECOVERY_NBXMOD = 2
 #   5 = exclude 1-2, 1-3, and special 1-4 (normal production MD)
 
 
+def _is_all_ml_pbc_context(ctx: MlpotContext) -> bool:
+    if not bool(getattr(ctx, "use_pbc", False)):
+        return False
+    ml_selection = getattr(ctx, "ml_selection", None)
+    if ml_selection is None:
+        return False
+    try:
+        n_ml = len(ml_selection.get_atom_indexes())
+        n_total = int(_import_pycharmm().coor.get_natom())
+    except Exception:
+        return False
+    return n_total > 0 and n_ml >= n_total
+
+
 def apply_recovery_nbonds(ctx: MlpotContext, *, nbxmod: int = RECOVERY_NBXMOD) -> None:
     """Temporary nonbond settings for bonded rescue SD (``NBXMOD 2``, VDW on in BLOCK)."""
     from mmml.interfaces.pycharmmInterface.nbonds_config import vacuum_nbond_kwargs
 
     pycharmm = _import_pycharmm()
+    if _is_all_ml_pbc_context(ctx):
+        return
     pycharmm.nbonds.update_bnbnd()
     if ctx.use_pbc and ctx.cubic_box_side_A is not None:
         from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import apply_pbc_nbonds
