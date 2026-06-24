@@ -1651,6 +1651,8 @@ def _refresh_restart_write_after_chunk(
     """
     if write_path is None:
         return
+    if _valid_restart_file(write_path) is not None:
+        return
     from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         rewrite_dynamics_restart_from_current_state,
     )
@@ -1720,6 +1722,8 @@ def _ensure_valid_overlap_scratch_restart(
     if not _is_overlap_scratch_restart(write_path, final_restart):
         return
     path = Path(write_path)
+    if _valid_restart_file(path) is not None:
+        return
     _refresh_overlap_scratch_restart(write_path, final_restart=final_restart)
     if _valid_restart_file(path) is not None:
         return
