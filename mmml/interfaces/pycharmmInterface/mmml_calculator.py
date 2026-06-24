@@ -973,7 +973,7 @@ def setup_calculator(
             # Ensure permutation length matches atom count
             if ml_perm.shape[0] == n_atoms:
                 ml_inv_perm = jnp.empty_like(ml_perm)
-                ml_inv_perm = ml_inv_perm.at[ml_perm].set(jnp.arange(n_atoms))
+                ml_inv_perm = ml_inv_perm.at[ml_perm].set(jnp.arange(n_atoms, dtype=ml_perm.dtype))
             else:
                 ml_perm = None
                 ml_inv_perm = None

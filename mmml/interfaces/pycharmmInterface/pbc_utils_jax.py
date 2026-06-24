@@ -147,7 +147,7 @@ def unwrap_groups(R: Array, groups: list[Array], cell: Array) -> Array:
     R_concat = jnp.concatenate(unwrapped_list, axis=0)
     order = jnp.concatenate(groups, axis=0)
     inv = jnp.empty_like(order)
-    inv = inv.at[order].set(jnp.arange(order.shape[0]))
+    inv = inv.at[order].set(jnp.arange(order.shape[0], dtype=order.dtype))
     return R_concat[inv]
 
 
