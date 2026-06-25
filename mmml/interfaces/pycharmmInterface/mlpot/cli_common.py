@@ -1338,6 +1338,28 @@ def charmm_grms() -> float:
     return float(energy.get_grms())
 
 
+def charmm_total_forces_kcalmol_A() -> np.ndarray:
+    """Per-atom CHARMM total forces from the last ``ENER FORCE`` (kcal/mol/Å)."""
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import pycharmm.coor as coor
+
+    fdf = coor.get_forces()
+    return np.column_stack(
+        [
+            fdf["dx"].to_numpy(dtype=float),
+            fdf["dy"].to_numpy(dtype=float),
+            fdf["dz"].to_numpy(dtype=float),
+        ]
+    )
+
+
+def charmm_total_forces_ev_angstrom() -> np.ndarray:
+    """Per-atom CHARMM total forces in eV/Å (canonical evaluate/compare units)."""
+    from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
+
+    return np.asarray(charmm_total_forces_kcalmol_A(), dtype=np.float64) / float(ev2kcalmol)
+
+
 def refresh_mlpot_energy_and_grms(
     mlpot_ctx: Any | None = None,
     *,

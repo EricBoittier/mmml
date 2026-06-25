@@ -636,3 +636,75 @@ def test_evaluate_jaxmd_uses_cutoff_parameters_from_cutoffs_module() -> None:
         "from mmml.interfaces.pycharmmInterface.calculator_utils import CutoffParameters"
         not in source
     )
+
+
+def test_charmm_total_forces_ev_angstrom_converts_kcal_units(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        charmm_total_forces_ev_angstrom,
+    )
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_total_forces_kcalmol_A",
+        lambda: np.array([[23.060548867, 0.0, 0.0]]),
+    )
+    forces = charmm_total_forces_ev_angstrom()
+    assert forces.shape == (1, 3)
+    assert forces[0, 0] == pytest.approx(1.0)
+
+
+def test_evaluate_pycharmm_returns_forces_ev_angstrom(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from mmml.cli.run.md_evaluate_npz import _evaluate_pycharmm
+    from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
+
+    forces_kcal = np.array([[23.060548867, 0.0, 0.0], [0.0, 46.121097734, 0.0]])
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.apply_charmm_output_from_args",
+        lambda _args: 50,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.setup_default_nbonds",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_checkpoint",
+        lambda _ckpt: Path("/tmp/ckpt"),
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.run_workflow._register_mlpot_context",
+        lambda *a, **k: (object(), object()),
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        lambda _pos: None,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        lambda *_a, **_k: 0.1,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_energy_row",
+        lambda: {"ENER": float(ev2kcalmol)},
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_total_forces_ev_angstrom",
+        lambda: forces_kcal / float(ev2kcalmol),
+    )
+
+    metrics = _evaluate_pycharmm(
+        Namespace(quiet=True, checkpoint="/tmp/ckpt"),
+        z=np.array([6, 1], dtype=int),
+        positions=np.zeros((2, 3)),
+        n_monomers=1,
+        use_pbc=False,
+        L=None,
+    )
+    assert metrics["energy_eV"] == pytest.approx(1.0)
+    np.testing.assert_allclose(
+        np.asarray(metrics["forces_eV_A"]),
+        forces_kcal / float(ev2kcalmol),
+    )
+    assert metrics["max_force_eV_A"] == pytest.approx(2.0)

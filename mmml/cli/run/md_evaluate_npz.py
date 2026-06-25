@@ -133,6 +133,77 @@ def normalize_metrics_to_ev(
     return out
 
 
+def _print_evaluate_npz_summary(
+    *,
+    backend: str,
+    metrics: dict[str, Any],
+    out_path: Path,
+    artifacts: dict[str, str],
+    result: dict[str, Any],
+    quiet: bool,
+    n_eval_frames: int | None = None,
+) -> None:
+    """Print evaluate-npz completion summary (one line when ``quiet``)."""
+    energy = metrics.get("energy_eV")
+    if isinstance(energy, list):
+        energy = float(np.mean(energy)) if energy else None
+    max_f = metrics.get("max_force_eV_A")
+    if isinstance(max_f, list):
+        max_f = float(np.max(max_f)) if max_f else None
+    if quiet:
+        parts = [f"mmml evaluate-npz ({backend}):"]
+        if energy is not None:
+            parts.append(f"E={float(energy):.6f} eV")
+        if max_f is not None:
+            parts.append(f"max|F|={float(max_f):.4f} eV/A")
+        if n_eval_frames is not None:
+            parts.append(f"frames={int(n_eval_frames)}")
+        parts.append(f"-> {out_path}")
+        print(" ".join(parts), flush=True)
+        return
+
+    print(f"mmml md-system evaluate-npz ({backend}):", flush=True)
+    print(f"  energy = {energy}", flush=True)
+    print(f"  max|F| = {max_f}", flush=True)
+    if n_eval_frames is not None:
+        print(f"  wrote {n_eval_frames} frames to trajectory", flush=True)
+    print(f"  wrote {out_path}", flush=True)
+    for label, path in artifacts.items():
+        print(f"  {label} = {path}", flush=True)
+    if "reference_compare" in result:
+        cmp = result["reference_compare"]
+        ref_units = result.get("reference_units")
+        if ref_units:
+            print(
+                f"  reference units: E={ref_units['energy']}, F={ref_units['force']}",
+                flush=True,
+            )
+        if cmp.get("status") == "error":
+            print(f"  compare error: {cmp.get('error')}", flush=True)
+        elif "delta_energy_eV" in cmp:
+            print(
+                f"  vs reference: dE = {cmp['delta_energy_eV']:.6f} eV "
+                f"(|dE| = {cmp['abs_delta_energy_eV']:.6f} eV)",
+                flush=True,
+            )
+        elif cmp.get("mean_delta_energy_eV") is not None:
+            print(
+                f"  vs reference: mean dE = {cmp['mean_delta_energy_eV']:.6f} eV "
+                f"(RMSE = {cmp['rmse_delta_energy_eV']:.6f} eV)",
+                flush=True,
+            )
+        if "force_rmse_eV_A" in cmp:
+            print(
+                f"  vs reference: force RMSE = {cmp['force_rmse_eV_A']:.6f} eV/A",
+                flush=True,
+            )
+        elif cmp.get("mean_force_rmse_eV_A") is not None:
+            print(
+                f"  vs reference: mean force RMSE = {cmp['mean_force_rmse_eV_A']:.6f} eV/A",
+                flush=True,
+            )
+
+
 def _linear_sum_assignment(cost: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     try:
         from scipy.optimize import linear_sum_assignment
@@ -1121,6 +1192,7 @@ def _evaluate_pycharmm(
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
         apply_charmm_output_from_args,
         charmm_energy_row,
+        charmm_total_forces_ev_angstrom,
         refresh_mlpot_energy_and_grms,
         resolve_pbc_box_side,
         resolve_use_pbc,
@@ -1156,20 +1228,26 @@ def _evaluate_pycharmm(
         args=args,
     )
     sync_charmm_positions(np.asarray(positions, dtype=np.float64))
-    grms = refresh_mlpot_energy_and_grms(ctx, context="evaluate-npz")
+    refresh_ctx = "" if bool(getattr(args, "quiet", False)) else "evaluate-npz"
+    grms = refresh_mlpot_energy_and_grms(ctx, context=refresh_ctx)
     charmm_row = charmm_energy_row()
     total_kcal = float(charmm_row.get("ENER", charmm_row.get("ENERGY", 0.0)))
-    return {
-        "energy_kcal_mol": total_kcal,
-        "energy_eV": total_kcal / float(ev2kcalmol),
-        "grms_kcal_mol_A": float(grms),
-        "charmm_energy_terms_kcal_mol": charmm_row,
-        "n_atoms": int(len(z)),
-        "n_monomers": int(n_monomers),
-        "pbc": bool(use_pbc),
-        "box_A": float(L) if L is not None else None,
-        "path": "pycharmm_mlpot_callback",
-    }
+    forces_ev = charmm_total_forces_ev_angstrom()[: int(len(z))]
+    return normalize_metrics_to_ev(
+        {
+            "energy_kcal_mol": total_kcal,
+            "energy_eV": total_kcal / float(ev2kcalmol),
+            "forces_eV_A": forces_ev,
+            "force_unit": "ev_angstrom",
+            "grms_kcal_mol_A": float(grms),
+            "charmm_energy_terms_kcal_mol": charmm_row,
+            "n_atoms": int(len(z)),
+            "n_monomers": int(n_monomers),
+            "pbc": bool(use_pbc),
+            "box_A": float(L) if L is not None else None,
+            "path": "pycharmm_mlpot_callback",
+        }
+    )
 
 
 def _prepare_evaluate_npz_context(args: Any) -> dict[str, Any]:
@@ -1613,22 +1691,15 @@ def _evaluate_reference_trajectory(args: Any, ctx: dict[str, Any]) -> int:
         result["artifacts"] = artifacts
     out_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
 
-    if not getattr(args, "quiet", False):
-        print(f"  wrote {n_eval} frames to trajectory", flush=True)
-        print(f"  wrote {out_path}", flush=True)
-        for label, path in artifacts.items():
-            print(f"  {label} = {path}", flush=True)
-        if compare_summary.get("mean_delta_energy_eV") is not None:
-            print(
-                f"  vs reference: mean dE = {compare_summary['mean_delta_energy_eV']:.6f} eV "
-                f"(RMSE = {compare_summary['rmse_delta_energy_eV']:.6f} eV)",
-                flush=True,
-            )
-        if compare_summary.get("mean_force_rmse_eV_A") is not None:
-            print(
-                f"  vs reference: mean force RMSE = {compare_summary['mean_force_rmse_eV_A']:.6f} eV/A",
-                flush=True,
-            )
+    _print_evaluate_npz_summary(
+        backend=backend,
+        metrics=result.get("metrics", {}),
+        out_path=out_path,
+        artifacts=artifacts,
+        result=result,
+        quiet=bool(getattr(args, "quiet", False)),
+        n_eval_frames=n_eval,
+    )
     return 0
 
 
@@ -1841,32 +1912,12 @@ def run_evaluate_npz(args: Any) -> int:
         result["artifacts"] = artifacts
 
     out_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
-    if not getattr(args, "quiet", False):
-        print(f"mmml md-system evaluate-npz ({backend}):", flush=True)
-        print(f"  energy = {metrics.get('energy_eV', metrics.get('energy_kcal_mol'))}", flush=True)
-        print(f"  max|F| = {metrics.get('max_force_eV_A', metrics.get('grms_kcal_mol_A'))}", flush=True)
-        print(f"  wrote {out_path}", flush=True)
-        for label, path in artifacts.items():
-            print(f"  {label} = {path}", flush=True)
-        if "reference_compare" in result:
-            cmp = result["reference_compare"]
-            ref_units = result.get("reference_units")
-            if ref_units and not getattr(args, "quiet", False):
-                print(
-                    f"  reference units: E={ref_units['energy']}, F={ref_units['force']}",
-                    flush=True,
-                )
-            if cmp.get("status") == "error":
-                print(f"  compare error: {cmp.get('error')}", flush=True)
-            elif "delta_energy_eV" in cmp:
-                print(
-                    f"  vs reference: dE = {cmp['delta_energy_eV']:.6f} eV "
-                    f"(|dE| = {cmp['abs_delta_energy_eV']:.6f} eV)",
-                    flush=True,
-                )
-            if "force_rmse_eV_A" in cmp:
-                print(
-                    f"  vs reference: force RMSE = {cmp['force_rmse_eV_A']:.6f} eV/A",
-                    flush=True,
-                )
+    _print_evaluate_npz_summary(
+        backend=backend,
+        metrics=metrics,
+        out_path=out_path,
+        artifacts=artifacts,
+        result=result,
+        quiet=bool(getattr(args, "quiet", False)),
+    )
     return 0
