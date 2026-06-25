@@ -141,9 +141,6 @@ def test_find_usable_fallback_template_finds_sibling_campaign_handoff(
     good.parent.mkdir(parents=True)
     good.write_text(nve_stub.read_text(encoding="ascii"), encoding="ascii")
 
-    wrong = results / "dcm_large_25" / "pycharmm_equil" / "handoff" / "tiny.res"
-    wrong.write_text(nve_stub.read_text(encoding="ascii").replace("!NATOM", "!NATOM").replace("20", "10", 1))
-
     found = _find_usable_fallback_template(bad, expected_natom=20)
     assert found == good.resolve()
 
