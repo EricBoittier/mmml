@@ -229,6 +229,51 @@ def restart_has_nonfinite_coordinates(path: Path | None) -> bool:
     return False
 
 
+def charmm_coordinates_are_finite() -> bool:
+    """True when all CHARMM Cartesian coordinates are finite."""
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import pycharmm.coor as coor
+
+    pos = coor.get_positions()
+    arr = pos[["x", "y", "z"]].to_numpy(dtype=np.float64).reshape(-1)
+    if arr.size == 0:
+        return True
+    return bool(np.all(np.isfinite(arr)))
+
+
+def charmm_dynamics_energy_is_finite() -> bool:
+    """True when the current CHARMM energy row has no NaN/Inf scalars."""
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import pycharmm.energy as energy
+
+    try:
+        row = energy.get_energy().iloc[0]
+    except Exception:
+        return False
+    for value in row.to_dict().values():
+        if isinstance(value, (int, float, np.floating)):
+            if not np.isfinite(float(value)):
+                return False
+    return True
+
+
+def charmm_dynamics_state_is_finite() -> bool:
+    """Coordinates and energy row are finite after a dynamics segment."""
+    return charmm_coordinates_are_finite() and charmm_dynamics_energy_is_finite()
+
+
+def validate_charmm_dynamics_state_after_chunk(*, context: str) -> None:
+    """Raise when coordinates or energies are non-finite (barostat / MLpot blow-up)."""
+    if charmm_dynamics_state_is_finite():
+        return
+    raise RuntimeError(
+        f"{context}: CHARMM dynamics produced non-finite coordinates or energy "
+        "(NPT barostat instability or MLpot blow-up). Use a shorter timestep, "
+        "tighter echeck, or rely on CPT stability chunking; do not continue "
+        "integration — Fortran image updates can segfault on NaN coordinates."
+    )
+
+
 def read_restart_last_step(path: Path) -> int | None:
     """Return the accumulated dynamics step from a CHARMM restart file.
 
