@@ -1303,9 +1303,8 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
 
             pretreat_restart_path = find_latest_pretreat_mm_restart(paths)
             # Keep in-memory pretreat coords/crystal/IMAGE; do not READ restart here.
-            # Fresh equi leaves a valid PBC state in RAM; re-reading clobbers IMAGE
-            # lists (0 image pairs) and offline coord parsing can desync the cell.
-            # Resume paths call restore_charmm_state_from_restart inside pretreat.
+            # Do not call UPDATE or prepare_charmm_pbc after pretreat — pretreat NVT/CPT
+            # already left valid IMAGE lists; extra IMAGE/crystal work desyncs MLpot MIC.
             box_side = sync_workflow_pbc_box_side_after_mm_pretreat(
                 box_side,
                 pretreat_restart=pretreat_restart_path,
