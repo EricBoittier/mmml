@@ -1,6 +1,9 @@
 """Numbered minimize snapshot naming."""
 
 from pathlib import Path
+from unittest import mock
+
+import pytest
 
 from mmml.interfaces.pycharmmInterface.mlpot.minimize_artifacts import (
     CHARMM_MM_PRE,
@@ -9,6 +12,10 @@ from mmml.interfaces.pycharmmInterface.mlpot.minimize_artifacts import (
     legacy_mlpot_mini_paths,
     rescue_snapshot_spec,
     snapshot_file_paths,
+)
+from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    DynamicsOverlapConfig,
+    save_stabilized_overlap_rescue_snapshot,
 )
 
 
@@ -39,3 +46,33 @@ def test_registry_tracks_last_rescue_crd(tmp_path: Path) -> None:
     crd.write_text("dummy", encoding="utf-8")
     reg.record(spec, {"crd": crd, "pdb": crd.with_suffix(".pdb")})
     assert reg.last_rescue_crd == crd.resolve()
+
+
+def test_save_stabilized_overlap_rescue_snapshot_uses_hybrid_grms(tmp_path: Path):
+    reg = MinimizeArtifactRegistry(tmp_path, "dcm_20")
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        n_monomers=2,
+        artifact_registry=reg,
+    )
+    ctx = mock.Mock()
+    written = {
+        "crd": tmp_path / "10_rescue_equi_at_step_2000_dcm_20.crd",
+        "pdb": tmp_path / "10_rescue_equi_at_step_2000_dcm_20.pdb",
+    }
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
+        return_value=12.5,
+    ) as hybrid_grms, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.minimize_artifacts.save_snapshot_from_charmm",
+        return_value=written,
+    ) as save_snap:
+        save_stabilized_overlap_rescue_snapshot(
+            ctx,
+            cfg,
+            label="EQUI at step 2000",
+        )
+    hybrid_grms.assert_called_once()
+    save_snap.assert_called_once()
+    assert save_snap.call_args.kwargs["grms_kcalmol_A"] == pytest.approx(12.5)
+    assert save_snap.call_args.kwargs["title"] == "Geometry rescue: EQUI at step 2000"
