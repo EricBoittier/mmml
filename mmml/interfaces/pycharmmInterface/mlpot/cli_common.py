@@ -891,18 +891,35 @@ def build_ase_cluster(
     residue: str,
     n_molecules: int,
     spacing: float,
+    *,
+    reference_npz: str | Path | None = None,
+    frame: int = 0,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Build a homogeneous CHARMM PSF-ordered cluster for ASE / hybrid calculators.
 
     Residues with bundled 3D templates (ACO, MEOH) use those templates; all others
-    use the make-res monomer recipe plus composition placement (never flat IC tables).
+    use IC + SD-only monomer relaxation plus composition placement (no ABNR / make-res).
+
+    When ``reference_npz`` is set, build the PSF and load coordinates from that file
+    (must be PSF-order and match ``residue`` × ``n_molecules``).
     """
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-    from mmml.cli.run.md_pbc_suite.cluster import _build_psf_ordered_cluster
+    from mmml.cli.run.md_pbc_suite.cluster import (
+        _build_psf_ordered_cluster,
+        build_cluster_from_reference_npz,
+    )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
-    z, r = _build_psf_ordered_cluster(residue.upper(), n_molecules, spacing)
-    sync_charmm_positions(r)
+    if reference_npz is not None:
+        z, r = build_cluster_from_reference_npz(
+            residue.upper(),
+            n_molecules,
+            reference_npz,
+            frame=frame,
+        )
+    else:
+        z, r = _build_psf_ordered_cluster(residue.upper(), n_molecules, spacing)
+        sync_charmm_positions(r)
     validate_cluster_geometry(r, n_molecules=n_molecules)
     return z, r
 

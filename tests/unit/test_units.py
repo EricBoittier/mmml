@@ -165,6 +165,25 @@ def test_infer_reference_units_from_force_magnitudes(tmp_path: Path) -> None:
     assert infer_reference_force_unit(ha_path) == "hartree_bohr"
 
 
+def test_load_reference_energies_does_not_recursively_infer_units(tmp_path: Path) -> None:
+    """Regression: load_reference_energies_from_npz must not recurse via infer."""
+    from mmml.data.units import load_reference_energies_from_npz
+
+    path = tmp_path / "ref.npz"
+    np.savez_compressed(
+        path,
+        E=np.array([-43.0, -44.0]),
+        F=np.random.default_rng(0).normal(size=(2, 10, 3)) * 2.0,
+        R=np.zeros((2, 10, 3)),
+        Z=np.ones((2, 10), dtype=int),
+        N=np.array([10, 10], dtype=int),
+    )
+    with np.load(path) as data:
+        e, unit = load_reference_energies_from_npz(data, path=path)
+    assert unit == "ev"
+    np.testing.assert_allclose(e, [-43.0, -44.0])
+
+
 def test_normalize_to_canonical_converts_hartree(tmp_path: Path) -> None:
     manifest = UnitsManifestV2(
         arrays={"E": "hartree", "F": "hartree_bohr", "R": "angstrom"},

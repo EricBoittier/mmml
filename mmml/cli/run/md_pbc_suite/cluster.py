@@ -157,6 +157,131 @@ def _monomer_geometry_is_3d(coords: np.ndarray, *, min_axis_span: float = 0.3) -
     return float(span[1]) >= min_axis_span and float(span[2]) >= min_axis_span
 
 
+def ensure_monomer_3d_coords(
+    coords: np.ndarray,
+    *,
+    amplitude: float = 0.8,
+) -> np.ndarray:
+    """Break collinear/planar monomer IC coordinates with a deterministic 3D spread."""
+    out = np.asarray(coords, dtype=np.float64).copy()
+    if out.ndim != 2 or out.shape[1] != 3:
+        raise ValueError(f"coords must be (N, 3), got {out.shape}")
+    n = int(out.shape[0])
+    if n < 2:
+        return out
+    com = out.mean(axis=0)
+    out -= com
+    span = np.ptp(out, axis=0)
+    if float(span[1]) < 0.3:
+        out[min(1, n - 1), 1] += float(amplitude)
+    if float(span[2]) < 0.3:
+        out[min(2, n - 1), 2] += float(amplitude)
+    out += com
+    return out
+
+
+def relax_monomer_geometry_for_cluster(
+    residue: str,
+    *,
+    nstep_sd: int = 400,
+    tolenr: float = 1e-2,
+    tolgrd: float = 1e-2,
+) -> tuple[np.ndarray, list[str], np.ndarray]:
+    """Build a 3D monomer using IC + SD-only relaxation (avoids ABNR segfaults on clusters)."""
+    from mmml.cli.run.md_pbc_suite.ase import _read_cgenff_toppar, _reset_pycharmm_system
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import prepare_charmm_vacuum
+    from mmml.interfaces.pycharmmInterface.nbonds_config import apply_vacuum_nbonds
+
+    import pycharmm.minimize as charmm_minimize
+
+    residue = residue.upper()
+    _reset_pycharmm_system()
+    prepare_charmm_vacuum()
+    _read_cgenff_toppar()
+    read.sequence_string(residue)
+    gen.new_segment(seg_name="TMP", setup_ic=True)
+    ic.prm_fill(replace_all=True)
+    ic.build()
+
+    atom_names = [str(x) for x in np.asarray(psf.get_atype(), dtype=str)]
+    coords = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=np.float64)
+    if int(coords.shape[0]) != len(atom_names):
+        raise RuntimeError(
+            f"PSF atom-name count mismatch while generating {residue}: "
+            f"{len(atom_names)} vs positions {coords.shape[0]}"
+        )
+
+    if not _monomer_geometry_is_3d(coords):
+        coords = ensure_monomer_3d_coords(coords)
+        coor.set_positions(pd.DataFrame(coords, columns=["x", "y", "z"]))
+
+    pyci.pycharmm_quiet()
+    apply_vacuum_nbonds(nbxmod=1)
+    charmm_minimize.run_sd(nstep=int(nstep_sd), tolenr=float(tolenr), tolgrd=float(tolgrd))
+    coords = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=np.float64)
+
+    if not _monomer_geometry_is_3d(coords):
+        coords = ensure_monomer_3d_coords(coords)
+        coor.set_positions(pd.DataFrame(coords, columns=["x", "y", "z"]))
+        apply_vacuum_nbonds(nbxmod=1)
+        charmm_minimize.run_sd(nstep=int(nstep_sd), tolenr=float(tolenr), tolgrd=float(tolgrd))
+        coords = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=np.float64)
+
+    if not _monomer_geometry_is_3d(coords):
+        span = np.ptp(coords, axis=0)
+        raise RuntimeError(
+            f"Monomer {residue} not 3D after SD relaxation "
+            f"(spans Å x={span[0]:.2f} y={span[1]:.2f} z={span[2]:.2f})"
+        )
+
+    z = np.asarray(get_Z_from_psf(), dtype=int)
+    if int(z.shape[0]) != len(atom_names):
+        raise RuntimeError(
+            f"PSF Z count mismatch for {residue}: {z.shape[0]} vs {len(atom_names)} atom names"
+        )
+    return coords, atom_names, z
+
+
+def build_cluster_from_reference_npz(
+    residue: str,
+    n_molecules: int,
+    reference_npz: str | Path,
+    *,
+    frame: int = 0,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Build CHARMM PSF for ``residue``×``n_molecules`` and load positions from reference NPZ."""
+    from mmml.cli.run.md_pbc_suite.ase import _build_cluster_psf_topology_only
+    from mmml.interfaces.pycharmmInterface.cluster_geometry import reference_frame_geometry
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+
+    ref_z, ref_r = reference_frame_geometry(reference_npz, frame=frame)
+    n_atoms = int(len(ref_z))
+    if n_atoms % int(n_molecules) != 0:
+        raise ValueError(
+            f"Reference frame has {n_atoms} atoms, not divisible by n_molecules={n_molecules}"
+        )
+    atoms_per = n_atoms // int(n_molecules)
+    residue = residue.upper()
+    composition = [(residue, int(n_molecules))]
+    atoms_per_list = [atoms_per] * int(n_molecules)
+    residue_labels = [residue] * int(n_molecules)
+
+    z = _build_cluster_psf_topology_only(
+        composition,
+        expected_atoms=n_atoms,
+        atoms_per_list=atoms_per_list,
+        residue_labels=residue_labels,
+    )
+    if not np.array_equal(z, ref_z):
+        raise ValueError(
+            f"Reference atomic numbers {ref_z.tolist()} != PSF order {z.tolist()}. "
+            "Use a PSF-order reference NPZ (e.g. *_psf_order.npz) matching the composition."
+        )
+    coor.set_positions(pd.DataFrame(ref_r, columns=["x", "y", "z"]))
+    sync_charmm_positions(ref_r)
+    return z, ref_r
+
+
 def build_minimized_monomer_for_packmol(
     residue: str,
     *,

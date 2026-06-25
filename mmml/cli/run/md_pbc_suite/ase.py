@@ -299,11 +299,13 @@ def _load_packmol_sphere_positions(
 def _residue_geometries_for_composition(
     composition: list[tuple[str, int]],
 ) -> dict[str, tuple[np.ndarray, list[str], np.ndarray]]:
-    """Relaxed monomer coords, atom names, and Z per residue type (make-res recipe)."""
+    """Relaxed monomer coords, atom names, and Z per residue type (SD-only cluster recipe)."""
+    from mmml.cli.run.md_pbc_suite.cluster import relax_monomer_geometry_for_cluster
+
     residue_geometries: dict[str, tuple[np.ndarray, list[str], np.ndarray]] = {}
     for residue, _count in composition:
         if residue not in residue_geometries:
-            residue_geometries[residue] = _generate_residue_with_make_res_recipe(residue)
+            residue_geometries[residue] = relax_monomer_geometry_for_cluster(residue)
     return residue_geometries
 
 
@@ -385,7 +387,9 @@ def _build_cluster_psf_from_composition(
     else:
         for residue, _count in composition:
             if residue not in residue_geometries:
-                residue_geometries[residue] = _generate_residue_with_make_res_recipe(residue)
+                from mmml.cli.run.md_pbc_suite.cluster import relax_monomer_geometry_for_cluster
+
+                residue_geometries[residue] = relax_monomer_geometry_for_cluster(residue)
 
     sequence_items: list[str] = []
     for residue, count in composition:
