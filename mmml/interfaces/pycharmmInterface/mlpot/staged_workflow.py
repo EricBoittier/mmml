@@ -930,6 +930,65 @@ def _configure_npt_dynamics_start(
         )
 
 
+def _maybe_configure_cpt_in_memory_overlap_start(
+    *,
+    stage: Literal["mini", "heat", "nve", "equi", "prod"],
+    kw: dict[str, Any],
+    io: CharmmTrajectoryFiles,
+    use_memory: bool,
+    prev_restart_is_current_state: bool,
+    stage_overlap: DynamicsOverlapConfig | None,
+    mlpot_ctx: Any,
+    nstep: int,
+    args: argparse.Namespace,
+    timestep_ps: float,
+    use_pbc: bool,
+    temp: float,
+    box_side: float | None,
+) -> Path | None:
+    """Fresh CPT barostat when EQUI/PROD continues in RAM without overlap READYN."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        overlap_first_chunk_skips_readyn,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        resolve_overlap_memory_handoff,
+    )
+
+    if stage not in ("equi", "prod"):
+        return None
+    if not bool(kw.get("cpt")):
+        return None
+    if not (prev_restart_is_current_state or use_memory):
+        return None
+
+    overlap_skip = overlap_first_chunk_skips_readyn(
+        overlap=stage_overlap,
+        mlpot_ctx=mlpot_ctx,
+        nstep=nstep,
+        nsavc=kw.get("nsavc"),
+        restart_read=io.restart_read,
+        memory_handoff_default=resolve_overlap_memory_handoff(args),
+    )
+    if not (use_memory or overlap_skip):
+        return None
+
+    restart_path: Path | None = None
+    if use_memory or overlap_skip:
+        restart_path = _seed_restart_for_memory_handoff(io, kw, stage=stage)
+    _configure_npt_dynamics_start(
+        kw,
+        io,
+        coords_in_memory=True,
+        restart_from_file=False,
+        timestep_ps=timestep_ps,
+        use_pbc=use_pbc,
+        quiet=bool(args.quiet),
+        temp=temp,
+        box_side=box_side,
+    )
+    return restart_path
+
+
 def _can_seed_stage_from_memory(
     rread: Path | None,
     *,
@@ -1930,19 +1989,6 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         memory_handoff=use_memory,
                     )
                     kw["nsavc"] = dcd_nsavc
-                    if use_memory:
-                        restart_path = _seed_restart_for_memory_handoff(seg_io, kw, stage="equi")
-                        _configure_npt_dynamics_start(
-                            kw,
-                            seg_io,
-                            coords_in_memory=True,
-                            restart_from_file=False,
-                            timestep_ps=timestep_ps,
-                            use_pbc=charmm_pbc,
-                            quiet=bool(args.quiet),
-                            temp=temp,
-                            box_side=box_side,
-                        )
                     _sync_mlpot_cell_before_npt(
                         "equi",
                         mlpot_pbc=mlpot_pbc,
@@ -1977,6 +2023,23 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         restart_prefix=f"equi_{tag}",
                         restart_write=seg_io.restart_write,
                     )
+                    cpt_seed = _maybe_configure_cpt_in_memory_overlap_start(
+                        stage="equi",
+                        kw=kw,
+                        io=seg_io,
+                        use_memory=use_memory,
+                        prev_restart_is_current_state=prev_restart_is_current_state,
+                        stage_overlap=stage_overlap,
+                        mlpot_ctx=ctx,
+                        nstep=nstep,
+                        args=args,
+                        timestep_ps=timestep_ps,
+                        use_pbc=charmm_pbc,
+                        temp=temp,
+                        box_side=box_side,
+                    )
+                    if cpt_seed is not None:
+                        restart_path = cpt_seed
                     run_dynamics_with_io(
                         kw,
                         seg_io,
@@ -2072,20 +2135,6 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                             flush=True,
                         )
                     restart_path = Path(rread) if restart and rread else None
-                    if use_memory:
-                        seed = _seed_restart_for_memory_handoff(seg_io, kw, stage="prod")
-                        restart_path = seed
-                        _configure_npt_dynamics_start(
-                            kw,
-                            seg_io,
-                            coords_in_memory=True,
-                            restart_from_file=False,
-                            timestep_ps=timestep_ps,
-                            use_pbc=charmm_pbc,
-                            quiet=bool(args.quiet),
-                            temp=temp,
-                            box_side=box_side,
-                        )
                     _sync_mlpot_cell_before_npt(
                         "prod",
                         mlpot_pbc=mlpot_pbc,
@@ -2120,6 +2169,23 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         restart_prefix=f"prod_{tag}",
                         restart_write=seg_io.restart_write,
                     )
+                    cpt_seed = _maybe_configure_cpt_in_memory_overlap_start(
+                        stage="prod",
+                        kw=kw,
+                        io=seg_io,
+                        use_memory=use_memory,
+                        prev_restart_is_current_state=prev_restart_is_current_state,
+                        stage_overlap=stage_overlap,
+                        mlpot_ctx=ctx,
+                        nstep=nstep,
+                        args=args,
+                        timestep_ps=timestep_ps,
+                        use_pbc=charmm_pbc,
+                        temp=temp,
+                        box_side=box_side,
+                    )
+                    if cpt_seed is not None:
+                        restart_path = cpt_seed
                     run_dynamics_with_io(
                         kw,
                         seg_io,
@@ -2235,20 +2301,8 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     io, kw, stage="heat"
                 )
                 restart_path = overlap_prior_restart
-            elif use_memory:
+            elif use_memory and stage not in ("equi", "prod"):
                 restart_path = _seed_restart_for_memory_handoff(io, kw, stage=stage)
-                if stage in ("equi", "prod"):
-                    _configure_npt_dynamics_start(
-                        kw,
-                        io,
-                        coords_in_memory=True,
-                        restart_from_file=False,
-                        timestep_ps=timestep_ps,
-                        use_pbc=charmm_pbc,
-                        quiet=bool(args.quiet),
-                        temp=temp,
-                        box_side=box_side,
-                    )
             _sync_mlpot_cell_before_npt(
                 stage,
                 mlpot_pbc=mlpot_pbc,
@@ -2400,6 +2454,23 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 prev_restart=overlap_prior_restart,
                 restart_write=io.restart_write,
             )
+            cpt_seed = _maybe_configure_cpt_in_memory_overlap_start(
+                stage=stage,
+                kw=kw,
+                io=io,
+                use_memory=use_memory,
+                prev_restart_is_current_state=prev_restart_is_current_state,
+                stage_overlap=stage_overlap,
+                mlpot_ctx=ctx,
+                nstep=nstep,
+                args=args,
+                timestep_ps=timestep_ps,
+                use_pbc=charmm_pbc,
+                temp=temp,
+                box_side=box_side,
+            )
+            if cpt_seed is not None:
+                restart_path = cpt_seed
             run_dynamics_with_io(
                 kw,
                 io,
