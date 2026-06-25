@@ -1276,6 +1276,11 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 # Default: 100 kcal/mol per atom — catches severe Packmol clash energies
                 # (e.g. 17M kcal/mol for 890 atoms) while ignoring normal ML energies.
                 _pre_sd_threshold = 100.0 * float(n_atoms)
+            _pre_sd_grms = getattr(args, "pre_sd_recovery_grms_threshold", None)
+            if _pre_sd_grms is None:
+                _pre_sd_grms = resolve_max_grms_before_dyn(
+                    args, n_mol, n_atoms, pbc=charmm_pbc
+                )
             minimize_with_mlpot(
                 MinimizeWithMlpotConfig(
                     fixed_ml_selection=fix_sel,
@@ -1298,6 +1303,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     test_first=resolve_test_first_config(args),
                     show_energy=show_energy,
                     pre_sd_bonded_recovery_energy_kcalmol=_pre_sd_threshold,
+                    pre_sd_bonded_recovery_grms_kcalmol_A=float(_pre_sd_grms),
                     pre_sd_bonded_recovery_nstep=int(
                         getattr(args, "bonded_mm_mini_steps", 200) or 200
                     ),
@@ -1414,7 +1420,58 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         current_grms = float(charmm_grms())
         if current_grms > max_grms:
             if not args.quiet:
-                print(f"\nInstability detected (GRMS {current_grms:.4f} > max {max_grms:.4f}). Attempting jiggle and minimize recovery...", flush=True)
+                _mini_note = (
+                    " (--md-stages omits 'mini')"
+                    if "mini" not in stages
+                    else ""
+                )
+                print(
+                    f"\nInstability detected (GRMS {current_grms:.4f} > max {max_grms:.4f})"
+                    f"{_mini_note}: running MLpot SD recovery before dynamics...",
+                    flush=True,
+                )
+            fix_sel = select_by_resids(fix_resids) if fix_resids else None
+            _pre_sd_threshold = getattr(args, "pre_sd_recovery_energy_threshold", None)
+            if _pre_sd_threshold is None and getattr(args, "bonded_mm_mini", True):
+                _pre_sd_threshold = 100.0 * float(n_atoms)
+            _pre_sd_grms = getattr(args, "pre_sd_recovery_grms_threshold", None)
+            if _pre_sd_grms is None:
+                _pre_sd_grms = max_grms
+            minimize_with_mlpot(
+                MinimizeWithMlpotConfig(
+                    fixed_ml_selection=fix_sel,
+                    nstep=mini_nstep,
+                    nprint=mini_nprint,
+                    verbose=not args.quiet,
+                    reference_positions=get_charmm_positions_array(),
+                    pyCModel=pyCModel,
+                    mlpot_ctx=ctx,
+                    save=False,
+                    title="Pre-dynamics MLpot SD recovery",
+                    skip_if_crd_exists=False,
+                    test_first=resolve_test_first_config(args),
+                    show_energy=show_energy,
+                    pre_sd_bonded_recovery_energy_kcalmol=_pre_sd_threshold,
+                    pre_sd_bonded_recovery_grms_kcalmol_A=float(_pre_sd_grms),
+                    pre_sd_bonded_recovery_nstep=int(
+                        getattr(args, "bonded_mm_mini_steps", 200) or 200
+                    ),
+                )
+            )
+            sync_charmm_positions(get_charmm_positions_array())
+            refresh_mlpot_energy_and_grms(
+                ctx,
+                context="Pre-dynamics gate (post-MLpot SD)" if not args.quiet else "",
+            )
+            current_grms = float(charmm_grms())
+
+        if current_grms > max_grms:
+            if not args.quiet:
+                print(
+                    f"\nGRMS still {current_grms:.4f} after MLpot SD; "
+                    "attempting bonded-MM jiggle recovery...",
+                    flush=True,
+                )
             from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import apply_charmm_position_noise
             from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
                 BondedMmMiniConfig,
@@ -1429,12 +1486,12 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 show_energy=False,
             )
             minimize_bonded_mm_recovery(ctx, recovery_config)
-            
+
             # Apply uniform noise (amplitude 0.05 Å) to break symmetry
             apply_charmm_position_noise(amplitude_A=0.05, distribution="uniform")
-            
+
             minimize_bonded_mm_recovery(ctx, recovery_config)
-            
+
             # Refresh GRMS after recovery attempt
             refresh_mlpot_energy_and_grms(
                 ctx,
