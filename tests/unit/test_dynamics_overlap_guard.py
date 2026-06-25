@@ -2424,18 +2424,33 @@ def test_run_dynamics_chunk_strips_stale_iunwri(tmp_path):
     assert "iunrea" not in captured[0]
 
 
-def test_prepare_overlap_chunk_skips_upinb_when_mlpot_active():
+def test_prepare_overlap_chunk_skips_upinb_when_mlpot_active(tmp_path: Path):
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _prepare_overlap_chunk_after_restart,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
+    scratch = tmp_path / "heat.overlap_a.res"
+    scratch.write_text("REST\n")
     ctx = mock.Mock(spec=MlpotContext)
+    ctx.pyCModel = mock.Mock()
+    ctx.cubic_box_side_A = 50.0
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
-    ) as imp:
-        _prepare_overlap_chunk_after_restart(ctx)
+    ) as imp, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.run_workflow.sync_mlpot_pbc_cell_from_charmm",
+        return_value=50.0,
+    ) as sync_mic:
+        _prepare_overlap_chunk_after_restart(ctx, restart_read=scratch)
     imp.assert_not_called()
+    sync_mic.assert_called_once_with(
+        ctx.pyCModel,
+        fallback_side_A=50.0,
+        restart_path=scratch,
+        verbose=False,
+    )
+    assert ctx.cubic_box_side_A == pytest.approx(50.0)
+    assert ctx.charmm_cubic_box_side_A == pytest.approx(50.0)
 
 
 def test_prepare_post_rescue_overlap_handoff_assigns_velocities_in_memory():

@@ -152,6 +152,17 @@ def test_hoover_cpt_heat_ramp_target_and_overlap_chunk():
     assert chunk_kw["iasvel"] == 1
     assert chunk_kw["start"] is False
 
+    chunk_kw = {"restart": True}
+    apply_hoover_cpt_heat_ramp_overlap_chunk(
+        chunk_kw,
+        chunk_index=1,
+        steps_done=500,
+        ramp_spec=spec,
+        total_nstep=25000,
+        n_chunks=50,
+    )
+    assert chunk_kw["iasvel"] == 0
+
 
 def test_apply_heat_segment_ramp_kwargs_splits_ramp():
     kw = {"firstt": 0.0, "finalt": 240.0, "ihtfrq": 100, "tbath": 240.0}

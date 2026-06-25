@@ -871,7 +871,10 @@ def apply_hoover_cpt_heat_ramp_overlap_chunk(
     chunk_kw["finalt"] = float(ramp_spec["finalt"])
     chunk_kw["tbath"] = float(ramp_spec["finalt"])
     chunk_kw["hoover reft"] = target
-    chunk_kw["iasvel"] = 1
+    if bool(chunk_kw.get("restart")):
+        chunk_kw["iasvel"] = 0
+    else:
+        chunk_kw["iasvel"] = 1
     chunk_kw["start"] = False
 
 
@@ -2166,6 +2169,8 @@ def _refresh_segment_restart_after_overlap_rescue(
 
 def _prepare_overlap_chunk_after_restart(
     mlpot_ctx: Optional["MlpotContext"],
+    *,
+    restart_read: PathLike | None = None,
 ) -> None:
     """Stabilize CHARMM before the next overlap ``dyna`` chunk that will ``READYN``.
 
@@ -2173,8 +2178,26 @@ def _prepare_overlap_chunk_after_restart(
     lists are already established and rebuilding them mid-workflow segfaults after
     long MD (same as ``reregister_mlpot`` / ``refresh_nbonds_after_mlpot*``).
     ``READYN`` on the scratch restart restores coordinates, velocities, and lists.
+
+    When MLpot is active, refresh the JAX MIC cell from the upcoming scratch restart
+    (or live CHARMM pbound) so ``calculate_charmm`` does not keep using a stale
+    pretreat ``.res`` path set at registration time.
     """
     if mlpot_ctx is not None:
+        pyCModel = getattr(mlpot_ctx, "pyCModel", None)
+        if pyCModel is not None:
+            from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import (
+                sync_mlpot_pbc_cell_from_charmm,
+            )
+
+            side = sync_mlpot_pbc_cell_from_charmm(
+                pyCModel,
+                fallback_side_A=getattr(mlpot_ctx, "cubic_box_side_A", None),
+                restart_path=restart_read,
+                verbose=False,
+            )
+            mlpot_ctx.cubic_box_side_A = float(side)
+            mlpot_ctx.charmm_cubic_box_side_A = float(side)
         return
 
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
@@ -2743,7 +2766,14 @@ def run_dynamics_with_io(
                     loose_pbc=loose_pbc,
                 )
                 if has_restart_read:
-                    _prepare_overlap_chunk_after_restart(mlpot_ctx)
+                    _prepare_overlap_chunk_after_restart(
+                        mlpot_ctx,
+                        restart_read=(
+                            getattr(chunk_io, "restart_read", None)
+                            if chunk_io is not None
+                            else None
+                        ),
+                    )
 
                 chunk_traj_iokw = (
                     trajectory_iokw

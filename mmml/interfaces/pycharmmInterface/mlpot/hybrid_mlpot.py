@@ -312,10 +312,10 @@ class DecomposedMlpotCalculator:
         if self._cell:
             from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
                 cubic_box_matrix_from_side,
-                resolve_charmm_cubic_box_side_A,
+                resolve_mlpot_mic_box_side_A,
             )
 
-            side, _ = resolve_charmm_cubic_box_side_A(
+            side, _ = resolve_mlpot_mic_box_side_A(
                 fallback_side_A=float(self._cell) if self._cell else None,
                 restart_path=getattr(self, "_npt_restart_read", None),
             )
