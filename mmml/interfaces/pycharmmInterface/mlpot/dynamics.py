@@ -3220,6 +3220,18 @@ def run_dynamics_with_io(
                                     f"(step {steps_before_chunk})"
                                 ),
                             )
+                            from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+                                save_stabilized_overlap_rescue_snapshot,
+                            )
+
+                            save_stabilized_overlap_rescue_snapshot(
+                                mlpot_ctx,
+                                overlap,
+                                label=(
+                                    f"{overlap_context} after early-abort recovery "
+                                    f"(step {steps_before_chunk})"
+                                ),
+                            )
                             # In-memory echeck aborts often sit just under the overlap
                             # distance threshold; bonded rescue here rewinds PSF state
                             # unnecessarily.  Only run the full overlap guard when
@@ -3331,6 +3343,15 @@ def run_dynamics_with_io(
                                 mlpot_ctx,
                                 overlap,
                                 context=f"{overlap_context} at step {steps_done}",
+                            )
+                            from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+                                save_stabilized_overlap_rescue_snapshot,
+                            )
+
+                            save_stabilized_overlap_rescue_snapshot(
+                                mlpot_ctx,
+                                overlap,
+                                label=f"{overlap_context} at step {steps_done}",
                             )
                         if chunk_index + 1 < n_chunks:
                             chunk_io = _materialize_post_rescue_restart_handoff(
