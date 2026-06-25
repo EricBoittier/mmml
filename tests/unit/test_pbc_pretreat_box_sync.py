@@ -173,7 +173,7 @@ def test_pretreat_handoff_panel_tolerates_inactive_pbound(tmp_path: Path) -> Non
     assert "28.000 (restart)" in pbc["workflow_box_L_Å"]
 
 
-def test_sync_charmm_crystal_after_mm_pretreat_restores_inactive_pbound() -> None:
+def test_sync_charmm_crystal_after_mm_pretreat_refreshes_image_without_redef() -> None:
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         sync_charmm_crystal_after_mm_pretreat,
     )
@@ -181,7 +181,7 @@ def test_sync_charmm_crystal_after_mm_pretreat_restores_inactive_pbound() -> Non
     mock_py = mock.MagicMock()
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
-        side_effect=[False, True],
+        return_value=False,
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
     ) as ensure, mock.patch(
@@ -200,7 +200,7 @@ def test_sync_charmm_crystal_after_mm_pretreat_restores_inactive_pbound() -> Non
         restored = sync_charmm_crystal_after_mm_pretreat(28.0, quiet=True)
 
     assert restored is True
-    ensure.assert_called_once_with(28.0, quiet=True)
+    ensure.assert_not_called()
     assert "UPDATE" in mock_py.lingo.charmm_script.call_args[0][0]
 
 
