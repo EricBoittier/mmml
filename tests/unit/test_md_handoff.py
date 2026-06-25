@@ -296,6 +296,58 @@ def test_apply_handoff_geometry_wraps_pbc_monomers() -> None:
     assert np.all(wrapped[:, 0] < L + 1.0e-6)
 
 
+def test_align_handoff_positions_for_charmm_pbc_shifts_jaxmd_wrap():
+    from mmml.cli.run.md_handoff import (
+        MdHandoffState,
+        align_handoff_positions_for_charmm_pbc,
+        monomer_offsets_uniform,
+    )
+
+    L = 40.0
+    pos = np.zeros((10, 3), dtype=float)
+    pos[0:5] = [1.0, 20.0, 20.0]
+    pos[5:10] = [39.0, 20.0, 20.0]
+    handoff = MdHandoffState(
+        positions=pos,
+        atomic_numbers=np.ones(10, dtype=np.int32),
+        metadata={"backend": "jaxmd"},
+    )
+    offsets = monomer_offsets_uniform(10, 2)
+    aligned = align_handoff_positions_for_charmm_pbc(
+        pos,
+        monomer_offsets=offsets,
+        box_side_A=L,
+        handoff=handoff,
+        quiet=True,
+    )
+    assert np.all(aligned[:, 0] >= -0.5 * L - 1.0e-6)
+    assert np.all(aligned[:, 0] <= 0.5 * L + 1.0e-6)
+    assert not np.allclose(aligned, pos)
+
+
+def test_align_handoff_positions_skips_pycharmm_handoff():
+    from mmml.cli.run.md_handoff import (
+        MdHandoffState,
+        align_handoff_positions_for_charmm_pbc,
+        monomer_offsets_uniform,
+    )
+
+    pos = np.array([[1.0, 2.0, 3.0]], dtype=float)
+    handoff = MdHandoffState(
+        positions=pos,
+        atomic_numbers=np.array([6], dtype=np.int32),
+        metadata={"backend": "pycharmm"},
+    )
+    aligned = align_handoff_positions_for_charmm_pbc(
+        pos,
+        monomer_offsets=monomer_offsets_uniform(1, 1),
+        box_side_A=32.0,
+        handoff=handoff,
+        quiet=True,
+    )
+    assert np.allclose(aligned, pos)
+
+
 def test_resolve_handoff_restart_template_uses_continue_from_final_res(
     nve_stub: Path, tmp_path: Path
 ) -> None:
