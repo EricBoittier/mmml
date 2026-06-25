@@ -3166,30 +3166,23 @@ def run_dynamics_with_io(
                         overlap_run_state_dir=overlap_run_state_dir,
                         overlap_restart_read=overlap_restart_read_for_chunk,
                         segment_restart_read=segment_restart_read,
+                        mlpot_ctx=mlpot_ctx,
+                        cpt=bool(chunk_kw.get("cpt")),
+                        chunk_index=chunk_index,
                     )
                     if (
                         recovery.ok
                         and chunk_retry_count < _MAX_EARLY_ABORT_CHUNK_RETRIES
                     ):
                         chunk_retry_count += 1
-                        if recovery.source == "memory":
-                            if n_chunks > 1:
-                                early_abort_restart_handoff = True
-                            else:
-                                early_abort_memory_handoff = True
-                        else:
-                            early_abort_restart_handoff = True
+                        early_abort_memory_handoff = False
+                        early_abort_restart_handoff = False
+                        rescued_overlap = False
                         if mlpot_ctx is not None and overlap is not None:
                             from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
                                 finalize_overlap_rescue_for_dynamics,
                             )
 
-                            check_dynamics_overlap(
-                                overlap,
-                                context=f"{overlap_context} after early-abort recovery",
-                                step=steps_before_chunk,
-                                mlpot_ctx=mlpot_ctx,
-                            )
                             finalize_overlap_rescue_for_dynamics(
                                 mlpot_ctx,
                                 overlap,
@@ -3198,7 +3191,42 @@ def run_dynamics_with_io(
                                     f"(step {steps_before_chunk})"
                                 ),
                             )
-                        post_rescue_handoff_applied = False
+                            # In-memory echeck aborts often sit just under the overlap
+                            # distance threshold; bonded rescue here rewinds PSF state
+                            # unnecessarily.  Only run the full overlap guard when
+                            # coordinates were reloaded from disk/run_state.
+                            if recovery.source != "memory":
+                                _, rescued_overlap = check_dynamics_overlap(
+                                    overlap,
+                                    context=(
+                                        f"{overlap_context} after early-abort recovery"
+                                    ),
+                                    step=steps_before_chunk,
+                                    mlpot_ctx=mlpot_ctx,
+                                )
+                        use_readyn_handoff = (
+                            chunk_io is not None
+                            and n_chunks > 1
+                            and (
+                                rescued_overlap
+                                or (
+                                    recovery.source != "memory"
+                                    and bool(chunk_kw.get("cpt"))
+                                )
+                            )
+                        )
+                        if use_readyn_handoff:
+                            chunk_io = _materialize_post_rescue_restart_handoff(
+                                chunk_io,
+                                chunk_kw,
+                                steps_done=steps_before_chunk,
+                                mlpot_ctx=mlpot_ctx,
+                                overlap=overlap,
+                                overlap_context=overlap_context,
+                            )
+                            post_rescue_handoff_applied = True
+                        else:
+                            early_abort_memory_handoff = True
                         steps_done = steps_before_chunk
                         rerun_chunk = True
                         print(

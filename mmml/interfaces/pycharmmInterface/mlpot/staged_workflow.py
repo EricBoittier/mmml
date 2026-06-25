@@ -857,6 +857,7 @@ def _stage_handoff_restart_for_early_abort(
     by_stage: dict[MdStage, tuple[str, ...]] = {
         "prod": ("equi_res",),
         "equi": ("heat_res",),
+        "heat": ("geometry_baseline_res",),
     }
     for key in by_stage.get(stage, ()):
         p = paths.get(key)
@@ -1980,6 +1981,9 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         mlpot_ctx=ctx,
                         rng_base=getattr(args, "seed", None),
                         loose_pbc=loose_pbc,
+                        segment_restart_read=_stage_handoff_restart_for_early_abort(
+                            "heat", paths, prev_restart
+                        ),
                         **overlap_run_state_kwargs_from_args(args),
                     )
                     _validate_dyn_stage_completion(
@@ -2591,7 +2595,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 loose_pbc=loose_pbc,
                 segment_restart_read=(
                     _stage_handoff_restart_for_early_abort(stage, paths, prev_restart)
-                    if stage in ("equi", "prod")
+                    if stage in ("heat", "equi", "prod")
                     else None
                 ),
                 **overlap_run_state_kwargs_from_args(args),
