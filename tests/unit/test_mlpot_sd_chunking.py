@@ -65,6 +65,32 @@ def test_maybe_abort_sd_on_grms_respects_initial_cap():
     )
 
 
+def test_maybe_abort_sd_on_grms_allows_transient_rise_after_calculator_mini():
+    ctx = MagicMock()
+    cfg = MinimizeWithMlpotConfig(
+        mlpot_ctx=ctx,
+        pre_sd_bonded_recovery_grms_kcalmol_A=50.0,
+        sd_grms_watchdog_factor=2.5,
+        verbose=False,
+    )
+    assert not _maybe_abort_sd_on_grms(
+        cfg,
+        initial_grms=0.5163,
+        previous_grms=0.5163,
+        current_grms=1.4881,
+        pass_label="pass 1",
+        step_label="after chunk 1",
+    )
+    assert _maybe_abort_sd_on_grms(
+        cfg,
+        initial_grms=0.5163,
+        previous_grms=0.5163,
+        current_grms=1200.0,
+        pass_label="pass 1",
+        step_label="after chunk 1",
+    )
+
+
 def test_maybe_abort_sd_on_grms_detects_chunk_to_chunk_rise():
     ctx = MagicMock()
     cfg = MinimizeWithMlpotConfig(
