@@ -111,17 +111,14 @@ def test_find_ptxas_from_nvidia_namespace(tmp_path, monkeypatch):
     ptxas_dir = tmp_path / "nvidia" / "cu13" / "bin"
     ptxas_dir.mkdir(parents=True)
     (ptxas_dir / "ptxas").write_bytes(b"stub")
-    from importlib.machinery import ModuleSpec
-    import importlib.util
-
-    spec = ModuleSpec("nvidia", loader=None, is_package=True)
-    spec.submodule_search_locations = [str(tmp_path / "nvidia")]
-    monkeypatch.setattr(
-        importlib.util,
-        "find_spec",
-        lambda name: spec if name == "nvidia" else None,
-    )
     monkeypatch.setattr(jax_gpu_warmup, "_site_package_roots", lambda: [])
+    monkeypatch.setattr(
+        jax_gpu_warmup,
+        "_ptxas_from_nvidia_namespace",
+        lambda: ptxas_dir.resolve(),
+    )
+    monkeypatch.setattr(jax_gpu_warmup, "_ptxas_from_importlib_metadata", lambda: None)
+    monkeypatch.setattr(jax_gpu_warmup, "_ptxas_from_system_cuda", lambda: None)
     jax_gpu_warmup.find_bundled_ptxas_dir.cache_clear()
     assert jax_gpu_warmup.find_bundled_ptxas_dir() == ptxas_dir.resolve()
     jax_gpu_warmup.find_bundled_ptxas_dir.cache_clear()
