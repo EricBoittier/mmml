@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 import json
 from pathlib import Path
 from typing import Any
@@ -200,6 +201,14 @@ def _print_evaluate_npz_summary(
         elif cmp.get("mean_force_rmse_eV_A") is not None:
             print(
                 f"  vs reference: mean force RMSE = {cmp['mean_force_rmse_eV_A']:.6f} eV/A",
+                flush=True,
+            )
+        force_vs_com = cmp.get("force_vs_com") or {}
+        if force_vs_com.get("corr_com_force_rmse") is not None:
+            print(
+                f"  force RMSE vs COM: r = {force_vs_com['corr_com_force_rmse']:.3f} "
+                f"(COM {force_vs_com.get('com_dist_A_min', '?'):.2f}"
+                f"–{force_vs_com.get('com_dist_A_max', '?'):.2f} Å)",
                 flush=True,
             )
 
@@ -456,6 +465,144 @@ def save_evaluate_compare_extxyz_trajectories(
             artifacts["extxyz_difference"] = str(diff_path)
 
     return artifacts
+
+
+def _reference_com_dist_A(reference: Any, ref_frame: int) -> float | None:
+    com = getattr(reference, "com_distances", None)
+    if com is None:
+        return None
+    arr = np.asarray(com, dtype=np.float64).reshape(-1)
+    idx = int(ref_frame)
+    if idx < 0 or idx >= int(arr.shape[0]):
+        return None
+    return float(arr[idx])
+
+
+def save_evaluate_compare_diagnostics(
+    out_dir: Path,
+    per_frame: list[dict[str, Any]],
+    *,
+    backend: str,
+) -> tuple[dict[str, str], dict[str, Any]]:
+    """Write CSV and optional plots of model–reference errors vs COM distance."""
+    ok = [
+        c
+        for c in per_frame
+        if c.get("status") == "ok" and c.get("com_dist_A") is not None
+    ]
+    artifacts: dict[str, str] = {}
+    summary: dict[str, Any] = {"n_frames": int(len(ok))}
+    if not ok:
+        return artifacts, summary
+
+    rows: list[dict[str, Any]] = []
+    for c in ok:
+        rows.append(
+            {
+                "reference_frame": int(c.get("reference_frame", -1)),
+                "reference_source_index": c.get("reference_source_index"),
+                "com_dist_A": float(c["com_dist_A"]),
+                "delta_energy_eV": c.get("delta_energy_eV"),
+                "abs_delta_energy_eV": c.get("abs_delta_energy_eV"),
+                "force_rmse_eV_A": c.get("force_rmse_eV_A"),
+                "force_mae_eV_A": c.get("force_mae_eV_A"),
+                "force_max_abs_eV_A": c.get("force_max_abs_eV_A"),
+            }
+        )
+    rows.sort(key=lambda r: (float(r["com_dist_A"]), int(r["reference_frame"])))
+
+    csv_path = Path(out_dir) / "evaluate_compare_diagnostics.csv"
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = list(rows[0].keys())
+    with csv_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+    artifacts["compare_diagnostics_csv"] = str(csv_path)
+
+    com = np.asarray([r["com_dist_A"] for r in rows], dtype=np.float64)
+    summary["com_dist_A_min"] = float(com.min())
+    summary["com_dist_A_max"] = float(com.max())
+    if rows[0].get("force_rmse_eV_A") is not None:
+        force_rmse = np.asarray(
+            [float(r["force_rmse_eV_A"]) for r in rows if r.get("force_rmse_eV_A") is not None],
+            dtype=np.float64,
+        )
+        com_f = np.asarray(
+            [float(r["com_dist_A"]) for r in rows if r.get("force_rmse_eV_A") is not None],
+            dtype=np.float64,
+        )
+        summary["mean_force_rmse_eV_A"] = float(force_rmse.mean())
+        summary["max_force_rmse_eV_A"] = float(force_rmse.max())
+        if int(force_rmse.shape[0]) >= 2:
+            summary["corr_com_force_rmse"] = float(np.corrcoef(com_f, force_rmse)[0, 1])
+    if rows[0].get("abs_delta_energy_eV") is not None:
+        abs_de = np.asarray(
+            [float(r["abs_delta_energy_eV"]) for r in rows if r.get("abs_delta_energy_eV") is not None],
+            dtype=np.float64,
+        )
+        summary["mean_abs_delta_energy_eV"] = float(abs_de.mean())
+        summary["max_abs_delta_energy_eV"] = float(abs_de.max())
+
+    try:
+        import matplotlib.pyplot as plt
+    except Exception:
+        return artifacts, summary
+
+    if rows[0].get("force_rmse_eV_A") is not None:
+        force_rmse = np.asarray([float(r["force_rmse_eV_A"]) for r in rows], dtype=np.float64)
+        fig, ax = plt.subplots(figsize=(6, 4))
+        ax.scatter(com, force_rmse, s=18, alpha=0.85)
+        order = np.argsort(com)
+        ax.plot(com[order], force_rmse[order], lw=1.0, alpha=0.5, color="C1")
+        ax.set_xlabel("COM distance (Å)")
+        ax.set_ylabel("Force RMSE (eV/Å)")
+        ax.set_title(f"Force error vs COM distance ({backend})")
+        fig.tight_layout()
+        png_path = Path(out_dir) / "force_rmse_vs_com.png"
+        fig.savefig(png_path, dpi=150)
+        plt.close(fig)
+        artifacts["force_rmse_vs_com_png"] = str(png_path)
+
+        fig, ax = plt.subplots(figsize=(6, 4))
+        ax.scatter(com, force_rmse, s=18, alpha=0.85, label="per frame")
+        if int(com.shape[0]) >= 4:
+            n_bins = int(min(8, max(3, com.shape[0] // 3)))
+            edges = np.linspace(float(com.min()), float(com.max()), n_bins + 1)
+            centers: list[float] = []
+            means: list[float] = []
+            for lo, hi in zip(edges[:-1], edges[1:]):
+                mask = (com >= lo) & (com < hi if hi < edges[-1] else com <= hi)
+                if not np.any(mask):
+                    continue
+                centers.append(float(0.5 * (lo + hi)))
+                means.append(float(force_rmse[mask].mean()))
+            if centers:
+                ax.plot(centers, means, "o-", lw=1.5, color="C3", label="binned mean")
+        ax.set_xlabel("COM distance (Å)")
+        ax.set_ylabel("Force RMSE (eV/Å)")
+        ax.set_title(f"Binned force RMSE vs COM ({backend})")
+        ax.legend()
+        fig.tight_layout()
+        binned_path = Path(out_dir) / "force_rmse_vs_com_binned.png"
+        fig.savefig(binned_path, dpi=150)
+        plt.close(fig)
+        artifacts["force_rmse_vs_com_binned_png"] = str(binned_path)
+
+    if rows[0].get("abs_delta_energy_eV") is not None:
+        abs_de = np.asarray([float(r["abs_delta_energy_eV"]) for r in rows], dtype=np.float64)
+        fig, ax = plt.subplots(figsize=(6, 4))
+        ax.scatter(com, abs_de, s=18, alpha=0.85, color="C2")
+        ax.set_xlabel("COM distance (Å)")
+        ax.set_ylabel("|ΔE| (eV)")
+        ax.set_title(f"Energy error vs COM distance ({backend})")
+        fig.tight_layout()
+        png_path = Path(out_dir) / "abs_delta_energy_vs_com.png"
+        fig.savefig(png_path, dpi=150)
+        plt.close(fig)
+        artifacts["abs_delta_energy_vs_com_png"] = str(png_path)
+
+    return artifacts, summary
 
 
 def _permutation_within_monomer_blocks(
@@ -1578,6 +1725,9 @@ def _evaluate_reference_trajectory(args: Any, ctx: dict[str, Any]) -> int:
                 reference_force_unit=ref_force_unit,
             )
             cmp["status"] = "ok"
+            com_dist = _reference_com_dist_A(reference, int(ref_frame))
+            if com_dist is not None:
+                cmp["com_dist_A"] = com_dist
         except Exception as exc:
             cmp = {
                 "status": "error",
@@ -1686,6 +1836,16 @@ def _evaluate_reference_trajectory(args: Any, ctx: dict[str, Any]) -> int:
         compare_path.parent.mkdir(parents=True, exist_ok=True)
         compare_path.write_text(json.dumps(compare_summary, indent=2), encoding="utf-8")
         artifacts["compare_json"] = str(compare_path)
+
+        diag_artifacts, diag_summary = save_evaluate_compare_diagnostics(
+            out_dir,
+            per_frame_compare,
+            backend=backend,
+        )
+        artifacts.update(diag_artifacts)
+        if diag_summary.get("n_frames", 0) > 0:
+            compare_summary["force_vs_com"] = diag_summary
+            compare_path.write_text(json.dumps(compare_summary, indent=2), encoding="utf-8")
 
     if artifacts:
         result["artifacts"] = artifacts
