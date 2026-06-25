@@ -277,11 +277,16 @@ def _ptxas_from_system_cuda() -> Path | None:
 
 @lru_cache(maxsize=1)
 def find_bundled_nvidia_lib_dirs() -> list[Path]:
-    """Wheel-shipped NVIDIA runtime libs (cuDNN, cuBLAS, …) for JAX CUDA plugins."""
+    """Wheel-shipped NVIDIA runtime libs (cuDNN, cuBLAS, cuSPARSE, …) for JAX CUDA plugins."""
     rel_libs = (
         "nvidia/cudnn/lib",
         "nvidia/cu13/lib",
+        "nvidia/cu12/lib",
+        "nvidia/cusparse/lib",
         "nvidia/cublas/lib",
+        "nvidia/cusolver/lib",
+        "nvidia/curand/lib",
+        "nvidia/cufft/lib",
         "nvidia/cuda_nvrtc/lib",
         "nvidia/cuda_cupti/lib",
         "nvidia/nccl/lib",
@@ -294,7 +299,63 @@ def find_bundled_nvidia_lib_dirs() -> list[Path]:
             if candidate.is_dir() and candidate not in seen:
                 seen.add(candidate)
                 dirs.append(candidate)
+        nvidia_root = root / "nvidia"
+        if nvidia_root.is_dir():
+            for lib_dir in sorted(nvidia_root.glob("*/lib")):
+                try:
+                    resolved = lib_dir.resolve()
+                except OSError:
+                    continue
+                if resolved in seen or not resolved.is_dir():
+                    continue
+                if any(resolved.glob("*.so*")) or any(resolved.glob("*.dll")):
+                    seen.add(resolved)
+                    dirs.append(resolved)
     return dirs
+
+
+def _jax_is_imported() -> bool:
+    return "jax" in sys.modules
+
+
+def _installed_jax_cuda_plugins() -> list[str]:
+    try:
+        from importlib.metadata import distributions
+    except ImportError:
+        return []
+    names: list[str] = []
+    for dist in distributions():
+        name = (dist.metadata.get("Name") or "").strip()
+        lower = name.lower()
+        if lower.startswith("jax-cuda") and "plugin" in lower:
+            names.append(name)
+    return sorted(names)
+
+
+def diagnose_jax_cuda_toolchain() -> dict[str, str | bool | None | list[str]]:
+    """Notebook-friendly snapshot of JAX GPU toolchain discovery."""
+    ptxas_dir = find_bundled_ptxas_dir()
+    bundled = [str(p) for p in find_bundled_nvidia_lib_dirs()]
+    diag: dict[str, str | bool | None | list[str]] = {
+        "python": sys.executable,
+        "prefix": sys.prefix,
+        "jax_imported": _jax_is_imported(),
+        "jax_cuda_plugins": _installed_jax_cuda_plugins(),
+        "bundled_nvidia_lib_dirs": bundled,
+        "ptxas_on_path": shutil.which("ptxas"),
+        "ptxas_dir": str(ptxas_dir) if ptxas_dir is not None else None,
+        "cuda_home": (os.environ.get("CUDA_HOME") or os.environ.get("CUDA_PATH") or "").strip()
+        or None,
+    }
+    if _jax_is_imported():
+        try:
+            import jax
+
+            diag["jax_devices"] = [str(d) for d in jax.devices()]
+            diag["jax_default_backend"] = str(jax.default_backend())
+        except Exception as exc:
+            diag["jax_devices"] = [f"(error: {exc})"]
+    return diag
 
 
 @lru_cache(maxsize=1)
@@ -309,19 +370,6 @@ def find_bundled_ptxas_dir() -> Path | None:
         if found is not None:
             return found
     return None
-
-
-def diagnose_jax_cuda_toolchain() -> dict[str, str | bool | None]:
-    """Notebook-friendly snapshot of JAX GPU toolchain discovery."""
-    ptxas_dir = find_bundled_ptxas_dir()
-    return {
-        "python": sys.executable,
-        "prefix": sys.prefix,
-        "ptxas_on_path": shutil.which("ptxas"),
-        "ptxas_dir": str(ptxas_dir) if ptxas_dir is not None else None,
-        "cuda_home": (os.environ.get("CUDA_HOME") or os.environ.get("CUDA_PATH") or "").strip()
-        or None,
-    }
 
 
 def _ptxas_missing_error() -> RuntimeError:
@@ -340,9 +388,49 @@ def _ptxas_missing_error() -> RuntimeError:
     )
 
 
+def _jax_gpu_env_too_late_error() -> RuntimeError:
+    diag = diagnose_jax_cuda_toolchain()
+    return RuntimeError(
+        "JAX was already imported before GPU runtime libraries were configured. "
+        "cuSPARSE/cuBLAS from pip wheels must be on LD_LIBRARY_PATH *before* "
+        "the first `import jax`, or the CUDA plugin falls back to CPU.\n"
+        f"  python: {diag['python']}\n"
+        f"  jax_cuda_plugins: {diag.get('jax_cuda_plugins')}\n"
+        f"  bundled_nvidia_lib_dirs: {len(diag.get('bundled_nvidia_lib_dirs') or [])} dirs\n"
+        "Fix:\n"
+        "  1. Restart the Jupyter kernel.\n"
+        "  2. First cell only:\n"
+        "       from mmml.interfaces.pycharmmInterface.mlpot.cli_common import prepare_jax_gpu_notebook\n"
+        "       prepare_jax_gpu_notebook()\n"
+        "  3. Then import jax / setup_calculator in later cells.\n"
+        "  4. In this venv: cd ~/mmml && uv sync --extra gpu  (CUDA 13; RTX 5090)\n"
+        "     Avoid mixing jax-cuda12-plugin with the default gpu extra."
+    )
+
+
 def prepare_jax_gpu_notebook(*, required: bool = True) -> bool:
-    """Prep PATH/LD_LIBRARY_PATH for JAX GPU JIT in Jupyter (call once per kernel)."""
-    ensure_jax_cuda_runtime_libs(quiet=True)
+    """Prep PATH/LD_LIBRARY_PATH for JAX GPU JIT in Jupyter (call once per kernel).
+
+    Must run in the **first notebook cell**, before ``import jax`` or any mmml import
+    that pulls JAX in transitively.
+    """
+    if _jax_is_imported():
+        try:
+            import jax
+
+            if jax.default_backend() == "cpu" and _installed_jax_cuda_plugins():
+                if required:
+                    raise _jax_gpu_env_too_late_error()
+                return False
+        except Exception:
+            pass
+
+    bundled = ensure_jax_cuda_runtime_libs(quiet=True)
+    if not bundled and required and _installed_jax_cuda_plugins():
+        raise RuntimeError(
+            "JAX CUDA plugin(s) are installed but no pip NVIDIA runtime libs were found "
+            f"under {sys.prefix}. Run: cd ~/mmml && uv sync --extra gpu"
+        )
     ok = ensure_jax_cuda_toolchain(required=False)
     if ok:
         return True
@@ -355,7 +443,7 @@ def ensure_jax_cuda_runtime_libs(*, quiet: bool = False) -> list[str]:
     """Prefer pip-shipped cuDNN/cuBLAS over older system modules on ``LD_LIBRARY_PATH``.
 
     JAX CUDA 13 rejects cuDNN < 9.10.1 on multi-GPU nodes when cuBLAS >= 12.9 is
-    visible. ``uv sync --extra gpu-cuda13`` installs ``nvidia-cudnn-cu13`` under
+    visible. ``uv sync --extra gpu`` installs ``nvidia-cudnn-cu13`` under
     ``site-packages``, but cluster ``module load cudnn/9.4`` often wins unless these
     directories are prepended *after* MPI/CHARMM library setup as well.
     """
@@ -386,7 +474,7 @@ def ensure_jax_cuda_toolchain(*, required: bool = False) -> bool:
 
     JAX CUDA wheels ship ``ptxas`` under ``site-packages/nvidia/cu13/bin`` (or
     ``cu12``). XLA fails with ``INTERNAL: Failed to launch ptxas`` when that
-    directory is not on ``PATH`` — common after ``uv sync --extra gpu-cuda13``.
+    directory is not on ``PATH`` — common after ``uv sync --extra gpu``.
 
     Returns True when ``ptxas`` is available on ``PATH`` after this call.
     """

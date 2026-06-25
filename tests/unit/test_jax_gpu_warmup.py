@@ -107,7 +107,15 @@ def test_find_ptxas_from_system_cuda_home(tmp_path, monkeypatch):
     jax_gpu_warmup.find_bundled_ptxas_dir.cache_clear()
 
 
-def test_find_ptxas_from_nvidia_namespace(tmp_path, monkeypatch):
+def test_find_bundled_nvidia_lib_dirs_glob(tmp_path, monkeypatch):
+    cu12_dir = tmp_path / "nvidia" / "cu12" / "lib"
+    cu12_dir.mkdir(parents=True)
+    (cu12_dir / "libcusparse.so.12").write_bytes(b"stub")
+    monkeypatch.setattr(jax_gpu_warmup, "_site_package_roots", lambda: [tmp_path])
+    jax_gpu_warmup.find_bundled_nvidia_lib_dirs.cache_clear()
+    assert cu12_dir.resolve() in jax_gpu_warmup.find_bundled_nvidia_lib_dirs()
+    jax_gpu_warmup.find_bundled_nvidia_lib_dirs.cache_clear()
+
     ptxas_dir = tmp_path / "nvidia" / "cu13" / "bin"
     ptxas_dir.mkdir(parents=True)
     (ptxas_dir / "ptxas").write_bytes(b"stub")

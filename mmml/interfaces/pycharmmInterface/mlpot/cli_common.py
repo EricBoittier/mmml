@@ -976,12 +976,21 @@ def prepare_charmm_notebook(**kwargs: Any) -> None:
 
 
 def prepare_jax_gpu_notebook(*, required: bool = True) -> bool:
-    """Prep JAX GPU JIT (``ptxas``) for notebooks — call before ``setup_calculator``."""
+    """Prep JAX GPU env for notebooks — **first cell**, before ``import jax``."""
     from mmml.interfaces.pycharmmInterface.cluster_geometry import (
         prepare_jax_gpu_notebook as _prepare_jax_gpu_notebook,
     )
 
     return _prepare_jax_gpu_notebook(required=required)
+
+
+def prepare_notebook_kernel(*, jax_required: bool = True) -> None:
+    """Bootstrap JAX GPU + CHARMM for Jupyter (JAX prep must run before any ``import jax``)."""
+    from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+        prepare_notebook_kernel as _prepare_notebook_kernel,
+    )
+
+    _prepare_notebook_kernel(jax_required=jax_required)
 
 
 def composition_tag(composition: list[tuple[str, int]] | None, residue: str, n_molecules: int) -> str:
