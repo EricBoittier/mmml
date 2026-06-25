@@ -2544,6 +2544,7 @@ def run_dynamics_with_io(
     post_rescue_in_memory_mode = False
     post_rescue_handoff_applied = False
     any_post_rescue_in_memory = False
+    early_abort_memory_handoff = False
     if (
         n_chunks > 20
         and "heat" in str(overlap_context).lower()
@@ -2603,6 +2604,7 @@ def run_dynamics_with_io(
         while chunk_index < n_chunks:
             chunk_retried = False
             segment_aborted = False
+            early_abort_memory_handoff = False
             rerun_chunk = True
             while rerun_chunk:
                 rerun_chunk = False
@@ -2623,6 +2625,7 @@ def run_dynamics_with_io(
                         mlpot_ctx=mlpot_ctx,
                         use_memory_handoff=(
                             post_rescue_in_memory_mode
+                            or early_abort_memory_handoff
                             or _overlap_chunk_uses_memory_handoff(
                                 mlpot_ctx,
                                 chunk_index=chunk_index,
@@ -2639,6 +2642,7 @@ def run_dynamics_with_io(
                         chunk_dcd_paths.append(Path(chunk_io.trajectory))
                 mem_handoff = (
                     post_rescue_in_memory_mode
+                    or early_abort_memory_handoff
                     or _overlap_chunk_uses_memory_handoff(
                         mlpot_ctx,
                         chunk_index=chunk_index,
@@ -2734,6 +2738,16 @@ def run_dynamics_with_io(
                     chunk_index=chunk_index,
                     has_restart_read=has_restart_read,
                 )
+                if early_abort_memory_handoff:
+                    chunk_kw["restart"] = False
+                    chunk_kw["new"] = False
+                    chunk_kw["start"] = False
+                    chunk_kw["iasvel"] = 0
+                    chunk_kw.pop("iunrea", None)
+                    chunk_kw["iunrea"] = -1
+                    _strip_stale_heat_ramp_keywords(chunk_kw)
+                    if int(chunk_kw.get("ihtfrq", 0) or 0) != 0:
+                        chunk_kw["ihtfrq"] = 0
                 if heat_ramp_spec is not None:
                     apply_heat_ramp_overlap_chunk(
                         chunk_kw,
@@ -2757,6 +2771,8 @@ def run_dynamics_with_io(
                     )
                     post_rescue_handoff_applied = True
                     post_rescue_in_memory_mode = False
+                elif early_abort_memory_handoff and mlpot_ctx is not None:
+                    _prepare_overlap_chunk_after_restart(mlpot_ctx, restart_read=None)
                 if chunk_io is None or chunk_io.restart_write is None:
                     chunk_kw.pop("iunwri", None)
 
@@ -2842,18 +2858,22 @@ def run_dynamics_with_io(
                         attempt_overlap_early_abort_recovery,
                     )
 
-                    if not chunk_retried and attempt_overlap_early_abort_recovery(
+                    recovery = attempt_overlap_early_abort_recovery(
                         overlap,
                         chunk_nstep=chunk_nstep,
                         steps_done=steps_done,
                         steps_before_chunk=steps_before_chunk,
                         overlap_context=overlap_context,
                         overlap_run_state_dir=overlap_run_state_dir,
-                    ):
+                    )
+                    if not chunk_retried and recovery.ok:
                         chunk_retried = True
-                        post_rescue_in_memory_mode = True
+                        if recovery.source == "memory":
+                            early_abort_memory_handoff = True
+                        else:
+                            post_rescue_in_memory_mode = True
+                            any_post_rescue_in_memory = True
                         post_rescue_handoff_applied = False
-                        any_post_rescue_in_memory = True
                         steps_done = steps_before_chunk
                         rerun_chunk = True
                         print(

@@ -166,6 +166,62 @@ def test_overlap_early_abort_recovery_retries_chunk(tmp_path):
     post_rescue.assert_called_once()
 
 
+def test_overlap_early_abort_in_memory_recovery_skips_post_rescue(tmp_path):
+    """In-memory early abort keeps CPT velocities; no Boltzmann reassign."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+        GeometryRecoveryResult,
+    )
+
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        min_distance_A=0.5,
+        check_interval=500,
+        n_monomers=2,
+        use_pbc=False,
+    )
+    calls: list[dict] = []
+
+    def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
+        calls.append(dict(kw))
+        if _io is not None and _io.restart_write is not None:
+            step = 40 if len(calls) == 1 else 500
+            Path(_io.restart_write).write_text(f"REST {step} 1\n", encoding="utf-8")
+        return mock.Mock()
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        side_effect=fake_chunk,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+        return_value=(5.0, False),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+    ) as prep_after, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
+        side_effect=lambda path: int(Path(path).read_text().split()[1]),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.attempt_overlap_early_abort_recovery",
+        return_value=GeometryRecoveryResult(True, "memory"),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_post_rescue_overlap_handoff",
+    ) as post_rescue:
+        run_dynamics_with_io(
+            {"nstep": 500},
+            CharmmTrajectoryFiles(restart_write=tmp_path / "prod.res"),
+            overlap=cfg,
+            overlap_context="PROD",
+            mlpot_ctx=mock.Mock(),
+        )
+
+    assert len(calls) == 2
+    post_rescue.assert_not_called()
+    prep_after.assert_called_once()
+    assert calls[1]["restart"] is False
+    assert calls[1]["iasvel"] == 0
+    assert calls[1]["iunrea"] == -1
+
+
 def test_resolve_defaults_to_rescue_and_1p5A():
     args = argparse.Namespace()
     cfg = resolve_dynamics_overlap_config(args, n_monomers=4, use_pbc=True)
