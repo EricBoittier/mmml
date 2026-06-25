@@ -187,65 +187,16 @@ def relax_monomer_geometry_for_cluster(
     nstep_abnr: int = 200,
 ) -> tuple[np.ndarray, list[str], np.ndarray]:
     """Build and CHARMM-minimize an isolated monomer for cluster assembly."""
-    from mmml.cli.run.md_pbc_suite.ase import _read_cgenff_toppar, _reset_pycharmm_system
+    from mmml.cli.run.md_pbc_suite.cluster import build_minimized_monomer_for_packmol
     from mmml.interfaces.pycharmmInterface.cluster_geometry import ensure_charmm_session_ready
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
-        CharmmMmMinimizeConfig,
-        minimize_charmm_mm_only,
-    )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
-        get_charmm_positions_array,
-        prepare_charmm_vacuum,
-        sync_charmm_positions,
-    )
 
     ensure_charmm_session_ready()
-    residue = residue.upper()
-    _reset_pycharmm_system()
-    prepare_charmm_vacuum()
-    _read_cgenff_toppar()
-    read.sequence_string(residue)
-    gen.new_segment(seg_name="TMP", setup_ic=True)
-    ic.prm_fill(replace_all=True)
-    ic.build()
-
-    atom_names = [str(x) for x in np.asarray(psf.get_atype(), dtype=str)]
-    coords = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=np.float64)
-    if int(coords.shape[0]) != len(atom_names):
-        raise RuntimeError(
-            f"PSF atom-name count mismatch while generating {residue}: "
-            f"{len(atom_names)} vs positions {coords.shape[0]}"
-        )
-
-    if not _monomer_geometry_is_3d(coords):
-        coords = ensure_monomer_3d_coords(coords)
-    sync_charmm_positions(coords)
-
-    minimize_charmm_mm_only(
-        CharmmMmMinimizeConfig(
-            nstep_sd=int(nstep_sd),
-            nstep_abnr=int(nstep_abnr),
-            nprint=50,
-            verbose=False,
-            show_energy=False,
-        )
+    return build_minimized_monomer_for_packmol(
+        residue.upper(),
+        nstep_sd=int(nstep_sd),
+        nstep_abnr=int(nstep_abnr),
+        verbose=False,
     )
-    coords = get_charmm_positions_array()
-
-    if not _monomer_geometry_is_3d(coords):
-        span = np.ptp(coords, axis=0)
-        raise RuntimeError(
-            f"Monomer {residue} not 3D after CHARMM minimize "
-            f"(spans Å x={span[0]:.2f} y={span[1]:.2f} z={span[2]:.2f}). "
-            "Try build_ase_cluster(..., reference_npz=...) with a PSF-order NPZ."
-        )
-
-    z = np.asarray(get_Z_from_psf(), dtype=int)
-    if int(z.shape[0]) != len(atom_names):
-        raise RuntimeError(
-            f"PSF Z count mismatch for {residue}: {z.shape[0]} vs {len(atom_names)} atom names"
-        )
-    return coords, atom_names, z
 
 
 def build_cluster_from_reference_npz(
