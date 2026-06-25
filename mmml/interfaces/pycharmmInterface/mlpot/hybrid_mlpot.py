@@ -35,7 +35,11 @@ def _box_cache_key(box: jnp.ndarray | None) -> bool:
 def _box_numpy_for_update(box: jnp.ndarray | None) -> np.ndarray | None:
     if box is None:
         return None
-    side = float(box[0, 0])
+    arr = np.asarray(box)
+    if arr.ndim == 1:
+        side = float(arr[0])
+    else:
+        side = float(arr[0, 0])
     return np.asarray([side, side, side], dtype=np.float64)
 
 

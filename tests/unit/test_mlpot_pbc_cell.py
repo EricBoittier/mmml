@@ -420,6 +420,53 @@ def test_cubic_box_matrix_from_side():
     assert float(m[1, 1]) == pytest.approx(40.0)
 
 
+def test_box_numpy_for_update_accepts_matrix_and_vector():
+    import jax.numpy as jnp
+
+    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import _box_numpy_for_update
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import cubic_box_matrix_from_side
+
+    matrix = jnp.asarray(cubic_box_matrix_from_side(28.0), dtype=jnp.float32)
+    vector = jnp.array([28.0, 28.0, 28.0], dtype=jnp.float32)
+    expected = np.array([28.0, 28.0, 28.0], dtype=np.float64)
+    np.testing.assert_allclose(_box_numpy_for_update(matrix), expected)
+    np.testing.assert_allclose(_box_numpy_for_update(vector), expected)
+    assert _box_numpy_for_update(None) is None
+
+
+def test_mlpot_spherical_forces_passes_cubic_box_matrix():
+    from unittest import mock
+
+    import jax.numpy as jnp
+
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import mlpot_spherical_forces_ev_angstrom
+    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+        DecomposedMlpotCalculator,
+        DecomposedMlpotModel,
+    )
+
+    calc = mock.Mock(spec=DecomposedMlpotCalculator)
+    calc.atomic_numbers = np.array([6, 1], dtype=int)
+    calc.n_monomers = 1
+    calc.cutoff_params = mock.Mock()
+    calc.do_mm = True
+    calc.spherical_fn = mock.Mock(
+        return_value=mock.Mock(forces=jnp.zeros((2, 3), dtype=jnp.float32))
+    )
+    calc._resolve_mm_pairs = mock.Mock(
+        return_value=(jnp.zeros((1, 2), dtype=jnp.int32), jnp.zeros((1,), dtype=jnp.bool_), False)
+    )
+    model = mock.Mock(spec=DecomposedMlpotModel)
+    model.get_pycharmm_calculator.return_value = calc
+    pos = np.zeros((2, 3), dtype=np.float64)
+
+    forces = mlpot_spherical_forces_ev_angstrom(model, positions=pos, use_pbc=True, box_A=28.0)
+
+    assert forces is not None
+    box_arg = calc._resolve_mm_pairs.call_args.args[1]
+    assert np.asarray(box_arg).shape == (3, 3)
+
+
 def test_is_cubic_box_sides():
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import _is_cubic_box_sides
 

@@ -1490,7 +1490,9 @@ def mlpot_spherical_forces_ev_angstrom(
         doML_dimer=True,
     )
     if use_pbc and box_A is not None:
-        box_j = jnp.array([float(box_A), float(box_A), float(box_A)], dtype=jnp.float32)
+        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import cubic_box_matrix_from_side
+
+        box_j = jnp.asarray(cubic_box_matrix_from_side(float(box_A)), dtype=jnp.float32)
         kwargs["box"] = box_j
         mm_pair_idx, mm_pair_mask, use_mm_pairs = calc._resolve_mm_pairs(pos_np, box_j)
         if use_mm_pairs:
