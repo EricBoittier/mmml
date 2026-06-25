@@ -23,15 +23,23 @@ from mmml.interfaces.pycharmmInterface.hybrid_reference import (
     apply_npz_charges_to_psf,
     load_geometry_npz,
 )
+from mmml.data.units import (
+    CALCULATOR_UNITS,
+    EV_TO_HARTREE,
+    convert_energy,
+    convert_forces,
+    energy_to_ev,
+    forces_to_ev_angstrom,
+    infer_reference_energy_unit,
+    infer_reference_force_unit,
+    normalize_energy_unit,
+    normalize_force_unit,
+)
 from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
 
 load_evaluate_npz = load_geometry_npz
 
-HARTREE_TO_EV = 27.211386245988
-EV_TO_HARTREE = 1.0 / HARTREE_TO_EV
-BOHR_TO_ANG = 0.529177210903
-HARTREE_BOHR_TO_EV_ANG = HARTREE_TO_EV / BOHR_TO_ANG
-EV_ANG_TO_HARTREE_BOHR = BOHR_TO_ANG / HARTREE_TO_EV
+EVALUATE_ARTIFACT_UNITS = dict(CALCULATOR_UNITS)
 
 
 def _evaluate_int_arg(args: Any, name: str, default: int) -> int:
@@ -41,27 +49,87 @@ def _evaluate_int_arg(args: Any, name: str, default: int) -> int:
     return int(value)
 
 
-def energy_to_ev(values: np.ndarray | float, unit: str) -> np.ndarray | float:
-    unit_l = str(unit).lower()
-    arr = np.asarray(values, dtype=np.float64)
-    scalar = arr.ndim == 0
-    if unit_l in {"ev"}:
-        out = arr
-    elif unit_l in {"hartree", "ha"}:
-        out = arr * HARTREE_TO_EV
-    elif unit_l in {"kcal", "kcal/mol", "kcal_mol"}:
-        out = arr * (1.0 / float(ev2kcalmol))
-    else:
-        raise ValueError(f"Unsupported energy unit: {unit}")
-    return float(out) if scalar else out
-
-
 def forces_hartree_bohr_to_ev_ang(forces: np.ndarray) -> np.ndarray:
-    return np.asarray(forces, dtype=np.float64) * HARTREE_BOHR_TO_EV_ANG
+    return np.asarray(
+        forces_to_ev_angstrom(forces, "hartree_bohr"),
+        dtype=np.float64,
+    )
 
 
 def forces_ev_ang_to_hartree_bohr(forces: np.ndarray) -> np.ndarray:
-    return np.asarray(forces, dtype=np.float64) * EV_ANG_TO_HARTREE_BOHR
+    return np.asarray(
+        convert_forces(forces, "ev_angstrom", "hartree_bohr"),
+        dtype=np.float64,
+    )
+
+
+def resolve_reference_units(
+    reference_path: Path | str | None,
+    args: Any | None = None,
+) -> tuple[str, str]:
+    """Resolve reference NPZ energy/force units from manifest or CLI overrides."""
+    energy_unit = "hartree"
+    force_unit = "hartree_bohr"
+    if reference_path is not None:
+        energy_unit = infer_reference_energy_unit(reference_path, default=energy_unit)
+        force_unit = infer_reference_force_unit(reference_path, default=force_unit)
+    if args is not None:
+        cli_e = getattr(args, "evaluate_reference_energy_unit", None)
+        cli_f = getattr(args, "evaluate_reference_force_unit", None)
+        if cli_e is not None:
+            energy_unit = str(cli_e)
+        if cli_f is not None:
+            force_unit = str(cli_f)
+    return energy_unit, force_unit
+
+
+def _calculator_energy_unit(atoms: Any | None) -> str | None:
+    if atoms is None or getattr(atoms, "calc", None) is None:
+        return None
+    results = getattr(atoms.calc, "results", None) or {}
+    return results.get("energy_unit") or results.get("units", {}).get("energy")
+
+
+def normalize_metrics_to_ev(
+    metrics: dict[str, Any],
+    *,
+    atoms: Any | None = None,
+) -> dict[str, Any]:
+    """Ensure metric energy/force values are numerically in eV / eV/Å."""
+    out = dict(metrics)
+    raw_unit = out.get("energy_unit") or _calculator_energy_unit(atoms)
+    energy = out.get("energy_eV")
+    if energy is None and "energy_hartree" in out:
+        energy = convert_energy(out["energy_hartree"], "hartree", "ev")
+    if energy is not None and raw_unit is not None:
+        try:
+            if normalize_energy_unit(str(raw_unit)) == "hartree":
+                energy = convert_energy(energy, "hartree", "ev")
+        except ValueError:
+            pass
+    if energy is not None:
+        out["energy_eV"] = float(energy)
+        out["energy_hartree"] = float(convert_energy(energy, "ev", "hartree"))
+        out["energy_kcal_mol"] = float(energy) * float(ev2kcalmol)
+    forces = out.get("forces_eV_A")
+    force_unit = out.get("force_unit") or (
+        (getattr(atoms.calc, "results", None) or {}).get("forces_unit")
+        if atoms is not None and getattr(atoms, "calc", None) is not None
+        else None
+    )
+    if forces is not None and force_unit is not None:
+        try:
+            if normalize_force_unit(str(force_unit)) == "hartree_bohr":
+                forces = convert_forces(forces, "hartree_bohr", "ev_angstrom")
+        except ValueError:
+            pass
+    if forces is not None:
+        f_arr = np.asarray(forces, dtype=np.float64)
+        out["forces_eV_A"] = f_arr.tolist() if f_arr.ndim > 1 else f_arr
+        out["max_force_eV_A"] = float(np.abs(f_arr).max())
+        out["rms_force_eV_A"] = float(np.sqrt(np.mean(f_arr**2)))
+    out["units"] = dict(EVALUATE_ARTIFACT_UNITS)
+    return out
 
 
 def _linear_sum_assignment(cost: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -179,6 +247,9 @@ def save_evaluate_trajectory_npz(
         "R": r.reshape(1, n_atoms, 3),
         "E": np.array([float(energy_eV) * EV_TO_HARTREE], dtype=np.float64),
         "E_eV": np.array([float(energy_eV)], dtype=np.float64),
+        "_mmml_units": np.array(
+            json.dumps({"E": "ev", "F": "ev_angstrom", "R": "angstrom", "E_eV": "ev"})
+        ),
     }
     if forces_eV_A is not None:
         f_ev = np.asarray(forces_eV_A, dtype=np.float64).reshape(n_atoms, 3)
@@ -244,6 +315,9 @@ def save_evaluate_trajectory_npz_multi(
         "R": r,
         "E": e_ev * EV_TO_HARTREE,
         "E_eV": e_ev,
+        "_mmml_units": np.array(
+            json.dumps({"E": "ev", "F": "ev_angstrom", "R": "angstrom", "E_eV": "ev"})
+        ),
     }
     if frame_indices is not None:
         payload["source_indices"] = np.asarray(frame_indices, dtype=np.int32).reshape(-1)
@@ -315,11 +389,15 @@ def compare_evaluate_to_reference_npz(
     positions: np.ndarray,
     energy_eV: float,
     forces_eV_A: np.ndarray | None,
-    reference_energy_unit: str = "hartree",
-    reference_force_unit: str = "hartree_bohr",
+    reference_energy_unit: str | None = None,
+    reference_force_unit: str | None = None,
 ) -> dict[str, Any]:
     """Compare MMML single-point results to a reference trajectory NPZ frame."""
     ref_path = Path(reference_path).expanduser().resolve()
+    if reference_energy_unit is None:
+        reference_energy_unit = infer_reference_energy_unit(ref_path)
+    if reference_force_unit is None:
+        reference_force_unit = infer_reference_force_unit(ref_path)
     with np.load(ref_path, allow_pickle=True) as ref:
         if "R" not in ref.files:
             raise ValueError(f"{ref_path.name} has no 'R' key; expected trajectory NPZ")
@@ -369,13 +447,10 @@ def compare_evaluate_to_reference_npz(
             out["delta_energy_eV"] = delta_e
             out["abs_delta_energy_eV"] = abs(delta_e)
         if forces_eV_A is not None and ref_f_raw is not None:
-            unit_l = reference_force_unit.lower()
-            if unit_l in {"hartree_bohr", "hartree/bohr", "ha/bohr"}:
-                ref_f_ev = forces_hartree_bohr_to_ev_ang(ref_f_raw)
-            elif unit_l in {"ev_ang", "ev/a", "ev/ang", "ev/angstrom"}:
-                ref_f_ev = ref_f_raw
-            else:
-                raise ValueError(f"Unsupported reference force unit: {reference_force_unit}")
+            ref_f_ev = np.asarray(
+                forces_to_ev_angstrom(ref_f_raw, reference_force_unit),
+                dtype=np.float64,
+            )
             pred_f = np.asarray(forces_eV_A, dtype=np.float64).reshape(ref_n, 3)
             delta_f = pred_f - ref_f_ev
             out["force_rmse_eV_A"] = float(np.sqrt(np.mean(delta_f**2)))
@@ -501,19 +576,15 @@ def _evaluate_atoms_mmml(
     use_pbc: bool,
     L: float | None,
 ) -> dict[str, Any]:
-    energy_eV = float(atoms.get_potential_energy())
-    forces = np.asarray(atoms.get_forces(), dtype=np.float64)
-    return {
-        "energy_eV": energy_eV,
-        "energy_kcal_mol": energy_eV * float(ev2kcalmol),
-        "forces_eV_A": forces.tolist(),
-        "max_force_eV_A": float(np.abs(forces).max()),
-        "rms_force_eV_A": float(np.sqrt(np.mean(forces**2))),
+    raw = {
+        "energy_eV": float(atoms.get_potential_energy()),
+        "forces_eV_A": np.asarray(atoms.get_forces(), dtype=np.float64),
         "n_atoms": int(len(z)),
         "n_monomers": int(n_monomers),
         "pbc": bool(use_pbc),
         "box_A": float(L) if L is not None else None,
     }
+    return normalize_metrics_to_ev(raw, atoms=atoms)
 
 
 def _evaluate_ase_mmml(
@@ -624,20 +695,18 @@ def _evaluate_jaxmd_mmml(
         get_update_fn = None
 
     atoms.calc = calc
-    energy_eV = float(atoms.get_potential_energy())
-    forces = np.asarray(atoms.get_forces(), dtype=np.float64)
-    ase_result = {
-        "energy_eV": energy_eV,
-        "energy_kcal_mol": energy_eV * float(ev2kcalmol),
-        "forces_eV_A": forces.tolist(),
-        "max_force_eV_A": float(np.abs(forces).max()),
-        "rms_force_eV_A": float(np.sqrt(np.mean(forces**2))),
-        "n_atoms": int(len(z)),
-        "n_monomers": int(n_monomers),
-        "pbc": bool(use_pbc),
-        "box_A": float(L) if L is not None else None,
-        "path": "ase_interface",
-    }
+    ase_result = normalize_metrics_to_ev(
+        {
+            "energy_eV": float(atoms.get_potential_energy()),
+            "forces_eV_A": np.asarray(atoms.get_forces(), dtype=np.float64),
+            "n_atoms": int(len(z)),
+            "n_monomers": int(n_monomers),
+            "pbc": bool(use_pbc),
+            "box_A": float(L) if L is not None else None,
+            "path": "ase_interface",
+        },
+        atoms=atoms,
+    )
 
     if spherical_cutoff_calculator is None:
         return ase_result
@@ -671,12 +740,12 @@ def _evaluate_jaxmd_mmml(
     )
     energy_jit = float(np.asarray(out.energy).reshape(-1)[0])
     forces_jit = np.asarray(out.forces, dtype=np.float64)
-    ase_result["jaxmd_jit"] = {
-        "energy_eV": energy_jit,
-        "energy_kcal_mol": energy_jit * float(ev2kcalmol),
-        "max_force_eV_A": float(np.abs(forces_jit).max()),
-        "rms_force_eV_A": float(np.sqrt(np.mean(forces_jit**2))),
-    }
+    ase_result["jaxmd_jit"] = normalize_metrics_to_ev(
+        {
+            "energy_eV": energy_jit,
+            "forces_eV_A": forces_jit,
+        }
+    )
     return ase_result
 
 
@@ -928,13 +997,16 @@ def _evaluate_reference_trajectory(args: Any, ctx: dict[str, Any]) -> int:
     forces_list: list[np.ndarray] = []
     positions_out: list[np.ndarray] = []
     per_frame_compare: list[dict[str, Any]] = []
-    ref_energy_unit = str(getattr(args, "evaluate_reference_energy_unit", "hartree"))
-    ref_force_unit = str(getattr(args, "evaluate_reference_force_unit", "hartree_bohr"))
+    ref_energy_unit, ref_force_unit = resolve_reference_units(reference.path, args)
 
     if not getattr(args, "quiet", False):
         print(
             f"mmml md-system evaluate-npz ({backend}): "
             f"evaluating {n_eval} frames from {reference.path.name}",
+            flush=True,
+        )
+        print(
+            f"  reference units: E={ref_energy_unit}, F={ref_force_unit}",
             flush=True,
         )
 
@@ -1005,6 +1077,8 @@ def _evaluate_reference_trajectory(args: Any, ctx: dict[str, Any]) -> int:
     compare_summary: dict[str, Any] = {
         "status": "ok" if ok_compares else "error",
         "reference_npz": str(reference.path),
+        "reference_energy_unit": ref_energy_unit,
+        "reference_force_unit": ref_force_unit,
         "n_frames": n_eval,
         "frame_indices": frame_indices.tolist(),
         "per_frame": per_frame_compare,
@@ -1019,6 +1093,7 @@ def _evaluate_reference_trajectory(args: Any, ctx: dict[str, Any]) -> int:
         compare_summary["mean_force_rmse_eV_A"] = float(force_rmse.mean())
 
     result: dict[str, Any] = {
+        "units": dict(EVALUATE_ARTIFACT_UNITS),
         "backend": backend,
         "setup": str(getattr(args, "setup", "")),
         "npz": str(ctx["npz_path"]),
@@ -1179,6 +1254,7 @@ def run_evaluate_npz(args: Any) -> int:
         out_path.parent.mkdir(parents=True, exist_ok=True)
 
     result: dict[str, Any] = {
+        "units": dict(EVALUATE_ARTIFACT_UNITS),
         "backend": backend,
         "setup": str(getattr(args, "setup", "")),
         "npz": str(npz_path),
@@ -1246,6 +1322,11 @@ def run_evaluate_npz(args: Any) -> int:
         else:
             compare_path = Path(compare_path).expanduser()
         compare_path.parent.mkdir(parents=True, exist_ok=True)
+        ref_e_unit, ref_f_unit = resolve_reference_units(ref_path, args)
+        result["reference_units"] = {
+            "energy": ref_e_unit,
+            "force": ref_f_unit,
+        }
         try:
             compare = compare_evaluate_to_reference_npz(
                 Path(ref_path),
@@ -1254,12 +1335,8 @@ def run_evaluate_npz(args: Any) -> int:
                 positions=pos_out,
                 energy_eV=energy_eV,
                 forces_eV_A=forces_eV_A,
-                reference_energy_unit=str(
-                    getattr(args, "evaluate_reference_energy_unit", "hartree")
-                ),
-                reference_force_unit=str(
-                    getattr(args, "evaluate_reference_force_unit", "hartree_bohr")
-                ),
+                reference_energy_unit=ref_e_unit,
+                reference_force_unit=ref_f_unit,
             )
             compare["status"] = "ok"
         except Exception as exc:
@@ -1292,6 +1369,12 @@ def run_evaluate_npz(args: Any) -> int:
             print(f"  {label} = {path}", flush=True)
         if "reference_compare" in result:
             cmp = result["reference_compare"]
+            ref_units = result.get("reference_units")
+            if ref_units and not getattr(args, "quiet", False):
+                print(
+                    f"  reference units: E={ref_units['energy']}, F={ref_units['force']}",
+                    flush=True,
+                )
             if cmp.get("status") == "error":
                 print(f"  compare error: {cmp.get('error')}", flush=True)
             elif "delta_energy_eV" in cmp:

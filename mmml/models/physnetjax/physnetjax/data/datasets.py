@@ -6,7 +6,7 @@ from tqdm import tqdm
 from typing import Dict, List, Tuple, Union
 from pathlib import Path
 
-from physnetjax.data.data import ATOM_ENERGIES_HARTREE
+from mmml.data.units import subtract_atom_refs
 from physnetjax.data.full_padding import pad_atomic_numbers, pad_coordinates, pad_forces
 from physnetjax.data.read_npz import process_npz_file
 from physnetjax.utils.pretty_printer import print_dict_as_table
@@ -305,8 +305,7 @@ def prepare_multiple_datasets(
     if "E" in datasets[0]:
         energies = np.concatenate([ds["E"] for ds in datasets])[not_failed]
         if subtract_atom_energies:
-            tmp_ae = ATOM_ENERGIES_HARTREE[atomic_numbers].sum(axis=1) * 27.2114
-            energies -= tmp_ae
+            energies = subtract_atom_refs(energies, atomic_numbers, energy_unit="ev")
         if subtract_mean:
             energies -= np.mean(energies)
         data.append(energies.reshape(-1, 1))

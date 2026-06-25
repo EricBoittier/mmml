@@ -37,6 +37,24 @@ from .rmd17 import (
     load_rmd17_official_splits,
     resolve_rmd17_splits_dir,
 )
+from .units import (
+    CALCULATOR_UNITS,
+    CANONICAL_ENERGY_UNIT,
+    CANONICAL_FORCE_UNIT,
+    CANONICAL_LENGTH_UNIT,
+    HARTREE_BOHR_TO_EV_ANGSTROM,
+    HARTREE_TO_EV,
+    TRAINING_UNITS,
+    UnitsManifestV2,
+    convert_energy,
+    convert_forces,
+    energy_to_ev,
+    forces_to_ev_angstrom,
+    load_units_manifest,
+    normalize_to_canonical,
+    subtract_atom_refs,
+    units_from_npz,
+)
 
 __version__ = "0.1.0"
 
@@ -66,5 +84,22 @@ __all__ = [
     "load_rmd17_npz",
     "load_rmd17_official_splits",
     "resolve_rmd17_splits_dir",
+    # Units
+    "CALCULATOR_UNITS",
+    "CANONICAL_ENERGY_UNIT",
+    "CANONICAL_FORCE_UNIT",
+    "CANONICAL_LENGTH_UNIT",
+    "HARTREE_BOHR_TO_EV_ANGSTROM",
+    "HARTREE_TO_EV",
+    "TRAINING_UNITS",
+    "UnitsManifestV2",
+    "convert_energy",
+    "convert_forces",
+    "energy_to_ev",
+    "forces_to_ev_angstrom",
+    "load_units_manifest",
+    "normalize_to_canonical",
+    "subtract_atom_refs",
+    "units_from_npz",
 ]
 

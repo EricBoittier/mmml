@@ -12,7 +12,7 @@ from mmml.data.atomic_references import (
 from rich.console import Console
 from rich.table import Table
 
-from mmml.models.physnetjax.physnetjax.utils.pretty_printer import print_dict_as_table
+from mmml.data.units import subtract_atom_refs
 
 # Atomic energies in Hartree sourced from reference table
 ATOM_ENERGIES_HARTREE = get_atomic_reference_array(
@@ -128,8 +128,7 @@ def prepare_multiple_datasets(
         dataE = np.concatenate([dataset["E"] for dataset in datasets])[not_failed]
         print("dataE", dataE.flatten()[:10])
         if subtract_atom_energies:
-            tmp_ae = ATOM_ENERGIES_HARTREE[dataZ].sum(axis=1) * 27.2114
-            dataE = dataE - tmp_ae
+            dataE = subtract_atom_refs(dataE, dataZ, energy_unit="ev")
         if subtract_mean:
             dataE = dataE - np.mean(dataE)
         print("dataE", dataE.flatten()[:10])

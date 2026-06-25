@@ -1041,7 +1041,12 @@ def build_ml_dict(data: dict) -> dict:
         if arr is not None:
             ml["density_grid"] = arr
 
-    return {k: v for k, v in ml.items() if v is not None}
+    ml = {k: v for k, v in ml.items() if v is not None}
+    if ml:
+        from mmml.data.units import attach_units_to_npz_payload
+
+        return attach_units_to_npz_payload(ml)
+    return ml
 
 
 def _arrays_only(data: dict) -> dict:
