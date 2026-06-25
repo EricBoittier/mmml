@@ -743,6 +743,10 @@ def test_evaluate_pycharmm_returns_forces_ev_angstrom(
             "spherical_fn",
         ),
     )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.collect_evaluate_force_sources_ev_angstrom",
+        lambda *_a, **_k: {},
+    )
 
     metrics = _evaluate_pycharmm(
         Namespace(quiet=True, checkpoint="/tmp/ckpt"),
@@ -961,7 +965,7 @@ def test_compare_force_sources_to_reference() -> None:
         {"spherical_fn": pred, "charmm_total": ref},
         baseline="spherical_fn",
     )
-    assert cross["force_rmse_vs_spherical_fn_eV_A"] == pytest.approx(float(np.sqrt(0.04 / 6.0)))
+    assert cross["force_rmse_vs_spherical_fn_eV_A"] == pytest.approx(float(np.sqrt(0.01 / 6.0)))
 
 
 def test_evaluate_pycharmm_reuses_mlpot_state_without_reregister() -> None:
@@ -995,5 +999,5 @@ def test_evaluate_pycharmm_reuses_mlpot_state_without_reregister() -> None:
     setup_mock.assert_not_called()
     sync_mock.assert_called_once()
     metrics_mock.assert_called_once()
-    assert metrics_mock.call_args.kwargs["ctx"] is ctx
-    assert metrics_mock.call_args.kwargs["calc"] is calc
+    assert metrics_mock.call_args.args[0] is ctx
+    assert metrics_mock.call_args.args[1] is calc

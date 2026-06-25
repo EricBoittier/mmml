@@ -178,7 +178,11 @@ def test_minimize_with_mlpot_asserts_user_when_ctx_provided():
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.assert_mlpot_user_active",
-    ) as assert_user:
+        return_value=0.0,
+    ) as assert_user, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms",
+        return_value=0.0,
+    ):
         minimize_with_mlpot(config)
 
     assert_user.assert_called_once_with(
