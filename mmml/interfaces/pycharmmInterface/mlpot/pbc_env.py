@@ -422,17 +422,20 @@ def sync_charmm_crystal_after_mm_pretreat(
     *,
     quiet: bool = False,
 ) -> bool:
-    """Re-install crystal/IMAGE when ``pbound`` is inactive after CPT pretreat.
+    """Refresh IMAGE lists after MM pretreat without redefining the crystal.
 
-    CPT prod can leave Fortran IMAGE lists valid while ``pbound_get_size`` reads
-    zero in Python.  MLpot MIC then falls back to restart-file L and can disagree
-    with in-memory coords.  Safe only **before** MLpot registration (no restart READ).
+    CPT/NVT pretreat already installed crystal + IMAGE during cluster setup and
+    dynamics.  ``pbound_get_size`` can read zero in Python while Fortran IMAGE
+    lists remain valid.  Re-running :func:`prepare_charmm_pbc` here re-folds
+    residues and can desync MLpot MIC from in-memory coords (classical GRMS still
+    looks fine; MLpot USER/GRMS explode at registration).
+
+    Safe only **before** MLpot registration (no restart READ).
     """
     if box_side_A <= 0.0:
         return False
     if charmm_crystal_is_active():
         return False
-    ensure_charmm_crystal_for_cpt(float(box_side_A), quiet=quiet)
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
 
@@ -444,13 +447,13 @@ def sync_charmm_crystal_after_mm_pretreat(
         live, source = probe_charmm_cubic_box_side_A()
         if live is not None and source == "pbound":
             print(
-                f"PBC crystal restored after MM pretreat: pbound L={live:.3f} Å",
+                f"PBC IMAGE refreshed after MM pretreat: pbound L={live:.3f} Å",
                 flush=True,
             )
         else:
             print(
-                "PBC crystal restored after MM pretreat (pbound still inactive; "
-                f"using L={float(box_side_A):.3f} Å from pretreat sync)",
+                "PBC IMAGE refreshed after MM pretreat (pbound still inactive in "
+                f"Python; MLpot MIC uses L={float(box_side_A):.3f} Å from pretreat sync)",
                 flush=True,
             )
     return True

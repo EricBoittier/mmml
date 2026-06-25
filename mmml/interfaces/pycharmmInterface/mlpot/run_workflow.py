@@ -1318,6 +1318,19 @@ def build_charmm_mm_pretreat_handoff_sections(
         if workflow_side > 0.0:
             rho = float(r.shape[0]) / float(workflow_side) ** 3
             pbc["number_density_atoms/Å³"] = f"{rho:.5f}"
+        if n_monomers > 1 and r.shape[0] % n_monomers == 0:
+            from mmml.utils.geometry_checks import find_worst_intermonomer_overlap
+
+            apm = int(r.shape[0] // n_monomers)
+            offsets = np.arange(0, r.shape[0] + 1, apm, dtype=int)
+            mic_cell = np.diag([float(ml_side), float(ml_side), float(ml_side)])
+            worst_mic, _ = find_worst_intermonomer_overlap(r, offsets, cell=mic_cell)
+            pbc["worst_MIC_intermonomer_Å"] = f"{worst_mic:.3f}"
+            if worst_mic < 1.5:
+                warnings.append(
+                    f"tight MIC inter-monomer contact {worst_mic:.3f} Å "
+                    "(<1.5 Å; MLpot may explode at registration)"
+                )
 
         if workflow_source == "restart":
             warnings.append(
