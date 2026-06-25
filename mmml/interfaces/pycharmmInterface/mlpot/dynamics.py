@@ -2040,6 +2040,11 @@ def _mlpot_ctx_cubic_box_side_A(mlpot_ctx: Optional["MlpotContext"]) -> float | 
 
 
 def _post_rescue_bath_target_K(chunk_kw: dict[str, Any]) -> float:
+    """Bath temperature for post-rescue Boltzmann draw and CPT thermostat keywords."""
+    if "hoover reft" in chunk_kw:
+        return float(chunk_kw["hoover reft"])
+    if "treference" in chunk_kw:
+        return float(chunk_kw["treference"])
     return float(
         chunk_kw.get("tbath", chunk_kw.get("finalt", chunk_kw.get("firstt", 300.0)))
     )
