@@ -180,3 +180,19 @@ def test_normalize_to_canonical_converts_hartree(tmp_path: Path) -> None:
     out = normalize_to_canonical(data, manifest, allow_hartree=True)
     assert out["E"][0] == pytest.approx(-HARTREE_TO_EV)
     assert CANONICAL_ENERGY_UNIT == "ev"
+
+
+def test_calculator_unit_metadata_must_not_flat_merge() -> None:
+    """Flat-merging CALCULATOR_UNITS overwrites ASE numeric energy with 'eV'."""
+    from mmml.data.units import calculator_results_units
+
+    meta = calculator_results_units()
+    numeric_energy = -43.5
+    results = {"energy": numeric_energy, "forces": np.zeros((2, 3))}
+    flat = {**results, **meta}
+    assert isinstance(flat["energy"], str)
+
+    results["units"] = dict(meta)
+    results["energy_unit"] = "eV"
+    assert isinstance(results["energy"], float)
+    assert results["units"]["energy"] == "eV"
