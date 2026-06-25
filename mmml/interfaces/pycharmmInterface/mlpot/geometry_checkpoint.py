@@ -126,6 +126,51 @@ def build_geometry_recovery_candidates(overlap: Any) -> list[Path]:
     return ordered
 
 
+def build_early_abort_recovery_candidates(
+    overlap: Any,
+    *,
+    overlap_restart_read: Path | str | None = None,
+) -> list[Path]:
+    """Recovery ladder after a short overlap chunk abort.
+
+    Unlike :func:`build_geometry_recovery_candidates`, the upcoming overlap
+    ``READYN`` source (``.overlap_a/.b.res`` from the previous good chunk) is
+    tried first so equi/prod does not rewind to an earlier stage (e.g. heat).
+    """
+    seen: set[str] = set()
+    ordered: list[Path] = []
+
+    def add(path: Path | str | None, *, allow_scratch: bool = False) -> None:
+        if path is None:
+            return
+        p = Path(path)
+        if is_overlap_scratch_restart_path(p) and not allow_scratch:
+            return
+        if is_pretreat_mm_restart_path(p):
+            return
+        if is_handoff_seed_restart_path(p):
+            return
+        key = str(p.expanduser())
+        if key in seen:
+            return
+        seen.add(key)
+        ordered.append(p)
+
+    if overlap_restart_read is not None:
+        read = Path(overlap_restart_read)
+        add(read, allow_scratch=True)
+        if is_overlap_scratch_restart_path(read):
+            name = read.name
+            if ".overlap_a." in name:
+                add(read.with_name(name.replace(".overlap_a.", ".overlap_b.")), allow_scratch=True)
+            elif ".overlap_b." in name:
+                add(read.with_name(name.replace(".overlap_b.", ".overlap_a.")), allow_scratch=True)
+
+    for cand in build_geometry_recovery_candidates(overlap):
+        add(cand)
+    return ordered
+
+
 def is_geometry_recovery_crd_path(path: Path | str) -> bool:
     """True for CHARMM coordinate cards used in the geometry recovery ladder."""
     return Path(path).suffix.lower() == ".crd"
@@ -454,12 +499,16 @@ def attempt_overlap_early_abort_recovery(
     steps_before_chunk: int,
     overlap_context: str,
     overlap_run_state_dir: Path | None = None,
+    overlap_restart_read: Path | str | None = None,
 ) -> GeometryRecoveryResult:
     """Reload geometry after a short chunk abort.
 
     When ``source`` is ``memory``, CHARMM still holds coordinates, velocities,
     and barostat state from the aborted chunk; callers must not Boltzmann-
     reassign velocities before retrying the chunk.
+
+    ``overlap_restart_read`` is the scratch/file path the failed chunk would
+  have ``READYN`` from (end of the previous overlap chunk).
     """
     if overlap is None or overlap.action != "rescue":
         return GeometryRecoveryResult(False)
@@ -467,7 +516,10 @@ def attempt_overlap_early_abort_recovery(
     if integrated <= 0:
         return GeometryRecoveryResult(False)
 
-    candidates = build_geometry_recovery_candidates(overlap)
+    candidates = build_early_abort_recovery_candidates(
+        overlap,
+        overlap_restart_read=overlap_restart_read,
+    )
 
     label = f"early-abort recovery ({overlap_context})"
     try:
