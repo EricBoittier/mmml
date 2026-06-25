@@ -52,7 +52,7 @@ def _build_ase_factory(args: Any, base_ckpt_dir: Path, atoms_per_list: list[int]
         ml_batch_size=getattr(args, "ml_batch_size", None),
         ml_max_active_dimers=getattr(args, "ml_max_active_dimers", None),
         ml_compute_dtype=getattr(args, "ml_compute_dtype", None),
-        max_pairs=int(getattr(args, "max_pairs", 20_000)),
+        max_pairs=int(getattr(args, "max_pairs", 20_000) or 20_000),
     )
 
 

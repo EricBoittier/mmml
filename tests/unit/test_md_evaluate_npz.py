@@ -54,6 +54,15 @@ def test_load_evaluate_npz_positions_only(tmp_path: Path) -> None:
     assert payload.handoff.atomic_numbers.size == 0
 
 
+def test_evaluate_int_arg_treats_none_as_default() -> None:
+    from mmml.cli.run.md_evaluate_npz import _evaluate_int_arg
+
+    args = Namespace(max_pairs=None, jax_md_update_interval=None)
+    assert _evaluate_int_arg(args, "max_pairs", 20_000) == 20_000
+    assert _evaluate_int_arg(args, "jax_md_update_interval", 1) == 1
+    assert _evaluate_int_arg(Namespace(), "max_pairs", 20_000) == 20_000
+
+
 def test_resolve_evaluate_use_pbc_from_setup() -> None:
     handoff = MdHandoffState(
         positions=np.zeros((3, 3)),
