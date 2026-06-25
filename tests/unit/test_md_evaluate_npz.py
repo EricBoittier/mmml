@@ -474,7 +474,7 @@ def test_run_evaluate_npz_ase_backend(tmp_path: Path, monkeypatch: pytest.Monkey
         jax_md_max_overflow_retries=4,
         jax_md_disable_fallback=False,
         jax_md_update_interval=1,
-        jax_md_skin_distance=0.2,
+        jax_md_skin_distance=0.0,
         max_pairs=1000,
         flat_bottom_radius=None,
         flat_bottom_k=1.0,

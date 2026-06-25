@@ -811,9 +811,6 @@ def setup_calculator(
         pbc_map = do_pbc_map = False
 
     _jax_md_skin_distance = float(jax_md_skin_distance)
-    if pbc_cell is not None and _jax_md_skin_distance == 0.0:
-        # Reuse jax_md pair lists between MLpot callbacks when coords move < 0.5 Å.
-        _jax_md_skin_distance = 0.5
 
     _density_est = cell_list_density_estimate if cell_list_density_estimate is not None else 0.03
     emit_hybrid_ml_setup(
