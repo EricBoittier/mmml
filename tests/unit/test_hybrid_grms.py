@@ -48,8 +48,11 @@ def test_mlpot_hybrid_grms_uses_spherical_fn():
     ("hybrid", "charmm", "kind"),
     [
         (3.0, 2.0, "ok"),
-        (7.0, 2.0, "desync_suspected"),
+        (0.5, 1.15, "ok"),
+        (9.0, 1.15, "geometry_stress"),
+        (7.0, 2.0, "geometry_stress"),
         (472.0, 1.15, "geometry_stress"),
+        (30.0, 10.0, "desync_suspected"),
         (80.0, 6.0, "both_high"),
     ],
 )
@@ -73,7 +76,7 @@ def test_resolve_mlpot_grms_reports_geometry_stress(capsys):
     out = capsys.readouterr().out
     assert "hybrid GRMS=80.0000" in out
     assert "geometry stress" in out
-    assert "stale or MM-only" not in out
+    assert "possible desync" not in out
 
 
 def test_resolve_mlpot_grms_reports_desync(capsys):
@@ -81,14 +84,14 @@ def test_resolve_mlpot_grms_reports_desync(capsys):
 
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.mlpot_hybrid_grms_from_calculator",
-        return_value=14.0,
+        return_value=30.0,
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms",
-        return_value=2.0,
+        return_value=10.0,
     ):
         grms = resolve_mlpot_grms_kcalmol_A(ctx, context="gate check")
 
-    assert grms == pytest.approx(14.0)
+    assert grms == pytest.approx(30.0)
     out = capsys.readouterr().out
     assert "possible desync" in out
 
@@ -110,9 +113,9 @@ def test_probe_and_light_resync_if_desync_runs_resync():
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.measure_hybrid_charmm_grms",
         return_value=mock.Mock(
-            hybrid=14.0,
-            charmm=2.0,
-            ratio=7.0,
+            hybrid=30.0,
+            charmm=10.0,
+            ratio=3.0,
             kind="desync_suspected",
         ),
     ), mock.patch(
@@ -133,9 +136,9 @@ def test_probe_and_light_resync_skips_resync_for_geometry_stress():
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.measure_hybrid_charmm_grms",
         return_value=mock.Mock(
-            hybrid=472.0,
+            hybrid=9.0,
             charmm=1.15,
-            ratio=410.0,
+            ratio=7.8,
             kind="geometry_stress",
         ),
     ), mock.patch(
@@ -144,7 +147,29 @@ def test_probe_and_light_resync_skips_resync_for_geometry_stress():
         grms = probe_and_light_resync_if_desync(ctx, context="sync")
 
     resync.assert_not_called()
-    assert grms == pytest.approx(472.0)
+    assert grms == pytest.approx(9.0)
+
+
+def test_probe_and_light_resync_skips_resync_when_hybrid_relaxed():
+    ctx = mock.Mock()
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.measure_hybrid_charmm_grms",
+        return_value=mock.Mock(
+            hybrid=0.5,
+            charmm=1.15,
+            ratio=2.3,
+            kind="ok",
+        ),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.light_resync_mlpot_state",
+    ) as resync:
+        grms = probe_and_light_resync_if_desync(ctx, context="sync")
+
+    resync.assert_not_called()
+    assert grms == pytest.approx(0.5)
 
 
 def test_light_resync_reregisters_and_updates():
@@ -211,8 +236,8 @@ def test_prepare_mlpot_hybrid_state_resync_before_bonded_recovery():
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.measure_hybrid_charmm_grms",
         side_effect=[
-            mock.Mock(hybrid=14.0, charmm=2.0, ratio=7.0, kind="desync_suspected"),
-            mock.Mock(hybrid=40.0, charmm=2.0, ratio=20.0, kind="geometry_stress"),
+            mock.Mock(hybrid=30.0, charmm=10.0, ratio=3.0, kind="desync_suspected"),
+            mock.Mock(hybrid=40.0, charmm=8.0, ratio=5.0, kind="desync_suspected"),
             mock.Mock(hybrid=3.0, charmm=2.5, ratio=1.2, kind="ok"),
         ],
     ), mock.patch(
@@ -223,7 +248,7 @@ def test_prepare_mlpot_hybrid_state_resync_before_bonded_recovery():
     ) as bonded:
         hybrid, user = prepare_mlpot_hybrid_state_for_sd(
             ctx,
-            grms_limit=50.0,
+            grms_limit=25.0,
             energy_limit=None,
             bonded_recovery_nstep=25,
             verbose=False,
