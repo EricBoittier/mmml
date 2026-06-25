@@ -409,3 +409,94 @@ class CutoffParameters:
         )
         fig.savefig(out_path, dpi=150)
         return ax
+
+
+def parse_comma_float_grid(spec: str) -> list[float]:
+    """Parse a comma-separated list of floats (e.g. grid CLI values)."""
+    return [float(x.strip()) for x in str(spec).split(",") if x.strip()]
+
+
+def cutoff_search_result_dict(
+    *,
+    ml_switch_width: float,
+    mm_switch_on: float,
+    mm_switch_width: float,
+    mse_energy: float,
+    mse_forces: float,
+    objective: float,
+) -> dict[str, float]:
+    """Canonical cutoff grid-search row plus deprecated aliases for older notebooks."""
+    ml_w = float(ml_switch_width)
+    mm_on = float(mm_switch_on)
+    mm_w = float(mm_switch_width)
+    return {
+        "ml_switch_width": ml_w,
+        "mm_switch_on": mm_on,
+        "mm_switch_width": mm_w,
+        "ml_cutoff": ml_w,
+        "mm_cutoff": mm_w,
+        "mse_energy": float(mse_energy),
+        "mse_forces": float(mse_forces),
+        "objective": float(objective),
+    }
+
+
+def cutoff_grids_from_args(args) -> tuple[list[float], list[float], list[float]]:
+    """Return (ml_switch_width_grid, mm_switch_on_grid, mm_switch_width_grid)."""
+    ml_spec = getattr(args, "ml_switch_width_grid", None) or getattr(
+        args, "ml_cutoff_grid", "1.5,2.0,2.5,3.0"
+    )
+    mm_on_spec = getattr(args, "mm_switch_on_grid", "4.0,5.0,6.0,7.0")
+    mm_w_spec = getattr(args, "mm_switch_width_grid", None) or getattr(
+        args, "mm_cutoff_grid", "0.5,1.0,1.5,2.0"
+    )
+    return (
+        parse_comma_float_grid(ml_spec),
+        parse_comma_float_grid(mm_on_spec),
+        parse_comma_float_grid(mm_w_spec),
+    )
+
+
+def add_handoff_cutoff_grid_args(parser: argparse.ArgumentParser) -> None:
+    """Grid-search CLI flags (canonical names with legacy aliases)."""
+    parser.add_argument(
+        "--ml-switch-width-grid",
+        "--ml-cutoff-grid",
+        dest="ml_switch_width_grid",
+        type=str,
+        default="1.5,2.0,2.5,3.0",
+        help="Comma-separated ML handoff width grid (Å).",
+    )
+    parser.add_argument(
+        "--mm-switch-on-grid",
+        dest="mm_switch_on_grid",
+        type=str,
+        default="4.0,5.0,6.0,7.0",
+        help="Comma-separated mm_switch_on grid (Å).",
+    )
+    parser.add_argument(
+        "--mm-switch-width-grid",
+        "--mm-cutoff-grid",
+        dest="mm_switch_width_grid",
+        type=str,
+        default="0.5,1.0,1.5,2.0",
+        help="Comma-separated MM outer taper width grid (Å).",
+    )
+    parser.add_argument(
+        "--energy-weight",
+        type=float,
+        default=1.0,
+        help="Weight for energy MSE in cutoff objective.",
+    )
+    parser.add_argument(
+        "--force-weight",
+        type=float,
+        default=1.0,
+        help="Weight for force MSE in cutoff objective.",
+    )
+    parser.add_argument(
+        "--max-frames",
+        type=int,
+        default=200,
+        help="Max trajectory frames to evaluate (-1 = all).",
+    )

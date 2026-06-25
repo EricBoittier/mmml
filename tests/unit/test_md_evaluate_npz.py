@@ -72,6 +72,27 @@ def test_md_system_parser_accepts_evaluate_npz() -> None:
     assert Path(args.evaluate_npz) == Path("/tmp/geom.npz")
 
 
+def test_md_system_parser_accepts_optimize_cutoffs() -> None:
+    from mmml.cli.run.md_system import parse_md_system_args
+
+    args = parse_md_system_args(
+        [
+            "--optimize-cutoffs",
+            "--reference-npz",
+            "/tmp/traj.npz",
+            "--composition",
+            "DCM:2",
+            "--ml-cutoff-grid",
+            "1.5,2.0",
+            "--max-frames",
+            "10",
+        ]
+    )
+    assert args.optimize_cutoffs is True
+    assert Path(args.reference_npz) == Path("/tmp/traj.npz")
+    assert args.ml_switch_width_grid == "1.5,2.0"
+
+
 def test_run_evaluate_npz_ase_backend(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     import sys
 

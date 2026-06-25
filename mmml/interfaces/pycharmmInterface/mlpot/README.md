@@ -234,6 +234,33 @@ NPZ fields:
 
 Backends: `ase` (ASE calculator), `jaxmd` (ASE + JIT spherical kernel), `pycharmm` (CHARMM MLpot callback). Results: `<output-dir>/evaluate.json`.
 
+## Cutoff optimization
+
+Three entry points share `mmml.interfaces.pycharmmInterface.hybrid_reference` and canonical cutoff names (`ml_switch_width`, `mm_switch_on`, `mm_switch_width`; legacy aliases `ml_cutoff`, `mm_cutoff`):
+
+| Tool | NPZ format | Topology |
+|------|------------|----------|
+| `mmml md-system --evaluate-npz` | single frame: `positions` | `--composition` or NPZ `atomic_numbers` |
+| `mmml md-system --optimize-cutoffs --reference-npz` | trajectory: `R`, optional `E`, `F` | `--composition` required |
+| `python -m mmml.cli.misc.opt_mmml` | trajectory: `R`, optional `E`, `F` | PDB + `--n-atoms-monomer` |
+
+Grid search example (ASE hybrid calculator, no dynamics):
+
+```bash
+mmml md-system \
+  --optimize-cutoffs \
+  --reference-npz path/to/qm_traj.npz \
+  --composition DCM:2 \
+  --checkpoint examples/ckpts_json/DESdimers_params.json \
+  --ml-switch-width-grid 1.5,2.0,2.5 \
+  --mm-switch-on-grid 6.0,7.0 \
+  --mm-switch-width-grid 0.5,1.0 \
+  --max-frames 50 \
+  --output-dir artifacts/cutoff_fit
+```
+
+Results: `<output-dir>/optimize_cutoffs.json` with `best` and per-grid `results` (canonical keys plus `ml_cutoff`/`mm_cutoff` aliases).
+
 
 ## Tests
 
