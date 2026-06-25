@@ -17,6 +17,17 @@ def _install_fake_pycharmm(
     user_kcal: float,
 ) -> None:
     """Stub pycharmm submodules without loading libcharmm (CI-safe)."""
+    from contextlib import contextmanager
+
+    @contextmanager
+    def _noop_silent():
+        yield
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_silent_command",
+        _noop_silent,
+    )
+
     fake_energy = types.ModuleType("pycharmm.energy")
     fake_energy.get_grms = lambda: grms
     fake_energy.get_term_by_name = lambda name: user_kcal
@@ -55,7 +66,7 @@ def test_assert_dynamics_ready_calls_ener_force_when_mlpot_required(monkeypatch)
         def reregister_mlpot(self) -> None:
             refreshed.append("reregister")
 
-    def _fake_refresh(ctx, *, context=""):
+    def _fake_refresh(ctx, *, context="", **kwargs):
         refreshed.append(f"refresh:{context}")
         return 0.1
 
@@ -92,7 +103,7 @@ def test_assert_dynamics_ready_retries_stale_mm_grms(monkeypatch):
 
     grms_values = iter([175.0, 5.5])
 
-    def _fake_refresh(ctx, *, context=""):
+    def _fake_refresh(ctx, *, context="", **kwargs):
         calls.append(f"refresh:{context}")
         return next(grms_values)
 

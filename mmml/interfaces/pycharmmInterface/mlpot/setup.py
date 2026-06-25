@@ -457,7 +457,9 @@ def apply_charmm_verbosity(
         "warnlev": int(settings.set_warn_level(int(warnlev))),
         "bomlev": int(settings.set_bomb_level(int(bomlev))),
     }
-    pycharmm.lingo.charmm_script(f"bomlev {int(bomlev)}")
+    pycharmm.lingo.charmm_script(
+        f"PRNLev {int(prnlev)}\nWRNLev {int(warnlev)}\nbomlev {int(bomlev)}"
+    )
     return old
 
 

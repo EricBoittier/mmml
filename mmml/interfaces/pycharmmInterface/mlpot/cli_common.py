@@ -1260,18 +1260,28 @@ def refresh_mlpot_energy_and_grms(
     mlpot_ctx: Any | None = None,
     *,
     context: str = "MLpot energy refresh",
+    silent_charmm: bool = True,
 ) -> float:
     """Re-apply MLpot BLOCK, run ``ENER FORCE``, return GRMS (kcal/mol/Å).
 
     CHARMM SD can leave a stale GRMS from the minimizer while MLpot USER forces
     are not fully synchronized. Call before pre-dynamics gates and after MLpot mini.
+
+    ``silent_charmm`` (default True) runs ``ENER FORCE`` at PRNLev/WRNLev 0 so gate
+    checks do not spam nonbond list banners; Python ``context`` lines still print.
     """
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
 
     if mlpot_ctx is not None:
         mlpot_ctx.reregister_mlpot()
-    pycharmm.lingo.charmm_script("ENER FORCE")
+    if silent_charmm:
+        from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
+
+        with charmm_silent_command():
+            pycharmm.lingo.charmm_script("ENER FORCE")
+    else:
+        pycharmm.lingo.charmm_script("ENER FORCE")
     grms = charmm_grms()
     if context:
         print(
@@ -1387,6 +1397,7 @@ def assert_dynamics_ready(
     require_mlpot_user: bool = False,
     user_zero_tol_kcalmol: float = 1.0e-6,
     mlpot_ctx: Any | None = None,
+    silent_charmm: bool = True,
 ) -> float:
     """Warn or abort if gradients are still huge before starting dynamics."""
     import math
@@ -1394,14 +1405,29 @@ def assert_dynamics_ready(
     import pycharmm
     import pycharmm.energy as energy
 
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
+
+    def _ener_force() -> None:
+        if silent_charmm:
+            with charmm_silent_command():
+                pycharmm.lingo.charmm_script("ENER FORCE")
+        else:
+            pycharmm.lingo.charmm_script("ENER FORCE")
+
     user_kcal: float | None = None
     if require_mlpot_user and mlpot_ctx is not None:
-        grms = refresh_mlpot_energy_and_grms(mlpot_ctx, context="")
+        grms = refresh_mlpot_energy_and_grms(
+            mlpot_ctx, context="", silent_charmm=silent_charmm
+        )
     elif require_mlpot_user:
-        pycharmm.lingo.charmm_script("ENER FORCE")
+        _ener_force()
         grms = charmm_grms()
     else:
-        pycharmm.lingo.charmm_script("ENER")
+        if silent_charmm:
+            with charmm_silent_command():
+                pycharmm.lingo.charmm_script("ENER")
+        else:
+            pycharmm.lingo.charmm_script("ENER")
         grms = charmm_grms()
     if require_mlpot_user:
         try:
@@ -1428,6 +1454,7 @@ def assert_dynamics_ready(
             grms = refresh_mlpot_energy_and_grms(
                 mlpot_ctx,
                 context="Pre-dynamics GRMS retry (stale MM block suspected)",
+                silent_charmm=silent_charmm,
             )
             if grms <= max_grms:
                 print(
