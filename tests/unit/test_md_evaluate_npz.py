@@ -327,8 +327,7 @@ def test_center_positions_at_com_moves_mass_weighted_origin() -> None:
     from ase.data import atomic_masses
 
     masses = atomic_masses[z]
-    com = np.average(pos, axis=0, weights=masses)
-    np.testing.assert_allclose(centered.mean(axis=0, weights=masses), 0.0, atol=1e-12)
+    np.testing.assert_allclose(np.average(centered, axis=0, weights=masses), 0.0, atol=1e-12)
 
 
 def test_save_evaluate_compare_extxyz_trajectories_writes_three_layers(tmp_path: Path) -> None:
