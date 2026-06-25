@@ -489,15 +489,23 @@ def test_decomposed_calculator_passes_charmm_box_to_spherical_fn():
     )
     captured: dict[str, Any] = {}
 
-    def _fake_vg_fn(*, n_atoms, atomic_numbers_jax, box_jax):
+    def _fake_forward_fn(*, n_atoms, atomic_numbers_jax, box_jax):
         captured["box_jax"] = box_jax
 
-        def _eval(positions_jax, mm_pair_idx, mm_pair_mask, use_mm_pairs):
+        def _eval(
+            positions_jax,
+            mm_pair_idx,
+            mm_pair_mask,
+            use_mm_pairs,
+            spatial_monomer_indices,
+            spatial_dimer_indices,
+            use_spatial,
+        ):
             return jnp.array(0.0), jnp.zeros((8, 3))
 
         return _eval
 
-    calc._get_value_and_grad_fn = MagicMock(side_effect=_fake_vg_fn)
+    calc._get_spherical_forward_fn = MagicMock(side_effect=_fake_forward_fn)
     n = 8
     x = np.zeros(n, dtype=np.float64)
     y = np.zeros(n, dtype=np.float64)
