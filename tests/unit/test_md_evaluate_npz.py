@@ -738,9 +738,9 @@ def test_evaluate_pycharmm_returns_forces_ev_angstrom(
     )
     monkeypatch.setattr(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_evaluate_forces_ev_angstrom",
-        lambda _calc, *, natom: (
+        lambda _calc, *, natom, positions=None, use_pbc=False, box_A=None: (
             np.asarray(forces_kcal[: int(natom)], dtype=np.float64) / float(ev2kcalmol),
-            "mlpot_callback",
+            "spherical_fn",
         ),
     )
 
@@ -758,7 +758,7 @@ def test_evaluate_pycharmm_returns_forces_ev_angstrom(
         forces_kcal / float(ev2kcalmol),
     )
     assert metrics["max_force_eV_A"] == pytest.approx(2.0)
-    assert metrics.get("force_source") == "mlpot_callback"
+    assert metrics.get("force_source") == "spherical_fn"
 
 
 def test_mlpot_hybrid_forces_ev_angstrom_reads_last_ml_forces() -> None:
