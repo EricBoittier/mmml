@@ -274,6 +274,19 @@ def _as_numeric_energy_array(values: np.ndarray) -> np.ndarray:
     return out
 
 
+def _load_reference_energy_array(data: Any) -> np.ndarray | None:
+    """Load per-frame reference energies from NPZ data (no unit inference)."""
+    files = list(getattr(data, "files", data.keys()))
+    if "E_eV" in files:
+        return np.asarray(data["E_eV"], dtype=np.float64).reshape(-1)
+    if "E" not in files:
+        return None
+    try:
+        return np.asarray(data["E"], dtype=np.float64).reshape(-1)
+    except (ValueError, TypeError):
+        return _as_numeric_energy_array(np.asarray(data["E"]))
+
+
 def load_reference_energies_from_npz(
     data: Any,
     *,
@@ -282,15 +295,10 @@ def load_reference_energies_from_npz(
     """Load per-frame reference energies and their unit from an NPZ."""
     files = list(getattr(data, "files", data.keys()))
     if "E_eV" in files:
-        e = np.asarray(data["E_eV"], dtype=np.float64).reshape(-1)
-        return e, "ev"
+        return _load_reference_energy_array(data), "ev"
     if "E" not in files:
         return None, infer_reference_energy_unit(path)
-    try:
-        e = np.asarray(data["E"], dtype=np.float64).reshape(-1)
-    except (ValueError, TypeError):
-        e = _as_numeric_energy_array(np.asarray(data["E"]))
-    return e, infer_reference_energy_unit(path)
+    return _load_reference_energy_array(data), infer_reference_energy_unit(path)
 
 
 def reference_energy_ev_at_frame(
@@ -526,7 +534,7 @@ def _infer_reference_units_from_arrays(npz_path: Path | str) -> tuple[str | None
             if "E" not in data.files:
                 return None, None
             try:
-                e = load_reference_energies_from_npz(data, path=p)[0]
+                e = _load_reference_energy_array(data)
             except ValueError:
                 return None, None
             if e is None or e.size == 0:

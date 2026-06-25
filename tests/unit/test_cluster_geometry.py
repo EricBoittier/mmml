@@ -56,3 +56,13 @@ def test_atoms_from_reference_npz(tmp_path: Path) -> None:
     atoms = atoms_from_reference_npz(path)
     assert len(atoms) == 5
     np.testing.assert_array_equal(atoms.get_atomic_numbers(), z_row[0])
+
+
+def test_ensure_monomer_3d_coords_breaks_collinear() -> None:
+    from mmml.cli.run.md_pbc_suite.cluster import ensure_monomer_3d_coords
+
+    flat = np.array([[0.0, 0.0, 0.0], [6.0, 0.0, 0.0]], dtype=float)
+    spread = ensure_monomer_3d_coords(flat)
+    span = np.ptp(spread, axis=0)
+    assert float(span[1]) >= 0.3
+    assert float(span[2]) >= 0.3
