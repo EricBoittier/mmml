@@ -191,14 +191,25 @@ def restore_charmm_state_from_restart(
             f"close unit {int(read_unit)}\n"
             "UPDATE\n"
         )
+    import pycharmm.coor as coor
+
+    n = int(coor.get_natom())
     live = get_charmm_positions_array()
     if (
-        live is None
-        or live.size != pos.shape[0]
-        or not np.all(np.isfinite(live))
-        or np.allclose(live, 0.0)
+        live is not None
+        and live.shape[0] == n
+        and np.all(np.isfinite(live))
+        and not np.allclose(live, 0.0)
     ):
+        sync_charmm_positions(live)
+    elif pos.shape[0] == n:
         sync_charmm_positions(pos)
+    else:
+        raise RuntimeError(
+            f"restart {path.name}: offline NATOM={pos.shape[0]} vs CHARMM natom={n} "
+            f"(live rows={None if live is None else live.shape[0]}). "
+            "PSF and restart atom counts must match."
+        )
 
 
 def restore_charmm_state_from_crd(crd_path: PathLike) -> None:

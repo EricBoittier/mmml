@@ -77,6 +77,9 @@ def get_charmm_positions_array() -> np.ndarray:
         df = getter()
         pos = df[["x", "y", "z"]].to_numpy(dtype=float)
         if pos.shape[0] and not np.allclose(pos, 0.0):
+            n = int(coor.get_natom())
+            if n > 0 and pos.shape[0] > n:
+                pos = np.asarray(pos[:n], dtype=float)
             return pos
     n = coor.get_natom()
     if n > 0:

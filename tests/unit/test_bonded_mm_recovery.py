@@ -1223,6 +1223,7 @@ def test_restore_charmm_state_from_restart_parses_and_syncs_positions(tmp_path):
         dtype=float,
     )
     mock_py = MagicMock()
+    mock_py.coor.get_natom.return_value = 2
     synced: list[np.ndarray] = []
 
     def _capture_sync(pos):
