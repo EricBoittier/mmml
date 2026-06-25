@@ -2,31 +2,34 @@ import os
 import sys
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Any
 
 # current directory of current file
 cwd = Path(__file__).parent
-
-chmh = None
-chml = None
-with open(cwd / ".." / ".." / ".." / "CHARMMSETUP") as f:
-    lines = f.readlines()
-    for line in lines:
-        if "CHARMM_HOME" in line:
-            chmh = line.split("=")[1].strip()
-        if "CHARMM_LIB_DIR" in line:
-            chml = line.split("=")[1].strip()
-if chmh is None:
-    raise ValueError("CHARMM_HOME is not set")
-if chml is None:
-    raise ValueError("CHARMM_LIB_DIR is not set")
-
-# job_shell / ensure_charmm_mlpot_limits.sh may export tier lib paths before import.
-CHARMM_HOME = os.environ.get("CHARMM_HOME") or chmh
-CHARMM_LIB_DIR = os.environ.get("CHARMM_LIB_DIR") or chml
-os.environ["CHARMM_HOME"] = CHARMM_HOME
-os.environ["CHARMM_LIB_DIR"] = CHARMM_LIB_DIR
-
 _REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def _load_charmm_paths_from_setup() -> tuple[str | None, str | None]:
+    chmh: str | None = None
+    chml: str | None = None
+    setup_file = _REPO_ROOT / "CHARMMSETUP"
+    if not setup_file.is_file():
+        return chmh, chml
+    for line in setup_file.read_text(encoding="utf-8").splitlines():
+        if "CHARMM_HOME" in line and "=" in line:
+            chmh = line.split("=", 1)[1].strip()
+        if "CHARMM_LIB_DIR" in line and "=" in line:
+            chml = line.split("=", 1)[1].strip()
+    return chmh, chml
+
+
+_setup_home, _setup_lib = _load_charmm_paths_from_setup()
+CHARMM_HOME = os.environ.get("CHARMM_HOME") or _setup_home or ""
+CHARMM_LIB_DIR = os.environ.get("CHARMM_LIB_DIR") or _setup_lib or ""
+if CHARMM_HOME:
+    os.environ.setdefault("CHARMM_HOME", CHARMM_HOME)
+if CHARMM_LIB_DIR:
+    os.environ.setdefault("CHARMM_LIB_DIR", CHARMM_LIB_DIR)
 
 
 def _ensure_vendored_pycharmm_on_path() -> None:
@@ -42,41 +45,82 @@ def _ensure_vendored_pycharmm_on_path() -> None:
 
 
 _ensure_vendored_pycharmm_on_path()
-chmhp = Path(CHARMM_HOME) / "tool" / "pycharmm"
-if str(chmhp) not in sys.path:
-    sys.path.append(str(chmhp))
+if CHARMM_HOME:
+    chmhp = Path(CHARMM_HOME) / "tool" / "pycharmm"
+    if str(chmhp) not in sys.path:
+        sys.path.append(str(chmhp))
 
 CGENFF_RTF = cwd / ".." / ".." / "data" / "charmm" / "top_all36_cgenff.rtf"
 CGENFF_RTF = CGENFF_RTF.resolve()
-print(CGENFF_RTF)
 CGENFF_PRM = cwd / ".." / ".." / "data" / "charmm" / "par_all36_cgenff.prm"
 CGENFF_PRM = CGENFF_PRM.resolve()
-print(CGENFF_PRM)
 
 CGENFF_RTF = str(CGENFF_RTF)
 CGENFF_PRM = str(CGENFF_PRM)
 
+from mmml.interfaces.pycharmmInterface.charmm_mpi import (  # noqa: E402
+    charmm_lib_available,
+    prepare_serial_charmm_mpi_env,
+)
 
-print("CHARMM_HOME", CHARMM_HOME)
-print("CHARMM_LIB_DIR", CHARMM_LIB_DIR)
-
-from mmml.interfaces.pycharmmInterface.charmm_mpi import prepare_serial_charmm_mpi_env
+PYCHARMM_AVAILABLE = charmm_lib_available()
 
 prepare_serial_charmm_mpi_env()
 
-import pycharmm
+pycharmm: Any = None
+coor: Any = None
+energy: Any = None
+read: Any = None
+settings: Any = None
+psf: Any = None
+minimize: Any = None
 
-import pycharmm.coor as coor
-import pycharmm.energy as energy
-import pycharmm.read as read
-import pycharmm.settings as settings
-import pycharmm.psf as psf
-import pycharmm.minimize as minimize
+if PYCHARMM_AVAILABLE:
+    import pycharmm as _pycharmm
+    import pycharmm.coor as _coor
+    import pycharmm.energy as _energy
+    import pycharmm.minimize as _minimize
+    import pycharmm.psf as _psf
+    import pycharmm.read as _read
+    import pycharmm.settings as _settings
+
+    pycharmm = _pycharmm
+    coor = _coor
+    energy = _energy
+    read = _read
+    settings = _settings
+    psf = _psf
+    minimize = _minimize
+
+
+def _report_charmm_import_paths() -> None:
+    if not PYCHARMM_AVAILABLE:
+        return
+    if (os.environ.get("MMML_QUIET") or "").strip().lower() in ("1", "yes", "true"):
+        return
+    try:
+        from mmml.utils.rich_report import emit_charmm_env
+
+        emit_charmm_env(
+            cgenff_rtf=CGENFF_RTF,
+            cgenff_prm=CGENFF_PRM,
+            charmm_home=CHARMM_HOME,
+            charmm_lib_dir=CHARMM_LIB_DIR,
+        )
+    except Exception:
+        print(CGENFF_RTF)
+        print(CGENFF_PRM)
+        print("CHARMM_HOME", CHARMM_HOME)
+        print("CHARMM_LIB_DIR", CHARMM_LIB_DIR)
+
+
+_report_charmm_import_paths()
 
 import ase
 from ase.visualize import view
 
-def get_block(a,b):
+
+def get_block(a, b):
     block = f"""BLOCK
 CALL 1 SELE .NOT. (RESID {a} .OR. RESID {b}) END
 CALL 2 SELE (RESID {a} .OR. RESID {b}) END
@@ -87,7 +131,10 @@ END
 """
     return block
 
+
 def reset_block() -> None:
+    if not PYCHARMM_AVAILABLE:
+        return
     block = """BLOCK 
         CALL 1 SELE ALL END
           COEFF 1 1 1.0 
@@ -96,7 +143,12 @@ def reset_block() -> None:
     from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
 
     run_charmm_script_quiet(block)
-    print("CHARMM BLOCK: full MM (all atoms, COEFF 1.0)", flush=True)
+    try:
+        from mmml.utils.rich_report import emit_charmm_block
+
+        emit_charmm_block("full MM (all atoms, COEFF 1.0)")
+    except Exception:
+        print("CHARMM BLOCK: full MM (all atoms, COEFF 1.0)", flush=True)
 
 
 def should_skip_charmm_energy_show() -> bool:
@@ -133,6 +185,8 @@ def safe_energy_show():
     Call energy.show() unless the environment requests skipping it to avoid segfault.
     Use when CHARMM energy evaluation may crash (e.g. under SLURM / on some clusters).
     """
+    if not PYCHARMM_AVAILABLE:
+        return
     if should_skip_charmm_energy_show():
         print("Skipping energy.show() (SKIP_CHARMM_ENERGY_SHOW, SLURM, or macOS).")
     else:
@@ -219,6 +273,8 @@ reset_block()
 
 def _init_charmm_default_levels() -> None:
     """Match ``mmml md-system`` defaults; ``bomlev 0`` aborts minimize in notebooks."""
+    if not PYCHARMM_AVAILABLE:
+        return
     try:
         from mmml.interfaces.pycharmmInterface.mlpot.setup import apply_charmm_verbosity
 
@@ -226,8 +282,6 @@ def _init_charmm_default_levels() -> None:
     except Exception:
         pass
 
-
-_init_charmm_default_levels()
 
 _domdec_vacuum_disabled = False
 _domdec_disabled_early = False
@@ -303,6 +357,8 @@ def ensure_domdec_off_for_mlpot_energy(*, context: str = "MLpot energy") -> bool
 
 def crystal_free_charmm() -> None:
     """Clear periodic image state (safe to repeat)."""
+    if not PYCHARMM_AVAILABLE:
+        return
     try:
         pycharmm.lingo.charmm_script("crystal free")
     except Exception:
@@ -321,8 +377,9 @@ def _init_vacuum_charmm_state() -> None:
 
 
 _init_vacuum_charmm_state()
+_init_charmm_default_levels()
 
-from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf 
+from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
 def ase_from_pycharmm_state():
     Z = get_Z_from_psf()
@@ -335,6 +392,8 @@ def view_pycharmm_state():
 
 def _apply_print_levels(prnlev: int, wrnlev: int) -> None:
     """Set CHARMM PRNLev/WRNLev via stream API and scripting (keeps both in sync)."""
+    if not PYCHARMM_AVAILABLE:
+        return
     settings.set_verbosity(int(prnlev))
     settings.set_warn_level(int(wrnlev))
     pycharmm.lingo.charmm_script(f"PRNLev {int(prnlev)}\nWRNLev {int(wrnlev)}")
@@ -359,6 +418,9 @@ def pycharmm_loud() -> None:
 @contextmanager
 def charmm_print_level(prnlev: int = 0, wrnlev: int | None = None):
     """Temporarily set CHARMM print/warning levels; restore on exit."""
+    if not PYCHARMM_AVAILABLE:
+        yield
+        return
     if wrnlev is None:
         wrnlev = prnlev
     old_prn = settings.set_verbosity(int(prnlev))
@@ -374,4 +436,5 @@ def charmm_print_level(prnlev: int = 0, wrnlev: int | None = None):
 
 from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev  # noqa: E402
 
-pycharmm_quiet()
+if PYCHARMM_AVAILABLE:
+    pycharmm_quiet()
