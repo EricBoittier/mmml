@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 from typing import Any
 
 __all__ = ["mlpot"]
@@ -9,7 +10,5 @@ __all__ = ["mlpot"]
 
 def __getattr__(name: str) -> Any:
     if name == "mlpot":
-        from mmml.interfaces.pycharmmInterface import mlpot as _mlpot
-
-        return _mlpot
+        return importlib.import_module(".mlpot", __name__)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
