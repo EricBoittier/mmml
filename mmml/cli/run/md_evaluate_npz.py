@@ -1070,11 +1070,29 @@ def resolve_evaluate_max_frames(args: Any) -> int:
     return int(raw)
 
 
+def _reference_frame_indices_override(args: Any) -> list[int] | None:
+    """Explicit reference frame list for single-frame reference-driven evaluation."""
+    ref_path = getattr(args, "evaluate_reference_npz", None)
+    if ref_path is None or resolve_evaluate_max_frames(args) != 1:
+        return None
+    ref_frame = getattr(args, "evaluate_reference_frame", None)
+    if ref_frame is not None:
+        return [int(ref_frame)]
+    eval_npz = getattr(args, "evaluate_npz", None)
+    if eval_npz is None:
+        return None
+    if Path(eval_npz).expanduser().resolve() == Path(ref_path).expanduser().resolve():
+        return [int(getattr(args, "evaluate_frame", 0) or 0)]
+    return None
+
+
 def should_evaluate_reference_trajectory(args: Any) -> bool:
-    """True when MMML should loop over frames from --evaluate-reference-npz."""
+    """True when MMML should loop over frames from ``--evaluate-reference-npz``."""
     if getattr(args, "evaluate_reference_npz", None) is None:
         return False
-    return resolve_evaluate_max_frames(args) != 1
+    if resolve_evaluate_max_frames(args) != 1:
+        return True
+    return _reference_frame_indices_override(args) is not None
 
 
 def compare_evaluate_to_reference_npz(
@@ -1594,6 +1612,7 @@ def _prepare_evaluate_npz_context(args: Any) -> dict[str, Any]:
             n_atoms_monomer=n_atoms_monomer,
             n_monomers=n_monomers,
             max_frames=resolve_evaluate_max_frames(args),
+            frame_indices_override=_reference_frame_indices_override(args),
         )
         ref_frame0 = int(reference.frame_indices[0])
         ref_z0 = _reference_z_for_frame(reference, ref_frame0, len(z))

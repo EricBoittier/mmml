@@ -134,7 +134,23 @@ def test_load_reference_trajectory_npz_selects_frames(tmp_path: Path) -> None:
     assert ref.com_distances.shape[0] == n_frames
 
 
-def test_load_reference_trajectory_rejects_handoff_npz(tmp_path: Path) -> None:
+def test_load_reference_trajectory_npz_honors_frame_indices_override(tmp_path: Path) -> None:
+    n_atoms = 4
+    n_frames = 6
+    R = np.random.default_rng(0).random((n_frames, n_atoms, 3))
+    z = np.array([6, 1, 1, 1], dtype=np.int32)
+    path = tmp_path / "traj.npz"
+    np.savez_compressed(path, R=R, Z=z, N=np.full(n_frames, n_atoms))
+
+    ref = load_reference_trajectory_npz(
+        path,
+        z_fallback=z,
+        n_atoms_monomer=2,
+        n_monomers=2,
+        max_frames=1,
+        frame_indices_override=[4],
+    )
+    np.testing.assert_array_equal(ref.frame_indices, [4])
     path = tmp_path / "handoff.npz"
     np.savez_compressed(path, positions=np.zeros((3, 3)), atomic_numbers=np.ones(3, dtype=int))
     with pytest.raises(ValueError, match="single-frame handoff"):

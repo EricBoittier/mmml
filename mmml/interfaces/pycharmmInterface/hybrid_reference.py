@@ -6,7 +6,7 @@ import itertools
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Sequence
 
 import numpy as np
 
@@ -140,6 +140,7 @@ def load_reference_trajectory_npz(
     n_atoms_monomer: int,
     n_monomers: int,
     max_frames: int = 200,
+    frame_indices_override: Sequence[int] | None = None,
 ) -> ReferenceTrajectory:
     """Load trajectory reference NPZ with ``R`` (and optional ``E``, ``F``)."""
     path = Path(path).expanduser().resolve()
@@ -202,10 +203,24 @@ def load_reference_trajectory_npz(
     else:
         valid_idx = np.arange(n_frames)
 
-    sorted_valid = valid_idx[np.argsort(com_distances[valid_idx])]
-    n_valid = len(sorted_valid)
-    stride = max(1, n_valid // max(1, n_eval))
-    frame_indices = sorted_valid[::stride][:n_eval]
+    if frame_indices_override is not None:
+        frame_indices = np.asarray(frame_indices_override, dtype=int).reshape(-1)
+        if frame_indices.size == 0:
+            raise ValueError("frame_indices_override must not be empty")
+        for idx in frame_indices.tolist():
+            if int(idx) < 0 or int(idx) >= n_frames:
+                raise ValueError(
+                    f"reference frame index {idx} out of range for {n_frames} frames"
+                )
+            if int(idx) not in set(valid_idx.tolist()):
+                raise ValueError(
+                    f"reference frame {idx} failed N={n_atoms_monomer * n_monomers} filter"
+                )
+    else:
+        sorted_valid = valid_idx[np.argsort(com_distances[valid_idx])]
+        n_valid = len(sorted_valid)
+        stride = max(1, n_valid // max(1, n_eval))
+        frame_indices = sorted_valid[::stride][:n_eval]
 
     return ReferenceTrajectory(
         path=path,
