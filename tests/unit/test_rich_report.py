@@ -94,3 +94,51 @@ def test_emit_hybrid_ml_setup_plain(capsys) -> None:
 
 def test_collect_psf_topology_mapping_without_charmm() -> None:
     assert rich_report.collect_psf_topology_mapping() is None
+
+
+def test_psf_residue_summary_per_residue_names() -> None:
+    class _Psf:
+        def get_nres(self) -> int:
+            return 10
+
+        def get_res(self) -> list[str]:
+            return ["DCM"] * 10
+
+        def get_resid(self) -> list[str]:
+            return [str(i) for i in range(1, 11)]
+
+    n_res, label = rich_report._psf_residue_summary(_Psf(), n_atom=50, max_residue_rows=6)
+    assert n_res == 10
+    assert label == "DCM×10"
+
+
+def test_psf_residue_summary_mixed_composition() -> None:
+    class _Psf:
+        def get_nres(self) -> int:
+            return 4
+
+        def get_res(self) -> list[str]:
+            return ["MEOH", "MEOH", "ACET", "ACET"]
+
+        def get_resid(self) -> list[str]:
+            return ["1", "2", "3", "4"]
+
+    n_res, label = rich_report._psf_residue_summary(_Psf(), n_atom=20, max_residue_rows=6)
+    assert n_res == 4
+    assert label == "MEOH×2, ACET×2"
+
+
+def test_psf_residue_summary_per_atom_resids() -> None:
+    class _Psf:
+        def get_nres(self) -> int:
+            return 2
+
+        def get_res(self) -> list[str]:
+            return ["DCM", "DCM"]
+
+        def get_resid(self) -> list[str]:
+            return ["1"] * 5 + ["2"] * 5
+
+    n_res, label = rich_report._psf_residue_summary(_Psf(), n_atom=10, max_residue_rows=6)
+    assert n_res == 2
+    assert label == "DCM×2"
