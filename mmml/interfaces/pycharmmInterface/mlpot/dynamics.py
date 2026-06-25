@@ -411,7 +411,6 @@ def minimize_bonded_mm_recovery(
 ) -> float | None:
     """Bonded-only rescue SD (BOND/ANGL/DIHE); MLpot detached for pure CHARMM minimization."""
     from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_bonded_mm_only_block
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         MlpotContext,
         get_charmm_positions_array,
@@ -425,10 +424,7 @@ def minimize_bonded_mm_recovery(
         _prepare_bonded_mm_rescue_environment(ctx)
         pycharmm, cons_fix, *_ = _import_pycharmm_modules()
         minimize = _import_pycharmm_modules()[3]
-        from mmml.interfaces.pycharmmInterface.charmm_levels import (
-            charmm_quiet_output,
-            run_charmm_script_quiet,
-        )
+        from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_quiet_output
 
         from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
             charmm_grms_after_ener_force,
@@ -437,9 +433,9 @@ def minimize_bonded_mm_recovery(
         if config.nstep_sd <= 0:
             return charmm_grms_after_ener_force()
 
+        grms_before = charmm_grms_after_ener_force()
         angl_before = charmm_bonded_term_kcalmol("ANGL")
         bond_before = charmm_bonded_term_kcalmol("BOND")
-        grms_before = charmm_grms_after_ener_force()
         _log_bonded_term_diagnostics(verbose=config.verbose)
         if config.verbose:
             msg = (
