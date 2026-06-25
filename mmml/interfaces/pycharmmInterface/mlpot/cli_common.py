@@ -1339,18 +1339,24 @@ def charmm_grms() -> float:
 
 
 def charmm_total_forces_kcalmol_A() -> np.ndarray:
-    """Per-atom CHARMM total forces from the last ``ENER FORCE`` (kcal/mol/Å)."""
+    """Per-atom CHARMM forces from the last ``ENER FORCE`` (kcal/mol/Å).
+
+    PyCHARMM ``coor.get_forces()`` exposes ``dx/dy/dz`` as energy gradients
+    (``dE/dx``). Physical forces are the negative gradient (see
+    ``tests/functionality/mlpot/01_callback_vs_ase_no_charmm.py``).
+    """
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm.coor as coor
 
     fdf = coor.get_forces()
-    return np.column_stack(
+    grad = np.column_stack(
         [
             fdf["dx"].to_numpy(dtype=float),
             fdf["dy"].to_numpy(dtype=float),
             fdf["dz"].to_numpy(dtype=float),
         ]
     )
+    return -grad
 
 
 def charmm_total_forces_ev_angstrom() -> np.ndarray:

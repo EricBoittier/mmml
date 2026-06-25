@@ -641,14 +641,32 @@ def test_evaluate_jaxmd_uses_cutoff_parameters_from_cutoffs_module() -> None:
 def test_charmm_total_forces_ev_angstrom_converts_kcal_units(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    pytest.importorskip("pycharmm")
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
         charmm_total_forces_ev_angstrom,
+        charmm_total_forces_kcalmol_A,
     )
 
+    class _ForceFrame:
+        def __init__(self, dx: float, dy: float, dz: float) -> None:
+            self._vals = {"dx": dx, "dy": dy, "dz": dz}
+
+        def __getitem__(self, key: str):
+            val = np.array([self._vals[key]], dtype=float)
+
+            class _Series:
+                @staticmethod
+                def to_numpy(dtype=float):
+                    return val.astype(dtype)
+
+            return _Series()
+
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_total_forces_kcalmol_A",
-        lambda: np.array([[23.060548867, 0.0, 0.0]]),
+        "pycharmm.coor.get_forces",
+        lambda: _ForceFrame(-23.060548867, 0.0, 0.0),
     )
+    kcal = charmm_total_forces_kcalmol_A()
+    assert kcal[0, 0] == pytest.approx(23.060548867)
     forces = charmm_total_forces_ev_angstrom()
     assert forces.shape == (1, 3)
     assert forces[0, 0] == pytest.approx(1.0)
