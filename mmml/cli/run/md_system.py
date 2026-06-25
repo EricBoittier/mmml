@@ -16,6 +16,7 @@ from mmml.interfaces.pycharmmInterface.cutoffs import (
     DEFAULT_ML_SWITCH_WIDTH,
     DEFAULT_MM_SWITCH_ON,
     DEFAULT_MM_SWITCH_WIDTH,
+    add_handoff_cutoff_grid_args,
 )
 from mmml.interfaces.pycharmmInterface.ml_dtypes import add_ml_compute_dtype_args
 
@@ -1160,6 +1161,32 @@ def build_parser() -> argparse.ArgumentParser:
         help="JSON path for --evaluate-npz results (default: <output-dir>/evaluate.json).",
     )
     parser.add_argument(
+        "--optimize-cutoffs",
+        action="store_true",
+        help=(
+            "Grid-search ML/MM handoff cutoffs against a reference trajectory NPZ "
+            "(requires --reference-npz and --composition). ASE backend only."
+        ),
+    )
+    parser.add_argument(
+        "--reference-npz",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help=(
+            "Trajectory NPZ with keys R (n_frames, N, 3) and optional E, F, Z, N "
+            "for --optimize-cutoffs (not the single-frame handoff format used by "
+            "--evaluate-npz)."
+        ),
+    )
+    parser.add_argument(
+        "--optimize-output",
+        type=Path,
+        default=None,
+        help="JSON path for --optimize-cutoffs results (default: <output-dir>/optimize_cutoffs.json).",
+    )
+    add_handoff_cutoff_grid_args(parser)
+    parser.add_argument(
         "--no-stage-summary",
         action="store_true",
         help="Do not write stage_summary.json (campaigns).",
@@ -2274,6 +2301,21 @@ def main() -> int:
                 print(f"mmml md-system: error: {exc}", file=sys.stderr)
                 exit_code = 2
             return exit_code
+        if getattr(args, "optimize_cutoffs", False):
+            if not getattr(args, "reference_npz", None):
+                print(
+                    "mmml md-system: error: --optimize-cutoffs requires --reference-npz",
+                    file=sys.stderr,
+                )
+                return 2
+            from mmml.cli.run.md_optimize_cutoffs import run_optimize_cutoffs
+
+            backend = "ase"
+            try:
+                return int(run_optimize_cutoffs(args))
+            except Exception as exc:
+                print(f"mmml md-system: optimize-cutoffs failed: {exc}", file=sys.stderr)
+                return 1
         if getattr(args, "evaluate_npz", None):
             try:
                 _apply_backend_setup_defaults(args)

@@ -6,7 +6,7 @@ dataset, and results for inspection in a notebook or REPL.
 
 Public API for notebook use:
 
-    from mmml.cli.opt_mmml import run, parse_args, OptContext
+    from mmml.cli.misc.opt_mmml import run, parse_args, OptContext
 
     args = parse_args()  # or build argparse.Namespace with required options
     ctx = run(args)      # returns OptContext, not exit code
@@ -15,16 +15,17 @@ Public API for notebook use:
     ctx.atoms            # ASE atoms with hybrid calculator attached
     ctx.hybrid_calc      # current hybrid calculator
     ctx.calculator_factory
-    ctx.cutoff_params    # CutoffParameters for current ml/mm cutoffs
-    ctx.dataset          # raw npz (ctx.dataset["R"], ctx.dataset["E"], etc.)
+    ctx.cutoff_params    # CutoffParameters (ml_switch_width / mm_switch_on / mm_switch_width)
+    ctx.reference        # ReferenceTrajectory from hybrid_reference
+    ctx.dataset          # raw npz (legacy alias: ctx.reference path arrays)
     ctx.R_all            # positions (n_frames, n_atoms, 3)
     ctx.E_all, ctx.F_all # reference energies and forces
     ctx.Z_ds             # atomic numbers (dataset order, possibly mapped)
     ctx.com_distances    # COM distance per frame
     ctx.frame_indices    # indices of frames used in evaluation
     ctx.has_E, ctx.has_F
-    ctx.results          # list of grid-search result dicts
-    ctx.best             # best result dict (ml_cutoff, mm_switch_on, mm_cutoff, objective, ...)
+    ctx.results          # list of grid-search result dicts (canonical + ml_cutoff aliases)
+    ctx.best             # best result dict
     ctx.save_dir         # directory used for diagnostics and trajectories
 
 Notebook kernel: Use the project venv (e.g. mmml/.venv/bin/python) as the notebook kernel.
@@ -35,7 +36,6 @@ Using a different Python (e.g. ~/.local) can cause JaxRuntimeError / PJRT versio
 from __future__ import annotations
 
 import argparse
-import itertools
 import json
 import sys
 import time
@@ -49,6 +49,18 @@ from mmml.cli.base import (
     resolve_checkpoint_paths,
     setup_ase_imports,
     setup_mmml_imports,
+)
+from mmml.interfaces.pycharmmInterface.cutoffs import (
+    add_handoff_cutoff_args,
+    add_handoff_cutoff_grid_args,
+    cutoff_grids_from_args,
+    cutoff_parameters_from_args,
+    handoff_widths_from_args,
+)
+from mmml.interfaces.pycharmmInterface.hybrid_reference import (
+    ReferenceTrajectory,
+    load_reference_trajectory_npz,
+    run_cutoff_grid_search,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.mlpot_gpu_policy import (
     resolve_ml_gpu_count as _resolve_ml_gpu_count,
@@ -78,43 +90,9 @@ def parse_args() -> argparse.Namespace:
         required=True,
     )
 
-    # Optimization controls
-    parser.add_argument(
-        "--ml-cutoff-grid",
-        type=str,
-        default="1.5,2.0,2.5,3.0",
-        help="Comma-separated ML cutoff grid in Å (e.g., '1.5,2.0,2.5').",
-    )
-    parser.add_argument(
-        "--mm-switch-on-grid",
-        type=str,
-        default="4.0,5.0,6.0,7.0",
-        help="Comma-separated MM switch-on grid in Å (e.g., '4.0,5.0,6.0').",
-    )
-    parser.add_argument(
-        "--mm-cutoff-grid",
-        type=str,
-        default="0.5,1.0,1.5,2.0",
-        help="Comma-separated MM cutoff width grid in Å (e.g., '0.5,1.0,1.5').",
-    )
-    parser.add_argument(
-        "--energy-weight",
-        type=float,
-        default=1.0,
-        help="Weight for energy MSE term in the objective.",
-    )
-    parser.add_argument(
-        "--force-weight",
-        type=float,
-        default=1.0,
-        help="Weight for force MSE term in the objective.",
-    )
-    parser.add_argument(
-        "--max-frames",
-        type=int,
-        default=200,
-        help="Maximum number of frames from dataset to evaluate (for speed). Use -1 for all.",
-    )
+    add_handoff_cutoff_grid_args(parser)
+    add_handoff_cutoff_args(parser)
+
     parser.add_argument(
         "--out",
         type=Path,
@@ -166,24 +144,6 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
-        "--ml-cutoff",
-        type=float,
-        # default=2.0,
-        help="ML cutoff distance passed to the calculator factory (default: 2.0 Å).",
-    )
-    parser.add_argument(
-        "--mm-switch-on",
-        type=float,
-        # default=5.0,
-        help="MM switch-on distance for the hybrid calculator (default: 5.0 Å).",
-    )
-    parser.add_argument(
-        "--mm-cutoff",
-        type=float,
-        # default=1.0,
-        help="MM cutoff width for the hybrid calculator (default: 1.0 Å).",
-    )
-    parser.add_argument(
         "--include-mm",
         action="store_true",
         help="Keep MM contributions enabled when evaluating the hybrid calculator.",
@@ -229,11 +189,6 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def parse_grid(s: str) -> list[float]:
-    """Parse comma-separated grid string into list of floats."""
-    return [float(x) for x in s.split(",") if x.strip() != ""]
-
-
 @dataclass
 class OptContext:
     """
@@ -252,7 +207,8 @@ class OptContext:
     calculator_factory: Any = None
     hybrid_calc: Any = None
     cutoff_params: Any = None
-    # Dataset: raw npz and extracted arrays
+    reference: ReferenceTrajectory | None = None
+    # Dataset: raw npz and extracted arrays (mirrors reference for notebooks)
     dataset: Any = None
     R_all: np.ndarray | None = None
     E_all: np.ndarray | None = None
@@ -303,64 +259,6 @@ def load_pdb_and_box(
     return ase_io.read(str(pdbfile))
 
 
-def load_dataset_and_frames(
-    dataset_path: Path,
-    Z_fallback: np.ndarray,
-    n_atoms_monomer: int,
-    n_monomers: int,
-    max_frames: int | None,
-) -> dict[str, Any]:
-    """
-    Load dataset npz, compute COM distances, select frame indices.
-    Returns dict with: dataset, R_all, E_all, F_all, Z_ds, com_distances,
-    frame_indices, has_E, has_F, n_eval, n_frames.
-    """
-    dataset = np.load(dataset_path)
-    R_all = np.array(dataset["R"], copy=True)
-    Z_ds = dataset.get("Z", Z_fallback)
-    if hasattr(Z_ds, "ndim") and Z_ds.ndim > 1:
-        Z_ds = np.array(Z_ds[0]).astype(int)
-    else:
-        Z_ds = np.asarray(Z_ds).astype(int)
-    E_all = dataset.get("E", None)
-    F_all = dataset.get("F", None)
-    has_E = E_all is not None and np.size(E_all) > 0
-    has_F = F_all is not None and np.size(F_all) > 0
-    n_frames = R_all.shape[0]
-    n_eval = (
-        min(n_frames, max_frames) if (max_frames is not None and max_frames > 0)
-        else n_frames if max_frames == -1 else n_frames
-    )
-    com_distances = []
-    for i in range(len(R_all)):
-        com1 = R_all[i][:n_atoms_monomer].mean(axis=0)
-        com2 = R_all[i][n_atoms_monomer:].mean(axis=0)
-        com_distances.append(float(np.linalg.norm(com1 - com2)))
-        R_all[i] = R_all[i] - R_all[i].mean(axis=0)
-    com_distances = np.array(com_distances)
-    valid_mask = np.asarray(dataset["N"]) == n_atoms_monomer * n_monomers
-    valid_idx = np.where(valid_mask)[0]
-    if valid_idx.size == 0:
-        raise RuntimeError("No valid dimer frames found in dataset.")
-    sorted_valid = valid_idx[np.argsort(com_distances[valid_idx])]
-    n_valid = len(sorted_valid)
-    stride = max(1, n_valid // max(1, n_eval))
-    frame_indices = sorted_valid[::stride][:n_eval]
-    return {
-        "dataset": dataset,
-        "R_all": R_all,
-        "E_all": E_all,
-        "F_all": F_all,
-        "Z_ds": Z_ds,
-        "com_distances": com_distances,
-        "frame_indices": frame_indices,
-        "has_E": has_E,
-        "has_F": has_F,
-        "n_eval": n_eval,
-        "n_frames": n_frames,
-    }
-
-
 def align_dataset_to_pdb_order(
     R_all: np.ndarray,
     Z_ds: np.ndarray,
@@ -389,12 +287,13 @@ def build_calculator_factory(
     setup_calculator: Any,
 ) -> Any:
     """Build the hybrid calculator factory from args and checkpoint."""
+    ml_w, mm_on, mm_w = handoff_widths_from_args(args)
     return setup_calculator(
         ATOMS_PER_MONOMER=args.n_atoms_monomer,
         N_MONOMERS=args.n_monomers,
-        ml_cutoff_distance=args.ml_cutoff,
-        mm_switch_on=args.mm_switch_on,
-        mm_cutoff=args.mm_cutoff,
+        ml_switch_width=ml_w,
+        mm_switch_on=mm_on,
+        mm_switch_width=mm_w,
         complementary_handoff=not getattr(args, "no_complementary_handoff", False),
         doML=True,
         doMM=args.include_mm,
@@ -454,12 +353,17 @@ def setup_atoms_cell_and_calc(
     atoms.calc = hybrid_calc
 
 
+def _cutoff_label_triple(args: argparse.Namespace) -> tuple[float, float, float]:
+    return handoff_widths_from_args(args)
+
+
 def run_diagnostics(ctx: OptContext, save_dir: Path) -> None:
     """Plot energy scatter, energy vs COM distance, and write diagnostics CSV."""
     imp = _ensure_opt_imports()
     pd = imp["pd"]
     plt = imp["plt"]
     args = ctx.args
+    ml_w, mm_on, mm_w = _cutoff_label_triple(args)
     atoms = ctx.atoms
     frame_indices = ctx.frame_indices
     R_all = ctx.R_all
@@ -501,7 +405,7 @@ def run_diagnostics(ctx: OptContext, save_dir: Path) -> None:
         })
     df_diag = pd.DataFrame(rows).sort_values(by=["com_dist", "frame_index"]).reset_index(drop=True)
     save_dir.mkdir(parents=True, exist_ok=True)
-    out_csv = save_dir / f"diagnostics_{args.ml_cutoff:.2f}_{args.mm_switch_on:.2f}_{args.mm_cutoff:.2f}.csv"
+    out_csv = save_dir / f"diagnostics_{ml_w:.2f}_{mm_on:.2f}_{mm_w:.2f}.csv"
     df_diag.to_csv(out_csv, index=False)
     print(f"Saved diagnostics CSV to {out_csv}")
     plt.figure(figsize=(5, 5))
@@ -512,10 +416,10 @@ def run_diagnostics(ctx: OptContext, save_dir: Path) -> None:
     plt.xlabel("Reference energy (E)")
     plt.ylabel("Predicted energy (E)")
     plt.title(
-        f"Energy: predicted vs reference | ml={args.ml_cutoff:.2f}, mm_on={args.mm_switch_on:.2f}, mm_cut={args.mm_cutoff:.2f}"
+        f"Energy: predicted vs reference | ml_w={ml_w:.2f}, mm_on={mm_on:.2f}, mm_w={mm_w:.2f}"
     )
     plt.tight_layout()
-    out_scatter = save_dir / f"energy_scatter_{args.ml_cutoff:.2f}_{args.mm_switch_on:.2f}_{args.mm_cutoff:.2f}.png"
+    out_scatter = save_dir / f"energy_scatter_{ml_w:.2f}_{mm_on:.2f}_{mm_w:.2f}.png"
     plt.savefig(out_scatter, dpi=150)
     plt.close()
     order = np.argsort(r_sel)
@@ -528,11 +432,11 @@ def run_diagnostics(ctx: OptContext, save_dir: Path) -> None:
     plt.xlabel("COM distance (Å)")
     plt.ylabel("Energy (E)")
     plt.title(
-        f"Energy vs COM distance | ml={args.ml_cutoff:.2f}, mm_on={args.mm_switch_on:.2f}, mm_cut={args.mm_cutoff:.2f}"
+        f"Energy vs COM distance | ml_w={ml_w:.2f}, mm_on={mm_on:.2f}, mm_w={mm_w:.2f}"
     )
     plt.legend()
     plt.tight_layout()
-    out_curve = save_dir / f"energy_vs_r_{args.ml_cutoff:.2f}_{args.mm_switch_on:.2f}_{args.mm_cutoff:.2f}.png"
+    out_curve = save_dir / f"energy_vs_r_{ml_w:.2f}_{mm_on:.2f}_{mm_w:.2f}.png"
     plt.savefig(out_curve, dpi=150)
     plt.close()
 
@@ -554,7 +458,8 @@ def write_reference_trajectory(ctx: OptContext, save_dir: Path) -> None:
     has_F = ctx.has_F
     if not has_E or frame_indices is None or R_all is None or Z_ds is None:
         return
-    ref_traj_path = save_dir / f"reference_trajectory_{args.ml_cutoff:.2f}_{args.mm_switch_on:.2f}_{args.mm_cutoff:.2f}.traj"
+    ml_w, mm_on, mm_w = _cutoff_label_triple(args)
+    ref_traj_path = save_dir / f"reference_trajectory_{ml_w:.2f}_{mm_on:.2f}_{mm_w:.2f}.traj"
     with Trajectory(ref_traj_path, "w") as traj:
         for i in frame_indices:
             cell = atoms.cell if getattr(atoms, "cell", None) is not None else None
@@ -571,84 +476,6 @@ def write_reference_trajectory(ctx: OptContext, save_dir: Path) -> None:
     print(
         f"Saved reference trajectory ({len(frame_indices)} frames) to {ref_traj_path}"
     )
-
-
-def evaluate_objective(
-    ml_cutoff: float,
-    mm_switch_on: float,
-    mm_cutoff: float,
-    ctx: OptContext,
-    CutoffParameters: Any,
-    Trajectory: Any,
-) -> dict[str, Any]:
-    """Evaluate objective (weighted MSE energy + MSE forces) for one cutoff triple."""
-    atoms = ctx.atoms
-    calculator_factory = ctx.calculator_factory
-    frame_indices = ctx.frame_indices
-    R_all = ctx.R_all
-    E_all = ctx.E_all
-    F_all = ctx.F_all
-    Z_ds = ctx.Z_ds
-    has_E = ctx.has_E
-    has_F = ctx.has_F
-    args = ctx.args
-    local_params = CutoffParameters(
-        ml_cutoff=ml_cutoff,
-        mm_switch_on=mm_switch_on,
-        mm_cutoff=mm_cutoff,
-    )
-    calc = build_hybrid_calculator(
-        calculator_factory,
-        Z_ds,
-        R_all[0],
-        args,
-        cutoff_params=local_params,
-    )
-    atoms.calc = calc
-    se_e, se_f, n_e, n_f = 0.0, 0.0, 0, 0
-    for i in frame_indices:
-        atoms.set_positions(R_all[i])
-        pred_E = float(atoms.get_potential_energy())
-        pred_F = np.asarray(atoms.get_forces())
-        if has_E and E_all is not None:
-            se_e += (pred_E - float(E_all[i])) ** 2
-            n_e += 1
-        if has_F and F_all is not None:
-            se_f += float(np.mean((np.asarray(F_all[i]) - pred_F) ** 2))
-            n_f += 1
-    mse_e = (se_e / max(n_e, 1)) if has_E else 0.0
-    mse_f = (se_f / max(n_f, 1)) if has_F else 0.0
-    obj = args.energy_weight * mse_e + args.force_weight * mse_f
-    return {
-        "ml_cutoff": ml_cutoff,
-        "mm_switch_on": mm_switch_on,
-        "mm_cutoff": mm_cutoff,
-        "mse_energy": mse_e,
-        "mse_forces": mse_f,
-        "objective": obj,
-    }
-
-
-def run_grid_search(
-    ml_grid: list[float],
-    mm_on_grid: list[float],
-    mm_cut_grid: list[float],
-    ctx: OptContext,
-    CutoffParameters: Any,
-    Trajectory: Any,
-) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
-    """Run full grid search; returns (results, best)."""
-    imp = _ensure_opt_imports()
-    Traj = imp["Trajectory"]
-    results = []
-    best = None
-    for ml_c, mm_on, mm_c in itertools.product(ml_grid, mm_on_grid, mm_cut_grid):
-        res = evaluate_objective(ml_c, mm_on, mm_c, ctx, CutoffParameters, Traj)
-        results.append(res)
-        print(f"DEBUG result: {res}")
-        if best is None or res["objective"] < best["objective"]:
-            best = res
-    return results, best
 
 
 def run(args: argparse.Namespace) -> OptContext:
@@ -681,11 +508,7 @@ def run(args: argparse.Namespace) -> OptContext:
     Z, R = pdb_ase_atoms.get_atomic_numbers(), pdb_ase_atoms.get_positions()
 
     ctx.calculator_factory = build_calculator_factory(args, base_ckpt_dir, natoms, setup_calculator)
-    ctx.cutoff_params = CutoffParameters(
-        ml_cutoff=args.ml_cutoff,
-        mm_switch_on=args.mm_switch_on,
-        mm_cutoff=args.mm_cutoff,
-    )
+    ctx.cutoff_params = cutoff_parameters_from_args(args)
     print(f"Cutoff parameters: {ctx.cutoff_params}")
     ctx.cutoff_params.plot_cutoff_parameters(Path.cwd())
 
@@ -711,26 +534,26 @@ def run(args: argparse.Namespace) -> OptContext:
     print(f"Initial forces: {hybrid_forces}")
 
 
-    # Load dataset and select frames
-    ds = load_dataset_and_frames(
+    # Load reference trajectory and select frames
+    ctx.reference = load_reference_trajectory_npz(
         args.dataset,
-        Z,
-        args.n_atoms_monomer,
-        args.n_monomers,
-        args.max_frames,
+        z_fallback=Z,
+        n_atoms_monomer=args.n_atoms_monomer,
+        n_monomers=args.n_monomers,
+        max_frames=args.max_frames,
     )
-    ctx.dataset = ds["dataset"]
-    ctx.R_all = ds["R_all"]
-    ctx.E_all = ds["E_all"]
-    ctx.F_all = ds["F_all"]
-    ctx.Z_ds = ds["Z_ds"]
-    ctx.com_distances = ds["com_distances"]
-    ctx.frame_indices = ds["frame_indices"]
-    ctx.has_E = ds["has_E"]
-    ctx.has_F = ds["has_F"]
-    ctx.n_eval = ds["n_eval"]
-    ctx.n_frames = ds["n_frames"]
-    print(f"Dataset: {ctx.dataset}")
+    ctx.dataset = np.load(args.dataset)
+    ctx.R_all = ctx.reference.R
+    ctx.E_all = ctx.reference.E
+    ctx.F_all = ctx.reference.F
+    ctx.Z_ds = ctx.reference.Z
+    ctx.com_distances = ctx.reference.com_distances
+    ctx.frame_indices = ctx.reference.frame_indices
+    ctx.has_E = ctx.reference.has_E
+    ctx.has_F = ctx.reference.has_F
+    ctx.n_eval = len(ctx.frame_indices)
+    ctx.n_frames = ctx.reference.n_frames
+    print(f"Dataset: {args.dataset}")
     print(f"Dataset keys: {list(ctx.dataset.keys())}")
     print(f"R shape: {ctx.R_all.shape}")
     print(
@@ -743,6 +566,19 @@ def run(args: argparse.Namespace) -> OptContext:
         ctx.R_all, ctx.Z_ds, ctx.F_all, Z,
     )
     ctx.R_all, ctx.Z_ds, ctx.F_all = R_all, Z_ds, F_all
+    ctx.reference = ReferenceTrajectory(
+        path=ctx.reference.path,
+        R=ctx.R_all,
+        Z=ctx.Z_ds,
+        E=ctx.E_all,
+        F=ctx.F_all,
+        frame_indices=ctx.frame_indices,
+        com_distances=ctx.com_distances,
+        has_E=ctx.has_E,
+        has_F=ctx.has_F,
+        n_frames=ctx.n_frames,
+        metadata=ctx.reference.metadata,
+    )
     if not np.all(Z == ctx.Z_ds):
         print("Applied atom-order mapping to match PDB.")
 
@@ -765,21 +601,33 @@ def run(args: argparse.Namespace) -> OptContext:
         print(f"Warning: reference trajectory writing failed: {e}")
 
     # Grid search
-    ml_grid = parse_grid(args.ml_cutoff_grid)
-    mm_on_grid = parse_grid(args.mm_switch_on_grid)
-    mm_cut_grid = parse_grid(args.mm_cutoff_grid)
-    print(f"Grid sizes -> ml:{len(ml_grid)} mm_on:{len(mm_on_grid)} mm_cut:{len(mm_cut_grid)}")
-
-    Traj = _ensure_opt_imports()["Trajectory"]
-    start = time.time()
-    ctx.results, ctx.best = run_grid_search(
-        ml_grid, mm_on_grid, mm_cut_grid, ctx, CutoffParameters, Traj
+    ml_grid, mm_on_grid, mm_w_grid = cutoff_grids_from_args(args)
+    print(
+        f"Grid sizes -> ml_w:{len(ml_grid)} mm_on:{len(mm_on_grid)} mm_w:{len(mm_w_grid)}"
     )
-    for res in ctx.results:
-        print(
-            f"ml={res['ml_cutoff']:.3f} mm_on={res['mm_switch_on']:.3f} mm_cut={res['mm_cutoff']:.3f} "
-            f"-> obj={res['objective']:.6e} (E={res['mse_energy']:.6e}, F={res['mse_forces']:.6e})"
+
+    def attach_calculator(cutoff):
+        return build_hybrid_calculator(
+            ctx.calculator_factory,
+            ctx.Z_ds,
+            ctx.R_all[int(ctx.frame_indices[0])],
+            args,
+            cutoff_params=cutoff,
         )
+
+    start = time.time()
+    ctx.results, ctx.best = run_cutoff_grid_search(
+        ml_grid=ml_grid,
+        mm_on_grid=mm_on_grid,
+        mm_w_grid=mm_w_grid,
+        atoms=ctx.atoms,
+        attach_calculator=attach_calculator,
+        reference=ctx.reference,
+        energy_weight=float(args.energy_weight),
+        force_weight=float(args.force_weight),
+        complementary_handoff=not bool(getattr(args, "no_complementary_handoff", False)),
+        verbose=True,
+    )
     elapsed = time.time() - start
     print(f"Grid search completed in {elapsed:.1f}s over {len(ctx.results)} combos.")
     print(f"Best: {ctx.best}")
@@ -799,14 +647,18 @@ def run(args: argparse.Namespace) -> OptContext:
 
     if args.out_npz is not None and ctx.best is not None:
         npz_data = {
-            "ml_cutoffs": np.array([r["ml_cutoff"] for r in ctx.results]),
+            "ml_switch_widths": np.array([r["ml_switch_width"] for r in ctx.results]),
             "mm_switch_ons": np.array([r["mm_switch_on"] for r in ctx.results]),
+            "mm_switch_widths": np.array([r["mm_switch_width"] for r in ctx.results]),
+            "ml_cutoffs": np.array([r["ml_cutoff"] for r in ctx.results]),
             "mm_cutoffs": np.array([r["mm_cutoff"] for r in ctx.results]),
             "mse_energies": np.array([r["mse_energy"] for r in ctx.results]),
             "mse_forces": np.array([r["mse_forces"] for r in ctx.results]),
             "objectives": np.array([r["objective"] for r in ctx.results]),
-            "best_ml_cutoff": ctx.best["ml_cutoff"],
+            "best_ml_switch_width": ctx.best["ml_switch_width"],
             "best_mm_switch_on": ctx.best["mm_switch_on"],
+            "best_mm_switch_width": ctx.best["mm_switch_width"],
+            "best_ml_cutoff": ctx.best["ml_cutoff"],
             "best_mm_cutoff": ctx.best["mm_cutoff"],
             "best_mse_energy": ctx.best["mse_energy"],
             "best_mse_forces": ctx.best["mse_forces"],

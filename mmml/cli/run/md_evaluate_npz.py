@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -18,92 +17,15 @@ from mmml.cli.run.md_handoff import (
     resolve_handoff_box,
     set_handoff_in,
 )
+from mmml.interfaces.pycharmmInterface.cutoffs import handoff_widths_from_args
+from mmml.interfaces.pycharmmInterface.hybrid_reference import (
+    GeometryNpzPayload as EvaluateNpzPayload,
+    apply_npz_charges_to_psf,
+    load_geometry_npz,
+)
 from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
 
-
-@dataclass
-class EvaluateNpzPayload:
-    """Geometry and optional MM parameters loaded from an evaluation NPZ."""
-
-    handoff: MdHandoffState
-    charges: np.ndarray | None = None
-    at_codes: np.ndarray | None = None
-    epsilon: np.ndarray | None = None
-    sigma: np.ndarray | None = None
-
-
-def _optional_npz_array(data: np.lib.npyio.NpzFile, key: str) -> np.ndarray | None:
-    if key not in data.files:
-        return None
-    arr = np.asarray(data[key])
-    if arr.size == 0:
-        return None
-    return arr
-
-
-def _normalize_at_codes(raw: np.ndarray) -> np.ndarray:
-    codes = np.asarray(raw, dtype=np.int32).reshape(-1)
-    if codes.size == 0:
-        raise ValueError("at_codes/iac array is empty")
-    if int(codes.min()) >= 1:
-        codes = codes - 1
-    if int(codes.min()) < 0:
-        raise ValueError("at_codes/iac must be 0-based or 1-based CHARMM iac indices")
-    return codes
-
-
-def load_evaluate_npz(path: Path) -> EvaluateNpzPayload:
-    """Load positions and optional MM parameters from an NPZ file.
-
-  Required:
-    - ``positions`` (N, 3)
-
-  Optional (standard handoff keys):
-    - ``atomic_numbers``, ``pbc``, ``cell``, ``velocities``, ``metadata``
-
-  Optional (MM overrides for calculator smoke tests):
-    - ``charges`` (N,) partial charges (e units)
-    - ``at_codes`` or ``iac`` (N,) LJ atom-type indices (0- or 1-based)
-    - ``epsilon``, ``sigma`` (N,) stored in the result payload for traceability;
-      switched MM still uses CGenFF tables keyed by ``at_codes`` unless the PSF
-      was built with matching types.
-    """
-    path = Path(path).expanduser().resolve()
-    if not path.is_file():
-        raise FileNotFoundError(f"evaluate NPZ not found: {path}")
-
-    with np.load(path, allow_pickle=True) as data:
-        handoff = load_handoff_from_npz(path)
-        charges = _optional_npz_array(data, "charges")
-        at_raw = _optional_npz_array(data, "at_codes")
-        if at_raw is None:
-            at_raw = _optional_npz_array(data, "iac")
-        at_codes = _normalize_at_codes(at_raw) if at_raw is not None else None
-        epsilon = _optional_npz_array(data, "epsilon")
-        sigma = _optional_npz_array(data, "sigma")
-
-    if charges is not None and int(charges.shape[0]) != int(handoff.positions.shape[0]):
-        raise ValueError(
-            f"charges length {charges.shape[0]} != positions atoms {handoff.positions.shape[0]}"
-        )
-    if at_codes is not None and int(at_codes.shape[0]) != int(handoff.positions.shape[0]):
-        raise ValueError(
-            f"at_codes length {at_codes.shape[0]} != positions atoms {handoff.positions.shape[0]}"
-        )
-
-    return EvaluateNpzPayload(
-        handoff=handoff,
-        charges=charges,
-        at_codes=at_codes,
-        epsilon=epsilon,
-        sigma=sigma,
-    )
-
-
-def apply_npz_charges_to_psf(charges: np.ndarray) -> None:
-    import pycharmm.scalar as scalar
-
-    scalar.set_charges(np.asarray(charges, dtype=np.float64))
+load_evaluate_npz = load_geometry_npz
 
 
 def resolve_evaluate_use_pbc(args: Any, handoff: MdHandoffState) -> bool:
@@ -130,12 +52,9 @@ def _resolve_evaluate_backend(args: Any) -> str:
     return backend
 
 
-def _mmml_cutoff_args(args: Any) -> tuple[float, float, float, float]:
-    from mmml.interfaces.pycharmmInterface.cutoffs import handoff_widths_from_args
-
+def _mmml_cutoff_args(args: Any) -> tuple[float, float, float]:
     ml_w, mm_on, mm_w = handoff_widths_from_args(args)
-    ml_cut = float(getattr(args, "ml_cutoff", getattr(args, "ml_switch_width", ml_w)))
-    return ml_cut, mm_on, mm_w, ml_w
+    return ml_w, mm_on, mm_w
 
 
 def _build_atoms_for_evaluate(
@@ -176,7 +95,7 @@ def _evaluate_ase_mmml(
 ) -> dict[str, Any]:
     from mmml.cli.run.md_pbc_suite.ase import _factory_mmml
 
-    ml_cut, mm_on, mm_w, _ = _mmml_cutoff_args(args)
+    ml_w, mm_on, mm_w = _mmml_cutoff_args(args)
     atoms_per = atoms_per_list[0] if len(set(atoms_per_list)) == 1 else atoms_per_list
     calc = _factory_mmml(
         z=z,
@@ -184,7 +103,7 @@ def _evaluate_ase_mmml(
         n_mol=n_monomers,
         atoms_per=atoms_per,
         base_ckpt_dir=base_ckpt_dir,
-        ml_cut=ml_cut,
+        ml_cut=ml_w,
         mm_sw=mm_on,
         mm_cut=mm_w,
         cell_scalar=float(L) if use_pbc and L is not None else None,
@@ -242,7 +161,7 @@ def _evaluate_jaxmd_mmml(
     from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
     import pycharmm.psf as psf
 
-    ml_cut, mm_on, mm_w, ml_w = _mmml_cutoff_args(args)
+    ml_w, mm_on, mm_w = _mmml_cutoff_args(args)
     if at_codes_override is not None:
         at_codes = np.asarray(at_codes_override, dtype=int)
     else:
