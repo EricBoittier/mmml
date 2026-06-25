@@ -423,6 +423,23 @@ def resolve_handoff_restart_template(
     return None
 
 
+def _handoff_positions_for_charmm_restart(handoff: MdHandoffState) -> np.ndarray:
+    """Prefer live CHARMM coords when the caller already synced aligned positions."""
+    try:
+        from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+
+        live = get_charmm_positions_array()
+        if (
+            live is not None
+            and int(live.size) == int(np.asarray(handoff.positions).size)
+            and not np.allclose(live, 0.0)
+        ):
+            return np.asarray(live, dtype=np.float64)
+    except Exception:
+        pass
+    return np.asarray(handoff.positions, dtype=np.float64)
+
+
 def prepare_pycharmm_handoff_continuation(
     handoff: MdHandoffState,
     args: argparse.Namespace,
@@ -441,9 +458,12 @@ def prepare_pycharmm_handoff_continuation(
     seed = Path(out_dir) / "handoff" / "continue_seed.res"
     seed.parent.mkdir(parents=True, exist_ok=True)
 
-    payload = handoff
+    positions = _handoff_positions_for_charmm_restart(handoff)
+    payload = handoff if np.allclose(positions, handoff.positions) else replace(
+        handoff, positions=positions
+    )
     if handoff.velocities is not None and not getattr(args, "continue_velocities", True):
-        payload = replace(handoff, velocities=None)
+        payload = replace(payload, velocities=None)
 
     # Whether we wrote the restart synthetically (bypasses CHARMM ``read restart``
     # since CHARMM's Fortran reader may not accept the synthetic header).

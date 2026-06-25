@@ -496,6 +496,67 @@ def test_charmm_jaxmd_pbc_alignment_roundtrip():
     assert np.allclose(back, pos_jax, atol=1.0e-6)
 
 
+def test_handoff_positions_for_charmm_restart_prefers_live_charmm(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from mmml.cli.run.md_handoff import (
+        MdHandoffState,
+        _handoff_positions_for_charmm_restart,
+    )
+
+    handoff_pos = np.array([[1.0, 2.0, 3.0]], dtype=float)
+    live_pos = np.array([[-10.0, 2.0, 3.0]], dtype=float)
+    handoff = MdHandoffState(
+        positions=handoff_pos,
+        atomic_numbers=np.array([6], dtype=np.int32),
+    )
+
+    def _fake_live() -> np.ndarray:
+        return live_pos.copy()
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        _fake_live,
+    )
+    got = _handoff_positions_for_charmm_restart(handoff)
+    assert np.allclose(got, live_pos)
+
+
+def test_staged_handoff_r_matches_charmm_aligned_positions() -> None:
+    """Regression: jaxmd handoff must update ``r`` after CHARMM PBC alignment."""
+    from dataclasses import replace
+
+    from mmml.cli.run.md_handoff import (
+        MdHandoffState,
+        align_handoff_positions_for_charmm_pbc,
+        monomer_offsets_uniform,
+    )
+
+    L = 28.0
+    pos_jax = np.zeros((10, 3), dtype=float)
+    pos_jax[0:5] = [2.0, 14.0, 14.0]
+    pos_jax[5:10] = [26.0, 14.0, 14.0]
+    handoff = MdHandoffState(
+        positions=pos_jax,
+        atomic_numbers=np.ones(10, dtype=np.int32),
+        metadata={"backend": "jaxmd"},
+    )
+    offsets = monomer_offsets_uniform(10, 2)
+    aligned = align_handoff_positions_for_charmm_pbc(
+        pos_jax,
+        monomer_offsets=offsets,
+        box_side_A=L,
+        handoff=handoff,
+        quiet=True,
+    )
+    r = np.asarray(aligned, dtype=np.float64)
+    handoff = replace(handoff, positions=r)
+    assert np.allclose(handoff.positions, r)
+    assert not np.allclose(r, pos_jax)
+    assert np.all(r[:, 0] >= -0.5 * L - 1.0e-6)
+    assert np.all(r[:, 0] <= 0.5 * L + 1.0e-6)
+
+
 def test_resolve_handoff_restart_template_uses_continue_from_final_res(
     nve_stub: Path, tmp_path: Path
 ) -> None:
