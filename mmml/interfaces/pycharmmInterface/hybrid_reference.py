@@ -65,14 +65,14 @@ def _normalize_at_codes(raw: np.ndarray) -> np.ndarray:
     return codes
 
 
-def load_geometry_npz(path: Path) -> GeometryNpzPayload:
-    """Load single-frame handoff-style NPZ (``positions`` key)."""
+def load_geometry_npz(path: Path, *, frame: int = 0) -> GeometryNpzPayload:
+    """Load single-frame geometry NPZ (``positions`` or trajectory ``R`` key)."""
     path = Path(path).expanduser().resolve()
     if not path.is_file():
         raise FileNotFoundError(f"geometry NPZ not found: {path}")
 
     with np.load(path, allow_pickle=True) as data:
-        handoff = load_handoff_from_npz(path)
+        handoff = load_handoff_from_npz(path, frame=frame)
         charges = _optional_npz_array(data, "charges")
         at_raw = _optional_npz_array(data, "at_codes")
         if at_raw is None:

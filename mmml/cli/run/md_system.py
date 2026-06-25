@@ -1161,6 +1161,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="JSON path for --evaluate-npz results (default: <output-dir>/evaluate.json).",
     )
     parser.add_argument(
+        "--evaluate-frame",
+        type=int,
+        default=0,
+        help="Frame index when --evaluate-npz uses trajectory keys R/Z (default: 0).",
+    )
+    parser.add_argument(
         "--optimize-cutoffs",
         action="store_true",
         help=(
@@ -2285,7 +2291,8 @@ def main() -> int:
     exit_code = 2
     try:
         try:
-            _validate_packmol_args(args)
+            if not getattr(args, "evaluate_npz", None):
+                _validate_packmol_args(args)
         except ValueError as exc:
             print(f"mmml md-system: error: {exc}", file=sys.stderr)
             return 2

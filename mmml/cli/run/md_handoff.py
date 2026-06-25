@@ -802,7 +802,59 @@ def load_handoff_from_res(path: Path, *, atomic_numbers: np.ndarray | None = Non
   )
 
 
-def load_handoff_from_npz(path: Path) -> MdHandoffState:
+def _handoff_positions_from_npz(data: np.lib.npyio.NpzFile, *, frame: int = 0) -> np.ndarray:
+  if "positions" in data.files:
+    positions = np.asarray(data["positions"], dtype=np.float64)
+  elif "R" in data.files:
+    R = np.asarray(data["R"], dtype=np.float64)
+    if R.ndim == 3:
+      positions = np.asarray(R[int(frame)], dtype=np.float64)
+    elif R.ndim == 2:
+      positions = R
+    else:
+      raise ValueError(f"R must have shape (N, 3) or (F, N, 3), got {R.shape}")
+  else:
+    raise KeyError("positions is not a file in the archive")
+
+  if positions.ndim != 2 or positions.shape[1] != 3:
+    raise ValueError(f"handoff positions must have shape (N, 3), got {positions.shape}")
+  return positions
+
+
+def _handoff_atomic_numbers_from_npz(
+    data: np.lib.npyio.NpzFile,
+    *,
+    frame: int = 0,
+    n_atoms: int | None = None,
+) -> np.ndarray:
+  raw = None
+  if "atomic_numbers" in data.files:
+    raw = data["atomic_numbers"]
+  elif "Z" in data.files:
+    raw = data["Z"]
+
+  if raw is None:
+    return np.zeros(0, dtype=np.int32)
+
+  z = np.asarray(raw, dtype=np.int32)
+  if z.ndim == 2:
+    z = np.asarray(z[int(frame)], dtype=np.int32)
+  elif z.ndim != 1:
+    raise ValueError(f"atomic_numbers/Z must have shape (N,) or (F, N), got {z.shape}")
+
+  if n_atoms is not None and int(z.shape[0]) != int(n_atoms):
+    if "N" in data.files:
+      active_n = int(np.asarray(data["N"], dtype=int).reshape(-1)[int(frame)])
+      if int(z.shape[0]) >= active_n:
+        z = np.asarray(z[:active_n], dtype=np.int32)
+    if int(z.shape[0]) != int(n_atoms):
+      raise ValueError(
+        f"atomic_numbers length {z.shape[0]} does not match positions ({n_atoms} atoms)"
+      )
+  return z
+
+
+def load_handoff_from_npz(path: Path, *, frame: int = 0) -> MdHandoffState:
   data = np.load(path, allow_pickle=True)
   meta_raw = data.get("metadata")
   if meta_raw is None and "metadata.json" in data.files:
@@ -814,9 +866,20 @@ def load_handoff_from_npz(path: Path) -> MdHandoffState:
   else:
     meta = {}
   cell = data["cell"] if "cell" in data.files else None
+  positions = _handoff_positions_from_npz(data, frame=frame)
+  if "N" in data.files and positions.shape[0] > 0:
+    counts = np.asarray(data["N"], dtype=int).reshape(-1)
+    active_n = int(counts[int(frame)])
+    if active_n < positions.shape[0]:
+      positions = np.asarray(positions[:active_n], dtype=np.float64)
+  atomic_numbers = _handoff_atomic_numbers_from_npz(
+    data,
+    frame=frame,
+    n_atoms=int(positions.shape[0]),
+  )
   return MdHandoffState(
-    positions=data["positions"],
-    atomic_numbers=data["atomic_numbers"],
+    positions=positions,
+    atomic_numbers=atomic_numbers,
     velocities=data["velocities"] if "velocities" in data.files else None,
     cell=cell,
     pbc=bool(data["pbc"]) if "pbc" in data.files else cell is not None,
