@@ -1776,7 +1776,7 @@ def test_apply_overlap_chunk_restart_read_forces_iasvel_zero():
     assert kw["firstt"] == 240.0
 
 
-def test_apply_overlap_chunk_hoover_chunk0_omits_start_and_iasvel_one():
+def test_apply_overlap_chunk_hoover_chunk0_preserves_cold_start():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
 
     kw = {
@@ -1785,10 +1785,10 @@ def test_apply_overlap_chunk_hoover_chunk0_omits_start_and_iasvel_one():
         "finalt": 240.0,
         "cpt": True,
         "hoover reft": 240.0,
-        "iasvel": 0,
+        "iasvel": 1,
     }
     _apply_overlap_chunk_dynamics_kw(kw, chunk_index=0, has_restart_read=False)
-    assert kw["start"] is False
+    assert kw["start"] is True
     assert kw["iasvel"] == 1
     assert kw["restart"] is False
 
@@ -1840,7 +1840,25 @@ def test_apply_overlap_chunk_preserves_heat_cold_start_kw():
     assert kw3["TEMINC"] == 48.0
 
 
-def test_apply_overlap_chunk_hoover_cpt_keeps_iasvel_zero_after_boltzmann():
+def test_apply_overlap_chunk_hoover_cpt_preserves_cold_start_on_chunk_zero():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
+
+    kw = {
+        "start": True,
+        "iasvel": 1,
+        "cpt": True,
+        "hoover reft": 2.0,
+        "firstt": 2.0,
+        "finalt": 10.0,
+    }
+    _apply_overlap_chunk_dynamics_kw(kw, chunk_index=0, has_restart_read=False)
+    assert kw["iasvel"] == 1
+    assert kw["start"] is True
+    assert kw["restart"] is False
+    assert kw["iunrea"] == -1
+
+
+def test_apply_overlap_chunk_hoover_cpt_continuation_zeros_iasvel_after_chunk_zero():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
 
     kw = {
@@ -1851,10 +1869,9 @@ def test_apply_overlap_chunk_hoover_cpt_keeps_iasvel_zero_after_boltzmann():
         "firstt": 10.0,
         "finalt": 24.0,
     }
-    _apply_overlap_chunk_dynamics_kw(kw, chunk_index=0, has_restart_read=False)
+    _apply_overlap_chunk_dynamics_kw(kw, chunk_index=1, has_restart_read=True)
     assert kw["iasvel"] == 0
-    assert kw["restart"] is False
-    assert kw["iunrea"] == -1
+    assert kw["restart"] is True
 
 
 def test_apply_overlap_chunk_cpt_npt_keeps_iasvel_one_after_boltzmann():

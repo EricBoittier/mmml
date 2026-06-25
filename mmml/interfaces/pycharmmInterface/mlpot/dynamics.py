@@ -1052,8 +1052,9 @@ def build_hoover_heat_dynamics(
     :func:`build_heat_dynamics` (``iasors=0`` ``ihtfrq`` scaling), which is the
     supported all-ML heat path in ``COMP_AND_HEATING.md``.
 
-    Boltzmann velocities at ``firstt`` should be assigned before ``dyna`` (see
-    :func:`staged_workflow._configure_heat_dynamics_start`).
+    On the first heat segment, Boltzmann assignment and CPT barostat init must
+    happen in one ``dyna`` call (``start=True``, ``iasvel=1``); see
+    :func:`staged_workflow._configure_heat_dynamics_start`.
     """
     heat_finalt = float(finalt if finalt is not None else temp)
     heat_firstt = float(firstt if firstt is not None else heat_finalt * 0.2)
@@ -2265,12 +2266,16 @@ def _apply_overlap_chunk_dynamics_kw(
     elif preserve_cold_start and (
         "hoover reft" in chunk_kw or bool(chunk_kw.get("cpt"))
     ):
-        # Hoover CPT chunk 0 after in-memory Boltzmann assign (see staged_workflow).
+        # Hoover CPT chunk 0: preserve start=True for single-dyna heat cold start.
+        # Equi/NPT may still use start=False with iasvel=1 after a Boltzmann assign.
         if bool(chunk_kw.get("start")):
             chunk_kw["iasvel"] = 1
-        elif int(chunk_kw.get("iasvel", 0)) != 1:
+        elif int(chunk_kw.get("iasvel", 0)) == 1:
+            chunk_kw["iasvel"] = 1
+            chunk_kw["start"] = False
+        else:
             chunk_kw["iasvel"] = 0
-        chunk_kw["start"] = False
+            chunk_kw["start"] = False
         if int(chunk_kw.get("ihtfrq", 0)) != 0:
             chunk_kw["ihtfrq"] = 0
     if chunk_index == 0 and not has_restart_read:
