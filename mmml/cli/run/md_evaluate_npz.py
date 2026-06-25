@@ -28,6 +28,13 @@ from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
 load_evaluate_npz = load_geometry_npz
 
 
+def _evaluate_int_arg(args: Any, name: str, default: int) -> int:
+    value = getattr(args, name, default)
+    if value is None:
+        return int(default)
+    return int(value)
+
+
 def resolve_evaluate_use_pbc(args: Any, handoff: MdHandoffState) -> bool:
     if handoff.cell is not None or bool(handoff.pbc):
         return True
@@ -112,13 +119,13 @@ def _evaluate_ase_mmml(
         jax_md_capacity_growth_factor=float(
             getattr(args, "jax_md_capacity_growth_factor", 1.5)
         ),
-        jax_md_max_overflow_retries=int(getattr(args, "jax_md_max_overflow_retries", 4)),
+        jax_md_max_overflow_retries=_evaluate_int_arg(args, "jax_md_max_overflow_retries", 4),
         jax_md_overflow_fallback_to_cell_list=not bool(
             getattr(args, "jax_md_disable_fallback", False)
         ),
-        jax_md_update_interval=int(getattr(args, "jax_md_update_interval", 1)),
+        jax_md_update_interval=_evaluate_int_arg(args, "jax_md_update_interval", 1),
         jax_md_skin_distance=float(getattr(args, "jax_md_skin_distance", 0.2)),
-        max_pairs=int(getattr(args, "max_pairs", 20_000)),
+        max_pairs=_evaluate_int_arg(args, "max_pairs", 20_000),
         flat_bottom_radius=getattr(args, "flat_bottom_radius", None),
         flat_bottom_force_const=float(getattr(args, "flat_bottom_k", 1.0)),
         flat_bottom_mode=str(getattr(args, "flat_bottom_mode", "system")),
@@ -180,16 +187,16 @@ def _evaluate_jaxmd_mmml(
         MAX_ATOMS_PER_SYSTEM=max(atoms_per_list) * 2,
         cell=False if not use_pbc else float(L),
         at_codes_override=at_codes,
-        max_pairs=int(getattr(args, "max_pairs", 20_000)),
+        max_pairs=_evaluate_int_arg(args, "max_pairs", 20_000),
         jax_md_capacity_multiplier=float(getattr(args, "jax_md_capacity_multiplier", 1.25)),
         jax_md_capacity_growth_factor=float(
             getattr(args, "jax_md_capacity_growth_factor", 1.5)
         ),
-        jax_md_max_overflow_retries=int(getattr(args, "jax_md_max_overflow_retries", 4)),
+        jax_md_max_overflow_retries=_evaluate_int_arg(args, "jax_md_max_overflow_retries", 4),
         jax_md_overflow_fallback_to_cell_list=not bool(
             getattr(args, "jax_md_disable_fallback", False)
         ),
-        jax_md_update_interval=int(getattr(args, "jax_md_update_interval", 1)),
+        jax_md_update_interval=_evaluate_int_arg(args, "jax_md_update_interval", 1),
         jax_md_skin_distance=float(getattr(args, "jax_md_skin_distance", 0.2)),
         flat_bottom_radius=getattr(args, "flat_bottom_radius", None),
         flat_bottom_force_const=float(getattr(args, "flat_bottom_k", 1.0)),
