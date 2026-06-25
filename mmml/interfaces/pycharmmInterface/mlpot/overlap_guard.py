@@ -784,21 +784,27 @@ def _extent_check(
     )
 
 
-def _maybe_save_rescue_snapshot(
+def save_stabilized_overlap_rescue_snapshot(
     mlpot_ctx: "MlpotContext",
     config: DynamicsOverlapConfig,
     *,
     label: str,
 ) -> None:
+    """Write PDB/CRD after MLpot re-register + rescue mini (not mid-bonded-MM)."""
     registry = getattr(config, "artifact_registry", None)
     if registry is None:
         return
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
-
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        resolve_mlpot_grms_kcalmol_A,
+    )
     from mmml.interfaces.pycharmmInterface.mlpot.minimize_artifacts import (
         save_snapshot_from_charmm,
     )
 
+    grms = resolve_mlpot_grms_kcalmol_A(
+        mlpot_ctx,
+        context=f"{label} rescue snapshot",
+    )
     spec = registry.allocate_rescue_spec(label)
     save_snapshot_from_charmm(
         registry,
@@ -806,7 +812,7 @@ def _maybe_save_rescue_snapshot(
         out_dir=registry.out_dir,
         tag=registry.tag,
         title=spec.label,
-        grms_kcalmol_A=float(charmm_grms()),
+        grms_kcalmol_A=float(grms),
         include_psf=False,
     )
 
@@ -959,7 +965,6 @@ def _handle_inter_monomer_rescue(
 
     try:
         run_inter_monomer_overlap_rescue(mlpot_ctx, config)
-        _maybe_save_rescue_snapshot(mlpot_ctx, config, label=label)
     except Exception as rescue_exc:
         if config.separate_on_rescue_fail:
             print(f"MLpot overlap rescue failed: {rescue_exc}", flush=True)
@@ -1004,7 +1009,6 @@ def _handle_intramonomer_rescue(
         raise RuntimeError(
             f"{exc}; intra-monomer bonded-MM rescue failed: {rescue_exc}"
         ) from rescue_exc
-    _maybe_save_rescue_snapshot(mlpot_ctx, config, label=label)
     try:
         return _intramonomer_check(config, context=f"{label} after intra-monomer rescue")
     except RuntimeError as still_bad:
@@ -1048,7 +1052,6 @@ def _handle_extent_rescue(
             config,
             prior_restart=prior,
         )
-        _maybe_save_rescue_snapshot(mlpot_ctx, config, label=label)
     except Exception as rescue_exc:
         raise RuntimeError(
             f"{exc}; fly-off recovery from {Path(prior).name} failed: {rescue_exc}"
