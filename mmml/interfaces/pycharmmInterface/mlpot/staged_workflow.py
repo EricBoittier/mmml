@@ -1298,6 +1298,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         if charmm_pbc and box_side is not None:
             from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
                 find_latest_pretreat_mm_restart,
+                sync_charmm_crystal_after_mm_pretreat,
                 sync_workflow_pbc_box_side_after_mm_pretreat,
             )
 
@@ -1310,6 +1311,10 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 box_side,
                 pretreat_restart=pretreat_restart_path,
                 args=args,
+                quiet=bool(args.quiet),
+            )
+            sync_charmm_crystal_after_mm_pretreat(
+                float(box_side),
                 quiet=bool(args.quiet),
             )
         else:

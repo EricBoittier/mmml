@@ -171,3 +171,49 @@ def test_pretreat_handoff_panel_tolerates_inactive_pbound(tmp_path: Path) -> Non
     pbc = dict(next(s for title, s in sections if title == "PBC → MLpot handoff"))
     assert pbc["pbound_cubic_L_Å"] == "inactive"
     assert "28.000 (restart)" in pbc["workflow_box_L_Å"]
+
+
+def test_sync_charmm_crystal_after_mm_pretreat_restores_inactive_pbound() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        sync_charmm_crystal_after_mm_pretreat,
+    )
+
+    mock_py = mock.MagicMock()
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
+        side_effect=[False, True],
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
+    ) as ensure, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
+        return_value=(28.0, "pbound"),
+    ), mock.patch.dict(
+        "sys.modules",
+        {
+            "pycharmm": mock_py,
+            "mmml.interfaces.pycharmmInterface.import_pycharmm": mock.MagicMock(),
+        },
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        return_value=__import__("contextlib").nullcontext(),
+    ):
+        restored = sync_charmm_crystal_after_mm_pretreat(28.0, quiet=True)
+
+    assert restored is True
+    ensure.assert_called_once_with(28.0, quiet=True)
+    assert "UPDATE" in mock_py.lingo.charmm_script.call_args[0][0]
+
+
+def test_sync_charmm_crystal_after_mm_pretreat_noop_when_active() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        sync_charmm_crystal_after_mm_pretreat,
+    )
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
+    ) as ensure:
+        assert sync_charmm_crystal_after_mm_pretreat(28.0, quiet=True) is False
+    ensure.assert_not_called()
