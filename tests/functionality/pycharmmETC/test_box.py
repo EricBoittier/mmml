@@ -15,11 +15,11 @@ def _can_import(name: str) -> bool:
 def test_setup_box_generic_smoke(pycharmm_workdir: Path):
     from mmml.interfaces.pycharmmInterface import setupBox
 
-    from tests.functionality.pycharmmETC._paths import fixture_pdb
+    from tests.functionality.pycharmmETC._paths import workdir_pdb
 
-    pdb_path = fixture_pdb("init-packmol.pdb")
-    if not pdb_path.is_file():
-        pytest.skip(f"Missing input pdb fixture: {pdb_path}")
+    pdb_path = workdir_pdb("init-packmol.pdb")
+    if not (pycharmm_workdir / pdb_path).is_file():
+        pytest.skip(f"Missing input pdb seed in workdir: {pdb_path}")
 
     atoms = setupBox.setup_box_generic(
         str(pdb_path), side_length=10.0, tag="tip3", skip_energy_show=True

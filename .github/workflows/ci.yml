@@ -38,3 +38,51 @@ jobs:
         run: |
           mkdocs build --strict
 
+  charmm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install CHARMM build dependencies
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            cmake gfortran g++ libstdc++-13-dev \
+            libopenmpi-dev openmpi-bin libfftw3-dev
+      - name: Ensure CHARMM tree
+        run: |
+          if [[ ! -d setup/charmm/source ]]; then
+            tar -xf setup/charmm.tar.xz -C setup
+          fi
+      - name: Cache libcharmm.so
+        id: charmm-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            setup/charmm/libcharmm.so
+            setup/charmm/lib
+            setup/api/.ci-charmm-patch-stamp
+            ~/.cache/mmml-charmm-build
+          key: charmm-lib-${{ hashFiles('setup/charmm.tar.xz', 'setup/api/api_func.F90', 'setup/api/api_psf.F90', 'scripts/rebuild_charmm_mlpot.sh') }}
+      - name: Build libcharmm.so
+        if: steps.charmm-cache.outputs.cache-hit != 'true'
+        run: bash scripts/ci/setup_charmm_lib.sh
+      - name: Write CHARMMSETUP (cache hit)
+        if: steps.charmm-cache.outputs.cache-hit == 'true'
+        run: |
+          {
+            echo "export CHARMM_HOME=$PWD/setup/charmm"
+            echo "export CHARMM_LIB_DIR=$PWD/setup/charmm"
+          } > CHARMMSETUP
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          pip install ".[dev]"
+      - name: Run PyCHARMM smoke tests
+        run: bash scripts/ci/run_pycharmm_smoke_pytest.sh -q
+
