@@ -327,7 +327,7 @@ def main(argv: list[str] | None = None) -> int:
         action="store_false",
         help="Skip ASE BFGS/FIRE pre-minimization before the JAX-MD runner.",
     )
-    p.add_argument("--jax-md-capacity-multiplier", type=float, default=1.25)
+    p.add_argument("--jax-md-capacity-multiplier", type=float, default=1.75)
     p.add_argument("--jax-md-capacity-growth-factor", type=float, default=1.5)
     p.add_argument("--jax-md-max-overflow-retries", type=int, default=4)
     p.add_argument("--jax-md-update-interval", type=int, default=1)

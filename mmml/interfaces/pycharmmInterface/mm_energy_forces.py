@@ -20,6 +20,10 @@ from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
     mic_displacements_batched_smooth,
 )
 
+# Verlet skin for jax-md MM pair reuse: ≤ dr_threshold/2 (dr_threshold=0.5 Å in bundle).
+DEFAULT_JAX_MD_CAPACITY_MULTIPLIER = 1.75
+DEFAULT_JAX_MD_SKIN_DISTANCE_A = 0.25
+
 try:
     from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM, CGENFF_RTF
     from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet
@@ -129,10 +133,6 @@ def _filter_pairs_by_com_min(
     return out_mask
 
 
-# Verlet skin for jax-md MM pair reuse: ≤ dr_threshold/2 (dr_threshold=0.5 Å in bundle).
-DEFAULT_JAX_MD_SKIN_DISTANCE_A = 0.25
-
-
 def format_mm_pair_update_stats_summary(stats: dict) -> str:
     """One-line neighbor-list cache summary for jaxmd suite logs."""
     calls = int(stats.get("calls", 0))
@@ -178,6 +178,30 @@ def neighbor_pair_cache_should_reuse(
         return box_delta <= box_delta_tol
 
     return False
+
+
+def _fractional_positions_for_jax_md_neighbor_list(
+    positions: np.ndarray,
+    pbc_cell: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Wrap Cartesian positions to fractional [0,1) and return (R_frac, box_diag)."""
+    cell_np = np.asarray(pbc_cell, dtype=np.float64)
+    if cell_np.ndim == 0:
+        L = float(cell_np)
+        cell_3x3 = np.diag([L, L, L])
+    elif cell_np.shape == (1,):
+        L = float(cell_np[0])
+        cell_3x3 = np.diag([L, L, L])
+    elif cell_np.shape == (3,):
+        cell_3x3 = np.diag(cell_np)
+    else:
+        cell_3x3 = cell_np
+
+    inv_cell = np.linalg.inv(cell_3x3)
+    R_frac = positions @ inv_cell.T
+    R_frac = np.asarray(R_frac - np.floor(R_frac), dtype=np.float64)
+    box_diag = np.diagonal(cell_3x3).astype(np.float64)
+    return R_frac, box_diag
 
 
 def _box_to_cell_3x3(box: Array) -> Array:
@@ -379,12 +403,12 @@ def build_mm_energy_forces_fn(
     use_jax_md_neighbor_list: bool = True,
     fractional_coordinates: bool = False,
     mm_r_min: Optional[float] = None,
-    jax_md_capacity_multiplier: float = 1.25,
+    jax_md_capacity_multiplier: float = DEFAULT_JAX_MD_CAPACITY_MULTIPLIER,
     jax_md_capacity_growth_factor: float = 1.5,
     jax_md_max_overflow_retries: int = 4,
     jax_md_overflow_fallback_to_cell_list: bool = True,
     jax_md_update_interval: int = 1,
-    jax_md_skin_distance: float = 0.0,
+    jax_md_skin_distance: float = DEFAULT_JAX_MD_SKIN_DISTANCE_A,
     mm_nl_backend: str = "auto",
     debug: bool = False,
     ml_compute_dtype: str | None = None,
@@ -800,6 +824,7 @@ def build_mm_energy_forces_fn(
             "skin_distance": float(max(0.0, jax_md_skin_distance)),
         }
         _last_positions = [None]
+        _last_cartesian_positions = [None]
         _last_box = [None]
         _fallback_max_pairs_cell = [max_pairs]
 
@@ -962,27 +987,9 @@ def build_mm_energy_forces_fn(
             )
 
         def update_mm_pairs(positions: np.ndarray, box: Optional[np.ndarray] = None) -> Tuple[Array, Array]:
-            R = np.asarray(positions, dtype=np.float64)
+            R_cart = np.asarray(positions, dtype=np.float64)
             _nbr_debug = debug
             _pair_stats["calls"] += 1
-
-            if fractional_coordinates and box is None:
-                cell_np = np.asarray(pbc_cell, dtype=np.float64)
-                if cell_np.ndim == 0:
-                    L = float(cell_np)
-                    cell_3x3 = np.diag([L, L, L])
-                elif cell_np.shape == (1,):
-                    L = float(cell_np[0])
-                    cell_3x3 = np.diag([L, L, L])
-                elif cell_np.shape == (3,):
-                    cell_3x3 = np.diag(cell_np)
-                else:
-                    cell_3x3 = cell_np
-
-                inv_cell = np.linalg.inv(cell_3x3)
-                R_frac = R @ inv_cell.T
-                R = np.asarray(R_frac - np.floor(R_frac), dtype=np.float64)
-                box = np.diagonal(cell_3x3).astype(np.float64)
 
             interval = int(max(1, jax_md_update_interval))
             skin = float(max(0.0, jax_md_skin_distance))
@@ -992,18 +999,23 @@ def build_mm_energy_forces_fn(
                 and _pair_mask_cell[0] is not None
             )
 
+            # Skin/interval reuse on Cartesian coords (skip fractional wrap + inv on hot path).
             if neighbor_pair_cache_should_reuse(
                 calls=_pair_stats["calls"],
                 interval=interval,
                 skin=skin,
-                R=R,
-                last_R=_last_positions[0],
+                R=R_cart,
+                last_R=_last_cartesian_positions[0],
                 box=box,
                 last_box=_last_box[0],
                 have_cache=have_cache,
             ):
                 _pair_stats["reused"] += 1
                 return _pair_idx_cell[0], _pair_mask_cell[0]
+
+            R = R_cart
+            if fractional_coordinates and box is None:
+                R, box = _fractional_positions_for_jax_md_neighbor_list(R_cart, pbc_cell)
 
             nbrs = _nbrs[0]
             kwargs = {} if (box is None or not fractional_coordinates) else {"box": jnp.asarray(box)}
@@ -1118,6 +1130,7 @@ def build_mm_energy_forces_fn(
             _pair_idx_cell[0] = pair_idx
             _pair_mask_cell[0] = pair_mask
             _last_positions[0] = np.asarray(R, dtype=np.float64)
+            _last_cartesian_positions[0] = R_cart.copy()
             _last_box[0] = None if box is None else np.asarray(box, dtype=np.float64).copy()
             _pair_stats["updates"] += 1
 

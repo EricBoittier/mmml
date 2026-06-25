@@ -1330,7 +1330,7 @@ def _attach_ase_mmml_calculator(
         mm_cut=mm_w,
         cell_scalar=float(L) if use_pbc and L is not None else None,
         verbose=bool(getattr(args, "verbose_calc", False)),
-        jax_md_capacity_multiplier=float(getattr(args, "jax_md_capacity_multiplier", 1.25)),
+        jax_md_capacity_multiplier=float(getattr(args, "jax_md_capacity_multiplier", 1.75)),
         jax_md_capacity_growth_factor=float(
             getattr(args, "jax_md_capacity_growth_factor", 1.5)
         ),
@@ -1444,7 +1444,7 @@ def _evaluate_jaxmd_mmml(
         cell=False if not use_pbc else float(L),
         at_codes_override=at_codes,
         max_pairs=_evaluate_int_arg(args, "max_pairs", 20_000),
-        jax_md_capacity_multiplier=float(getattr(args, "jax_md_capacity_multiplier", 1.25)),
+        jax_md_capacity_multiplier=float(getattr(args, "jax_md_capacity_multiplier", 1.75)),
         jax_md_capacity_growth_factor=float(
             getattr(args, "jax_md_capacity_growth_factor", 1.5)
         ),

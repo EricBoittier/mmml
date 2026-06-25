@@ -4,7 +4,17 @@ from __future__ import annotations
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mm_energy_forces import neighbor_pair_cache_should_reuse
+from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
+    DEFAULT_JAX_MD_CAPACITY_MULTIPLIER,
+    DEFAULT_JAX_MD_SKIN_DISTANCE_A,
+    _fractional_positions_for_jax_md_neighbor_list,
+    neighbor_pair_cache_should_reuse,
+)
+
+
+def test_default_jax_md_neighbor_tuning_constants() -> None:
+    assert DEFAULT_JAX_MD_SKIN_DISTANCE_A == 0.25
+    assert DEFAULT_JAX_MD_CAPACITY_MULTIPLIER == 1.75
 
 
 def test_skin_zero_interval_reuse_stable_box() -> None:
@@ -52,3 +62,11 @@ def test_skin_positive_small_disp_reuse() -> None:
         last_box=box.copy(),
         have_cache=True,
     )
+
+
+def test_fractional_wrap_helper_matches_legacy_shape() -> None:
+    R = np.array([[0.1, 0.2, 0.3], [1.1, 0.0, 0.0]], dtype=np.float64)
+    R_frac, box_diag = _fractional_positions_for_jax_md_neighbor_list(R, np.array(30.0))
+    assert R_frac.shape == R.shape
+    assert box_diag.shape == (3,)
+    assert np.all(R_frac >= 0.0) and np.all(R_frac < 1.0)

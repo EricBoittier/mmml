@@ -1441,8 +1441,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--jax-md-capacity-multiplier",
         type=float,
-        default=1.25,
-        help="Initial jax-md neighbor-list capacity multiplier.",
+        default=1.75,
+        help="Initial jax-md neighbor-list capacity multiplier (higher reduces overflow/re-JIT).",
     )
     parser.add_argument(
         "--jax-md-capacity-growth-factor",

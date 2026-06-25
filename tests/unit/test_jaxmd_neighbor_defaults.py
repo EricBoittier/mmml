@@ -77,3 +77,4 @@ def test_jaxmd_and_ase_cli_defaults_use_interval_one_conservative_skin():
     assert "default=1" in jaxmd_src.split("jax-md-update-interval")[1][:120]
     assert "DEFAULT_JAX_MD_SKIN_DISTANCE_A" in ase_src
     assert "default=1," in ase_src.split('"--jax-md-update-interval"')[1][:200]
+    assert "default=1.75" in ase_src.split('"--jax-md-capacity-multiplier"')[1][:200]
