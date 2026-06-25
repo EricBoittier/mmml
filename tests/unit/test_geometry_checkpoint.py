@@ -285,6 +285,27 @@ def test_build_geometry_recovery_candidates_skips_pretreat_mm(tmp_path):
     assert pretreat not in ladder
 
 
+def test_attempt_overlap_early_abort_recovery_reports_memory_source(tmp_path):
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        n_monomers=2,
+        geometry_fallback_restarts=(),
+    )
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.restore_geometry_from_ladder",
+        return_value=Path("<in-memory>"),
+    ):
+        recovery = attempt_overlap_early_abort_recovery(
+            cfg,
+            chunk_nstep=640,
+            steps_done=2706,
+            steps_before_chunk=2560,
+            overlap_context="PROD",
+        )
+    assert recovery.ok is True
+    assert recovery.source == "memory"
+
+
 def test_attempt_overlap_early_abort_recovery_uses_baseline_not_scratch(tmp_path):
     baseline = tmp_path / "geometry_baseline_dcm_155.res"
     baseline.write_text("baseline\n", encoding="utf-8")
@@ -301,14 +322,15 @@ def test_attempt_overlap_early_abort_recovery_uses_baseline_not_scratch(tmp_path
         "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.restore_geometry_from_ladder",
         return_value=baseline,
     ) as restore:
-        ok = attempt_overlap_early_abort_recovery(
+        recovery = attempt_overlap_early_abort_recovery(
             cfg,
             chunk_nstep=250,
             steps_done=138,
             steps_before_chunk=0,
             overlap_context="heat segment 1/10",
         )
-    assert ok is True
+    assert recovery.ok is True
+    assert recovery.source == "restart"
     restore.assert_called_once()
     called_candidates = restore.call_args[0][0]
     assert called_candidates[0] == baseline
@@ -400,7 +422,7 @@ def test_attempt_overlap_early_abort_recovery_uses_crd_when_restarts_invalid(
         "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.charmm_memory_coordinates_usable",
         return_value=False,
     ):
-        ok = attempt_overlap_early_abort_recovery(
+        recovery = attempt_overlap_early_abort_recovery(
             cfg,
             chunk_nstep=400,
             steps_done=1,
@@ -408,5 +430,6 @@ def test_attempt_overlap_early_abort_recovery_uses_crd_when_restarts_invalid(
             overlap_context="HEAT",
         )
 
-    assert ok is True
+    assert recovery.ok is True
+    assert recovery.source == "crd"
     restore_crd.assert_called_once_with(crd.resolve())
