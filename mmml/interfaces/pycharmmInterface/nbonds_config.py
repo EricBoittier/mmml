@@ -53,6 +53,17 @@ class PbcNbondCutoffs:
             "(CHARMM requires cutoffs < L/2)"
         )
 
+    def charm_ctexnb_A(self) -> float:
+        """``ctexnb`` passed to CHARMM (may bump by 1 Å when the box allows).
+
+        CHARMM can segfault when ``ctexnb`` equals ``cutnb`` exactly on some builds.
+        Bump by 1 Å only when that stays strictly below ``L/2``.
+        """
+        return charm_ctexnb_A(
+            self.ctexnb,
+            cubic_box_side_A=self.cubic_box_side_A,
+        )
+
     def as_pbc_nbond_kwargs(self, *, nbxmod: int = 1) -> dict[str, Any]:
         return pbc_nbond_kwargs(
             nbxmod=nbxmod,
@@ -60,8 +71,26 @@ class PbcNbondCutoffs:
             cutim=self.cutim,
             ctonnb=self.ctonnb,
             ctofnb=self.ctofnb,
-            ctexnb=self.ctexnb+1.0, # fix for CHARMM segfault
+            ctexnb=self.charm_ctexnb_A(),
         )
+
+
+def charm_ctexnb_A(
+    ctexnb: float,
+    *,
+    cubic_box_side_A: float,
+    bump_A: float = 1.0,
+) -> float:
+    """Return PBC-safe ``ctexnb`` for CHARMM, with optional +1 Å bump when allowed."""
+    base = float(ctexnb)
+    bumped = base + float(bump_A)
+    L = float(cubic_box_side_A)
+    if not (L > 0.0) or L != L:  # nan / invalid box: vacuum-style preset
+        return bumped
+    half = 0.5 * L
+    if bumped < half:
+        return bumped
+    return base
 
 
 def scale_vacuum_switch_cutoffs(

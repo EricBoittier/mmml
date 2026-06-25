@@ -604,6 +604,31 @@ def test_save_handoff_to_res_unusable_template_resolves_fallback(
     np.testing.assert_allclose(reloaded.positions, pos, rtol=1e-5, atol=1e-5)
 
 
+def test_find_usable_fallback_template_prefers_newest_restart(
+    nve_stub: Path, tmp_path: Path
+) -> None:
+    import os
+    import time
+    from mmml.cli.run.md_handoff import _find_usable_fallback_template
+
+    bad_template = tmp_path / "handoff" / "final.res"
+    bad_template.parent.mkdir(parents=True)
+    bad_template.write_text("continue_seed_style_invalid")
+
+    older = tmp_path / "heat_old.res"
+    newer = tmp_path / "heat_new.res"
+    older.write_text(nve_stub.read_text(encoding="ascii"), encoding="ascii")
+    newer.write_text(nve_stub.read_text(encoding="ascii"), encoding="ascii")
+
+    old_time = time.time() - 3600
+    os.utime(older, (old_time, old_time))
+    os.utime(newer, (time.time(), time.time()))
+
+    found = _find_usable_fallback_template(bad_template, expected_natom=20)
+    assert found is not None
+    assert found.name == "heat_new.res"
+
+
 def test_prepare_pycharmm_handoff_continuation_no_template_invalid_restart(
     tmp_path: Path,
 ) -> None:
