@@ -442,7 +442,10 @@ def test_build_stage_dynamics_kw_heat_no_echeck_heat_disables_echeck():
 
 
 def test_resolve_heat_thermostat_coerces_scale_after_pretreat():
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_heat_thermostat
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        resolve_charmm_mm_pretreat_for_staged,
+        resolve_heat_thermostat,
+    )
 
     args = argparse.Namespace(
         heat_thermostat="scale",
@@ -459,6 +462,24 @@ def test_resolve_heat_thermostat_coerces_scale_after_pretreat():
         quiet=True,
     )
     assert resolve_heat_thermostat(args_no_pretreat) == "scale"
+
+
+def test_resolve_charmm_mm_pretreat_for_staged_skips_handoff():
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        resolve_charmm_mm_pretreat_for_staged,
+    )
+
+    args = argparse.Namespace(charmm_mm_pretreat=True)
+    assert resolve_charmm_mm_pretreat_for_staged(args, handoff_coords_in_memory=False)
+    assert not resolve_charmm_mm_pretreat_for_staged(args, handoff_coords_in_memory=True)
+
+    args_force = argparse.Namespace(
+        charmm_mm_pretreat=True,
+        charmm_mm_pretreat_on_handoff=True,
+    )
+    assert resolve_charmm_mm_pretreat_for_staged(
+        args_force, handoff_coords_in_memory=True
+    )
 
 
 def test_build_stage_dynamics_kw_heat_scale_pbc_avoids_cpt():

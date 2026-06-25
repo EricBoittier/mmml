@@ -633,7 +633,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "pycharmm: CGENFF minimize + CHARMM heat/equi/prod before MLpot (no PhysNet); "
-            "see --charmm-mm-pretreat-ps-* and --charmm-mm-pretreat-heat-nstep"
+            "see --charmm-mm-pretreat-ps-* and --charmm-mm-pretreat-heat-nstep. "
+            "Skipped when continuing from handoff unless --charmm-mm-pretreat-on-handoff"
+        ),
+    )
+    parser.add_argument(
+        "--charmm-mm-pretreat-on-handoff",
+        action="store_true",
+        help=(
+            "pycharmm: run CHARMM MM pretreat even when jaxmd/PyCHARMM handoff coords "
+            "are already in memory (default: pretreat only on cold Packmol starts)"
         ),
     )
     parser.add_argument(
@@ -1995,6 +2004,8 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     cmd.extend(["--charmm-tolgrd", str(args.charmm_tolgrd)])
     if getattr(args, "charmm_mm_pretreat", False):
         cmd.append("--charmm-mm-pretreat")
+    if getattr(args, "charmm_mm_pretreat_on_handoff", False):
+        cmd.append("--charmm-mm-pretreat-on-handoff")
     _append_optional(
         cmd,
         "--charmm-mm-pretreat-ps-heat",

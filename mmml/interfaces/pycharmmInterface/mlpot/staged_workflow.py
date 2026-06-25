@@ -38,6 +38,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_pbc_box_side,
     resolve_show_energy,
     resolve_test_first_config,
+    resolve_charmm_mm_pretreat_for_staged,
     resolve_charmm_use_pbc,
     resolve_loose_pbc,
     resolve_mlpot_use_pbc,
@@ -1235,7 +1236,21 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             )
     recovery_topology_psf = vmd_topo_psf if Path(vmd_topo_psf).is_file() else None
 
-    pretreat_mm = bool(getattr(args, "charmm_mm_pretreat", False))
+    pretreat_mm = resolve_charmm_mm_pretreat_for_staged(
+        args,
+        handoff_coords_in_memory=handoff_coords_in_memory,
+    )
+    if (
+        handoff_coords_in_memory
+        and bool(getattr(args, "charmm_mm_pretreat", False))
+        and not pretreat_mm
+        and not args.quiet
+    ):
+        print(
+            "CHARMM MM pretreat: skipped (handoff coords in memory; "
+            "use --charmm-mm-pretreat-on-handoff to force)",
+            flush=True,
+        )
     if pretreat_mm:
         r = run_charmm_mm_pretreat_before_mlpot(
             args,

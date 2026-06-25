@@ -450,9 +450,31 @@ def _requested_heat_thermostat(args: argparse.Namespace) -> str:
     return raw
 
 
+def resolve_charmm_mm_pretreat_for_staged(
+    args: argparse.Namespace,
+    *,
+    handoff_coords_in_memory: bool,
+) -> bool:
+    """Whether to run CHARMM MM pretreat before MLpot in :func:`run_staged_workflow`.
+
+    Pretreat relaxes Packmol clashes on cold starts.  When continuing from a jaxmd
+    or PyCHARMM handoff, coordinates are already in CHARMM memory — pretreat is
+    skipped unless ``--charmm-mm-pretreat-on-handoff`` is set.
+    """
+    if not bool(getattr(args, "charmm_mm_pretreat", False)):
+        return False
+    if handoff_coords_in_memory and not bool(
+        getattr(args, "charmm_mm_pretreat_on_handoff", False)
+    ):
+        return False
+    return True
+
+
 def heat_thermostat_requires_hoover_after_pretreat(args: argparse.Namespace) -> bool:
     """True when MLpot heat must use Hoover to avoid two-nose CHARMM conflicts."""
-    if not bool(getattr(args, "charmm_mm_pretreat", False)):
+    if not resolve_charmm_mm_pretreat_for_staged(
+        args, handoff_coords_in_memory=False
+    ):
         return False
     setup = str(getattr(args, "setup", "") or "").strip().lower()
     return setup.startswith("pbc_")
