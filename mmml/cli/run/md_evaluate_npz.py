@@ -1522,7 +1522,13 @@ def _evaluate_pycharmm(
     grms = refresh_mlpot_energy_and_grms(ctx, context=refresh_ctx)
     charmm_row = charmm_energy_row()
     total_kcal = float(charmm_row.get("ENER", charmm_row.get("ENERGY", 0.0)))
-    forces_ev, force_source = resolve_evaluate_forces_ev_angstrom(calc, natom=int(len(z)))
+    forces_ev, force_source = resolve_evaluate_forces_ev_angstrom(
+        calc,
+        natom=int(len(z)),
+        positions=np.asarray(positions, dtype=np.float64),
+        use_pbc=use_pbc,
+        box_A=L,
+    )
     return normalize_metrics_to_ev(
         {
             "energy_kcal_mol": total_kcal,
@@ -1875,6 +1881,8 @@ def _evaluate_reference_trajectory(args: Any, ctx: dict[str, Any]) -> int:
                 reference_force_unit=ref_force_unit,
             )
             cmp["status"] = "ok"
+            if metrics.get("force_source") is not None:
+                cmp["force_source"] = str(metrics["force_source"])
             com_dist = _reference_com_dist_A(reference, int(ref_frame))
             if com_dist is not None:
                 cmp["com_dist_A"] = com_dist
@@ -1950,6 +1958,11 @@ def _evaluate_reference_trajectory(args: Any, ctx: dict[str, Any]) -> int:
             "energy_eV": energies_arr.tolist(),
             "max_force_eV_A": [
                 float(np.abs(f).max()) for f in (forces_list or [np.empty((len(z), 3))])
+            ],
+            "force_sources": [
+                str(c.get("force_source", ""))
+                for c in per_frame_compare
+                if c.get("status") == "ok" and c.get("force_source")
             ],
         },
     }
