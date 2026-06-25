@@ -1461,14 +1461,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--jax-md-update-interval",
         type=int,
-        default=10,
+        default=1,
         help="Update MM neighbor pairs every N calculator calls (reuse cached pairs in between).",
     )
     parser.add_argument(
         "--jax-md-skin-distance",
         type=float,
-        default=0.2,
-        help="Reuse cached MM neighbor pairs while max displacement since last update is below this (A).",
+        default=0.0,
+        help=(
+            "Reuse cached MM neighbor pairs while max displacement since last update is below "
+            "this (Å). Default 0: rebuild every update (recommended for PBC dynamics)."
+        ),
     )
     parser.add_argument(
         "--max-pairs",

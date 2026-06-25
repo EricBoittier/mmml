@@ -27,6 +27,30 @@ from typing import Callable, Optional
 
 WORSE_COUNT_THRESHOLD = 100
 
+
+def resolve_jaxmd_steps_per_loop_call(
+    *,
+    steps_per_recording: int,
+    use_pbc: bool,
+    has_update_fn: bool,
+    jax_md_update_interval: int | None,
+) -> int:
+    """MD steps per JIT block before refreshing PBC MM neighbor lists.
+
+    PBC hybrid dynamics must refresh ``pair_idx``/``pair_mask`` every step; holding
+    lists across a multi-step ``fori_loop`` causes force discontinuities and NVE blow-ups.
+    """
+    target = 1 if (use_pbc and has_update_fn) else int(jax_md_update_interval or 100)
+    if target <= 0:
+        target = 1 if (use_pbc and has_update_fn) else 100
+    if use_pbc and has_update_fn:
+        return 1
+    steps_per_loop_call = min(target, int(steps_per_recording))
+    for d in range(steps_per_loop_call, 0, -1):
+        if int(steps_per_recording) % d == 0:
+            return d
+    return steps_per_loop_call
+
 # JAX-MD integrator carry (positions, momenta) must stay float32 even when the hybrid
 # calculator runs ML/MM interior math in float64 (ml_compute_dtype=float64).
 _JAXMD_DTYPE = jnp.float32
@@ -520,15 +544,12 @@ def set_up_nhc_sim_routine(
         getattr(args, "steps_per_recording", None)
         or (25 if (args.ensemble == "npt" and use_pbc) else 1000)
     )
-    # Define steps_per_loop_call as a divisor of steps_per_recording close to target jax_md_update_interval (default 100)
-    target_update_interval = getattr(args, "jax_md_update_interval", 100) or 100
-    if target_update_interval <= 0:
-        target_update_interval = 100
-    steps_per_loop_call = min(target_update_interval, steps_per_recording)
-    for d in range(steps_per_loop_call, 0, -1):
-        if steps_per_recording % d == 0:
-            steps_per_loop_call = d
-            break
+    steps_per_loop_call = resolve_jaxmd_steps_per_loop_call(
+        steps_per_recording=int(steps_per_recording),
+        use_pbc=bool(use_pbc),
+        has_update_fn=get_update_fn is not None,
+        jax_md_update_interval=getattr(args, "jax_md_update_interval", None),
+    )
 
     kT = as_jaxmd_dtype(T * unit['temperature'])
     jax.random.PRNGKey(0)
@@ -1651,4 +1672,5 @@ def set_up_nhc_sim_routine(
             positions_out = np.empty((0, len(atoms), 3), dtype=np.float32)
         return steps_completed, positions_out, nhc_boxes_out if is_npt else None
 
+    run_sim.neighbor_update_interval_steps = int(steps_per_loop_call)
     return run_sim
