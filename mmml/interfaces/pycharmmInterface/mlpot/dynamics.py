@@ -871,10 +871,9 @@ def apply_hoover_cpt_heat_ramp_overlap_chunk(
     chunk_kw["finalt"] = float(ramp_spec["finalt"])
     chunk_kw["tbath"] = float(ramp_spec["finalt"])
     chunk_kw["hoover reft"] = target
-    if bool(chunk_kw.get("restart")):
-        chunk_kw["iasvel"] = 0
-    else:
-        chunk_kw["iasvel"] = 1
+    # Velocities are assigned once before overlap chunk 0 (staged_workflow) or
+    # carried via READYN / in-memory handoff on later chunks; never reassign here.
+    chunk_kw["iasvel"] = 0
     chunk_kw["start"] = False
 
 
@@ -914,10 +913,7 @@ def apply_heat_ramp_overlap_chunk(
     chunk_kw["finalt"] = float(ramp_spec["finalt"])
     chunk_kw["TEMINC"] = float(ramp_spec["teminc"])
     chunk_kw["ihtfrq"] = int(ramp_spec["ihtfrq"])
-    if bool(chunk_kw.get("restart")):
-        chunk_kw["iasvel"] = 0
-    else:
-        chunk_kw["iasvel"] = 1
+    chunk_kw["iasvel"] = 0
     chunk_kw["iasors"] = 0
     chunk_kw["start"] = False
 
