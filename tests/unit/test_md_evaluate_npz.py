@@ -666,7 +666,11 @@ def test_evaluate_jaxmd_uses_cutoff_parameters_from_cutoffs_module() -> None:
 def test_charmm_total_forces_ev_angstrom_converts_kcal_units(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    pytest.importorskip("pycharmm")
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import charmm_lib_available
+
+    if not charmm_lib_available():
+        pytest.skip("CHARMM runtime not available")
+    import pycharmm  # noqa: F401
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
         charmm_total_forces_ev_angstrom,
         charmm_total_forces_kcalmol_A,
