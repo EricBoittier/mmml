@@ -92,11 +92,36 @@ def test_apply_heat_ramp_overlap_chunk_continues_ramp():
     assert chunk_kw["finalt"] == 240.0
     assert chunk_kw["TEMINC"] == 0.12
     assert chunk_kw["iasors"] == 0
-    assert chunk_kw["iasvel"] == 1
+    assert chunk_kw["iasvel"] == 0
     assert chunk_kw["start"] is False
 
 
-def test_hoover_cpt_heat_ramp_target_and_overlap_chunk():
+def test_hoover_cpt_heat_ramp_overlap_chunk_keeps_iasvel_zero_after_boltzmann():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _apply_overlap_chunk_dynamics_kw,
+        apply_hoover_cpt_heat_ramp_overlap_chunk,
+    )
+
+    chunk_kw = {
+        "start": False,
+        "iasvel": 0,
+        "cpt": True,
+        "hoover reft": 2.4,
+        "firstt": 2.4,
+        "finalt": 12.0,
+        "tbath": 12.0,
+    }
+    _apply_overlap_chunk_dynamics_kw(chunk_kw, chunk_index=0, has_restart_read=False)
+    apply_hoover_cpt_heat_ramp_overlap_chunk(
+        chunk_kw,
+        chunk_index=0,
+        steps_done=0,
+        ramp_spec={"firstt": 2.4, "finalt": 12.0},
+        total_nstep=4000,
+        n_chunks=8,
+    )
+    assert chunk_kw["iasvel"] == 0
+    assert chunk_kw["start"] is False
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         apply_hoover_cpt_heat_ramp_overlap_chunk,
         hoover_cpt_heat_ramp_spec_from_kw,
@@ -136,6 +161,7 @@ def test_hoover_cpt_heat_ramp_target_and_overlap_chunk():
         n_chunks=1,
     )
     assert chunk_kw["hoover reft"] == pytest.approx(15.0)
+    assert chunk_kw["iasvel"] == 0
     chunk_kw = {}
     apply_hoover_cpt_heat_ramp_overlap_chunk(
         chunk_kw,
@@ -149,7 +175,7 @@ def test_hoover_cpt_heat_ramp_target_and_overlap_chunk():
     assert chunk_kw["finalt"] == 30.0
     assert chunk_kw["tbath"] == 30.0
     assert chunk_kw["hoover reft"] == pytest.approx(0.6)
-    assert chunk_kw["iasvel"] == 1
+    assert chunk_kw["iasvel"] == 0
     assert chunk_kw["start"] is False
 
     chunk_kw = {"restart": True}
