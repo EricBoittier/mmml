@@ -170,16 +170,109 @@ def _site_package_roots() -> list[Path]:
         import site
 
         roots.extend(Path(p) for p in site.getsitepackages())
+        user_site = site.getusersitepackages()
+        if user_site:
+            roots.append(Path(user_site))
+    except Exception:
+        pass
+    try:
+        import sysconfig
+
+        for key in ("purelib", "platlib"):
+            lib = sysconfig.get_path(key)
+            if lib:
+                roots.append(Path(lib))
     except Exception:
         pass
     seen: set[Path] = set()
     unique: list[Path] = []
     for root in roots:
-        resolved = root.resolve()
+        try:
+            resolved = root.resolve()
+        except OSError:
+            continue
         if resolved not in seen and resolved.is_dir():
             seen.add(resolved)
             unique.append(resolved)
     return unique
+
+
+def _ptxas_candidates_in_tree(root: Path) -> Path | None:
+    rel_bins = (
+        "nvidia/cu13/bin",
+        "nvidia/cu12/bin",
+        "nvidia/cuda_nvcc/bin",
+    )
+    for rel in rel_bins:
+        candidate = (root / rel).resolve()
+        if (candidate / "ptxas").is_file():
+            return candidate
+    return None
+
+
+def _ptxas_from_nvidia_namespace() -> Path | None:
+    try:
+        import importlib.util
+
+        spec = importlib.util.find_spec("nvidia")
+    except Exception:
+        return None
+    if spec is None or not spec.submodule_search_locations:
+        return None
+    for root in spec.submodule_search_locations:
+        found = _ptxas_candidates_in_tree(Path(root))
+        if found is not None:
+            return found
+    return None
+
+
+def _ptxas_from_importlib_metadata() -> Path | None:
+    try:
+        from importlib.metadata import PackageNotFoundError, distribution
+    except ImportError:
+        return None
+    for dist_name in (
+        "nvidia-cuda-nvcc",
+        "nvidia-cuda-nvcc-cu13",
+        "nvidia-cuda-nvcc-cu12",
+    ):
+        try:
+            dist = distribution(dist_name)
+        except PackageNotFoundError:
+            continue
+        for path in (dist.locate_file("nvidia"), dist.locate_file("")):
+            found = _ptxas_candidates_in_tree(Path(path))
+            if found is not None:
+                return found
+    return None
+
+
+def _ptxas_from_system_cuda() -> Path | None:
+    candidates: list[Path] = []
+    for env_name in ("CUDA_HOME", "CUDA_PATH", "CUDA_ROOT"):
+        cuda_home = (os.environ.get(env_name) or "").strip()
+        if cuda_home:
+            candidates.append(Path(cuda_home) / "bin")
+    candidates.extend(
+        Path(p)
+        for p in (
+            "/usr/local/cuda/bin",
+            "/opt/cuda/bin",
+            "/usr/lib/cuda/bin",
+        )
+    )
+    seen: set[Path] = set()
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve()
+        except OSError:
+            continue
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        if (resolved / "ptxas").is_file():
+            return resolved
+    return None
 
 
 @lru_cache(maxsize=1)
@@ -206,25 +299,56 @@ def find_bundled_nvidia_lib_dirs() -> list[Path]:
 
 @lru_cache(maxsize=1)
 def find_bundled_ptxas_dir() -> Path | None:
-    """Return the directory containing wheel-shipped ``ptxas``, if any."""
-    rel_bins = (
-        "nvidia/cu13/bin",
-        "nvidia/cu12/bin",
-        "nvidia/cuda_nvcc/bin",
-    )
+    """Return the directory containing wheel-shipped or system ``ptxas``, if any."""
     for root in _site_package_roots():
-        for rel in rel_bins:
-            candidate = (root / rel).resolve()
-            if (candidate / "ptxas").is_file():
-                return candidate
-    for env_name in ("CUDA_HOME", "CUDA_PATH"):
-        cuda_home = (os.environ.get(env_name) or "").strip()
-        if not cuda_home:
-            continue
-        candidate = (Path(cuda_home) / "bin").resolve()
-        if (candidate / "ptxas").is_file():
-            return candidate
+        found = _ptxas_candidates_in_tree(root)
+        if found is not None:
+            return found
+    for finder in (_ptxas_from_nvidia_namespace, _ptxas_from_importlib_metadata, _ptxas_from_system_cuda):
+        found = finder()
+        if found is not None:
+            return found
     return None
+
+
+def diagnose_jax_cuda_toolchain() -> dict[str, str | bool | None]:
+    """Notebook-friendly snapshot of JAX GPU toolchain discovery."""
+    ptxas_dir = find_bundled_ptxas_dir()
+    return {
+        "python": sys.executable,
+        "prefix": sys.prefix,
+        "ptxas_on_path": shutil.which("ptxas"),
+        "ptxas_dir": str(ptxas_dir) if ptxas_dir is not None else None,
+        "cuda_home": (os.environ.get("CUDA_HOME") or os.environ.get("CUDA_PATH") or "").strip()
+        or None,
+    }
+
+
+def _ptxas_missing_error() -> RuntimeError:
+    diag = diagnose_jax_cuda_toolchain()
+    return RuntimeError(
+        "ptxas not found for JAX GPU JIT compilation. "
+        "JAX can list CUDA devices without ptxas, but the first jax.jit compile needs it.\n"
+        f"  python: {diag['python']}\n"
+        f"  CUDA_HOME/CUDA_PATH: {diag['cuda_home'] or '(unset)'}\n"
+        "Fix (pick one):\n"
+        "  1. In this kernel's env: uv sync --extra gpu  (installs nvidia-cuda-nvcc wheel)\n"
+        "  2. module load cuda && export CUDA_HOME=$CUDA_HOME  (system toolkit bin/ptxas)\n"
+        "  3. Notebook first cell: from mmml.utils.jax_gpu_warmup import prepare_jax_gpu_notebook; "
+        "prepare_jax_gpu_notebook()\n"
+        "Verify: import shutil; print(shutil.which('ptxas'))"
+    )
+
+
+def prepare_jax_gpu_notebook(*, required: bool = True) -> bool:
+    """Prep PATH/LD_LIBRARY_PATH for JAX GPU JIT in Jupyter (call once per kernel)."""
+    ensure_jax_cuda_runtime_libs(quiet=True)
+    ok = ensure_jax_cuda_toolchain(required=False)
+    if ok:
+        return True
+    if required:
+        raise _ptxas_missing_error()
+    return False
 
 
 def ensure_jax_cuda_runtime_libs(*, quiet: bool = False) -> list[str]:
@@ -275,11 +399,7 @@ def ensure_jax_cuda_toolchain(*, required: bool = False) -> bool:
     ptxas_dir = find_bundled_ptxas_dir()
     if ptxas_dir is None:
         if required:
-            raise RuntimeError(
-                "ptxas not found for JAX GPU compilation. Install CUDA extras, e.g. "
-                "`uv sync --extra gpu-cuda13` or `pip install nvidia-cuda-nvcc`, "
-                "or put a CUDA toolkit bin directory containing ptxas on PATH."
-            )
+            raise _ptxas_missing_error()
         return False
 
     path = str(ptxas_dir)

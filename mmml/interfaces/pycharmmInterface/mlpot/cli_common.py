@@ -974,6 +974,15 @@ def prepare_charmm_notebook(**kwargs: Any) -> None:
     ensure_charmm_session_ready(**kwargs)
 
 
+def prepare_jax_gpu_notebook(*, required: bool = True) -> bool:
+    """Prep JAX GPU JIT (``ptxas``) for notebooks — call before ``setup_calculator``."""
+    from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+        prepare_jax_gpu_notebook as _prepare_jax_gpu_notebook,
+    )
+
+    return _prepare_jax_gpu_notebook(required=required)
+
+
 def composition_tag(composition: list[tuple[str, int]] | None, residue: str, n_molecules: int) -> str:
     if composition:
         parts = [f"{res.lower()}_{count}" for res, count in composition]
