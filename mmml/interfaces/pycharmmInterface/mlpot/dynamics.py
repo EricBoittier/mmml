@@ -492,7 +492,7 @@ def minimize_overlap_rescue(
     from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
         apply_bonded_vdw_recovery_block,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms_after_ener_force
     from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         OverlapRescueConfig,
     )
@@ -514,8 +514,7 @@ def minimize_overlap_rescue(
         _prepare_overlap_rescue_lists(ctx)
         pycharmm, cons_fix, *_ = _import_pycharmm_modules()
         minimize = _import_pycharmm_modules()[3]
-        pycharmm.lingo.charmm_script("ENER")
-        grms_before = float(charmm_grms())
+        grms_before = charmm_grms_after_ener_force(silent=not config.verbose)
         if config.verbose:
             print(
                 f"Overlap rescue start: GRMS={grms_before:.4f} kcal/mol/Å",
@@ -551,9 +550,7 @@ def minimize_overlap_rescue(
                         tolenr=float(config.tolenr),
                         tolgrd=float(config.tolgrd),
                     )
-            # Do not call ENER here: on overlapped PBC clusters it recenters images
-            # and can stack atoms (GRMS/energy blow up) while leaving bad coordinates.
-            grms = float(charmm_grms())
+            grms = charmm_grms_after_ener_force(silent=not config.verbose)
             if config.verbose:
                 print(
                     f"Overlap rescue end: GRMS={grms:.4f} kcal/mol/Å",
@@ -2211,18 +2208,16 @@ def _prepare_post_rescue_overlap_handoff(
 ) -> None:
     """Continue overlap dynamics in-process after PSF-reload geometry rescue.
 
-    A full ``READYN`` handoff restores pre-rescue velocities and CPT barostat
-    internals from the last dynamics checkpoint, which disagrees with minimized
-    coordinates (``PIXX`` overflow and ``upimag`` segfaults).  Boltzmann-assign
-    on the rescued in-memory coordinates and run the next chunk without restart
-    read, matching normal MLpot overlap memory handoff.
+    Prefer :func:`_materialize_post_rescue_restart_handoff` for CPT overlap chunks;
+    this path remains for legacy in-memory handoff when restart materialization
+    is unavailable.
     """
     _assign_post_rescue_velocities_and_crystal(chunk_kw, mlpot_ctx=mlpot_ctx)
     bath = _post_rescue_bath_target_K(chunk_kw)
     chunk_kw["restart"] = False
     chunk_kw["new"] = False
     chunk_kw["start"] = False
-    chunk_kw["iasvel"] = 1
+    chunk_kw["iasvel"] = 0
     chunk_kw.pop("iunrea", None)
     chunk_kw["iunrea"] = -1
     _strip_stale_heat_ramp_keywords(chunk_kw)
@@ -2231,6 +2226,106 @@ def _prepare_post_rescue_overlap_handoff(
     if "hoover reft" in chunk_kw:
         chunk_kw["hoover reft"] = bath
         chunk_kw["firstt"] = bath
+
+
+def _materialize_post_rescue_restart_handoff(
+    chunk_io: CharmmTrajectoryFiles,
+    chunk_kw: dict[str, Any],
+    *,
+    steps_done: int,
+    mlpot_ctx: Optional["MlpotContext"],
+    overlap: Optional["DynamicsOverlapConfig"],
+    overlap_context: str,
+) -> CharmmTrajectoryFiles:
+    """Write rescued coords+velocities to scratch restart; next chunk uses READYN."""
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        rewrite_dynamics_restart_validated,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        patch_restart_global_step,
+    )
+
+    _assign_post_rescue_velocities_and_crystal(chunk_kw, mlpot_ctx=mlpot_ctx)
+
+    read_path = (
+        Path(chunk_io.restart_read) if chunk_io.restart_read is not None else None
+    )
+    write_path = (
+        Path(chunk_io.restart_write) if chunk_io.restart_write is not None else None
+    )
+    targets: list[Path] = []
+    if write_path is not None:
+        targets.append(write_path)
+    if read_path is not None and read_path not in targets:
+        targets.append(read_path)
+
+    if not targets:
+        return chunk_io
+
+    step = max(0, int(steps_done))
+    for path in targets:
+        if not rewrite_dynamics_restart_validated(path):
+            rescued_positions = None
+            if overlap is not None:
+                from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+                    get_charmm_positions_array,
+                )
+
+                rescued_positions = np.asarray(
+                    get_charmm_positions_array(), dtype=float
+                ).copy()
+            rescue_crd, prior_restart = _overlap_rescue_restart_fallback_paths(overlap)
+            from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+                restore_post_rescue_coordinates,
+            )
+
+            source = restore_post_rescue_coordinates(
+                rescued_positions=rescued_positions,
+                rescue_crd=rescue_crd,
+                prior_restart=prior_restart,
+            )
+            _assign_post_rescue_velocities_and_crystal(chunk_kw, mlpot_ctx=mlpot_ctx)
+            if not rewrite_dynamics_restart_validated(path):
+                raise RuntimeError(
+                    f"overlap ({overlap_context}): post-rescue restart handoff failed "
+                    f"writing {path.name} after fallback from {source}"
+                )
+        patch_restart_global_step(path, step)
+
+    valid_read = (
+        _valid_overlap_chunk_restart_read(write_path) if write_path is not None else None
+    )
+    if valid_read is None and write_path is not None:
+        valid_read = _valid_restart_file(write_path)
+
+    bath = _post_rescue_bath_target_K(chunk_kw)
+    chunk_kw["restart"] = True
+    chunk_kw["new"] = False
+    chunk_kw["start"] = False
+    chunk_kw["iasvel"] = 0
+    chunk_kw.pop("iunrea", None)
+    _strip_stale_heat_ramp_keywords(chunk_kw)
+    if int(chunk_kw.get("ihtfrq", 0) or 0) != 0:
+        chunk_kw["ihtfrq"] = 0
+    if "hoover reft" in chunk_kw:
+        chunk_kw["hoover reft"] = bath
+        chunk_kw["firstt"] = bath
+
+    print(
+        f"overlap ({overlap_context}): post-rescue restart handoff from "
+        f"{valid_read.name if valid_read is not None else targets[0].name} "
+        f"at global step {step} (READYN; MLpot stabilized)",
+        flush=True,
+    )
+
+    return CharmmTrajectoryFiles(
+        restart_read=valid_read,
+        restart_write=chunk_io.restart_write,
+        trajectory=chunk_io.trajectory,
+        restart_read_unit=chunk_io.restart_read_unit,
+        restart_write_unit=chunk_io.restart_write_unit,
+        trajectory_unit=chunk_io.trajectory_unit,
+    )
 
 
 def _overlap_rescue_restart_fallback_paths(
@@ -2682,7 +2777,7 @@ def run_dynamics_with_io(
     n_chunks = total_nstep // interval
     post_rescue_in_memory_mode = False
     post_rescue_handoff_applied = False
-    any_post_rescue_in_memory = False
+    any_post_rescue_restart_handoff = False
     early_abort_memory_handoff = False
     early_abort_restart_handoff = False
     if (
@@ -3094,6 +3189,9 @@ def run_dynamics_with_io(
                             restart_path=refresh_path,
                         )
                     if rescued and chunk_io is not None and chunk_io.restart_write is not None:
+                        from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+                            finalize_overlap_rescue_for_dynamics,
+                        )
                         from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
                             patch_restart_global_step,
                         )
@@ -3106,16 +3204,23 @@ def run_dynamics_with_io(
                             Path(chunk_io.restart_write),
                             steps_done,
                         )
-                        if chunk_index + 1 < n_chunks:
-                            post_rescue_in_memory_mode = True
-                            post_rescue_handoff_applied = False
-                            any_post_rescue_in_memory = True
-                            print(
-                                f"overlap ({overlap_context}): post-rescue in-memory handoff "
-                                f"at global step {steps_done} for remaining chunks "
-                                f"(fresh velocities; avoiding stale CPT READYN after PSF reload)",
-                                flush=True,
+                        if mlpot_ctx is not None and overlap is not None:
+                            finalize_overlap_rescue_for_dynamics(
+                                mlpot_ctx,
+                                overlap,
+                                context=f"{overlap_context} at step {steps_done}",
                             )
+                        if chunk_index + 1 < n_chunks:
+                            chunk_io = _materialize_post_rescue_restart_handoff(
+                                chunk_io,
+                                chunk_kw,
+                                steps_done=steps_done,
+                                mlpot_ctx=mlpot_ctx,
+                                overlap=overlap,
+                                overlap_context=overlap_context,
+                            )
+                            post_rescue_handoff_applied = True
+                            any_post_rescue_restart_handoff = True
                         else:
                             _refresh_segment_restart_after_overlap_rescue(
                                 chunk_io.restart_write,
@@ -3179,7 +3284,7 @@ def run_dynamics_with_io(
             chunk_index += 1
         completed = True
         if (
-            any_post_rescue_in_memory
+            any_post_rescue_restart_handoff
             and io is not None
             and io.restart_write is not None
             and steps_done >= total_nstep - 1
