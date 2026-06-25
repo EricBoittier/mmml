@@ -177,19 +177,12 @@ def test_minimize_with_mlpot_asserts_user_when_ctx_provided():
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.assert_mlpot_user_active",
-        return_value=0.0,
-    ) as assert_user, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms",
-        return_value=0.0,
-    ):
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.prepare_mlpot_hybrid_state_for_sd",
+        return_value=(0.0, 0.0),
+    ) as prepare_sd:
         minimize_with_mlpot(config)
 
-    assert_user.assert_called_once_with(
-        ctx,
-        context="MLpot SD minimize",
-        quiet=True,
-    )
+    prepare_sd.assert_called_once()
 
 
 def test_minimize_with_mlpot_single_pass_when_no_fix():

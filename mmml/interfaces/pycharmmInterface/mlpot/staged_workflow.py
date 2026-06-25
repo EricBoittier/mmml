@@ -1406,14 +1406,14 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         ctx.charmm_cubic_box_side_A = float(box_side)
 
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
-        refresh_mlpot_energy_and_grms,
+        probe_and_light_resync_if_desync,
     )
 
-    refresh_mlpot_energy_and_grms(
+    probe_and_light_resync_if_desync(
         ctx,
         context="MLpot list sync before SD minimize" if not args.quiet else "",
-        reregister=False,
-        verbose=False,
+        verbose=not args.quiet,
+        restart_path=pretreat_restart_path,
     )
 
     restart_from = (

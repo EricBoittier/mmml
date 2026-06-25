@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import argparse
 import os
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional, Sequence, Tuple
+from typing import Any, Literal, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -1625,6 +1626,292 @@ def forces_grms_kcalmol_A(forces: np.ndarray) -> float:
     return float(np.sqrt(np.mean(f * f)))
 
 
+GrmsMismatchKind = Literal[
+    "ok", "desync_suspected", "geometry_stress", "both_high", "unknown"
+]
+
+
+@dataclass(frozen=True)
+class HybridCharmmGrmsDiag:
+    """Hybrid vs CHARMM GRMS comparison for MLpot readiness gates."""
+
+    hybrid: float
+    charmm: float
+    ratio: float
+    kind: GrmsMismatchKind
+
+
+def classify_hybrid_charmm_grms_mismatch(
+    hybrid: float,
+    charmm: float,
+    *,
+    warn_ratio: float = 2.0,
+    desync_max_ratio: float = 10.0,
+    charmm_bonded_ok_max: float = 5.0,
+) -> GrmsMismatchKind:
+    """Classify hybrid/CHARMM GRMS disagreement for resync vs geometry recovery."""
+    if not (np.isfinite(hybrid) and np.isfinite(charmm)):
+        return "unknown"
+    if charmm <= 1.0e-8:
+        return "ok" if hybrid <= warn_ratio else "geometry_stress"
+    ratio = float(max(hybrid / charmm, charmm / hybrid))
+    if ratio <= warn_ratio:
+        return "ok"
+    if ratio <= desync_max_ratio:
+        return "desync_suspected"
+    if charmm <= charmm_bonded_ok_max:
+        return "geometry_stress"
+    return "both_high"
+
+
+def measure_hybrid_charmm_grms(
+    mlpot_ctx: Any | None,
+    *,
+    prefer_calculator: bool = True,
+    warn_ratio: float = 2.0,
+    desync_max_ratio: float = 10.0,
+    charmm_bonded_ok_max: float = 5.0,
+) -> HybridCharmmGrmsDiag:
+    """Measure hybrid and CHARMM GRMS and classify their mismatch."""
+    hybrid = float("nan")
+    if mlpot_ctx is not None and prefer_calculator:
+        calc = mlpot_hybrid_grms_from_calculator(mlpot_ctx)
+        if calc is not None and np.isfinite(calc):
+            hybrid = float(calc)
+    if not np.isfinite(hybrid):
+        hybrid = float(charmm_grms())
+    charmm = float(charmm_grms())
+    ratio = (
+        float(max(hybrid / charmm, charmm / hybrid))
+        if charmm > 1.0e-8 and np.isfinite(hybrid)
+        else float("inf")
+    )
+    kind = classify_hybrid_charmm_grms_mismatch(
+        hybrid,
+        charmm,
+        warn_ratio=warn_ratio,
+        desync_max_ratio=desync_max_ratio,
+        charmm_bonded_ok_max=charmm_bonded_ok_max,
+    )
+    return HybridCharmmGrmsDiag(hybrid=hybrid, charmm=charmm, ratio=ratio, kind=kind)
+
+
+def _print_hybrid_charmm_grms_diag(context: str, diag: HybridCharmmGrmsDiag) -> None:
+    if not context:
+        return
+    if diag.kind == "ok":
+        print(
+            f"{context}: hybrid GRMS={diag.hybrid:.4f} kcal/mol/Å (calculator)",
+            flush=True,
+        )
+        return
+    notes = {
+        "desync_suspected": (
+            f"possible desync (ratio={diag.ratio:.1f}); light resync recommended"
+        ),
+        "geometry_stress": (
+            "ML geometry stress (CHARMM bonded/MM GRMS low; ELEC/VDW blocked on ML atoms)"
+        ),
+        "both_high": "high hybrid and CHARMM GRMS",
+        "unknown": "non-finite GRMS",
+    }
+    note = notes.get(diag.kind, diag.kind)
+    print(
+        f"{context}: hybrid GRMS={diag.hybrid:.4f} kcal/mol/Å (calculator); "
+        f"CHARMM GRMS={diag.charmm:.4f} ({note})",
+        flush=True,
+    )
+
+
+def light_resync_mlpot_state(
+    mlpot_ctx: Any,
+    *,
+    context: str = "MLpot light resync",
+    silent_charmm: bool = True,
+    verbose: bool = False,
+    restart_path: Path | str | None = None,
+) -> float:
+    """Reregister MLpot, ``ENER FORCE``, ``UPDATE``, and sync PBC; return hybrid GRMS.
+
+    Does **not** call ``upinb`` / ``update_bnbnd`` (unsafe with MLpot registered).
+    """
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import pycharmm
+
+    mlpot_ctx.reregister_mlpot(verbose=verbose)
+    if getattr(mlpot_ctx, "use_pbc", False):
+        pyCModel = getattr(mlpot_ctx, "pyCModel", None)
+        if pyCModel is not None:
+            from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import (
+                sync_mlpot_pbc_cell_from_charmm,
+            )
+
+            side = sync_mlpot_pbc_cell_from_charmm(
+                pyCModel,
+                fallback_side_A=getattr(mlpot_ctx, "cubic_box_side_A", None),
+                restart_path=restart_path,
+                verbose=verbose,
+            )
+            mlpot_ctx.cubic_box_side_A = float(side)
+            mlpot_ctx.charmm_cubic_box_side_A = float(side)
+    if silent_charmm:
+        from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
+
+        with charmm_silent_command():
+            pycharmm.lingo.charmm_script("ENER FORCE")
+            pycharmm.lingo.charmm_script("UPDATE")
+    else:
+        pycharmm.lingo.charmm_script("ENER FORCE")
+        pycharmm.lingo.charmm_script("UPDATE")
+    diag = measure_hybrid_charmm_grms(mlpot_ctx)
+    if context:
+        print(
+            f"{context}: hybrid GRMS {diag.hybrid:.4f} kcal/mol/Å after light resync "
+            f"(CHARMM {diag.charmm:.4f})",
+            flush=True,
+        )
+    return float(diag.hybrid)
+
+
+def probe_and_light_resync_if_desync(
+    mlpot_ctx: Any,
+    *,
+    context: str = "",
+    silent_charmm: bool = True,
+    verbose: bool = False,
+    restart_path: Path | str | None = None,
+) -> float:
+    """Run light resync when hybrid/CHARMM GRMS look desynced; else refresh in place."""
+    charmm_grms_after_ener_force(silent=silent_charmm)
+    diag = measure_hybrid_charmm_grms(mlpot_ctx)
+    _print_hybrid_charmm_grms_diag(context, diag)
+    if diag.kind == "desync_suspected":
+        return light_resync_mlpot_state(
+            mlpot_ctx,
+            context=context or "MLpot light resync",
+            silent_charmm=silent_charmm,
+            verbose=verbose,
+            restart_path=restart_path,
+        )
+    return float(diag.hybrid)
+
+
+def prepare_mlpot_hybrid_state_for_sd(
+    mlpot_ctx: Any,
+    *,
+    grms_limit: float | None,
+    energy_limit: float | None,
+    bonded_recovery_nstep: int,
+    bonded_recovery_verbose: bool = False,
+    bonded_recovery_show_energy: bool = False,
+    bonded_recovery_nprint: int = 10,
+    bonded_recovery_tolenr: float = 1e-5,
+    bonded_recovery_tolgrd: float = 1e-5,
+    context_prefix: str = "Pre-SD",
+    verbose: bool = True,
+    restart_path: Path | str | None = None,
+    allow_high_grms: bool | None = None,
+) -> tuple[float, float]:
+    """Resync, optional bonded recovery, and abort if hybrid GRMS remains too high.
+
+    Returns ``(hybrid_grms, user_kcal)`` when MLpot SD may proceed.
+    """
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import assert_mlpot_user_active
+
+    if allow_high_grms is None:
+        allow_high_grms = bool(os.environ.get("MMML_MLPOT_ALLOW_HIGH_GRMS"))
+
+    user = assert_mlpot_user_active(
+        mlpot_ctx,
+        context=f"{context_prefix} MLpot SD minimize",
+        quiet=not verbose,
+    )
+    charmm_grms_after_ener_force()
+    diag = measure_hybrid_charmm_grms(mlpot_ctx)
+    _print_hybrid_charmm_grms_diag(
+        f"{context_prefix} hybrid GRMS check" if verbose else "",
+        diag,
+    )
+    hybrid_grms = float(diag.hybrid)
+
+    if diag.kind == "desync_suspected":
+        hybrid_grms = light_resync_mlpot_state(
+            mlpot_ctx,
+            context=f"{context_prefix} light resync" if verbose else "",
+            verbose=verbose,
+            restart_path=restart_path,
+        )
+        diag = measure_hybrid_charmm_grms(mlpot_ctx)
+
+    grms_hot = grms_limit is not None and hybrid_grms > float(grms_limit)
+    user_hot = energy_limit is not None and user > float(energy_limit)
+    if grms_hot or user_hot:
+        reasons: list[str] = []
+        if user_hot:
+            reasons.append(f"USER={user:.1f} kcal/mol > {float(energy_limit):.1f}")
+        if grms_hot:
+            reasons.append(
+                f"GRMS={hybrid_grms:.1f} kcal/mol/Å > {float(grms_limit):.1f}"
+            )
+        if diag.kind == "geometry_stress":
+            recovery_note = "bonded-MM SD (MLpot detached; may not lower hybrid GRMS)"
+        else:
+            recovery_note = "bonded-MM SD (MLpot detached)"
+        print(
+            f"{context_prefix} bonded recovery: {', '.join(reasons)}; "
+            f"running {recovery_note} ({bonded_recovery_nstep} steps)",
+            flush=True,
+        )
+        from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+            BondedMmMiniConfig,
+            minimize_bonded_mm_recovery,
+        )
+
+        minimize_bonded_mm_recovery(
+            mlpot_ctx,
+            BondedMmMiniConfig(
+                nstep_sd=int(bonded_recovery_nstep),
+                nprint=max(1, int(bonded_recovery_nprint)),
+                tolenr=float(bonded_recovery_tolenr),
+                tolgrd=float(bonded_recovery_tolgrd),
+                verbose=bonded_recovery_verbose,
+                show_energy=bonded_recovery_show_energy,
+            ),
+        )
+        user = assert_mlpot_user_active(
+            mlpot_ctx,
+            context=f"{context_prefix} MLpot SD (post bonded recovery)",
+            quiet=not verbose,
+        )
+        charmm_grms_after_ener_force()
+        diag = measure_hybrid_charmm_grms(mlpot_ctx)
+        _print_hybrid_charmm_grms_diag(
+            f"{context_prefix} post-recovery hybrid GRMS" if verbose else "",
+            diag,
+        )
+        hybrid_grms = float(diag.hybrid)
+        if diag.kind == "desync_suspected":
+            hybrid_grms = light_resync_mlpot_state(
+                mlpot_ctx,
+                context=f"{context_prefix} post-recovery light resync" if verbose else "",
+                verbose=verbose,
+                restart_path=restart_path,
+            )
+
+    if grms_limit is not None and hybrid_grms > float(grms_limit):
+        msg = (
+            f"{context_prefix}: hybrid GRMS {hybrid_grms:.2f} kcal/mol/Å > "
+            f"{float(grms_limit):.1f} after resync/recovery; refusing MLpot SD. "
+            "Try more pretreat/--mini-nstep, a composition checkpoint, or "
+            "MMML_MLPOT_ALLOW_HIGH_GRMS (not recommended)."
+        )
+        if not allow_high_grms:
+            raise RuntimeError(msg)
+        print(f"WARN: {msg}", flush=True)
+
+    return float(hybrid_grms), float(user)
+
+
 def mlpot_hybrid_grms_from_calculator(
     mlpot_ctx: Any,
     *,
@@ -1688,24 +1975,27 @@ def resolve_mlpot_grms_kcalmol_A(
     if mlpot_ctx is not None and prefer_calculator:
         calc_grms = mlpot_hybrid_grms_from_calculator(mlpot_ctx)
         if calc_grms is not None and np.isfinite(calc_grms):
-            if charmm_fallback:
+            if charmm_fallback and context:
                 charmm_val = float(charmm_grms())
-                if (
-                    context
-                    and np.isfinite(charmm_val)
-                    and charmm_val > 1.0e-8
-                    and (
-                        calc_grms > stale_warn_ratio * charmm_val
-                        or charmm_val > stale_warn_ratio * calc_grms
-                    )
-                ):
-                    print(
-                        f"{context}: hybrid GRMS={calc_grms:.4f} kcal/mol/Å "
-                        f"(calculator); CHARMM GRMS={charmm_val:.4f} "
-                        "(stale or MM-only)",
-                        flush=True,
-                    )
-                elif context:
+                kind = classify_hybrid_charmm_grms_mismatch(
+                    float(calc_grms),
+                    charmm_val,
+                    warn_ratio=stale_warn_ratio,
+                )
+                ratio = (
+                    float(max(calc_grms / charmm_val, charmm_val / calc_grms))
+                    if charmm_val > 1.0e-8
+                    else float("inf")
+                )
+                diag = HybridCharmmGrmsDiag(
+                    hybrid=float(calc_grms),
+                    charmm=charmm_val,
+                    ratio=ratio,
+                    kind=kind,
+                )
+                if diag.kind != "ok":
+                    _print_hybrid_charmm_grms_diag(context, diag)
+                else:
                     print(
                         f"{context}: hybrid GRMS={calc_grms:.4f} kcal/mol/Å "
                         "(calculator)",

@@ -3612,73 +3612,23 @@ def minimize_with_mlpot(
             print("CHARMM energy before minimization:")
             _maybe_show_energy(True)
         if config.mlpot_ctx is not None:
-            from mmml.interfaces.pycharmmInterface.mlpot.setup import (
-                assert_mlpot_user_active,
-            )
-
-            pre_sd_user = assert_mlpot_user_active(
-                config.mlpot_ctx,
-                context="MLpot SD minimize",
-                quiet=not config.verbose,
-            )
-            # If the USER energy is pathologically high (severe clashes from Packmol
-            # placement that CHARMM MM pre-min could not fully resolve), or GRMS is
-            # still large after CHARMM pretreat, run a bonded-only rescue SD *before*
-            # the MLpot SD so the ML potential starts from a geometry it can minimize.
             from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
-                charmm_grms_after_ener_force,
-                resolve_mlpot_grms_kcalmol_A,
+                prepare_mlpot_hybrid_state_for_sd,
             )
 
-            _threshold = config.pre_sd_bonded_recovery_energy_kcalmol
-            _grms_thr = config.pre_sd_bonded_recovery_grms_kcalmol_A
-            charmm_grms_after_ener_force()
-            _grms = resolve_mlpot_grms_kcalmol_A(
+            prepare_mlpot_hybrid_state_for_sd(
                 config.mlpot_ctx,
-                context=(
-                    "Pre-SD hybrid GRMS check" if config.verbose else ""
-                ),
+                grms_limit=config.pre_sd_bonded_recovery_grms_kcalmol_A,
+                energy_limit=config.pre_sd_bonded_recovery_energy_kcalmol,
+                bonded_recovery_nstep=config.pre_sd_bonded_recovery_nstep,
+                bonded_recovery_verbose=config.verbose,
+                bonded_recovery_show_energy=config.show_energy,
+                bonded_recovery_nprint=config.nprint,
+                bonded_recovery_tolenr=config.tolenr,
+                bonded_recovery_tolgrd=config.tolgrd,
+                context_prefix="Pre-SD",
+                verbose=config.verbose,
             )
-            _user_hot = _threshold is not None and pre_sd_user > float(_threshold)
-            _grms_hot = _grms_thr is not None and _grms > float(_grms_thr)
-            if _user_hot or _grms_hot:
-                _reasons: list[str] = []
-                if _user_hot:
-                    _reasons.append(
-                        f"USER={pre_sd_user:.1f} kcal/mol > {float(_threshold):.1f}"
-                    )
-                if _grms_hot:
-                    _reasons.append(
-                        f"GRMS={_grms:.1f} kcal/mol/Å > {float(_grms_thr):.1f}"
-                    )
-                print(
-                    f"Pre-SD bonded recovery: {', '.join(_reasons)}; "
-                    f"running bonded-MM SD ({config.pre_sd_bonded_recovery_nstep} steps) "
-                    "before MLpot SD minimize",
-                    flush=True,
-                )
-                minimize_bonded_mm_recovery(
-                    config.mlpot_ctx,
-                    BondedMmMiniConfig(
-                        nstep_sd=config.pre_sd_bonded_recovery_nstep,
-                        nprint=max(1, config.nprint),
-                        tolenr=config.tolenr,
-                        tolgrd=config.tolgrd,
-                        verbose=config.verbose,
-                        show_energy=config.show_energy,
-                    ),
-                )
-                # Re-check USER after bonded recovery to confirm MLpot is still active.
-                post_recover_user = assert_mlpot_user_active(
-                    config.mlpot_ctx,
-                    context="MLpot SD minimize (post bonded recovery)",
-                    quiet=not config.verbose,
-                )
-                print(
-                    f"Pre-SD bonded recovery done: USER {pre_sd_user:.1f} "
-                    f"-> {post_recover_user:.1f} kcal/mol",
-                    flush=True,
-                )
         _run_mlpot_sd_then_abnr(
             minimize,
             pycharmm,
