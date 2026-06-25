@@ -594,6 +594,8 @@ class MinimizeWithMlpotConfig:
     show_energy: bool = False
     verbose: bool = False
     test_first: Optional["TestFirstConfig"] = None
+    # ABNR steps after each SD pass. ``None`` → same as ``nstep``; ``0`` disables ABNR.
+    nstep_abnr: Optional[int] = None
     # When the MLpot USER energy before SD exceeds this threshold (kcal/mol),
     # run a bonded-MM rescue pass (MLpot detached) before the main MLpot SD.
     # None disables the check; 1e5 is a safe default for catching severe clashes.
@@ -2962,21 +2964,70 @@ def _prepare_mlpot_sd_list_frequencies(pycharmm: Any, *, sd_kw: dict[str, Any]) 
 
 
 def _sd_kwargs_from_config(config: MinimizeWithMlpotConfig) -> dict[str, Any]:
-    """Common ``minimize.run_sd`` settings including optional DCD trajectory."""
+    """Common ``minimize.run_sd`` / ``run_abnr`` settings including optional DCD trajectory."""
     kw: dict[str, Any] = {
         "nstep": config.nstep,
         "nprint": config.nprint,
         "tolenr": config.tolenr,
         "tolgrd": config.tolgrd,
-        # Do not rebuild nonbond/MLpot pair lists each SD step (mlpot_update can
-        # segfault when all atoms are ML and the atom-pair list is empty).
-        "inbfrq": 50,
-        "ihbfrq": 50,
+        # Do not rebuild nonbond/MLpot pair lists each mini step (mlpot_update can
+        # segfault when all atoms are ML and the atom-pair list is empty). Sync once
+        # after mini via ``sync_charmm_lists_after_mini`` (CHARMM UPDATE).
+        "inbfrq": 0,
+        "ihbfrq": 0,
     }
     if config.save and config.dcd_path is not None and config.dcd_nsavc > 0:
         kw["iuncrd"] = config.dcd_unit
         kw["nsavc"] = config.dcd_nsavc
     return kw
+
+
+def _resolved_abnr_nstep(config: MinimizeWithMlpotConfig) -> int:
+    if config.nstep_abnr is not None:
+        return max(0, int(config.nstep_abnr))
+    return max(0, int(config.nstep))
+
+
+def _run_mlpot_sd_then_abnr(
+    minimize: Any,
+    pycharmm: Any,
+    config: MinimizeWithMlpotConfig,
+    sd_kw: dict[str, Any],
+    *,
+    pass_label: str,
+) -> None:
+    """One SD pass followed by ABNR (same ``nstep`` by default) under MLpot."""
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_quiet_output
+
+    _prepare_mlpot_sd_list_frequencies(pycharmm, sd_kw=sd_kw)
+    if config.verbose:
+        print(
+            f"SD {pass_label}: nstep={config.nstep} nprint={config.nprint}",
+            flush=True,
+        )
+    with charmm_quiet_output():
+        minimize.run_sd(**sd_kw)
+
+    abnr_n = _resolved_abnr_nstep(config)
+    if abnr_n <= 0:
+        return
+
+    abnr_kw = {
+        "nstep": abnr_n,
+        "nprint": config.nprint,
+        "tolenr": config.tolenr,
+        "tolgrd": config.tolgrd,
+        "inbfrq": int(sd_kw.get("inbfrq", 0)),
+        "ihbfrq": int(sd_kw.get("ihbfrq", 0)),
+    }
+    _prepare_mlpot_sd_list_frequencies(pycharmm, sd_kw=abnr_kw)
+    if config.verbose:
+        print(
+            f"ABNR {pass_label}: nstep={abnr_n} nprint={config.nprint}",
+            flush=True,
+        )
+    with charmm_quiet_output():
+        minimize.run_abnr(**abnr_kw)
 
 
 def minimize_with_mlpot(
@@ -3060,15 +3111,13 @@ def minimize_with_mlpot(
                     f"-> {post_recover_user:.1f} kcal/mol",
                     flush=True,
                 )
-        if config.verbose:
-            print(
-                f"SD pass 1 (free, all atoms): nstep={config.nstep} nprint={config.nprint}"
-            )
-        _prepare_mlpot_sd_list_frequencies(pycharmm, sd_kw=sd_kw)
-        from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_quiet_output
-
-        with charmm_quiet_output():
-            minimize.run_sd(**sd_kw)
+        _run_mlpot_sd_then_abnr(
+            minimize,
+            pycharmm,
+            config,
+            sd_kw,
+            pass_label="pass 1 (free, all atoms)",
+        )
         if config.verbose and config.show_energy:
             print("CHARMM energy after SD pass 1 (free):")
             _maybe_show_energy(True)
@@ -3076,18 +3125,19 @@ def minimize_with_mlpot(
         if config.fixed_ml_selection is not None:
             n_fix = len(config.fixed_ml_selection.get_atom_indexes())
             cons_fix.setup(config.fixed_ml_selection)
-            if config.verbose:
-                print(
-                    f"SD pass 2 (cons_fix, {n_fix} atoms): "
-                    f"nstep={config.nstep} nprint={config.nprint}"
-                )
-            _prepare_mlpot_sd_list_frequencies(pycharmm, sd_kw=sd_kw)
-            with charmm_quiet_output():
-                minimize.run_sd(**sd_kw)
+            _run_mlpot_sd_then_abnr(
+                minimize,
+                pycharmm,
+                config,
+                sd_kw,
+                pass_label=f"pass 2 (cons_fix, {n_fix} atoms)",
+            )
             if config.verbose and config.show_energy:
                 print("CHARMM energy after SD pass 2 (constrained):")
                 _maybe_show_energy(True)
             cons_fix.turn_off()
+
+        sync_charmm_lists_after_mini(quiet=not config.verbose)
 
         if config.save:
             from mmml.interfaces.pycharmmInterface.mlpot.setup import (
