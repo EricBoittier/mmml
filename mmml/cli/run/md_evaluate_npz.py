@@ -1923,6 +1923,10 @@ def _evaluate_reference_trajectory(args: Any, ctx: dict[str, Any]) -> int:
     if ok_compares and "force_rmse_eV_A" in ok_compares[0]:
         force_rmse = np.asarray([c["force_rmse_eV_A"] for c in ok_compares], dtype=np.float64)
         compare_summary["mean_force_rmse_eV_A"] = float(force_rmse.mean())
+    if len(ok_compares) == 1:
+        for key, value in ok_compares[0].items():
+            if key != "status":
+                compare_summary[key] = value
 
     result: dict[str, Any] = {
         "units": dict(EVALUATE_ARTIFACT_UNITS),
