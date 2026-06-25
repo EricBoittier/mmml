@@ -273,22 +273,16 @@ def cell_list_pairs(
             "Truncating. Increase max_pairs for correctness."
         )
         if not suppress_warning:
-            try:
-                from rich.console import Console
-                from rich.panel import Panel
+            from mmml.utils.rich_report import emit_panel
 
-                Console(stderr=True).print(
-                    Panel(
-                        (
-                            f"[bold red]{message}[/bold red]\n\n"
-                            f"Suggested value: [bold]--max-pairs {int(np.ceil(n_valid * 1.25))}[/bold]"
-                        ),
-                        title="[bold red]MM Pair List Truncated[/bold red]",
-                        border_style="red",
-                    )
-                )
-            except Exception:
-                pass
+            emit_panel(
+                "MM Pair List Truncated",
+                (
+                    f"{message}\n\n"
+                    f"Suggested value: --max-pairs {int(np.ceil(n_valid * 1.25))}"
+                ),
+                border_style="red",
+            )
         raise PairListTruncationError(n_valid, max_pairs)
 
     pair_i = np.zeros(max_pairs, dtype=np.int32)
