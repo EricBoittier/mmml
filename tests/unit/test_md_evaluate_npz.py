@@ -950,15 +950,15 @@ def test_compare_force_sources_to_reference() -> None:
     ref = np.array([[0.0, 0.0, 0.0], [0.2, 0.0, 0.0]], dtype=np.float64)
     pred = np.array([[0.0, 0.0, 0.0], [0.1, 0.0, 0.0]], dtype=np.float64)
     m = force_error_metrics_ev_angstrom(pred, ref)
-    assert m["force_rmse_eV_A"] == pytest.approx(0.1 / np.sqrt(2))
+    assert m["force_rmse_eV_A"] == pytest.approx(float(np.sqrt(0.01 / 6.0)))
     lanes = compare_force_sources_to_reference(
         {"spherical_fn": pred, "charmm_total": ref},
         ref,
     )
-    assert lanes["spherical_fn"]["force_rmse_eV_A"] == pytest.approx(0.1 / np.sqrt(2))
+    assert lanes["spherical_fn"]["force_rmse_eV_A"] == pytest.approx(float(np.sqrt(0.01 / 6.0)))
     assert lanes["charmm_total"]["force_rmse_eV_A"] == pytest.approx(0.0)
     cross = cross_lane_force_rmse_ev_angstrom(
         {"spherical_fn": pred, "charmm_total": ref},
         baseline="spherical_fn",
     )
-    assert cross["force_rmse_vs_spherical_fn_eV_A"] == pytest.approx(0.1 / np.sqrt(2))
+    assert cross["force_rmse_vs_spherical_fn_eV_A"] == pytest.approx(float(np.sqrt(0.04 / 6.0)))
