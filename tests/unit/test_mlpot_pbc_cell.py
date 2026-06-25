@@ -491,7 +491,7 @@ def test_resolve_mlpot_mic_box_side_A_skips_restart_when_crystal_active(tmp_path
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_mlpot_mic_box_side_A",
         return_value=(28.0, "pbound"),
     ) as mock_resolve:
         side, source = resolve_mlpot_mic_box_side_A(
@@ -557,7 +557,7 @@ def test_decomposed_calculator_passes_charmm_box_to_spherical_fn():
     dy = np.zeros(n, dtype=np.float64)
     dz = np.zeros(n, dtype=np.float64)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_mlpot_mic_box_side_A",
         return_value=(39.0, "pbound"),
     ), patch(
         "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
@@ -591,7 +591,7 @@ def test_decomposed_calculator_propagates_box_sync_failure():
     dy = np.zeros(n, dtype=np.float64)
     dz = np.zeros(n, dtype=np.float64)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_mlpot_mic_box_side_A",
         side_effect=RuntimeError("CHARMM box is not cubic"),
     ), patch(
         "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
