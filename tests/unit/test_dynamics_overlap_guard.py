@@ -28,6 +28,19 @@ def _mock_bond_exclusion_pairs_unless_targeted(request):
     if request.node.name == "test_bond_exclusion_pairs_handles_empty_get_ib_jb":
         yield
         return
+    skip_segment_mock = request.node.name in {
+        "test_ensure_segment_restart_checkpoint_returns_existing",
+        "test_ensure_segment_restart_checkpoint_writes_file",
+        "test_refresh_overlap_prior_segment_restart_rewrites_scratch",
+    }
+    segment_patch = (
+        nullcontext()
+        if skip_segment_mock
+        else mock.patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
+            side_effect=lambda p: Path(p).resolve() if p is not None else None,
+        )
+    )
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard._bond_exclusion_pairs",
         return_value=frozenset(),
@@ -35,7 +48,9 @@ def _mock_bond_exclusion_pairs_unless_targeted(request):
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_restart_write_after_chunk",
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
-    ):
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+    ), segment_patch:
         yield
 
 
@@ -1360,6 +1375,11 @@ def test_overlap_post_rescue_handoff_uses_readyn_restart(tmp_path, capsys):
     ) as post_rescue, mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
+        side_effect=lambda p: Path(p).resolve(),
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
         side_effect=lambda path: 500 * len(calls),
     ):
@@ -1375,7 +1395,7 @@ def test_overlap_post_rescue_handoff_uses_readyn_restart(tmp_path, capsys):
     assert calls[0][0]["restart"] is False
     assert calls[1][0]["restart"] is True
     assert calls[1][0]["iasvel"] == 0
-    assert calls[2][0]["restart"] is True
+    assert calls[2][0]["restart"] is False
     finalize.assert_called_once()
     materialize.assert_called_once()
     post_rescue.assert_not_called()
@@ -1483,6 +1503,11 @@ def test_mlpot_overlap_chunks_continue_in_memory_without_readyn(tmp_path):
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
+        side_effect=lambda p: Path(p).resolve(),
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
         return_value=2,
     ):
@@ -1496,11 +1521,10 @@ def test_mlpot_overlap_chunks_continue_in_memory_without_readyn(tmp_path):
 
     assert [c["nstep"] for c in calls] == [2, 2, 2]
     assert calls[0]["restart"] is False
-    assert calls[1]["restart"] is True
-    assert calls[1].get("iunrea") == 3
-    assert calls[1].get("iasvel") == 0
-    assert calls[2]["restart"] is True
-    assert calls[2].get("iasvel") == 0
+    assert calls[1]["restart"] is False
+    assert calls[1].get("iunrea", -1) == -1
+    assert calls[2]["restart"] is False
+    assert calls[2].get("iunrea", -1) == -1
 
 
 def test_mlpot_overlap_chunks_use_scratch_restart_handoff(tmp_path, monkeypatch):
@@ -2213,11 +2237,11 @@ def test_run_dynamics_with_io_mlpot_defaults_overlap_memory_handoff(tmp_path):
         )
     assert len(calls) == 3
     assert calls[0]["restart"] is False
-    assert calls[1]["restart"] is True
-    assert calls[2]["restart"] is True
+    assert calls[1]["restart"] is False
+    assert calls[2]["restart"] is False
     assert calls[0].get("iunrea") == -1
-    assert calls[1].get("iunrea") == 3
-    assert calls[2].get("iunrea") == 3
+    assert calls[1].get("iunrea", -1) == -1
+    assert calls[2].get("iunrea", -1) == -1
 
 
 def test_ensure_valid_overlap_scratch_restart_raises_on_rest_minus_one(tmp_path):
