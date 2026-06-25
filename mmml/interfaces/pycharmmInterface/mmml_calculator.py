@@ -49,7 +49,11 @@ from mmml.interfaces.pycharmmInterface.ml_dtypes import (
     ml_zeros,
     resolve_ml_compute_dtype,
 )
-from mmml.interfaces.pycharmmInterface.mm_energy_forces import build_mm_energy_forces_fn
+from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
+    DEFAULT_JAX_MD_CAPACITY_MULTIPLIER,
+    DEFAULT_JAX_MD_SKIN_DISTANCE_A,
+    build_mm_energy_forces_fn,
+)
 from mmml.utils.jax_gpu_warmup import (
     apply_xla_cuda_timer_log_filter,
     ensure_xla_gpu_warmed,
@@ -344,12 +348,12 @@ def setup_calculator(
     ml_gpu_count: int = 1,
     ml_max_active_dimers: Optional[int] = None,
     mm_r_min: Optional[float] = None,
-    jax_md_capacity_multiplier: float = 1.25,
+    jax_md_capacity_multiplier: float = DEFAULT_JAX_MD_CAPACITY_MULTIPLIER,
     jax_md_capacity_growth_factor: float = 1.5,
     jax_md_max_overflow_retries: int = 4,
     jax_md_overflow_fallback_to_cell_list: bool = True,
     jax_md_update_interval: int = 1,
-    jax_md_skin_distance: float = 0.0,
+    jax_md_skin_distance: float = DEFAULT_JAX_MD_SKIN_DISTANCE_A,
     ml_compute_dtype: str | None = None,
     defer_xla_gpu_warmup: bool = False,
 ):
@@ -398,7 +402,8 @@ def setup_calculator(
         jax_md_update_interval: Rebuild/update MM neighbor pairs every N calculator calls.
             Intermediate calls reuse cached pairs.
         jax_md_skin_distance: Additional displacement threshold (Å). When >0, cached pairs are
-            reused while max displacement since last update stays below this value.
+            reused while max Cartesian displacement since last update stays below this value.
+            Default 0.25 Å (≤ jax-md dr_threshold/2 for exact reuse within the pair buffer).
         min_com_restraint_distance: Optional pairwise inter-monomer COM lower wall (Å).
             Adds ``0.5*k*(r_min-r)^2`` when a monomer-pair COM distance is below
             ``r_min``. Use to prevent collapsed/reactive monomer encounters.
@@ -993,6 +998,7 @@ def setup_calculator(
     _cached_mm_fn = [None]          # [0] = calculate_mm_energy_and_forces | None
     _cached_update_mm_pairs = [None]  # [0] = update_mm_pairs | None (jax_md path)
     _cached_mm_cutoff_key = [None]  # hashable key to detect cutoff-param changes
+    _lambda_version = [0]
     _hybrid_jit_warmed = [False]
 
     def _maybe_warmup_hybrid_jit(
@@ -1038,6 +1044,7 @@ def setup_calculator(
             cutoff_params.mm_switch_width,
             getattr(cutoff_params, "complementary_handoff", True),
             mm_r_min,
+            _lambda_version[0],
         )
         if _cached_mm_fn[0] is None or _cached_mm_cutoff_key[0] != key:
             mm_result, update_fn = get_MM_energy_forces_fns(
@@ -1909,14 +1916,11 @@ def setup_calculator(
                 """Update the lambda_monomer array at runtime.
 
                 ``new_lambda`` must be array-like of shape ``(n_monomers,)``.
-                The update is reflected in subsequent ``calculate()`` calls because
-                the closure variables inside the JIT-compiled functions reference
-                the same mutable buffer.
+                Invalidates the cached MM neighbor/energy JIT so the new λ is picked
+                up on the next ``calculate()`` call.
 
-                Note: Since JAX traces are keyed on array *identity*, changing
-                the lambda values will trigger a re-trace of JIT-compiled
-                functions that close over ``lambda_monomer``.  For performance
-                in production runs, prefer setting lambda once before the MD loop.
+                Prefer setting λ once before the MD loop; repeated updates rebuild MM
+                kernels and add compile latency.
                 """
                 nonlocal lambda_monomer
                 new_arr = jnp.asarray(new_lambda, dtype=ml_jnp_dtype)
@@ -1924,7 +1928,20 @@ def setup_calculator(
                     raise ValueError(
                         f"lambda_monomer must have shape ({n_monomers},), got {new_arr.shape}"
                     )
+                if _hybrid_jit_warmed[0]:
+                    import warnings
+
+                    warnings.warn(
+                        "set_lambda_monomer after hybrid JIT warmup invalidates the MM "
+                        "cache and may trigger recompilation on the next step.",
+                        UserWarning,
+                        stacklevel=2,
+                    )
                 lambda_monomer = new_arr
+                _lambda_version[0] += 1
+                _cached_mm_fn[0] = None
+                _cached_update_mm_pairs[0] = None
+                _cached_mm_cutoff_key[0] = None
 
             def get_mm_pair_update_stats(self) -> dict:
                 update_fn = _cached_update_mm_pairs[0]
@@ -2024,12 +2041,24 @@ def setup_calculator(
                 if self.backprop:
                     R_jax = jnp.asarray(R)
 
-                    def _energy_scalar(positions_jax):
-                        return jnp.reshape(_spherical_eval(positions_jax).energy, (-1,))[0]
+                    if self.verbose:
+                        def _energy_with_aux(positions_jax):
+                            model_out = _spherical_eval(positions_jax)
+                            energy = jnp.reshape(model_out.energy, (-1,))[0]
+                            return energy, model_out
 
-                    E, grad_R = jax.value_and_grad(_energy_scalar)(R_jax)
+                        (E, out), grad_R = jax.value_and_grad(
+                            _energy_with_aux, has_aux=True
+                        )(R_jax)
+                    else:
+                        def _energy_scalar(positions_jax):
+                            return jnp.reshape(
+                                _spherical_eval(positions_jax).energy, (-1,)
+                            )[0]
+
+                        E, grad_R = jax.value_and_grad(_energy_scalar)(R_jax)
+                        out = None
                     F = -grad_R
-                    out = _spherical_eval(R_jax) if self.verbose else None
                 else:
                     out = _spherical_eval(jnp.asarray(R))
                     E = out.energy
