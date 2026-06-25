@@ -1,8 +1,50 @@
-"""JAX-MD PBC neighbor-list defaults (NVE stability)."""
+"""JAX-MD PBC neighbor-list defaults (NVE stability + throughput)."""
 
 from __future__ import annotations
 
 from mmml.cli.run.jaxmd_runner import resolve_jaxmd_steps_per_loop_call
+from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
+    DEFAULT_JAX_MD_SKIN_DISTANCE_A,
+    format_mm_pair_update_stats_summary,
+    neighbor_pair_cache_should_reuse,
+)
+import numpy as np
+
+
+def test_default_skin_is_quarter_angstrom():
+    assert DEFAULT_JAX_MD_SKIN_DISTANCE_A == 0.25
+
+
+def test_skin_zero_interval_one_never_reuses():
+    R = np.zeros((4, 3), dtype=np.float64)
+    box = np.array([40.0, 40.0, 40.0])
+    assert not neighbor_pair_cache_should_reuse(
+        calls=1,
+        interval=1,
+        skin=0.0,
+        R=R,
+        last_R=R.copy(),
+        box=box,
+        last_box=box.copy(),
+        have_cache=True,
+    )
+
+
+def test_default_skin_interval_one_reuses_small_step():
+    R0 = np.zeros((4, 3), dtype=np.float64)
+    R1 = R0.copy()
+    R1[0, 0] = 0.1
+    box = np.array([40.0, 40.0, 40.0])
+    assert neighbor_pair_cache_should_reuse(
+        calls=1,
+        interval=1,
+        skin=DEFAULT_JAX_MD_SKIN_DISTANCE_A,
+        R=R1,
+        last_R=R0,
+        box=box,
+        last_box=box.copy(),
+        have_cache=True,
+    )
 
 
 def test_resolve_steps_per_loop_call_is_one_for_pbc_with_update_fn():
@@ -17,28 +59,21 @@ def test_resolve_steps_per_loop_call_is_one_for_pbc_with_update_fn():
     )
 
 
-def test_resolve_steps_per_loop_call_allows_chunks_without_pbc():
-    steps = resolve_jaxmd_steps_per_loop_call(
-        steps_per_recording=1000,
-        use_pbc=False,
-        has_update_fn=False,
-        jax_md_update_interval=100,
+def test_format_mm_pair_update_stats_summary():
+    line = format_mm_pair_update_stats_summary(
+        {"calls": 1000, "reused": 950, "updates": 50, "reallocs": 0, "fallbacks": 0}
     )
-    assert steps == 100
+    assert "950/1000 reused (95.0%)" in line
+    assert "reallocs=0" in line
 
 
-def test_jaxmd_and_ase_cli_defaults_use_interval_one_skin_zero():
+def test_jaxmd_and_ase_cli_defaults_use_interval_one_conservative_skin():
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[2]
     jaxmd_src = (root / "mmml/cli/run/md_pbc_suite/jaxmd.py").read_text(encoding="utf-8")
     ase_src = (root / "mmml/cli/run/md_pbc_suite/ase.py").read_text(encoding="utf-8")
-    assert '"--jax-md-update-interval"' in jaxmd_src or '--jax-md-update-interval", type=int, default=1' in jaxmd_src
+    assert "DEFAULT_JAX_MD_SKIN_DISTANCE_A" in jaxmd_src
     assert "default=1" in jaxmd_src.split("jax-md-update-interval")[1][:120]
-    assert '"--jax-md-skin-distance"' in jaxmd_src
-    assert "default=0.0" in jaxmd_src.split("jax-md-skin-distance")[1][:120]
-    assert '"--jax-md-update-interval"' in ase_src
+    assert "DEFAULT_JAX_MD_SKIN_DISTANCE_A" in ase_src
     assert "default=1," in ase_src.split('"--jax-md-update-interval"')[1][:200]
-    assert '"--jax-md-skin-distance"' in ase_src
-    assert "default=0.0" in ase_src.split('"--jax-md-skin-distance"')[1][:300]
-

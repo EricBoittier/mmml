@@ -56,7 +56,10 @@ from mmml.interfaces.pycharmmInterface.cutoffs import (
     DEFAULT_MM_SWITCH_WIDTH,
 )
 from mmml.interfaces.pycharmmInterface.mmml_calculator import CutoffParameters, setup_calculator
-from mmml.interfaces.pycharmmInterface.mm_energy_forces import _get_actual_psf_charges
+from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
+    DEFAULT_JAX_MD_SKIN_DISTANCE_A,
+    _get_actual_psf_charges,
+)
 from mmml.utils.geometry_checks import assert_no_intermonomer_atom_overlap
 from mmml.utils.jax_gpu_warmup import warmup_ase_mmml_energy_forces
 import pycharmm.param as param
@@ -1467,10 +1470,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--jax-md-skin-distance",
         type=float,
-        default=0.0,
+        default=DEFAULT_JAX_MD_SKIN_DISTANCE_A,
         help=(
             "Reuse cached MM neighbor pairs while max displacement since last update is below "
-            "this (Å). Default 0: rebuild every update (recommended for PBC dynamics)."
+            f"this (Å). Default {DEFAULT_JAX_MD_SKIN_DISTANCE_A}: safe with jax-md dr_threshold=0.5 Å; "
+            "use 0 only for debugging (rebuild every step, much slower)."
         ),
     )
     parser.add_argument(

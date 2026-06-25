@@ -37,6 +37,7 @@ from mmml.data.units import (
     normalize_force_unit,
     reference_energy_ev_at_frame,
 )
+from mmml.interfaces.pycharmmInterface.mm_energy_forces import DEFAULT_JAX_MD_SKIN_DISTANCE_A
 from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
 
 load_evaluate_npz = load_geometry_npz
@@ -1338,7 +1339,9 @@ def _attach_ase_mmml_calculator(
             getattr(args, "jax_md_disable_fallback", False)
         ),
         jax_md_update_interval=_evaluate_int_arg(args, "jax_md_update_interval", 1),
-        jax_md_skin_distance=float(getattr(args, "jax_md_skin_distance", 0.0)),
+        jax_md_skin_distance=float(
+            getattr(args, "jax_md_skin_distance", DEFAULT_JAX_MD_SKIN_DISTANCE_A)
+        ),
         max_pairs=_evaluate_int_arg(args, "max_pairs", 20_000),
         flat_bottom_radius=getattr(args, "flat_bottom_radius", None),
         flat_bottom_force_const=float(getattr(args, "flat_bottom_k", 1.0)),
@@ -1450,7 +1453,9 @@ def _evaluate_jaxmd_mmml(
             getattr(args, "jax_md_disable_fallback", False)
         ),
         jax_md_update_interval=_evaluate_int_arg(args, "jax_md_update_interval", 1),
-        jax_md_skin_distance=float(getattr(args, "jax_md_skin_distance", 0.0)),
+        jax_md_skin_distance=float(
+            getattr(args, "jax_md_skin_distance", DEFAULT_JAX_MD_SKIN_DISTANCE_A)
+        ),
         flat_bottom_radius=getattr(args, "flat_bottom_radius", None),
         flat_bottom_force_const=float(getattr(args, "flat_bottom_k", 1.0)),
         flat_bottom_mode=str(getattr(args, "flat_bottom_mode", "system")),
