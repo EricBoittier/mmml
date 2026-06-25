@@ -1801,6 +1801,22 @@ def test_apply_overlap_chunk_hoover_cpt_keeps_iasvel_zero_after_boltzmann():
     assert kw["iunrea"] == -1
 
 
+def test_apply_overlap_chunk_cpt_npt_keeps_iasvel_one_after_boltzmann():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
+
+    kw = {
+        "start": False,
+        "iasvel": 1,
+        "cpt": True,
+        "hoover reft": 12.0,
+        "tmass": 160,
+    }
+    _apply_overlap_chunk_dynamics_kw(kw, chunk_index=0, has_restart_read=False)
+    assert kw["iasvel"] == 1
+    assert kw["restart"] is False
+    assert kw["iunrea"] == -1
+
+
 def test_run_dynamics_with_io_mlpot_defaults_overlap_memory_handoff(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
