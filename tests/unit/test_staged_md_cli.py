@@ -569,7 +569,7 @@ def test_overlap_for_stage_enables_heat_chunking():
 
 
 def test_configure_heat_dynamics_start_hoover_memory_handoff_no_comp_velocities():
-    """Hoover CPT after mini: assign at FIRSTT, then dyna with iasvel=0 (no TBATH re-draw)."""
+    """Hoover CPT after mini: single dyna start=True (no nstep=0 assign)."""
     io = CharmmTrajectoryFiles()
     kw = {
         "firstt": 0.0,
@@ -595,10 +595,10 @@ def test_configure_heat_dynamics_start_hoover_memory_handoff_no_comp_velocities(
             heat_thermostat="hoover",
         )
 
-    assign.assert_called_once()
+    assign.assert_not_called()
     assert kw["restart"] is False
-    assert kw["start"] is False
-    assert kw["iasvel"] == 0
+    assert kw["start"] is True
+    assert kw["iasvel"] == 1
 
 
 def test_configure_heat_dynamics_start_scale_memory_handoff_single_dyna():
@@ -673,6 +673,40 @@ def _write_restartable_res(path: Path, *, jhstrt: int = 250) -> None:
         f"   10     0     500       1      10   {jhstrt}     297       0       0\n",
         encoding="ascii",
     )
+
+
+def test_configure_heat_dynamics_start_hoover_restart_file_single_dyna(tmp_path):
+    """Hoover CPT from restart file: READYN+start in one dyna (no nstep=0 assign)."""
+    res = tmp_path / "mini.res"
+    _write_restartable_res(res, jhstrt=0)
+    io = CharmmTrajectoryFiles(restart_read=res)
+    kw = {
+        "firstt": 2.0,
+        "finalt": 10.0,
+        "cpt": True,
+        "hoover reft": 2.0,
+        "tmass": 840,
+    }
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.assign_velocities_at_temperature"
+    ) as assign:
+        _configure_heat_dynamics_start(
+            kw,
+            io,
+            coords_in_memory=False,
+            restart_from_file=True,
+            timestep_ps=0.00025,
+            use_pbc=True,
+            quiet=True,
+            heat_thermostat="hoover",
+        )
+
+    assign.assert_not_called()
+    assert kw["restart"] is True
+    assert kw["start"] is True
+    assert kw["iasvel"] == 1
+    assert io.restart_read == res
 
 
 def test_configure_heat_dynamics_start_in_place_resume_uses_dyna_restart(tmp_path):

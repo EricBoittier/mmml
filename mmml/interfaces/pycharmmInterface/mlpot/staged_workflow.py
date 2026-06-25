@@ -498,30 +498,20 @@ def _configure_heat_dynamics_start(
         io.restart_read = None
         kw["restart"] = False
         kw["new"] = False
-        if hoover_cpt_heat:
-            assign_velocities_at_temperature(
-                firstt,
-                timestep_ps=timestep_ps,
-                restart_path=None,
-                use_pbc=use_pbc,
-            )
-            # Velocities already drawn at FIRSTT; iasvel=1 on the main dyna would
-            # re-assign at TBATH/FINALT (CHARMM) and spike T on segment ≥1 handoff.
-            kw["iasvel"] = 0
-            kw["start"] = False
-        else:
-            # Single dyna: Boltzmann at FIRSTT (start=True) then ihtfrq scaling.
-            # Avoid a separate nstep=0 assign — it triggers a second dynamc/lambdata_init
-            # that can segfault on BLOCK builds after the main heat segment starts.
-            kw["iasvel"] = 1
+        # Single dyna: Boltzmann at FIRSTT (start=True, iasvel=1).  A separate
+        # nstep=0 assign before Hoover CPT leaves barostat pistons uninitialized
+        # (garbage PIXX/PRESS at step 0) and triggers a second dynamc/lambdata_init
+        # that can segfault on BLOCK builds.
+        kw["iasvel"] = 1
+        kw["start"] = True
+        if not hoover_cpt_heat:
             kw["iasors"] = 0
-            kw["start"] = True
         if not quiet:
             if hoover_cpt_heat:
                 print(
-                    f"HEAT: Boltzmann velocities at FIRSTT={firstt:.1f} K "
+                    f"HEAT: dyna start FIRSTT={firstt:.1f} K "
                     "(in-memory coords after mini); Hoover CPT NVT (no ihtfrq); "
-                    "start=False (no COMP velocity assign)",
+                    "single dyna (no nstep=0 assign)",
                     flush=True,
                 )
             else:
@@ -556,6 +546,19 @@ def _configure_heat_dynamics_start(
 
     if restart_from_file and io.restart_read is not None:
         restart_path = io.restart_read
+        if hoover_cpt_heat:
+            kw["restart"] = True
+            kw["new"] = False
+            kw["start"] = True
+            kw["iasvel"] = 1
+            if not quiet:
+                print(
+                    f"HEAT: dyna restart+start FIRSTT={firstt:.1f} K "
+                    f"(coords from {restart_path}); Hoover CPT NVT (no ihtfrq); "
+                    "single dyna (no nstep=0 assign)",
+                    flush=True,
+                )
+            return
         assign_velocities_at_temperature(
             firstt,
             timestep_ps=timestep_ps,
@@ -567,23 +570,11 @@ def _configure_heat_dynamics_start(
         kw["new"] = False
         kw.pop("iunrea", None)
         kw["iunrea"] = -1
-        if hoover_cpt_heat:
-            kw["iasvel"] = 0
-            kw["start"] = False
-        else:
-            kw["start"] = False
+        kw["start"] = False
         if not quiet:
-            msg = (
-                f"HEAT: Boltzmann velocities at FIRSTT={firstt:.1f} K "
-                f"(coords from {restart_path}); "
-            )
             print(
-                msg
-                + (
-                    "Hoover CPT NVT (no ihtfrq); start=False (no COMP velocity assign)"
-                    if hoover_cpt_heat
-                    else "ihtfrq scales (iasors=0)"
-                ),
+                f"HEAT: Boltzmann velocities at FIRSTT={firstt:.1f} K "
+                f"(coords from {restart_path}); ihtfrq scales (iasors=0)",
                 flush=True,
             )
         return
