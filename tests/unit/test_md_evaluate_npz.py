@@ -118,6 +118,37 @@ def test_compare_evaluate_to_reference_npz(tmp_path: Path) -> None:
     assert "force_rmse_eV_A" in cmp
 
 
+def test_compare_evaluate_reorders_psf_order_reference(tmp_path: Path) -> None:
+    perm = np.array([0, 3, 4, 1, 2], dtype=int)
+    charmm_z = np.array([6, 1, 1, 17, 17, 6, 1, 1, 17, 17], dtype=np.int32)
+    charmm_r = np.random.default_rng(4).random((10, 3))
+    psf_z = charmm_z.reshape(2, 5)[:, perm].reshape(-1)
+    psf_r = charmm_r.reshape(2, 5, 3)[:, perm, :].reshape(10, 3)
+    ref_e_hartree = -1.6 / 27.211386245988
+    ref_path = tmp_path / "ref_psf_order.npz"
+    np.savez_compressed(
+        ref_path,
+        N=np.array([10], dtype=int),
+        Z=psf_z.reshape(1, 10),
+        R=psf_r.reshape(1, 10, 3),
+        E=np.array([ref_e_hartree], dtype=np.float64),
+        F=np.random.default_rng(5).random((1, 10, 3)),
+    )
+    cmp = compare_evaluate_to_reference_npz(
+        ref_path,
+        frame=0,
+        atomic_numbers=charmm_z,
+        positions=charmm_r,
+        energy_eV=-1.6,
+        forces_eV_A=np.ones((10, 3)),
+        reference_energy_unit="hartree",
+        reference_force_unit="hartree_bohr",
+    )
+    assert cmp["reference_reordered"] is True
+    assert cmp["position_rmsd_A"] == pytest.approx(0.0, abs=1e-12)
+    assert cmp["delta_energy_eV"] == pytest.approx(0.0, abs=1e-6)
+
+
 def test_save_evaluate_extxyz_includes_forces(tmp_path: Path) -> None:
     from ase.io import read
 
