@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 import time
+import uuid
 from argparse import Namespace
 from pathlib import Path
 from typing import Any
@@ -66,6 +67,33 @@ def _resolve_output_dir(merged: dict[str, Any], run_id: str, *, rep: int = 0) ->
     if root is None:
         root = "results"
     return (Path(str(root)) / run_id).resolve()
+
+
+def _unique_output_dir_if_exists(path: Path, *, resume: bool) -> Path:
+    """Return ``path`` when missing or resuming; else ``path_<uuid>`` if ``path`` exists."""
+    resolved = path.expanduser().resolve()
+    if resume or not resolved.exists():
+        return resolved
+    while True:
+        candidate = resolved.parent / f"{resolved.name}_{uuid.uuid4().hex[:8]}"
+        if not candidate.exists():
+            return candidate
+
+
+def _lookup_resolved_output_dir(
+    resolved: dict[str, Path],
+    campaign: dict[str, Any],
+    job_id: str,
+    *,
+    rep: int = 0,
+) -> Path:
+    """Prefer in-run output paths (after uniquification) over static YAML layout."""
+    if job_id in resolved:
+        return resolved[job_id]
+    for run_id, path in resolved.items():
+        if run_id == job_id or run_id.startswith(f"{job_id}."):
+            return path
+    return _resolve_output_dir(merge_campaign_job_config(campaign, job_id), job_id, rep=rep)
 
 
 _CAMPAIGN_ONLY_KEYS = frozenset(
@@ -217,6 +245,18 @@ def run_campaign(args: Namespace) -> int:
     plan_rows = build_plan_rows(campaign, order)
     campaign_root = Path(getattr(args, "campaign_output_dir", None) or campaign.get("campaign_output", "artifacts/md_campaign"))
     campaign_root = campaign_root.expanduser().resolve()
+    resume = bool(getattr(args, "resume_campaign", False))
+    run_all = bool(getattr(args, "run_all", False))
+    requested_campaign_root = campaign_root
+    if run_all and not resume:
+        campaign_root = _unique_output_dir_if_exists(campaign_root, resume=False)
+        if campaign_root != requested_campaign_root and not getattr(args, "quiet", False):
+            print(
+                f"mmml md-system: campaign output dir {requested_campaign_root} exists; "
+                f"using {campaign_root}",
+                flush=True,
+            )
+    args.campaign_output_dir = campaign_root
     campaign_root.mkdir(parents=True, exist_ok=True)
     write_campaign_plan(campaign_root / "campaign_plan.json", plan_rows)
     if not getattr(args, "quiet", False):
@@ -224,6 +264,7 @@ def run_campaign(args: Namespace) -> int:
 
     expanded = expand_repeated_jobs(campaign, order)
     handoff_by_run: dict[str, Any] = {}
+    resolved_output_dirs: dict[str, Path] = {}
     job_summaries: list[MdJobSummary] = []
     campaign_rc = 0
 
@@ -231,7 +272,17 @@ def run_campaign(args: Namespace) -> int:
         merged = merge_campaign_job_config(campaign, base_id)
         if rep:
             merged["seed"] = int(merged.get("seed", 123)) + rep
-        out_dir = _resolve_output_dir(merged, run_id, rep=rep)
+        merged["campaign_output_dir"] = str(campaign_root)
+        requested_out_dir = _resolve_output_dir(merged, run_id, rep=rep)
+        out_dir = requested_out_dir
+        if run_all and not resume:
+            out_dir = _unique_output_dir_if_exists(out_dir, resume=False)
+            if out_dir != requested_out_dir and not getattr(args, "quiet", False):
+                print(
+                    f"mmml md-system: job {run_id!r} output dir exists; using {out_dir}",
+                    flush=True,
+                )
+        resolved_output_dirs[run_id] = out_dir
         merged["output_dir"] = str(out_dir)
         merged["job_name"] = run_id
         dep = merged.get("depends_on")
@@ -243,8 +294,8 @@ def run_campaign(args: Namespace) -> int:
                     handoff_in = handoff_by_run.get(rid)
                     break
             if handoff_in is None:
-                dep_dir = _resolve_output_dir(
-                    merge_campaign_job_config(campaign, dep_key), dep_key
+                dep_dir = _lookup_resolved_output_dir(
+                    resolved_output_dirs, campaign, dep_key
                 )
                 dep_merged = merge_campaign_job_config(campaign, dep_key)
                 handoff_in = load_dependency_handoff(
@@ -253,8 +304,8 @@ def run_campaign(args: Namespace) -> int:
                     fallback_box_side_A=dep_merged.get("box_size"),
                 )
             elif dep:
-                dep_dir = _resolve_output_dir(
-                    merge_campaign_job_config(campaign, dep_key), dep_key
+                dep_dir = _lookup_resolved_output_dir(
+                    resolved_output_dirs, campaign, dep_key
                 )
                 dep_merged = merge_campaign_job_config(campaign, dep_key)
                 handoff_in = enrich_handoff_from_restart_files(
@@ -263,8 +314,8 @@ def run_campaign(args: Namespace) -> int:
                     fallback_box_side_A=dep_merged.get("box_size"),
                 )
             if handoff_in is not None and not merged.get("continue_from"):
-                dep_dir = _resolve_output_dir(
-                    merge_campaign_job_config(campaign, dep_key), dep_key
+                dep_dir = _lookup_resolved_output_dir(
+                    resolved_output_dirs, campaign, dep_key
                 )
                 npz = dep_dir / "handoff" / "state.npz"
                 if npz.is_file():
@@ -292,7 +343,9 @@ def run_campaign(args: Namespace) -> int:
         if handoff_out is not None:
             template = None
             if dep and handoff_by_run.get(str(dep)):
-                prev_dir = _resolve_output_dir(merge_campaign_job_config(campaign, str(dep)), str(dep))
+                prev_dir = _lookup_resolved_output_dir(
+                    resolved_output_dirs, campaign, str(dep)
+                )
                 cand = prev_dir / "handoff" / "final.res"
                 if cand.is_file():
                     template = cand
