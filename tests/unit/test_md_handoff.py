@@ -522,6 +522,42 @@ def test_handoff_positions_for_charmm_restart_prefers_live_charmm(
     assert np.allclose(got, live_pos)
 
 
+def test_validate_handoff_matches_cluster_geometry_rejects_mismatch() -> None:
+    from mmml.cli.run.md_handoff import (
+        MdHandoffState,
+        validate_handoff_matches_cluster_geometry,
+    )
+
+    handoff = MdHandoffState(
+        positions=np.zeros((125, 3)),
+        atomic_numbers=np.ones(125, dtype=np.int32),
+        metadata={"path": "handoff/state.npz", "backend": "jaxmd"},
+    )
+    z = np.ones(100, dtype=np.int32)
+    with pytest.raises(ValueError, match="125 atoms .* 100 atoms"):
+        validate_handoff_matches_cluster_geometry(
+            handoff,
+            z,
+            20,
+            tag="dcm_20",
+            composition="DCM:20",
+        )
+
+
+def test_validate_handoff_matches_cluster_geometry_accepts_match() -> None:
+    from mmml.cli.run.md_handoff import (
+        MdHandoffState,
+        validate_handoff_matches_cluster_geometry,
+    )
+
+    handoff = MdHandoffState(
+        positions=np.zeros((100, 3)),
+        atomic_numbers=np.ones(100, dtype=np.int32),
+    )
+    z = np.ones(100, dtype=np.int32)
+    validate_handoff_matches_cluster_geometry(handoff, z, 20, tag="dcm_20")
+
+
 def test_staged_handoff_r_matches_charmm_aligned_positions() -> None:
     """Regression: jaxmd handoff must update ``r`` after CHARMM PBC alignment."""
     from dataclasses import replace

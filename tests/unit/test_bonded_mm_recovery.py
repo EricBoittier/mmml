@@ -1223,7 +1223,6 @@ def test_restore_charmm_state_from_restart_parses_and_syncs_positions(tmp_path):
         dtype=float,
     )
     mock_py = MagicMock()
-    mock_py.coor.get_natom.return_value = 2
     synced: list[np.ndarray] = []
 
     def _capture_sync(pos):
@@ -1235,6 +1234,9 @@ def test_restore_charmm_state_from_restart_parses_and_syncs_positions(tmp_path):
             "pycharmm": mock_py,
             "mmml.interfaces.pycharmmInterface.import_pycharmm": MagicMock(),
         },
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._charmm_natom_count",
+        return_value=2,
     ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
         return_value=__import__("contextlib").nullcontext(),
@@ -1254,6 +1256,102 @@ def test_restore_charmm_state_from_restart_parses_and_syncs_positions(tmp_path):
     assert str(restart) in script
     assert "read restart unit 93" in script
     assert "UPDATE" in script
+
+
+def test_restore_charmm_state_from_restart_prefers_live_coords(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        restore_charmm_state_from_restart,
+    )
+
+    restart = tmp_path / "prior.res"
+    restart.write_text(
+        "REST     0     1\n"
+        "       2 !NTITLE followed by title\n"
+        "* test\n"
+        "\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        "         2           0           0           0           0           0           0\n"
+        "\n"
+        " !X, Y, Z\n"
+        " 0.100000000000000D+00 0.200000000000000D+00 0.300000000000000D+00\n"
+        " 0.400000000000000D+00 0.500000000000000D+00 0.600000000000000D+00\n"
+    )
+    live = np.array([[9.0, 9.0, 9.0], [8.0, 8.0, 8.0]], dtype=float)
+    synced: list[np.ndarray] = []
+
+    def _capture_sync(pos):
+        synced.append(np.asarray(pos, dtype=float))
+
+    mock_py = MagicMock()
+    with patch.dict(
+        "sys.modules",
+        {
+            "pycharmm": mock_py,
+            "mmml.interfaces.pycharmmInterface.import_pycharmm": MagicMock(),
+        },
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._charmm_natom_count",
+        return_value=2,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        return_value=__import__("contextlib").nullcontext(),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        return_value=live.copy(),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        side_effect=_capture_sync,
+    ):
+        restore_charmm_state_from_restart(restart, read_unit=93)
+
+    assert len(synced) == 1
+    assert np.allclose(synced[0], live)
+
+
+def test_restore_charmm_state_from_restart_raises_natom_mismatch(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        restore_charmm_state_from_restart,
+    )
+
+    restart = tmp_path / "stale.res"
+    restart.write_text(
+        "REST     0     1\n"
+        "     125 !NTITLE followed by title\n"
+        "* stale 25-mer\n"
+        "\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        "       125           0           0           0           0           0           0\n"
+        "\n"
+        " !X, Y, Z\n"
+        + "\n".join(
+            " 0.100000000000000D+00 0.200000000000000D+00 0.300000000000000D+00"
+            for _ in range(125)
+        )
+        + "\n"
+    )
+    live = np.zeros((100, 3), dtype=float)
+    mock_py = MagicMock()
+    with patch.dict(
+        "sys.modules",
+        {
+            "pycharmm": mock_py,
+            "mmml.interfaces.pycharmmInterface.import_pycharmm": MagicMock(),
+        },
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._charmm_natom_count",
+        return_value=100,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        return_value=__import__("contextlib").nullcontext(),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        return_value=live,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+    ) as mock_sync:
+        with pytest.raises(RuntimeError, match="offline NATOM=125 vs CHARMM natom=100"):
+            restore_charmm_state_from_restart(restart, read_unit=93)
+    mock_sync.assert_not_called()
 
 
 def test_restore_charmm_state_from_restart_raises_without_finite_coords(tmp_path):
