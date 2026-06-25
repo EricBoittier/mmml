@@ -677,6 +677,34 @@ def setup_calculator(
         params = cast_pytree_to_ml_dtype(params, dtype=ml_jnp_dtype)
     MODEL.natoms = max_atoms
     print(f"[setup_calculator] Model loaded: {MODEL}")
+
+    from mmml.data.units import HARTREE_TO_EV, calculator_results_units
+
+    checkpoint_training_units = None
+    if is_json_checkpoint:
+        checkpoint_training_units = config.get("training_units") or checkpoint.get("training_units")
+    else:
+        try:
+            from mmml.models.physnetjax.physnetjax.restart.restart import orbax_checkpointer
+
+            restored = orbax_checkpointer.restore(restart)
+            checkpoint_training_units = restored.get("training_units")
+        except Exception:
+            checkpoint_training_units = None
+    if (
+        ml_energy_conversion_factor == 1.0
+        and checkpoint_training_units is not None
+        and str(checkpoint_training_units.get("energy", "eV")).lower() in {"hartree", "ha"}
+    ):
+        import warnings
+
+        warnings.warn(
+            "Legacy Hartree-trained checkpoint detected; applying HARTREE_TO_EV at ML output boundary.",
+            stacklevel=2,
+        )
+        ml_energy_conversion_factor = float(HARTREE_TO_EV)
+        ml_force_conversion_factor = float(HARTREE_TO_EV)
+    _calculator_unit_metadata = calculator_results_units()
     if is_json_checkpoint:
         print(
             f"[setup_calculator] Runtime natoms={max_atoms} (largest monomer/dimer in this system). "
@@ -1953,6 +1981,10 @@ def setup_calculator(
                 self.results["energy"] = final_energy * self.energy_conversion_factor
                 # Ensure forces are finite before storing
                 forces_final = F * self.force_conversion_factor
+                
+                self.results.update(_calculator_unit_metadata)
+                self.results["energy_unit"] = "eV"
+                self.results["forces_unit"] = "eV/Angstrom"
                 
                 # Check for NaN/Inf using JAX operations first (works with JAX arrays)
                 forces_final = jnp.where(jnp.isfinite(forces_final), forces_final, 0.0)

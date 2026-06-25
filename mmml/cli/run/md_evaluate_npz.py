@@ -214,6 +214,195 @@ def align_reference_frame_to_evaluate(
     return ref_r_aligned, ref_f_aligned, meta
 
 
+def _reference_z_for_frame(reference: Any, frame: int, n_atoms: int) -> np.ndarray:
+    z_arr = np.asarray(reference.Z)
+    if z_arr.ndim == 1:
+        return np.asarray(z_arr[:n_atoms], dtype=np.int32)
+    return np.asarray(z_arr[int(frame), :n_atoms], dtype=np.int32)
+
+
+def _permutation_within_monomer_blocks(
+    reference_numbers: np.ndarray,
+    evaluator_numbers: np.ndarray,
+    atoms_per_list: list[int],
+) -> np.ndarray:
+    """Map evaluator rows to reference rows when only monomer atom order differs."""
+    ref_z = np.asarray(reference_numbers, dtype=np.int32).reshape(-1)
+    eval_z = np.asarray(evaluator_numbers, dtype=np.int32).reshape(-1)
+    perm = np.arange(len(eval_z), dtype=int)
+    offset = 0
+    for n_per in atoms_per_list:
+        n_per = int(n_per)
+        block_ref = ref_z[offset : offset + n_per]
+        block_eval = eval_z[offset : offset + n_per]
+        if not np.array_equal(block_ref, block_eval):
+            block_perm = np.empty(n_per, dtype=int)
+            for element in sorted(set(int(z) for z in block_eval.tolist())):
+                eval_idx = np.where(block_eval == element)[0]
+                ref_idx = np.where(block_ref == element)[0]
+                if len(eval_idx) != len(ref_idx):
+                    raise ValueError(
+                        f"Element {element} count mismatch in monomer block at offset {offset}"
+                    )
+                for e_local, r_local in zip(eval_idx, ref_idx):
+                    block_perm[e_local] = r_local
+            perm[offset : offset + n_per] = offset + block_perm
+        offset += n_per
+    return perm
+
+
+def _permutation_ref_to_evaluator_z(
+    reference_positions: np.ndarray,
+    reference_numbers: np.ndarray,
+    evaluator_numbers: np.ndarray,
+    *,
+    geometry_hint: np.ndarray | None = None,
+    atoms_per_list: list[int] | None = None,
+    use_geometry: bool = True,
+) -> np.ndarray:
+    ref_r = np.asarray(reference_positions, dtype=np.float64).reshape(-1, 3)
+    ref_z = np.asarray(reference_numbers, dtype=np.int32).reshape(-1)
+    eval_z = np.asarray(evaluator_numbers, dtype=np.int32).reshape(-1)
+    n_atoms = int(len(eval_z))
+    if np.array_equal(ref_z, eval_z):
+        return np.arange(n_atoms, dtype=int)
+    if atoms_per_list and int(sum(atoms_per_list)) == n_atoms:
+        if not use_geometry or geometry_hint is None:
+            return _permutation_within_monomer_blocks(ref_z, eval_z, atoms_per_list)
+        hint = np.asarray(geometry_hint, dtype=np.float64).reshape(-1, 3)
+        perm = np.arange(n_atoms, dtype=int)
+        offset = 0
+        for n_per in atoms_per_list:
+            n_per = int(n_per)
+            block_ref_r = ref_r[offset : offset + n_per]
+            block_ref_z = ref_z[offset : offset + n_per]
+            block_hint = hint[offset : offset + n_per]
+            block_eval_z = eval_z[offset : offset + n_per]
+            if not np.array_equal(block_ref_z, block_eval_z):
+                block_perm = _assign_atoms_by_element(
+                    block_ref_r,
+                    block_ref_z,
+                    block_hint,
+                    block_eval_z,
+                )
+                perm[offset : offset + n_per] = offset + block_perm
+            offset += n_per
+        return perm
+    hint = (
+        np.asarray(geometry_hint, dtype=np.float64).reshape(-1, 3)
+        if geometry_hint is not None
+        else ref_r
+    )
+    return _assign_atoms_by_element(ref_r, ref_z, hint, eval_z)
+
+
+def positions_for_evaluator_z(
+    reference_positions: np.ndarray,
+    reference_numbers: np.ndarray,
+    evaluator_numbers: np.ndarray,
+    *,
+    geometry_hint: np.ndarray | None = None,
+    atoms_per_list: list[int] | None = None,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    """Return coordinates permuted into evaluator ``Z`` row order."""
+    ref_r = np.asarray(reference_positions, dtype=np.float64).reshape(-1, 3)
+    ref_z = np.asarray(reference_numbers, dtype=np.int32).reshape(-1)
+    eval_z = np.asarray(evaluator_numbers, dtype=np.int32).reshape(-1)
+    perm = _permutation_ref_to_evaluator_z(
+        ref_r,
+        ref_z,
+        eval_z,
+        geometry_hint=geometry_hint,
+        atoms_per_list=atoms_per_list,
+    )
+    reordered = ref_r[perm]
+    meta = {
+        "geometry_reordered": not np.array_equal(perm, np.arange(len(eval_z))),
+        "geometry_permutation": perm.tolist(),
+    }
+    if geometry_hint is not None:
+        hint = np.asarray(geometry_hint, dtype=np.float64).reshape(-1, 3)
+        meta["position_rmsd_after_reorder_A"] = float(
+            np.sqrt(np.mean((reordered - hint) ** 2))
+        )
+    return reordered, meta
+
+
+def permute_handoff_array_to_evaluator_z(
+    values: np.ndarray,
+    *,
+    handoff_positions: np.ndarray,
+    handoff_numbers: np.ndarray,
+    evaluator_numbers: np.ndarray,
+    atoms_per_list: list[int] | None = None,
+) -> np.ndarray:
+    """Reorder per-atom handoff arrays (charges, LJ types, …) to evaluator ``Z`` order."""
+    flat = np.asarray(values, dtype=np.float64).reshape(-1)
+    perm = _permutation_ref_to_evaluator_z(
+        np.asarray(handoff_positions, dtype=np.float64).reshape(-1, 3),
+        np.asarray(handoff_numbers, dtype=np.int32).reshape(-1),
+        np.asarray(evaluator_numbers, dtype=np.int32).reshape(-1),
+        atoms_per_list=atoms_per_list,
+        use_geometry=False,
+    )
+    return flat[perm]
+
+
+def _psf_z_for_composition(
+    composition: str,
+    *,
+    expected_atoms: int,
+    atoms_per_list: list[int],
+    residue_labels: list[str],
+) -> np.ndarray:
+    from mmml.cli.run.md_pbc_suite.ase import _build_cluster_psf_topology_only, _parse_composition
+
+    return _build_cluster_psf_topology_only(
+        _parse_composition(composition),
+        expected_atoms=expected_atoms,
+        atoms_per_list=atoms_per_list,
+        residue_labels=residue_labels,
+    )
+
+
+def _resolve_evaluator_z_and_handoff_layout(
+    *,
+    handoff: MdHandoffState,
+    z: np.ndarray,
+    composition: str | None,
+    atoms_per_list: list[int],
+    residue_labels: list[str],
+    evaluate_reference_npz: Path | None,
+) -> tuple[np.ndarray, np.ndarray, list[str]]:
+    """Prefer PSF/reference ``Z`` when a reference NPZ drives evaluation."""
+    warnings: list[str] = []
+    handoff_z = np.asarray(z, dtype=np.int32).copy()
+    if composition is None or evaluate_reference_npz is None:
+        return handoff_z, handoff_z, warnings
+
+    z_psf = _psf_z_for_composition(
+        composition,
+        expected_atoms=len(handoff_z),
+        atoms_per_list=atoms_per_list,
+        residue_labels=residue_labels,
+    )
+    if np.array_equal(handoff_z, z_psf):
+        return z_psf, handoff_z, warnings
+
+    if sorted(handoff_z.tolist()) != sorted(z_psf.tolist()):
+        warnings.append(
+            "handoff atomic_numbers differ from composition PSF topology; "
+            "keeping handoff Z"
+        )
+        return handoff_z, handoff_z, warnings
+
+    warnings.append(
+        "handoff atomic_numbers use a different atom order than PSF/reference; "
+        "using PSF order for MMML evaluation"
+    )
+    return z_psf, handoff_z, warnings
+
+
 def _forces_from_metrics(metrics: dict[str, Any]) -> np.ndarray | None:
     if "forces_eV_A" in metrics:
         return np.asarray(metrics["forces_eV_A"], dtype=np.float64)
@@ -831,6 +1020,18 @@ def _prepare_evaluate_npz_context(args: Any) -> dict[str, Any]:
             n_molecules=int(getattr(args, "n_molecules", 1) or 1),
         )
     )
+    ref_path = getattr(args, "evaluate_reference_npz", None)
+    ref_path_resolved = (
+        Path(ref_path).expanduser().resolve() if ref_path is not None else None
+    )
+    z, handoff_z, z_warnings = _resolve_evaluator_z_and_handoff_layout(
+        handoff=handoff,
+        z=z,
+        composition=getattr(args, "composition", None),
+        atoms_per_list=atoms_per_list,
+        residue_labels=residue_labels,
+        evaluate_reference_npz=ref_path_resolved,
+    )
     n_monomers = len(atoms_per_list)
     monomer_offsets = np.zeros(n_monomers + 1, dtype=int)
     monomer_offsets[1:] = np.cumsum(np.asarray(atoms_per_list, dtype=int))
@@ -863,18 +1064,46 @@ def _prepare_evaluate_npz_context(args: Any) -> dict[str, Any]:
         )
 
     reference = None
-    ref_path = getattr(args, "evaluate_reference_npz", None)
-    if ref_path is not None and should_evaluate_reference_trajectory(args):
-        ref_path = Path(ref_path).expanduser().resolve()
+    if ref_path_resolved is not None and should_evaluate_reference_trajectory(args):
         n_atoms_monomer = int(len(z) // n_monomers)
         reference = load_reference_trajectory_npz(
-            ref_path,
+            ref_path_resolved,
             z_fallback=z,
             n_atoms_monomer=n_atoms_monomer,
             n_monomers=n_monomers,
             max_frames=resolve_evaluate_max_frames(args),
         )
-        r0 = np.asarray(reference.R[int(reference.frame_indices[0])], dtype=np.float64)
+        ref_frame0 = int(reference.frame_indices[0])
+        ref_z0 = _reference_z_for_frame(reference, ref_frame0, len(z))
+        ref_r0 = np.asarray(reference.R[ref_frame0, : len(z)], dtype=np.float64)
+        r0, _ = positions_for_evaluator_z(
+            ref_r0,
+            ref_z0,
+            z,
+            geometry_hint=ref_r0,
+            atoms_per_list=atoms_per_list,
+        )
+    elif ref_path_resolved is not None:
+        with np.load(ref_path_resolved, allow_pickle=True) as ref_peek:
+            if "R" in ref_peek.files:
+                ref_frame = int(getattr(args, "evaluate_reference_frame", frame) or frame)
+                if "Z" in ref_peek.files:
+                    z_arr = np.asarray(ref_peek["Z"])
+                    ref_z = (
+                        np.asarray(z_arr[: len(z)], dtype=np.int32)
+                        if z_arr.ndim == 1
+                        else np.asarray(z_arr[ref_frame, : len(z)], dtype=np.int32)
+                    )
+                else:
+                    ref_z = z
+                ref_r = np.asarray(ref_peek["R"][ref_frame, : len(z)], dtype=np.float64)
+                r0, _ = positions_for_evaluator_z(
+                    ref_r,
+                    ref_z,
+                    z,
+                    geometry_hint=ref_r,
+                    atoms_per_list=atoms_per_list,
+                )
 
     ensure_psf_for_handoff_cluster(
         composition=handoff_composition,
@@ -885,7 +1114,30 @@ def _prepare_evaluate_npz_context(args: Any) -> dict[str, Any]:
         quiet=bool(getattr(args, "quiet", False)),
     )
     if payload.charges is not None:
-        apply_npz_charges_to_psf(payload.charges)
+        charges = payload.charges
+        if not np.array_equal(handoff_z, z):
+            charges = permute_handoff_array_to_evaluator_z(
+                charges,
+                handoff_positions=handoff.positions,
+                handoff_numbers=handoff_z,
+                evaluator_numbers=z,
+                atoms_per_list=atoms_per_list,
+            )
+        apply_npz_charges_to_psf(charges)
+    if payload.at_codes is not None and not np.array_equal(handoff_z, z):
+        payload = EvaluateNpzPayload(
+            handoff=payload.handoff,
+            charges=payload.charges,
+            at_codes=permute_handoff_array_to_evaluator_z(
+                payload.at_codes,
+                handoff_positions=handoff.positions,
+                handoff_numbers=handoff_z,
+                evaluator_numbers=z,
+                atoms_per_list=atoms_per_list,
+            ).astype(np.int32),
+            epsilon=payload.epsilon,
+            sigma=payload.sigma,
+        )
 
     if reference is not None:
         from ase import Atoms
@@ -925,6 +1177,8 @@ def _prepare_evaluate_npz_context(args: Any) -> dict[str, Any]:
         "base_ckpt_dir": base_ckpt_dir,
         "atoms": atoms,
         "reference": reference,
+        "handoff_z": handoff_z,
+        "z_warnings": z_warnings,
     }
 
 
@@ -956,6 +1210,7 @@ def _evaluate_reference_trajectory(args: Any, ctx: dict[str, Any]) -> int:
     use_pbc = ctx["use_pbc"]
     L = ctx["L"]
     payload = ctx["payload"]
+    atoms_per_list = ctx["atoms_per_list"]
     frame_indices = np.asarray(reference.frame_indices, dtype=int).reshape(-1)
     n_eval = int(len(frame_indices))
 
@@ -1009,9 +1264,19 @@ def _evaluate_reference_trajectory(args: Any, ctx: dict[str, Any]) -> int:
             f"  reference units: E={ref_energy_unit}, F={ref_force_unit}",
             flush=True,
         )
+        for warning in ctx.get("z_warnings", []):
+            print(f"  note: {warning}", flush=True)
 
     for ref_frame in frame_indices:
-        pos = np.asarray(reference.R[int(ref_frame)], dtype=np.float64)
+        ref_z = _reference_z_for_frame(reference, int(ref_frame), len(z))
+        ref_r = np.asarray(reference.R[int(ref_frame), : len(z)], dtype=np.float64)
+        pos, _geom_meta = positions_for_evaluator_z(
+            ref_r,
+            ref_z,
+            z,
+            geometry_hint=ref_r,
+            atoms_per_list=atoms_per_list,
+        )
         atoms.set_positions(pos)
         if backend == "pycharmm":
             metrics = _evaluate_pycharmm(

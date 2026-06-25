@@ -18,20 +18,7 @@ from typing import Any
 import numpy as np
 from ase import Atoms
 
-
-HARTREE_TO_EV = 27.211386245988
-KCAL_MOL_TO_EV = 1.0 / 23.0605
-
-
-def _energy_to_ev(values: np.ndarray, unit: str) -> np.ndarray:
-    unit_l = unit.lower()
-    if unit_l in {"ev", "eV".lower()}:
-        return values.astype(np.float64)
-    if unit_l in {"hartree", "ha"}:
-        return values.astype(np.float64) * HARTREE_TO_EV
-    if unit_l in {"kcal", "kcal/mol", "kcal_mol"}:
-        return values.astype(np.float64) * KCAL_MOL_TO_EV
-    raise ValueError(f"Unsupported energy unit: {unit}")
+from mmml.data.units import energy_to_ev, infer_reference_energy_unit
 
 
 def _select_indices(n_frames: int, max_frames: int | None, stride: int, seed: int) -> np.ndarray:
@@ -42,7 +29,9 @@ def _select_indices(n_frames: int, max_frames: int | None, stride: int, seed: in
     return indices
 
 
-def _load_npz(path: Path, reference_energy_unit: str) -> dict[str, np.ndarray]:
+def _load_npz(path: Path, reference_energy_unit: str | None = None) -> dict[str, np.ndarray]:
+    if reference_energy_unit is None:
+        reference_energy_unit = infer_reference_energy_unit(path)
     data = np.load(path, allow_pickle=True)
     required = {"N", "Z", "R", "E"}
     missing = sorted(required.difference(data.files))
@@ -53,7 +42,7 @@ def _load_npz(path: Path, reference_energy_unit: str) -> dict[str, np.ndarray]:
         "Z": np.asarray(data["Z"], dtype=np.int32),
         "R": np.asarray(data["R"], dtype=np.float64),
         "E_ref_raw": np.asarray(data["E"], dtype=np.float64),
-        "E_ref_eV": _energy_to_ev(np.asarray(data["E"], dtype=np.float64), reference_energy_unit),
+        "E_ref_eV": np.asarray(energy_to_ev(np.asarray(data["E"], dtype=np.float64), reference_energy_unit)),
         "source_indices": np.asarray(data["source_indices"], dtype=int)
         if "source_indices" in data.files
         else np.arange(len(data["N"]), dtype=int),
@@ -223,8 +212,9 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--reference-energy-unit",
-        default="hartree",
+        default=None,
         choices=["hartree", "ha", "ev", "kcal", "kcal/mol", "kcal_mol"],
+        help="Reference NPZ energy unit (default: read from _mmml_units or units_manifest.json).",
     )
     parser.add_argument("--cutoff", type=float, default=10.0)
     parser.add_argument(
@@ -256,7 +246,7 @@ def main(argv: list[str] | None = None) -> int:
         rows, summary = _evaluate_file(
             path,
             calculators=calculators,
-            reference_energy_unit=args.reference_energy_unit,
+            reference_energy_unit=args.reference_energy_unit or infer_reference_energy_unit(path),
             max_frames=args.max_frames,
             stride=args.stride,
             seed=args.seed,
