@@ -1201,6 +1201,7 @@ def _build_atoms_for_evaluate(
     monomer_offsets: np.ndarray,
     use_pbc: bool,
     L: float | None,
+    preserve_r0: bool = False,
 ) -> Any:
     from ase import Atoms
 
@@ -1213,7 +1214,8 @@ def _build_atoms_for_evaluate(
         atoms.set_pbc(True)
     else:
         atoms.set_pbc(False)
-    apply_handoff_geometry_to_atoms(atoms, handoff, monomer_offsets=monomer_offsets)
+    if not preserve_r0:
+        apply_handoff_geometry_to_atoms(atoms, handoff, monomer_offsets=monomer_offsets)
     return atoms
 
 
@@ -1583,6 +1585,7 @@ def _prepare_evaluate_npz_context(args: Any) -> dict[str, Any]:
         )
 
     reference = None
+    geometry_from_reference = False
     if ref_path_resolved is not None and should_evaluate_reference_trajectory(args):
         n_atoms_monomer = int(len(z) // n_monomers)
         reference = load_reference_trajectory_npz(
@@ -1602,6 +1605,7 @@ def _prepare_evaluate_npz_context(args: Any) -> dict[str, Any]:
             geometry_hint=ref_r0,
             atoms_per_list=atoms_per_list,
         )
+        geometry_from_reference = True
     elif ref_path_resolved is not None:
         with np.load(ref_path_resolved, allow_pickle=True) as ref_peek:
             if "R" in ref_peek.files:
@@ -1623,6 +1627,7 @@ def _prepare_evaluate_npz_context(args: Any) -> dict[str, Any]:
                     geometry_hint=ref_r,
                     atoms_per_list=atoms_per_list,
                 )
+                geometry_from_reference = True
 
     ensure_psf_for_handoff_cluster(
         composition=handoff_composition,
@@ -1658,7 +1663,7 @@ def _prepare_evaluate_npz_context(args: Any) -> dict[str, Any]:
             sigma=payload.sigma,
         )
 
-    if reference is not None:
+    if reference is not None or geometry_from_reference:
         from ase import Atoms
 
         pos = np.asarray(r0, dtype=np.float64)
@@ -1696,6 +1701,7 @@ def _prepare_evaluate_npz_context(args: Any) -> dict[str, Any]:
         "base_ckpt_dir": base_ckpt_dir,
         "atoms": atoms,
         "reference": reference,
+        "geometry_from_reference": geometry_from_reference,
         "handoff_z": handoff_z,
         "z_warnings": z_warnings,
     }
@@ -2183,6 +2189,22 @@ def run_evaluate_npz(args: Any) -> int:
                 reference_force_unit=ref_f_unit,
             )
             compare["status"] = "ok"
+            ml_w, mm_on, _mm_w = _mmml_cutoff_args(args)
+            from mmml.interfaces.pycharmmInterface.hybrid_reference import compute_com_distances
+
+            com_dist = float(
+                compute_com_distances(
+                    np.asarray(pos_out, dtype=np.float64).reshape(1, -1, 3),
+                    n_atoms_monomer=int(len(z) // n_monomers),
+                    n_monomers=n_monomers,
+                )[0]
+            )
+            compare["com_dist_A"] = com_dist
+            compare["ml_regime"] = classify_ml_regime(
+                com_dist,
+                ml_switch_width=ml_w,
+                mm_switch_on=mm_on,
+            )
         except Exception as exc:
             compare = {
                 "status": "error",
