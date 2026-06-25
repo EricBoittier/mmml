@@ -205,7 +205,8 @@ def test_run_minimize_in_chunks_watchdog_stops_early():
         )
 
     assert result.completed is False
-    assert result.rolled_back is False
+    assert result.rolled_back is True
+    assert result.last_grms == 12.0
     assert minimize.run_sd.call_count == 1
 
 
@@ -250,8 +251,12 @@ def test_run_minimize_in_chunks_watchdog_uses_sd_watchdog_initial_grms():
         )
 
     assert result.completed is False
+    assert result.rolled_back is True
+    assert result.last_grms == 0.4
     assert minimize.run_sd.call_count == 1
-    ctx = MagicMock(use_pbc=True)
+
+
+def test_run_minimize_in_chunks_watchdog_rolls_back_after_chunk_blowup():
     minimize = MagicMock()
     pycharmm = MagicMock()
     config = MinimizeWithMlpotConfig(
