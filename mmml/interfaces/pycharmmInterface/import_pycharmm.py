@@ -379,9 +379,10 @@ def _init_vacuum_charmm_state() -> None:
 _init_vacuum_charmm_state()
 _init_charmm_default_levels()
 
-from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
 def ase_from_pycharmm_state():
+    from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+
     Z = get_Z_from_psf()
     R = coor.get_positions()
     return ase.Atoms(Z, R)
