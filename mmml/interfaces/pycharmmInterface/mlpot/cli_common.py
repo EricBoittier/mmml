@@ -1615,6 +1615,116 @@ def charmm_positions_angstrom() -> np.ndarray:
     return pos_df[["x", "y", "z"]].to_numpy(dtype=np.float64).reshape(-1, 3)
 
 
+def forces_grms_kcalmol_A(forces: np.ndarray) -> float:
+    """RMS of force components (kcal/mol/Å), matching CHARMM ``get_grms`` convention."""
+    f = np.asarray(forces, dtype=np.float64).reshape(-1, 3)
+    if f.size == 0:
+        return float("nan")
+    return float(np.sqrt(np.mean(f * f)))
+
+
+def mlpot_hybrid_grms_from_calculator(
+    mlpot_ctx: Any,
+    *,
+    positions: np.ndarray | None = None,
+    natom: int | None = None,
+) -> float | None:
+    """Hybrid ML/MM GRMS from JAX ``spherical_fn`` at CHARMM (or given) positions.
+
+    Prefer this over :func:`charmm_grms` for MLpot gates: CHARMM SD and MM-only
+    blocks can leave ``get_grms()`` reflecting bonded/MM terms while the hybrid
+    potential still has large ML forces.
+    """
+    pyCModel = getattr(mlpot_ctx, "pyCModel", None)
+    if pyCModel is None:
+        return None
+
+    if natom is None:
+        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+        import pycharmm.coor as coor
+
+        natom = int(coor.get_natom())
+    n = int(natom)
+
+    if positions is None:
+        pos = charmm_positions_angstrom()[:n]
+    else:
+        pos = np.asarray(positions, dtype=np.float64).reshape(-1, 3)[:n]
+
+    use_pbc = bool(getattr(mlpot_ctx, "use_pbc", False))
+    box_A = getattr(mlpot_ctx, "cubic_box_side_A", None)
+    if box_A is None:
+        box_A = getattr(mlpot_ctx, "charmm_cubic_box_side_A", None)
+
+    forces_ev = mlpot_spherical_forces_ev_angstrom(
+        pyCModel,
+        positions=pos,
+        use_pbc=use_pbc,
+        box_A=float(box_A) if box_A is not None else None,
+    )
+    if forces_ev is not None and int(forces_ev.shape[0]) >= n:
+        from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
+
+        forces_kcal = np.asarray(forces_ev[:n], dtype=np.float64) * float(ev2kcalmol)
+        return forces_grms_kcalmol_A(forces_kcal)
+
+    forces_kcal = mlpot_last_hybrid_forces_kcalmol_A(pyCModel)
+    if forces_kcal is not None and int(forces_kcal.shape[0]) >= n:
+        return forces_grms_kcalmol_A(forces_kcal[:n])
+    return None
+
+
+def resolve_mlpot_grms_kcalmol_A(
+    mlpot_ctx: Any | None = None,
+    *,
+    context: str = "",
+    prefer_calculator: bool = True,
+    charmm_fallback: bool = True,
+    stale_warn_ratio: float = 2.0,
+) -> float:
+    """GRMS for MLpot readiness gates (calculator hybrid forces when available)."""
+    if mlpot_ctx is not None and prefer_calculator:
+        calc_grms = mlpot_hybrid_grms_from_calculator(mlpot_ctx)
+        if calc_grms is not None and np.isfinite(calc_grms):
+            if charmm_fallback:
+                charmm_val = float(charmm_grms())
+                if (
+                    context
+                    and np.isfinite(charmm_val)
+                    and charmm_val > 1.0e-8
+                    and (
+                        calc_grms > stale_warn_ratio * charmm_val
+                        or charmm_val > stale_warn_ratio * calc_grms
+                    )
+                ):
+                    print(
+                        f"{context}: hybrid GRMS={calc_grms:.4f} kcal/mol/Å "
+                        f"(calculator); CHARMM GRMS={charmm_val:.4f} "
+                        "(stale or MM-only)",
+                        flush=True,
+                    )
+                elif context:
+                    print(
+                        f"{context}: hybrid GRMS={calc_grms:.4f} kcal/mol/Å "
+                        "(calculator)",
+                        flush=True,
+                    )
+            elif context:
+                print(
+                    f"{context}: hybrid GRMS={calc_grms:.4f} kcal/mol/Å "
+                    "(calculator)",
+                    flush=True,
+                )
+            return float(calc_grms)
+
+    if not charmm_fallback:
+        return float("nan")
+    grms = float(charmm_grms())
+    if context:
+        print(f"{context}: GRMS={grms:.4f} kcal/mol/Å (CHARMM)", flush=True)
+    return grms
+
+
 def refresh_mlpot_energy_and_grms(
     mlpot_ctx: Any | None = None,
     *,
@@ -1623,7 +1733,10 @@ def refresh_mlpot_energy_and_grms(
     reregister: bool = True,
     verbose: bool = False,
 ) -> float:
-    """Re-apply MLpot BLOCK, run ``ENER FORCE``, return GRMS (kcal/mol/Å).
+    """Re-apply MLpot BLOCK, run ``ENER FORCE``, return hybrid GRMS (kcal/mol/Å).
+
+    When ``mlpot_ctx`` is set, GRMS comes from JAX ``spherical_fn`` at the current
+    CHARMM coordinates (not CHARMM ``get_grms()``, which can be stale after SD).
 
     CHARMM SD can leave a stale GRMS from the minimizer while MLpot USER forces
     are not fully synchronized. Call before pre-dynamics gates and after MLpot mini.
@@ -1646,13 +1759,11 @@ def refresh_mlpot_energy_and_grms(
             pycharmm.lingo.charmm_script("ENER FORCE")
     else:
         pycharmm.lingo.charmm_script("ENER FORCE")
-    grms = charmm_grms()
-    if context:
-        print(
-            f"{context}: GRMS={grms:.4f} kcal/mol/Å (after ENER FORCE)",
-            flush=True,
-        )
-    return grms
+    return resolve_mlpot_grms_kcalmol_A(
+        mlpot_ctx,
+        context=context if context else "MLpot energy refresh",
+        prefer_calculator=mlpot_ctx is not None,
+    )
 
 
 def resolve_mini_nstep(
@@ -1817,13 +1928,13 @@ def assert_dynamics_ready(
             stale_grms = float(grms)
             grms = refresh_mlpot_energy_and_grms(
                 mlpot_ctx,
-                context="Pre-dynamics GRMS retry (stale MM block suspected)",
+                context="Pre-dynamics GRMS retry (hybrid force re-eval)",
                 silent_charmm=silent_charmm,
             )
             if grms <= max_grms:
                 print(
                     f"Pre-dynamics GRMS recovered: {stale_grms:.2f} -> {grms:.4f} "
-                    f"kcal/mol/Å after MLpot reattach (limit {max_grms})",
+                    f"kcal/mol/Å after hybrid re-eval (limit {max_grms})",
                     flush=True,
                 )
     if grms <= max_grms:
