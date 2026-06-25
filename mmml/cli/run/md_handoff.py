@@ -757,11 +757,20 @@ def apply_handoff_geometry_to_atoms(
     apply_handoff_to_atoms(atoms, handoff)
     pos = np.asarray(atoms.get_positions(), dtype=float)
     if bool(np.asarray(atoms.pbc).any()) and atoms.cell is not None:
-        from mmml.utils.geometry_checks import wrap_monomers_primary_cell
+        cell_mat = np.asarray(atoms.cell.array, dtype=float)
+        box_side = float(cell_mat[0, 0])
+        offsets = np.asarray(monomer_offsets, dtype=int)
+        if handoff_needs_jaxmd_pbc_alignment(handoff):
+            pos = align_handoff_positions_for_jaxmd_pbc(
+                pos,
+                monomer_offsets=offsets,
+                box_side_A=box_side,
+                handoff=handoff,
+            )
+        else:
+            from mmml.utils.geometry_checks import wrap_monomers_primary_cell
 
-        pos = wrap_monomers_primary_cell(
-            pos, np.asarray(monomer_offsets, dtype=int), atoms.cell.array
-        )
+            pos = wrap_monomers_primary_cell(pos, offsets, cell_mat)
         atoms.set_positions(pos)
     if sync_charmm:
         from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
@@ -792,6 +801,12 @@ def handoff_needs_charmm_pbc_alignment(handoff: MdHandoffState) -> bool:
     if source in ("npz", "h5", "traj"):
         return backend != "pycharmm"
     return False
+
+
+def handoff_needs_jaxmd_pbc_alignment(handoff: MdHandoffState) -> bool:
+    """True for CHARMM handoffs that use image-centered coords (xcen/ycen/zcen 0)."""
+    meta = handoff.metadata or {}
+    return str(meta.get("backend", "")).strip().lower() == "pycharmm"
 
 
 def align_handoff_positions_for_charmm_pbc(
@@ -828,6 +843,44 @@ def align_handoff_positions_for_charmm_pbc(
         print(
             "Handoff PBC: aligned jaxmd primary-cell coords to CHARMM image center "
             f"(L={L:.3f} Å, xcen/ycen/zcen 0)",
+            flush=True,
+        )
+    return aligned
+
+
+def align_handoff_positions_for_jaxmd_pbc(
+    positions: np.ndarray,
+    *,
+    monomer_offsets: np.ndarray,
+    box_side_A: float,
+    handoff: MdHandoffState | None = None,
+    quiet: bool = False,
+) -> np.ndarray:
+    """Map CHARMM image-centered coords to JAX-MD ``[0, L)`` monomer wraps.
+
+    Inverse of :func:`align_handoff_positions_for_charmm_pbc` (shift ``+L/2``,
+    then per-monomer primary-cell wrap). Matches the fresh-cluster recipe
+    ``r0 - com + 0.5*L`` used when building from Packmol.
+    """
+    if handoff is not None and not handoff_needs_jaxmd_pbc_alignment(handoff):
+        return np.asarray(positions, dtype=np.float64)
+
+    from mmml.utils.geometry_checks import wrap_monomers_primary_cell
+
+    L = float(box_side_A)
+    if L <= 0.0:
+        raise ValueError(f"box_side_A must be > 0, got {L}")
+    cell = np.diag([L, L, L])
+    pos = np.asarray(positions, dtype=np.float64) + 0.5 * L
+    aligned = wrap_monomers_primary_cell(
+        pos,
+        np.asarray(monomer_offsets, dtype=int),
+        cell,
+    )
+    if not quiet:
+        print(
+            "Handoff PBC: aligned CHARMM image-center coords to JAX-MD primary cell "
+            f"(L={L:.3f} Å)",
             flush=True,
         )
     return aligned
@@ -907,7 +960,7 @@ def load_handoff_from_res(path: Path, *, atomic_numbers: np.ndarray | None = Non
     cell=cell,
     pbc=cell is not None,
     step=read_restart_last_step(p),
-    metadata={"source": "res", "path": str(p)},
+    metadata={"source": "res", "path": str(p), "backend": "pycharmm"},
   )
 
 
