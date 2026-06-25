@@ -1233,6 +1233,33 @@ def build_parser() -> argparse.ArgumentParser:
         help="JSON path for reference comparison (default: <output-dir>/evaluate_compare.json).",
     )
     parser.add_argument(
+        "--dyna-probe",
+        action="store_true",
+        help=(
+            "PyCHARMM only: one short NVE DYNA step with pre/post snapshots of all "
+            "force lanes (spherical_fn, mlpot_callback, charmm_total). Requires "
+            "--evaluate-npz and --composition."
+        ),
+    )
+    parser.add_argument(
+        "--dyna-probe-nstep",
+        type=int,
+        default=1,
+        help="Number of NVE integration steps for --dyna-probe (default: 1).",
+    )
+    parser.add_argument(
+        "--dyna-probe-dt-fs",
+        type=float,
+        default=0.5,
+        help="Timestep in fs for --dyna-probe (default: 0.5).",
+    )
+    parser.add_argument(
+        "--dyna-probe-output",
+        type=Path,
+        default=None,
+        help="JSON path for --dyna-probe results (default: <output-dir>/dyna_probe.json).",
+    )
+    parser.add_argument(
         "--optimize-cutoffs",
         action="store_true",
         help=(
@@ -2394,6 +2421,21 @@ def main() -> int:
                 exit_code = int(run_optimize_cutoffs(args))
             except Exception as exc:
                 print(f"mmml md-system: optimize-cutoffs failed: {exc}", file=sys.stderr)
+                exit_code = 1
+            return exit_code
+        if getattr(args, "dyna_probe", False):
+            try:
+                _apply_backend_setup_defaults(args)
+            except ValueError as exc:
+                print(f"mmml md-system: error: {exc}", file=sys.stderr)
+                exit_code = 2
+                return exit_code
+            from mmml.cli.run.md_dyna_probe import run_dyna_probe
+
+            try:
+                exit_code = int(run_dyna_probe(args))
+            except Exception as exc:
+                print(f"mmml md-system: dyna-probe failed: {exc}", file=sys.stderr)
                 exit_code = 1
             return exit_code
         if getattr(args, "evaluate_npz", None):

@@ -901,3 +901,64 @@ def test_save_evaluate_compare_diagnostics_writes_csv_and_summary(tmp_path: Path
     assert summary["corr_com_force_rmse"] == pytest.approx(-1.0, abs=1e-12)
     assert summary["mean_force_rmse_eV_A_pure_ml"] == pytest.approx(0.25)
     assert summary["mean_force_rmse_eV_A_handoff"] == pytest.approx(0.003)
+
+
+def test_enrich_compare_with_force_sources() -> None:
+    from mmml.cli.run.md_evaluate_npz import enrich_compare_with_force_sources
+
+    cmp: dict = {"force_rmse_eV_A": 0.1}
+    ref_f = np.zeros((2, 3), dtype=np.float64)
+    sources = {
+        "spherical_fn": np.array([[0.0, 0.0, 0.0], [0.1, 0.0, 0.0]], dtype=np.float64),
+        "charmm_total": np.array([[1.0, 0.0, 0.0], [0.0, 0.0, 0.0]], dtype=np.float64),
+    }
+    enrich_compare_with_force_sources(
+        cmp,
+        reference_forces_ev=ref_f,
+        force_sources=sources,
+        charmm_energy_terms_kcal_mol={"USER": 12.5, "ENER": 12.5},
+    )
+    assert cmp["charmm_energy_terms_kcal_mol"]["USER"] == pytest.approx(12.5)
+    assert cmp["force_rmse_spherical_fn_eV_A"] == pytest.approx(
+        float(np.sqrt(np.mean(np.array([[0.0, 0.0, 0.0], [0.1, 0.0, 0.0]]) ** 2)))
+    )
+    assert cmp["force_rmse_charmm_total_eV_A"] == pytest.approx(
+        float(np.sqrt(np.mean(np.array([[1.0, 0.0, 0.0], [0.0, 0.0, 0.0]]) ** 2)))
+    )
+    assert "force_source_compare" in cmp
+
+
+def test_metrics_for_json_export_strips_force_sources() -> None:
+    from mmml.cli.run.md_evaluate_npz import metrics_for_json_export
+
+    metrics = {
+        "energy_eV": 1.0,
+        "force_sources_all": {"charmm_total": np.zeros((2, 3))},
+    }
+    exported = metrics_for_json_export(metrics)
+    assert "force_sources_all" not in exported
+    assert exported["energy_eV"] == 1.0
+
+
+def test_compare_force_sources_to_reference() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        compare_force_sources_to_reference,
+        cross_lane_force_rmse_ev_angstrom,
+        force_error_metrics_ev_angstrom,
+    )
+
+    ref = np.array([[0.0, 0.0, 0.0], [0.2, 0.0, 0.0]], dtype=np.float64)
+    pred = np.array([[0.0, 0.0, 0.0], [0.1, 0.0, 0.0]], dtype=np.float64)
+    m = force_error_metrics_ev_angstrom(pred, ref)
+    assert m["force_rmse_eV_A"] == pytest.approx(0.1 / np.sqrt(2))
+    lanes = compare_force_sources_to_reference(
+        {"spherical_fn": pred, "charmm_total": ref},
+        ref,
+    )
+    assert lanes["spherical_fn"]["force_rmse_eV_A"] == pytest.approx(0.1 / np.sqrt(2))
+    assert lanes["charmm_total"]["force_rmse_eV_A"] == pytest.approx(0.0)
+    cross = cross_lane_force_rmse_ev_angstrom(
+        {"spherical_fn": pred, "charmm_total": ref},
+        baseline="spherical_fn",
+    )
+    assert cross["force_rmse_vs_spherical_fn_eV_A"] == pytest.approx(0.1 / np.sqrt(2))
