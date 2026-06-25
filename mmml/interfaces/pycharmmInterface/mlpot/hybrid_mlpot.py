@@ -119,21 +119,25 @@ class DecomposedMlpotCalculator:
         self.ev2kcal = float(ev2kcalmol)
         self._cell = float(cell) if cell else False
         self.last_ml_forces: np.ndarray | None = None
-        self._value_and_grad_fn: Any | None = None
-        self._vg_cache_key: tuple[Any, ...] | None = None
+        self._spherical_forward_fn: Any | None = None
+        self._forward_cache_key: tuple[Any, ...] | None = None
 
     def _grad_cache_owner(self) -> DecomposedMlpotCalculator | DecomposedMlpotModel:
         parent = getattr(self, "_parent_model", None)
         return parent if parent is not None else self
 
-    def _get_value_and_grad_fn(
+    def _get_spherical_forward_fn(
         self,
         *,
         n_atoms: int,
         atomic_numbers_jax: jnp.ndarray,
         box_jax: jnp.ndarray | None,
     ) -> Any:
-        """Return a cached ``jit(value_and_grad)`` for MLpot SD/dynamics callbacks."""
+        """Return a cached ``jit`` forward eval (energy eV, forces eV/Å from ``out.forces``).
+
+        Matches the ASE calculator path (``backprop=False``). ``jax.value_and_grad`` on the
+        energy scalar can disagree with ``out.forces`` when sparse MM pair lists are used.
+        """
         dtype = resolve_ml_compute_dtype(self._ml_compute_dtype)
         box_present = box_jax is not None
         cache_key = (
@@ -145,8 +149,8 @@ class DecomposedMlpotCalculator:
             bool(self._spatial_mpi),
         )
         owner = self._grad_cache_owner()
-        if owner._vg_cache_key == cache_key and owner._value_and_grad_fn is not None:
-            return owner._value_and_grad_fn
+        if owner._forward_cache_key == cache_key and owner._spherical_forward_fn is not None:
+            return owner._spherical_forward_fn
 
         spherical_fn = self.spherical_fn
         cutoff_params = self.cutoff_params
@@ -154,7 +158,8 @@ class DecomposedMlpotCalculator:
         do_mm = self.do_mm
 
         if box_present:
-            def energy_scalar(
+
+            def forward_fn(
                 positions: jnp.ndarray,
                 box: jnp.ndarray,
                 mm_pair_idx: jnp.ndarray,
@@ -163,7 +168,7 @@ class DecomposedMlpotCalculator:
                 spatial_monomer_indices: jnp.ndarray,
                 spatial_dimer_indices: jnp.ndarray,
                 use_spatial: bool,
-            ) -> jnp.ndarray:
+            ) -> tuple[jnp.ndarray, jnp.ndarray]:
                 kwargs: dict[str, Any] = dict(
                     positions=positions,
                     atomic_numbers=atomic_numbers_jax,
@@ -181,12 +186,9 @@ class DecomposedMlpotCalculator:
                     kwargs["spatial_monomer_indices"] = spatial_monomer_indices
                     kwargs["spatial_dimer_indices"] = spatial_dimer_indices
                 out = spherical_fn(**kwargs)
-                return jnp.reshape(out.energy, (-1,))[0]
+                return jnp.reshape(out.energy, (-1,))[0], out.forces
 
-            fn = jax.jit(
-                jax.value_and_grad(energy_scalar, argnums=0),
-                static_argnums=(4, 7),
-            )
+            fn = jax.jit(forward_fn, static_argnums=(4, 7))
 
             def wrapper(
                 positions,
@@ -200,15 +202,6 @@ class DecomposedMlpotCalculator:
                 current_box = getattr(self, "_current_box", None)
                 if current_box is None:
                     current_box = box_jax
-                # print(f"[DEBUG SHAPES] positions={positions.shape} dtype={positions.dtype}", flush=True)
-                # if current_box is not None:
-                    # print(f"[DEBUG SHAPES] box={current_box.shape} values={current_box.tolist()}", flush=True)
-                # else:
-                    # print("[DEBUG SHAPES] box=None", flush=True)
-                # print(f"[DEBUG SHAPES] mm_pair_idx={mm_pair_idx.shape} mm_pair_mask={mm_pair_mask.shape}", flush=True)
-                # print(f"[DEBUG SHAPES] use_mm_pairs={use_mm_pairs} (static)", flush=True)
-                # print(f"[DEBUG SHAPES] spatial_monomer_indices={spatial_monomer_indices.shape} spatial_dimer_indices={spatial_dimer_indices.shape}", flush=True)
-                # print(f"[DEBUG SHAPES] use_spatial={use_spatial} (static)", flush=True)
                 return fn(
                     positions,
                     current_box,
@@ -219,9 +212,11 @@ class DecomposedMlpotCalculator:
                     spatial_dimer_indices,
                     use_spatial,
                 )
-            owner._value_and_grad_fn = wrapper
+
+            owner._spherical_forward_fn = wrapper
         else:
-            def energy_scalar(
+
+            def forward_fn(
                 positions: jnp.ndarray,
                 mm_pair_idx: jnp.ndarray,
                 mm_pair_mask: jnp.ndarray,
@@ -229,7 +224,7 @@ class DecomposedMlpotCalculator:
                 spatial_monomer_indices: jnp.ndarray,
                 spatial_dimer_indices: jnp.ndarray,
                 use_spatial: bool,
-            ) -> jnp.ndarray:
+            ) -> tuple[jnp.ndarray, jnp.ndarray]:
                 kwargs: dict[str, Any] = dict(
                     positions=positions,
                     atomic_numbers=atomic_numbers_jax,
@@ -246,16 +241,26 @@ class DecomposedMlpotCalculator:
                     kwargs["spatial_monomer_indices"] = spatial_monomer_indices
                     kwargs["spatial_dimer_indices"] = spatial_dimer_indices
                 out = spherical_fn(**kwargs)
-                return jnp.reshape(out.energy, (-1,))[0]
+                return jnp.reshape(out.energy, (-1,))[0], out.forces
 
-            fn = jax.jit(
-                jax.value_and_grad(energy_scalar, argnums=0),
-                static_argnums=(3, 6),
-            )
-            owner._value_and_grad_fn = fn
+            owner._spherical_forward_fn = jax.jit(forward_fn, static_argnums=(3, 6))
 
-        owner._vg_cache_key = cache_key
-        return owner._value_and_grad_fn
+        owner._forward_cache_key = cache_key
+        return owner._spherical_forward_fn
+
+    def _get_value_and_grad_fn(
+        self,
+        *,
+        n_atoms: int,
+        atomic_numbers_jax: jnp.ndarray,
+        box_jax: jnp.ndarray | None,
+    ) -> Any:
+        """Deprecated alias retained for tests; prefer :meth:`_get_spherical_forward_fn`."""
+        return self._get_spherical_forward_fn(
+            n_atoms=n_atoms,
+            atomic_numbers_jax=atomic_numbers_jax,
+            box_jax=box_jax,
+        )
 
     def _resolve_mm_pairs(
         self,
@@ -352,7 +357,7 @@ class DecomposedMlpotCalculator:
                     dtype=resolve_ml_compute_dtype(getattr(self, "_ml_compute_dtype", None)),
                 )
                 atomic_numbers_jax = jnp.asarray(self.atomic_numbers[:n])
-                value_and_grad_fn = self._get_value_and_grad_fn(
+                forward_fn = self._get_spherical_forward_fn(
                     n_atoms=n,
                     atomic_numbers_jax=atomic_numbers_jax,
                     box_jax=box,
@@ -378,7 +383,7 @@ class DecomposedMlpotCalculator:
                     )
                     mono_jax = jnp.asarray(batch_idx.owned_monomers, dtype=jnp.int32)
                     dimer_jax = jnp.asarray(batch_idx.active_dimer_indices, dtype=jnp.int32)
-                e_raw, grad = value_and_grad_fn(
+                e_raw, forces_ev = forward_fn(
                     positions_jax,
                     mm_pair_idx,
                     mm_pair_mask,
@@ -388,9 +393,9 @@ class DecomposedMlpotCalculator:
                     use_spatial,
                 )
                 e_raw = jnp.where(jnp.isfinite(e_raw), e_raw, 0.0)
-                grad = jnp.where(jnp.isfinite(grad), grad, 0.0)
+                forces_ev = jnp.where(jnp.isfinite(forces_ev), forces_ev, 0.0)
                 e_kcal = float(jax.device_get(e_raw)) * self.ev2kcal
-                forces = -np.asarray(jax.device_get(grad), dtype=np.float64) * self.ev2kcal
+                forces = np.asarray(jax.device_get(forces_ev), dtype=np.float64) * self.ev2kcal
                 self.last_ml_forces = np.asarray(forces, dtype=np.float64, copy=True)
                 parent = getattr(self, "_parent_model", None)
                 if parent is not None:
@@ -462,8 +467,8 @@ class DecomposedMlpotModel:
         else:
             self._atoms_per_monomer = [int(x) for x in atoms_per_monomer]
         self._last_ml_forces: np.ndarray | None = None
-        self._value_and_grad_fn: Any | None = None
-        self._vg_cache_key: tuple[Any, ...] | None = None
+        self._spherical_forward_fn: Any | None = None
+        self._forward_cache_key: tuple[Any, ...] | None = None
         self._pending_factory = pending_factory
         self._pending_factory_z = (
             None if pending_factory_z is None else np.asarray(pending_factory_z, dtype=int)
@@ -538,8 +543,8 @@ class DecomposedMlpotModel:
         if not self._defer_jax_until_after_sd or self._jax_on_gpu:
             return
         self._spherical_fn = None
-        self._value_and_grad_fn = None
-        self._vg_cache_key = None
+        self._spherical_forward_fn = None
+        self._forward_cache_key = None
         if self._do_mm:
             self._get_update_fn = None
         self._finalize_jax_factory(gpu=True)
@@ -547,8 +552,8 @@ class DecomposedMlpotModel:
         if calc is not None:
             calc.spherical_fn = self._spherical_fn
             calc._get_update_fn = self._get_update_fn
-            calc._value_and_grad_fn = None
-            calc._vg_cache_key = None
+            calc._spherical_forward_fn = None
+            calc._forward_cache_key = None
 
     def get_pycharmm_calculator(self, ml_atom_indices=None, ml_atomic_numbers=None, **kwargs):
         self._finalize_jax_factory()
@@ -775,7 +780,7 @@ def _warmup_value_and_grad_for_model(
     mm_pair_mask: Any = None,
     use_mm_pairs: bool = False,
 ) -> None:
-    """Compile the CHARMM callback ``value_and_grad`` path (SD / dynamics)."""
+    """Compile the CHARMM callback spherical forward path (SD / dynamics)."""
     from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_context
     from mmml.utils.jax_gpu_warmup import block_jax_values, run_jax_warmup_passes
 
@@ -795,14 +800,14 @@ def _warmup_value_and_grad_for_model(
             dtype=resolve_ml_compute_dtype(model._ml_compute_dtype),
         )
         atomic_numbers_jax = jnp.asarray(z)
-        value_and_grad_fn = calc._get_value_and_grad_fn(
+        forward_fn = calc._get_spherical_forward_fn(
             n_atoms=len(z),
             atomic_numbers_jax=atomic_numbers_jax,
             box_jax=box,
         )
 
-        def _run_value_and_grad():
-            return value_and_grad_fn(
+        def _run_forward():
+            return forward_fn(
                 positions_jax,
                 pair_idx,
                 pair_mask,
@@ -813,9 +818,9 @@ def _warmup_value_and_grad_for_model(
             )
 
         run_jax_warmup_passes(
-            "mlpot_value_and_grad",
+            "mlpot_spherical_forward",
             2,
-            _run_value_and_grad,
+            _run_forward,
             block=lambda out: block_jax_values(out[0], out[1]),
         )
 
