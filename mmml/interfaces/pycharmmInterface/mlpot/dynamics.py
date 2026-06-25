@@ -10,6 +10,10 @@ from typing import TYPE_CHECKING, Any, Literal, Optional, Union
 NptThermostat = Literal["hoover", "berendsen"]
 HeatThermostat = Literal["scale", "hoover"]
 
+# NPT Hoover CPT: max steps per ``dyn.run()`` when overlap guard is off. Long single
+# segments can NaN the barostat/crystal and segfault in Fortran ``upimag`` on UPDECI.
+DEFAULT_CPT_DYNAMICS_CHUNK_NSTEP = 250
+
 if TYPE_CHECKING:
     from mmml.interfaces.pycharmmInterface.mlpot.derivative_test import TestFirstConfig
     from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
@@ -2974,6 +2978,108 @@ def _run_dynamics_chunk(
             f.close()
 
 
+def _cpt_stability_chunk_nstep(kw: dict[str, Any], total_nstep: int) -> int | None:
+    """Chunk size for NPT CPT when overlap guard is off; ``None`` = single ``dyn.run()``."""
+    import os
+
+    if not bool(kw.get("cpt")) or total_nstep <= 0:
+        return None
+    raw = os.environ.get("MMML_CPT_DYNAMICS_CHUNK_NSTEP")
+    chunk = (
+        int(raw)
+        if raw is not None and str(raw).strip() != ""
+        else DEFAULT_CPT_DYNAMICS_CHUNK_NSTEP
+    )
+    chunk = max(1, int(chunk))
+    if total_nstep <= chunk:
+        return None
+    return chunk
+
+
+def _dynamics_chunk_state_corrupt(
+    *,
+    overlap_context: str,
+    restart_path: Path | None,
+) -> bool:
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        charmm_dynamics_state_is_finite,
+        restart_has_nonfinite_coordinates,
+    )
+
+    if not charmm_dynamics_state_is_finite():
+        print(
+            f"WARN: {overlap_context}: non-finite CHARMM coordinates/energy after "
+            "dynamics chunk",
+            flush=True,
+        )
+        return True
+    if restart_path is not None and restart_has_nonfinite_coordinates(restart_path):
+        print(
+            f"WARN: {overlap_context}: restart {Path(restart_path).name} has "
+            "non-finite coordinates after dynamics chunk",
+            flush=True,
+        )
+        return True
+    return False
+
+
+def _run_cpt_stability_chunked_dynamics(
+    kw: dict[str, Any],
+    io: Optional[CharmmTrajectoryFiles],
+    *,
+    overlap_context: str,
+    rng_base: int | None,
+    chunk_nstep: int,
+) -> Any:
+    """Integrate NPT CPT in short segments with finite-state checks between chunks."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        validate_charmm_dynamics_state_after_chunk,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.force_checkpoint import (
+        maybe_record_forces,
+    )
+
+    total = int(kw.get("nstep", 0))
+    steps_done = 0
+    last_dyn = None
+    n_chunks = (total + chunk_nstep - 1) // chunk_nstep
+    print(
+        f"{overlap_context}: NPT CPT stability chunking — {total} steps in "
+        f"{n_chunks} chunk(s) of ≤{chunk_nstep} "
+        "(avoids NaN barostat / image-update segfaults)",
+        flush=True,
+    )
+    while steps_done < total:
+        n = min(chunk_nstep, total - steps_done)
+        chunk_kw = dict(kw)
+        chunk_kw["nstep"] = n
+        if steps_done > 0:
+            chunk_kw["restart"] = True
+            chunk_kw["new"] = False
+            chunk_kw["start"] = False
+        last_dyn = _run_dynamics_chunk(
+            chunk_kw,
+            io,
+            rng_base=rng_base,
+            rng_salt=steps_done,
+        )
+        restart_path = (
+            Path(io.restart_write)
+            if io is not None and io.restart_write is not None
+            else None
+        )
+        if _dynamics_chunk_state_corrupt(
+            overlap_context=f"{overlap_context} chunk ending step {steps_done + n}",
+            restart_path=restart_path,
+        ):
+            validate_charmm_dynamics_state_after_chunk(
+                context=f"{overlap_context} at step {steps_done + n}",
+            )
+        steps_done += n
+    maybe_record_forces(total, ml_forces=None)
+    return last_dyn
+
+
 def run_dynamics_with_io(
     dynamics_kwargs: dict[str, Any],
     io: Optional[CharmmTrajectoryFiles] = None,
@@ -3052,6 +3158,16 @@ def run_dynamics_with_io(
             restart_write=io.restart_write if io is not None else None,
         )
     if not guard_active or total_nstep <= 0:
+        cpt_chunk = _cpt_stability_chunk_nstep(kw, total_nstep)
+        if cpt_chunk is not None:
+            last_dyn = _run_cpt_stability_chunked_dynamics(
+                kw,
+                io,
+                overlap_context=overlap_context,
+                rng_base=rng_base,
+                chunk_nstep=cpt_chunk,
+            )
+            return last_dyn
         last_dyn = _run_dynamics_chunk(
             kw,
             io,
@@ -3062,10 +3178,23 @@ def run_dynamics_with_io(
                 steps_done=0,
             ),
         )
+        from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+            validate_charmm_dynamics_state_after_chunk,
+        )
         from mmml.interfaces.pycharmmInterface.mlpot.force_checkpoint import (
             maybe_record_forces,
         )
 
+        restart_path = (
+            Path(io.restart_write)
+            if io is not None and io.restart_write is not None
+            else None
+        )
+        if _dynamics_chunk_state_corrupt(
+            overlap_context=overlap_context,
+            restart_path=restart_path,
+        ):
+            validate_charmm_dynamics_state_after_chunk(context=overlap_context)
         maybe_record_forces(int(kw.get("nstep", 0)), ml_forces=None)
         return last_dyn
 
@@ -3431,6 +3560,18 @@ def run_dynamics_with_io(
                         retry_count=chunk_retry_count,
                     ),
                 )
+                chunk_restart_path = (
+                    Path(chunk_io.restart_write)
+                    if chunk_io is not None
+                    and getattr(chunk_io, "restart_write", None) is not None
+                    else None
+                )
+                chunk_state_corrupt = _dynamics_chunk_state_corrupt(
+                    overlap_context=(
+                        f"overlap ({overlap_context}) chunk {chunk_index + 1}/{n_chunks}"
+                    ),
+                    restart_path=chunk_restart_path,
+                )
                 if chunk_io is not None and getattr(chunk_io, "restart_write", None) is not None:
                     _refresh_restart_write_after_chunk(
                         chunk_io.restart_write,
@@ -3447,6 +3588,11 @@ def run_dynamics_with_io(
                     steps_done = max(reported_steps, expected_after)
                 else:
                     steps_done = reported_steps
+                if chunk_state_corrupt:
+                    steps_done = min(
+                        steps_done,
+                        steps_before_chunk + max(0, chunk_nstep - 2),
+                    )
                 if (
                     chunk_io is not None
                     and getattr(chunk_io, "restart_write", None) is not None
