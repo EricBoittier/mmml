@@ -332,9 +332,9 @@ def test_decomposed_calculator_initializes_mm_before_spherical_fn():
         get_update_fn=get_update_fn,
     )
     mock_energy = jnp.array(0.0)
-    mock_grad = jnp.zeros((8, 3))
-    mock_vg = MagicMock(return_value=(mock_energy, mock_grad))
-    calc._get_value_and_grad_fn = MagicMock(return_value=mock_vg)
+    mock_forces = jnp.zeros((8, 3))
+    mock_forward = MagicMock(return_value=(mock_energy, mock_forces))
+    calc._get_spherical_forward_fn = MagicMock(return_value=mock_forward)
     n = 8
     x = np.zeros(n, dtype=np.float64)
     y = np.zeros(n, dtype=np.float64)
@@ -352,7 +352,7 @@ def test_decomposed_calculator_initializes_mm_before_spherical_fn():
         )
 
     get_update_fn.assert_called_once()
-    mock_vg.assert_called_once()
+    mock_forward.assert_called_once()
 
 
 def test_pbc_nbond_cutoffs_respects_half_box():
@@ -553,7 +553,7 @@ def test_decomposed_calculator_propagates_box_sync_failure():
     assert calc._cell == pytest.approx(40.0)
 
 
-def test_value_and_grad_fn_cached_across_callbacks(monkeypatch):
+def test_spherical_forward_fn_cached_across_callbacks(monkeypatch):
     monkeypatch.setenv("MMML_MLPOT_DEVICE", "cpu")
     z = np.zeros(8, dtype=int)
 
@@ -566,6 +566,7 @@ def test_value_and_grad_fn_cached_across_callbacks(monkeypatch):
 
         out = Out()
         out.energy = energy
+        out.forces = 2.0 * pos
         return out
 
     calc = DecomposedMlpotCalculator(
@@ -586,11 +587,11 @@ def test_value_and_grad_fn_cached_across_callbacks(monkeypatch):
     calc.calculate_charmm(
         n, 0, 0, None, x, y, zc, dx, dy, dz, 0, 0, None, None, None, None, None, None, None
     )
-    first_key = calc._grad_cache_owner()._vg_cache_key
+    first_key = calc._grad_cache_owner()._forward_cache_key
     calc.calculate_charmm(
         n, 0, 0, None, x + 0.01, y, zc, dx, dy, dz, 0, 0, None, None, None, None, None, None, None
     )
-    second_key = calc._grad_cache_owner()._vg_cache_key
+    second_key = calc._grad_cache_owner()._forward_cache_key
 
     assert first_key is not None
     assert second_key == first_key
