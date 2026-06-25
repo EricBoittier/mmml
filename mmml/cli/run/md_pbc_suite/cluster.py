@@ -50,6 +50,22 @@ def _build_psf_ordered_cluster(
     template_pdb: Path | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     residue = residue.upper()
+    if template_pdb is None:
+        template_pdb = _default_template_pdb_for_residue(residue)
+    if template_pdb is None:
+        from mmml.cli.run.md_pbc_suite.ase import _build_cluster_from_composition
+
+        z, shifted, _, _ = _build_cluster_from_composition(
+            composition=[(residue, n_molecules)],
+            spacing=spacing,
+        )
+        span = np.ptp(shifted, axis=0)
+        if float(span[1]) < 0.3 or float(span[2]) < 0.3:
+            raise RuntimeError(
+                f"Cluster geometry not 3D (spans Å x={span[0]:.3f} y={span[1]:.3f} z={span[2]:.3f})"
+            )
+        return z, shifted
+
     sequence = " ".join([residue] * n_molecules)
 
     from mmml.interfaces.pycharmmInterface.mlpot.setup import prepare_charmm_vacuum
@@ -80,13 +96,6 @@ def _build_psf_ordered_cluster(
     atom_names = np.asarray(psf.get_atype())
     if len(atom_names) != n_atoms:
         raise RuntimeError(f"PSF atom-name count mismatch: {len(atom_names)} vs positions {n_atoms}")
-
-    if template_pdb is None and residue == "ACO":
-        from mmml.paths import default_aco_template_pdb
-
-        aco_tmpl = default_aco_template_pdb()
-        if aco_tmpl.is_file():
-            template_pdb = aco_tmpl
 
     if template_pdb is not None:
         tmpl = _load_template_pdb_coords(template_pdb)
