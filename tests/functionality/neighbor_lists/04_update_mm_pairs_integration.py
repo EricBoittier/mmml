@@ -8,7 +8,13 @@ import sys
 
 import numpy as np
 
-from _common import npt_box_sequence, print_fail, print_header, print_pass, two_dimer_cluster
+from _common import (
+    npt_box_sequence,
+    print_fail,
+    print_header,
+    print_pass,
+    setup_charmm_aco_dimer_cluster,
+)
 
 
 def _build_update_fn(skip_charmm: bool):
@@ -22,7 +28,7 @@ def _build_update_fn(skip_charmm: bool):
 
     from mmml.interfaces.pycharmmInterface.mm_energy_forces import build_mm_energy_forces_fn
 
-    positions, cell, offsets, _mid = two_dimer_cluster()
+    positions, cell, offsets, _mid = setup_charmm_aco_dimer_cluster()
     n_monomers = len(offsets) - 1
     atoms_per = int(offsets[1] - offsets[0])
     atoms_list = [atoms_per] * n_monomers
