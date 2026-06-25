@@ -1504,6 +1504,56 @@ def mlpot_spherical_forces_ev_angstrom(
     return forces
 
 
+def mlpot_spherical_energy_forces_ev_angstrom(
+    pyCModel: Any,
+    *,
+    positions: np.ndarray,
+    use_pbc: bool,
+    box_A: float | None,
+) -> tuple[float, np.ndarray] | None:
+    """Hybrid energy (eV) and forces (eV/Å) from ``spherical_fn`` in one evaluation."""
+    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+        DecomposedMlpotCalculator,
+        DecomposedMlpotModel,
+    )
+
+    if not isinstance(pyCModel, DecomposedMlpotModel):
+        return None
+    calc = pyCModel.get_pycharmm_calculator()
+    if not isinstance(calc, DecomposedMlpotCalculator) or calc.spherical_fn is None:
+        return None
+
+    import jax
+    import jax.numpy as jnp
+
+    pos_np = np.asarray(positions, dtype=np.float64).reshape(-1, 3)
+    n = int(pos_np.shape[0])
+    pos_j = jnp.asarray(pos_np, dtype=jnp.float32)
+    z_j = jnp.asarray(calc.atomic_numbers[:n], dtype=jnp.int32)
+    kwargs: dict[str, Any] = dict(
+        positions=pos_j,
+        atomic_numbers=z_j,
+        n_monomers=int(calc.n_monomers),
+        cutoff_params=calc.cutoff_params,
+        doML=True,
+        doMM=bool(calc.do_mm),
+        doML_dimer=True,
+    )
+    if use_pbc and box_A is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import cubic_box_matrix_from_side
+
+        box_j = jnp.asarray(cubic_box_matrix_from_side(float(box_A)), dtype=jnp.float32)
+        kwargs["box"] = box_j
+        mm_pair_idx, mm_pair_mask, use_mm_pairs = calc._resolve_mm_pairs(pos_np, box_j)
+        if use_mm_pairs:
+            kwargs["mm_pair_idx"] = mm_pair_idx
+            kwargs["mm_pair_mask"] = mm_pair_mask
+    out = calc.spherical_fn(**kwargs)
+    energy_ev = float(jax.device_get(jnp.reshape(out.energy, (-1,))[0]))
+    forces_ev = np.asarray(jax.device_get(out.forces), dtype=np.float64).reshape(n, 3)
+    return energy_ev, forces_ev
+
+
 def force_error_metrics_ev_angstrom(
     predicted_forces_ev: np.ndarray,
     reference_forces_ev: np.ndarray,
@@ -1818,6 +1868,11 @@ def prepare_mlpot_hybrid_state_for_sd(
     verbose: bool = True,
     restart_path: Path | str | None = None,
     allow_high_grms: bool | None = None,
+    calculator_minimize: bool = True,
+    calculator_minimize_steps: int = 200,
+    calculator_minimize_fmax_ev_a: float = 0.05,
+    calculator_bfgs_maxstep: float = 0.05,
+    quiet_bfgs: bool = False,
 ) -> tuple[float, float]:
     """Resync, optional bonded recovery, and abort if hybrid GRMS remains too high.
 
@@ -1840,6 +1895,7 @@ def prepare_mlpot_hybrid_state_for_sd(
         diag,
     )
     hybrid_grms = float(diag.hybrid)
+    mlpot_ctx.sd_watchdog_baseline_grms = None
 
     if diag.kind == "desync_suspected":
         hybrid_grms = light_resync_mlpot_state(
@@ -1852,6 +1908,40 @@ def prepare_mlpot_hybrid_state_for_sd(
 
     grms_hot = grms_limit is not None and hybrid_grms > float(grms_limit)
     user_hot = energy_limit is not None and user > float(energy_limit)
+
+    run_calculator_mini = calculator_minimize and (
+        grms_hot or diag.kind == "geometry_stress" or user_hot
+    )
+    if run_calculator_mini:
+        from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+            HybridCalculatorMinimizeConfig,
+            minimize_hybrid_calculator_before_sd,
+        )
+
+        hybrid_grms = minimize_hybrid_calculator_before_sd(
+            mlpot_ctx,
+            HybridCalculatorMinimizeConfig(
+                max_steps=int(calculator_minimize_steps),
+                fmax_ev_a=float(calculator_minimize_fmax_ev_a),
+                bfgs_maxstep=float(calculator_bfgs_maxstep),
+                verbose=verbose,
+                quiet_bfgs=quiet_bfgs,
+            ),
+            context_prefix=context_prefix,
+        )
+        diag = measure_hybrid_charmm_grms(mlpot_ctx)
+        _print_hybrid_charmm_grms_diag(
+            f"{context_prefix} post-calculator hybrid GRMS" if verbose else "",
+            diag,
+        )
+        grms_hot = grms_limit is not None and hybrid_grms > float(grms_limit)
+        user = assert_mlpot_user_active(
+            mlpot_ctx,
+            context=f"{context_prefix} MLpot SD (post calculator mini)",
+            quiet=not verbose,
+        )
+        user_hot = energy_limit is not None and user > float(energy_limit)
+
     if grms_hot or user_hot:
         reasons: list[str] = []
         if user_hot:
@@ -1915,6 +2005,9 @@ def prepare_mlpot_hybrid_state_for_sd(
         if not allow_high_grms:
             raise RuntimeError(msg)
         print(f"WARN: {msg}", flush=True)
+
+    if mlpot_ctx.sd_watchdog_baseline_grms is None:
+        mlpot_ctx.sd_watchdog_baseline_grms = float(hybrid_grms)
 
     return float(hybrid_grms), float(user)
 
@@ -2418,6 +2511,7 @@ def add_staged_md_args(parser: argparse.ArgumentParser) -> None:
         help="Pretreat CHARMM ABNR steps (default: --charmm-abnr-steps)",
     )
     add_bonded_mm_mini_args(parser)
+    add_calculator_pre_minimize_args(parser)
     group.add_argument(
         "--mlpot-mm-internal-scale",
         type=float,
@@ -2631,6 +2725,45 @@ def add_bonded_mm_mini_args(parser: argparse.ArgumentParser) -> None:
         "--allow-high-bonded-strain",
         action="store_true",
         help="Continue when --bonded-mm-max-angl-kcal / max-internal limits are exceeded",
+    )
+
+
+def add_calculator_pre_minimize_args(parser: argparse.ArgumentParser) -> None:
+    group = parser.add_argument_group(
+        "Hybrid calculator pre-minimize (ASE BFGS before MLpot SD)"
+    )
+    group.add_argument(
+        "--calculator-pre-minimize",
+        dest="calculator_pre_minimize",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Run ASE BFGS on the full hybrid JAX calculator before MLpot SD when "
+            "pre-SD hybrid GRMS is high (default: on)."
+        ),
+    )
+    group.add_argument(
+        "--pre-min-steps",
+        type=int,
+        default=200,
+        help="Max ASE BFGS steps before MLpot SD (default: 200).",
+    )
+    group.add_argument(
+        "--pre-min-fmax",
+        type=float,
+        default=0.05,
+        help="ASE BFGS convergence fmax in eV/Å (default: 0.05).",
+    )
+    group.add_argument(
+        "--bfgs-maxstep",
+        type=float,
+        default=0.05,
+        help="ASE BFGS maximum atomic displacement per step in Å (default: 0.05).",
+    )
+    group.add_argument(
+        "--quiet-bfgs",
+        action="store_true",
+        help="Suppress ASE BFGS per-step log output during calculator pre-minimize.",
     )
 
 

@@ -1469,6 +1469,13 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     pre_sd_bonded_recovery_nstep=int(
                         getattr(args, "bonded_mm_mini_steps", 200) or 200
                     ),
+                    calculator_pre_minimize=bool(
+                        getattr(args, "calculator_pre_minimize", True)
+                    ),
+                    calculator_minimize_steps=int(getattr(args, "pre_min_steps", 200)),
+                    calculator_minimize_fmax_ev_a=float(getattr(args, "pre_min_fmax", 0.05)),
+                    calculator_bfgs_maxstep=float(getattr(args, "bfgs_maxstep", 0.05)),
+                    quiet_bfgs=bool(getattr(args, "quiet_bfgs", False)),
                 )
             )
             if save_mini and legacy_mlpot is not None:
@@ -1630,6 +1637,13 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     pre_sd_bonded_recovery_nstep=int(
                         getattr(args, "bonded_mm_mini_steps", 200) or 200
                     ),
+                    calculator_pre_minimize=bool(
+                        getattr(args, "calculator_pre_minimize", True)
+                    ),
+                    calculator_minimize_steps=int(getattr(args, "pre_min_steps", 200)),
+                    calculator_minimize_fmax_ev_a=float(getattr(args, "pre_min_fmax", 0.05)),
+                    calculator_bfgs_maxstep=float(getattr(args, "bfgs_maxstep", 0.05)),
+                    quiet_bfgs=bool(getattr(args, "quiet_bfgs", False)),
                 )
             )
             sync_charmm_positions(get_charmm_positions_array())
