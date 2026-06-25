@@ -12,9 +12,12 @@ import pytest
 
 from mmml.cli.run.md_evaluate_npz import (
     EvaluateNpzPayload,
+    compare_evaluate_to_reference_npz,
     load_evaluate_npz,
     resolve_evaluate_use_pbc,
     run_evaluate_npz,
+    save_evaluate_extxyz,
+    save_evaluate_trajectory_npz,
 )
 from mmml.cli.run.md_handoff import MdHandoffState
 
@@ -61,6 +64,78 @@ def test_evaluate_int_arg_treats_none_as_default() -> None:
     assert _evaluate_int_arg(args, "max_pairs", 20_000) == 20_000
     assert _evaluate_int_arg(args, "jax_md_update_interval", 1) == 1
     assert _evaluate_int_arg(Namespace(), "max_pairs", 20_000) == 20_000
+
+
+def test_save_evaluate_trajectory_npz_roundtrip(tmp_path: Path) -> None:
+    z = np.array([6, 1, 1, 17, 17], dtype=np.int32)
+    r = np.random.default_rng(0).random((5, 3))
+    f = np.random.default_rng(1).random((5, 3))
+    path = tmp_path / "evaluate.npz"
+    save_evaluate_trajectory_npz(
+        path,
+        atomic_numbers=z,
+        positions=r,
+        energy_eV=-1.5,
+        forces_eV_A=f,
+    )
+    with np.load(path) as data:
+        assert int(data["N"][0]) == 5
+        np.testing.assert_array_equal(data["Z"][0], z)
+        np.testing.assert_allclose(data["R"][0], r)
+        np.testing.assert_allclose(data["F"][0], f)
+        assert data["E_eV"][0] == pytest.approx(-1.5)
+
+
+def test_compare_evaluate_to_reference_npz(tmp_path: Path) -> None:
+    z = np.array([6, 1, 1, 17, 17, 6, 1, 1, 17, 17], dtype=np.int32)
+    r = np.random.default_rng(2).random((10, 3))
+    ref_e_hartree = -1.6 / 27.211386245988
+    ref_f = np.random.default_rng(3).random((1, 10, 3))
+    ref_path = tmp_path / "ref.npz"
+    np.savez_compressed(
+        ref_path,
+        N=np.array([10], dtype=int),
+        Z=z.reshape(1, 10),
+        R=r.reshape(1, 10, 3),
+        E=np.array([ref_e_hartree], dtype=np.float64),
+        F=ref_f,
+        source_indices=np.array([41950], dtype=int),
+    )
+    pred_e = -1.6
+    pred_f = ref_f[0] + 0.01
+    cmp = compare_evaluate_to_reference_npz(
+        ref_path,
+        frame=0,
+        atomic_numbers=z,
+        positions=r,
+        energy_eV=pred_e,
+        forces_eV_A=pred_f,
+        reference_energy_unit="hartree",
+        reference_force_unit="hartree_bohr",
+    )
+    assert cmp["delta_energy_eV"] == pytest.approx(0.0, abs=1e-6)
+    assert cmp["reference_source_index"] == 41950
+    assert "force_rmse_eV_A" in cmp
+
+
+def test_save_evaluate_extxyz_includes_forces(tmp_path: Path) -> None:
+    from ase.io import read
+
+    z = np.array([6, 1, 1, 17, 17], dtype=np.int32)
+    r = np.zeros((5, 3))
+    f = np.ones((5, 3)) * 0.5
+    path = tmp_path / "evaluate.extxyz"
+    save_evaluate_extxyz(
+        path,
+        atomic_numbers=z,
+        positions=r,
+        energy_eV=-2.0,
+        forces_eV_A=f,
+    )
+    atoms = read(str(path), format="extxyz")
+    assert atoms.calc is not None
+    np.testing.assert_allclose(atoms.get_forces(), f)
+    assert atoms.get_potential_energy() == pytest.approx(-2.0)
 
 
 def test_resolve_evaluate_use_pbc_from_setup() -> None:
@@ -185,6 +260,7 @@ def test_run_evaluate_npz_ase_backend(tmp_path: Path, monkeypatch: pytest.Monkey
             "mmml.cli.run.md_evaluate_npz._evaluate_ase_mmml",
             return_value={
                 "energy_eV": -1.25,
+                "forces_eV_A": np.zeros((4, 3)).tolist(),
                 "max_force_eV_A": 0.01,
                 "rms_force_eV_A": 0.01,
                 "n_atoms": 4,
@@ -206,6 +282,8 @@ def test_run_evaluate_npz_ase_backend(tmp_path: Path, monkeypatch: pytest.Monkey
     payload = json.loads(result_path.read_text(encoding="utf-8"))
     assert payload["backend"] == "ase"
     assert payload["metrics"]["energy_eV"] == pytest.approx(-1.25)
+    assert (out_dir / "evaluate.npz").is_file()
+    assert (out_dir / "evaluate.extxyz").is_file()
 
 
 def test_md_system_evaluate_npz_manifest_exit_code_success(
