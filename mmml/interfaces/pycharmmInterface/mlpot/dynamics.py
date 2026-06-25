@@ -1686,6 +1686,8 @@ def _materialize_early_abort_restart_handoff(
     *,
     steps_before_chunk: int,
     overlap_context: str,
+    chunk_kw: dict[str, Any] | None = None,
+    mlpot_ctx: Optional["MlpotContext"] = None,
 ) -> CharmmTrajectoryFiles:
     """Write a valid READYN restart from in-memory state after a mid-chunk abort.
 
@@ -1700,6 +1702,12 @@ def _materialize_early_abort_restart_handoff(
         patch_restart_global_step,
     )
 
+    if chunk_kw is not None and bool(chunk_kw.get("cpt")):
+        _assign_post_rescue_velocities_and_crystal(
+            chunk_kw,
+            mlpot_ctx=mlpot_ctx,
+        )
+
     read_path = (
         Path(chunk_io.restart_read) if chunk_io.restart_read is not None else None
     )
@@ -1707,13 +1715,16 @@ def _materialize_early_abort_restart_handoff(
         Path(chunk_io.restart_write) if chunk_io.restart_write is not None else None
     )
     targets: list[Path] = []
-    if read_path is not None:
-        targets.append(read_path)
-    if write_path is not None and write_path not in targets:
+    if write_path is not None:
         targets.append(write_path)
+    if read_path is not None and read_path not in targets:
+        targets.append(read_path)
 
     if not targets:
-        return chunk_io
+        raise RuntimeError(
+            f"overlap ({overlap_context}): early-abort restart handoff has no "
+            f"scratch restart path (read={read_path!r}, write={write_path!r})"
+        )
 
     step = max(0, int(steps_before_chunk))
     for path in targets:
@@ -1724,14 +1735,25 @@ def _materialize_early_abort_restart_handoff(
             )
         patch_restart_global_step(path, step)
 
-    valid_read = _valid_overlap_chunk_restart_read(read_path) if read_path else None
-    if valid_read is None and read_path is not None:
-        valid_read = _valid_restart_file(read_path)
+    valid_read: Path | None = None
+    for candidate in (write_path, read_path):
+        if candidate is None:
+            continue
+        valid_read = _valid_overlap_chunk_restart_read(candidate)
+        if valid_read is None:
+            valid_read = _valid_restart_file(candidate)
+        if valid_read is not None:
+            break
+
+    if valid_read is None:
+        raise RuntimeError(
+            f"overlap ({overlap_context}): early-abort restart handoff wrote "
+            f"{', '.join(p.name for p in targets)} but none validate as READYN"
+        )
 
     print(
         f"overlap ({overlap_context}): early-abort restart handoff from "
-        f"{valid_read.name if valid_read is not None else targets[0].name} "
-        f"at global step {step} (READYN)",
+        f"{valid_read.name} at global step {step} (READYN)",
         flush=True,
     )
     return CharmmTrajectoryFiles(
@@ -2634,7 +2656,11 @@ def _run_dynamics_chunk(
     if extra_iokw:
         kw.update(extra_iokw)
         iokw = {**iokw, **extra_iokw}
-    if not kw.get("restart", False) and "iunrea" not in iokw:
+    if kw.get("restart", False):
+        kw.pop("iunrea", None)
+        if "iunrea" in iokw:
+            kw["iunrea"] = iokw["iunrea"]
+    elif "iunrea" not in iokw:
         kw.pop("iunrea", None)
         kw["iunrea"] = -1
     _sync_dynamics_io_units(kw, iokw)
@@ -2889,8 +2915,21 @@ def run_dynamics_with_io(
                         chunk_io,
                         steps_before_chunk=steps_before_chunk,
                         overlap_context=overlap_context,
+                        chunk_kw=chunk_kw,
+                        mlpot_ctx=mlpot_ctx,
                     )
                     if chunk_io.restart_read is None:
+                        if bool(chunk_kw.get("cpt")):
+                            raise RuntimeError(
+                                f"overlap ({overlap_context}): CPT early-abort retry "
+                                "requires a valid READYN scratch restart; refusing "
+                                "in-memory continuation (readyn segfault risk)"
+                            )
+                        print(
+                            f"overlap ({overlap_context}): early-abort restart "
+                            "materialization failed; falling back to in-memory retry",
+                            flush=True,
+                        )
                         early_abort_restart_handoff = False
                         early_abort_memory_handoff = True
                 mem_handoff = (
@@ -3006,6 +3045,7 @@ def run_dynamics_with_io(
                     chunk_kw["new"] = False
                     chunk_kw["start"] = False
                     chunk_kw["iasvel"] = 0
+                    chunk_kw.pop("iunrea", None)
                 if heat_ramp_spec is not None:
                     apply_heat_ramp_overlap_chunk(
                         chunk_kw,
@@ -3138,6 +3178,25 @@ def run_dynamics_with_io(
                                 early_abort_memory_handoff = True
                         else:
                             early_abort_restart_handoff = True
+                        if mlpot_ctx is not None and overlap is not None:
+                            from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+                                finalize_overlap_rescue_for_dynamics,
+                            )
+
+                            check_dynamics_overlap(
+                                overlap,
+                                context=f"{overlap_context} after early-abort recovery",
+                                step=steps_before_chunk,
+                                mlpot_ctx=mlpot_ctx,
+                            )
+                            finalize_overlap_rescue_for_dynamics(
+                                mlpot_ctx,
+                                overlap,
+                                context=(
+                                    f"{overlap_context} after early-abort recovery "
+                                    f"(step {steps_before_chunk})"
+                                ),
+                            )
                         post_rescue_handoff_applied = False
                         steps_done = steps_before_chunk
                         rerun_chunk = True
