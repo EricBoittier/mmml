@@ -865,10 +865,7 @@ def apply_hoover_cpt_heat_ramp_overlap_chunk(
     chunk_kw["finalt"] = float(ramp_spec["finalt"])
     chunk_kw["tbath"] = float(ramp_spec["finalt"])
     chunk_kw["hoover reft"] = target
-    if bool(chunk_kw.get("restart")):
-        chunk_kw["iasvel"] = 1
-    else:
-        chunk_kw["iasvel"] = 1
+    chunk_kw["iasvel"] = 1
     chunk_kw["start"] = False
 
 
@@ -2646,16 +2643,11 @@ def run_dynamics_with_io(
                         overlap_context=overlap_context,
                         overlap_run_state_dir=overlap_run_state_dir,
                     )
-                if chunk_index == 0 and has_restart_read:
-                    chunk_kw["new"] = False
-                    chunk_kw["start"] = False
-                    chunk_kw["restart"] = True
-                else:
-                    _apply_overlap_chunk_dynamics_kw(
-                        chunk_kw,
-                        chunk_index=chunk_index,
-                        has_restart_read=has_restart_read,
-                    )
+                _apply_overlap_chunk_dynamics_kw(
+                    chunk_kw,
+                    chunk_index=chunk_index,
+                    has_restart_read=has_restart_read,
+                )
                 if heat_ramp_spec is not None:
                     apply_heat_ramp_overlap_chunk(
                         chunk_kw,

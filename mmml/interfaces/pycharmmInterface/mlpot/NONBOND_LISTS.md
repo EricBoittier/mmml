@@ -189,6 +189,24 @@ When `pbc_cell` is set and jax-md is available, neighbor lists culling is perfor
 - **Optional caching** in `update_mm_pairs`:
   - `jax_md_update_interval` (default 1): skip rebuild check every N calls.
   - `jax_md_skin_distance` (default 0): reuse list until max atom displacement ≤ skin.
+  - **NPT box sync**: when `skin == 0`, interval-only reuse also requires stable box (`box_delta ≤ 1e-8`); box resize forces rebuild even between interval steps.
+
+### PBC: unified rebuild backends (`nl_backend.py`)
+
+Static PBC lists (no jax-md) and jax-md **overflow fallback** share rebuild logic via
+[`nl_backend.py`](../nl_backend.py) and [`nl_reference.py`](../nl_reference.py).
+
+| `mm_nl_backend` / `MMML_MM_NL_BACKEND` | Primary rebuild | Fallback |
+|----------------------------------------|-----------------|----------|
+| `auto` (default) | jax-md incremental when available | Vesin if installed, else cell-list |
+| `vesin` | [Vesin](https://luthaf.fr/vesin/latest/index.html) half-list + MM filters | cell-list |
+| `cell_list` | NumPy cell-list | — |
+| `jax_md` | jax-md incremental | Vesin → cell-list on overflow |
+
+Vesin is the preferred **cross-path reference oracle** for validation (optional dep:
+`uv sync --extra nl-validation`). Brute-force MIC is used when Vesin is not installed.
+
+Pass `mm_nl_backend=` to `build_mm_energy_forces_fn` or set env `MMML_MM_NL_BACKEND`.
 
 The cadence and method of updating these lists depend on the **simulation runner/backend**:
 
@@ -286,10 +304,18 @@ Fixed `inbfrq=50` at `dt=0.25` fs means CHARMM lists refresh every **12.5 fs**. 
 
 | Tool | Path | What it checks |
 |------|------|----------------|
+| **NL validation ladder** | [`tests/functionality/neighbor_lists/README.md`](../../../tests/functionality/neighbor_lists/README.md) | Vesin/brute reference, path parity, skin/box cache (manual, not pytest) |
 | Pair-list geometry audit | [`scripts/validate_mlpot_pair_lists.py`](../../../scripts/validate_mlpot_pair_lists.py) | Per-dimer COM distance, ML taper zone, MM inclusion, min inter-monomer distance (no CHARMM) |
 | `inbfrq` sweep + COM QC | [`workflows/dcm_nve_scaling/`](../../../workflows/dcm_nve_scaling/) | Systematic NVE stability vs `inbfrq`; `scaling_summary.csv` |
 | Staged validation ladder | [`tests/functionality/mlpot/README.md`](../../../tests/functionality/mlpot/README.md) | Register → energy compare → mini → dynamics |
 | COM drift analysis | [`scripts/analyze_monomer_com_dcd.py`](../../../scripts/analyze_monomer_com_dcd.py) | Cluster COM displacement, outlier ratio from DCD |
+
+Example NL path parity (no CHARMM):
+
+```bash
+uv sync --extra nl-validation   # optional Vesin
+bash tests/functionality/neighbor_lists/run_all.sh
+```
 
 Example post-mini audit:
 
@@ -332,7 +358,9 @@ Python bindings: [`pycharmm/energy_mlpot.py`](../../../../pycharmm/energy_mlpot.
 | [`mlpot/setup.py`](setup.py) | `register_mlpot`, `sync_charmm_positions`, unsafe-`upinb` guards |
 | [`mlpot/hybrid_mlpot.py`](hybrid_mlpot.py) | `DecomposedMlpotCalculator.calculate_charmm` callback |
 | [`mlpot/dynamics.py`](dynamics.py) | `inbfrq=0` SD kwargs, `sync_charmm_lists_after_mini`, `--dyn-inbfrq` |
-| [`mm_energy_forces.py`](../mm_energy_forces.py) | `build_mm_energy_forces_fn`, `update_mm_pairs` |
+| [`mm_energy_forces.py`](../mm_energy_forces.py) | `build_mm_energy_forces_fn`, `update_mm_pairs`, `neighbor_pair_cache_should_reuse` |
+| [`nl_backend.py`](../nl_backend.py) | Vesin / cell-list rebuild backends |
+| [`nl_reference.py`](../nl_reference.py) | Brute / Vesin reference oracles, pair-set compare |
 | [`jax_md_neighbor_list.py`](../jax_md_neighbor_list.py) | PBC jax-md neighbor list builder |
 | [`mmml_calculator.py`](../mmml_calculator.py) | `setup_calculator` factory; jax-md tuning kwargs |
 | [`cutoffs.py`](../cutoffs.py) | ML/MM complementary handoff parameters |

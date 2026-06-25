@@ -20,8 +20,8 @@ bash tests/functionality/neighbor_lists/run_all.sh
 uv run python tests/functionality/neighbor_lists/02_path_parity.py
 ```
 
-Script 04 requires PyCHARMM + CGENFF (`CHARMM_HOME`, `CHARMM_LIB_DIR`) and builds a
-2×ACO dimer PSF before calling `build_mm_energy_forces_fn`. Scripts 00–03 do not.
+Script 04 requires PyCHARMM + CGENFF (`CHARMM_HOME`, `CHARMM_LIB_DIR`). Scripts 00–03
+do not.
 
 ## Ladder
 

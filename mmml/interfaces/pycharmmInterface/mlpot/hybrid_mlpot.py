@@ -302,16 +302,11 @@ class DecomposedMlpotCalculator:
                 resolve_charmm_cubic_box_side_A,
             )
 
-            try:
-                side, _ = resolve_charmm_cubic_box_side_A(
-                    fallback_side_A=float(self._cell) if self._cell else None,
-                    restart_path=getattr(self, "_npt_restart_read", None),
-                )
-                self._cell = side
-            except (KeyboardInterrupt, SystemExit):
-                raise
-            except Exception:
-                side = float(self._cell)
+            side, _ = resolve_charmm_cubic_box_side_A(
+                fallback_side_A=float(self._cell) if self._cell else None,
+                restart_path=getattr(self, "_npt_restart_read", None),
+            )
+            self._cell = side
             box = jnp.asarray(cubic_box_matrix_from_side(side))
         self._current_box = box
         from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_context

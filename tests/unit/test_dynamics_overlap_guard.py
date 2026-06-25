@@ -784,6 +784,7 @@ def test_run_dynamics_with_io_chunks_and_checks(tmp_path):
 
     assert [c["nstep"] for c in calls] == [2, 2, 2]
     assert calls[0]["restart"] is True
+    assert calls[0]["iasvel"] == 0
     assert calls[0]["iunrea"] == 3
     assert "firstt" in calls[0]
     assert calls[1]["restart"] is True
@@ -1644,6 +1645,24 @@ def test_overlap_chunk_continues_velocity_scaling_heat_ramp(tmp_path, monkeypatc
     assert calls[1]["firstt"] == pytest.approx(0.6)
     assert calls[2]["firstt"] == pytest.approx(1.2)
     assert calls[3]["firstt"] == pytest.approx(1.8)
+
+
+def test_apply_overlap_chunk_restart_read_forces_iasvel_zero():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
+
+    kw = {
+        "start": True,
+        "new": True,
+        "restart": True,
+        "iasvel": 1,
+        "firstt": 240.0,
+    }
+    _apply_overlap_chunk_dynamics_kw(kw, chunk_index=0, has_restart_read=True)
+    assert kw["start"] is False
+    assert kw["new"] is False
+    assert kw["restart"] is True
+    assert kw["iasvel"] == 0
+    assert kw["firstt"] == 240.0
 
 
 def test_apply_overlap_chunk_hoover_chunk0_omits_start_and_iasvel_one():
