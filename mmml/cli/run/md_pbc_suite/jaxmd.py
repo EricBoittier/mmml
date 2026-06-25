@@ -772,6 +772,22 @@ def main(argv: list[str] | None = None) -> int:
                 jaxmd_pbc_minimize_steps=saved_jaxmd_pbc_minimize_steps,
             )
         )
+        if (
+            handoff_in is not None
+            and not free_space
+            and initial_fmax_eVA is not None
+            and str((handoff_in.metadata or {}).get("backend", "")).strip().lower()
+            == "pycharmm"
+            and initial_fmax_eVA
+            <= float(getattr(args, "handoff_quality_fmax_eVA", 1.0))
+        ):
+            args.jaxmd_pbc_minimize_steps = 0
+            if not getattr(args, "quiet", False):
+                print(
+                    "Handoff: skipping PBC FIRE (pycharmm continuation, "
+                    f"max|F|={initial_fmax_eVA:.4f} eV/Å)",
+                    flush=True,
+                )
 
     policy_summary = summarize_handoff_policy(
         handoff_in,
