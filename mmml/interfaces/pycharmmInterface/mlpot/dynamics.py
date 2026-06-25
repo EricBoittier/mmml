@@ -826,7 +826,7 @@ def _run_minimize_in_chunks(
         grms = _sync_mlpot_lists_after_sd_chunk(
             config,
             pass_label=pass_label,
-            chunk_index=chunk_index - 1,
+            chunk_index=chunk_index,
             n_chunks=n_chunks,
         )
         if grms is not None and _maybe_abort_sd_on_grms(
@@ -3821,13 +3821,18 @@ def minimize_with_mlpot(
                 context_prefix="Pre-SD",
                 verbose=config.verbose,
             )
-        _run_mlpot_sd_then_abnr(
+        sd_ok = _run_mlpot_sd_then_abnr(
             minimize,
             pycharmm,
             config,
             sd_kw,
             pass_label="pass 1 (free, all atoms)",
         )
+        if not sd_ok:
+            raise RuntimeError(
+                "MLpot SD pass 1 stopped early: hybrid GRMS watchdog triggered "
+                "(lists/forces diverged during inbfrq=0 minimization)"
+            )
         sync_charmm_lists_after_mini(quiet=not config.verbose)
         invalidate_mlpot_calculator_caches(config.mlpot_ctx)
         if config.verbose and config.mlpot_ctx is not None:
@@ -3847,13 +3852,18 @@ def minimize_with_mlpot(
         if config.fixed_ml_selection is not None:
             n_fix = len(config.fixed_ml_selection.get_atom_indexes())
             cons_fix.setup(config.fixed_ml_selection)
-            _run_mlpot_sd_then_abnr(
+            sd_ok = _run_mlpot_sd_then_abnr(
                 minimize,
                 pycharmm,
                 config,
                 sd_kw,
                 pass_label=f"pass 2 (cons_fix, {n_fix} atoms)",
             )
+            if not sd_ok:
+                raise RuntimeError(
+                    f"MLpot SD pass 2 (cons_fix, {n_fix} atoms) stopped early: "
+                    "hybrid GRMS watchdog triggered"
+                )
             sync_charmm_lists_after_mini(quiet=not config.verbose)
             invalidate_mlpot_calculator_caches(config.mlpot_ctx)
             if config.verbose and config.mlpot_ctx is not None:
