@@ -705,6 +705,77 @@ def _run_all_ml_inter_overlap_rescue(
     minimize_overlap_rescue(ctx, rescue)
 
 
+def finalize_overlap_rescue_for_dynamics(
+    ctx: MlpotContext,
+    config: Any,
+    *,
+    context: str,
+    max_grms: float | None = None,
+) -> float:
+    """Re-register MLpot, optional SD polish, and hybrid GRMS gate before continuing MD."""
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        refresh_mlpot_energy_and_grms,
+        resolve_mlpot_grms_kcalmol_A,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import assert_mlpot_user_active
+
+    verbose = bool(getattr(getattr(config, "rescue", None), "verbose", False))
+    ctx.reregister_mlpot(verbose=verbose)
+    grms = refresh_mlpot_energy_and_grms(
+        ctx,
+        context=f"{context} (post-rescue)",
+        reregister=False,
+        verbose=verbose,
+    )
+
+    mini_n = int(getattr(config, "mlpot_rescue_mini_nstep", 0) or 0)
+    if mini_n > 0:
+        bonded_cfg = _bonded_cfg_from_overlap_config(config)
+        _run_mlpot_recovery_mini(
+            ctx,
+            bonded_cfg,
+            pyCModel=_resolve_pyCModel(ctx, config),
+            context=context,
+            nstep=mini_n,
+        )
+        grms = refresh_mlpot_energy_and_grms(
+            ctx,
+            context=f"{context} (after MLpot mini)",
+            reregister=False,
+            verbose=verbose,
+        )
+
+    assert_mlpot_user_active(
+        ctx,
+        context=f"{context} post-rescue",
+        quiet=not verbose,
+    )
+
+    limit = max_grms
+    if limit is None:
+        n_mon = max(1, int(getattr(config, "n_monomers", 1) or 1))
+        limit = max(50.0, 50.0 * (float(n_mon) ** 0.5))
+
+    grms = resolve_mlpot_grms_kcalmol_A(
+        ctx,
+        context=f"{context} post-rescue gate",
+    )
+    if grms > limit:
+        raise RuntimeError(
+            f"{context}: post-overlap-rescue hybrid GRMS {grms:.2f} kcal/mol/Å > "
+            f"{limit:.0f} — coordinates still too strained to continue dynamics. "
+            "Try larger --charmm-sd-steps / --dynamics-overlap-charmm-sd-steps, "
+            "longer overlap rescue mini, or increase Packmol spacing."
+        )
+    if verbose:
+        print(
+            f"{context}: post-rescue stabilization OK "
+            f"(hybrid GRMS={grms:.4f} kcal/mol/Å, limit {limit:.0f})",
+            flush=True,
+        )
+    return grms
+
+
 def run_inter_monomer_overlap_rescue(
     ctx: MlpotContext,
     config: Any,

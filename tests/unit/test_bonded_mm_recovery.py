@@ -1561,3 +1561,71 @@ def argparse_namespace(**kwargs):
     import argparse
 
     return argparse.Namespace(**kwargs)
+
+
+def test_finalize_overlap_rescue_for_dynamics_reregisters_and_gates_grms():
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        finalize_overlap_rescue_for_dynamics,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        DynamicsOverlapConfig,
+        OverlapRescueConfig,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+
+    ctx = MagicMock(spec=MlpotContext)
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        n_monomers=4,
+        rescue=OverlapRescueConfig(verbose=False),
+        mlpot_rescue_mini_nstep=0,
+        pyCModel=MagicMock(),
+    )
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        return_value=12.0,
+    ) as refresh, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.assert_mlpot_user_active",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
+        return_value=12.0,
+    ):
+        grms = finalize_overlap_rescue_for_dynamics(
+            ctx, cfg, context="EQUI at step 2500"
+        )
+    ctx.reregister_mlpot.assert_called_once_with(verbose=False)
+    assert refresh.call_count == 1
+    assert grms == 12.0
+
+
+def test_finalize_overlap_rescue_for_dynamics_aborts_on_high_grms():
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        finalize_overlap_rescue_for_dynamics,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        DynamicsOverlapConfig,
+        OverlapRescueConfig,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+
+    ctx = MagicMock(spec=MlpotContext)
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        n_monomers=4,
+        rescue=OverlapRescueConfig(verbose=False),
+        mlpot_rescue_mini_nstep=0,
+        pyCModel=MagicMock(),
+    )
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        return_value=5000.0,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.assert_mlpot_user_active",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
+        return_value=5692.0,
+    ):
+        with pytest.raises(RuntimeError, match="post-overlap-rescue hybrid GRMS"):
+            finalize_overlap_rescue_for_dynamics(
+                ctx, cfg, context="EQUI at step 2500"
+            )
