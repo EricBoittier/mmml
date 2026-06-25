@@ -44,6 +44,16 @@ def test_load_evaluate_npz_optional_mm_fields(tmp_path: Path) -> None:
     np.testing.assert_allclose(payload.handoff.positions, pos)
 
 
+def test_load_evaluate_npz_positions_only(tmp_path: Path) -> None:
+    pos = np.random.default_rng(0).random((10, 3))
+    path = tmp_path / "geom.npz"
+    np.savez_compressed(path, positions=pos, pbc=False, metadata="{}")
+
+    payload = load_evaluate_npz(path)
+    np.testing.assert_allclose(payload.handoff.positions, pos)
+    assert payload.handoff.atomic_numbers.size == 0
+
+
 def test_resolve_evaluate_use_pbc_from_setup() -> None:
     handoff = MdHandoffState(
         positions=np.zeros((3, 3)),
@@ -67,9 +77,12 @@ def test_md_system_parser_accepts_evaluate_npz() -> None:
             "ase",
             "--setup",
             "free_nve",
+            "--evaluate-frame",
+            "2",
         ]
     )
     assert Path(args.evaluate_npz) == Path("/tmp/geom.npz")
+    assert args.evaluate_frame == 2
 
 
 def test_md_system_parser_accepts_optimize_cutoffs() -> None:

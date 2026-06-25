@@ -64,6 +64,27 @@ def test_load_geometry_npz_handoff_keys(tmp_path: Path) -> None:
     assert payload.charges is None
 
 
+def test_load_geometry_npz_positions_only(tmp_path: Path) -> None:
+    pos = np.random.default_rng(0).random((10, 3))
+    path = tmp_path / "geom.npz"
+    np.savez_compressed(path, positions=pos, pbc=False, metadata="{}")
+
+    payload = load_geometry_npz(path)
+    np.testing.assert_allclose(payload.handoff.positions, pos)
+    assert payload.handoff.atomic_numbers.size == 0
+
+
+def test_load_geometry_npz_trajectory_frame(tmp_path: Path) -> None:
+    R = np.random.default_rng(1).random((3, 10, 3))
+    Z = np.broadcast_to(np.array([6, 1, 1, 17, 17] * 2, dtype=np.int32), (3, 10))
+    path = tmp_path / "traj.npz"
+    np.savez_compressed(path, R=R, Z=Z, N=np.full(3, 10, dtype=int))
+
+    payload = load_geometry_npz(path, frame=2)
+    np.testing.assert_allclose(payload.handoff.positions, R[2])
+    np.testing.assert_array_equal(payload.handoff.atomic_numbers, Z[2])
+
+
 def test_load_reference_trajectory_npz_selects_frames(tmp_path: Path) -> None:
     n_atoms = 4
     n_frames = 6

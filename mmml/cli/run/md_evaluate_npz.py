@@ -346,7 +346,8 @@ def run_evaluate_npz(args: Any) -> int:
     from mmml.cli.run.md_pbc_suite.ase import _cubic_box_length, _parse_composition
 
     npz_path = Path(args.evaluate_npz).expanduser().resolve()
-    payload = load_evaluate_npz(npz_path)
+    frame = int(getattr(args, "evaluate_frame", 0) or 0)
+    payload = load_evaluate_npz(npz_path, frame=frame)
     handoff = payload.handoff
     set_handoff_in(handoff)
 
