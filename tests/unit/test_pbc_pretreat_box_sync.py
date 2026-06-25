@@ -15,6 +15,12 @@ def test_sync_workflow_pbc_box_side_after_mm_pretreat_updates_live_box() -> None
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
         return_value=(39.99, "pbound"),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.parse_cubic_box_side_from_charmm_restart",
+        return_value=39.99,
     ):
         synced = sync_workflow_pbc_box_side_after_mm_pretreat(
             28.0,
@@ -28,6 +34,9 @@ def test_sync_workflow_pbc_box_side_after_mm_pretreat_noop_when_unchanged() -> N
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
         return_value=(28.0, "fallback"),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
+        return_value=False,
     ):
         synced = sync_workflow_pbc_box_side_after_mm_pretreat(28.0, quiet=True)
     assert synced == 28.0
