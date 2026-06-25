@@ -1203,8 +1203,22 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     sync_charmm_positions(r)
     handoff_coords_in_memory = False
     if handoff_in is not None:
-        sync_charmm_positions(handoff_in.positions)
-        from mmml.cli.run.md_handoff import prepare_pycharmm_handoff_continuation
+        from mmml.cli.run.md_handoff import (
+            align_handoff_positions_for_charmm_pbc,
+            monomer_offsets_uniform,
+            prepare_pycharmm_handoff_continuation,
+        )
+
+        handoff_positions = np.asarray(handoff_in.positions, dtype=np.float64)
+        if charmm_pbc and box_side is not None:
+            handoff_positions = align_handoff_positions_for_charmm_pbc(
+                handoff_positions,
+                monomer_offsets=monomer_offsets_uniform(len(handoff_positions), n_mol),
+                box_side_A=float(box_side),
+                handoff=handoff_in,
+                quiet=bool(args.quiet),
+            )
+        sync_charmm_positions(handoff_positions)
 
         seed_restart = prepare_pycharmm_handoff_continuation(
             handoff_in,

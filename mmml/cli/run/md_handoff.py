@@ -724,6 +724,70 @@ def apply_handoff_geometry_to_atoms(
         sync_charmm_positions(np.asarray(atoms.get_positions(), dtype=np.float64))
 
 
+def monomer_offsets_uniform(n_atoms: int, n_monomers: int) -> np.ndarray:
+    """Cumulative atom indices for equal-sized monomers."""
+    if n_monomers < 1:
+        raise ValueError(f"n_monomers must be >= 1, got {n_monomers}")
+    if n_atoms % n_monomers != 0:
+        raise ValueError(
+            f"cannot build uniform monomer offsets: {n_atoms} atoms, "
+            f"{n_monomers} monomers"
+        )
+    per = n_atoms // n_monomers
+    return np.arange(0, n_atoms + 1, per, dtype=int)
+
+
+def handoff_needs_charmm_pbc_alignment(handoff: MdHandoffState) -> bool:
+    """True for jaxmd (and other non-CHARMM) handoffs that use [0,L) primary-cell wraps."""
+    meta = handoff.metadata or {}
+    backend = str(meta.get("backend", "")).strip().lower()
+    if backend in ("jaxmd", "ase"):
+        return True
+    source = str(meta.get("source", "")).strip().lower()
+    if source in ("npz", "h5", "traj"):
+        return backend != "pycharmm"
+    return False
+
+
+def align_handoff_positions_for_charmm_pbc(
+    positions: np.ndarray,
+    *,
+    monomer_offsets: np.ndarray,
+    box_side_A: float,
+    handoff: MdHandoffState | None = None,
+    quiet: bool = False,
+) -> np.ndarray:
+    """Map jaxmd-style coords to CHARMM ``image byres xcen/ycen/zcen 0`` convention.
+
+    JAX-MD keeps each monomer in the primary cell via floor wraps into ``[0, L)``.
+    CHARMM cubic PBC in :func:`prepare_charmm_pbc` centers the primary image on the
+    origin (coordinates near ``[-L/2, L/2]``). Without this shift, the first
+    ``MKIMAT2`` / dynamics pass can place residues in distant periodic images.
+    """
+    if handoff is not None and not handoff_needs_charmm_pbc_alignment(handoff):
+        return np.asarray(positions, dtype=np.float64)
+
+    from mmml.utils.geometry_checks import wrap_monomers_primary_cell
+
+    L = float(box_side_A)
+    if L <= 0.0:
+        raise ValueError(f"box_side_A must be > 0, got {L}")
+    cell = np.diag([L, L, L])
+    pos = wrap_monomers_primary_cell(
+        np.asarray(positions, dtype=np.float64),
+        np.asarray(monomer_offsets, dtype=int),
+        cell,
+    )
+    aligned = pos - 0.5 * L
+    if not quiet:
+        print(
+            "Handoff PBC: aligned jaxmd primary-cell coords to CHARMM image center "
+            f"(L={L:.3f} Å, xcen/ycen/zcen 0)",
+            flush=True,
+        )
+    return aligned
+
+
 def set_handoff_in(state: MdHandoffState | None) -> None:
     _handoff_in.set(state)
 
