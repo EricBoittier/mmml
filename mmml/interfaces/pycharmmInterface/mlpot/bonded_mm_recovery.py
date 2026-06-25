@@ -156,6 +156,12 @@ def restore_post_rescue_coordinates(
     )
 
 
+def _charmm_natom_count() -> int:
+    import pycharmm.coor as coor
+
+    return int(coor.get_natom())
+
+
 def restore_charmm_state_from_restart(
     restart_path: PathLike,
     *,
@@ -191,9 +197,7 @@ def restore_charmm_state_from_restart(
             f"close unit {int(read_unit)}\n"
             "UPDATE\n"
         )
-    import pycharmm.coor as coor
-
-    n = int(coor.get_natom())
+    n = _charmm_natom_count()
     live = get_charmm_positions_array()
     if (
         live is not None
