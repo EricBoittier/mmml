@@ -1553,6 +1553,15 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     stage_overlap_pre,
                     context="Post overlap rescue (pre-dynamics)",
                 )
+                from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+                    save_stabilized_overlap_rescue_snapshot,
+                )
+
+                save_stabilized_overlap_rescue_snapshot(
+                    ctx,
+                    stage_overlap_pre,
+                    label="after MLpot mini (pre-dynamics)",
+                )
 
         baseline_path = write_geometry_baseline_restart(out_dir, tag)
         if baseline_path is not None:

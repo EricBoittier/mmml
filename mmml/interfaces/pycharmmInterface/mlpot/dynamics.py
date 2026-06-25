@@ -3198,6 +3198,18 @@ def run_dynamics_with_io(
                                     f"(step {steps_before_chunk})"
                                 ),
                             )
+                            from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+                                save_stabilized_overlap_rescue_snapshot,
+                            )
+
+                            save_stabilized_overlap_rescue_snapshot(
+                                mlpot_ctx,
+                                overlap,
+                                label=(
+                                    f"{overlap_context} after early-abort recovery "
+                                    f"(step {steps_before_chunk})"
+                                ),
+                            )
                         post_rescue_handoff_applied = False
                         steps_done = steps_before_chunk
                         rerun_chunk = True
@@ -3269,6 +3281,15 @@ def run_dynamics_with_io(
                                 mlpot_ctx,
                                 overlap,
                                 context=f"{overlap_context} at step {steps_done}",
+                            )
+                            from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+                                save_stabilized_overlap_rescue_snapshot,
+                            )
+
+                            save_stabilized_overlap_rescue_snapshot(
+                                mlpot_ctx,
+                                overlap,
+                                label=f"{overlap_context} at step {steps_done}",
                             )
                         if chunk_index + 1 < n_chunks:
                             chunk_io = _materialize_post_rescue_restart_handoff(
