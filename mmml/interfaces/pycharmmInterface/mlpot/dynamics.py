@@ -602,6 +602,8 @@ class MinimizeWithMlpotConfig:
     pre_sd_bonded_recovery_energy_kcalmol: Optional[float] = None
     # Number of bonded-MM SD steps to use for the pre-SD recovery pass.
     pre_sd_bonded_recovery_nstep: int = 200
+    # Also run bonded-MM rescue when MLpot GRMS exceeds this (kcal/mol/Å).
+    pre_sd_bonded_recovery_grms_kcalmol_A: Optional[float] = None
 
 
 def _import_pycharmm_modules():
@@ -3077,14 +3079,28 @@ def minimize_with_mlpot(
                 quiet=not config.verbose,
             )
             # If the USER energy is pathologically high (severe clashes from Packmol
-            # placement that CHARMM MM pre-min could not fully resolve), run a
-            # bonded-only rescue SD *before* the MLpot SD so the ML potential starts
-            # from a geometry it can actually minimize.
+            # placement that CHARMM MM pre-min could not fully resolve), or GRMS is
+            # still large after CHARMM pretreat, run a bonded-only rescue SD *before*
+            # the MLpot SD so the ML potential starts from a geometry it can minimize.
+            from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+
             _threshold = config.pre_sd_bonded_recovery_energy_kcalmol
-            if _threshold is not None and pre_sd_user > float(_threshold):
+            _grms_thr = config.pre_sd_bonded_recovery_grms_kcalmol_A
+            _grms = float(charmm_grms())
+            _user_hot = _threshold is not None and pre_sd_user > float(_threshold)
+            _grms_hot = _grms_thr is not None and _grms > float(_grms_thr)
+            if _user_hot or _grms_hot:
+                _reasons: list[str] = []
+                if _user_hot:
+                    _reasons.append(
+                        f"USER={pre_sd_user:.1f} kcal/mol > {float(_threshold):.1f}"
+                    )
+                if _grms_hot:
+                    _reasons.append(
+                        f"GRMS={_grms:.1f} kcal/mol/Å > {float(_grms_thr):.1f}"
+                    )
                 print(
-                    f"Pre-SD bonded recovery: USER={pre_sd_user:.1f} kcal/mol "
-                    f"> threshold {float(_threshold):.1f} kcal/mol; "
+                    f"Pre-SD bonded recovery: {', '.join(_reasons)}; "
                     f"running bonded-MM SD ({config.pre_sd_bonded_recovery_nstep} steps) "
                     "before MLpot SD minimize",
                     flush=True,
