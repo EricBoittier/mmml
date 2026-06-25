@@ -285,6 +285,60 @@ def test_build_geometry_recovery_candidates_skips_pretreat_mm(tmp_path):
     assert pretreat not in ladder
 
 
+def test_early_abort_trust_in_memory_rejects_cpt_cold_start_blowup():
+    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+        _early_abort_trust_in_memory,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        DynamicsOverlapConfig,
+    )
+
+    cfg = DynamicsOverlapConfig(action="rescue", n_monomers=13)
+    ctx = mock.Mock()
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.charmm_memory_coordinates_usable",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
+        return_value=5692.0,
+    ):
+        assert not _early_abort_trust_in_memory(
+            cfg,
+            integrated=1,
+            chunk_nstep=640,
+            chunk_index=0,
+            cpt=True,
+            mlpot_ctx=ctx,
+        )
+
+
+def test_early_abort_trust_in_memory_accepts_stable_heat_abort():
+    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+        _early_abort_trust_in_memory,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        DynamicsOverlapConfig,
+    )
+
+    cfg = DynamicsOverlapConfig(action="rescue", n_monomers=13)
+    ctx = mock.Mock()
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.charmm_memory_coordinates_usable",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
+        return_value=1.7,
+    ):
+        assert _early_abort_trust_in_memory(
+            cfg,
+            integrated=383,
+            chunk_nstep=500,
+            chunk_index=5,
+            cpt=True,
+            mlpot_ctx=ctx,
+        )
+
+
 def test_attempt_overlap_early_abort_recovery_reports_memory_source(tmp_path):
     cfg = DynamicsOverlapConfig(
         action="rescue",
@@ -293,7 +347,10 @@ def test_attempt_overlap_early_abort_recovery_reports_memory_source(tmp_path):
     )
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.restore_geometry_from_ladder",
-        return_value=Path("<in-memory>"),
+        side_effect=RuntimeError("no disk"),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint._early_abort_trust_in_memory",
+        return_value=True,
     ):
         recovery = attempt_overlap_early_abort_recovery(
             cfg,
@@ -301,6 +358,7 @@ def test_attempt_overlap_early_abort_recovery_reports_memory_source(tmp_path):
             steps_done=2706,
             steps_before_chunk=2560,
             overlap_context="PROD",
+            mlpot_ctx=mock.Mock(),
         )
     assert recovery.ok is True
     assert recovery.source == "memory"
