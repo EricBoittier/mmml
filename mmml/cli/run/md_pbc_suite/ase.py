@@ -692,8 +692,12 @@ def _factory_mmml(
     ml_batch_size: Optional[int] = None,
     ml_max_active_dimers: Optional[int] = None,
     ml_compute_dtype: Optional[str] = None,
+    at_codes_override: np.ndarray | None = None,
 ):
-    at_codes = np.asarray(psf.get_iac(), dtype=int) - 1
+    if at_codes_override is not None:
+        at_codes = np.asarray(at_codes_override, dtype=int)
+    else:
+        at_codes = np.asarray(psf.get_iac(), dtype=int) - 1
     n_types = len(param.get_atc())
     cell_arg = float(cell_scalar) if cell_scalar is not None else False
     t0 = _tmark()

@@ -72,6 +72,19 @@ def test_handoff_widths_from_args_namespace() -> None:
     assert handoff_widths_from_args(Legacy()) == (2.5, 5.0, 0.8)
 
 
+def test_cutoff_grids_from_args_canonical() -> None:
+    from argparse import Namespace
+
+    from mmml.interfaces.pycharmmInterface.cutoffs import cutoff_grids_from_args
+
+    args = Namespace(
+        ml_switch_width_grid="1.5,2.0",
+        mm_switch_on_grid="4.0,5.0",
+        mm_switch_width_grid="0.5",
+    )
+    assert cutoff_grids_from_args(args) == ([1.5, 2.0], [4.0, 5.0], [0.5])
+
+
 def test_ml_scale_matches_calculator_sharpstep(default_cp: CutoffParameters) -> None:
     """CutoffParameters.ml_scale must match the JAX calculator sharpstep definition."""
     r = np.linspace(0.0, 8.0, 50)
