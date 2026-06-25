@@ -13,6 +13,7 @@ import pytest
 from mmml.cli.run.md_evaluate_npz import (
     EvaluateNpzPayload,
     _reference_com_dist_A,
+    classify_ml_regime,
     compare_evaluate_to_reference_npz,
     load_evaluate_npz,
     permute_handoff_array_to_evaluator_z,
@@ -739,6 +740,12 @@ def test_reference_com_dist_A_from_trajectory() -> None:
     assert _reference_com_dist_A(object(), 0) is None
 
 
+def test_classify_ml_regime() -> None:
+    assert classify_ml_regime(5.0, ml_switch_width=0.1, mm_switch_on=6.0) == "pure_ml"
+    assert classify_ml_regime(5.95, ml_switch_width=0.1, mm_switch_on=6.0) == "handoff"
+    assert classify_ml_regime(8.65, ml_switch_width=0.1, mm_switch_on=6.0) == "beyond_switch"
+
+
 def test_save_evaluate_compare_diagnostics_writes_csv_and_summary(tmp_path: Path) -> None:
     per_frame = [
         {
@@ -756,7 +763,7 @@ def test_save_evaluate_compare_diagnostics_writes_csv_and_summary(tmp_path: Path
             "status": "ok",
             "reference_frame": 20,
             "reference_source_index": 200,
-            "com_dist_A": 5.5,
+            "com_dist_A": 5.95,
             "delta_energy_eV": -0.002,
             "abs_delta_energy_eV": 0.002,
             "force_rmse_eV_A": 0.003,
@@ -773,15 +780,25 @@ def test_save_evaluate_compare_diagnostics_writes_csv_and_summary(tmp_path: Path
         tmp_path,
         per_frame,
         backend="pycharmm",
+        ml_switch_width=0.1,
+        mm_switch_on=6.0,
+        mm_switch_width=3.0,
     )
     csv_path = tmp_path / "evaluate_compare_diagnostics.csv"
     assert artifacts["compare_diagnostics_csv"] == str(csv_path)
     assert csv_path.is_file()
     lines = csv_path.read_text(encoding="utf-8").strip().splitlines()
     assert len(lines) == 3
-    assert "com_dist_A" in lines[0]
+    assert "ml_regime" in lines[0]
+    assert "pure_ml" in lines[1]
+    assert "handoff" in lines[2]
     assert summary["n_frames"] == 2
     assert summary["com_dist_A_min"] == pytest.approx(3.0)
-    assert summary["com_dist_A_max"] == pytest.approx(5.5)
+    assert summary["com_dist_A_max"] == pytest.approx(5.95)
+    assert summary["regime_counts"] == {"pure_ml": 1, "handoff": 1, "beyond_switch": 0}
+    assert summary["cutoffs"]["ml_handoff_A"] == pytest.approx([5.9, 6.0])
+    assert summary["cutoffs"]["mm_outer_taper_A"] == pytest.approx([6.0, 9.0])
     assert summary["mean_force_rmse_eV_A"] == pytest.approx((0.25 + 0.003) / 2)
     assert summary["corr_com_force_rmse"] == pytest.approx(-1.0, abs=1e-12)
+    assert summary["mean_force_rmse_eV_A_pure_ml"] == pytest.approx(0.25)
+    assert summary["mean_force_rmse_eV_A_handoff"] == pytest.approx(0.003)

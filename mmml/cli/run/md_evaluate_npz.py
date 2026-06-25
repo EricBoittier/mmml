@@ -478,30 +478,121 @@ def _reference_com_dist_A(reference: Any, ref_frame: int) -> float | None:
     return float(arr[idx])
 
 
+def classify_ml_regime(
+    com_dist_A: float,
+    *,
+    ml_switch_width: float,
+    mm_switch_on: float,
+) -> str:
+    """Classify dimer COM distance relative to the ML taper / handoff."""
+    r = float(com_dist_A)
+    ml_w = float(ml_switch_width)
+    mm_on = float(mm_switch_on)
+    handoff_lo = mm_on - ml_w
+    if r < handoff_lo:
+        return "pure_ml"
+    if r < mm_on:
+        return "handoff"
+    return "beyond_switch"
+
+
+def _cutoff_zone_bounds(
+    *,
+    ml_switch_width: float,
+    mm_switch_on: float,
+    mm_switch_width: float,
+) -> dict[str, tuple[float, float]]:
+    mm_on = float(mm_switch_on)
+    ml_w = float(ml_switch_width)
+    mm_w = float(mm_switch_width)
+    return {
+        "ml_handoff_A": (mm_on - ml_w, mm_on),
+        "mm_outer_taper_A": (mm_on, mm_on + mm_w),
+    }
+
+
+def _annotate_cutoff_zones_on_axes(
+    ax: Any,
+    *,
+    ml_switch_width: float,
+    mm_switch_on: float,
+    mm_switch_width: float,
+) -> None:
+    """Shade ML handoff and MM outer-taper COM-distance intervals."""
+    zones = _cutoff_zone_bounds(
+        ml_switch_width=ml_switch_width,
+        mm_switch_on=mm_switch_on,
+        mm_switch_width=mm_switch_width,
+    )
+    handoff_lo, handoff_hi = zones["ml_handoff_A"]
+    taper_lo, taper_hi = zones["mm_outer_taper_A"]
+    ax.axvspan(handoff_lo, handoff_hi, color="C0", alpha=0.12, label="ML handoff")
+    ax.axvspan(taper_lo, taper_hi, color="C1", alpha=0.10, label="MM outer taper")
+    ax.axvline(handoff_lo, color="C0", ls="--", lw=0.9, alpha=0.7)
+    ax.axvline(handoff_hi, color="C0", ls="-", lw=0.9, alpha=0.7)
+    ax.axvline(taper_hi, color="C1", ls="--", lw=0.9, alpha=0.7)
+
+
 def save_evaluate_compare_diagnostics(
     out_dir: Path,
     per_frame: list[dict[str, Any]],
     *,
     backend: str,
+    ml_switch_width: float | None = None,
+    mm_switch_on: float | None = None,
+    mm_switch_width: float | None = None,
 ) -> tuple[dict[str, str], dict[str, Any]]:
     """Write CSV and optional plots of model–reference errors vs COM distance."""
+    from mmml.interfaces.pycharmmInterface.cutoffs import (
+        DEFAULT_ML_SWITCH_WIDTH,
+        DEFAULT_MM_SWITCH_ON,
+        DEFAULT_MM_SWITCH_WIDTH,
+    )
+
+    ml_w = float(ml_switch_width if ml_switch_width is not None else DEFAULT_ML_SWITCH_WIDTH)
+    mm_on = float(mm_switch_on if mm_switch_on is not None else DEFAULT_MM_SWITCH_ON)
+    mm_w = float(mm_switch_width if mm_switch_width is not None else DEFAULT_MM_SWITCH_WIDTH)
+    zone_bounds = _cutoff_zone_bounds(
+        ml_switch_width=ml_w,
+        mm_switch_on=mm_on,
+        mm_switch_width=mm_w,
+    )
+
     ok = [
         c
         for c in per_frame
         if c.get("status") == "ok" and c.get("com_dist_A") is not None
     ]
     artifacts: dict[str, str] = {}
-    summary: dict[str, Any] = {"n_frames": int(len(ok))}
+    summary: dict[str, Any] = {
+        "n_frames": int(len(ok)),
+        "cutoffs": {
+            "ml_switch_width_A": ml_w,
+            "mm_switch_on_A": mm_on,
+            "mm_switch_width_A": mm_w,
+            "ml_handoff_A": list(zone_bounds["ml_handoff_A"]),
+            "mm_outer_taper_A": list(zone_bounds["mm_outer_taper_A"]),
+        },
+    }
     if not ok:
         return artifacts, summary
 
     rows: list[dict[str, Any]] = []
+    regime_counts: dict[str, int] = {"pure_ml": 0, "handoff": 0, "beyond_switch": 0}
     for c in ok:
+        com_dist = float(c["com_dist_A"])
+        regime = classify_ml_regime(
+            com_dist,
+            ml_switch_width=ml_w,
+            mm_switch_on=mm_on,
+        )
+        regime_counts[regime] = int(regime_counts.get(regime, 0)) + 1
         rows.append(
             {
                 "reference_frame": int(c.get("reference_frame", -1)),
                 "reference_source_index": c.get("reference_source_index"),
-                "com_dist_A": float(c["com_dist_A"]),
+                "com_dist_A": com_dist,
+                "ml_regime": regime,
                 "delta_energy_eV": c.get("delta_energy_eV"),
                 "abs_delta_energy_eV": c.get("abs_delta_energy_eV"),
                 "force_rmse_eV_A": c.get("force_rmse_eV_A"),
@@ -510,6 +601,7 @@ def save_evaluate_compare_diagnostics(
             }
         )
     rows.sort(key=lambda r: (float(r["com_dist_A"]), int(r["reference_frame"])))
+    summary["regime_counts"] = regime_counts
 
     csv_path = Path(out_dir) / "evaluate_compare_diagnostics.csv"
     csv_path.parent.mkdir(parents=True, exist_ok=True)
@@ -536,6 +628,13 @@ def save_evaluate_compare_diagnostics(
         summary["max_force_rmse_eV_A"] = float(force_rmse.max())
         if int(force_rmse.shape[0]) >= 2:
             summary["corr_com_force_rmse"] = float(np.corrcoef(com_f, force_rmse)[0, 1])
+        for regime in ("pure_ml", "handoff", "beyond_switch"):
+            mask = np.asarray([r["ml_regime"] == regime for r in rows], dtype=bool)
+            if not np.any(mask):
+                continue
+            vals = force_rmse[mask]
+            if vals.size:
+                summary[f"mean_force_rmse_eV_A_{regime}"] = float(vals.mean())
     if rows[0].get("abs_delta_energy_eV") is not None:
         abs_de = np.asarray(
             [float(r["abs_delta_energy_eV"]) for r in rows if r.get("abs_delta_energy_eV") is not None],
@@ -549,12 +648,24 @@ def save_evaluate_compare_diagnostics(
     except Exception:
         return artifacts, summary
 
+    def _decorate_cutoff_axes(ax: Any) -> None:
+        _annotate_cutoff_zones_on_axes(
+            ax,
+            ml_switch_width=ml_w,
+            mm_switch_on=mm_on,
+            mm_switch_width=mm_w,
+        )
+        handles, labels = ax.get_legend_handles_labels()
+        if handles:
+            ax.legend(handles, labels, loc="best", fontsize=8)
+
     if rows[0].get("force_rmse_eV_A") is not None:
         force_rmse = np.asarray([float(r["force_rmse_eV_A"]) for r in rows], dtype=np.float64)
-        fig, ax = plt.subplots(figsize=(6, 4))
-        ax.scatter(com, force_rmse, s=18, alpha=0.85)
+        fig, ax = plt.subplots(figsize=(6.5, 4))
+        _decorate_cutoff_axes(ax)
+        ax.scatter(com, force_rmse, s=18, alpha=0.85, zorder=3)
         order = np.argsort(com)
-        ax.plot(com[order], force_rmse[order], lw=1.0, alpha=0.5, color="C1")
+        ax.plot(com[order], force_rmse[order], lw=1.0, alpha=0.5, color="C1", zorder=2)
         ax.set_xlabel("COM distance (Å)")
         ax.set_ylabel("Force RMSE (eV/Å)")
         ax.set_title(f"Force error vs COM distance ({backend})")
@@ -564,8 +675,9 @@ def save_evaluate_compare_diagnostics(
         plt.close(fig)
         artifacts["force_rmse_vs_com_png"] = str(png_path)
 
-        fig, ax = plt.subplots(figsize=(6, 4))
-        ax.scatter(com, force_rmse, s=18, alpha=0.85, label="per frame")
+        fig, ax = plt.subplots(figsize=(6.5, 4))
+        _decorate_cutoff_axes(ax)
+        ax.scatter(com, force_rmse, s=18, alpha=0.85, label="per frame", zorder=3)
         if int(com.shape[0]) >= 4:
             n_bins = int(min(8, max(3, com.shape[0] // 3)))
             edges = np.linspace(float(com.min()), float(com.max()), n_bins + 1)
@@ -578,11 +690,21 @@ def save_evaluate_compare_diagnostics(
                 centers.append(float(0.5 * (lo + hi)))
                 means.append(float(force_rmse[mask].mean()))
             if centers:
-                ax.plot(centers, means, "o-", lw=1.5, color="C3", label="binned mean")
+                ax.plot(
+                    centers,
+                    means,
+                    "o-",
+                    lw=1.5,
+                    color="C3",
+                    label="binned mean",
+                    zorder=3,
+                )
         ax.set_xlabel("COM distance (Å)")
         ax.set_ylabel("Force RMSE (eV/Å)")
         ax.set_title(f"Binned force RMSE vs COM ({backend})")
-        ax.legend()
+        handles, labels = ax.get_legend_handles_labels()
+        if handles:
+            ax.legend(handles, labels, loc="best", fontsize=8)
         fig.tight_layout()
         binned_path = Path(out_dir) / "force_rmse_vs_com_binned.png"
         fig.savefig(binned_path, dpi=150)
@@ -591,8 +713,9 @@ def save_evaluate_compare_diagnostics(
 
     if rows[0].get("abs_delta_energy_eV") is not None:
         abs_de = np.asarray([float(r["abs_delta_energy_eV"]) for r in rows], dtype=np.float64)
-        fig, ax = plt.subplots(figsize=(6, 4))
-        ax.scatter(com, abs_de, s=18, alpha=0.85, color="C2")
+        fig, ax = plt.subplots(figsize=(6.5, 4))
+        _decorate_cutoff_axes(ax)
+        ax.scatter(com, abs_de, s=18, alpha=0.85, color="C2", zorder=3)
         ax.set_xlabel("COM distance (Å)")
         ax.set_ylabel("|ΔE| (eV)")
         ax.set_title(f"Energy error vs COM distance ({backend})")
@@ -1651,6 +1774,7 @@ def _evaluate_reference_trajectory(args: Any, ctx: dict[str, Any]) -> int:
     ref_forces_list: list[np.ndarray] = []
     per_frame_compare: list[dict[str, Any]] = []
     ref_energy_unit, ref_force_unit = resolve_reference_units(reference.path, args)
+    ml_w, mm_on, mm_w = _mmml_cutoff_args(args)
 
     if not getattr(args, "quiet", False):
         print(
@@ -1728,6 +1852,11 @@ def _evaluate_reference_trajectory(args: Any, ctx: dict[str, Any]) -> int:
             com_dist = _reference_com_dist_A(reference, int(ref_frame))
             if com_dist is not None:
                 cmp["com_dist_A"] = com_dist
+                cmp["ml_regime"] = classify_ml_regime(
+                    com_dist,
+                    ml_switch_width=ml_w,
+                    mm_switch_on=mm_on,
+                )
         except Exception as exc:
             cmp = {
                 "status": "error",
@@ -1841,6 +1970,9 @@ def _evaluate_reference_trajectory(args: Any, ctx: dict[str, Any]) -> int:
             out_dir,
             per_frame_compare,
             backend=backend,
+            ml_switch_width=ml_w,
+            mm_switch_on=mm_on,
+            mm_switch_width=mm_w,
         )
         artifacts.update(diag_artifacts)
         if diag_summary.get("n_frames", 0) > 0:
