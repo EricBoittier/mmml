@@ -76,6 +76,11 @@ def _charmm_lib_path() -> Path | None:
     return None
 
 
+def charmm_lib_available() -> bool:
+    """Return True when ``libcharmm.so`` is present under ``CHARMM_LIB_DIR``."""
+    return _charmm_lib_path() is not None
+
+
 def _run_ldd(lib: Path) -> str:
     try:
         proc = subprocess.run(

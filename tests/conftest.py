@@ -53,8 +53,9 @@ def _matches_any(rel: str, prefixes: tuple[str, ...]) -> bool:
 
 def can_import_pycharmm() -> bool:
     try:
-        __import__("pycharmm")
-        return True
+        from mmml.interfaces.pycharmmInterface.charmm_mpi import charmm_lib_available
+
+        return charmm_lib_available()
     except Exception:
         return False
 

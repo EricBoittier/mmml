@@ -140,13 +140,16 @@ def test_minimize_with_mlpot_runs_two_sd_passes_when_fixed_selection_set():
         "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
-    ) as mock_domdec:
+    ) as mock_domdec, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+    ):
         assert minimize_with_mlpot(config) is True
 
     mock_domdec.assert_called_once_with(context="MLpot SD minimize")
 
     assert minimize.run_sd.call_count == 2
-    assert pycharmm.nbonds.set_imgfrq.call_count == 0
+    assert pycharmm.nbonds.set_imgfrq.call_count == 4
+    assert pycharmm.nbonds.set_inbfrq.call_count == 4
     cons_fix.setup.assert_called_once_with(fixed_sel)
     cons_fix.turn_off.assert_called_once()
 
@@ -171,6 +174,8 @@ def test_minimize_with_mlpot_asserts_user_when_ctx_provided():
         "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.assert_mlpot_user_active",
     ) as assert_user:
@@ -204,6 +209,8 @@ def test_minimize_with_mlpot_single_pass_when_no_fix():
         "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
     ):
         minimize_with_mlpot(config)
 
