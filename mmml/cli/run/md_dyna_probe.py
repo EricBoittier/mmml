@@ -172,7 +172,7 @@ def run_dyna_probe(args: Any) -> int:
         apply_mlpot_jax_compilation_cache_env,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import build_nve_dynamics, run_dynamics
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import ensure_mlpot_user_before_dynamics
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import assert_mlpot_user_active
 
     prepare_serial_charmm_mpi_env()
     apply_mlpot_jax_compilation_cache_env(quiet=True)
@@ -197,7 +197,7 @@ def run_dyna_probe(args: Any) -> int:
         use_pbc=use_pbc,
         L=L,
     )
-    ensure_mlpot_user_before_dynamics(mlpot_ctx, context="dyna-probe")
+    assert_mlpot_user_active(mlpot_ctx, context="dyna-probe", quiet=quiet)
 
     ref_path = getattr(args, "evaluate_reference_npz", None) or getattr(
         args, "reference_npz", None

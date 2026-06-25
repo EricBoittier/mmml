@@ -130,8 +130,14 @@ def normalize_metrics_to_ev(
         out["forces_eV_A"] = f_arr.tolist() if f_arr.ndim > 1 else f_arr
         out["max_force_eV_A"] = float(np.abs(f_arr).max())
         out["rms_force_eV_A"] = float(np.sqrt(np.mean(f_arr**2)))
-    out.pop("force_sources_all", None)
     out["units"] = dict(EVALUATE_ARTIFACT_UNITS)
+    return out
+
+
+def metrics_for_json_export(metrics: dict[str, Any]) -> dict[str, Any]:
+    """Drop non-JSON fields (e.g. ndarray force-source dict) before writing evaluate.json."""
+    out = dict(metrics)
+    out.pop("force_sources_all", None)
     return out
 
 
@@ -2227,7 +2233,7 @@ def run_evaluate_npz(args: Any) -> int:
             "epsilon": payload.epsilon is not None,
             "sigma": payload.sigma is not None,
         },
-        "metrics": metrics,
+        "metrics": metrics_for_json_export(metrics),
     }
 
     pos_out = np.asarray(atoms.get_positions(), dtype=np.float64)
