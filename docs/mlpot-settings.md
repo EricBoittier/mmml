@@ -52,6 +52,8 @@ Use:
 
 Start with `r_min = 5.5–6.5 Å` for DCM testing, then tune from scan plots. This restraint is independent of `--flat-bottom-radius`: the flat-bottom sphere keeps the cluster/droplet contained, while the COM lower wall prevents two monomers from collapsing into each other.
 
+The COM wall is evaluated in the **JAX/MMML callback** (`calculator_utils.apply_com_lower_wall`), not as a CHARMM bonded/MMFP term. It applies to pairwise monomer COM distances (MIC-aware under PBC).
+
 ## Current Equations
 
 Default runs use complementary handoff:

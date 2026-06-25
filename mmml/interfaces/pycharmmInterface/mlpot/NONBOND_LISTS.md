@@ -142,6 +142,8 @@ With vacuum defaults (`cutnb=18`, `ctofnb=17`), the skin is **0.5 Å**. `QDONB` 
 
 When MLpot is active, `UPIMNB` calls `MKIMNB_MLPOT` to build image nonbond exclusions that account for ML atom pairs ([`upimag_util.F90`](../../../setup/image/upimag_util.F90)).
 
+**PBC cutoff clamping:** [`pbc_nbond_cutoffs()`](../nbonds_config.py) scales `cutnb`/`cutim`/switch radii to stay below `L/2 - 1 Å`. The exclusion cutoff `ctexnb` passed to CHARMM may be bumped by **+1 Å** when that stays strictly below `L/2` (some CHARMM builds segfault when `ctexnb == cutnb` exactly). On small capped boxes the bump is skipped so `ctexnb` remains at `cutnb`.
+
 ### Unsafe operations with MLpot registered
 
 Re-calling `update_bnbnd()` / `upinb` after MLpot registration can **segfault** on large all-ML systems. The workflow therefore:
@@ -268,7 +270,7 @@ Ranked by relevance to NVE instabilities observed in [`dcm_nve_scaling`](../../.
 |---|-------|---------|--------------|------------|
 | 1 | Stale CHARMM lists after mini | Force jump at first NVE step; COM outlier at frame 0 | `inbfrq=0` during SD; lists not synced | Keep `pre_nve_charmm_update` on (default) |
 | 2 | Fixed `inbfrq=50` vs heuristic `-1` | Drift/outliers worse at `inbfrq=50` than `-1` | Lists rebuilt every 12.5 fs (at 0.25 fs) regardless of motion; Python updates every step | `--dyn-inbfrq -1` for vacuum NVE |
-| 3 | Dual-list cutoff mismatch | Subtle force inconsistency at long range | CHARMM ~18 Å vs Python MM 7 Å vs PhysNet cutoff | Low impact when ML ELEC/VDW are BLOCK-zeroed; watch partial-MM paths |
+| 3 | Dual-list cutoff mismatch | Subtle force inconsistency at long range | CHARMM ~18 Å vs Python switched-MM reach **13 Å** (8+5 defaults) vs PhysNet cutoff | Low impact when ML ELEC/VDW are BLOCK-zeroed; watch partial-MM paths |
 | 4 | Unused Fortran pair indices | N/A today (Python ignores `idxu/idxv`) | CHARMM and Python disagree at Fortran layer | Future embedding work must reconcile |
 | 5 | `mlpot_is_init` caching | Stale `idxi/j/u/v` if `mlpot_update` skipped | Updates only on `QDONB`; not every ENER | Low impact today; relevant for future embedding |
 | 6 | jax-md skin / interval (PBC) | Force discontinuities near cutoff | Aggressive `jax_md_skin_distance` or `update_interval > 1` | Defaults: interval=1, skin=0 |
