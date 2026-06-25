@@ -1,0 +1,58 @@
+"""Unit tests for cluster geometry helpers."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+    atoms_from_reference_npz,
+    reference_frame_geometry,
+)
+
+
+def test_reference_frame_geometry_trajectory_npz(tmp_path: Path) -> None:
+    path = tmp_path / "ref.npz"
+    z_row = np.array([[6, 17, 17, 1, 1, 6, 17, 17, 1, 1]], dtype=int)
+    r_row = np.random.default_rng(0).normal(size=(1, 10, 3))
+    np.savez_compressed(
+        path,
+        N=np.array([10], dtype=int),
+        Z=z_row,
+        R=r_row,
+        E_eV=np.array([-43.0]),
+    )
+    z, r = reference_frame_geometry(path, frame=0)
+    assert z.shape == (10,)
+    assert r.shape == (10, 3)
+    np.testing.assert_array_equal(z, z_row[0])
+    np.testing.assert_allclose(r, r_row[0])
+
+
+def test_reference_frame_geometry_respects_n_per_frame(tmp_path: Path) -> None:
+    path = tmp_path / "padded.npz"
+    z_full = np.array([[6, 17, 17, 1, 1, 0, 0, 0, 0, 0]], dtype=int)
+    r_full = np.arange(30, dtype=float).reshape(1, 10, 3)
+    np.savez_compressed(
+        path,
+        N=np.array([5], dtype=int),
+        Z=z_full,
+        R=r_full,
+    )
+    z, r = reference_frame_geometry(path, frame=0)
+    assert z.shape == (5,)
+    assert r.shape == (5, 3)
+    np.testing.assert_array_equal(z, z_full[0, :5])
+
+
+def test_atoms_from_reference_npz(tmp_path: Path) -> None:
+    pytest.importorskip("ase")
+    path = tmp_path / "ref.npz"
+    z_row = np.array([[6, 17, 17, 1, 1]], dtype=int)
+    r_row = np.zeros((1, 5, 3))
+    np.savez_compressed(path, N=np.array([5], dtype=int), Z=z_row, R=r_row)
+    atoms = atoms_from_reference_npz(path)
+    assert len(atoms) == 5
+    np.testing.assert_array_equal(atoms.get_atomic_numbers(), z_row[0])

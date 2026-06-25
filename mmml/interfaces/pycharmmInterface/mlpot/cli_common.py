@@ -892,6 +892,11 @@ def build_ase_cluster(
     n_molecules: int,
     spacing: float,
 ) -> Tuple[np.ndarray, np.ndarray]:
+    """Build a homogeneous CHARMM PSF-ordered cluster for ASE / hybrid calculators.
+
+    Residues with bundled 3D templates (ACO, MEOH) use those templates; all others
+    use the make-res monomer recipe plus composition placement (never flat IC tables).
+    """
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     from mmml.cli.run.md_pbc_suite.cluster import _build_psf_ordered_cluster
     from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
@@ -900,6 +905,28 @@ def build_ase_cluster(
     sync_charmm_positions(r)
     validate_cluster_geometry(r, n_molecules=n_molecules)
     return z, r
+
+
+def reference_frame_geometry(
+    path: str | Path,
+    *,
+    frame: int = 0,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Load ``(Z, R)`` from a reference or handoff NPZ (see ``cluster_geometry``)."""
+    from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+        reference_frame_geometry as _reference_frame_geometry,
+    )
+
+    return _reference_frame_geometry(path, frame=frame)
+
+
+def atoms_from_reference_npz(path: str | Path, *, frame: int = 0) -> Any:
+    """ASE ``Atoms`` from a reference or handoff NPZ frame."""
+    from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+        atoms_from_reference_npz as _atoms_from_reference_npz,
+    )
+
+    return _atoms_from_reference_npz(path, frame=frame)
 
 
 def composition_tag(composition: list[tuple[str, int]] | None, residue: str, n_molecules: int) -> str:
