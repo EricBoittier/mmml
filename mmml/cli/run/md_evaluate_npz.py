@@ -27,6 +27,12 @@ from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
 
 load_evaluate_npz = load_geometry_npz
 
+HARTREE_TO_EV = 27.211386245988
+EV_TO_HARTREE = 1.0 / HARTREE_TO_EV
+BOHR_TO_ANG = 0.529177210903
+HARTREE_BOHR_TO_EV_ANG = HARTREE_TO_EV / BOHR_TO_ANG
+EV_ANG_TO_HARTREE_BOHR = BOHR_TO_ANG / HARTREE_TO_EV
+
 
 def _evaluate_int_arg(args: Any, name: str, default: int) -> int:
     value = getattr(args, name, default)
