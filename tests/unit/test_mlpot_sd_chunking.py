@@ -19,7 +19,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
 def test_mlpot_sd_chunk_nstep_smaller_for_pbc():
     ctx = MagicMock(use_pbc=True)
     cfg = MinimizeWithMlpotConfig(mlpot_ctx=ctx)
-    assert _mlpot_sd_chunk_nstep(cfg) == 200
+    assert _mlpot_sd_chunk_nstep(cfg) == 50
     cfg.mlpot_ctx = MagicMock(use_pbc=False)
     assert _mlpot_sd_chunk_nstep(cfg) == 500
     cfg.sd_chunk_nstep = 77

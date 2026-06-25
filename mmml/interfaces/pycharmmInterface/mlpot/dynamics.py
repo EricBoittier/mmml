@@ -686,7 +686,7 @@ def _mlpot_sd_chunk_nstep(config: MinimizeWithMlpotConfig) -> int:
     if config.sd_chunk_nstep is not None:
         return max(1, int(config.sd_chunk_nstep))
     pbc = bool(getattr(config.mlpot_ctx, "use_pbc", False)) if config.mlpot_ctx else False
-    return 200 if pbc else 500
+    return 50 if pbc else 500
 
 
 def _maybe_abort_sd_on_grms(

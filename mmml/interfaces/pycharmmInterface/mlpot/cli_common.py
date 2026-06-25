@@ -1649,18 +1649,25 @@ def classify_hybrid_charmm_grms_mismatch(
     desync_max_ratio: float = 10.0,
     charmm_bonded_ok_max: float = 5.0,
 ) -> GrmsMismatchKind:
-    """Classify hybrid/CHARMM GRMS disagreement for resync vs geometry recovery."""
+    """Classify hybrid/CHARMM GRMS disagreement for resync vs geometry recovery.
+
+    Hybrid GRMS from the JAX calculator is authoritative for MLpot.  CHARMM
+    ``get_grms()`` often stays ~1 kcal/mol/Å with ELEC/VDW blocked on ML atoms,
+    so a high CHARMM/hybrid ratio with low hybrid is healthy, not desync.
+    """
     if not (np.isfinite(hybrid) and np.isfinite(charmm)):
         return "unknown"
     if charmm <= 1.0e-8:
-        return "ok" if hybrid <= warn_ratio else "geometry_stress"
+        return "ok" if hybrid <= charmm_bonded_ok_max else "geometry_stress"
+    if hybrid <= charmm_bonded_ok_max:
+        return "ok"
+    if charmm <= charmm_bonded_ok_max:
+        return "geometry_stress"
     ratio = float(max(hybrid / charmm, charmm / hybrid))
     if ratio <= warn_ratio:
         return "ok"
     if ratio <= desync_max_ratio:
         return "desync_suspected"
-    if charmm <= charmm_bonded_ok_max:
-        return "geometry_stress"
     return "both_high"
 
 
