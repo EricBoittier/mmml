@@ -51,6 +51,42 @@ def test_expand_repeated_jobs() -> None:
     assert run_ids == ["equil", "prod", "nve.0", "nve.1"]
 
 
+def test_unique_output_dir_if_exists_keeps_missing_path(tmp_path) -> None:
+    from mmml.cli.run.md_campaign import _unique_output_dir_if_exists
+
+    missing = tmp_path / "fresh_campaign"
+    assert _unique_output_dir_if_exists(missing, resume=False) == missing.resolve()
+
+
+def test_unique_output_dir_if_exists_adds_uuid_suffix(tmp_path) -> None:
+    from mmml.cli.run.md_campaign import _unique_output_dir_if_exists
+
+    existing = tmp_path / "dcm_large_25"
+    existing.mkdir()
+    got = _unique_output_dir_if_exists(existing, resume=False)
+    assert got.parent == existing.parent
+    assert got.name.startswith("dcm_large_25_")
+    assert len(got.name) == len("dcm_large_25_") + 8
+    assert not got.exists()
+
+
+def test_unique_output_dir_if_exists_honors_resume(tmp_path) -> None:
+    from mmml.cli.run.md_campaign import _unique_output_dir_if_exists
+
+    existing = tmp_path / "campaign"
+    existing.mkdir()
+    assert _unique_output_dir_if_exists(existing, resume=True) == existing.resolve()
+
+
+def test_lookup_resolved_output_dir_prefers_in_run_path(tmp_path) -> None:
+    from mmml.cli.run.md_campaign import _lookup_resolved_output_dir
+
+    campaign = _sample_campaign()
+    resolved = {"equil": (tmp_path / "equil_run_abc12345").resolve()}
+    got = _lookup_resolved_output_dir(resolved, campaign, "equil")
+    assert got == resolved["equil"]
+
+
 def test_resolve_output_dir_repeat_subdirs(tmp_path) -> None:
     from mmml.cli.run.md_campaign import _resolve_output_dir
 

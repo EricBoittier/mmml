@@ -1064,18 +1064,25 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--run-all",
         action="store_true",
-        help="Run all jobs from a campaign config in dependency order (in-process).",
+        help=(
+            "Run all jobs from a campaign config in dependency order (in-process). "
+            "If the campaign output dir already exists, a new suffixed directory is used "
+            "unless --resume-campaign is set."
+        ),
     )
     parser.add_argument(
         "--resume-campaign",
         action="store_true",
-        help="Skip campaign jobs whose output-dir/handoff already exists.",
+        help="Skip campaign jobs whose output-dir/handoff already exists (reuse output dirs).",
     )
     parser.add_argument(
         "--campaign-output-dir",
         type=Path,
         default=None,
-        help="Directory for campaign_plan.json and campaign_summary.json.",
+        help=(
+            "Directory for campaign_plan.json and campaign_summary.json. "
+            "With --run-all, an existing path gets a UUID suffix unless resuming."
+        ),
     )
     parser.add_argument(
         "--continue-from",
