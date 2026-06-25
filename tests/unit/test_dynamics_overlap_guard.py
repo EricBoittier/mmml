@@ -167,7 +167,7 @@ def test_overlap_early_abort_recovery_retries_chunk(tmp_path):
 
 
 def test_overlap_early_abort_in_memory_recovery_skips_post_rescue(tmp_path):
-    """In-memory early abort keeps CPT velocities; no Boltzmann reassign."""
+    """Single-chunk early abort falls back to in-process continuation (no READYN slot)."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
     from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
         GeometryRecoveryResult,
@@ -220,6 +220,83 @@ def test_overlap_early_abort_in_memory_recovery_skips_post_rescue(tmp_path):
     assert calls[1]["restart"] is False
     assert calls[1]["iasvel"] == 0
     assert calls[1]["iunrea"] == -1
+
+
+def test_overlap_early_abort_materializes_restart_for_readyn(tmp_path, capsys):
+    """Multi-chunk early abort writes a valid scratch restart and READYN-retries."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+        GeometryRecoveryResult,
+    )
+
+    final_res = tmp_path / "prod.res"
+    slot_a = tmp_path / "prod.overlap_a.res"
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        min_distance_A=0.5,
+        check_interval=500,
+        n_monomers=2,
+        use_pbc=True,
+    )
+    calls: list[tuple[dict, object]] = []
+
+    def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
+        calls.append((dict(kw), _io))
+        if _io is not None and _io.restart_write is not None:
+            step = {1: 40, 2: 500, 3: 1000}.get(len(calls), 1000)
+            Path(_io.restart_write).write_text(f"REST {step} 1\n", encoding="utf-8")
+        return mock.Mock()
+
+    def fake_materialize(chunk_io, *, steps_before_chunk, overlap_context):
+        read = Path(chunk_io.restart_read or slot_a)
+        read.write_text("REST 0 500\n", encoding="utf-8")
+        from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+
+        print(
+            f"overlap ({overlap_context}): early-abort restart handoff from "
+            f"{read.name} at global step {steps_before_chunk} (READYN)",
+            flush=True,
+        )
+        return CharmmTrajectoryFiles(
+            restart_read=read,
+            restart_write=chunk_io.restart_write,
+            trajectory=chunk_io.trajectory,
+            restart_read_unit=chunk_io.restart_read_unit,
+            restart_write_unit=chunk_io.restart_write_unit,
+            trajectory_unit=chunk_io.trajectory_unit,
+        )
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        side_effect=fake_chunk,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+        return_value=(5.0, False),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
+        side_effect=lambda path: int(Path(path).read_text().split()[1]),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.attempt_overlap_early_abort_recovery",
+        return_value=GeometryRecoveryResult(True, "memory"),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._materialize_early_abort_restart_handoff",
+        side_effect=fake_materialize,
+    ) as materialize:
+        run_dynamics_with_io(
+            {"nstep": 1000, "cpt": True, "hoover reft": 90.0},
+            CharmmTrajectoryFiles(restart_write=final_res),
+            overlap=cfg,
+            overlap_context="PROD",
+            mlpot_ctx=mock.Mock(),
+        )
+
+    assert len(calls) == 3
+    materialize.assert_called_once()
+    assert calls[1][0]["restart"] is True
+    assert calls[1][0]["iasvel"] == 0
+    assert "early-abort restart handoff" in capsys.readouterr().out
 
 
 def test_resolve_defaults_to_rescue_and_1p5A():
