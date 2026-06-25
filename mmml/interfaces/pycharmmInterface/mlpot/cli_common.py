@@ -1579,6 +1579,8 @@ def refresh_mlpot_energy_and_grms(
     *,
     context: str = "MLpot energy refresh",
     silent_charmm: bool = True,
+    reregister: bool = True,
+    quiet: bool = False,
 ) -> float:
     """Re-apply MLpot BLOCK, run ``ENER FORCE``, return GRMS (kcal/mol/Å).
 
@@ -1587,12 +1589,15 @@ def refresh_mlpot_energy_and_grms(
 
     ``silent_charmm`` (default True) runs ``ENER FORCE`` at PRNLev/WRNLev 0 so gate
     checks do not spam nonbond list banners; Python ``context`` lines still print.
+
+    Set ``reregister=False`` for evaluate-npz frame loops where MLpot BLOCK is
+    already active (avoids repeated Rich BLOCK banners and redundant ``upinb``).
     """
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
 
-    if mlpot_ctx is not None:
-        mlpot_ctx.reregister_mlpot()
+    if mlpot_ctx is not None and reregister:
+        mlpot_ctx.reregister_mlpot(quiet=quiet)
     if silent_charmm:
         from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
 
