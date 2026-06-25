@@ -712,9 +712,9 @@ def _factory_mmml(
     factory = setup_calculator(
         ATOMS_PER_MONOMER=atoms_per,
         N_MONOMERS=n_mol,
-        ml_cutoff_distance=ml_cut,
+        ml_switch_width=ml_cut,
         mm_switch_on=mm_sw,
-        mm_cutoff=mm_cut,
+        mm_switch_width=mm_cut,
         doML=do_ml,
         doMM=True,
         doML_dimer=do_ml_dimer,
@@ -744,7 +744,11 @@ def _factory_mmml(
         ml_compute_dtype=ml_compute_dtype,
     )
     t1 = _tmark()
-    cutoff = CutoffParameters(ml_cutoff=ml_cut, mm_switch_on=mm_sw, mm_cutoff=mm_cut)
+    cutoff = CutoffParameters(
+        ml_switch_width=ml_cut,
+        mm_switch_on=mm_sw,
+        mm_switch_width=mm_cut,
+    )
     calc_result = factory(
         atomic_numbers=z,
         atomic_positions=r,

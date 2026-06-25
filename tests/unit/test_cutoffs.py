@@ -17,6 +17,7 @@ from mmml.interfaces.pycharmmInterface.cutoffs import (
     GAMMA_OFF,
     GAMMA_ON,
     CutoffParameters,
+    _resolve_ml_switch_width,
     handoff_widths_from_args,
 )
 
@@ -205,3 +206,8 @@ def test_simple_cosine_switches_match_endpoints() -> None:
 
 def test_gamma_constants_match_calculator_module() -> None:
     assert GAMMA_ON == CALC_GAMMA_ON
+
+
+def test_resolve_ml_switch_width_prefers_deprecated_distance() -> None:
+    assert _resolve_ml_switch_width(0.1, ml_cutoff_distance=0.5) == pytest.approx(0.5)
+    assert _resolve_ml_switch_width(0.1, ml_cutoff=0.75) == pytest.approx(0.75)

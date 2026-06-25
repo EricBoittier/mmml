@@ -7,6 +7,46 @@ from typing import Any
 
 import numpy as np
 
+_charmm_session_ready = False
+
+
+def ensure_charmm_session_ready(
+    *,
+    prnlev: int = 5,
+    warnlev: int = 5,
+    bomlev: int = -2,
+    force: bool = False,
+) -> None:
+    """Initialize CHARMM the same way ``mmml md-system`` does before PSF/minimize work.
+
+    Jupyter kernels often leave ``bomlev`` at 0 (CHARMM default). Any benign warning
+    during IC build, BLOCK, or minimization then triggers abnormal termination or
+    bond-force segfaults. Call once per kernel before ``build_ase_cluster`` or hybrid
+    calculator setup.
+    """
+    global _charmm_session_ready
+    import mmml.interfaces.pycharmmInterface.import_pycharmm as pyci  # noqa: F401
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import reset_block
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        apply_charmm_verbosity,
+        prepare_charmm_vacuum,
+    )
+    from mmml.interfaces.pycharmmInterface.utils import set_up_directories
+
+    if _charmm_session_ready and not force:
+        return
+
+    set_up_directories()
+    apply_charmm_verbosity(prnlev=int(prnlev), warnlev=int(warnlev), bomlev=int(bomlev))
+    prepare_charmm_vacuum()
+    reset_block()
+    _charmm_session_ready = True
+
+
+def prepare_charmm_notebook(**kwargs: Any) -> None:
+    """Alias for :func:`ensure_charmm_session_ready` (notebook entry point)."""
+    ensure_charmm_session_ready(**kwargs)
+
 
 def reference_frame_geometry(
     path: str | Path,
@@ -47,6 +87,7 @@ def prepare_vacuum_nbonds_for_mm() -> None:
     MMML calculator. Do **not** call after ``pycharmm.MLpot`` is registered (unsafe
     ``update_bnbnd`` / ``upinb`` on large systems).
     """
+    ensure_charmm_session_ready()
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import setup_charmm_nbonds
 
     setup_charmm_nbonds()
