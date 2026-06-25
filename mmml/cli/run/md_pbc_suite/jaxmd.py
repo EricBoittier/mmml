@@ -24,6 +24,10 @@ from mmml.interfaces.pycharmmInterface.cutoffs import (
     DEFAULT_MM_SWITCH_WIDTH,
     handoff_widths_from_args,
 )
+from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
+    DEFAULT_JAX_MD_SKIN_DISTANCE_A,
+    format_mm_pair_update_stats_summary,
+)
 from mmml.interfaces.pycharmmInterface.mmml_calculator import CutoffParameters, setup_calculator
 from mmml.paths import default_meoh_template_pdb
 
@@ -330,10 +334,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--jax-md-skin-distance",
         type=float,
-        default=0.0,
+        default=DEFAULT_JAX_MD_SKIN_DISTANCE_A,
         help=(
             "Reuse cached MM neighbor pairs while max displacement since last update is below "
-            "this (Å). Default 0: rebuild every update (recommended for PBC NVE/NVT)."
+            f"this (Å). Default {DEFAULT_JAX_MD_SKIN_DISTANCE_A}: safe with jax-md dr_threshold=0.5 Å "
+            "(Verlet skin); use 0 only for debugging (rebuild every step, much slower)."
         ),
     )
     p.add_argument(
@@ -1313,6 +1318,13 @@ def main(argv: list[str] | None = None) -> int:
             summary["mm_pair_update_stats"] = dict(update_fn_live.get_stats())
         except Exception:
             pass
+    stats = summary.get("mm_pair_update_stats")
+    if isinstance(stats, dict) and stats:
+        summary_line = format_mm_pair_update_stats_summary(stats)
+        summary["mm_pair_reuse_fraction"] = float(stats.get("reused", 0)) / max(
+            1, int(stats.get("calls", 0))
+        )
+        print(summary_line, flush=True)
     (out_dir / "suite_summary_jaxmd.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(json.dumps(summary, indent=2))
     for traj_path in traj_paths:
