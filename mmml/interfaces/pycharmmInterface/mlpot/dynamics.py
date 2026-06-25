@@ -2395,8 +2395,7 @@ def _apply_overlap_chunk_dynamics_kw(
     elif preserve_cold_start and (
         "hoover reft" in chunk_kw or bool(chunk_kw.get("cpt"))
     ):
-        # Hoover CPT chunk 0: preserve start=True for single-dyna heat cold start.
-        # Equi/NPT may still use start=False with iasvel=1 after a Boltzmann assign.
+        # Hoover CPT chunk 0: preserve start=True for single-dyna cold start (heat/NPT).
         if bool(chunk_kw.get("start")):
             chunk_kw["iasvel"] = 1
         elif int(chunk_kw.get("iasvel", 0)) == 1:
@@ -2564,6 +2563,7 @@ def run_dynamics_with_io(
     loose_pbc: bool = False,
     overlap_run_state_dir: Path | None = None,
     overlap_run_state_every_chunks: int = 0,
+    segment_restart_read: Path | str | None = None,
 ) -> Any:
     """Run dynamics and open/close CharmmFile units from ``io``.
 
@@ -3030,19 +3030,15 @@ def run_dynamics_with_io(
                         overlap_context=overlap_context,
                         overlap_run_state_dir=overlap_run_state_dir,
                         overlap_restart_read=overlap_restart_read_for_chunk,
+                        segment_restart_read=segment_restart_read,
                     )
                     if (
                         recovery.ok
                         and chunk_retry_count < _MAX_EARLY_ABORT_CHUNK_RETRIES
                     ):
                         chunk_retry_count += 1
-                        if recovery.source == "memory":
-                            if n_chunks > 1:
-                                early_abort_restart_handoff = True
-                            else:
-                                early_abort_memory_handoff = True
-                        else:
-                            early_abort_restart_handoff = True
+                        early_abort_memory_handoff = True
+                        early_abort_restart_handoff = False
                         post_rescue_handoff_applied = False
                         steps_done = steps_before_chunk
                         rerun_chunk = True

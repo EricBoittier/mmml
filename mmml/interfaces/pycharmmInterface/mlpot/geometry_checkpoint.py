@@ -130,12 +130,15 @@ def build_early_abort_recovery_candidates(
     overlap: Any,
     *,
     overlap_restart_read: Path | str | None = None,
+    segment_restart_read: Path | str | None = None,
 ) -> list[Path]:
     """Recovery ladder after a short overlap chunk abort.
 
     Unlike :func:`build_geometry_recovery_candidates`, the upcoming overlap
     ``READYN`` source (``.overlap_a/.b.res`` from the previous good chunk) is
     tried first so equi/prod does not rewind to an earlier stage (e.g. heat).
+    ``segment_restart_read`` is the stage handoff checkpoint (e.g. equi ``.res``
+    before prod overlap chunk 0).
     """
     seen: set[str] = set()
     ordered: list[Path] = []
@@ -165,6 +168,9 @@ def build_early_abort_recovery_candidates(
                 add(read.with_name(name.replace(".overlap_a.", ".overlap_b.")), allow_scratch=True)
             elif ".overlap_b." in name:
                 add(read.with_name(name.replace(".overlap_b.", ".overlap_a.")), allow_scratch=True)
+
+    if segment_restart_read is not None:
+        add(segment_restart_read)
 
     for cand in build_geometry_recovery_candidates(overlap):
         add(cand)
@@ -500,6 +506,7 @@ def attempt_overlap_early_abort_recovery(
     overlap_context: str,
     overlap_run_state_dir: Path | None = None,
     overlap_restart_read: Path | str | None = None,
+    segment_restart_read: Path | str | None = None,
 ) -> GeometryRecoveryResult:
     """Reload geometry after a short chunk abort.
 
@@ -519,11 +526,12 @@ def attempt_overlap_early_abort_recovery(
     candidates = build_early_abort_recovery_candidates(
         overlap,
         overlap_restart_read=overlap_restart_read,
+        segment_restart_read=segment_restart_read,
     )
 
     label = f"early-abort recovery ({overlap_context})"
     try:
-        path = restore_geometry_from_ladder(candidates, label=label, allow_in_memory=True)
+        path = restore_geometry_from_ladder(candidates, label=label, allow_in_memory=False)
         return GeometryRecoveryResult(True, _geometry_recovery_source_from_path(path))
     except RuntimeError:
         tried = ", ".join(p.name for p in candidates) or "(none)"
