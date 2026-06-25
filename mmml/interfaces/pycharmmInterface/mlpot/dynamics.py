@@ -1684,6 +1684,69 @@ def _refresh_overlap_scratch_restart(
     _refresh_restart_write_after_chunk(write_path, final_restart=final_restart)
 
 
+def _materialize_early_abort_restart_handoff(
+    chunk_io: CharmmTrajectoryFiles,
+    *,
+    steps_before_chunk: int,
+    overlap_context: str,
+) -> CharmmTrajectoryFiles:
+    """Write a valid READYN restart from in-memory state after a mid-chunk abort.
+
+    CPT / Hoover overlap chunks segfault in ``readyn`` when dynamics is retried
+    with ``iunrea=-1`` but CHARMM still expects barostat restart internals.
+    Materialize scratch restart(s) and hand off via normal ``READYN``.
+    """
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        rewrite_dynamics_restart_validated,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        patch_restart_global_step,
+    )
+
+    read_path = (
+        Path(chunk_io.restart_read) if chunk_io.restart_read is not None else None
+    )
+    write_path = (
+        Path(chunk_io.restart_write) if chunk_io.restart_write is not None else None
+    )
+    targets: list[Path] = []
+    if read_path is not None:
+        targets.append(read_path)
+    if write_path is not None and write_path not in targets:
+        targets.append(write_path)
+
+    if not targets:
+        return chunk_io
+
+    step = max(0, int(steps_before_chunk))
+    for path in targets:
+        if not rewrite_dynamics_restart_validated(path):
+            raise RuntimeError(
+                f"overlap ({overlap_context}): early-abort restart handoff failed "
+                f"writing {path.name} from in-memory CHARMM state"
+            )
+        patch_restart_global_step(path, step)
+
+    valid_read = _valid_overlap_chunk_restart_read(read_path) if read_path else None
+    if valid_read is None and read_path is not None:
+        valid_read = _valid_restart_file(read_path)
+
+    print(
+        f"overlap ({overlap_context}): early-abort restart handoff from "
+        f"{valid_read.name if valid_read is not None else targets[0].name} "
+        f"at global step {step} (READYN)",
+        flush=True,
+    )
+    return CharmmTrajectoryFiles(
+        restart_read=valid_read,
+        restart_write=chunk_io.restart_write,
+        trajectory=chunk_io.trajectory,
+        restart_read_unit=chunk_io.restart_read_unit,
+        restart_write_unit=chunk_io.restart_write_unit,
+        trajectory_unit=chunk_io.trajectory_unit,
+    )
+
+
 def _restart_header_step_field(path: Path) -> str | None:
     """Return the third token on the ``REST`` line (step / history marker), if present."""
     try:
@@ -2544,6 +2607,7 @@ def run_dynamics_with_io(
     post_rescue_handoff_applied = False
     any_post_rescue_in_memory = False
     early_abort_memory_handoff = False
+    early_abort_restart_handoff = False
     if (
         n_chunks > 20
         and "heat" in str(overlap_context).lower()
@@ -2604,6 +2668,7 @@ def run_dynamics_with_io(
             chunk_retried = False
             segment_aborted = False
             early_abort_memory_handoff = False
+            early_abort_restart_handoff = False
             rerun_chunk = True
             while rerun_chunk:
                 rerun_chunk = False
@@ -2639,6 +2704,15 @@ def run_dynamics_with_io(
                         and chunk_io.trajectory is not None
                     ):
                         chunk_dcd_paths.append(Path(chunk_io.trajectory))
+                if early_abort_restart_handoff and chunk_io is not None:
+                    chunk_io = _materialize_early_abort_restart_handoff(
+                        chunk_io,
+                        steps_before_chunk=steps_before_chunk,
+                        overlap_context=overlap_context,
+                    )
+                    if chunk_io.restart_read is None:
+                        early_abort_restart_handoff = False
+                        early_abort_memory_handoff = True
                 mem_handoff = (
                     post_rescue_in_memory_mode
                     or early_abort_memory_handoff
@@ -2747,6 +2821,11 @@ def run_dynamics_with_io(
                     _strip_stale_heat_ramp_keywords(chunk_kw)
                     if int(chunk_kw.get("ihtfrq", 0) or 0) != 0:
                         chunk_kw["ihtfrq"] = 0
+                elif early_abort_restart_handoff:
+                    chunk_kw["restart"] = True
+                    chunk_kw["new"] = False
+                    chunk_kw["start"] = False
+                    chunk_kw["iasvel"] = 0
                 if heat_ramp_spec is not None:
                     apply_heat_ramp_overlap_chunk(
                         chunk_kw,
@@ -2868,7 +2947,10 @@ def run_dynamics_with_io(
                     if not chunk_retried and recovery.ok:
                         chunk_retried = True
                         if recovery.source == "memory":
-                            early_abort_memory_handoff = True
+                            if n_chunks > 1:
+                                early_abort_restart_handoff = True
+                            else:
+                                early_abort_memory_handoff = True
                         else:
                             post_rescue_in_memory_mode = True
                             any_post_rescue_in_memory = True
