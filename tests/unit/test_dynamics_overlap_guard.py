@@ -333,14 +333,23 @@ def test_overlap_early_abort_memory_recovery_skips_overlap_check(tmp_path):
             Path(_io.restart_write).write_text(f"REST {step} 1\n", encoding="utf-8")
         return mock.Mock()
 
+    overlap_contexts: list[str] = []
+
+    def track_overlap_check(_cfg, *, context, step=None, mlpot_ctx=None):
+        overlap_contexts.append(context)
+        return (5.0, False)
+
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
-    ) as overlap_check, mock.patch(
+        side_effect=track_overlap_check,
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.finalize_overlap_rescue_for_dynamics",
     ) as finalize, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
         side_effect=lambda path: int(Path(path).read_text().split()[1]),
     ), mock.patch(
@@ -356,7 +365,8 @@ def test_overlap_early_abort_memory_recovery_skips_overlap_check(tmp_path):
         )
 
     finalize.assert_called_once()
-    overlap_check.assert_not_called()
+    assert not any("after early-abort recovery" in c for c in overlap_contexts)
+    assert "HEAT" in overlap_contexts
 
 
 def test_overlap_early_abort_disk_recovery_cpt_retries_with_readyn(tmp_path, capsys):
