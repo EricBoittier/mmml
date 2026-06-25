@@ -64,6 +64,8 @@ class _BestMinimizationFrame:
     def restore_best_force(self) -> float:
         if self.best_force_positions is not None:
             self.atoms.set_positions(self.best_force_positions)
+        if np.isfinite(self.best_force_fmax):
+            return float(self.best_force_fmax)
         return float(np.abs(self.atoms.get_forces()).max())
 
 
