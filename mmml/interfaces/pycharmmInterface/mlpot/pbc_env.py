@@ -417,6 +417,45 @@ def sync_workflow_pbc_box_side_after_mm_pretreat(
     return float(live)
 
 
+def sync_charmm_crystal_after_mm_pretreat(
+    box_side_A: float,
+    *,
+    quiet: bool = False,
+) -> bool:
+    """Re-install crystal/IMAGE when ``pbound`` is inactive after CPT pretreat.
+
+    CPT prod can leave Fortran IMAGE lists valid while ``pbound_get_size`` reads
+    zero in Python.  MLpot MIC then falls back to restart-file L and can disagree
+    with in-memory coords.  Safe only **before** MLpot registration (no restart READ).
+    """
+    if box_side_A <= 0.0:
+        return False
+    if charmm_crystal_is_active():
+        return False
+    ensure_charmm_crystal_for_cpt(float(box_side_A), quiet=quiet)
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import pycharmm
+
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+
+    with charmm_relaxed_bomlev():
+        pycharmm.lingo.charmm_script("UPDATE\n")
+    if not quiet:
+        live, source = probe_charmm_cubic_box_side_A()
+        if live is not None and source == "pbound":
+            print(
+                f"PBC crystal restored after MM pretreat: pbound L={live:.3f} Å",
+                flush=True,
+            )
+        else:
+            print(
+                "PBC crystal restored after MM pretreat (pbound still inactive; "
+                f"using L={float(box_side_A):.3f} Å from pretreat sync)",
+                flush=True,
+            )
+    return True
+
+
 def find_latest_pretreat_mm_restart(paths: dict[str, Path]) -> Path | None:
     """Return the latest pretreat MM restart (prod, equi, or heat)."""
     for key in ("charmm_mm_prod_res", "charmm_mm_equi_res", "charmm_mm_heat_res"):
@@ -441,5 +480,6 @@ __all__ = [
     "prepare_charmm_pbc",
     "setup_charmm_environment",
     "sync_workflow_pbc_box_side_after_mm_pretreat",
+    "sync_charmm_crystal_after_mm_pretreat",
     "find_latest_pretreat_mm_restart",
 ]
