@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 
 import mmml.interfaces.pycharmmInterface.import_pycharmm as pyci
+from mmml.interfaces.pycharmmInterface.cluster_geometry import ensure_monomer_3d_coords
 from mmml.interfaces.pycharmmInterface.import_pycharmm import (
     coor,
     pycharmm,
@@ -15,16 +16,19 @@ from mmml.interfaces.pycharmmInterface.import_pycharmm import (
 )
 from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
-import pycharmm.generate as gen
-import pycharmm.ic as ic
-import pycharmm.param as param
-import pycharmm.psf as psf
-import pycharmm.read as read
-import pycharmm.settings as settings
+if pyci.PYCHARMM_AVAILABLE:
+    import pycharmm.generate as gen
+    import pycharmm.ic as ic
+    import pycharmm.param as param
+    import pycharmm.psf as psf
+    import pycharmm.read as read
+    import pycharmm.settings as settings
 
-pyci.read = read
-pyci.settings = settings
-pyci.psf = psf
+    pyci.read = read
+    pyci.settings = settings
+    pyci.psf = psf
+else:
+    gen = ic = param = psf = read = settings = None  # type: ignore[assignment]
 
 
 def _load_template_pdb_coords(template_pdb: Path) -> dict[str, np.ndarray]:
@@ -153,31 +157,11 @@ def _default_template_pdb_for_residue(residue: str) -> Path | None:
 
 
 def _monomer_geometry_is_3d(coords: np.ndarray, *, min_axis_span: float = 0.3) -> bool:
-    span = np.max(coords, axis=0) - np.min(coords, axis=0)
-    return float(span[1]) >= min_axis_span and float(span[2]) >= min_axis_span
+    from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+        _monomer_geometry_is_3d as _is_3d,
+    )
 
-
-def ensure_monomer_3d_coords(
-    coords: np.ndarray,
-    *,
-    amplitude: float = 0.8,
-) -> np.ndarray:
-    """Break collinear/planar monomer IC coordinates with a deterministic 3D spread."""
-    out = np.asarray(coords, dtype=np.float64).copy()
-    if out.ndim != 2 or out.shape[1] != 3:
-        raise ValueError(f"coords must be (N, 3), got {out.shape}")
-    n = int(out.shape[0])
-    if n < 2:
-        return out
-    com = out.mean(axis=0)
-    out -= com
-    span = np.ptp(out, axis=0)
-    if float(span[1]) < 0.3:
-        out[min(1, n - 1), 1] += float(amplitude)
-    if float(span[2]) < 0.3:
-        out[min(2, n - 1), 2] += float(amplitude)
-    out += com
-    return out
+    return _is_3d(coords, min_axis_span=min_axis_span)
 
 
 def relax_monomer_geometry_for_cluster(

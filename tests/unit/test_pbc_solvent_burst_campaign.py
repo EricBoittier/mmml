@@ -232,7 +232,8 @@ def test_slurm_max_concurrent(cfg: dict) -> None:
 
 
 def test_total_ps_budget(cfg: dict) -> None:
-    assert total_jaxmd_ps(cfg) == pytest.approx(1000.0)
+    expected = float(cfg["jaxmd_burst_ps"]) * int(cfg["jaxmd_bursts"])
+    assert total_jaxmd_ps(cfg) == pytest.approx(expected)
     assert total_pycharmm_equi_ps(cfg) == pytest.approx(50.0)
 
 
