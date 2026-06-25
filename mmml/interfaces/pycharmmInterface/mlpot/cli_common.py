@@ -357,18 +357,19 @@ def resolve_dcd_nsavc_for_args(
 def apply_charmm_output_from_args(args: argparse.Namespace) -> int:
     from mmml.interfaces.pycharmmInterface.mlpot.setup import apply_charmm_verbosity
 
+    bomlev = int(getattr(args, "bomlev", -2))
     if getattr(args, "quiet", False):
-        apply_charmm_verbosity(prnlev=0, warnlev=0, bomlev=args.bomlev)
+        apply_charmm_verbosity(prnlev=0, warnlev=0, bomlev=bomlev)
     else:
         apply_charmm_verbosity(
-            prnlev=args.prnlev,
-            warnlev=args.warnlev,
-            bomlev=args.bomlev,
+            prnlev=int(getattr(args, "prnlev", 5)),
+            warnlev=int(getattr(args, "warnlev", 5)),
+            bomlev=bomlev,
         )
     if getattr(args, "quiet", False):
         mini_nstep = getattr(args, "mini_nstep", getattr(args, "nstep", 100))
         return max(1, int(mini_nstep))
-    return max(1, int(args.nprint))
+    return max(1, int(getattr(args, "nprint", 50)))
 
 
 def resolve_nve_boltzmann_temp(
