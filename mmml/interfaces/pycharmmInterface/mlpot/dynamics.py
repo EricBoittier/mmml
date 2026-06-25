@@ -2242,7 +2242,10 @@ def _apply_overlap_chunk_dynamics_kw(
         "hoover reft" in chunk_kw or bool(chunk_kw.get("cpt"))
     ):
         # Hoover CPT chunk 0 after in-memory Boltzmann assign (see staged_workflow).
-        chunk_kw["iasvel"] = 1 if bool(chunk_kw.get("start")) else 0
+        if bool(chunk_kw.get("start")):
+            chunk_kw["iasvel"] = 1
+        elif int(chunk_kw.get("iasvel", 0)) != 1:
+            chunk_kw["iasvel"] = 0
         chunk_kw["start"] = False
         if int(chunk_kw.get("ihtfrq", 0)) != 0:
             chunk_kw["ihtfrq"] = 0
