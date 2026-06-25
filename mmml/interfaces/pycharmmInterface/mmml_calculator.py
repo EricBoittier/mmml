@@ -1982,7 +1982,8 @@ def setup_calculator(
                 # Ensure forces are finite before storing
                 forces_final = F * self.force_conversion_factor
                 
-                self.results.update(_calculator_unit_metadata)
+                # Nested only: flat merge would overwrite numeric energy/forces keys.
+                self.results["units"] = dict(_calculator_unit_metadata)
                 self.results["energy_unit"] = "eV"
                 self.results["forces_unit"] = "eV/Angstrom"
                 
