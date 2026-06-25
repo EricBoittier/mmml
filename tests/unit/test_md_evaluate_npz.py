@@ -962,3 +962,38 @@ def test_compare_force_sources_to_reference() -> None:
         baseline="spherical_fn",
     )
     assert cross["force_rmse_vs_spherical_fn_eV_A"] == pytest.approx(float(np.sqrt(0.04 / 6.0)))
+
+
+def test_evaluate_pycharmm_reuses_mlpot_state_without_reregister() -> None:
+    """Multi-frame evaluate must not call register_mlpot per frame (upinb segfault)."""
+    from mmml.cli.run.md_evaluate_npz import _evaluate_pycharmm
+
+    z = np.array([6, 1, 1, 1, 1, 6, 1, 1, 1, 1], dtype=np.int32)
+    pos = np.random.default_rng(0).random((10, 3))
+    ctx = object()
+    calc = object()
+    args = Namespace(quiet=True)
+
+    with patch(
+        "mmml.cli.run.md_evaluate_npz.setup_pycharmm_eval_mlpot",
+    ) as setup_mock, patch(
+        "mmml.cli.run.md_evaluate_npz._pycharmm_eval_metrics",
+        return_value={"energy_eV": 1.0, "forces_eV_A": np.zeros((10, 3))},
+    ) as metrics_mock, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+    ) as sync_mock:
+        _evaluate_pycharmm(
+            args,
+            z=z,
+            positions=pos,
+            n_monomers=2,
+            use_pbc=False,
+            L=None,
+            mlpot_state=(ctx, calc),
+        )
+
+    setup_mock.assert_not_called()
+    sync_mock.assert_called_once()
+    metrics_mock.assert_called_once()
+    assert metrics_mock.call_args.kwargs["ctx"] is ctx
+    assert metrics_mock.call_args.kwargs["calc"] is calc

@@ -1583,15 +1583,18 @@ def setup_pycharmm_eval_mlpot(
     return ctx, calc
 
 
-def _evaluate_pycharmm(
-    args: Any,
+def _pycharmm_eval_metrics(
+    ctx: Any,
+    calc: Any,
     *,
     z: np.ndarray,
     positions: np.ndarray,
     n_monomers: int,
     use_pbc: bool,
     L: float | None,
+    quiet: bool,
 ) -> dict[str, Any]:
+    """ENER FORCE + force lanes at current CHARMM coordinates (MLpot already registered)."""
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
         charmm_energy_row,
         collect_evaluate_force_sources_ev_angstrom,
@@ -1599,15 +1602,7 @@ def _evaluate_pycharmm(
         resolve_evaluate_forces_ev_angstrom,
     )
 
-    ctx, calc = setup_pycharmm_eval_mlpot(
-        args,
-        z=z,
-        positions=positions,
-        n_monomers=n_monomers,
-        use_pbc=use_pbc,
-        L=L,
-    )
-    refresh_ctx = "" if bool(getattr(args, "quiet", False)) else "evaluate-npz"
+    refresh_ctx = "" if quiet else "evaluate-npz"
     grms = refresh_mlpot_energy_and_grms(ctx, context=refresh_ctx)
     charmm_row = charmm_energy_row()
     total_kcal = float(charmm_row.get("ENER", charmm_row.get("ENERGY", 0.0)))
@@ -1642,6 +1637,45 @@ def _evaluate_pycharmm(
             "box_A": float(L) if L is not None else None,
             "path": "pycharmm_mlpot_callback",
         }
+    )
+
+
+def _evaluate_pycharmm(
+    args: Any,
+    *,
+    z: np.ndarray,
+    positions: np.ndarray,
+    n_monomers: int,
+    use_pbc: bool,
+    L: float | None,
+    mlpot_state: tuple[Any, Any] | None = None,
+) -> dict[str, Any]:
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+
+    quiet = bool(getattr(args, "quiet", False))
+    if mlpot_state is None:
+        ctx, calc = setup_pycharmm_eval_mlpot(
+            args,
+            z=z,
+            positions=positions,
+            n_monomers=n_monomers,
+            use_pbc=use_pbc,
+            L=L,
+        )
+    else:
+        ctx, calc = mlpot_state
+        sync_charmm_positions(np.asarray(positions, dtype=np.float64))
+        if hasattr(calc, "_cached_update_fn"):
+            calc._cached_update_fn = None
+    return _pycharmm_eval_metrics(
+        ctx,
+        calc,
+        z=z,
+        positions=positions,
+        n_monomers=n_monomers,
+        use_pbc=use_pbc,
+        L=L,
+        quiet=quiet,
     )
 
 
@@ -1875,6 +1909,7 @@ def _evaluate_reference_trajectory(args: Any, ctx: dict[str, Any]) -> int:
             L=L,
             at_codes_override=payload.at_codes,
         )
+        pycharmm_state = None
     elif backend == "jaxmd":
         _evaluate_jaxmd_mmml(
             args,
@@ -1887,8 +1922,9 @@ def _evaluate_reference_trajectory(args: Any, ctx: dict[str, Any]) -> int:
             L=L,
             at_codes_override=payload.at_codes,
         )
+        pycharmm_state = None
     else:
-        _evaluate_pycharmm(
+        pycharmm_state = setup_pycharmm_eval_mlpot(
             args,
             z=z,
             positions=atoms.get_positions(),
@@ -1938,6 +1974,7 @@ def _evaluate_reference_trajectory(args: Any, ctx: dict[str, Any]) -> int:
                 n_monomers=n_monomers,
                 use_pbc=use_pbc,
                 L=L,
+                mlpot_state=pycharmm_state,
             )
         else:
             metrics = _evaluate_atoms_mmml(
