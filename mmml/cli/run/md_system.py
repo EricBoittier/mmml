@@ -2295,11 +2295,13 @@ def main() -> int:
                 _validate_packmol_args(args)
         except ValueError as exc:
             print(f"mmml md-system: error: {exc}", file=sys.stderr)
-            return 2
+            exit_code = 2
+            return exit_code
         if args.config and (args.job_id or args.run_all):
             from mmml.cli.run.md_campaign import run_campaign
 
-            return int(run_campaign(args))
+            exit_code = int(run_campaign(args))
+            return exit_code
         if args.setup == "lambda_ti":
             backend = str(args.backend)
             try:
@@ -2314,39 +2316,45 @@ def main() -> int:
                     "mmml md-system: error: --optimize-cutoffs requires --reference-npz",
                     file=sys.stderr,
                 )
-                return 2
+                exit_code = 2
+                return exit_code
             from mmml.cli.run.md_optimize_cutoffs import run_optimize_cutoffs
 
             backend = "ase"
             try:
-                return int(run_optimize_cutoffs(args))
+                exit_code = int(run_optimize_cutoffs(args))
             except Exception as exc:
                 print(f"mmml md-system: optimize-cutoffs failed: {exc}", file=sys.stderr)
-                return 1
+                exit_code = 1
+            return exit_code
         if getattr(args, "evaluate_npz", None):
             try:
                 _apply_backend_setup_defaults(args)
             except ValueError as exc:
                 print(f"mmml md-system: error: {exc}", file=sys.stderr)
-                return 2
+                exit_code = 2
+                return exit_code
             from mmml.cli.run.md_evaluate_npz import _resolve_evaluate_backend, run_evaluate_npz
 
             backend = _resolve_evaluate_backend(args)
             try:
-                return int(run_evaluate_npz(args))
+                exit_code = int(run_evaluate_npz(args))
             except Exception as exc:
                 print(f"mmml md-system: evaluate-npz failed: {exc}", file=sys.stderr)
-                return 1
+                exit_code = 1
+            return exit_code
         try:
             _apply_backend_setup_defaults(args)
         except ValueError as exc:
             print(f"mmml md-system: error: {exc}", file=sys.stderr)
-            return 2
+            exit_code = 2
+            return exit_code
         try:
             backend, argv = build_command(args)
         except ValueError as exc:
             print(f"mmml md-system: error: {exc}", file=sys.stderr)
-            return 2
+            exit_code = 2
+            return exit_code
         exit_code = run_backend(backend, argv, args)
         return exit_code
     finally:
