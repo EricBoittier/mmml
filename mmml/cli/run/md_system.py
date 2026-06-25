@@ -1167,6 +1167,65 @@ def build_parser() -> argparse.ArgumentParser:
         help="Frame index when --evaluate-npz uses trajectory keys R/Z (default: 0).",
     )
     parser.add_argument(
+        "--evaluate-forces-npz",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help=(
+            "Trajectory-style NPZ output with R, F, E, Z, N (default: "
+            "<output-dir>/evaluate.npz)."
+        ),
+    )
+    parser.add_argument(
+        "--evaluate-traj",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help=(
+            "Extended XYZ with attached energy/forces for ASE/Ovito "
+            "(default: <output-dir>/evaluate.extxyz)."
+        ),
+    )
+    parser.add_argument(
+        "--no-evaluate-save-artifacts",
+        action="store_true",
+        help="Do not write evaluate.npz / evaluate.extxyz alongside evaluate.json.",
+    )
+    parser.add_argument(
+        "--evaluate-reference-npz",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help=(
+            "MP2/QM reference trajectory NPZ (keys R, E, optional F) for on-the-fly "
+            "comparison; writes evaluate_compare.json."
+        ),
+    )
+    parser.add_argument(
+        "--evaluate-reference-frame",
+        type=int,
+        default=None,
+        help="Reference NPZ frame for comparison (default: same as --evaluate-frame).",
+    )
+    parser.add_argument(
+        "--evaluate-reference-energy-unit",
+        choices=("hartree", "ev", "kcal_mol"),
+        default="hartree",
+        help="Unit of E in --evaluate-reference-npz (default: hartree for MP2 exports).",
+    )
+    parser.add_argument(
+        "--evaluate-reference-force-unit",
+        choices=("hartree_bohr", "ev_ang"),
+        default="hartree_bohr",
+        help="Unit of F in --evaluate-reference-npz (default: hartree_bohr for PySCF).",
+    )
+    parser.add_argument(
+        "--evaluate-compare-output",
+        type=Path,
+        default=None,
+        help="JSON path for reference comparison (default: <output-dir>/evaluate_compare.json).",
+    )
+    parser.add_argument(
         "--optimize-cutoffs",
         action="store_true",
         help=(
