@@ -136,6 +136,221 @@ def _format_cell(value: Any) -> str:
     return text
 
 
+_HORIZONTAL_STYLES = (
+    "cyan",
+    "green",
+    "yellow",
+    "magenta",
+    "blue",
+    "bright_cyan",
+    "bright_green",
+    "bright_yellow",
+    "bright_magenta",
+    "bright_blue",
+)
+
+
+def _mapping_from_rows(rows: Sequence[tuple[str, Any]]) -> dict[str, Any]:
+    return {str(k): v for k, v in rows}
+
+
+def _horizontal_table_from_mapping(
+    mapping: Mapping[str, Any],
+    *,
+    title: str | None = None,
+):
+    from rich.table import Table
+
+    table = Table(
+        title=title,
+        show_header=True,
+        header_style="bold",
+        expand=True,
+        show_edge=True,
+    )
+    keys = list(mapping.keys())
+    for i, key in enumerate(keys):
+        table.add_column(str(key), style=_HORIZONTAL_STYLES[i % len(_HORIZONTAL_STYLES)])
+    if keys:
+        table.add_row(*[_format_cell(mapping[k]) for k in keys])
+    return table
+
+
+def emit_horizontal_table(
+    title: str,
+    mapping: Mapping[str, Any],
+    *,
+    quiet: bool = False,
+    stderr: bool = False,
+) -> None:
+    """Model-Attributes style table: field names as columns, one value row."""
+    if quiet or is_quiet() or not mapping:
+        return
+    plain = [title, "  " + "  ".join(f"{k}={_format_cell(v)}" for k, v in mapping.items())]
+    if not rich_enabled(quiet=quiet):
+        _emit_plain("\n".join(plain), stderr=stderr)
+        return
+    try:
+        from rich.panel import Panel
+
+        _console(stderr=stderr).print(
+            Panel(
+                _horizontal_table_from_mapping(mapping, title=None),
+                title=f"[bold]{title}[/bold]",
+                border_style="blue",
+            )
+        )
+    except Exception:
+        _emit_plain("\n".join(plain), stderr=stderr)
+
+
+def _model_attributes_mapping(model: Any) -> dict[str, Any]:
+    return _mapping_from_rows(_model_attribute_rows(model))
+
+
+def emit_hybrid_ml_setup(
+    *,
+    system: Mapping[str, Any],
+    handoff: Mapping[str, Any],
+    neighbor_lists: Mapping[str, Any],
+    model: Any,
+    checkpoint: Mapping[str, Any] | None = None,
+    ml_flags: Mapping[str, Any] | None = None,
+    quiet: bool = False,
+) -> None:
+    """Single dashboard for hybrid calculator setup (replaces duplicate setup/model panels)."""
+    if quiet or is_quiet():
+        return
+
+    sections: list[tuple[str, Mapping[str, Any]]] = [
+        ("System", system),
+        ("Handoff & cutoffs", handoff),
+        ("Neighbor lists & ML batching", neighbor_lists),
+        ("Model", _model_attributes_mapping(model)),
+    ]
+    if ml_flags:
+        sections.append(("ML/MM flags", ml_flags))
+    if checkpoint:
+        sections.append(("Checkpoint", checkpoint))
+
+    if not rich_enabled(quiet=quiet):
+        lines = ["Hybrid ML/MM setup"]
+        for title, mapping in sections:
+            if not mapping:
+                continue
+            lines.append(f"[{title}]")
+            lines.extend(f"  {k}: {_format_cell(v)}" for k, v in mapping.items())
+        _emit_plain("\n".join(lines))
+        return
+
+    try:
+        from rich.console import Group
+        from rich.panel import Panel
+
+        blocks = []
+        for title, mapping in sections:
+            if not mapping:
+                continue
+            blocks.append(
+                Panel(
+                    _horizontal_table_from_mapping(mapping),
+                    title=f"[bold]{title}[/bold]",
+                    border_style="dim",
+                    padding=(0, 1),
+                )
+            )
+        _console().print(
+            Panel(
+                Group(*blocks),
+                title="[bold cyan]Hybrid ML/MM setup[/bold cyan]",
+                border_style="cyan",
+            )
+        )
+    except Exception:
+        lines = ["Hybrid ML/MM setup"]
+        for title, mapping in sections:
+            if not mapping:
+                continue
+            lines.append(f"[{title}]")
+            lines.extend(f"  {k}: {_format_cell(v)}" for k, v in mapping.items())
+        _emit_plain("\n".join(lines))
+
+
+def collect_psf_topology_mapping(
+    *,
+    max_residue_rows: int = 6,
+    max_type_samples: int = 8,
+) -> dict[str, Any] | None:
+    """Summarize in-memory CHARMM PSF when PyCHARMM is loaded."""
+    try:
+        from mmml.interfaces.pycharmmInterface.charmm_mpi import charmm_lib_available
+
+        if not charmm_lib_available():
+            return None
+        import numpy as np
+        import pycharmm.coor as coor
+        import pycharmm.psf as psf
+    except Exception:
+        return None
+
+    try:
+        n_atom = int(coor.get_natom())
+    except Exception:
+        return None
+    if n_atom <= 0:
+        return None
+
+    masses = np.asarray(psf.get_amass(), dtype=float)
+    charges = np.asarray(psf.get_charges(), dtype=float)
+    atypes = [str(x) for x in np.asarray(psf.get_atype(), dtype=str)]
+    iac = np.asarray(psf.get_iac(), dtype=int)
+
+    unique_types, type_counts = np.unique(atypes, return_counts=True)
+    type_parts = [
+        f"{t}×{int(c)}" for t, c in zip(unique_types[:max_type_samples], type_counts[:max_type_samples])
+    ]
+    if len(unique_types) > max_type_samples:
+        type_parts.append(f"…+{len(unique_types) - max_type_samples} types")
+
+    res_parts: list[str] = []
+    try:
+        resids = np.asarray(psf.get_resid(), dtype=int)
+        resnames = [str(x) for x in np.asarray(psf.get_resname(), dtype=str)]
+        seen: set[tuple[int, str]] = set()
+        for rid, rname in zip(resids, resnames):
+            key = (int(rid), rname)
+            if key in seen:
+                continue
+            seen.add(key)
+            count = int(np.sum((resids == rid) & (np.asarray(resnames) == rname)))
+            res_parts.append(f"{rname}{rid}×{count}")
+            if len(res_parts) >= max_residue_rows:
+                if len(seen) < len(np.unique(resids)):
+                    res_parts.append("…")
+                break
+    except Exception:
+        res_parts = []
+
+    return {
+        "n_atoms": n_atom,
+        "n_residues": len(res_parts) if res_parts else "?",
+        "total_charge": f"{float(np.sum(charges)):.4f} e",
+        "mass_range_amu": f"{float(masses.min()):.3f}–{float(masses.max()):.3f}",
+        "atom_types": ", ".join(type_parts) if type_parts else "—",
+        "type_index_range": f"{int(iac.min())}–{int(iac.max())}",
+        "residues": ", ".join(res_parts) if res_parts else "—",
+    }
+
+
+def emit_charmm_topology_summary(*, quiet: bool = False) -> bool:
+    """Rich block for PSF atom types, charges, masses (no-op when PSF not loaded)."""
+    mapping = collect_psf_topology_mapping()
+    if not mapping:
+        return False
+    emit_horizontal_table("CHARMM topology (PSF)", mapping, quiet=quiet)
+    return True
+
+
 def _model_attribute_rows(model: Any) -> list[tuple[str, Any]]:
     preferred = (
         "features",
@@ -172,20 +387,21 @@ def emit_model_loaded(
     runtime_natoms: int | None = None,
     quiet: bool = False,
 ) -> None:
-    """Pretty-print a loaded EF/PhysNet model summary."""
-    rows = _model_attribute_rows(model)
+    """Pretty-print a loaded EF/PhysNet model summary (horizontal table)."""
+    mapping = _model_attributes_mapping(model)
     if checkpoint is not None:
-        rows.append(("checkpoint", checkpoint))
+        mapping["checkpoint"] = checkpoint
     if runtime_natoms is not None:
-        rows.append(("runtime_natoms", runtime_natoms))
-    emit_table("Model loaded", rows, border_style="green", quiet=quiet)
+        mapping["runtime_natoms"] = runtime_natoms
+    emit_horizontal_table("Model", mapping, quiet=quiet)
 
 
 def emit_setup_calculator_summary(
-  rows: Sequence[tuple[str, Any]],
-  *,
-  quiet: bool = False,
+    rows: Sequence[tuple[str, Any]],
+    *,
+    quiet: bool = False,
 ) -> None:
+    """Legacy field/value panel — prefer :func:`emit_hybrid_ml_setup`."""
     emit_table("setup_calculator", list(rows), border_style="cyan", quiet=quiet)
 
 

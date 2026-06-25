@@ -71,7 +71,14 @@ def get_last(path: str) -> Path:
     return dirs[-1]
 
 
-def get_params_model(restart: str, natoms: int = None, return_everything: bool = False):
+def get_params_model(
+    restart: str,
+    natoms: int = None,
+    return_everything: bool = False,
+    *,
+    quiet: bool = False,
+    return_meta: bool = False,
+):
     """
     Load parameters and model from checkpoint.
     
@@ -95,8 +102,13 @@ def get_params_model(restart: str, natoms: int = None, return_everything: bool =
     modification_date = datetime.fromtimestamp(modification_time)
 
     params = restored["params"]
-    print(restored["model"].keys())
+    if not quiet:
+        print(restored["model"].keys())
     if "model_attributes" not in restored.keys():
+        if return_everything:
+            return params, None, restored
+        if return_meta:
+            return params, None, None
         return params, None
 
     # kwargs = _process_model_attributes(restored["model_attributes"], natoms)
@@ -106,15 +118,16 @@ def get_params_model(restart: str, natoms: int = None, return_everything: bool =
     model.natoms = natoms
     model.zbl = bool(kwargs["zbl"]) if "zbl" in kwargs.keys() else False
 
-    print_dict_as_table(kwargs, title="Model Attributes", plot=True)
-    restart_dict = {
-        "Checkpoint": restart,
+    checkpoint_meta = {
+        "Checkpoint": str(restart),
         "name": Path(restart).name,
         "epoch": restored["epoch"],
         "best_loss": restored["best_loss"],
         "Save Time": modification_date,
     }
-    print_dict_as_table(restart_dict, title="Last Checkpoint", plot=True)
+    if not quiet:
+        print_dict_as_table(kwargs, title="Model Attributes", plot=True)
+        print_dict_as_table(checkpoint_meta, title="Last Checkpoint", plot=True)
 
     # Fill missing params (e.g. repulsion) from old checkpoints that lack newer submodules
     if model.zbl:
@@ -131,6 +144,8 @@ def get_params_model(restart: str, natoms: int = None, return_everything: bool =
 
     if return_everything:
         return params, model, restored
+    if return_meta:
+        return params, model, checkpoint_meta
     # print(model)
     return params, model
 

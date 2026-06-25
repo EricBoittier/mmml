@@ -61,3 +61,28 @@ def test_model_attribute_rows_from_object() -> None:
     rows = rich_report._model_attribute_rows(_Model())
     assert ("features", 32) in rows
     assert ("class", "_Model") in rows
+
+
+def test_emit_hybrid_ml_setup_plain(capsys) -> None:
+    class _Model:
+        features = 32
+        natoms = 10
+        cutoff = 12.0
+        charges = False
+
+    rich_report.emit_hybrid_ml_setup(
+        system={"n_monomers": 2, "total_atoms": 10},
+        handoff={"mm_switch_on_Å": "8.0"},
+        neighbor_lists={"ml_sparse_dimers": True},
+        model=_Model(),
+        checkpoint={"epoch": 1000},
+        ml_flags={"doML": True, "doMM": True},
+    )
+    out = capsys.readouterr().out
+    assert "Hybrid ML/MM setup" in out
+    assert "n_monomers" in out
+    assert "features" in out
+
+
+def test_collect_psf_topology_mapping_without_charmm() -> None:
+    assert rich_report.collect_psf_topology_mapping() is None
