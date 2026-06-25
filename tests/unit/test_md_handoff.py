@@ -113,6 +113,41 @@ def test_is_usable_restart_template_accepts_valid_overlap(
     assert not _is_usable_restart_template(tmp_path / "continue_seed.res")
 
 
+def test_is_usable_restart_template_quiet_suppresses_natom_mismatch_stderr(
+    nve_stub: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from mmml.cli.run.md_handoff import _is_usable_restart_template
+
+    res = tmp_path / "twenty_atoms.res"
+    res.write_text(nve_stub.read_text(encoding="ascii"), encoding="ascii")
+    assert not _is_usable_restart_template(res, expected_natom=100, quiet=True)
+    assert capsys.readouterr().err == ""
+
+    assert not _is_usable_restart_template(res, expected_natom=100, quiet=False)
+    assert "NATOM mismatch" in capsys.readouterr().err
+
+
+def test_find_usable_fallback_template_finds_sibling_campaign_handoff(
+    nve_stub: Path, tmp_path: Path
+) -> None:
+    from mmml.cli.run.md_handoff import _find_usable_fallback_template
+
+    results = tmp_path / "results" / "test01"
+    bad = results / "dcm_20" / "handoff" / "final.res"
+    bad.parent.mkdir(parents=True)
+    bad.write_text("continue_seed_style_invalid")
+
+    good = results / "dcm_large_25" / "pycharmm_equil" / "handoff" / "final.res"
+    good.parent.mkdir(parents=True)
+    good.write_text(nve_stub.read_text(encoding="ascii"), encoding="ascii")
+
+    wrong = results / "dcm_large_25" / "pycharmm_equil" / "handoff" / "tiny.res"
+    wrong.write_text(nve_stub.read_text(encoding="ascii").replace("!NATOM", "!NATOM").replace("20", "10", 1))
+
+    found = _find_usable_fallback_template(bad, expected_natom=20)
+    assert found == good.resolve()
+
+
 def test_resolve_handoff_restart_template_prefers_heat_over_overlap(
     nve_stub: Path, tmp_path: Path
 ) -> None:

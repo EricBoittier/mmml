@@ -7,7 +7,7 @@ import re
 from contextvars import ContextVar
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 import numpy as np
 
@@ -227,6 +227,56 @@ def _resolve_existing_file_path(raw_path: str | Path | None) -> Path | None:
     return None
 
 
+def _handoff_restart_glob_patterns() -> tuple[str, ...]:
+    """Glob patterns for restart discovery under a campaign/results directory."""
+    return (
+        "*.res",
+        "handoff/*.res",
+        "handoff/final.res",
+        "*/handoff/*.res",
+        "*/handoff/final.res",
+        "*/*/handoff/*.res",
+        "*/*/*.res",
+    )
+
+
+def _restart_natom_matches(path: Path, expected_natom: int | None) -> bool:
+    """Cheap NATOM precheck before parsing full restart coordinates."""
+    if expected_natom is None:
+        return True
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_restart_natom,
+    )
+
+    natom = read_restart_natom(path)
+    return natom is not None and int(natom) == int(expected_natom)
+
+
+def _iter_restart_candidates_in_dirs(
+    search_dirs: list[Path],
+    *,
+    expected_natom: int | None,
+) -> Iterator[Path]:
+    """Yield unique ``.res`` paths that pass a cheap NATOM filter."""
+    seen: set[Path] = set()
+    for sdir in search_dirs:
+        if not sdir.is_dir():
+            continue
+        for pattern in _handoff_restart_glob_patterns():
+            for res_file in sdir.glob(pattern):
+                if not res_file.is_file():
+                    continue
+                if res_file.name.lower().startswith("continue_seed"):
+                    continue
+                key = res_file.resolve()
+                if key in seen:
+                    continue
+                if not _restart_natom_matches(res_file, expected_natom):
+                    continue
+                seen.add(key)
+                yield res_file
+
+
 def _find_any_res_file_in_same_dir(raw_path: str | Path | None, handoff: MdHandoffState | None = None) -> Path | None:
     """Search for any usable .res file in the resolved directory of raw_path."""
     if not raw_path:
@@ -285,34 +335,42 @@ def _find_any_res_file_in_same_dir(raw_path: str | Path | None, handoff: MdHando
         pass
 
     # Search the collected directories for any usable .res file
-    seen_dirs = set()
+    seen_dirs: set[Path] = set()
+    ordered_dirs: list[Path] = []
     for d in dirs_to_search:
         try:
             resolved_d = d.resolve()
             if resolved_d in seen_dirs:
                 continue
             seen_dirs.add(resolved_d)
-
-            candidates = []
-            expected_natom = len(handoff.positions) if handoff is not None else None
-            for file_path in resolved_d.glob("*.res"):
-                if file_path.is_file():
-                    try:
-                        if _is_usable_restart_template(file_path, expected_natom=expected_natom):
-                            name = file_path.name.lower()
-                            if "overlap" not in name and not name.startswith("continue_seed"):
-                                candidates.append((0, file_path))
-                            elif "overlap" in name:
-                                candidates.append((1, file_path))
-                    except Exception:
-                        pass
-
-            if candidates:
-                # Sort by priority (normal res first, then overlap), then modified time (newest first)
-                candidates.sort(key=lambda item: (item[0], -item[1].stat().st_mtime))
-                return candidates[0][1]
+            ordered_dirs.append(resolved_d)
         except Exception:
             pass
+
+    expected_natom = len(handoff.positions) if handoff is not None else None
+    candidates: list[tuple[int, Path]] = []
+    for file_path in _iter_restart_candidates_in_dirs(
+        ordered_dirs,
+        expected_natom=expected_natom,
+    ):
+        try:
+            if not _is_usable_restart_template(
+                file_path,
+                expected_natom=expected_natom,
+                quiet=True,
+            ):
+                continue
+            name = file_path.name.lower()
+            if "overlap" not in name and not name.startswith("continue_seed"):
+                candidates.append((0, file_path))
+            elif "overlap" in name:
+                candidates.append((1, file_path))
+        except Exception:
+            pass
+
+    if candidates:
+        candidates.sort(key=lambda item: (item[0], -item[1].stat().st_mtime))
+        return candidates[0][1]
 
     return None
 
@@ -1363,7 +1421,12 @@ def _overlap_scratch_restart_backups(paths: dict[str, Path]) -> list[Path]:
     return sorted(found, key=lambda p: p.stat().st_mtime, reverse=True)
 
 
-def _is_usable_restart_template(path: Path, expected_natom: int | None = None) -> bool:
+def _is_usable_restart_template(
+    path: Path,
+    expected_natom: int | None = None,
+    *,
+    quiet: bool = False,
+) -> bool:
     """Validate restart coordinates for handoff templating (content, not filename)."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_restart_coordinates,
@@ -1376,22 +1439,50 @@ def _is_usable_restart_template(path: Path, expected_natom: int | None = None) -
     if path.name.lower().startswith("continue_seed"):
         return False
     if restart_has_nonfinite_coordinates(path):
-        print(f"DEBUG restart_template: {path} contains non-finite coordinates or parse failed.", file=sys.stderr, flush=True)
+        if not quiet:
+            print(
+                f"DEBUG restart_template: {path} contains non-finite coordinates or parse failed.",
+                file=sys.stderr,
+                flush=True,
+            )
         return False
     natom = read_restart_natom(path)
     if natom is None:
-        print(f"DEBUG restart_template: {path} NATOM could not be parsed.", file=sys.stderr, flush=True)
+        if not quiet:
+            print(
+                f"DEBUG restart_template: {path} NATOM could not be parsed.",
+                file=sys.stderr,
+                flush=True,
+            )
         return False
     if expected_natom is not None and int(natom) != int(expected_natom):
-        print(f"DEBUG restart_template: {path} NATOM mismatch: parsed {natom}, expected {expected_natom}", file=sys.stderr, flush=True)
+        if not quiet:
+            print(
+                f"DEBUG restart_template: {path} NATOM mismatch: "
+                f"parsed {natom}, expected {expected_natom}",
+                file=sys.stderr,
+                flush=True,
+            )
         return False
     coords = read_restart_coordinates(path)
     if coords is None:
-        flat_len = len(_restart_coordinate_values(path))
-        print(f"DEBUG restart_template: {path} read_restart_coordinates returned None. NATOM is {natom}, parsed {flat_len} coords (expected {3 * natom})", file=sys.stderr, flush=True)
+        if not quiet:
+            flat_len = len(_restart_coordinate_values(path))
+            print(
+                f"DEBUG restart_template: {path} read_restart_coordinates returned None. "
+                f"NATOM is {natom}, parsed {flat_len} coords (expected {3 * natom})",
+                file=sys.stderr,
+                flush=True,
+            )
         return False
     if int(coords.shape[0]) != int(natom):
-        print(f"DEBUG restart_template: {path} coords shape mismatch: shape {coords.shape}, NATOM {natom}", file=sys.stderr, flush=True)
+        if not quiet:
+            print(
+                f"DEBUG restart_template: {path} coords shape mismatch: "
+                f"shape {coords.shape}, NATOM {natom}",
+                file=sys.stderr,
+                flush=True,
+            )
         return False
     return True
 
@@ -1517,29 +1608,33 @@ def _find_usable_fallback_template(failed_template: Path, expected_natom: int) -
             search_dirs.append(failed_template.parent.parent)
 
         curr = failed_template.parent
-        for _ in range(3):
-            curr = curr.parent
+        for _ in range(2):
+            if curr.name == "handoff":
+                curr = curr.parent
             if curr == curr.parent:
                 break
             search_dirs.append(curr)
+            curr = curr.parent
 
         candidates: list[tuple[int, Path]] = []
-        for sdir in search_dirs:
-            if not sdir.is_dir():
+        for res_file in _iter_restart_candidates_in_dirs(
+            search_dirs,
+            expected_natom=expected_natom,
+        ):
+            try:
+                if not _is_usable_restart_template(
+                    res_file,
+                    expected_natom=expected_natom,
+                    quiet=True,
+                ):
+                    continue
+                name = res_file.name.lower()
+                if "overlap" not in name:
+                    candidates.append((0, res_file))
+                else:
+                    candidates.append((1, res_file))
+            except Exception:
                 continue
-            for res_file in sdir.rglob("*.res"):
-                if res_file.name.lower().startswith("continue_seed"):
-                    continue
-                try:
-                    if not _is_usable_restart_template(res_file, expected_natom=expected_natom):
-                        continue
-                    name = res_file.name.lower()
-                    if "overlap" not in name:
-                        candidates.append((0, res_file))
-                    else:
-                        candidates.append((1, res_file))
-                except Exception:
-                    continue
         if candidates:
             candidates.sort(key=lambda item: (item[0], -item[1].stat().st_mtime))
             return candidates[0][1]
