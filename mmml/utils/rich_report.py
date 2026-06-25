@@ -316,34 +316,99 @@ def collect_psf_topology_mapping(
     if len(unique_types) > max_type_samples:
         type_parts.append(f"…+{len(unique_types) - max_type_samples} types")
 
-    res_parts: list[str] = []
-    try:
-        resids = np.asarray(psf.get_resid(), dtype=int)
-        resnames = [str(x) for x in np.asarray(psf.get_resname(), dtype=str)]
-        seen: set[tuple[int, str]] = set()
-        for rid, rname in zip(resids, resnames):
-            key = (int(rid), rname)
-            if key in seen:
-                continue
-            seen.add(key)
-            count = int(np.sum((resids == rid) & (np.asarray(resnames) == rname)))
-            res_parts.append(f"{rname}{rid}×{count}")
-            if len(res_parts) >= max_residue_rows:
-                if len(seen) < len(np.unique(resids)):
-                    res_parts.append("…")
-                break
-    except Exception:
-        res_parts = []
+    n_res, res_label = _psf_residue_summary(
+        psf,
+        n_atom=n_atom,
+        max_residue_rows=max_residue_rows,
+    )
 
     return {
         "n_atoms": n_atom,
-        "n_residues": len(res_parts) if res_parts else "?",
+        "n_residues": n_res,
         "total_charge": f"{float(np.sum(charges)):.4f} e",
         "mass_range_amu": f"{float(masses.min()):.3f}–{float(masses.max()):.3f}",
         "atom_types": ", ".join(type_parts) if type_parts else "—",
         "type_index_range": f"{int(iac.min())}–{int(iac.max())}",
-        "residues": ", ".join(res_parts) if res_parts else "—",
+        "residues": res_label,
     }
+
+
+def _psf_residue_summary(
+    psf: Any,
+    *,
+    n_atom: int,
+    max_residue_rows: int,
+) -> tuple[int | str, str]:
+    """Return (n_residues, compact residue label) from in-memory PSF."""
+    from collections import Counter
+
+    try:
+        n_res = int(psf.get_nres()) if hasattr(psf, "get_nres") else 0
+    except Exception:
+        n_res = 0
+
+    if n_res <= 0:
+        return "?", "—"
+
+    resnames: list[str] = []
+    if hasattr(psf, "get_res"):
+        try:
+            resnames = [str(x).strip() for x in psf.get_res()]
+        except Exception:
+            resnames = []
+
+    resids: list[int] = []
+    if hasattr(psf, "get_resid"):
+        try:
+            resids = [int(str(x).strip()) for x in psf.get_resid()]
+        except Exception:
+            resids = []
+
+    parts: list[str] = []
+    try:
+        if len(resnames) == n_res:
+            for name, count in sorted(
+                Counter(resnames).items(),
+                key=lambda item: (-item[1], item[0]),
+            ):
+                parts.append(f"{name}×{count}")
+                if len(parts) >= max_residue_rows:
+                    if len(Counter(resnames)) > max_residue_rows:
+                        parts.append("…")
+                    break
+        elif len(resids) == n_res:
+            id_counts = Counter(resids)
+            for rid, count in sorted(id_counts.items()):
+                parts.append(f"res{rid}×{count}")
+                if len(parts) >= max_residue_rows:
+                    if len(id_counts) > max_residue_rows:
+                        parts.append("…")
+                    break
+        elif len(resids) == n_atom and n_atom > 0:
+            names_by_rid: list[str] = []
+            for rid in sorted(set(resids)):
+                if 0 < rid <= len(resnames):
+                    names_by_rid.append(resnames[rid - 1])
+                else:
+                    names_by_rid.append(f"res{rid}")
+            name_counts = Counter(names_by_rid)
+            for name, count in sorted(name_counts.items(), key=lambda item: (-item[1], item[0])):
+                parts.append(f"{name}×{count}")
+                if len(parts) >= max_residue_rows:
+                    if len(name_counts) > max_residue_rows:
+                        parts.append("…")
+                    break
+    except Exception:
+        parts = []
+
+    if parts:
+        return n_res, ", ".join(parts)
+    if resids and len(resids) == n_res:
+        lo, hi = min(resids), max(resids)
+        if lo == hi:
+            return n_res, f"res{lo}"
+        return n_res, f"res{lo}–res{hi}"
+    return n_res, f"{n_res} residue(s)"
 
 
 def emit_charmm_topology_summary(*, quiet: bool = False) -> bool:
