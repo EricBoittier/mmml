@@ -12,6 +12,10 @@ def is_quiet() -> bool:
     return (os.environ.get("MMML_QUIET") or "").strip().lower() in ("1", "yes", "true")
 
 
+def is_verbose() -> bool:
+    return (os.environ.get("MMML_VERBOSE") or "").strip().lower() in ("1", "yes", "true")
+
+
 def rich_enabled(*, quiet: bool = False) -> bool:
     if quiet or is_quiet():
         return False
@@ -405,9 +409,9 @@ def emit_setup_calculator_summary(
     emit_table("setup_calculator", list(rows), border_style="cyan", quiet=quiet)
 
 
-def emit_charmm_block(summary: str, *, quiet: bool = False) -> None:
-    """One-line CHARMM BLOCK summary after a quiet script."""
-    if quiet or is_quiet():
+def emit_charmm_block(summary: str, *, quiet: bool = False, verbose: bool = False) -> None:
+    """One-line CHARMM BLOCK summary after a quiet script (verbose only by default)."""
+    if quiet or is_quiet() or not (verbose or is_verbose()):
         return
     plain = summary if summary.startswith("CHARMM BLOCK:") else f"CHARMM BLOCK: {summary}"
     if not rich_enabled(quiet=quiet):

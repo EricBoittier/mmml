@@ -149,7 +149,7 @@ class MlpotContext:
             clear_mlpot_energy_block(self.ml_selection, block_tag=self.block_tag)
         apply_charmm_mm_block()
 
-    def reregister_mlpot(self, *, quiet: bool = False) -> None:
+    def reregister_mlpot(self, *, verbose: bool = False) -> None:
         """Re-attach MLpot + ML BLOCK after temporary MM-only work."""
         from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
             apply_mlpot_energy_block,
@@ -160,7 +160,7 @@ class MlpotContext:
         self.block_tag = apply_mlpot_energy_block(
             self.ml_selection,
             mm_internal_scale=float(self.mm_internal_scale),
-            quiet=quiet,
+            verbose=verbose,
         )
         reattach = getattr(self.mlpot, "reattach_mlpot", None)
         if callable(reattach):
@@ -898,6 +898,7 @@ def register_mlpot(
     use_pbc: bool = False,
     mm_internal_scale: float = 0.0,
     cubic_box_side_A: float | None = None,
+    verbose: bool = False,
     **kwargs: Any,
 ) -> MlpotContext:
     """Register ``pycharmm.MLpot`` and return a context manager-like handle."""
@@ -951,6 +952,7 @@ def register_mlpot(
         block_tag = apply_mlpot_energy_block(
             ml_selection,
             mm_internal_scale=float(mm_internal_scale),
+            verbose=verbose,
         )
         mlpot = pycharmm.MLpot(
             ml_model=pyCModel,

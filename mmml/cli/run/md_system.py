@@ -462,6 +462,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="pycharmm: reduce CHARMM console output",
     )
     parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Print CHARMM BLOCK Rich summaries and extra MLpot setup detail",
+    )
+    parser.add_argument(
         "--dcd-nsavc",
         type=int,
         default=1,

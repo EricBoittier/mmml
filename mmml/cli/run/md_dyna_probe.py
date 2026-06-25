@@ -62,7 +62,6 @@ def pycharmm_dyna_snapshot(
         ctx,
         context=refresh_ctx,
         reregister=False,
-        quiet=quiet,
     )
     pos = charmm_positions_angstrom()[: int(len(z))]
     charmm_row = charmm_energy_row()
