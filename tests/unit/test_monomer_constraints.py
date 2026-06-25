@@ -19,6 +19,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
 )
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     MinimizeWithMlpotConfig,
+    MlpotSdChunkResult,
     minimize_with_mlpot,
 )
 
@@ -178,7 +179,7 @@ def test_minimize_with_mlpot_asserts_user_when_ctx_provided():
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_mlpot_sd_then_abnr",
-        return_value=True,
+        return_value=MlpotSdChunkResult(completed=True),
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.prepare_mlpot_hybrid_state_for_sd",
         return_value=(0.0, 0.0),

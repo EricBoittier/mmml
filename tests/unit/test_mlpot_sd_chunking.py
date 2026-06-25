@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+import numpy as np
 import pytest
 
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     MinimizeWithMlpotConfig,
+    MlpotSdChunkResult,
+    _effective_mlpot_sd_chunk_nstep,
     _maybe_abort_sd_on_grms,
     _mlpot_sd_chunk_nstep,
     _run_minimize_in_chunks,
@@ -19,11 +22,21 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
 def test_mlpot_sd_chunk_nstep_smaller_for_pbc():
     ctx = MagicMock(use_pbc=True)
     cfg = MinimizeWithMlpotConfig(mlpot_ctx=ctx)
-    assert _mlpot_sd_chunk_nstep(cfg) == 50
+    assert _mlpot_sd_chunk_nstep(cfg) == 25
     cfg.mlpot_ctx = MagicMock(use_pbc=False)
     assert _mlpot_sd_chunk_nstep(cfg) == 500
     cfg.sd_chunk_nstep = 77
     assert _mlpot_sd_chunk_nstep(cfg) == 77
+
+
+def test_effective_mlpot_sd_chunk_nstep_shrinks_when_grms_low():
+    ctx = MagicMock(use_pbc=True)
+    cfg = MinimizeWithMlpotConfig(mlpot_ctx=ctx)
+    assert _effective_mlpot_sd_chunk_nstep(cfg, previous_grms=9.0) == 25
+    assert _effective_mlpot_sd_chunk_nstep(cfg, previous_grms=3.0) == 25
+    assert _effective_mlpot_sd_chunk_nstep(cfg, previous_grms=0.5) == 10
+    cfg.sd_chunk_nstep = 8
+    assert _effective_mlpot_sd_chunk_nstep(cfg, previous_grms=0.5) == 8
 
 
 def test_maybe_abort_sd_on_grms_respects_initial_cap():
@@ -102,12 +115,15 @@ def test_run_minimize_in_chunks_splits_long_pbc_sd():
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_mlpot_sd_list_frequencies",
     ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        return_value=np.zeros((1, 3)),
+    ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
         return_value=5.0,
     ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
     ):
-        ok = _run_minimize_in_chunks(
+        result = _run_minimize_in_chunks(
             minimize,
             pycharmm,
             config,
@@ -118,7 +134,7 @@ def test_run_minimize_in_chunks_splits_long_pbc_sd():
             run_attr="run_sd",
         )
 
-    assert ok is True
+    assert result.completed is True
     assert minimize.run_sd.call_count == 3
     assert [call.kwargs["nstep"] for call in minimize.run_sd.call_args_list] == [200, 200, 50]
 
@@ -143,12 +159,15 @@ def test_run_minimize_in_chunks_watchdog_stops_early():
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_mlpot_sd_list_frequencies",
     ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        return_value=np.zeros((1, 3)),
+    ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
         return_value=12.0,
     ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
     ):
-        ok = _run_minimize_in_chunks(
+        result = _run_minimize_in_chunks(
             minimize,
             pycharmm,
             config,
@@ -159,8 +178,68 @@ def test_run_minimize_in_chunks_watchdog_stops_early():
             run_attr="run_sd",
         )
 
-    assert ok is False
+    assert result.completed is False
+    assert result.rolled_back is False
     assert minimize.run_sd.call_count == 1
+
+
+def test_run_minimize_in_chunks_watchdog_rolls_back_last_good():
+    ctx = MagicMock(use_pbc=True)
+    minimize = MagicMock()
+    pycharmm = MagicMock()
+    config = MinimizeWithMlpotConfig(
+        nstep=600,
+        mlpot_ctx=ctx,
+        sd_chunk_nstep=200,
+        pre_sd_bonded_recovery_grms_kcalmol_A=50.0,
+        sd_grms_watchdog_factor=2.5,
+        verbose=True,
+    )
+    base_kw = {"inbfrq": 0, "ihbfrq": 0}
+    good_positions = np.zeros((3, 3))
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._sync_mlpot_lists_after_sd_chunk",
+        side_effect=[0.4, 1200.0],
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_mlpot_sd_list_frequencies",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
+        return_value=12.0,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        return_value=good_positions,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._rollback_mlpot_sd_chunk_geometry",
+    ) as rollback, patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
+    ):
+        result = _run_minimize_in_chunks(
+            minimize,
+            pycharmm,
+            config,
+            base_kw,
+            total_nstep=600,
+            pass_label="pass 1",
+            method="SD",
+            run_attr="run_sd",
+        )
+
+    assert result.completed is False
+    assert result.rolled_back is True
+    assert result.last_grms == 0.4
+    assert result.rolled_back_chunk == 1
+    assert minimize.run_sd.call_count == 2
+    rollback.assert_called_once()
+    rollback_args = rollback.call_args
+    assert rollback_args.args[0] is config
+    np.testing.assert_array_equal(rollback_args.args[1], good_positions)
+    assert rollback_args.kwargs == {
+        "pass_label": "pass 1",
+        "chunk_index": 1,
+        "bad_grms": 1200.0,
+        "good_grms": 0.4,
+    }
 
 
 def test_minimize_with_mlpot_refreshes_grms_after_sync():
@@ -190,7 +269,7 @@ def test_minimize_with_mlpot_refreshes_grms_after_sync():
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_mlpot_sd_then_abnr",
-        return_value=True,
+        return_value=MlpotSdChunkResult(completed=True),
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.prepare_mlpot_hybrid_state_for_sd",
         return_value=(1.0, -10.0),
@@ -229,7 +308,51 @@ def test_minimize_with_mlpot_raises_when_sd_watchdog_aborts():
         return_value=(12.0, -100.0),
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_mlpot_sd_then_abnr",
-        return_value=False,
+        return_value=MlpotSdChunkResult(completed=False),
     ):
         with pytest.raises(RuntimeError, match="watchdog"):
             minimize_with_mlpot(config)
+
+
+def test_minimize_with_mlpot_continues_after_rollback():
+    ctx = MagicMock()
+    minimize = MagicMock()
+    pycharmm = MagicMock()
+    cons_fix = MagicMock()
+
+    config = MinimizeWithMlpotConfig(
+        nstep=3,
+        nprint=10,
+        verbose=True,
+        mlpot_ctx=ctx,
+    )
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
+        return_value=(pycharmm, cons_fix, MagicMock(), minimize, MagicMock()),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.prepare_mlpot_hybrid_state_for_sd",
+        return_value=(12.0, -100.0),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_mlpot_sd_then_abnr",
+        return_value=MlpotSdChunkResult(
+            completed=False,
+            rolled_back=True,
+            last_grms=0.38,
+            rolled_back_chunk=5,
+        ),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+    ) as sync_lists, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+    ) as refresh_grms:
+        minimize_with_mlpot(config)
+
+    sync_lists.assert_called()
+    refresh_grms.assert_called_once()
