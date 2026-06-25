@@ -259,7 +259,13 @@ def test_register_mlpot_context_forwards_cell():
     mock_load.assert_called_once()
     assert mock_load.call_args.kwargs["cell"] == 20.0
     mock_register.assert_called_once_with(
-        fake_model, z, fake_sel, use_pbc=True, mm_internal_scale=0.0, cubic_box_side_A=20.0
+        fake_model,
+        z,
+        fake_sel,
+        use_pbc=True,
+        mm_internal_scale=0.0,
+        cubic_box_side_A=20.0,
+        verbose=False,
     )
     mock_warmup.assert_called_once()
     assert mock_warmup.call_args.kwargs["cell"] == 20.0

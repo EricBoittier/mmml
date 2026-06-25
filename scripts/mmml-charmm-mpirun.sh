@@ -42,10 +42,13 @@ ld = os.environ.get("LD_LIBRARY_PATH", "")
 if ld:
     print(f"export LD_LIBRARY_PATH={shlex.quote(ld)}")
 if not bundled:
+    import sys
+
     print(
-        "echo mmml-charmm-mpirun: warning: no pip nvidia/cudnn libs; "
-        "JAX CUDA may fail if module cuDNN is < 9.10.1. "
-        "Run: uv sync --extra gpu >&2",
+        "mmml-charmm-mpirun: warning: no pip nvidia/cudnn libs; "
+        "JAX CUDA may fail if module cuDNN is below 9.10.1. "
+        "Run: uv sync --extra gpu",
+        file=sys.stderr,
     )
 
 mpirun = charmm_mpirun_path()
