@@ -334,6 +334,30 @@ def test_build_early_abort_recovery_candidates_prefers_overlap_read(tmp_path):
     assert baseline in ladder
 
 
+def test_build_early_abort_recovery_candidates_includes_segment_restart(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+        build_early_abort_recovery_candidates,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import DynamicsOverlapConfig
+
+    equi = tmp_path / "equi_dcm_10.res"
+    equi.write_text("equi\n", encoding="utf-8")
+    baseline = tmp_path / "geometry_baseline_dcm_10.res"
+    baseline.write_text("baseline\n", encoding="utf-8")
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        n_monomers=2,
+        geometry_baseline_restart=baseline,
+        geometry_fallback_restarts=(),
+    )
+    ladder = build_early_abort_recovery_candidates(
+        cfg,
+        segment_restart_read=equi,
+    )
+    assert ladder[0] == equi.resolve()
+    assert baseline in ladder
+
+
 def test_attempt_overlap_early_abort_recovery_uses_baseline_without_overlap_read(tmp_path):
     """Without overlap_restart_read, scratch prior_segment is still excluded."""
     baseline = tmp_path / "geometry_baseline_dcm_155.res"
