@@ -15,6 +15,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     assert_dynamics_ready,
     build_cluster_from_args_with_tag,
     charmm_grms,
+    resolve_mlpot_grms_kcalmol_A,
     composition_tag,
     dynamics_nstep_from_ps,
     format_resid_constraint_message,
@@ -1485,7 +1486,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         "xyz": paths["mlpot_mmml_xyz"],
                         "energy_json": paths["mlpot_mmml_energy_json"],
                     },
-                    grms_kcalmol_A=charmm_grms(),
+                    grms_kcalmol_A=resolve_mlpot_grms_kcalmol_A(ctx, context=""),
                 )
             sync_charmm_positions(get_charmm_positions_array())
             refresh_mlpot_energy_and_grms(
@@ -1567,12 +1568,11 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             n_atoms,
             pbc=charmm_pbc,
         )
-        refresh_mlpot_energy_and_grms(
+        current_grms = refresh_mlpot_energy_and_grms(
             ctx,
             context="Pre-dynamics gate" if not args.quiet else "",
         )
 
-        current_grms = float(charmm_grms())
         if current_grms > max_grms:
             if not args.quiet:
                 _mini_note = (
@@ -1614,11 +1614,10 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 )
             )
             sync_charmm_positions(get_charmm_positions_array())
-            refresh_mlpot_energy_and_grms(
+            current_grms = refresh_mlpot_energy_and_grms(
                 ctx,
                 context="Pre-dynamics gate (post-MLpot SD)" if not args.quiet else "",
             )
-            current_grms = float(charmm_grms())
 
         if current_grms > max_grms:
             if not args.quiet:
