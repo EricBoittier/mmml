@@ -228,16 +228,55 @@ def _resolve_existing_file_path(raw_path: str | Path | None) -> Path | None:
 
 
 def _handoff_restart_glob_patterns() -> tuple[str, ...]:
-    """Glob patterns for restart discovery under a campaign/results directory."""
+    """Glob patterns for restart discovery within one campaign run directory."""
     return (
-        "*.res",
         "handoff/*.res",
         "handoff/final.res",
+        "*.res",
         "*/handoff/*.res",
         "*/handoff/final.res",
-        "*/*/handoff/*.res",
-        "*/*/*.res",
+        "pretreat/*.res",
+        "*/pretreat/*.res",
+        "*/*.res",
     )
+
+
+def _campaign_root_from_handoff_path(path: Path) -> Path | None:
+    """Return the campaign run root (e.g. ``.../results/dcm_large_201``).
+
+    Stages such as ``jaxmd_nve`` and ``pycharmm_equil`` live under this directory.
+    The parent ``results/`` directory must not be used for restart discovery.
+    """
+    resolved = Path(path).expanduser().resolve()
+    parts = resolved.parts
+    for trigger in ("results", "artifacts", "workflows", "examples"):
+        if trigger in parts:
+            idx = parts.index(trigger)
+            if idx + 2 < len(parts):
+                return Path(*parts[: idx + 2])
+    cur = resolved.parent if resolved.is_file() else resolved
+    if cur.name == "handoff":
+        cur = cur.parent
+    parent = cur.parent
+    if parent.name in ("results", "artifacts", "workflows", "examples"):
+        return cur
+    if parent == parent.parent:
+        return None
+    return parent
+
+
+def _handoff_restart_search_dirs(anchor: Path) -> list[Path]:
+    """Directories to scan for restart templates, confined to one campaign run."""
+    campaign = _campaign_root_from_handoff_path(anchor)
+    if campaign is not None and campaign.is_dir():
+        return [campaign]
+    resolved = Path(anchor).expanduser().resolve()
+    cur = resolved.parent if resolved.is_file() else resolved
+    if cur.name == "handoff" and cur.parent.is_dir():
+        return [cur.parent]
+    if cur.is_dir():
+        return [cur]
+    return []
 
 
 def _restart_natom_matches(path: Path, expected_natom: int | None) -> bool:
@@ -278,7 +317,7 @@ def _iter_restart_candidates_in_dirs(
 
 
 def _find_any_res_file_in_same_dir(raw_path: str | Path | None, handoff: MdHandoffState | None = None) -> Path | None:
-    """Search for any usable .res file in the resolved directory of raw_path."""
+    """Search for any usable ``.res`` file under the same campaign run as ``raw_path``."""
     if not raw_path:
         return None
     try:
@@ -286,64 +325,12 @@ def _find_any_res_file_in_same_dir(raw_path: str | Path | None, handoff: MdHando
     except Exception:
         return None
 
-    dirs_to_search: list[Path] = []
-
-    # 1. Direct parent if the directory exists
-    try:
-        if path.parent.is_dir():
-            dirs_to_search.append(path.parent)
-            if path.parent.name == "handoff" and path.parent.parent.is_dir():
-                dirs_to_search.append(path.parent.parent)
-    except Exception:
-        pass
-
-    # 2. Trigger-based resolution of parent directory
-    try:
-        parts = list(path.parts)
-        for trigger in ("artifacts", "workflows", "examples", "results"):
-            if trigger in parts:
-                idx = parts.index(trigger)
-                rel_dir = Path(*parts[idx:-1]) # up to the parent directory
-                repo_root = Path(__file__).resolve().parents[3]
-                cand_dir = (repo_root / rel_dir).resolve()
-                if cand_dir.is_dir():
-                    dirs_to_search.append(cand_dir)
-                if cand_dir.parent.is_dir():
-                    dirs_to_search.append(cand_dir.parent)
-
-                cand_cwd_dir = (Path.cwd() / rel_dir).resolve()
-                if cand_cwd_dir.is_dir():
-                    dirs_to_search.append(cand_cwd_dir)
-                if cand_cwd_dir.parent.is_dir():
-                    dirs_to_search.append(cand_cwd_dir.parent)
-    except Exception:
-        pass
-
-    # 3. Fallback based on grandparent/parent/filename structure
-    try:
-        parts = list(path.parts)
-        if len(parts) >= 3:
-            parent_name = parts[-2]
-            grandparent_name = parts[-3]
-            repo_root = Path(__file__).resolve().parents[3]
-            cand_dir = (repo_root / "artifacts" / "pbc_solvent_burst" / grandparent_name / parent_name).resolve()
-            if cand_dir.is_dir():
-                dirs_to_search.append(cand_dir)
-            if cand_dir.parent.is_dir():
-                dirs_to_search.append(cand_dir.parent)
-    except Exception:
-        pass
-
-    # Search the collected directories for any usable .res file
-    seen_dirs: set[Path] = set()
-    ordered_dirs: list[Path] = []
-    for d in dirs_to_search:
+    ordered_dirs = _handoff_restart_search_dirs(path)
+    if not ordered_dirs:
         try:
-            resolved_d = d.resolve()
-            if resolved_d in seen_dirs:
-                continue
-            seen_dirs.add(resolved_d)
-            ordered_dirs.append(resolved_d)
+            resolved = _resolve_existing_file_path(path)
+            if resolved is not None:
+                ordered_dirs = _handoff_restart_search_dirs(resolved)
         except Exception:
             pass
 
@@ -1601,20 +1588,11 @@ def _patch_handoff_into_restart_template(
 
 
 def _find_usable_fallback_template(failed_template: Path, expected_natom: int) -> Path | None:
-    """Search for a usable fallback restart template in the vicinity of failed_template."""
+    """Search for a usable fallback restart template within the same campaign run."""
     try:
-        search_dirs = [failed_template.parent]
-        if failed_template.parent.name == "handoff":
-            search_dirs.append(failed_template.parent.parent)
-
-        curr = failed_template.parent
-        for _ in range(2):
-            if curr.name == "handoff":
-                curr = curr.parent
-            if curr == curr.parent:
-                break
-            search_dirs.append(curr)
-            curr = curr.parent
+        search_dirs = _handoff_restart_search_dirs(failed_template)
+        if not search_dirs:
+            return None
 
         candidates: list[tuple[int, Path]] = []
         for res_file in _iter_restart_candidates_in_dirs(
