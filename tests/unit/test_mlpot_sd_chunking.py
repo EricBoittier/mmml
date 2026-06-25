@@ -189,14 +189,11 @@ def test_minimize_with_mlpot_refreshes_grms_after_sync():
     ) as sync_lists, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.assert_mlpot_user_active",
-        return_value=0.0,
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_mlpot_sd_then_abnr",
+        return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
-        return_value=1.0,
-    ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
-        return_value=1.0,
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.prepare_mlpot_hybrid_state_for_sd",
+        return_value=(1.0, -10.0),
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
     ) as refresh_grms:
@@ -205,3 +202,34 @@ def test_minimize_with_mlpot_refreshes_grms_after_sync():
     sync_lists.assert_called()
     refresh_grms.assert_called_once()
     assert refresh_grms.call_args.kwargs.get("context") == "Post MLpot SD pass 1"
+
+
+def test_minimize_with_mlpot_raises_when_sd_watchdog_aborts():
+    ctx = MagicMock()
+    minimize = MagicMock()
+    pycharmm = MagicMock()
+    cons_fix = MagicMock()
+
+    config = MinimizeWithMlpotConfig(
+        nstep=3,
+        nprint=10,
+        verbose=False,
+        mlpot_ctx=ctx,
+    )
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
+        return_value=(pycharmm, cons_fix, MagicMock(), minimize, MagicMock()),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.prepare_mlpot_hybrid_state_for_sd",
+        return_value=(12.0, -100.0),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_mlpot_sd_then_abnr",
+        return_value=False,
+    ):
+        with pytest.raises(RuntimeError, match="watchdog"):
+            minimize_with_mlpot(config)
