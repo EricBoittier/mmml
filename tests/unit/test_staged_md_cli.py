@@ -808,6 +808,122 @@ def test_configure_npt_dynamics_start_memory_handoff_no_readyn():
     assert "firstt" not in kw
 
 
+def test_equi_after_heat_overlap_memory_handoff_configures_npt_start(
+    tmp_path, monkeypatch
+):
+    """CPT EQUI after HEAT must re-init barostat when overlap chunk 0 skips READYN."""
+    from unittest.mock import MagicMock, patch
+
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        DynamicsOverlapConfig,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+        _maybe_configure_cpt_in_memory_overlap_start,
+    )
+
+    heat = tmp_path / "heat.res"
+    heat.write_text("REST 1 4000\n", encoding="ascii")
+    equi = tmp_path / "equi.res"
+    io = CharmmTrajectoryFiles(restart_read=heat, restart_write=equi)
+    kw = {
+        "cpt": True,
+        "hoover reft": 280.0,
+        "restart": True,
+        "start": False,
+        "nsavc": 50,
+        "iunrea": 3,
+    }
+    cfg = DynamicsOverlapConfig(
+        action="error",
+        min_distance_A=0.5,
+        check_interval=500,
+        n_monomers=2,
+        use_pbc=True,
+    )
+    args = argparse.Namespace(dynamics_overlap_memory_handoff=False, quiet=True)
+    monkeypatch.delenv("MMML_NO_OVERLAP_MEMORY_HANDOFF", raising=False)
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.assign_velocities_at_temperature"
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.staged_workflow.ensure_charmm_crystal_for_cpt"
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.staged_workflow.rewrite_dynamics_restart_from_current_state"
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        return_value=True,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
+        return_value=True,
+    ):
+        seed = _maybe_configure_cpt_in_memory_overlap_start(
+            stage="equi",
+            kw=kw,
+            io=io,
+            use_memory=False,
+            prev_restart_is_current_state=True,
+            stage_overlap=cfg,
+            mlpot_ctx=MagicMock(),
+            nstep=4000,
+            args=args,
+            timestep_ps=0.00025,
+            use_pbc=True,
+            temp=280.0,
+            box_side=32.0,
+        )
+
+    assert seed == equi
+    assert kw["restart"] is False
+    assert kw["iunrea"] == -1
+    assert io.restart_read is None
+
+
+def test_maybe_configure_cpt_skips_single_chunk_overlap(tmp_path, monkeypatch):
+    from unittest.mock import MagicMock, patch
+
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        DynamicsOverlapConfig,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+        _maybe_configure_cpt_in_memory_overlap_start,
+    )
+
+    heat = tmp_path / "heat.res"
+    heat.write_text("REST 1 4000\n", encoding="ascii")
+    io = CharmmTrajectoryFiles(restart_read=heat, restart_write=tmp_path / "equi.res")
+    kw = {"cpt": True, "hoover reft": 280.0, "restart": True, "nsavc": 50}
+    cfg = DynamicsOverlapConfig(
+        action="error",
+        min_distance_A=0.5,
+        check_interval=500,
+        n_monomers=2,
+        use_pbc=True,
+    )
+    args = argparse.Namespace(dynamics_overlap_memory_handoff=True, quiet=True)
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.staged_workflow._configure_npt_dynamics_start"
+    ) as configure_npt:
+        result = _maybe_configure_cpt_in_memory_overlap_start(
+            stage="equi",
+            kw=kw,
+            io=io,
+            use_memory=False,
+            prev_restart_is_current_state=True,
+            stage_overlap=cfg,
+            mlpot_ctx=MagicMock(),
+            nstep=500,
+            args=args,
+            timestep_ps=0.00025,
+            use_pbc=True,
+            temp=280.0,
+            box_side=32.0,
+        )
+
+    configure_npt.assert_not_called()
+    assert result is None
+
+
 def test_mlpot_profile_propagation(monkeypatch):
     from mmml.cli.run.md_system import parse_md_system_args, build_pycharmm_command
     from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import run_staged_workflow

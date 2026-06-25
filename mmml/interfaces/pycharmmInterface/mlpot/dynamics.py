@@ -1814,6 +1814,55 @@ def _valid_overlap_chunk_restart_read(path: PathLike | None) -> Path | None:
     return _valid_restart_file(p)
 
 
+def overlap_first_chunk_skips_readyn(
+    *,
+    overlap: Optional["DynamicsOverlapConfig"],
+    mlpot_ctx: Optional["MlpotContext"],
+    nstep: int,
+    nsavc: int | None = None,
+    restart_read: PathLike | None = None,
+    memory_handoff_default: bool = False,
+) -> bool:
+    """True when overlap chunk 0 will run ``dyna`` without ``READYN``.
+
+    Mirrors the chunk-0 decision in :func:`run_dynamics_with_io` so staged NPT can
+    call :func:`_configure_npt_dynamics_start` before dynamics when stage-level
+    ``use_memory`` is false but overlap uses in-process handoff on chunk 0.
+    """
+    if overlap is None or not (
+        overlap.enabled or overlap.intra_enabled or overlap.extent_enabled
+    ):
+        return False
+    total_nstep = max(0, int(nstep))
+    if total_nstep <= 0:
+        return False
+
+    requested_interval = max(1, int(overlap.check_interval))
+    interval = effective_overlap_check_interval(
+        total_nstep,
+        requested_interval,
+        nsavc=nsavc,
+    )
+    n_chunks = total_nstep // interval
+    if n_chunks <= 1:
+        return False
+
+    memory_handoff = bool(overlap.memory_handoff)
+    if mlpot_ctx is not None and not memory_handoff and memory_handoff_default:
+        from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import _truthy_env
+
+        if not _truthy_env("MMML_NO_OVERLAP_MEMORY_HANDOFF"):
+            memory_handoff = True
+
+    if memory_handoff and mlpot_ctx is not None:
+        return True
+
+    if _valid_overlap_chunk_restart_read(restart_read) is None:
+        return True
+
+    return False
+
+
 def _overlap_chunk_io(
     io: CharmmTrajectoryFiles,
     *,

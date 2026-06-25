@@ -212,6 +212,61 @@ def test_resolve_overlap_memory_handoff_explicit_and_mpi_default(monkeypatch):
         assert resolve_overlap_memory_handoff(args) is False
 
 
+def test_overlap_first_chunk_skips_readyn_mlpot_memory_handoff(tmp_path, monkeypatch):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        overlap_first_chunk_skips_readyn,
+    )
+
+    cfg = DynamicsOverlapConfig(
+        action="error",
+        min_distance_A=0.5,
+        check_interval=500,
+        n_monomers=2,
+        use_pbc=True,
+    )
+    heat = tmp_path / "heat.res"
+    heat.write_text("REST 1 4000\n", encoding="ascii")
+    mlpot_ctx = object()
+    monkeypatch.delenv("MMML_NO_OVERLAP_MEMORY_HANDOFF", raising=False)
+
+    assert overlap_first_chunk_skips_readyn(
+        overlap=cfg,
+        mlpot_ctx=mlpot_ctx,
+        nstep=4000,
+        nsavc=50,
+        restart_read=heat,
+        memory_handoff_default=True,
+    ) is True
+
+    assert overlap_first_chunk_skips_readyn(
+        overlap=cfg,
+        mlpot_ctx=mlpot_ctx,
+        nstep=500,
+        nsavc=50,
+        restart_read=heat,
+        memory_handoff_default=True,
+    ) is False
+
+    assert overlap_first_chunk_skips_readyn(
+        overlap=cfg,
+        mlpot_ctx=mlpot_ctx,
+        nstep=4000,
+        nsavc=50,
+        restart_read=heat,
+        memory_handoff_default=False,
+    ) is False
+
+    monkeypatch.setenv("MMML_NO_OVERLAP_MEMORY_HANDOFF", "1")
+    assert overlap_first_chunk_skips_readyn(
+        overlap=cfg,
+        mlpot_ctx=mlpot_ctx,
+        nstep=4000,
+        nsavc=50,
+        restart_read=heat,
+        memory_handoff_default=True,
+    ) is False
+
+
 def test_resolve_off_disables_inter_and_intra():
     args = argparse.Namespace(dynamics_overlap_action="off")
     cfg = resolve_dynamics_overlap_config(args, n_monomers=4, use_pbc=False)
