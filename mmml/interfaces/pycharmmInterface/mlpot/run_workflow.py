@@ -718,6 +718,7 @@ def _register_mlpot_context(
         use_pbc=mlpot_use_pbc,
         mm_internal_scale=mm_internal_scale,
         cubic_box_side_A=ml_cell,
+        verbose=bool(getattr(args, "verbose", False)) if args is not None else False,
     )
     from mmml.interfaces.pycharmmInterface.jax_device_policy import apply_mlpot_jax_platform_env
 

@@ -1607,7 +1607,6 @@ def _pycharmm_eval_metrics(
         ctx,
         context=refresh_ctx,
         reregister=False,
-        quiet=quiet,
     )
     charmm_row = charmm_energy_row()
     total_kcal = float(charmm_row.get("ENER", charmm_row.get("ENERGY", 0.0)))
