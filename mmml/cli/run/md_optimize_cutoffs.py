@@ -116,7 +116,7 @@ def run_optimize_cutoffs(args: Any) -> int:
         z_fallback=z,
         n_atoms_monomer=n_atoms_monomer,
         n_monomers=n_monomers,
-        max_frames=int(getattr(args, "max_frames", 200)),
+        max_frames=int(getattr(args, "max_frames", None) or 200),
     )
 
     ensure_psf_for_handoff_cluster(

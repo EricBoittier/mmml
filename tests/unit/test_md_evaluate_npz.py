@@ -15,9 +15,13 @@ from mmml.cli.run.md_evaluate_npz import (
     compare_evaluate_to_reference_npz,
     load_evaluate_npz,
     resolve_evaluate_use_pbc,
+    resolve_evaluate_max_frames,
     run_evaluate_npz,
     save_evaluate_extxyz,
+    save_evaluate_extxyz_multi,
     save_evaluate_trajectory_npz,
+    save_evaluate_trajectory_npz_multi,
+    should_evaluate_reference_trajectory,
 )
 from mmml.cli.run.md_handoff import MdHandoffState
 
@@ -147,6 +151,68 @@ def test_compare_evaluate_reorders_psf_order_reference(tmp_path: Path) -> None:
     assert cmp["reference_reordered"] is True
     assert cmp["position_rmsd_A"] == pytest.approx(0.0, abs=1e-12)
     assert cmp["delta_energy_eV"] == pytest.approx(0.0, abs=1e-6)
+
+
+def test_resolve_evaluate_max_frames_defaults_to_one() -> None:
+    assert resolve_evaluate_max_frames(Namespace(max_frames=None)) == 1
+    assert resolve_evaluate_max_frames(Namespace(max_frames=20)) == 20
+
+
+def test_should_evaluate_reference_trajectory() -> None:
+    assert should_evaluate_reference_trajectory(Namespace(evaluate_reference_npz=None)) is False
+    assert (
+        should_evaluate_reference_trajectory(
+            Namespace(evaluate_reference_npz="/tmp/ref.npz", max_frames=None)
+        )
+        is False
+    )
+    assert (
+        should_evaluate_reference_trajectory(
+            Namespace(evaluate_reference_npz="/tmp/ref.npz", max_frames=20)
+        )
+        is True
+    )
+
+
+def test_save_evaluate_trajectory_npz_multi_roundtrip(tmp_path: Path) -> None:
+    z = np.array([6, 1, 1, 17, 17], dtype=np.int32)
+    r = np.random.default_rng(0).random((3, 5, 3))
+    f = np.random.default_rng(1).random((3, 5, 3))
+    e = np.array([-1.0, -1.1, -1.2])
+    path = tmp_path / "evaluate_traj.npz"
+    save_evaluate_trajectory_npz_multi(
+        path,
+        atomic_numbers=z,
+        positions=r,
+        energies_eV=e,
+        forces_eV_A=f,
+        frame_indices=np.array([0, 5, 10], dtype=int),
+    )
+    with np.load(path) as data:
+        assert data["R"].shape == (3, 5, 3)
+        assert data["E_eV"].shape == (3,)
+        np.testing.assert_allclose(data["F"][1], f[1])
+        np.testing.assert_array_equal(data["source_indices"], [0, 5, 10])
+
+
+def test_save_evaluate_extxyz_multi_writes_all_frames(tmp_path: Path) -> None:
+    from ase.io import read
+
+    z = np.array([6, 1, 1, 17, 17], dtype=np.int32)
+    r = np.zeros((4, 5, 3))
+    f = np.ones((4, 5, 3)) * 0.25
+    e = np.linspace(-2.0, -1.7, 4)
+    path = tmp_path / "evaluate.extxyz"
+    save_evaluate_extxyz_multi(
+        path,
+        atomic_numbers=z,
+        positions=r,
+        energies_eV=e,
+        forces_eV_A=f,
+    )
+    frames = read(str(path), index=":")
+    assert len(frames) == 4
+    assert frames[2].get_potential_energy() == pytest.approx(float(e[2]))
 
 
 def test_save_evaluate_extxyz_includes_forces(tmp_path: Path) -> None:

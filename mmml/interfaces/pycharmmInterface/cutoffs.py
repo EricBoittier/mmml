@@ -497,6 +497,10 @@ def add_handoff_cutoff_grid_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--max-frames",
         type=int,
-        default=200,
-        help="Max trajectory frames to evaluate (-1 = all).",
+        default=None,
+        help=(
+            "Max trajectory frames to evaluate (-1 = all). "
+            "Default: 200 for --optimize-cutoffs; 1 for --evaluate-npz with "
+            "--evaluate-reference-npz unless this flag is set."
+        ),
     )
