@@ -927,6 +927,9 @@ def build_ase_cluster(
         z, r = _build_psf_ordered_cluster(residue.upper(), n_molecules, spacing)
         sync_charmm_positions(r)
     validate_cluster_geometry(r, n_molecules=n_molecules)
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import report_charmm_topology_summary
+
+    report_charmm_topology_summary()
     return z, r
 
 

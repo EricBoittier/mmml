@@ -572,9 +572,6 @@ def setup_calculator(
     # print(BATCH_SIZE)
     restart_path = Path(model_restart_path) if type(model_restart_path) == str else model_restart_path
     setup_rows.append(("model_restart_path", restart_path.resolve()))
-    from mmml.utils.rich_report import emit_setup_calculator_summary, emit_model_loaded, emit_tagged
-
-    emit_setup_calculator_summary(setup_rows)
 
     # Check if this is a JSON checkpoint (params.json in dir, or path to .json file)
     is_json_checkpoint = (
@@ -588,7 +585,8 @@ def setup_calculator(
     _mlpot_jax_defer_stack = ExitStack()
     if defer_xla_gpu_warmup:
         _mlpot_jax_defer_stack.enter_context(jax_cpu_until_mlpot_registered())
-    
+
+    checkpoint_meta: dict[str, Any] | None = None
     if is_json_checkpoint:
         # This is a JSON checkpoint - use it directly
         restart = restart_path
@@ -696,19 +694,24 @@ def setup_calculator(
                 f"If this is a JSON checkpoint, make sure params.json exists in the directory."
             ) from e
         # Setup monomer model using orbax
-        params, MODEL = get_params_model(restart, natoms=max_atoms)
+        params, MODEL, checkpoint_meta = get_params_model(
+            restart, natoms=max_atoms, quiet=True, return_meta=True
+        )
         params = cast_pytree_to_ml_dtype(params, dtype=ml_jnp_dtype)
     MODEL.natoms = max_atoms
-    emit_model_loaded(
-        MODEL,
-        checkpoint=str(restart_path.resolve()),
-        runtime_natoms=max_atoms if is_json_checkpoint else None,
-    )
 
+    from mmml.utils.rich_report import emit_hybrid_ml_setup, emit_tagged
     from mmml.data.units import HARTREE_TO_EV, calculator_results_units
 
-    checkpoint_training_units = None
     if is_json_checkpoint:
+        if checkpoint_meta is None:
+            checkpoint_meta = {
+                "Checkpoint": str(restart_path.resolve()),
+                "name": restart_path.name,
+                "epoch": "—",
+                "best_loss": "—",
+                "Save Time": "—",
+            }
         checkpoint_training_units = config.get("training_units") or checkpoint.get("training_units")
     else:
         try:
@@ -812,6 +815,46 @@ def setup_calculator(
         # Reuse jax_md pair lists between MLpot callbacks when coords move < 0.5 Å.
         _jax_md_skin_distance = 0.5
 
+    _density_est = cell_list_density_estimate if cell_list_density_estimate is not None else 0.03
+    emit_hybrid_ml_setup(
+        system={
+            "n_monomers": n_monomers,
+            "atoms_per_monomer": atoms_per_monomer_list,
+            "total_atoms": total_atoms,
+            "max_atoms": max_atoms,
+            "ml_compute_dtype": str(ml_jnp_dtype),
+            "checkpoint_dir": str(restart_path.resolve()),
+        },
+        handoff={
+            "ml_switch_width_Å": f"{ml_switch_width:.4f}",
+            "mm_switch_on_Å": f"{mm_switch_on:.4f}",
+            "mm_switch_width_Å": f"{mm_switch_width:.4f}",
+            "complementary": complementary_handoff,
+            "mm_r_min_Å": f"{mm_r_min:.4f}" if mm_r_min is not None else "—",
+            "model_cutoff_Å": getattr(MODEL, "cutoff", "—"),
+        },
+        neighbor_lists={
+            "ml_sparse_dimers": ml_sparse_dimers,
+            "dimers_total": n_dimers_total,
+            "max_active_dimers": _max_active_dimers,
+            "ml_batch_size": ml_batch_size if ml_batch_size is not None else "all",
+            "ml_gpu_count": ml_gpu_count,
+            "jax_md_skin_Å": _jax_md_skin_distance,
+            "jax_md_update_every": jax_md_update_interval,
+            "max_pairs": max_pairs if max_pairs is not None else "auto",
+            "cell_list_safety": cell_list_safety_factor,
+            "density_est": _density_est,
+            "PBC": bool(pbc_cell is not None),
+        },
+        model=MODEL,
+        checkpoint=checkpoint_meta,
+        ml_flags={
+            "doML": doML,
+            "doMM": doMM,
+            "doML_dimer": doML_dimer,
+            "defer_xla_warmup": defer_xla_gpu_warmup,
+        },
+    )
 
 
     def switch_ML(X,
