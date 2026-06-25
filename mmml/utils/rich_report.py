@@ -367,13 +367,18 @@ def _psf_residue_summary(
     parts: list[str] = []
     try:
         if len(resnames) == n_res:
-            for name, count in sorted(
-                Counter(resnames).items(),
-                key=lambda item: (-item[1], item[0]),
-            ):
-                parts.append(f"{name}×{count}")
+            name_counts = Counter(resnames)
+            seen_names: set[str] = set()
+            ordered_names: list[str] = []
+            for name in resnames:
+                if name in seen_names:
+                    continue
+                seen_names.add(name)
+                ordered_names.append(name)
+            for name in ordered_names:
+                parts.append(f"{name}×{name_counts[name]}")
                 if len(parts) >= max_residue_rows:
-                    if len(Counter(resnames)) > max_residue_rows:
+                    if len(name_counts) > max_residue_rows:
                         parts.append("…")
                     break
         elif len(resids) == n_res:
@@ -392,8 +397,15 @@ def _psf_residue_summary(
                 else:
                     names_by_rid.append(f"res{rid}")
             name_counts = Counter(names_by_rid)
-            for name, count in sorted(name_counts.items(), key=lambda item: (-item[1], item[0])):
-                parts.append(f"{name}×{count}")
+            seen_names = set()
+            ordered_names: list[str] = []
+            for name in names_by_rid:
+                if name in seen_names:
+                    continue
+                seen_names.add(name)
+                ordered_names.append(name)
+            for name in ordered_names:
+                parts.append(f"{name}×{name_counts[name]}")
                 if len(parts) >= max_residue_rows:
                     if len(name_counts) > max_residue_rows:
                         parts.append("…")
