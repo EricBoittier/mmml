@@ -846,6 +846,30 @@ def _overlap_extent_prior_restart(
     return None
 
 
+def _stage_handoff_restart_for_early_abort(
+    stage: MdStage,
+    paths: dict[str, Path],
+    prev_restart: Path | None,
+) -> Path | None:
+    """On-disk stage handoff for overlap chunk-0 early-abort recovery (equi for prod, etc.)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
+
+    by_stage: dict[MdStage, tuple[str, ...]] = {
+        "prod": ("equi_res",),
+        "equi": ("heat_res",),
+    }
+    for key in by_stage.get(stage, ()):
+        p = paths.get(key)
+        if p is None:
+            continue
+        valid = _valid_restart_file(Path(p))
+        if valid is not None:
+            return valid
+    if prev_restart is not None:
+        return _valid_restart_file(Path(prev_restart))
+    return None
+
+
 def _seed_restart_for_memory_handoff(
     io: CharmmTrajectoryFiles,
     kw: dict[str, Any],
@@ -884,42 +908,32 @@ def _configure_npt_dynamics_start(
     temp: float,
     box_side: float | None = None,
 ) -> None:
-    """Fresh Boltzmann draw and CPT barostat for in-memory handoff after mini/rescue.
+    """Fresh CPT barostat for in-memory handoff after mini/rescue.
 
     ``write restart`` after SD/minimization saves coordinates but not barostat
-    piston state; ``READYN`` then yields garbage ``PIXX``/``PRESSE``.  Match HEAT/NVE:
-    continue from RAM with ``restart=False``, ``start=False``, ``iasvel=1``.
+    piston state; ``READYN`` then yields garbage ``PIXX``/``PRESSE``.  Use a
+    single ``dyna`` with ``start=True``, ``iasvel=1`` (no ``nstep=0`` assign).
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
-        assign_velocities_at_temperature,
-    )
-
     if not coords_in_memory:
         return
 
     io.restart_read = None
     kw["restart"] = False
     kw["new"] = False
-    kw.pop("iunrea", None)
-    kw["iunrea"] = -1
     target = float(kw.get("hoover reft", kw.get("treference", temp)))
     use_cpt = bool(kw.get("cpt"))
     if use_pbc and use_cpt and box_side is not None:
         ensure_charmm_crystal_for_cpt(float(box_side), quiet=quiet)
-    assign_velocities_at_temperature(
-        target,
-        timestep_ps=timestep_ps,
-        restart_path=None,
-        use_pbc=use_pbc and use_cpt,
-    )
-    kw["start"] = False
+    # Single CPT dyna: Boltzmann at target T + barostat init (no nstep=0 assign).
     kw["iasvel"] = 1
-    kw.pop("firstt", None)
+    kw["start"] = True
+    kw.pop("iunrea", None)
+    kw["iunrea"] = -1
     if not quiet:
         label = "NPT" if use_cpt else "NVT"
         print(
-            f"{label}: Boltzmann velocities at {target:.1f} K "
-            "(in-memory coords after mini; fresh barostat, no READYN)",
+            f"{label}: dyna start at {target:.1f} K "
+            "(in-memory coords; single dyna, no nstep=0 assign)",
             flush=True,
         )
 
@@ -2134,6 +2148,9 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         mlpot_ctx=ctx,
                         rng_base=getattr(args, "seed", None),
                         loose_pbc=loose_pbc,
+                        segment_restart_read=_stage_handoff_restart_for_early_abort(
+                            "equi", paths, prev_restart
+                        ),
                         **overlap_run_state_kwargs_from_args(args),
                     )
                     _validate_dyn_stage_completion(
@@ -2280,6 +2297,9 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         mlpot_ctx=ctx,
                         rng_base=getattr(args, "seed", None),
                         loose_pbc=loose_pbc,
+                        segment_restart_read=_stage_handoff_restart_for_early_abort(
+                            "prod", paths, prev_restart
+                        ),
                         **overlap_run_state_kwargs_from_args(args),
                     )
                     _validate_dyn_stage_completion(
@@ -2565,6 +2585,11 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 mlpot_ctx=ctx,
                 rng_base=getattr(args, "seed", None),
                 loose_pbc=loose_pbc,
+                segment_restart_read=(
+                    _stage_handoff_restart_for_early_abort(stage, paths, prev_restart)
+                    if stage in ("equi", "prod")
+                    else None
+                ),
                 **overlap_run_state_kwargs_from_args(args),
             )
             _validate_dyn_stage_completion(

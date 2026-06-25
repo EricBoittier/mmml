@@ -818,7 +818,7 @@ def test_heat_multiseg_memory_handoff_reset_then_seed(tmp_path):
 
 
 def test_configure_npt_dynamics_start_memory_handoff_no_readyn():
-    """EQUI/PROD after bonded-MM must not READYN static write-restart (no CPT state)."""
+    """EQUI/PROD after bonded-MM: single CPT dyna start (no nstep=0 assign, no READYN)."""
     from unittest.mock import patch
 
     io = CharmmTrajectoryFiles(restart_write=Path("/tmp/equi.res"))
@@ -853,14 +853,13 @@ def test_configure_npt_dynamics_start_memory_handoff_no_readyn():
             box_side=32.0,
         )
 
-    assign.assert_called_once()
+    assign.assert_not_called()
     crystal.assert_called_once()
     assert kw["restart"] is False
-    assert kw["start"] is False
+    assert kw["start"] is True
     assert kw["iasvel"] == 1
     assert kw["iunrea"] == -1
     assert io.restart_read is None
-    assert "firstt" not in kw
 
 
 def test_equi_after_heat_overlap_memory_handoff_configures_npt_start(
