@@ -12,11 +12,14 @@ from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
     attempt_overlap_early_abort_recovery,
     build_geometry_recovery_candidates,
     discover_resume_restart,
+    first_valid_geometry_crd_path,
     first_valid_restart_path,
+    is_geometry_recovery_crd_path,
     is_handoff_seed_restart_path,
     is_overlap_scratch_restart_path,
     pretreat_stage_complete,
     resolve_geometry_checkpoint_ladder,
+    restore_geometry_from_ladder,
     resume_charmm_mm_pretreat_if_available,
     write_geometry_baseline_restart,
 )
@@ -310,3 +313,100 @@ def test_attempt_overlap_early_abort_recovery_uses_baseline_not_scratch(tmp_path
     called_candidates = restore.call_args[0][0]
     assert called_candidates[0] == baseline
     assert scratch not in called_candidates
+
+
+def test_first_valid_geometry_crd_path_skips_restart_files(tmp_path):
+    junk = (
+        "NOTE!! THIS FILE  C A N N O T  BE USED TO RESTART A RUN!!!\n"
+    )
+    baseline = tmp_path / "geometry_baseline_dcm_25.res"
+    baseline.write_text(junk, encoding="utf-8")
+    crd = tmp_path / "03_bonded_mm_after_mini_dcm_25.crd"
+    crd.write_text("crd coords\n", encoding="utf-8")
+    heat = tmp_path / "heat_dcm_25.res"
+    heat.write_text(junk, encoding="utf-8")
+    ladder = [baseline, crd, heat]
+
+    assert first_valid_restart_path(ladder) is None
+    assert first_valid_geometry_crd_path(ladder) == crd.resolve()
+    assert is_geometry_recovery_crd_path(crd)
+
+
+def test_restore_geometry_from_ladder_falls_back_to_crd(tmp_path):
+    crd = tmp_path / "03_bonded_mm_after_mini_dcm_25.crd"
+    crd.write_text("crd coords\n", encoding="utf-8")
+    bad = tmp_path / "heat_dcm_25.res"
+    bad.write_text(
+        "NOTE!! THIS FILE  C A N N O T  BE USED TO RESTART A RUN!!!\n",
+        encoding="utf-8",
+    )
+    candidates = [bad, crd]
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_crd"
+    ) as restore_crd:
+        path = restore_geometry_from_ladder(candidates, label="test recovery")
+
+    restore_crd.assert_called_once_with(crd.resolve())
+    assert path == crd.resolve()
+
+
+def test_restore_geometry_from_ladder_falls_back_to_in_memory(tmp_path):
+    bad = tmp_path / "heat_dcm_25.res"
+    bad.write_text(
+        "NOTE!! THIS FILE  C A N N O T  BE USED TO RESTART A RUN!!!\n",
+        encoding="utf-8",
+    )
+    candidates = [bad]
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.charmm_memory_coordinates_usable",
+        return_value=True,
+    ):
+        path = restore_geometry_from_ladder(
+            candidates,
+            label="test recovery",
+            allow_in_memory=True,
+        )
+
+    assert path == Path("<in-memory>")
+
+
+def test_attempt_overlap_early_abort_recovery_uses_crd_when_restarts_invalid(
+    tmp_path,
+):
+    baseline = tmp_path / "geometry_baseline_dcm_25.res"
+    baseline.write_text(
+        "NOTE!! THIS FILE  C A N N O T  BE USED TO RESTART A RUN!!!\n",
+        encoding="utf-8",
+    )
+    crd = tmp_path / "03_bonded_mm_after_mini_dcm_25.crd"
+    crd.write_text("crd coords\n", encoding="utf-8")
+    heat = tmp_path / "heat_dcm_25.res"
+    heat.write_text(
+        "NOTE!! THIS FILE  C A N N O T  BE USED TO RESTART A RUN!!!\n",
+        encoding="utf-8",
+    )
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        n_monomers=2,
+        geometry_baseline_restart=baseline,
+        geometry_fallback_restarts=(crd, heat),
+    )
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_crd"
+    ) as restore_crd, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.charmm_memory_coordinates_usable",
+        return_value=False,
+    ):
+        ok = attempt_overlap_early_abort_recovery(
+            cfg,
+            chunk_nstep=400,
+            steps_done=1,
+            steps_before_chunk=0,
+            overlap_context="HEAT",
+        )
+
+    assert ok is True
+    restore_crd.assert_called_once_with(crd.resolve())
