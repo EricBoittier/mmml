@@ -40,10 +40,18 @@ def test_emit_jax_compile_session_summary_plain(capsys) -> None:
 
 
 def test_emit_charmm_block_plain(capsys) -> None:
-    rich_report.emit_charmm_block("MLpot all-ML (10 atoms, bonded/ELEC/VDW off)")
+    rich_report.emit_charmm_block(
+        "MLpot all-ML (10 atoms, bonded/ELEC/VDW off)",
+        verbose=True,
+    )
     out = capsys.readouterr().out
     assert "CHARMM BLOCK:" in out
     assert "MLpot all-ML" in out
+
+
+def test_emit_charmm_block_suppressed_by_default(capsys) -> None:
+    rich_report.emit_charmm_block("MLpot all-ML (10 atoms, bonded/ELEC/VDW off)")
+    assert capsys.readouterr().out == ""
 
 
 def test_emit_status_respects_quiet(capsys, monkeypatch: pytest.MonkeyPatch) -> None:
