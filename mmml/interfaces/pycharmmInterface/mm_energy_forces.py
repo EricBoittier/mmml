@@ -129,6 +129,24 @@ def _filter_pairs_by_com_min(
     return out_mask
 
 
+# Verlet skin for jax-md MM pair reuse: ≤ dr_threshold/2 (dr_threshold=0.5 Å in bundle).
+DEFAULT_JAX_MD_SKIN_DISTANCE_A = 0.25
+
+
+def format_mm_pair_update_stats_summary(stats: dict) -> str:
+    """One-line neighbor-list cache summary for jaxmd suite logs."""
+    calls = int(stats.get("calls", 0))
+    reused = int(stats.get("reused", 0))
+    updates = int(stats.get("updates", 0))
+    reallocs = int(stats.get("reallocs", 0))
+    fallbacks = int(stats.get("fallbacks", 0))
+    pct = 100.0 * reused / max(1, calls)
+    return (
+        f"[jaxmd_nbr] pair-list cache: {reused}/{calls} reused ({pct:.1f}%), "
+        f"{updates} rebuilds, reallocs={reallocs}, fallbacks={fallbacks}"
+    )
+
+
 def neighbor_pair_cache_should_reuse(
     *,
     calls: int,
