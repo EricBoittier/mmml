@@ -562,6 +562,37 @@ def prepare_pycharmm_handoff_continuation(
     return seed
 
 
+def validate_handoff_matches_cluster_geometry(
+    handoff: MdHandoffState,
+    atomic_numbers: np.ndarray,
+    n_monomers: int,
+    *,
+    tag: str | None = None,
+    composition: str | None = None,
+) -> None:
+    """Fail fast when handoff atom count disagrees with PSF / composition layout."""
+    ho_n = int(np.asarray(handoff.positions).shape[0])
+    cluster_n = int(len(atomic_numbers))
+    if ho_n == cluster_n:
+        return
+    meta = handoff.metadata or {}
+    src = (
+        meta.get("restart_path")
+        or meta.get("path")
+        or meta.get("backend")
+        or "handoff"
+    )
+    comp_hint = f", --composition {composition!r}" if composition else ""
+    per = ho_n // max(1, int(n_monomers)) if int(n_monomers) > 0 else ho_n
+    cluster_per = cluster_n // max(1, int(n_monomers)) if int(n_monomers) > 0 else cluster_n
+    raise ValueError(
+        f"Handoff has {ho_n} atoms ({int(n_monomers)}×{per}) but cluster geometry has "
+        f"{cluster_n} atoms ({int(n_monomers)}×{cluster_per}, tag={tag!r}{comp_hint}). "
+        f"Source: {src}. Regenerate the handoff for this campaign or align "
+        "--composition with the prior stage (e.g. DCM:20 vs DCM:25)."
+    )
+
+
 def cluster_layout_from_composition_string(
     composition: str,
     *,

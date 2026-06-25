@@ -1076,6 +1076,15 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     ckpt = resolve_checkpoint(args.checkpoint)
     z, r, n_mol, tag = _load_or_build_cluster(args, handoff_in=handoff_in)
     if handoff_in is not None:
+        from mmml.cli.run.md_handoff import validate_handoff_matches_cluster_geometry
+
+        validate_handoff_matches_cluster_geometry(
+            handoff_in,
+            z,
+            n_mol,
+            tag=tag,
+            composition=getattr(args, "composition", None),
+        )
         r = np.asarray(handoff_in.positions, dtype=np.float64)
         if (
             handoff_in.atomic_numbers is not None
