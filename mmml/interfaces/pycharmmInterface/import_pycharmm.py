@@ -141,14 +141,14 @@ def reset_block() -> None:
         END
         """
     from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
+    from mmml.utils.rich_report import emit_charmm_block, is_verbose
 
     run_charmm_script_quiet(block)
-    try:
-        from mmml.utils.rich_report import emit_charmm_block
-
-        emit_charmm_block("full MM (all atoms, COEFF 1.0)")
-    except Exception:
-        print("CHARMM BLOCK: full MM (all atoms, COEFF 1.0)", flush=True)
+    if is_verbose():
+        try:
+            emit_charmm_block("full MM (all atoms, COEFF 1.0)", verbose=True)
+        except Exception:
+            print("CHARMM BLOCK: full MM (all atoms, COEFF 1.0)", flush=True)
 
 
 def should_skip_charmm_energy_show() -> bool:

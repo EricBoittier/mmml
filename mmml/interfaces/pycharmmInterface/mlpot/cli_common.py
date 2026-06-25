@@ -1580,7 +1580,7 @@ def refresh_mlpot_energy_and_grms(
     context: str = "MLpot energy refresh",
     silent_charmm: bool = True,
     reregister: bool = True,
-    quiet: bool = False,
+    verbose: bool = False,
 ) -> float:
     """Re-apply MLpot BLOCK, run ``ENER FORCE``, return GRMS (kcal/mol/Å).
 
@@ -1597,7 +1597,7 @@ def refresh_mlpot_energy_and_grms(
     import pycharmm
 
     if mlpot_ctx is not None and reregister:
-        mlpot_ctx.reregister_mlpot(quiet=quiet)
+        mlpot_ctx.reregister_mlpot(verbose=verbose)
     if silent_charmm:
         from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
 
