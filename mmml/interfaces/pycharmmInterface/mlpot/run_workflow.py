@@ -1229,6 +1229,185 @@ def run_dynamics_workflow(
     return 0
 
 
+def build_charmm_mm_pretreat_handoff_sections(
+    positions: np.ndarray,
+    *,
+    n_monomers: int,
+    tag: str,
+    pretreat_restart: PathLike | None = None,
+    workflow_box_side_A: float | None = None,
+    use_pbc: bool = False,
+    paths: dict[str, Path] | None = None,
+) -> list[tuple[str, dict[str, Any]]]:
+    """Summarize CHARMM MM pretreat state before MLpot registration."""
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import validate_cluster_geometry
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        _read_charmm_box_sides_A,
+        charmm_crystal_is_active,
+        parse_cubic_box_side_from_charmm_restart,
+        resolve_charmm_cubic_box_side_A,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+
+    r = np.asarray(positions, dtype=float)
+    stats = validate_cluster_geometry(r, n_molecules=n_monomers)
+    geom: dict[str, Any] = {
+        "tag": tag,
+        "n_monomers": int(n_monomers),
+        "n_atoms": int(r.shape[0]),
+        "span_x_Å": f"{stats['span_x']:.3f}",
+        "span_y_Å": f"{stats['span_y']:.3f}",
+        "span_z_Å": f"{stats['span_z']:.3f}",
+    }
+    if n_monomers > 1 and not np.isnan(stats.get("com_dist_min", np.nan)):
+        geom["com_dist_min_Å"] = f"{stats['com_dist_min']:.3f}"
+        geom["com_dist_max_Å"] = f"{stats['com_dist_max']:.3f}"
+
+    mm_state: dict[str, Any] = {
+        "coord_source": "in-memory CHARMM (pretreat; no restart reload)",
+        "GRMS_kcal/mol/Å": f"{charmm_grms():.4f}",
+    }
+    try:
+        import pycharmm.coor as coor
+
+        mm_state["charmm_natom"] = int(coor.get_natom())
+    except Exception:
+        pass
+    live = get_charmm_positions_array()
+    if live is not None and live.shape[0] != r.shape[0]:
+        mm_state["live_coord_rows"] = int(live.shape[0])
+
+    pbc: dict[str, Any] = {}
+    warnings: list[str] = []
+    if use_pbc:
+        restart_path = Path(pretreat_restart) if pretreat_restart is not None else None
+        restart_side = (
+            parse_cubic_box_side_from_charmm_restart(restart_path)
+            if restart_path is not None and restart_path.is_file()
+            else None
+        )
+        lx, ly, lz = _read_charmm_box_sides_A()
+        crystal_active = charmm_crystal_is_active()
+        pbound_side, pbound_source = resolve_charmm_cubic_box_side_A(
+            fallback_side_A=None,
+            restart_path=None,
+        )
+        restart_for_workflow = None if crystal_active else restart_path
+        workflow_side, workflow_source = resolve_charmm_cubic_box_side_A(
+            fallback_side_A=workflow_box_side_A,
+            restart_path=restart_for_workflow,
+        )
+        ml_restart_for_sync = restart_path
+        ml_side, ml_source = resolve_charmm_cubic_box_side_A(
+            fallback_side_A=workflow_box_side_A,
+            restart_path=ml_restart_for_sync,
+        )
+
+        pbc = {
+            "crystal_active": crystal_active,
+            "pbound_Å": f"({lx:.3f}, {ly:.3f}, {lz:.3f})",
+            "pbound_cubic_L_Å": (
+                f"{pbound_side:.3f} ({pbound_source})"
+                if pbound_source == "pbound"
+                else "inactive"
+            ),
+            "workflow_box_L_Å": f"{workflow_side:.3f} ({workflow_source})",
+            "MLpot_MIC_sync_L_Å": f"{ml_side:.3f} ({ml_source})",
+        }
+        if restart_path is not None and restart_path.is_file():
+            pbc["pretreat_restart"] = restart_path.name
+        if restart_side is not None:
+            pbc["restart_crystal_L_Å"] = f"{restart_side:.3f}"
+        if workflow_box_side_A is not None:
+            pbc["campaign_box_size_Å"] = f"{float(workflow_box_side_A):.3f}"
+        if workflow_side > 0.0:
+            rho = float(r.shape[0]) / float(workflow_side) ** 3
+            pbc["number_density_atoms/Å³"] = f"{rho:.5f}"
+
+        if workflow_source == "restart":
+            warnings.append(
+                "workflow box resolved from restart file (pbound not cubic/active); "
+                "MLpot may log source=restart — prefer live pbound when IMAGE is active"
+            )
+        if ml_source == "restart" and crystal_active:
+            warnings.append(
+                "crystal/IMAGE appear active but MLpot MIC sync will read restart crystal"
+            )
+        if (
+            restart_side is not None
+            and pbound_source == "pbound"
+            and abs(restart_side - pbound_side) > max(1e-3, 1e-4 * pbound_side)
+        ):
+            warnings.append(
+                f"restart crystal L={restart_side:.3f} Å ≠ live pbound L={pbound_side:.3f} Å"
+            )
+        if (
+            workflow_box_side_A is not None
+            and workflow_source == "pbound"
+            and abs(workflow_side - float(workflow_box_side_A)) > max(1e-3, 1e-4 * workflow_side)
+        ):
+            warnings.append(
+                f"campaign --box-size {float(workflow_box_side_A):.3f} Å "
+                f"≠ live pbound {workflow_side:.3f} Å (NPT drift or pretreat resize)"
+            )
+
+    artifacts: dict[str, Any] = {}
+    if paths:
+        for key, label in (
+            ("charmm_mm_heat_res", "heat.res"),
+            ("charmm_mm_equi_res", "equi.res"),
+            ("charmm_mm_prod_res", "prod.res"),
+        ):
+            candidate = paths.get(key)
+            if candidate is not None and Path(candidate).is_file():
+                artifacts[label] = Path(candidate).name
+
+    sections: list[tuple[str, dict[str, Any]]] = [
+        ("Geometry", geom),
+        ("CHARMM MM state", mm_state),
+    ]
+    if pbc:
+        sections.append(("PBC → MLpot handoff", pbc))
+    if artifacts:
+        sections.append(("Pretreat artifacts", artifacts))
+    if warnings:
+        sections.append(
+            ("Warnings", {f"warn_{i + 1}": w for i, w in enumerate(warnings)})
+        )
+    return sections
+
+
+def print_charmm_mm_pretreat_handoff_panel(
+    positions: np.ndarray,
+    *,
+    n_monomers: int,
+    tag: str,
+    pretreat_restart: PathLike | None = None,
+    workflow_box_side_A: float | None = None,
+    use_pbc: bool = False,
+    paths: dict[str, Path] | None = None,
+    quiet: bool = False,
+) -> None:
+    """Rich dashboard after CHARMM MM pretreat, before MLpot registration."""
+    from mmml.utils.rich_report import emit_dashboard
+
+    sections = build_charmm_mm_pretreat_handoff_sections(
+        positions,
+        n_monomers=n_monomers,
+        tag=tag,
+        pretreat_restart=pretreat_restart,
+        workflow_box_side_A=workflow_box_side_A,
+        use_pbc=use_pbc,
+        paths=paths,
+    )
+    emit_dashboard(
+        "CHARMM MM pretreat → MLpot handoff",
+        sections,
+        border_style="green",
+        quiet=quiet,
+    )
+
+
 def run_workflow(
     args: argparse.Namespace,
     *,

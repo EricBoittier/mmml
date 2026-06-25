@@ -212,6 +212,58 @@ def _model_attributes_mapping(model: Any) -> dict[str, Any]:
     return _mapping_from_rows(_model_attribute_rows(model))
 
 
+def emit_dashboard(
+    title: str,
+    sections: Sequence[tuple[str, Mapping[str, Any]]],
+    *,
+    border_style: str = "cyan",
+    quiet: bool = False,
+) -> None:
+    """Multi-section Rich panel (plain-text fallback when Rich is disabled)."""
+    if quiet or is_quiet():
+        return
+
+    active = [(t, m) for t, m in sections if m]
+    if not active:
+        return
+
+    if not rich_enabled(quiet=quiet):
+        lines = [title]
+        for section_title, mapping in active:
+            lines.append(f"[{section_title}]")
+            lines.extend(f"  {k}: {_format_cell(v)}" for k, v in mapping.items())
+        _emit_plain("\n".join(lines))
+        return
+
+    try:
+        from rich.console import Group
+        from rich.panel import Panel
+
+        blocks = []
+        for section_title, mapping in active:
+            blocks.append(
+                Panel(
+                    _horizontal_table_from_mapping(mapping),
+                    title=f"[bold]{section_title}[/bold]",
+                    border_style="dim",
+                    padding=(0, 1),
+                )
+            )
+        _console().print(
+            Panel(
+                Group(*blocks),
+                title=f"[bold {border_style}]{title}[/bold {border_style}]",
+                border_style=border_style,
+            )
+        )
+    except Exception:
+        lines = [title]
+        for section_title, mapping in active:
+            lines.append(f"[{section_title}]")
+            lines.extend(f"  {k}: {_format_cell(v)}" for k, v in mapping.items())
+        _emit_plain("\n".join(lines))
+
+
 def emit_hybrid_ml_setup(
     *,
     system: Mapping[str, Any],
@@ -223,9 +275,6 @@ def emit_hybrid_ml_setup(
     quiet: bool = False,
 ) -> None:
     """Single dashboard for hybrid calculator setup (replaces duplicate setup/model panels)."""
-    if quiet or is_quiet():
-        return
-
     sections: list[tuple[str, Mapping[str, Any]]] = [
         ("System", system),
         ("Handoff & cutoffs", handoff),
@@ -236,48 +285,7 @@ def emit_hybrid_ml_setup(
         sections.append(("ML/MM flags", ml_flags))
     if checkpoint:
         sections.append(("Checkpoint", checkpoint))
-
-    if not rich_enabled(quiet=quiet):
-        lines = ["Hybrid ML/MM setup"]
-        for title, mapping in sections:
-            if not mapping:
-                continue
-            lines.append(f"[{title}]")
-            lines.extend(f"  {k}: {_format_cell(v)}" for k, v in mapping.items())
-        _emit_plain("\n".join(lines))
-        return
-
-    try:
-        from rich.console import Group
-        from rich.panel import Panel
-
-        blocks = []
-        for title, mapping in sections:
-            if not mapping:
-                continue
-            blocks.append(
-                Panel(
-                    _horizontal_table_from_mapping(mapping),
-                    title=f"[bold]{title}[/bold]",
-                    border_style="dim",
-                    padding=(0, 1),
-                )
-            )
-        _console().print(
-            Panel(
-                Group(*blocks),
-                title="[bold cyan]Hybrid ML/MM setup[/bold cyan]",
-                border_style="cyan",
-            )
-        )
-    except Exception:
-        lines = ["Hybrid ML/MM setup"]
-        for title, mapping in sections:
-            if not mapping:
-                continue
-            lines.append(f"[{title}]")
-            lines.extend(f"  {k}: {_format_cell(v)}" for k, v in mapping.items())
-        _emit_plain("\n".join(lines))
+    emit_dashboard("Hybrid ML/MM setup", sections, border_style="cyan", quiet=quiet)
 
 
 def collect_psf_topology_mapping(
