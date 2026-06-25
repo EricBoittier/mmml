@@ -2472,6 +2472,39 @@ def test_prepare_post_rescue_overlap_handoff_assigns_velocities_in_memory():
     assert "finalt" not in chunk_kw
 
 
+def test_post_rescue_bath_target_prefers_hoover_reft_for_cpt_prod():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _post_rescue_bath_target_K,
+        _prepare_post_rescue_overlap_handoff,
+    )
+
+    assert _post_rescue_bath_target_K({"hoover reft": 90.0}) == 90.0
+
+    chunk_kw = {
+        "cpt": True,
+        "hoover reft": 90.0,
+        "timestep": 0.00025,
+        "restart": True,
+        "iunrea": 3,
+    }
+    ctx = mock.Mock(use_pbc=True, charmm_cubic_box_side_A=40.0)
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.assign_velocities_at_temperature",
+    ) as assign_vel, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
+    ):
+        _prepare_post_rescue_overlap_handoff(chunk_kw, mlpot_ctx=ctx)
+
+    assign_vel.assert_called_once_with(
+        90.0,
+        timestep_ps=0.00025,
+        restart_path=None,
+        use_pbc=True,
+    )
+    assert chunk_kw["hoover reft"] == 90.0
+    assert chunk_kw["firstt"] == 90.0
+
+
 def test_valid_overlap_chunk_restart_read_rejects_handoff_seed(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _overlap_chunk_uses_memory_handoff,
