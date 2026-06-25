@@ -1396,14 +1396,26 @@ def _find_usable_fallback_template(failed_template: Path, expected_natom: int) -
                 break
             search_dirs.append(curr)
 
+        candidates: list[tuple[int, Path]] = []
         for sdir in search_dirs:
             if not sdir.is_dir():
                 continue
             for res_file in sdir.rglob("*.res"):
                 if res_file.name.lower().startswith("continue_seed"):
                     continue
-                if _is_usable_restart_template(res_file, expected_natom=expected_natom):
-                    return res_file
+                try:
+                    if not _is_usable_restart_template(res_file, expected_natom=expected_natom):
+                        continue
+                    name = res_file.name.lower()
+                    if "overlap" not in name:
+                        candidates.append((0, res_file))
+                    else:
+                        candidates.append((1, res_file))
+                except Exception:
+                    continue
+        if candidates:
+            candidates.sort(key=lambda item: (item[0], -item[1].stat().st_mtime))
+            return candidates[0][1]
     except Exception:
         pass
     return None
