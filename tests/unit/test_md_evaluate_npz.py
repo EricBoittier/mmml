@@ -740,8 +740,15 @@ def test_reference_com_dist_A_from_trajectory() -> None:
     assert _reference_com_dist_A(object(), 0) is None
 
 
-def test_build_atoms_for_evaluate_preserves_r0_when_requested() -> None:
+def test_build_atoms_for_evaluate_preserves_r0_when_requested(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from mmml.cli.run.md_evaluate_npz import _build_atoms_for_evaluate
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        lambda _pos: None,
+    )
 
     perm = np.array([0, 3, 4, 1, 2], dtype=int)
     charmm_z = np.array([6, 1, 1, 17, 17], dtype=np.int32)
