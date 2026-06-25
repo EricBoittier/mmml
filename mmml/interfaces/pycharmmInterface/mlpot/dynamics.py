@@ -723,6 +723,10 @@ def _effective_mlpot_sd_chunk_nstep(
     return cap
 
 
+# Post-calculator-mini GRMS is often <1 kcal/mol/Å; SD chunk noise to ~2–3 is normal.
+_SD_WATCHDOG_LOW_BASELINE_GRMS = 5.0
+
+
 def _maybe_abort_sd_on_grms(
     config: MinimizeWithMlpotConfig,
     *,
@@ -740,7 +744,12 @@ def _maybe_abort_sd_on_grms(
     threshold = config.pre_sd_bonded_recovery_grms_kcalmol_A
     if threshold is not None:
         max_allowed = float(threshold)
-    if initial_grms is not None and np.isfinite(initial_grms):
+    low_baseline = (
+        initial_grms is not None
+        and np.isfinite(initial_grms)
+        and float(initial_grms) < _SD_WATCHDOG_LOW_BASELINE_GRMS
+    )
+    if initial_grms is not None and np.isfinite(initial_grms) and not low_baseline:
         cap = float(initial_grms) * factor
         max_allowed = cap if max_allowed is None else min(max_allowed, cap)
     if max_allowed is not None and current_grms > max_allowed:
@@ -758,6 +767,8 @@ def _maybe_abort_sd_on_grms(
         and previous_grms > 1.0e-6
         and current_grms > float(previous_grms) * factor
     ):
+        if low_baseline and max_allowed is not None and current_grms <= max_allowed:
+            return False
         if config.verbose:
             print(
                 f"MLpot SD watchdog ({pass_label}, {step_label}): "
@@ -875,6 +886,10 @@ def _run_minimize_in_chunks(
     last_good_positions: np.ndarray | None = None
     last_good_grms: float | None = None
     last_good_chunk = 0
+    if initial_grms is not None and np.isfinite(initial_grms):
+        last_good_positions = get_charmm_positions_array().copy()
+        last_good_grms = float(initial_grms)
+        last_good_chunk = 0
 
     chunk_index = 0
     while remaining > 0:
