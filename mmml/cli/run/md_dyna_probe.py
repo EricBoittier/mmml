@@ -58,7 +58,12 @@ def pycharmm_dyna_snapshot(
     )
 
     refresh_ctx = "" if quiet else f"dyna-probe {label}"
-    grms = refresh_mlpot_energy_and_grms(ctx, context=refresh_ctx)
+    grms = refresh_mlpot_energy_and_grms(
+        ctx,
+        context=refresh_ctx,
+        reregister=False,
+        quiet=quiet,
+    )
     pos = charmm_positions_angstrom()[: int(len(z))]
     charmm_row = charmm_energy_row()
     total_kcal = float(charmm_row.get("ENER", charmm_row.get("ENERGY", 0.0)))
