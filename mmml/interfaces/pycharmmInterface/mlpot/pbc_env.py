@@ -330,9 +330,12 @@ def sync_workflow_pbc_box_side_after_mm_pretreat(
     from_restart: float | None = None
     if pretreat_restart is not None:
         from_restart = parse_cubic_box_side_from_charmm_restart(pretreat_restart)
-    restart_for_resolve = (
-        None if charmm_crystal_is_active() else pretreat_restart
-    )
+    crystal_active = False
+    try:
+        crystal_active = charmm_crystal_is_active()
+    except Exception:
+        crystal_active = False
+    restart_for_resolve = None if crystal_active else pretreat_restart
     live, source = resolve_charmm_cubic_box_side_A(
         fallback_side_A=float(box_side),
         restart_path=restart_for_resolve,
