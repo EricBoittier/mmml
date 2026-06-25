@@ -370,6 +370,8 @@ def test_minimize_bonded_recovery_uses_bonded_only_block():
     ) as imp, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms",
         return_value=1.0,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
     ):
         imp.return_value = (MagicMock(), MagicMock(), MagicMock(), MagicMock())
         minimize_bonded_mm_recovery(ctx, BondedMmMiniConfig(nstep_sd=0))
@@ -451,6 +453,8 @@ def test_minimize_bonded_recovery_unset_and_reregister():
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=MagicMock(),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
     ):
         imp.return_value = (MagicMock(), MagicMock(), MagicMock(), MagicMock())
         minimize_bonded_mm_recovery(ctx, BondedMmMiniConfig(nstep_sd=0))
