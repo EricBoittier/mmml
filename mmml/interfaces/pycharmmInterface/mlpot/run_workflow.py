@@ -1266,16 +1266,13 @@ def build_charmm_mm_pretreat_handoff_sections(
     mm_state: dict[str, Any] = {
         "coord_source": "in-memory CHARMM (pretreat; no restart reload)",
         "GRMS_kcal/mol/Å": f"{charmm_grms():.4f}",
+        "coord_rows": int(r.shape[0]),
     }
-    try:
-        import pycharmm.coor as coor
-
-        mm_state["charmm_natom"] = int(coor.get_natom())
-    except Exception:
-        pass
     live = get_charmm_positions_array()
-    if live is not None and live.shape[0] != r.shape[0]:
+    if live is not None:
         mm_state["live_coord_rows"] = int(live.shape[0])
+        if live.shape[0] != r.shape[0]:
+            mm_state["coord_row_mismatch"] = True
 
     pbc: dict[str, Any] = {}
     warnings: list[str] = []
