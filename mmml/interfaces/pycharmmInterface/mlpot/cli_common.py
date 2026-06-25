@@ -1460,6 +1460,87 @@ def mlpot_spherical_forces_ev_angstrom(
     return forces
 
 
+def force_error_metrics_ev_angstrom(
+    predicted_forces_ev: np.ndarray,
+    reference_forces_ev: np.ndarray,
+) -> dict[str, float]:
+    """RMSE / MAE / max |ΔF| between two (N, 3) force arrays in eV/Å."""
+    pred = np.asarray(predicted_forces_ev, dtype=np.float64).reshape(-1, 3)
+    ref = np.asarray(reference_forces_ev, dtype=np.float64).reshape(-1, 3)
+    if pred.shape != ref.shape:
+        raise ValueError(f"force shape mismatch: pred {pred.shape} vs ref {ref.shape}")
+    delta = pred - ref
+    return {
+        "force_rmse_eV_A": float(np.sqrt(np.mean(delta**2))),
+        "force_mae_eV_A": float(np.mean(np.abs(delta))),
+        "force_max_abs_eV_A": float(np.max(np.abs(delta))),
+    }
+
+
+def collect_evaluate_force_sources_ev_angstrom(
+    pyCModel: Any,
+    *,
+    natom: int,
+    positions: np.ndarray,
+    use_pbc: bool = False,
+    box_A: float | None = None,
+) -> dict[str, np.ndarray]:
+    """All evaluate force lanes at one geometry (eV/Å)."""
+    n = int(natom)
+    pos = np.asarray(positions, dtype=np.float64).reshape(-1, 3)
+    sources: dict[str, np.ndarray] = {}
+    spherical = mlpot_spherical_forces_ev_angstrom(
+        pyCModel,
+        positions=pos,
+        use_pbc=use_pbc,
+        box_A=box_A,
+    )
+    if spherical is not None and int(spherical.shape[0]) == n:
+        sources["spherical_fn"] = np.asarray(spherical, dtype=np.float64)
+    hybrid = mlpot_hybrid_forces_ev_angstrom(pyCModel, natom=n)
+    if hybrid is not None and int(hybrid.shape[0]) == n:
+        sources["mlpot_callback"] = np.asarray(hybrid, dtype=np.float64)
+    sources["charmm_total"] = np.asarray(
+        charmm_total_forces_ev_angstrom()[:n],
+        dtype=np.float64,
+    )
+    return sources
+
+
+def compare_force_sources_to_reference(
+    force_sources: dict[str, np.ndarray],
+    reference_forces_ev: np.ndarray,
+) -> dict[str, dict[str, float]]:
+    """Per-lane force error metrics vs a reference (eV/Å)."""
+    ref = np.asarray(reference_forces_ev, dtype=np.float64).reshape(-1, 3)
+    out: dict[str, dict[str, float]] = {}
+    for name, forces in force_sources.items():
+        out[name] = force_error_metrics_ev_angstrom(forces, ref)
+    return out
+
+
+def cross_lane_force_rmse_ev_angstrom(
+    force_sources: dict[str, np.ndarray],
+    *,
+    baseline: str = "spherical_fn",
+) -> dict[str, float]:
+    """RMSE of each lane vs ``baseline`` (eV/Å)."""
+    base = force_sources.get(baseline)
+    if base is None:
+        return {}
+    base_arr = np.asarray(base, dtype=np.float64).reshape(-1, 3)
+    out: dict[str, float] = {}
+    for name, forces in force_sources.items():
+        if name == baseline:
+            continue
+        pred = np.asarray(forces, dtype=np.float64).reshape(-1, 3)
+        if pred.shape != base_arr.shape:
+            continue
+        delta = pred - base_arr
+        out[f"force_rmse_vs_{baseline}_eV_A"] = float(np.sqrt(np.mean(delta**2)))
+    return out
+
+
 def resolve_evaluate_forces_ev_angstrom(
     pyCModel: Any,
     *,
@@ -1482,6 +1563,15 @@ def resolve_evaluate_forces_ev_angstrom(
     if hybrid is not None and int(hybrid.shape[0]) == int(natom):
         return np.asarray(hybrid, dtype=np.float64), "mlpot_callback"
     return charmm_total_forces_ev_angstrom()[: int(natom)], "charmm_total"
+
+
+def charmm_positions_angstrom() -> np.ndarray:
+    """Current CHARMM coordinates (Å) from the active PSF."""
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import pycharmm.coor as coor
+
+    pos_df = coor.get_positions()
+    return pos_df[["x", "y", "z"]].to_numpy(dtype=np.float64).reshape(-1, 3)
 
 
 def refresh_mlpot_energy_and_grms(

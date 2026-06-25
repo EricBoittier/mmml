@@ -130,6 +130,7 @@ def normalize_metrics_to_ev(
         out["forces_eV_A"] = f_arr.tolist() if f_arr.ndim > 1 else f_arr
         out["max_force_eV_A"] = float(np.abs(f_arr).max())
         out["rms_force_eV_A"] = float(np.sqrt(np.mean(f_arr**2)))
+    out.pop("force_sources_all", None)
     out["units"] = dict(EVALUATE_ARTIFACT_UNITS)
     return out
 
@@ -352,6 +353,47 @@ def reference_metrics_at_eval_geometry(
             dtype=np.float64,
         )
     return ref_e_ev, ref_f_ev
+
+
+def enrich_compare_with_force_sources(
+    cmp: dict[str, Any],
+    *,
+    reference_forces_ev: np.ndarray | None,
+    force_sources: dict[str, np.ndarray] | None,
+    charmm_energy_terms_kcal_mol: dict[str, float] | None = None,
+) -> None:
+    """Add per-lane force RMSE vs reference and optional CHARMM energy terms."""
+    if charmm_energy_terms_kcal_mol:
+        cmp["charmm_energy_terms_kcal_mol"] = dict(charmm_energy_terms_kcal_mol)
+    if reference_forces_ev is None or not force_sources:
+        return
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        compare_force_sources_to_reference,
+    )
+
+    src_cmp = compare_force_sources_to_reference(force_sources, reference_forces_ev)
+    cmp["force_source_compare"] = src_cmp
+    for name, metrics in src_cmp.items():
+        cmp[f"force_rmse_{name}_eV_A"] = metrics["force_rmse_eV_A"]
+        cmp[f"force_mae_{name}_eV_A"] = metrics["force_mae_eV_A"]
+        cmp[f"force_max_abs_{name}_eV_A"] = metrics["force_max_abs_eV_A"]
+
+
+def _diagnostics_force_source_columns(per_frame: list[dict[str, Any]]) -> list[str]:
+    """Extra CSV columns for multi-source force compare (stable order)."""
+    names = ("spherical_fn", "mlpot_callback", "charmm_total")
+    cols: list[str] = []
+    for name in names:
+        key = f"force_rmse_{name}_eV_A"
+        if any(c.get(key) is not None for c in per_frame if c.get("status") == "ok"):
+            cols.extend(
+                [
+                    f"force_rmse_{name}_eV_A",
+                    f"force_mae_{name}_eV_A",
+                    f"force_max_abs_{name}_eV_A",
+                ]
+            )
+    return cols
 
 
 def reference_metrics_from_npz(
@@ -598,6 +640,11 @@ def save_evaluate_compare_diagnostics(
                 "force_rmse_eV_A": c.get("force_rmse_eV_A"),
                 "force_mae_eV_A": c.get("force_mae_eV_A"),
                 "force_max_abs_eV_A": c.get("force_max_abs_eV_A"),
+                **{
+                    col: c.get(col)
+                    for col in _diagnostics_force_source_columns(ok)
+                    if c.get(col) is not None
+                },
             }
         )
     rows.sort(key=lambda r: (float(r["com_dist_A"]), int(r["reference_frame"])))
@@ -605,7 +652,19 @@ def save_evaluate_compare_diagnostics(
 
     csv_path = Path(out_dir) / "evaluate_compare_diagnostics.csv"
     csv_path.parent.mkdir(parents=True, exist_ok=True)
-    fieldnames = list(rows[0].keys())
+    base_fields = [
+        "reference_frame",
+        "reference_source_index",
+        "com_dist_A",
+        "ml_regime",
+        "delta_energy_eV",
+        "abs_delta_energy_eV",
+        "force_rmse_eV_A",
+        "force_mae_eV_A",
+        "force_max_abs_eV_A",
+    ]
+    extra_fields = _diagnostics_force_source_columns(ok)
+    fieldnames = base_fields + [c for c in extra_fields if c not in base_fields]
     with csv_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
@@ -1470,7 +1529,7 @@ def _evaluate_jaxmd_mmml(
     return ase_result
 
 
-def _evaluate_pycharmm(
+def setup_pycharmm_eval_mlpot(
     args: Any,
     *,
     z: np.ndarray,
@@ -1478,14 +1537,12 @@ def _evaluate_pycharmm(
     n_monomers: int,
     use_pbc: bool,
     L: float | None,
-) -> dict[str, Any]:
+) -> tuple[Any, Any]:
+    """Register MLpot for evaluate / dyna-probe (returns ``ctx``, ``calc``)."""
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
         apply_charmm_output_from_args,
-        charmm_energy_row,
-        refresh_mlpot_energy_and_grms,
-        resolve_evaluate_forces_ev_angstrom,
+        resolve_checkpoint,
         resolve_pbc_box_side,
-        resolve_use_pbc,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
     from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import _register_mlpot_context
@@ -1493,7 +1550,6 @@ def _evaluate_pycharmm(
         setup_default_nbonds,
         sync_charmm_positions,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_checkpoint
 
     apply_charmm_output_from_args(args)
     args.free_space = not use_pbc
@@ -1518,14 +1574,49 @@ def _evaluate_pycharmm(
         args=args,
     )
     sync_charmm_positions(np.asarray(positions, dtype=np.float64))
+    return ctx, calc
+
+
+def _evaluate_pycharmm(
+    args: Any,
+    *,
+    z: np.ndarray,
+    positions: np.ndarray,
+    n_monomers: int,
+    use_pbc: bool,
+    L: float | None,
+) -> dict[str, Any]:
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        charmm_energy_row,
+        collect_evaluate_force_sources_ev_angstrom,
+        refresh_mlpot_energy_and_grms,
+        resolve_evaluate_forces_ev_angstrom,
+    )
+
+    ctx, calc = setup_pycharmm_eval_mlpot(
+        args,
+        z=z,
+        positions=positions,
+        n_monomers=n_monomers,
+        use_pbc=use_pbc,
+        L=L,
+    )
     refresh_ctx = "" if bool(getattr(args, "quiet", False)) else "evaluate-npz"
     grms = refresh_mlpot_energy_and_grms(ctx, context=refresh_ctx)
     charmm_row = charmm_energy_row()
     total_kcal = float(charmm_row.get("ENER", charmm_row.get("ENERGY", 0.0)))
+    pos = np.asarray(positions, dtype=np.float64)
+    force_sources = collect_evaluate_force_sources_ev_angstrom(
+        calc,
+        natom=int(len(z)),
+        positions=pos,
+        use_pbc=use_pbc,
+        box_A=L,
+    )
     forces_ev, force_source = resolve_evaluate_forces_ev_angstrom(
         calc,
         natom=int(len(z)),
-        positions=np.asarray(positions, dtype=np.float64),
+        positions=pos,
         use_pbc=use_pbc,
         box_A=L,
     )
@@ -1536,6 +1627,7 @@ def _evaluate_pycharmm(
             "forces_eV_A": forces_ev,
             "force_unit": "ev_angstrom",
             "force_source": force_source,
+            "force_sources_all": force_sources,
             "grms_kcal_mol_A": float(grms),
             "charmm_energy_terms_kcal_mol": charmm_row,
             "n_atoms": int(len(z)),
@@ -1883,6 +1975,12 @@ def _evaluate_reference_trajectory(args: Any, ctx: dict[str, Any]) -> int:
             cmp["status"] = "ok"
             if metrics.get("force_source") is not None:
                 cmp["force_source"] = str(metrics["force_source"])
+            enrich_compare_with_force_sources(
+                cmp,
+                reference_forces_ev=ref_f_ev,
+                force_sources=metrics.get("force_sources_all"),
+                charmm_energy_terms_kcal_mol=metrics.get("charmm_energy_terms_kcal_mol"),
+            )
             com_dist = _reference_com_dist_A(reference, int(ref_frame))
             if com_dist is not None:
                 cmp["com_dist_A"] = com_dist
@@ -2226,6 +2324,24 @@ def run_evaluate_npz(args: Any) -> int:
                 reference_force_unit=ref_f_unit,
             )
             compare["status"] = "ok"
+            if metrics.get("force_source") is not None:
+                compare["force_source"] = str(metrics["force_source"])
+            ref_f_single = None
+            if forces_eV_A is not None:
+                _, ref_f_single = reference_metrics_from_npz(
+                    Path(ref_path),
+                    ref_frame=ref_frame,
+                    atomic_numbers=z,
+                    positions=pos_out,
+                    reference_energy_unit=ref_e_unit,
+                    reference_force_unit=ref_f_unit,
+                )
+            enrich_compare_with_force_sources(
+                compare,
+                reference_forces_ev=ref_f_single,
+                force_sources=metrics.get("force_sources_all"),
+                charmm_energy_terms_kcal_mol=metrics.get("charmm_energy_terms_kcal_mol"),
+            )
             ml_w, mm_on, _mm_w = _mmml_cutoff_args(args)
             from mmml.interfaces.pycharmmInterface.hybrid_reference import compute_com_distances
 
