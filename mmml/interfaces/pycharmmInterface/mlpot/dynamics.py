@@ -2512,8 +2512,7 @@ def _apply_overlap_chunk_dynamics_kw(
     elif preserve_cold_start and (
         "hoover reft" in chunk_kw or bool(chunk_kw.get("cpt"))
     ):
-        # Hoover CPT chunk 0: preserve start=True for single-dyna heat cold start.
-        # Equi/NPT may still use start=False with iasvel=1 after a Boltzmann assign.
+        # Hoover CPT chunk 0: preserve start=True for single-dyna cold start (heat/NPT).
         if bool(chunk_kw.get("start")):
             chunk_kw["iasvel"] = 1
         elif int(chunk_kw.get("iasvel", 0)) == 1:
@@ -2685,6 +2684,7 @@ def run_dynamics_with_io(
     loose_pbc: bool = False,
     overlap_run_state_dir: Path | None = None,
     overlap_run_state_every_chunks: int = 0,
+    segment_restart_read: Path | str | None = None,
 ) -> Any:
     """Run dynamics and open/close CharmmFile units from ``io``.
 
@@ -3165,6 +3165,7 @@ def run_dynamics_with_io(
                         overlap_context=overlap_context,
                         overlap_run_state_dir=overlap_run_state_dir,
                         overlap_restart_read=overlap_restart_read_for_chunk,
+                        segment_restart_read=segment_restart_read,
                     )
                     if (
                         recovery.ok

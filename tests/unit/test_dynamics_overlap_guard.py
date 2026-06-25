@@ -235,8 +235,8 @@ def test_overlap_early_abort_in_memory_recovery_skips_post_rescue(tmp_path):
     assert calls[1]["iunrea"] == -1
 
 
-def test_overlap_early_abort_materializes_restart_for_readyn(tmp_path, capsys):
-    """Multi-chunk early abort writes a valid scratch restart and READYN-retries."""
+def test_overlap_early_abort_multi_chunk_cpt_materializes_readyn(tmp_path, capsys):
+    """Multi-chunk CPT early abort must materialize READYN, not retry with iunrea=-1."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
     from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
         GeometryRecoveryResult,
@@ -256,20 +256,13 @@ def test_overlap_early_abort_materializes_restart_for_readyn(tmp_path, capsys):
     def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
         calls.append((dict(kw), _io))
         if _io is not None and _io.restart_write is not None:
-            step = {1: 40, 2: 500, 3: 1000}.get(len(calls), 1000)
-            Path(_io.restart_write).write_text(f"REST {step} 1\n", encoding="utf-8")
+            step = 500 if len(calls) == 1 else (501 if len(calls) == 2 else 1000)
+            Path(_io.restart_write).write_text(f"REST {step} 0\n", encoding="utf-8")
         return mock.Mock()
 
     def fake_materialize(chunk_io, *, steps_before_chunk, overlap_context, **kwargs):
         read = Path(chunk_io.restart_read or slot_a)
         read.write_text("REST 0 500\n", encoding="utf-8")
-        from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
-
-        print(
-            f"overlap ({overlap_context}): early-abort restart handoff from "
-            f"{read.name} at global step {steps_before_chunk} (READYN)",
-            flush=True,
-        )
         return CharmmTrajectoryFiles(
             restart_read=read,
             restart_write=chunk_io.restart_write,
@@ -294,7 +287,7 @@ def test_overlap_early_abort_materializes_restart_for_readyn(tmp_path, capsys):
         side_effect=lambda path: int(Path(path).read_text().split()[1]),
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.attempt_overlap_early_abort_recovery",
-        return_value=GeometryRecoveryResult(True, "memory"),
+        return_value=GeometryRecoveryResult(True, "restart"),
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._materialize_early_abort_restart_handoff",
         side_effect=fake_materialize,
@@ -312,7 +305,6 @@ def test_overlap_early_abort_materializes_restart_for_readyn(tmp_path, capsys):
     assert calls[1][0]["restart"] is True
     assert calls[1][0]["iasvel"] == 0
     assert "iunrea" not in calls[1][0]
-    assert "early-abort restart handoff" in capsys.readouterr().out
 
 
 def test_overlap_early_abort_disk_recovery_cpt_retries_with_readyn(tmp_path, capsys):
