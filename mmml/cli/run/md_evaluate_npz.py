@@ -1482,8 +1482,8 @@ def _evaluate_pycharmm(
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
         apply_charmm_output_from_args,
         charmm_energy_row,
-        charmm_total_forces_ev_angstrom,
         refresh_mlpot_energy_and_grms,
+        resolve_evaluate_forces_ev_angstrom,
         resolve_pbc_box_side,
         resolve_use_pbc,
     )
@@ -1522,13 +1522,14 @@ def _evaluate_pycharmm(
     grms = refresh_mlpot_energy_and_grms(ctx, context=refresh_ctx)
     charmm_row = charmm_energy_row()
     total_kcal = float(charmm_row.get("ENER", charmm_row.get("ENERGY", 0.0)))
-    forces_ev = charmm_total_forces_ev_angstrom()[: int(len(z))]
+    forces_ev, force_source = resolve_evaluate_forces_ev_angstrom(calc, natom=int(len(z)))
     return normalize_metrics_to_ev(
         {
             "energy_kcal_mol": total_kcal,
             "energy_eV": total_kcal / float(ev2kcalmol),
             "forces_eV_A": forces_ev,
             "force_unit": "ev_angstrom",
+            "force_source": force_source,
             "grms_kcal_mol_A": float(grms),
             "charmm_energy_terms_kcal_mol": charmm_row,
             "n_atoms": int(len(z)),

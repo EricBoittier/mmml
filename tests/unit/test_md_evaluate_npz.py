@@ -737,8 +737,11 @@ def test_evaluate_pycharmm_returns_forces_ev_angstrom(
         lambda: {"ENER": float(ev2kcalmol)},
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_total_forces_ev_angstrom",
-        lambda: forces_kcal / float(ev2kcalmol),
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_evaluate_forces_ev_angstrom",
+        lambda _calc, *, natom: (
+            np.asarray(forces_kcal[: int(natom)], dtype=np.float64) / float(ev2kcalmol),
+            "mlpot_callback",
+        ),
     )
 
     metrics = _evaluate_pycharmm(
@@ -755,6 +758,32 @@ def test_evaluate_pycharmm_returns_forces_ev_angstrom(
         forces_kcal / float(ev2kcalmol),
     )
     assert metrics["max_force_eV_A"] == pytest.approx(2.0)
+    assert metrics.get("force_source") == "mlpot_callback"
+
+
+def test_mlpot_hybrid_forces_ev_angstrom_reads_last_ml_forces() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        mlpot_hybrid_forces_ev_angstrom,
+    )
+    from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
+
+    class _Calc:
+        last_ml_forces = np.array([[23.060548867, 0.0, 0.0]], dtype=np.float64)
+
+    class _Model:
+        _registered_calculator = _Calc()
+
+    forces = mlpot_hybrid_forces_ev_angstrom(_Model(), natom=1)
+    assert forces is not None
+    assert forces[0, 0] == pytest.approx(1.0)
+    assert forces.shape == (1, 3)
+
+    class _ModelDirect:
+        _last_ml_forces = np.array([[float(ev2kcalmol), 0.0, 0.0]], dtype=np.float64)
+
+    forces_direct = mlpot_hybrid_forces_ev_angstrom(_ModelDirect(), natom=1)
+    assert forces_direct is not None
+    assert forces_direct[0, 0] == pytest.approx(1.0)
 
 
 def test_reference_com_dist_A_from_trajectory() -> None:
