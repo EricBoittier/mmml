@@ -94,6 +94,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
 from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import (
     _charmm_pre_minimize_before_mlpot,
     _register_mlpot_context,
+    print_charmm_mm_pretreat_handoff_panel,
     run_charmm_mm_pretreat_before_mlpot,
     sync_mlpot_pbc_cell_from_charmm,
 )
@@ -1293,6 +1294,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             skip_minimize=handoff_in is not None,
         )
         sync_charmm_positions(r)
+        pretreat_restart_path = None
         if charmm_pbc and box_side is not None:
             from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
                 find_latest_pretreat_mm_restart,
@@ -1310,6 +1312,22 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 args=args,
                 quiet=bool(args.quiet),
             )
+        else:
+            from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+                find_latest_pretreat_mm_restart,
+            )
+
+            pretreat_restart_path = find_latest_pretreat_mm_restart(paths)
+        print_charmm_mm_pretreat_handoff_panel(
+            r,
+            n_monomers=n_mol,
+            tag=tag,
+            pretreat_restart=pretreat_restart_path,
+            workflow_box_side_A=box_side if charmm_pbc else None,
+            use_pbc=charmm_pbc,
+            paths=paths,
+            quiet=bool(args.quiet),
+        )
     elif "mini" in stages and not getattr(args, "skip_cluster_build", False):
         save_mini = bool(getattr(args, "save", True))
         mini_dcd_nsavc = resolve_dcd_nsavc_for_args(args, nstep=mini_nstep)
