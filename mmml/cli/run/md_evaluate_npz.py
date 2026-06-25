@@ -1603,7 +1603,12 @@ def _pycharmm_eval_metrics(
     )
 
     refresh_ctx = "" if quiet else "evaluate-npz"
-    grms = refresh_mlpot_energy_and_grms(ctx, context=refresh_ctx)
+    grms = refresh_mlpot_energy_and_grms(
+        ctx,
+        context=refresh_ctx,
+        reregister=False,
+        quiet=quiet,
+    )
     charmm_row = charmm_energy_row()
     total_kcal = float(charmm_row.get("ENER", charmm_row.get("ENERGY", 0.0)))
     pos = np.asarray(positions, dtype=np.float64)

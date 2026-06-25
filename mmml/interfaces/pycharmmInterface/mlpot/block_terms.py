@@ -28,13 +28,13 @@ def _import_pycharmm():
     return pycharmm
 
 
-def _run_block_script(summary: str, script: str) -> None:
+def _run_block_script(summary: str, script: str, *, quiet: bool = False) -> None:
     """Apply a BLOCK script quietly and emit a one-line Python summary."""
     from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
     from mmml.utils.rich_report import emit_charmm_block
 
     run_charmm_script_quiet(script)
-    emit_charmm_block(summary)
+    emit_charmm_block(summary, quiet=quiet)
 
 
 def apply_charmm_mm_block() -> None:
@@ -79,6 +79,7 @@ def apply_mlpot_energy_block(
     ml_selection: Any,
     *,
     mm_internal_scale: float = 0.0,
+    quiet: bool = False,
 ) -> str:
     """Scale CHARMM bonded terms on ML atoms; MLpot USER supplies ML energy.
 
@@ -109,7 +110,7 @@ END
             summary = (
                 f"CHARMM BLOCK: MLpot all-ML ({n_total} atoms, bonded/ELEC/VDW off)"
             )
-        _run_block_script(summary, block)
+        _run_block_script(summary, block, quiet=quiet)
         return "all"
 
     name = ml_selection.store(_ML_BLOCK_NAME)
@@ -132,7 +133,7 @@ END
             f"CHARMM BLOCK: MLpot hybrid ({n_ml} ML + {n_mm} MM atoms, "
             "ML bonded/ELEC/VDW off)"
         )
-    _run_block_script(summary, block)
+    _run_block_script(summary, block, quiet=quiet)
     return name
 
 
