@@ -94,6 +94,10 @@ def test_print_pretreat_handoff_panel_plain(capsys) -> None:
             lambda: 1.0,
         )
         mp.setattr(
+            "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+            lambda: pos.copy(),
+        )
+        mp.setattr(
             "mmml.utils.rich_report.rich_enabled",
             lambda **_: False,
         )
