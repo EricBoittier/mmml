@@ -1372,6 +1372,25 @@ def charmm_grms() -> float:
     return float(energy.get_grms())
 
 
+def charmm_grms_after_ener_force(*, silent: bool = True) -> float:
+    """Run ``ENER FORCE`` then return GRMS (kcal/mol/Å).
+
+    ``ENER`` alone can leave a stale GRMS from a prior MLpot evaluation; always
+    use this before GRMS gates and bonded-MM recovery metrics.
+    """
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import pycharmm
+
+    if silent:
+        from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
+
+        with charmm_silent_command():
+            pycharmm.lingo.charmm_script("ENER FORCE")
+    else:
+        pycharmm.lingo.charmm_script("ENER FORCE")
+    return charmm_grms()
+
+
 def charmm_total_forces_kcalmol_A() -> np.ndarray:
     """Per-atom CHARMM forces from the last ``ENER FORCE`` (kcal/mol/Å).
 

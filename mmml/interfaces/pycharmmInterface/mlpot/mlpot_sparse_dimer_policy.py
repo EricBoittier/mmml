@@ -44,7 +44,14 @@ def resolve_max_active_dimers(
         if env:
             cap = int(env)
         else:
-            cap = all_pairs_cap if free_space else max(1000, 6 * int(n_monomers))
+            # Through DCM:90 (4005 unique dimers), evaluate every dimer slot in PBC
+            # so sparse packing never drops pairs for medium clusters (e.g. DCM:50).
+            if free_space:
+                cap = all_pairs_cap
+            elif n_dimers_total <= 4005:
+                cap = n_dimers_total
+            else:
+                cap = max(1000, 6 * int(n_monomers))
     if free_space:
         cap = max(cap, all_pairs_cap)
     cap = min(all_pairs_cap, cap)

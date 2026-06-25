@@ -1319,6 +1319,9 @@ def build_charmm_mm_pretreat_handoff_sections(
             rho = float(r.shape[0]) / float(workflow_side) ** 3
             pbc["number_density_atoms/Å³"] = f"{rho:.5f}"
         if n_monomers > 1 and r.shape[0] % n_monomers == 0:
+            from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
+                validate_sparse_dimer_cap,
+            )
             from mmml.utils.geometry_checks import find_worst_intermonomer_overlap
 
             apm = int(r.shape[0] // n_monomers)
@@ -1331,6 +1334,17 @@ def build_charmm_mm_pretreat_handoff_sections(
                     f"tight MIC inter-monomer contact {worst_mic:.3f} Å "
                     "(<1.5 Å; MLpot may explode at registration)"
                 )
+            sparse = validate_sparse_dimer_cap(
+                r,
+                n_monomers,
+                apm,
+                mm_switch_on=6.0,
+                box_side_A=float(ml_side),
+            )
+            pbc["near_dimer_pairs"] = int(sparse["n_near_mm_switch_on"])
+            pbc["max_active_dimers_cap"] = int(sparse["max_active_dimers_cap"])
+            if sparse.get("cap_saturated"):
+                warnings.append(str(sparse["verdict"]))
 
         if workflow_source == "restart":
             warnings.append(

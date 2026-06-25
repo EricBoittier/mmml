@@ -12,7 +12,11 @@ from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
 
 
 def test_resolve_max_active_dimers_default_90():
-    assert resolve_max_active_dimers(90, 4005) == 1000
+    assert resolve_max_active_dimers(90, 4005) == 4005
+
+
+def test_resolve_max_active_dimers_pbc_50_uses_all_pairs():
+    assert resolve_max_active_dimers(50, 1225) == 1225
 
 
 def test_resolve_max_active_dimers_free_space_uses_all_pairs():
