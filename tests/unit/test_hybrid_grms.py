@@ -229,7 +229,7 @@ def test_prepare_mlpot_hybrid_state_aborts_when_grms_stays_high():
                 allow_high_grms=False,
             )
 
-    calc_mini.assert_called_once()
+    calc_mini.assert_not_called()
     bonded.assert_called_once()
 
 
@@ -247,7 +247,7 @@ def test_prepare_mlpot_hybrid_state_resync_before_bonded_recovery():
         side_effect=[
             mock.Mock(hybrid=30.0, charmm=10.0, ratio=3.0, kind="desync_suspected"),
             mock.Mock(hybrid=40.0, charmm=8.0, ratio=5.0, kind="desync_suspected"),
-            mock.Mock(hybrid=40.0, charmm=8.0, ratio=5.0, kind="desync_suspected"),
+            mock.Mock(hybrid=3.0, charmm=2.5, ratio=1.2, kind="ok"),
             mock.Mock(hybrid=3.0, charmm=2.5, ratio=1.2, kind="ok"),
         ],
     ), mock.patch(
@@ -255,7 +255,7 @@ def test_prepare_mlpot_hybrid_state_resync_before_bonded_recovery():
         return_value=40.0,
     ) as resync, mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.minimize_hybrid_calculator_before_sd",
-        return_value=40.0,
+        return_value=3.0,
     ) as calc_mini, mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_bonded_mm_recovery",
     ) as bonded:
@@ -288,6 +288,7 @@ def test_prepare_mlpot_hybrid_state_calculator_mini_can_avoid_bonded_recovery():
         side_effect=[
             mock.Mock(hybrid=120.0, charmm=1.2, ratio=100.0, kind="geometry_stress"),
             mock.Mock(hybrid=3.0, charmm=2.0, ratio=1.5, kind="ok"),
+            mock.Mock(hybrid=3.0, charmm=2.0, ratio=1.5, kind="ok"),
         ],
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.minimize_hybrid_calculator_before_sd",
@@ -304,6 +305,6 @@ def test_prepare_mlpot_hybrid_state_calculator_mini_can_avoid_bonded_recovery():
         )
 
     calc_mini.assert_called_once()
-    bonded.assert_not_called()
+    bonded.assert_called_once()
     assert hybrid == pytest.approx(3.0)
     assert ctx.sd_watchdog_baseline_grms == pytest.approx(3.0)

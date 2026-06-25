@@ -25,6 +25,27 @@ class HybridCalculatorMinimizeConfig:
     use_bfgs_line_search: bool = True
     fmax_spike_factor: float = 4.0
     fmax_spike_floor_ev_a: float = 15.0
+    fmax_absolute_ceiling_ev_a: float = 500.0
+    fmax_running_spike_factor: float = 1.5
+    max_initial_fmax_ev_a: float = 100.0
+    max_start_grms_kcalmol_A: float | None = None
+    stall_patience_steps: int = 15
+    stall_improvement_ratio: float = 0.99
+
+
+def hybrid_calculator_mini_eligible(
+    hybrid_grms: float,
+    *,
+    grms_limit: float | None,
+    diag_kind: str,
+    grms_hot: bool,
+    user_hot: bool,
+) -> bool:
+    """Whether ASE hybrid BFGS is appropriate (bonded recovery should run first when False)."""
+    max_start = float(grms_limit) if grms_limit is not None else 50.0
+    if float(hybrid_grms) > max_start:
+        return False
+    return bool(grms_hot or diag_kind == "geometry_stress" or user_hot)
 
 
 def spike_fmax_limit_ev_a(
@@ -37,6 +58,28 @@ def spike_fmax_limit_ev_a(
     if not np.isfinite(initial_fmax_ev_a) or initial_fmax_ev_a <= 0.0:
         return float(floor_ev_a)
     return float(max(initial_fmax_ev_a * float(factor), float(floor_ev_a)))
+
+
+def should_abort_bfgs_fmax(
+    current_fmax_ev_a: float,
+    *,
+    spike_limit_ev_a: float,
+    best_fmax_ev_a: float,
+    absolute_ceiling_ev_a: float,
+    running_spike_factor: float,
+) -> bool:
+    """Return True when the current BFGS step should be rolled back and stopped."""
+    if not np.isfinite(current_fmax_ev_a):
+        return True
+    if current_fmax_ev_a > float(absolute_ceiling_ev_a):
+        return True
+    if (
+        np.isfinite(best_fmax_ev_a)
+        and best_fmax_ev_a > 0.0
+        and current_fmax_ev_a > float(best_fmax_ev_a) * float(running_spike_factor)
+    ):
+        return True
+    return current_fmax_ev_a > float(spike_limit_ev_a)
 
 
 class _BestMinimizationFrame:
@@ -152,20 +195,48 @@ def _run_hybrid_calculator_bfgs(
         floor_ev_a=config.fmax_spike_floor_ev_a,
     )
     stopped_on_spike = False
+    steps_since_improvement = 0
+    prev_best_fmax = float("inf")
 
     def _record_step() -> None:
+        nonlocal steps_since_improvement, prev_best_fmax, stopped_on_spike
         best_frame.record(f"step_{opt.get_number_of_steps()}")
+        if best_frame.best_force_fmax < prev_best_fmax * float(config.stall_improvement_ratio):
+            steps_since_improvement = 0
+            prev_best_fmax = float(best_frame.best_force_fmax)
+        else:
+            steps_since_improvement += 1
+        if (
+            steps_since_improvement >= int(config.stall_patience_steps)
+            and opt.get_number_of_steps() >= int(config.stall_patience_steps)
+            and best_frame.best_force_fmax > float(config.fmax_ev_a) * 10.0
+        ):
+            stopped_on_spike = True
+            if config.verbose:
+                print(
+                    f"{context_prefix} hybrid calculator BFGS: "
+                    f"stalled at fmax={best_frame.best_force_fmax:.4f} eV/Å "
+                    f"for {steps_since_improvement} steps; stopping",
+                    flush=True,
+                )
+            raise StopIteration
 
     def _abort_on_spike() -> None:
         nonlocal stopped_on_spike
         fmax = float(np.abs(atoms.get_forces()).max())
-        if not np.isfinite(fmax) or fmax > spike_limit:
+        if should_abort_bfgs_fmax(
+            fmax,
+            spike_limit_ev_a=spike_limit,
+            best_fmax_ev_a=best_frame.best_force_fmax,
+            absolute_ceiling_ev_a=config.fmax_absolute_ceiling_ev_a,
+            running_spike_factor=config.fmax_running_spike_factor,
+        ):
             stopped_on_spike = True
             if config.verbose:
                 fmax_txt = f"{fmax:.4f}" if np.isfinite(fmax) else "non-finite"
                 print(
                     f"{context_prefix} hybrid calculator BFGS: "
-                    f"fmax spike {fmax_txt} > {spike_limit:.4f} eV/Å; stopping",
+                    f"fmax guard triggered ({fmax_txt} eV/Å); stopping",
                     flush=True,
                 )
             raise StopIteration
@@ -213,6 +284,19 @@ def minimize_hybrid_calculator_before_sd(
     _promote_mlpot_jax_for_calculator_mini(mlpot_ctx, verbose=config.verbose)
     pos0 = get_charmm_positions_array()
     grms0 = mlpot_hybrid_grms_from_calculator(mlpot_ctx, positions=pos0)
+    max_start = config.max_start_grms_kcalmol_A
+    if max_start is None:
+        max_start = 50.0
+    if grms0 is not None and np.isfinite(grms0) and float(grms0) > float(max_start):
+        if config.verbose:
+            print(
+                f"{context_prefix}: skip calculator BFGS "
+                f"(GRMS {float(grms0):.1f} > {float(max_start):.1f} kcal/mol/Å); "
+                "run bonded-MM recovery first",
+                flush=True,
+            )
+        mlpot_ctx.sd_watchdog_baseline_grms = float(grms0)
+        return float(grms0)
     if config.verbose:
         grms_txt = f"{grms0:.4f}" if grms0 is not None and np.isfinite(grms0) else "?"
         opt_name = "BFGSLineSearch" if config.use_bfgs_line_search else "BFGS"
@@ -225,6 +309,21 @@ def minimize_hybrid_calculator_before_sd(
     atoms = ase.Atoms(numbers=np.asarray(z, dtype=int), positions=pos0)
     atoms.calc = _hybrid_mlpot_ase_calculator_class()(mlpot_ctx)
     initial_fmax = float(np.abs(atoms.get_forces()).max())
+    if initial_fmax > float(config.max_initial_fmax_ev_a):
+        if config.verbose:
+            print(
+                f"{context_prefix}: skip calculator BFGS "
+                f"(initial fmax {initial_fmax:.1f} > "
+                f"{float(config.max_initial_fmax_ev_a):.1f} eV/Å); "
+                "run bonded-MM recovery first",
+                flush=True,
+            )
+        mlpot_ctx.sd_watchdog_baseline_grms = (
+            float(grms0) if grms0 is not None and np.isfinite(grms0) else None
+        )
+        if mlpot_ctx.sd_watchdog_baseline_grms is None:
+            raise RuntimeError("hybrid GRMS unavailable before calculator minimize")
+        return float(mlpot_ctx.sd_watchdog_baseline_grms)
     opt, best_frame, stopped_on_spike = _run_hybrid_calculator_bfgs(
         atoms,
         config,
