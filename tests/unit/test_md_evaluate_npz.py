@@ -224,6 +224,28 @@ def test_should_evaluate_reference_trajectory() -> None:
     )
     assert (
         should_evaluate_reference_trajectory(
+            Namespace(
+                evaluate_reference_npz="/tmp/ref.npz",
+                evaluate_npz="/tmp/ref.npz",
+                evaluate_frame=16566,
+                max_frames=None,
+            )
+        )
+        is True
+    )
+    assert (
+        should_evaluate_reference_trajectory(
+            Namespace(
+                evaluate_reference_npz="/tmp/ref.npz",
+                evaluate_npz="/tmp/other.npz",
+                evaluate_reference_frame=16566,
+                max_frames=1,
+            )
+        )
+        is True
+    )
+    assert (
+        should_evaluate_reference_trajectory(
             Namespace(evaluate_reference_npz="/tmp/ref.npz", max_frames=20)
         )
         is True
