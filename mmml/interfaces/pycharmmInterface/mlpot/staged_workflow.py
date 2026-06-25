@@ -1285,24 +1285,16 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         )
         sync_charmm_positions(r)
         if charmm_pbc and box_side is not None:
-            from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
-                restore_charmm_state_from_restart,
-            )
             from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
                 find_latest_pretreat_mm_restart,
                 sync_workflow_pbc_box_side_after_mm_pretreat,
             )
 
             pretreat_restart_path = find_latest_pretreat_mm_restart(paths)
-            if pretreat_restart_path is not None:
-                restore_charmm_state_from_restart(pretreat_restart_path)
-                if not args.quiet:
-                    print(
-                        "PBC pretreat: reloaded "
-                        f"{pretreat_restart_path.name} (coords + crystal) "
-                        "before MLpot registration",
-                        flush=True,
-                    )
+            # Keep in-memory pretreat coords/crystal/IMAGE; do not READ restart here.
+            # Fresh equi leaves a valid PBC state in RAM; re-reading clobbers IMAGE
+            # lists (0 image pairs) and offline coord parsing can desync the cell.
+            # Resume paths call restore_charmm_state_from_restart inside pretreat.
             box_side = sync_workflow_pbc_box_side_after_mm_pretreat(
                 box_side,
                 pretreat_restart=pretreat_restart_path,

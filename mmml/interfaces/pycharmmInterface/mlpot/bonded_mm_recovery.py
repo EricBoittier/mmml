@@ -165,7 +165,10 @@ def restore_charmm_state_from_restart(
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_restart_coordinates,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        get_charmm_positions_array,
+        sync_charmm_positions,
+    )
 
     path = Path(restart_path).expanduser().resolve()
     if not path.is_file():
@@ -186,8 +189,16 @@ def restore_charmm_state_from_restart(
             f"open read unit {int(read_unit)} name {path}\n"
             f"read restart unit {int(read_unit)}\n"
             f"close unit {int(read_unit)}\n"
+            "UPDATE\n"
         )
-    sync_charmm_positions(pos)
+    live = get_charmm_positions_array()
+    if (
+        live is None
+        or live.size != pos.shape[0]
+        or not np.all(np.isfinite(live))
+        or np.allclose(live, 0.0)
+    ):
+        sync_charmm_positions(pos)
 
 
 def restore_charmm_state_from_crd(crd_path: PathLike) -> None:
