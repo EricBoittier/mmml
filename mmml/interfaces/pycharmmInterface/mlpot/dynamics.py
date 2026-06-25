@@ -1747,6 +1747,72 @@ def _materialize_early_abort_restart_handoff(
     )
 
 
+def _salvage_overlap_segment_progress(
+    *,
+    chunk_io: Optional[CharmmTrajectoryFiles],
+    final_restart: Path | None,
+    steps_before_chunk: int,
+    overlap_context: str,
+    mlpot_ctx: Optional["MlpotContext"],
+    overlap_restart_read: PathLike | None = None,
+) -> int | None:
+    """Rewind to the last good overlap handoff instead of failing the stage."""
+    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+        restore_geometry_from_ladder,
+    )
+
+    read_path = (
+        Path(overlap_restart_read)
+        if overlap_restart_read is not None
+        else (
+            Path(chunk_io.restart_read)
+            if chunk_io is not None and chunk_io.restart_read is not None
+            else None
+        )
+    )
+    if read_path is None or _valid_restart_file(read_path) is None:
+        return None
+    try:
+        restore_geometry_from_ladder(
+            [read_path],
+            label=f"overlap salvage ({overlap_context})",
+            allow_in_memory=False,
+        )
+    except RuntimeError:
+        return None
+
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        rewrite_dynamics_restart_validated,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        patch_restart_global_step,
+    )
+
+    targets: list[Path] = []
+    if final_restart is not None:
+        targets.append(Path(final_restart))
+    if chunk_io is not None and chunk_io.restart_write is not None:
+        write = Path(chunk_io.restart_write)
+        if write not in targets:
+            targets.append(write)
+    step = max(0, int(steps_before_chunk))
+    wrote = False
+    for path in targets:
+        if rewrite_dynamics_restart_validated(path):
+            patch_restart_global_step(path, step)
+            wrote = True
+    if not wrote:
+        return None
+    if mlpot_ctx is not None:
+        _prepare_overlap_chunk_after_restart(mlpot_ctx, restart_read=read_path)
+    print(
+        f"overlap ({overlap_context}): salvaged segment at global step {step} "
+        f"from {read_path.name} (partial stage completion; remaining chunk skipped)",
+        flush=True,
+    )
+    return step
+
+
 def _restart_header_step_field(path: Path) -> str | None:
     """Return the third token on the ``REST`` line (step / history marker), if present."""
     try:
@@ -2394,9 +2460,20 @@ def _refresh_charmm_dynamics_rng(*, base: int | None, salt: int) -> None:
     dyn.set_rngseeds(seeds)
 
 
-def _rng_salt_for_dynamics(*, overlap_context: str, chunk_index: int, steps_done: int) -> int:
+def _rng_salt_for_dynamics(
+    *,
+    overlap_context: str,
+    chunk_index: int,
+    steps_done: int,
+    retry_count: int = 0,
+) -> int:
     ctx_hash = abs(hash(str(overlap_context))) & 0x7FFF_FFFF
-    return int(ctx_hash + chunk_index * 1_000_003 + steps_done * 10_007)
+    return int(
+        ctx_hash
+        + chunk_index * 1_000_003
+        + steps_done * 10_007
+        + int(retry_count) * 7919
+    )
 
 
 def _integrated_step_from_restart(
@@ -2664,11 +2741,19 @@ def run_dynamics_with_io(
         if io is not None and n_chunks > 1 and io.trajectory is not None and not split_trajectory:
             trajectory_files, trajectory_iokw = io.open_trajectory_for_run()
         chunk_index = 0
+        _MAX_EARLY_ABORT_CHUNK_RETRIES = 3
         while chunk_index < n_chunks:
-            chunk_retried = False
+            chunk_retry_count = 0
             segment_aborted = False
             early_abort_memory_handoff = False
             early_abort_restart_handoff = False
+            overlap_restart_read_for_chunk: Path | None = None
+            if io is not None and n_chunks > 1:
+                planned_read, _ = _overlap_chunk_restart_paths(
+                    io, chunk_index=chunk_index, n_chunks=n_chunks
+                )
+                if planned_read is not None:
+                    overlap_restart_read_for_chunk = Path(planned_read)
             rerun_chunk = True
             while rerun_chunk:
                 rerun_chunk = False
@@ -2883,6 +2968,7 @@ def run_dynamics_with_io(
                         overlap_context=overlap_context,
                         chunk_index=chunk_index,
                         steps_done=steps_done,
+                        retry_count=chunk_retry_count,
                     ),
                 )
                 if chunk_io is not None and getattr(chunk_io, "restart_write", None) is not None:
@@ -2943,26 +3029,44 @@ def run_dynamics_with_io(
                         steps_before_chunk=steps_before_chunk,
                         overlap_context=overlap_context,
                         overlap_run_state_dir=overlap_run_state_dir,
+                        overlap_restart_read=overlap_restart_read_for_chunk,
                     )
-                    if not chunk_retried and recovery.ok:
-                        chunk_retried = True
+                    if (
+                        recovery.ok
+                        and chunk_retry_count < _MAX_EARLY_ABORT_CHUNK_RETRIES
+                    ):
+                        chunk_retry_count += 1
                         if recovery.source == "memory":
                             if n_chunks > 1:
                                 early_abort_restart_handoff = True
                             else:
                                 early_abort_memory_handoff = True
                         else:
-                            post_rescue_in_memory_mode = True
-                            any_post_rescue_in_memory = True
+                            early_abort_restart_handoff = True
                         post_rescue_handoff_applied = False
                         steps_done = steps_before_chunk
                         rerun_chunk = True
                         print(
                             f"overlap ({overlap_context}): retrying chunk "
-                            f"{chunk_index + 1}/{n_chunks} after geometry recovery",
+                            f"{chunk_index + 1}/{n_chunks} after geometry recovery "
+                            f"(attempt {chunk_retry_count}/{_MAX_EARLY_ABORT_CHUNK_RETRIES})",
                             flush=True,
                         )
                         continue
+                    salvaged = _salvage_overlap_segment_progress(
+                        chunk_io=chunk_io,
+                        final_restart=final_restart,
+                        steps_before_chunk=steps_before_chunk,
+                        overlap_context=overlap_context,
+                        mlpot_ctx=mlpot_ctx,
+                        overlap_restart_read=overlap_restart_read_for_chunk,
+                    )
+                    if salvaged is not None:
+                        steps_done = int(salvaged)
+                        segment_aborted = False
+                        rerun_chunk = False
+                        chunk_index = n_chunks
+                        break
                     segment_aborted = True
                 else:
                     print(

@@ -153,6 +153,15 @@ def test_overlap_early_abort_recovery_retries_chunk(tmp_path):
         "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.restore_geometry_from_ladder",
         return_value=baseline,
     ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.attempt_overlap_early_abort_recovery",
+        return_value=__import__(
+            "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint",
+            fromlist=["GeometryRecoveryResult"],
+        ).GeometryRecoveryResult(True, "restart"),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._materialize_early_abort_restart_handoff",
+        side_effect=lambda chunk_io, **kw: chunk_io,
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_post_rescue_overlap_handoff",
     ) as post_rescue:
         run_dynamics_with_io(
@@ -163,7 +172,7 @@ def test_overlap_early_abort_recovery_retries_chunk(tmp_path):
         )
 
     assert len(calls) == 2
-    post_rescue.assert_called_once()
+    post_rescue.assert_not_called()
 
 
 def test_overlap_early_abort_in_memory_recovery_skips_post_rescue(tmp_path):

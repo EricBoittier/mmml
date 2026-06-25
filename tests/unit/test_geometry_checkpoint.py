@@ -306,7 +306,36 @@ def test_attempt_overlap_early_abort_recovery_reports_memory_source(tmp_path):
     assert recovery.source == "memory"
 
 
-def test_attempt_overlap_early_abort_recovery_uses_baseline_not_scratch(tmp_path):
+def test_build_early_abort_recovery_candidates_prefers_overlap_read(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+        build_early_abort_recovery_candidates,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import DynamicsOverlapConfig
+
+    baseline = tmp_path / "geometry_baseline_dcm_10.res"
+    baseline.write_text("baseline\n", encoding="utf-8")
+    heat = tmp_path / "heat_dcm_10.res"
+    heat.write_text("heat\n", encoding="utf-8")
+    scratch = tmp_path / "equi_dcm_10.overlap_a.res"
+    scratch.write_text("scratch\n", encoding="utf-8")
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        n_monomers=2,
+        geometry_baseline_restart=baseline,
+        prior_segment_restart=heat,
+        geometry_fallback_restarts=(),
+    )
+    ladder = build_early_abort_recovery_candidates(
+        cfg,
+        overlap_restart_read=scratch,
+    )
+    assert ladder[0] == scratch.resolve()
+    assert heat in ladder
+    assert baseline in ladder
+
+
+def test_attempt_overlap_early_abort_recovery_uses_baseline_without_overlap_read(tmp_path):
+    """Without overlap_restart_read, scratch prior_segment is still excluded."""
     baseline = tmp_path / "geometry_baseline_dcm_155.res"
     baseline.write_text("baseline\n", encoding="utf-8")
     scratch = tmp_path / "heat_dcm_155.0.overlap_a.res"
