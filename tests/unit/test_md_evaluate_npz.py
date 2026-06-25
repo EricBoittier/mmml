@@ -206,3 +206,44 @@ def test_run_evaluate_npz_ase_backend(tmp_path: Path, monkeypatch: pytest.Monkey
     payload = json.loads(result_path.read_text(encoding="utf-8"))
     assert payload["backend"] == "ase"
     assert payload["metrics"]["energy_eV"] == pytest.approx(-1.25)
+
+
+def test_md_system_evaluate_npz_manifest_exit_code_success(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import sys
+
+    from mmml.cli.run import md_system
+
+    out_dir = tmp_path / "eval_smoke"
+    out_dir.mkdir()
+    npz = tmp_path / "geom.npz"
+    np.savez_compressed(npz, positions=np.zeros((10, 3)), pbc=False)
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "mmml",
+            "--evaluate-npz",
+            str(npz),
+            "--composition",
+            "DCM:2",
+            "--backend",
+            "ase",
+            "--setup",
+            "free_nve",
+            "--output-dir",
+            str(out_dir),
+        ],
+    )
+    monkeypatch.setattr("mmml.cli.run.md_evaluate_npz.run_evaluate_npz", lambda _args: 0)
+
+    assert md_system.main() == 0
+
+    manifest_path = tmp_path / "artifacts" / "md_system" / "jobs" / "eval_smoke.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["exit_code"] == 0
+    assert manifest["backend"] == "ase"
