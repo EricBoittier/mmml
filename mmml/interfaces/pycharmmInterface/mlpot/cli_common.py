@@ -1375,6 +1375,53 @@ def charmm_total_forces_ev_angstrom() -> np.ndarray:
     return np.asarray(charmm_total_forces_kcalmol_A(), dtype=np.float64) / float(ev2kcalmol)
 
 
+def mlpot_last_hybrid_forces_kcalmol_A(pyCModel: Any) -> np.ndarray | None:
+    """Hybrid ML/MM forces from the last MLpot callback (kcal/mol/Å).
+
+    ``ENER FORCE`` can leave bonded or other CHARMM terms in ``coor.get_forces()``
+    even when the BLOCK zeros their energy. For evaluate/compare, prefer these
+    callback forces — they match the ASE ``spherical_fn`` path.
+    """
+    if pyCModel is None:
+        return None
+    forces = getattr(pyCModel, "_last_ml_forces", None)
+    if forces is None:
+        calc = getattr(pyCModel, "_registered_calculator", None)
+        forces = getattr(calc, "last_ml_forces", None)
+    if forces is None:
+        return None
+    arr = np.asarray(forces, dtype=np.float64).reshape(-1, 3)
+    return arr if arr.size else None
+
+
+def mlpot_hybrid_forces_ev_angstrom(
+    pyCModel: Any,
+    *,
+    natom: int | None = None,
+) -> np.ndarray | None:
+    """Hybrid MLpot forces in eV/Å from the last callback evaluation."""
+    from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
+
+    forces_kcal = mlpot_last_hybrid_forces_kcalmol_A(pyCModel)
+    if forces_kcal is None:
+        return None
+    if natom is not None:
+        forces_kcal = forces_kcal[: int(natom)]
+    return np.asarray(forces_kcal, dtype=np.float64) / float(ev2kcalmol)
+
+
+def resolve_evaluate_forces_ev_angstrom(
+    pyCModel: Any,
+    *,
+    natom: int,
+) -> tuple[np.ndarray, str]:
+    """Forces for evaluate/compare: MLpot callback first, CHARMM total fallback."""
+    hybrid = mlpot_hybrid_forces_ev_angstrom(pyCModel, natom=natom)
+    if hybrid is not None and int(hybrid.shape[0]) == int(natom):
+        return np.asarray(hybrid, dtype=np.float64), "mlpot_callback"
+    return charmm_total_forces_ev_angstrom()[: int(natom)], "charmm_total"
+
+
 def refresh_mlpot_energy_and_grms(
     mlpot_ctx: Any | None = None,
     *,
