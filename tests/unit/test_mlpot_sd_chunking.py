@@ -191,6 +191,8 @@ def test_run_minimize_in_chunks_watchdog_stops_early():
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
         return_value=12.0,
     ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._rollback_mlpot_sd_chunk_geometry",
+    ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
     ):
         result = _run_minimize_in_chunks(
@@ -237,6 +239,8 @@ def test_run_minimize_in_chunks_watchdog_uses_sd_watchdog_initial_grms():
         "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=np.zeros((1, 3)),
     ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._rollback_mlpot_sd_chunk_geometry",
+    ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
     ):
         result = _run_minimize_in_chunks(
@@ -257,6 +261,7 @@ def test_run_minimize_in_chunks_watchdog_uses_sd_watchdog_initial_grms():
 
 
 def test_run_minimize_in_chunks_watchdog_rolls_back_after_chunk_blowup():
+    ctx = MagicMock(use_pbc=True)
     minimize = MagicMock()
     pycharmm = MagicMock()
     config = MinimizeWithMlpotConfig(
