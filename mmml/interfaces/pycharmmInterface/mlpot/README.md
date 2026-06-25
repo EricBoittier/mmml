@@ -207,6 +207,34 @@ mmml md-system --setup pbc_nvt --backend pycharmm \
 
 **Cross-backend campaigns** (PyCHARMM equil → JAX-MD prod): see [docs/handoff.md](../../../../docs/handoff.md) for box/velocity carry-over, cutoff consistency, and `handoff_quality_gate`.
 
+## Single-point evaluation (`--evaluate-npz`)
+
+Run one MMML energy/force evaluation at a fixed geometry without dynamics — useful for smoke-testing each backend in its runtime environment:
+
+```bash
+mmml md-system \
+  --evaluate-npz path/to/geometry.npz \
+  --composition DCM:9 \
+  --checkpoint examples/ckpts_json/DESdimers_params.json \
+  --backend ase \
+  --setup free_nve \
+  --output-dir artifacts/eval_smoke
+```
+
+NPZ fields:
+
+| Key | Required | Notes |
+|-----|----------|-------|
+| `positions` | yes | `(N, 3)` Å |
+| `atomic_numbers` | no | `(N,)`; omit if `--composition` rebuilds topology |
+| `pbc`, `cell` | no | periodic box for PBC setups |
+| `charges` | no | `(N,)` partial charges applied to CHARMM PSF before eval |
+| `at_codes` / `iac` | no | `(N,)` LJ type indices (0- or 1-based) for switched MM |
+| `epsilon`, `sigma` | no | recorded in output metadata; MM uses CGenFF via `at_codes` |
+
+Backends: `ase` (ASE calculator), `jaxmd` (ASE + JIT spherical kernel), `pycharmm` (CHARMM MLpot callback). Results: `<output-dir>/evaluate.json`.
+
+
 ## Tests
 
 ```bash

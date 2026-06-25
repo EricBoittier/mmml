@@ -1143,6 +1143,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="PBC-aware FIRE steps after first minimization (default: 200).",
     )
     parser.add_argument(
+        "--evaluate-npz",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help=(
+            "Single-point evaluation: load positions (and optional charges/LJ types) "
+            "from an NPZ file, build the selected backend calculator, and write "
+            "energy/forces to evaluate.json (no dynamics)."
+        ),
+    )
+    parser.add_argument(
+        "--evaluate-output",
+        type=Path,
+        default=None,
+        help="JSON path for --evaluate-npz results (default: <output-dir>/evaluate.json).",
+    )
+    parser.add_argument(
         "--no-stage-summary",
         action="store_true",
         help="Do not write stage_summary.json (campaigns).",
@@ -2257,6 +2274,20 @@ def main() -> int:
                 print(f"mmml md-system: error: {exc}", file=sys.stderr)
                 exit_code = 2
             return exit_code
+        if getattr(args, "evaluate_npz", None):
+            try:
+                _apply_backend_setup_defaults(args)
+            except ValueError as exc:
+                print(f"mmml md-system: error: {exc}", file=sys.stderr)
+                return 2
+            from mmml.cli.run.md_evaluate_npz import _resolve_evaluate_backend, run_evaluate_npz
+
+            backend = _resolve_evaluate_backend(args)
+            try:
+                return int(run_evaluate_npz(args))
+            except Exception as exc:
+                print(f"mmml md-system: evaluate-npz failed: {exc}", file=sys.stderr)
+                return 1
         try:
             _apply_backend_setup_defaults(args)
         except ValueError as exc:
