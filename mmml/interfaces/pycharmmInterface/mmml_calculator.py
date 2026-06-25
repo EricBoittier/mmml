@@ -438,10 +438,15 @@ def setup_calculator(
             f"flat_bottom_mode must be one of {FLAT_BOTTOM_MODES}, got {flat_bottom_mode!r}"
         )
     if flat_bottom_radius is not None and float(flat_bottom_radius) > 0:
-        print(
-            "[setup_calculator] flat_bottom mode=%s R=%.4f Å k=%.4f eV/Å²"
-            % (_fb_mode, float(flat_bottom_radius), float(flat_bottom_force_const))
-        )
+        setup_rows: list[tuple[str, Any]] = [
+            (
+                "flat_bottom",
+                f"mode={_fb_mode} R={float(flat_bottom_radius):.4f} Å "
+                f"k={float(flat_bottom_force_const):.4f} eV/Å²",
+            )
+        ]
+    else:
+        setup_rows = []
     _min_com_distance = (
         float(min_com_restraint_distance)
         if min_com_restraint_distance is not None
@@ -450,9 +455,11 @@ def setup_calculator(
     )
     _min_com_k = float(min_com_restraint_force_const)
     if _min_com_distance is not None:
-        print(
-            "[setup_calculator] pairwise COM lower-wall r_min=%.4f Å k=%.4f eV/Å²"
-            % (_min_com_distance, _min_com_k)
+        setup_rows.append(
+            (
+                "pairwise COM lower-wall",
+                f"r_min={_min_com_distance:.4f} Å k={_min_com_k:.4f} eV/Å²",
+            )
         )
 
     # Cumulative atom offsets: monomer_offsets[i] is the global index of the
@@ -491,17 +498,22 @@ def setup_calculator(
         handoff_start = mm_switch_on - ml_switch_width
         mm_r_min = handoff_start * 0.9 if handoff_start > 0 else None
 
-    print(f"[setup_calculator] ml_compute_dtype={ml_jnp_dtype} (CHARMM I/O remains float64)")
-    print(
-        "[setup_calculator] Handoff parameters -> ml_switch_width=%.4f Å, mm_switch_on=%.4f Å, "
-        "mm_switch_width=%.4f Å, complementary_handoff=%s"
-        % (ml_switch_width, mm_switch_on, mm_switch_width, complementary_handoff)
+    setup_rows.extend(
+        [
+            ("ml_compute_dtype", f"{ml_jnp_dtype} (CHARMM I/O remains float64)"),
+            (
+                "handoff",
+                f"ml_switch_width={ml_switch_width:.4f} Å, mm_switch_on={mm_switch_on:.4f} Å, "
+                f"mm_switch_width={mm_switch_width:.4f} Å, complementary_handoff={complementary_handoff}",
+            ),
+        ]
     )
     if mm_r_min is not None:
-        print(f"[setup_calculator] mm_r_min={mm_r_min} (exclude pairs with dimer COM < this)")
-    print(f"[setup_calculator] atoms_per_monomer={atoms_per_monomer_list}, total_atoms={total_atoms}")
+        setup_rows.append(("mm_r_min", f"{mm_r_min} (exclude pairs with dimer COM < this)"))
+    setup_rows.append(("atoms_per_monomer", atoms_per_monomer_list))
+    setup_rows.append(("total_atoms", total_atoms))
     if debug:
-        print(f"[setup_calculator] lambda_monomer={lambda_monomer}")
+        setup_rows.append(("lambda_monomer", lambda_monomer))
 
     # --- Build monomer / dimer index arrays ---------------------------------
     all_dimer_idxs = []
@@ -534,7 +546,9 @@ def setup_calculator(
     max_monomer_atoms = max(atoms_per_monomer_list)
     max_dimer_atoms = max(_dimer_atom_counts) if _dimer_atom_counts else 2 * max_monomer_atoms
     max_atoms = max(max_monomer_atoms, max_dimer_atoms)
-    print(f"[setup_calculator] max_atoms (model natoms)={max_atoms} (max monomer/dimer size)")
+    setup_rows.append(
+        ("max_atoms (model natoms)", f"{max_atoms} (max monomer/dimer size)")
+    )
 
     # Precompute padded index arrays for vectorized gather (avoids Python loops in get_ML_energy_fn)
     monomer_idx_arr = np.zeros((n_monomers, max_atoms), dtype=np.int32)
@@ -557,7 +571,10 @@ def setup_calculator(
     N_MONOMERS + len(dimer_perms)  # Number of systems per batch
     # print(BATCH_SIZE)
     restart_path = Path(model_restart_path) if type(model_restart_path) == str else model_restart_path
-    print(f"[setup_calculator] model_restart_path={restart_path.resolve()}")
+    setup_rows.append(("model_restart_path", restart_path.resolve()))
+    from mmml.utils.rich_report import emit_setup_calculator_summary, emit_model_loaded, emit_tagged
+
+    emit_setup_calculator_summary(setup_rows)
 
     # Check if this is a JSON checkpoint (params.json in dir, or path to .json file)
     is_json_checkpoint = (
@@ -682,7 +699,11 @@ def setup_calculator(
         params, MODEL = get_params_model(restart, natoms=max_atoms)
         params = cast_pytree_to_ml_dtype(params, dtype=ml_jnp_dtype)
     MODEL.natoms = max_atoms
-    print(f"[setup_calculator] Model loaded: {MODEL}")
+    emit_model_loaded(
+        MODEL,
+        checkpoint=str(restart_path.resolve()),
+        runtime_natoms=max_atoms if is_json_checkpoint else None,
+    )
 
     from mmml.data.units import HARTREE_TO_EV, calculator_results_units
 
@@ -712,19 +733,21 @@ def setup_calculator(
         ml_force_conversion_factor = float(HARTREE_TO_EV)
     _calculator_unit_metadata = calculator_results_units()
     if is_json_checkpoint:
-        print(
-            f"[setup_calculator] Runtime natoms={max_atoms} (largest monomer/dimer in this system). "
-            "n_res is an EF architecture parameter, not the number of CHARMM residues."
+        emit_tagged(
+            "setup_calculator",
+            "Runtime natoms is the largest monomer/dimer in this system; "
+            "n_res is an EF architecture parameter, not the number of CHARMM residues.",
         )
     apply_xla_cuda_timer_log_filter()
     if not defer_xla_gpu_warmup and ensure_xla_gpu_warmed():
-        print(
-            "[setup_calculator] Generic XLA GPU warmup (full hybrid warmup runs after PyCHARMM/CGENFF init)"
+        emit_tagged(
+            "setup_calculator",
+            "Generic XLA GPU warmup (full hybrid warmup runs after PyCHARMM/CGENFF init)",
         )
     elif defer_xla_gpu_warmup and verbose:
-        print(
-            "[setup_calculator] Deferred XLA GPU warmup until after CHARMM MLpot registration",
-            flush=True,
+        emit_tagged(
+            "setup_calculator",
+            "Deferred XLA GPU warmup until after CHARMM MLpot registration",
         )
     is_spooky_model = "spooky_model" in type(MODEL).__module__
 
@@ -959,7 +982,13 @@ def setup_calculator(
             box=box,
         )
         _hybrid_jit_warmed[0] = True
-        print("[mmml] hybrid JIT warmup complete (post-PyCHARMM delay-kernel calibration)")
+        from mmml.utils.rich_report import emit_tagged
+
+        emit_tagged(
+            "mmml",
+            "hybrid JIT warmup complete (post-PyCHARMM delay-kernel calibration)",
+            tag_style="bold magenta",
+        )
 
     def _ensure_mm_fn(positions_concrete, cutoff_params):
         """Build the MM energy/force function if not yet cached (or if cutoffs changed)."""
