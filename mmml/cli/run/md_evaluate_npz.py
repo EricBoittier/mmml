@@ -991,7 +991,7 @@ def _evaluate_jaxmd_mmml(
     L: float | None,
     at_codes_override: np.ndarray | None,
 ) -> dict[str, Any]:
-    from mmml.interfaces.pycharmmInterface.calculator_utils import CutoffParameters
+    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
     from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
     import pycharmm.psf as psf
 

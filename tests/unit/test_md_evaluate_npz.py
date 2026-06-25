@@ -612,3 +612,27 @@ def test_compare_autodetects_ev_reference(tmp_path: Path) -> None:
     )
     assert cmp["delta_energy_eV"] == pytest.approx(-0.01, abs=1e-6)
     assert cmp["reference_energy_unit"] == "ev"
+
+
+def test_apply_charmm_output_from_args_defaults_missing_bomlev() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        apply_charmm_output_from_args,
+    )
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.apply_charmm_verbosity"
+    ) as mock_apply:
+        nprint = apply_charmm_output_from_args(Namespace(quiet=True))
+    assert nprint == 100
+    mock_apply.assert_called_once_with(prnlev=0, warnlev=0, bomlev=-2)
+
+
+def test_evaluate_jaxmd_uses_cutoff_parameters_from_cutoffs_module() -> None:
+    import mmml.cli.run.md_evaluate_npz as mod
+
+    source = Path(mod.__file__).read_text(encoding="utf-8")
+    assert "from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters" in source
+    assert (
+        "from mmml.interfaces.pycharmmInterface.calculator_utils import CutoffParameters"
+        not in source
+    )
