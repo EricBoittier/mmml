@@ -326,8 +326,16 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--jax-md-capacity-multiplier", type=float, default=1.25)
     p.add_argument("--jax-md-capacity-growth-factor", type=float, default=1.5)
     p.add_argument("--jax-md-max-overflow-retries", type=int, default=4)
-    p.add_argument("--jax-md-update-interval", type=int, default=10)
-    p.add_argument("--jax-md-skin-distance", type=float, default=0.2)
+    p.add_argument("--jax-md-update-interval", type=int, default=1)
+    p.add_argument(
+        "--jax-md-skin-distance",
+        type=float,
+        default=0.0,
+        help=(
+            "Reuse cached MM neighbor pairs while max displacement since last update is below "
+            "this (Å). Default 0: rebuild every update (recommended for PBC NVE/NVT)."
+        ),
+    )
     p.add_argument(
         "--nvt-allow-stale-neighbors",
         action="store_true",
@@ -1086,6 +1094,8 @@ def main(argv: list[str] | None = None) -> int:
         skip_ml_dimers=False,
         debug=False,
         steps_per_recording=max(1, args.steps_per_recording),
+        jax_md_update_interval=effective_update_interval,
+        jax_md_skin_distance=effective_skin,
         nhc_chain_length=args.nhc_chain_length,
         nhc_chain_steps=args.nhc_chain_steps,
         nhc_sy_steps=args.nhc_sy_steps,
@@ -1133,6 +1143,11 @@ def main(argv: list[str] | None = None) -> int:
         print(
             "[jaxmd_nbr] internal updater settings (NVT fixed-box reuse): "
             f"update_interval_calls={effective_update_interval}, skin_distance={effective_skin:.3f} A"
+        )
+    elif args.ensemble == "nve" and not free_space:
+        print(
+            "[jaxmd_nbr] NVE PBC: neighbor list refresh every MD step "
+            f"(update_interval_calls={effective_update_interval}, skin_distance={effective_skin:.3f} A)"
         )
     update_fn_live = get_update_fn(np.asarray(atoms.get_positions(), dtype=np.float64), cutoff) if get_update_fn else None
     key = random.PRNGKey(args.seed)
@@ -1259,8 +1274,22 @@ def main(argv: list[str] | None = None) -> int:
         },
         "placement": "random_3d",
         "placement_seed": int(args.seed),
-        "neighbor_update_interval_steps": int(max(1, args.steps_per_recording)) if args.ensemble == "npt" else None,
-        "neighbor_expected_updates": int(nsteps // max(1, args.steps_per_recording)) if args.ensemble == "npt" else None,
+        "neighbor_update_interval_steps": (
+            int(getattr(run_sim, "neighbor_update_interval_steps", 1))
+            if not free_space and get_update_fn is not None
+            else (
+                int(max(1, args.steps_per_recording)) if args.ensemble == "npt" else None
+            )
+        ),
+        "neighbor_expected_updates": (
+            int(nsteps // max(1, int(getattr(run_sim, "neighbor_update_interval_steps", 1))))
+            if not free_space and get_update_fn is not None
+            else (
+                int(nsteps // max(1, args.steps_per_recording))
+                if args.ensemble == "npt"
+                else None
+            )
+        ),
         "neighbor_internal_update_interval_calls": effective_update_interval,
         "neighbor_internal_skin_distance_A": effective_skin,
         "pre_md_minimization": minimization_summary,
