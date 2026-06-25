@@ -1270,6 +1270,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             "use --charmm-mm-pretreat-on-handoff to force)",
             flush=True,
         )
+    pretreat_restart_path: Path | None = None
     if pretreat_mm:
         r = run_charmm_mm_pretreat_before_mlpot(
             args,
@@ -1284,23 +1285,28 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         )
         sync_charmm_positions(r)
         if charmm_pbc and box_side is not None:
+            from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+                restore_charmm_state_from_restart,
+            )
             from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+                find_latest_pretreat_mm_restart,
                 sync_workflow_pbc_box_side_after_mm_pretreat,
             )
 
-            pretreat_restart = None
-            for key in (
-                "charmm_mm_prod_res",
-                "charmm_mm_equi_res",
-                "charmm_mm_heat_res",
-            ):
-                candidate = paths.get(key)
-                if candidate is not None and Path(candidate).is_file():
-                    pretreat_restart = Path(candidate)
-                    break
+            pretreat_restart_path = find_latest_pretreat_mm_restart(paths)
+            if pretreat_restart_path is not None:
+                restore_charmm_state_from_restart(pretreat_restart_path)
+                if not args.quiet:
+                    print(
+                        "PBC pretreat: reloaded "
+                        f"{pretreat_restart_path.name} (coords + crystal) "
+                        "before MLpot registration",
+                        flush=True,
+                    )
             box_side = sync_workflow_pbc_box_side_after_mm_pretreat(
                 box_side,
-                pretreat_restart=pretreat_restart,
+                pretreat_restart=pretreat_restart_path,
+                args=args,
                 quiet=bool(args.quiet),
             )
     elif "mini" in stages and not getattr(args, "skip_cluster_build", False):
@@ -1363,6 +1369,15 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         args=args,
         topology_psf=recovery_topology_psf,
     )
+    if pretreat_mm and mlpot_pbc and pretreat_restart_path is not None:
+        box_side = sync_mlpot_pbc_cell_from_charmm(
+            pyCModel,
+            fallback_side_A=box_side,
+            restart_path=pretreat_restart_path,
+            verbose=not args.quiet,
+        )
+        ctx.cubic_box_side_A = float(box_side)
+        ctx.charmm_cubic_box_side_A = float(box_side)
 
     # Dummy SD step to ensure CHARMM neighbor list is configured for MLPot
     import pycharmm.lingo

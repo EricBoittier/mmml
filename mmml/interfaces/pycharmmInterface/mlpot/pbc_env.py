@@ -313,6 +313,7 @@ def sync_workflow_pbc_box_side_after_mm_pretreat(
     box_side: float | None,
     *,
     pretreat_restart: PathLike | None = None,
+    args: Any | None = None,
     quiet: bool = False,
 ) -> float | None:
     """Align workflow ML MIC cell with the live CHARMM box after MM pretreat.
@@ -320,14 +321,32 @@ def sync_workflow_pbc_box_side_after_mm_pretreat(
     NPT pretreat equi/prod can resize the crystal away from the Packmol density
     estimate passed into ``setup_charmm_environment``.  MLpot registration must
     use the post-pretreat box or MIC dimer distances disagree with CHARMM coords.
+
+    When ``pretreat_restart`` is set, the restart crystal is cross-checked against
+    live ``pbound_get_size`` and mismatches are logged.
     """
     if box_side is None:
         return None
+    from_restart: float | None = None
+    if pretreat_restart is not None:
+        from_restart = parse_cubic_box_side_from_charmm_restart(pretreat_restart)
     live, source = resolve_charmm_cubic_box_side_A(
         fallback_side_A=float(box_side),
         restart_path=pretreat_restart,
     )
     old = float(box_side)
+    if (
+        from_restart is not None
+        and from_restart > 0.0
+        and abs(from_restart - live) > max(1e-3, 1e-4 * live)
+        and not quiet
+    ):
+        print(
+            "PBC box cross-check after CHARMM MM pretreat: "
+            f"pbound/live={live:.3f} Å ({source}) vs restart={from_restart:.3f} Å "
+            f"({Path(pretreat_restart).name}); using live CHARMM box for MLpot MIC",
+            flush=True,
+        )
     if abs(live - old) > 1e-3:
         if not quiet:
             print(
@@ -335,8 +354,32 @@ def sync_workflow_pbc_box_side_after_mm_pretreat(
                 f"(source={source})",
                 flush=True,
             )
-        return float(live)
-    return old
+    elif not quiet:
+        print(
+            f"PBC box after CHARMM MM pretreat: L={live:.3f} Å (source={source})",
+            flush=True,
+        )
+    if args is not None and getattr(args, "box_size", None) is not None:
+        try:
+            from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import (
+                _pretreat_use_fixed_box_nvt,
+            )
+
+            fixed_nvt = _pretreat_use_fixed_box_nvt(args, use_pbc=True)
+        except Exception:
+            fixed_nvt = True
+        if not fixed_nvt and abs(live - old) > 1e-3:
+            args.box_size = float(live)
+    return float(live)
+
+
+def find_latest_pretreat_mm_restart(paths: dict[str, Path]) -> Path | None:
+    """Return the latest pretreat MM restart (prod, equi, or heat)."""
+    for key in ("charmm_mm_prod_res", "charmm_mm_equi_res", "charmm_mm_heat_res"):
+        candidate = paths.get(key)
+        if candidate is not None and Path(candidate).is_file():
+            return Path(candidate)
+    return None
 
 
 from mmml.interfaces.pycharmmInterface.nbonds_config import (  # noqa: E402
@@ -354,4 +397,5 @@ __all__ = [
     "prepare_charmm_pbc",
     "setup_charmm_environment",
     "sync_workflow_pbc_box_side_after_mm_pretreat",
+    "find_latest_pretreat_mm_restart",
 ]
