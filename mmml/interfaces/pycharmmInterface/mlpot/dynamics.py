@@ -425,6 +425,12 @@ def minimize_bonded_mm_recovery(
         _prepare_bonded_mm_rescue_environment(ctx)
         pycharmm, cons_fix, *_ = _import_pycharmm_modules()
         minimize = _import_pycharmm_modules()[3]
+        from mmml.interfaces.pycharmmInterface.charmm_levels import (
+            charmm_quiet_output,
+            run_charmm_script_quiet,
+        )
+
+        run_charmm_script_quiet("ENER")
         if config.nstep_sd <= 0:
             return float(charmm_grms())
 
@@ -445,10 +451,6 @@ def minimize_bonded_mm_recovery(
         sd_kw = _bonded_recovery_sd_kwargs(ctx, config)
         if config.verbose and config.show_energy:
             _maybe_show_energy(True)
-        from mmml.interfaces.pycharmmInterface.charmm_levels import (
-            charmm_quiet_output,
-            run_charmm_script_quiet,
-        )
 
         with charmm_quiet_output():
             minimize.run_sd(**sd_kw)

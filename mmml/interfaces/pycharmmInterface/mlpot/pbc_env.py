@@ -309,6 +309,36 @@ def setup_charmm_environment(
     return {"pbc": False, "box_A": None}
 
 
+def sync_workflow_pbc_box_side_after_mm_pretreat(
+    box_side: float | None,
+    *,
+    pretreat_restart: PathLike | None = None,
+    quiet: bool = False,
+) -> float | None:
+    """Align workflow ML MIC cell with the live CHARMM box after MM pretreat.
+
+    NPT pretreat equi/prod can resize the crystal away from the Packmol density
+    estimate passed into ``setup_charmm_environment``.  MLpot registration must
+    use the post-pretreat box or MIC dimer distances disagree with CHARMM coords.
+    """
+    if box_side is None:
+        return None
+    live, source = resolve_charmm_cubic_box_side_A(
+        fallback_side_A=float(box_side),
+        restart_path=pretreat_restart,
+    )
+    old = float(box_side)
+    if abs(live - old) > 1e-3:
+        if not quiet:
+            print(
+                f"PBC box sync after CHARMM MM pretreat: {old:.3f} -> {live:.3f} Å "
+                f"(source={source})",
+                flush=True,
+            )
+        return float(live)
+    return old
+
+
 from mmml.interfaces.pycharmmInterface.nbonds_config import (  # noqa: E402
     PbcNbondCutoffs,
     pbc_nbond_cutoffs,
@@ -323,4 +353,5 @@ __all__ = [
     "pbc_nbond_cutoffs",
     "prepare_charmm_pbc",
     "setup_charmm_environment",
+    "sync_workflow_pbc_box_side_after_mm_pretreat",
 ]
