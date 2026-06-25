@@ -108,18 +108,16 @@ def maybe_log_jax_compile_timers(*, quiet: bool = False) -> None:
     lines = _COMPILE_TIMER_SESSION.summary_lines()
     if not lines:
         return
-    for line in lines:
-        print(line, flush=True)
+    from mmml.utils.rich_report import emit_jax_compile_session_summary
+
+    emit_jax_compile_session_summary(lines, quiet=quiet)
 
 
 def _log_jax_compile_pass(label: str, pass_index: int, wall_seconds: float) -> None:
+    from mmml.utils.rich_report import emit_jax_compile_pass
+
     _COMPILE_TIMER_SESSION.record(label, pass_index, wall_seconds)
-    phase = "compile+run" if pass_index == 0 else "run"
-    print(
-        f"mmml: JAX compile timer [{label}] pass {pass_index + 1} ({phase}): "
-        f"{wall_seconds:.2f}s",
-        flush=True,
-    )
+    emit_jax_compile_pass(label, pass_index, wall_seconds)
 
 
 def run_jax_warmup_passes(
@@ -156,11 +154,9 @@ def run_jax_warmup_passes(
             entries = sorted(entries, key=lambda e: e.pass_index)
             run_s = entries[-1].wall_seconds
             compile_s = max(0.0, entries[0].wall_seconds - run_s)
-            print(
-                f"mmml: JAX compile timer [{label}] summary: "
-                f"compile≈{compile_s:.2f}s, run≈{run_s:.2f}s",
-                flush=True,
-            )
+            from mmml.utils.rich_report import emit_jax_compile_label_summary
+
+            emit_jax_compile_label_summary(label, compile_s, run_s)
 
 
 def _site_package_roots() -> list[Path]:

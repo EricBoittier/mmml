@@ -56,23 +56,31 @@ def _print_setup_calculator_factory_summary(
     cell: Union[float, bool],
 ) -> None:
     """Log hybrid factory defaults after ``setup_calculator`` returns."""
+    from mmml.utils.rich_report import emit_factory_summary
+
     cp = cutoff_params
     comp = getattr(cp, "complementary_handoff", True)
-    print(
-        "Decomposed MLpot factory (setup_calculator return):\n"
-        f"  factory={factory!r}\n"
-        f"  module={getattr(factory, '__module__', '?')}\n"
-        f"  name={getattr(factory, '__name__', type(factory).__name__)}\n"
-        f"  model_restart_path={checkpoint}\n"
-        f"  n_monomers={n_monomers} atoms_per_monomer={list(atoms_per_monomer)}\n"
-        f"  MAX_ATOMS_PER_SYSTEM={max_atoms_per_system}\n"
-        f"  doML={do_ml} doMM={do_mm} doML_dimer={do_ml_dimer}\n"
-        f"  ml_switch_width={cp.ml_switch_width} mm_switch_on={cp.mm_switch_on} "
-        f"mm_switch_width={cp.mm_switch_width} complementary_handoff={comp}\n"
-        f"  ml_batch_size={ml_batch_size} ml_gpu_count={ml_gpu_count} "
-        f"ml_max_active_dimers={ml_max_active_dimers}\n"
-        f"  cell={cell!r}",
-        flush=True,
+    emit_factory_summary(
+        "Decomposed MLpot factory",
+        {
+            "factory": getattr(factory, "__name__", type(factory).__name__),
+            "module": getattr(factory, "__module__", "?"),
+            "model_restart_path": str(checkpoint),
+            "n_monomers": n_monomers,
+            "atoms_per_monomer": list(atoms_per_monomer),
+            "MAX_ATOMS_PER_SYSTEM": max_atoms_per_system,
+            "doML": do_ml,
+            "doMM": do_mm,
+            "doML_dimer": do_ml_dimer,
+            "ml_switch_width": cp.ml_switch_width,
+            "mm_switch_on": cp.mm_switch_on,
+            "mm_switch_width": cp.mm_switch_width,
+            "complementary_handoff": comp,
+            "ml_batch_size": ml_batch_size,
+            "ml_gpu_count": ml_gpu_count,
+            "ml_max_active_dimers": ml_max_active_dimers,
+            "cell": repr(cell),
+        },
     )
 
 

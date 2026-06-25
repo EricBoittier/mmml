@@ -31,9 +31,10 @@ def _import_pycharmm():
 def _run_block_script(summary: str, script: str) -> None:
     """Apply a BLOCK script quietly and emit a one-line Python summary."""
     from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
+    from mmml.utils.rich_report import emit_charmm_block
 
     run_charmm_script_quiet(script)
-    print(summary, flush=True)
+    emit_charmm_block(summary)
 
 
 def apply_charmm_mm_block() -> None:

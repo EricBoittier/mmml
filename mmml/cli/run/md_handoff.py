@@ -1811,41 +1811,41 @@ def write_handoff_policy_json(summary: dict[str, Any], path: Path) -> Path:
 def print_handoff_policy_panel(summary: dict[str, Any], *, quiet: bool = False) -> None:
     if quiet:
         return
-    try:
-        from rich.console import Console
-        from rich.panel import Panel
-        from rich.table import Table
-    except ImportError:
-        print(f"Handoff policy: {json.dumps(summary, indent=2)}", flush=True)
-        return
+    from mmml.utils.rich_report import emit_table
 
-    c = Console()
-    table = Table(show_header=True, header_style="bold")
-    table.add_column("Field", style="cyan")
-    table.add_column("Value", style="white")
-    table.add_row("Handoff active", str(summary.get("handoff_active")))
+    rows: list[tuple[str, Any]] = [
+        ("Handoff active", summary.get("handoff_active")),
+    ]
     if summary.get("source_path"):
-        table.add_row("Source", str(summary.get("source_path")))
+        rows.append(("Source", summary.get("source_path")))
     if summary.get("prior_backend"):
-        table.add_row("Prior backend", str(summary.get("prior_backend")))
+        rows.append(("Prior backend", summary.get("prior_backend")))
     if summary.get("box_side_source"):
-        table.add_row("Box side source (write)", str(summary.get("box_side_source")))
-    table.add_row("Box side (Å)", str(summary.get("box_side_A")))
-    table.add_row("Box source (JAX-MD)", str(summary.get("box_source")))
-    table.add_row("Velocities in handoff", str(summary.get("velocities_in_handoff")))
+        rows.append(("Box side source (write)", summary.get("box_side_source")))
+    rows.extend(
+        [
+            ("Box side (Å)", summary.get("box_side_A")),
+            ("Box source (JAX-MD)", summary.get("box_source")),
+            ("Velocities in handoff", summary.get("velocities_in_handoff")),
+        ]
+    )
     if summary.get("velocities_source"):
-        table.add_row("Velocities source (write)", str(summary.get("velocities_source")))
-    table.add_row("Velocity policy", str(summary.get("velocity_policy")))
-    table.add_row("Skip pre-min", str(summary.get("skip_pre_min")))
+        rows.append(("Velocities source (write)", summary.get("velocities_source")))
+    rows.append(("Velocity policy", summary.get("velocity_policy")))
+    rows.append(("Skip pre-min", summary.get("skip_pre_min")))
     cutoffs = summary.get("cutoffs") or {}
     if cutoffs:
-        table.add_row(
-            "Cutoffs (ml/mm_on/mm_w)",
-            f"{cutoffs.get('ml_switch_width')} / {cutoffs.get('mm_switch_on')} / "
-            f"{cutoffs.get('mm_switch_width')}",
+        rows.append(
+            (
+                "Cutoffs (ml/mm_on/mm_w)",
+                f"{cutoffs.get('ml_switch_width')} / {cutoffs.get('mm_switch_on')} / "
+                f"{cutoffs.get('mm_switch_width')}",
+            )
         )
     if summary.get("initial_mmml_fmax_eVA") is not None:
-        table.add_row("Initial MMML |F|max (eV/Å)", f"{summary.get('initial_mmml_fmax_eVA'):.4f}")
+        rows.append(
+            ("Initial MMML |F|max (eV/Å)", f"{summary.get('initial_mmml_fmax_eVA'):.4f}")
+        )
     for w in summary.get("box_warnings") or []:
-        table.add_row("Warning", w)
-    c.print(Panel(table, title="[bold]Handoff policy[/bold]", border_style="blue"))
+        rows.append(("Warning", w))
+    emit_table("Handoff policy", rows, border_style="blue", quiet=quiet)
