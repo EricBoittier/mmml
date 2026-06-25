@@ -384,8 +384,17 @@ def test_pbc_nbond_kwargs_includes_ctexnb_when_capped():
 
     cuts = pbc_nbond_cutoffs(35.0)
     kw = cuts.as_pbc_nbond_kwargs()
+    # Capped box: bump would hit L/2, so ctexnb stays at cutnb
     assert kw["ctexnb"] == pytest.approx(cuts.cutnb)
     assert kw["cutim"] == pytest.approx(cuts.cutim)
+
+
+def test_pbc_nbond_kwargs_bumps_ctexnb_when_box_allows():
+    from mmml.interfaces.pycharmmInterface.nbonds_config import pbc_nbond_cutoffs
+
+    cuts = pbc_nbond_cutoffs(55.0)
+    kw = cuts.as_pbc_nbond_kwargs()
+    assert kw["ctexnb"] == pytest.approx(cuts.cutnb + 1.0)
 
 
 def test_charmm_ctypes_scalar_accepts_int_and_ctypes_wrapper():

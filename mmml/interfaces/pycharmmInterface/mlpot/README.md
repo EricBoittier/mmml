@@ -221,6 +221,15 @@ pytest tests/unit/test_mlpot_pbc_cell.py -q
 
 ### Built-in MLpot Profiling
 To enable lightweight timing metrics showing callback counts, JAX/ML evaluation time, and CHARMM overhead:
+
+```bash
+mmml md-system ... --mlpot-profile
+# or on the PyCHARMM MLpot driver:
+python -m mmml.cli.run.md_pbc_suite.pycharmm_mlpot --phase dynamics --mlpot-profile ...
+```
+
+Environment variables (same effect when set before Python starts):
+
 ```bash
 export MMML_MLPOT_PROFILE=1
 export MMML_JAX_COMPILE_TIMERS=1
