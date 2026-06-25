@@ -3187,11 +3187,18 @@ def minimize_with_mlpot(
             # the MLpot SD so the ML potential starts from a geometry it can minimize.
             from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
                 charmm_grms_after_ener_force,
+                resolve_mlpot_grms_kcalmol_A,
             )
 
             _threshold = config.pre_sd_bonded_recovery_energy_kcalmol
             _grms_thr = config.pre_sd_bonded_recovery_grms_kcalmol_A
-            _grms = charmm_grms_after_ener_force()
+            charmm_grms_after_ener_force()
+            _grms = resolve_mlpot_grms_kcalmol_A(
+                config.mlpot_ctx,
+                context=(
+                    "Pre-SD hybrid GRMS check" if config.verbose else ""
+                ),
+            )
             _user_hot = _threshold is not None and pre_sd_user > float(_threshold)
             _grms_hot = _grms_thr is not None and _grms > float(_grms_thr)
             if _user_hot or _grms_hot:
@@ -3239,6 +3246,15 @@ def minimize_with_mlpot(
             sd_kw,
             pass_label="pass 1 (free, all atoms)",
         )
+        if config.verbose and config.mlpot_ctx is not None:
+            from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+                resolve_mlpot_grms_kcalmol_A,
+            )
+
+            resolve_mlpot_grms_kcalmol_A(
+                config.mlpot_ctx,
+                context="Post MLpot SD pass 1",
+            )
         if config.verbose and config.show_energy:
             print("CHARMM energy after SD pass 1 (free):")
             _maybe_show_energy(True)
@@ -3253,6 +3269,15 @@ def minimize_with_mlpot(
                 sd_kw,
                 pass_label=f"pass 2 (cons_fix, {n_fix} atoms)",
             )
+            if config.verbose and config.mlpot_ctx is not None:
+                from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+                    resolve_mlpot_grms_kcalmol_A,
+                )
+
+                resolve_mlpot_grms_kcalmol_A(
+                    config.mlpot_ctx,
+                    context="Post MLpot SD pass 2",
+                )
             if config.verbose and config.show_energy:
                 print("CHARMM energy after SD pass 2 (constrained):")
                 _maybe_show_energy(True)
