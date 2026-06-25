@@ -447,6 +447,8 @@ def write_reference_trajectory(ctx: OptContext, save_dir: Path) -> None:
     Trajectory = imp["Trajectory"]
     SinglePointCalculator = imp["SinglePointCalculator"]
     Atoms = setup_ase_imports()
+    from mmml.cli.run.md_evaluate_npz import center_positions_at_com
+
     args = ctx.args
     atoms = ctx.atoms
     frame_indices = ctx.frame_indices
@@ -463,9 +465,10 @@ def write_reference_trajectory(ctx: OptContext, save_dir: Path) -> None:
     with Trajectory(ref_traj_path, "w") as traj:
         for i in frame_indices:
             cell = atoms.cell if getattr(atoms, "cell", None) is not None else None
+            positions = center_positions_at_com(R_all[i], Z_ds)
             ref_atoms = Atoms(
                 numbers=Z_ds,
-                positions=R_all[i],
+                positions=positions,
                 cell=cell,
                 pbc=getattr(atoms, "pbc", False),
             )

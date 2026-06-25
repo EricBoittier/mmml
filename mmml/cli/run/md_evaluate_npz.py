@@ -222,6 +222,171 @@ def _reference_z_for_frame(reference: Any, frame: int, n_atoms: int) -> np.ndarr
     return np.asarray(z_arr[int(frame), :n_atoms], dtype=np.int32)
 
 
+def center_positions_at_com(
+    positions: np.ndarray,
+    atomic_numbers: np.ndarray,
+) -> np.ndarray:
+    """Translate positions so the mass-weighted center of mass is at the origin."""
+    from ase.data import atomic_masses
+
+    pos = np.asarray(positions, dtype=np.float64)
+    z = np.asarray(atomic_numbers, dtype=np.int32).reshape(-1)
+    masses = np.asarray(atomic_masses[z], dtype=np.float64)
+    weights = np.ones(len(z), dtype=np.float64) if float(masses.sum()) <= 0.0 else masses
+    if pos.ndim == 2:
+        return pos - np.average(pos, axis=0, weights=weights)
+    com = np.average(pos, axis=1, weights=weights)
+    return pos - com[:, np.newaxis, :]
+
+
+def reference_metrics_at_eval_geometry(
+    reference: Any,
+    *,
+    ref_frame: int,
+    atomic_numbers: np.ndarray,
+    positions: np.ndarray,
+) -> tuple[float | None, np.ndarray | None]:
+    """Reference energy (eV) and forces (eV/Å) aligned to the evaluate geometry."""
+    n_atoms = int(len(atomic_numbers))
+    ref_z = _reference_z_for_frame(reference, int(ref_frame), n_atoms)
+    ref_r = np.asarray(reference.R[int(ref_frame), :n_atoms], dtype=np.float64)
+    ref_f_raw = None
+    if getattr(reference, "has_F", False) and getattr(reference, "F", None) is not None:
+        ref_f_raw = np.asarray(reference.F[int(ref_frame), :n_atoms], dtype=np.float64)
+    _, ref_f_aligned, _ = align_reference_frame_to_evaluate(
+        ref_r,
+        ref_z,
+        positions,
+        atomic_numbers,
+        reference_forces=ref_f_raw,
+    )
+    ref_e_ev = None
+    if getattr(reference, "has_E", False) and getattr(reference, "E", None) is not None:
+        ref_e_ev = float(
+            energy_to_ev(float(reference.E[int(ref_frame)]), reference.energy_unit)
+        )
+    ref_f_ev = None
+    if ref_f_aligned is not None:
+        ref_f_ev = np.asarray(
+            forces_to_ev_angstrom(ref_f_aligned, reference.force_unit),
+            dtype=np.float64,
+        )
+    return ref_e_ev, ref_f_ev
+
+
+def reference_metrics_from_npz(
+    reference_path: Path,
+    *,
+    ref_frame: int,
+    atomic_numbers: np.ndarray,
+    positions: np.ndarray,
+    reference_energy_unit: str | None = None,
+    reference_force_unit: str | None = None,
+) -> tuple[float | None, np.ndarray | None]:
+    """Load reference frame metrics from an NPZ path (single-frame evaluate)."""
+    ref_path = Path(reference_path).expanduser().resolve()
+    if reference_energy_unit is None:
+        reference_energy_unit = infer_reference_energy_unit(ref_path)
+    if reference_force_unit is None:
+        reference_force_unit = infer_reference_force_unit(ref_path)
+    with np.load(ref_path, allow_pickle=True) as ref:
+        if "N" in ref.files:
+            ref_n = int(np.asarray(ref["N"], dtype=int).reshape(-1)[int(ref_frame)])
+        else:
+            ref_n = int(np.asarray(ref["R"], dtype=np.float64).shape[1])
+        ref_z = np.asarray(ref["Z"][int(ref_frame), :ref_n], dtype=np.int32)
+        ref_r = np.asarray(ref["R"][int(ref_frame), :ref_n], dtype=np.float64)
+        ref_f_raw = (
+            np.asarray(ref["F"][int(ref_frame), :ref_n], dtype=np.float64)
+            if "F" in ref.files
+            else None
+        )
+        _, ref_f_aligned, _ = align_reference_frame_to_evaluate(
+            ref_r,
+            ref_z,
+            positions,
+            atomic_numbers,
+            reference_forces=ref_f_raw,
+        )
+        ref_e_ev = None
+        if "E" in ref.files or "E_eV" in ref.files:
+            ref_e_ev, _, _ = reference_energy_ev_at_frame(
+                ref,
+                int(ref_frame),
+                path=ref_path,
+                energy_unit=reference_energy_unit,
+            )
+        ref_f_ev = None
+        if ref_f_aligned is not None:
+            ref_f_ev = np.asarray(
+                forces_to_ev_angstrom(ref_f_aligned, reference_force_unit),
+                dtype=np.float64,
+            )
+    return ref_e_ev, ref_f_ev
+
+
+def save_evaluate_compare_extxyz_trajectories(
+    out_dir: Path,
+    *,
+    atomic_numbers: np.ndarray,
+    positions: np.ndarray,
+    model_energies_eV: np.ndarray,
+    model_forces_eV_A: np.ndarray | None,
+    reference_energies_eV: np.ndarray | None,
+    reference_forces_eV_A: np.ndarray | None,
+    prefix: str = "evaluate",
+) -> dict[str, str]:
+    """Write COM-centered extxyz trajectories for reference, model, and force difference."""
+    pos_centered = center_positions_at_com(positions, atomic_numbers)
+    artifacts: dict[str, str] = {}
+
+    model_path = out_dir / f"{prefix}_model.extxyz"
+    save_evaluate_extxyz_multi(
+        model_path,
+        atomic_numbers=atomic_numbers,
+        positions=pos_centered,
+        energies_eV=model_energies_eV,
+        forces_eV_A=model_forces_eV_A,
+    )
+    artifacts["extxyz_model"] = str(model_path)
+    if prefix == "evaluate":
+        legacy_path = out_dir / "evaluate.extxyz"
+        legacy_path.write_bytes(model_path.read_bytes())
+        artifacts["extxyz"] = str(legacy_path)
+    else:
+        artifacts["extxyz"] = str(model_path)
+
+    if reference_energies_eV is not None and reference_forces_eV_A is not None:
+        gt_path = out_dir / f"{prefix}_ground_truth.extxyz"
+        save_evaluate_extxyz_multi(
+            gt_path,
+            atomic_numbers=atomic_numbers,
+            positions=pos_centered,
+            energies_eV=reference_energies_eV,
+            forces_eV_A=reference_forces_eV_A,
+        )
+        artifacts["extxyz_ground_truth"] = str(gt_path)
+
+        if model_forces_eV_A is not None:
+            diff_forces = np.asarray(model_forces_eV_A, dtype=np.float64) - np.asarray(
+                reference_forces_eV_A, dtype=np.float64
+            )
+            diff_energies = np.asarray(model_energies_eV, dtype=np.float64) - np.asarray(
+                reference_energies_eV, dtype=np.float64
+            )
+            diff_path = out_dir / f"{prefix}_difference.extxyz"
+            save_evaluate_extxyz_multi(
+                diff_path,
+                atomic_numbers=atomic_numbers,
+                positions=pos_centered,
+                energies_eV=diff_energies,
+                forces_eV_A=diff_forces,
+            )
+            artifacts["extxyz_difference"] = str(diff_path)
+
+    return artifacts
+
+
 def _permutation_within_monomer_blocks(
     reference_numbers: np.ndarray,
     evaluator_numbers: np.ndarray,
@@ -1257,6 +1422,8 @@ def _evaluate_reference_trajectory(args: Any, ctx: dict[str, Any]) -> int:
     energies: list[float] = []
     forces_list: list[np.ndarray] = []
     positions_out: list[np.ndarray] = []
+    ref_energies: list[float] = []
+    ref_forces_list: list[np.ndarray] = []
     per_frame_compare: list[dict[str, Any]] = []
     ref_energy_unit, ref_force_unit = resolve_reference_units(reference.path, args)
 
@@ -1311,6 +1478,16 @@ def _evaluate_reference_trajectory(args: Any, ctx: dict[str, Any]) -> int:
         positions_out.append(np.asarray(atoms.get_positions(), dtype=np.float64))
         if forces.shape == (len(z), 3):
             forces_list.append(forces)
+        ref_e_ev, ref_f_ev = reference_metrics_at_eval_geometry(
+            reference,
+            ref_frame=int(ref_frame),
+            atomic_numbers=z,
+            positions=positions_out[-1],
+        )
+        if ref_e_ev is not None:
+            ref_energies.append(ref_e_ev)
+        if ref_f_ev is not None:
+            ref_forces_list.append(ref_f_ev)
         try:
             cmp = compare_evaluate_to_reference_npz(
                 reference.path,
@@ -1334,6 +1511,8 @@ def _evaluate_reference_trajectory(args: Any, ctx: dict[str, Any]) -> int:
     energies_arr = np.asarray(energies, dtype=np.float64)
     forces_arr = np.stack(forces_list, axis=0) if forces_list else None
     positions_arr = np.stack(positions_out, axis=0)
+    ref_energies_arr = np.asarray(ref_energies, dtype=np.float64) if ref_energies else None
+    ref_forces_arr = np.stack(ref_forces_list, axis=0) if ref_forces_list else None
 
     out_dir = Path(getattr(args, "output_dir", Path("artifacts/md_evaluate"))).expanduser()
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -1408,16 +1587,21 @@ def _evaluate_reference_trajectory(args: Any, ctx: dict[str, Any]) -> int:
         )
         artifacts["npz"] = str(npz_out)
 
-        traj_out = getattr(args, "evaluate_traj", None) or out_dir / "evaluate.extxyz"
-        traj_out = Path(traj_out).expanduser()
-        save_evaluate_extxyz_multi(
-            traj_out,
-            atomic_numbers=z,
-            positions=positions_arr,
-            energies_eV=energies_arr,
-            forces_eV_A=forces_arr,
+        traj_prefix = Path(
+            getattr(args, "evaluate_traj", None) or out_dir / "evaluate.extxyz"
+        ).stem
+        artifacts.update(
+            save_evaluate_compare_extxyz_trajectories(
+                out_dir,
+                atomic_numbers=z,
+                positions=positions_arr,
+                model_energies_eV=energies_arr,
+                model_forces_eV_A=forces_arr,
+                reference_energies_eV=ref_energies_arr,
+                reference_forces_eV_A=ref_forces_arr,
+                prefix=traj_prefix,
+            )
         )
-        artifacts["extxyz"] = str(traj_out)
 
         compare_path = getattr(args, "evaluate_compare_output", None) or out_dir / "evaluate_compare.json"
         compare_path = Path(compare_path).expanduser()
@@ -1568,19 +1752,45 @@ def run_evaluate_npz(args: Any) -> int:
         )
         artifacts["npz"] = str(npz_out)
 
-        traj_out = getattr(args, "evaluate_traj", None)
-        if traj_out is None:
-            traj_out = out_dir / "evaluate.extxyz"
-        else:
-            traj_out = Path(traj_out).expanduser()
-        save_evaluate_extxyz(
-            traj_out,
-            atomic_numbers=z,
-            positions=pos_out,
-            energy_eV=energy_eV,
-            forces_eV_A=forces_eV_A,
+        traj_prefix = Path(
+            getattr(args, "evaluate_traj", None) or out_dir / "evaluate.extxyz"
+        ).stem
+        ref_e_ev: float | None = None
+        ref_f_ev: np.ndarray | None = None
+        ref_path = getattr(args, "evaluate_reference_npz", None) or getattr(
+            args, "reference_npz", None
         )
-        artifacts["extxyz"] = str(traj_out)
+        if ref_path is not None:
+            ref_frame = int(getattr(args, "evaluate_reference_frame", frame) or frame)
+            ref_e_unit, ref_f_unit = resolve_reference_units(ref_path, args)
+            ref_e_ev, ref_f_ev = reference_metrics_from_npz(
+                Path(ref_path),
+                ref_frame=ref_frame,
+                atomic_numbers=z,
+                positions=pos_out,
+                reference_energy_unit=ref_e_unit,
+                reference_force_unit=ref_f_unit,
+            )
+        artifacts.update(
+            save_evaluate_compare_extxyz_trajectories(
+                out_dir,
+                atomic_numbers=z,
+                positions=pos_out.reshape(1, -1, 3),
+                model_energies_eV=np.array([energy_eV], dtype=np.float64),
+                model_forces_eV_A=(
+                    np.asarray(forces_eV_A, dtype=np.float64).reshape(1, -1, 3)
+                    if forces_eV_A is not None
+                    else None
+                ),
+                reference_energies_eV=(
+                    np.array([ref_e_ev], dtype=np.float64) if ref_e_ev is not None else None
+                ),
+                reference_forces_eV_A=(
+                    ref_f_ev.reshape(1, -1, 3) if ref_f_ev is not None else None
+                ),
+                prefix=traj_prefix,
+            )
+        )
 
     ref_path = getattr(args, "evaluate_reference_npz", None)
     if ref_path is None:

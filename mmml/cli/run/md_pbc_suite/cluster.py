@@ -182,17 +182,15 @@ def ensure_monomer_3d_coords(
 
 def relax_monomer_geometry_for_cluster(
     residue: str,
-    *,
-    nstep_sd: int = 400,
-    tolenr: float = 1e-2,
-    tolgrd: float = 1e-2,
 ) -> tuple[np.ndarray, list[str], np.ndarray]:
-    """Build a 3D monomer using IC + SD-only relaxation (avoids ABNR segfaults on clusters)."""
+    """Build a 3D monomer from IC tables without CHARMM minimization.
+
+    Cluster assembly only needs a non-flat placement geometry. SD/ABNR minimization
+    can segfault in ``ebondfs`` on some cluster CHARMM builds (notably DCM in notebooks).
+    For production geometries use ``build_cluster_from_reference_npz`` instead.
+    """
     from mmml.cli.run.md_pbc_suite.ase import _read_cgenff_toppar, _reset_pycharmm_system
     from mmml.interfaces.pycharmmInterface.mlpot.setup import prepare_charmm_vacuum
-    from mmml.interfaces.pycharmmInterface.nbonds_config import apply_vacuum_nbonds
-
-    import pycharmm.minimize as charmm_minimize
 
     residue = residue.upper()
     _reset_pycharmm_system()
@@ -213,25 +211,13 @@ def relax_monomer_geometry_for_cluster(
 
     if not _monomer_geometry_is_3d(coords):
         coords = ensure_monomer_3d_coords(coords)
-        coor.set_positions(pd.DataFrame(coords, columns=["x", "y", "z"]))
-
-    pyci.pycharmm_quiet()
-    apply_vacuum_nbonds(nbxmod=1)
-    charmm_minimize.run_sd(nstep=int(nstep_sd), tolenr=float(tolenr), tolgrd=float(tolgrd))
-    coords = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=np.float64)
-
-    if not _monomer_geometry_is_3d(coords):
-        coords = ensure_monomer_3d_coords(coords)
-        coor.set_positions(pd.DataFrame(coords, columns=["x", "y", "z"]))
-        apply_vacuum_nbonds(nbxmod=1)
-        charmm_minimize.run_sd(nstep=int(nstep_sd), tolenr=float(tolenr), tolgrd=float(tolgrd))
-        coords = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=np.float64)
 
     if not _monomer_geometry_is_3d(coords):
         span = np.ptp(coords, axis=0)
         raise RuntimeError(
-            f"Monomer {residue} not 3D after SD relaxation "
-            f"(spans Å x={span[0]:.2f} y={span[1]:.2f} z={span[2]:.2f})"
+            f"Monomer {residue} IC geometry is not 3D (spans Å x={span[0]:.2f} "
+            f"y={span[1]:.2f} z={span[2]:.2f}). "
+            "Pass reference_npz= to build_ase_cluster with a PSF-order reference NPZ."
         )
 
     z = np.asarray(get_Z_from_psf(), dtype=int)

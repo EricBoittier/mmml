@@ -38,3 +38,15 @@ def atoms_from_reference_npz(
 
     z, r = reference_frame_geometry(path, frame=frame)
     return Atoms(numbers=z, positions=r)
+
+
+def prepare_vacuum_nbonds_for_mm() -> None:
+    """Apply vacuum ``nbonds`` after cluster PSF build, before the first MM/hybrid energy.
+
+    Call once per notebook kernel after ``build_ase_cluster`` when attaching a hybrid
+    MMML calculator. Do **not** call after ``pycharmm.MLpot`` is registered (unsafe
+    ``update_bnbnd`` / ``upinb`` on large systems).
+    """
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import setup_charmm_nbonds
+
+    setup_charmm_nbonds()

@@ -898,10 +898,11 @@ def build_ase_cluster(
     """Build a homogeneous CHARMM PSF-ordered cluster for ASE / hybrid calculators.
 
     Residues with bundled 3D templates (ACO, MEOH) use those templates; all others
-    use IC + SD-only monomer relaxation plus composition placement (no ABNR / make-res).
+    use IC + deterministic 3D spread plus composition placement (no CHARMM minimize).
 
     When ``reference_npz`` is set, build the PSF and load coordinates from that file
-    (must be PSF-order and match ``residue`` × ``n_molecules``).
+    (must be PSF-order and match ``residue`` × ``n_molecules``). Prefer this for DCM
+    and other residues on cluster/notebook CHARMM builds that segfault in ``ebondfs``.
     """
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     from mmml.cli.run.md_pbc_suite.cluster import (
@@ -920,7 +921,13 @@ def build_ase_cluster(
     else:
         z, r = _build_psf_ordered_cluster(residue.upper(), n_molecules, spacing)
         sync_charmm_positions(r)
-    validate_cluster_geometry(r, n_molecules=n_molecules)
+    n_per = int(len(z) // max(int(n_molecules), 1))
+    min_extent = max(0.9, min(1.5, 0.22 * float(n_per)))
+    validate_cluster_geometry(
+        r,
+        n_molecules=n_molecules,
+        min_monomer_extent=min_extent,
+    )
     return z, r
 
 
@@ -944,6 +951,15 @@ def atoms_from_reference_npz(path: str | Path, *, frame: int = 0) -> Any:
     )
 
     return _atoms_from_reference_npz(path, frame=frame)
+
+
+def prepare_vacuum_nbonds_for_mm() -> None:
+    """Vacuum nbonds preset before first hybrid/MM energy (see ``cluster_geometry``)."""
+    from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+        prepare_vacuum_nbonds_for_mm as _prepare_vacuum_nbonds_for_mm,
+    )
+
+    _prepare_vacuum_nbonds_for_mm()
 
 
 def composition_tag(composition: list[tuple[str, int]] | None, residue: str, n_molecules: int) -> str:
