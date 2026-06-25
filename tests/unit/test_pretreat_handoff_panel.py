@@ -49,6 +49,14 @@ def test_build_pretreat_handoff_warns_restart_box_source(tmp_path: Path) -> None
             "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
             lambda **_: False,
         )
+        mp.setattr(
+            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
+            lambda **_: (None, None),
+        )
+        mp.setattr(
+            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_mlpot_mic_box_side_A",
+            lambda **kw: (28.0, "restart"),
+        )
         def _fake_resolve(**kw):
             if kw.get("restart_path") is not None:
                 return 28.0, "restart"

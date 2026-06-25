@@ -470,13 +470,50 @@ def test_parse_cubic_box_side_from_charmm_restart_vacuum_returns_none():
     assert parse_cubic_box_side_from_charmm_restart(nve_res) is None
 
 
+def test_probe_charmm_cubic_box_side_A_returns_none_when_unavailable():
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import probe_charmm_cubic_box_side_A
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_box_sides_A",
+        return_value=(0.0, 0.0, 0.0),
+    ):
+        side, source = probe_charmm_cubic_box_side_A()
+    assert side is None
+    assert source is None
+
+
+def test_resolve_mlpot_mic_box_side_A_skips_restart_when_crystal_active(tmp_path: Path):
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import resolve_mlpot_mic_box_side_A
+
+    restart = tmp_path / "prod.res"
+    restart.write_text("dummy")
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
+        return_value=True,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
+        return_value=(28.0, "pbound"),
+    ) as mock_resolve:
+        side, source = resolve_mlpot_mic_box_side_A(
+            fallback_side_A=28.0,
+            restart_path=restart,
+        )
+    assert side == pytest.approx(28.0)
+    assert source == "pbound"
+    mock_resolve.assert_called_once_with(
+        fallback_side_A=28.0,
+        restart_path=None,
+        rel_tol=1e-3,
+    )
+
+
 def test_sync_mlpot_pbc_cell_from_charmm_updates_model():
     from mmml.interfaces.pycharmmInterface.mlpot import run_workflow
 
     z = np.zeros(8, dtype=int)
     model = DecomposedMlpotModel(MagicMock(), CutoffParameters(), 2, z, cell=40.0)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_mlpot_mic_box_side_A",
         return_value=(39.25, "pbound"),
     ):
         side = run_workflow.sync_mlpot_pbc_cell_from_charmm(model, verbose=False)

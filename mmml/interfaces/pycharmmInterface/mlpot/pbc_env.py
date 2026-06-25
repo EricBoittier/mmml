@@ -167,6 +167,44 @@ def resolve_charmm_cubic_box_side_A(
     )
 
 
+def probe_charmm_cubic_box_side_A(
+    *,
+    fallback_side_A: float | None = None,
+    restart_path: PathLike | None = None,
+    rel_tol: float = 1e-3,
+) -> tuple[float | None, BoxSideSource | None]:
+    """Non-raising box probe; returns ``(None, None)`` when resolution fails."""
+    try:
+        side, source = resolve_charmm_cubic_box_side_A(
+            fallback_side_A=fallback_side_A,
+            restart_path=restart_path,
+            rel_tol=rel_tol,
+        )
+        return float(side), source
+    except RuntimeError:
+        return None, None
+
+
+def resolve_mlpot_mic_box_side_A(
+    *,
+    fallback_side_A: float | None = None,
+    restart_path: PathLike | None = None,
+    rel_tol: float = 1e-3,
+) -> tuple[float, BoxSideSource]:
+    """Resolve MIC cell side: live pbound when crystal is active, else restart/fallback."""
+    restart_for_resolve = restart_path
+    try:
+        if charmm_crystal_is_active(rel_tol=rel_tol):
+            restart_for_resolve = None
+    except Exception:
+        pass
+    return resolve_charmm_cubic_box_side_A(
+        fallback_side_A=fallback_side_A,
+        restart_path=restart_for_resolve,
+        rel_tol=rel_tol,
+    )
+
+
 def get_charmm_cubic_box_side_A(
     *,
     restart_path: PathLike | None = None,

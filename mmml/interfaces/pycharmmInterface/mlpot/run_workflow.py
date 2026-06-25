@@ -802,7 +802,7 @@ def sync_mlpot_pbc_cell_from_charmm(
     box under ``!CRYSTAL PARAMETERS``.
     """
     from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotModel
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import resolve_charmm_cubic_box_side_A
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import resolve_mlpot_mic_box_side_A
 
     if restart_path is not None:
         rpath = Path(restart_path)
@@ -814,7 +814,7 @@ def sync_mlpot_pbc_cell_from_charmm(
         if old_cell:
             fallback_side_A = float(old_cell)
 
-    side, source = resolve_charmm_cubic_box_side_A(
+    side, source = resolve_mlpot_mic_box_side_A(
         fallback_side_A=fallback_side_A,
         restart_path=restart_path,
     )
@@ -1245,7 +1245,9 @@ def build_charmm_mm_pretreat_handoff_sections(
         _read_charmm_box_sides_A,
         charmm_crystal_is_active,
         parse_cubic_box_side_from_charmm_restart,
+        probe_charmm_cubic_box_side_A,
         resolve_charmm_cubic_box_side_A,
+        resolve_mlpot_mic_box_side_A,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
@@ -1285,19 +1287,15 @@ def build_charmm_mm_pretreat_handoff_sections(
         )
         lx, ly, lz = _read_charmm_box_sides_A()
         crystal_active = charmm_crystal_is_active()
-        pbound_side, pbound_source = resolve_charmm_cubic_box_side_A(
-            fallback_side_A=None,
-            restart_path=None,
-        )
+        pbound_side, pbound_source = probe_charmm_cubic_box_side_A()
         restart_for_workflow = None if crystal_active else restart_path
         workflow_side, workflow_source = resolve_charmm_cubic_box_side_A(
             fallback_side_A=workflow_box_side_A,
             restart_path=restart_for_workflow,
         )
-        ml_restart_for_sync = restart_path
-        ml_side, ml_source = resolve_charmm_cubic_box_side_A(
+        ml_side, ml_source = resolve_mlpot_mic_box_side_A(
             fallback_side_A=workflow_box_side_A,
-            restart_path=ml_restart_for_sync,
+            restart_path=restart_path,
         )
 
         pbc = {
@@ -1305,7 +1303,7 @@ def build_charmm_mm_pretreat_handoff_sections(
             "pbound_Å": f"({lx:.3f}, {ly:.3f}, {lz:.3f})",
             "pbound_cubic_L_Å": (
                 f"{pbound_side:.3f} ({pbound_source})"
-                if pbound_source == "pbound"
+                if pbound_side is not None and pbound_source == "pbound"
                 else "inactive"
             ),
             "workflow_box_L_Å": f"{workflow_side:.3f} ({workflow_source})",
@@ -1332,6 +1330,7 @@ def build_charmm_mm_pretreat_handoff_sections(
             )
         if (
             restart_side is not None
+            and pbound_side is not None
             and pbound_source == "pbound"
             and abs(restart_side - pbound_side) > max(1e-3, 1e-4 * pbound_side)
         ):
