@@ -1663,6 +1663,9 @@ def _apply_backend_setup_defaults(args: argparse.Namespace) -> None:
     """Align ``--setup`` with ``--backend`` when the CLI default setup is wrong for pycharmm."""
     if args.setup == "lambda_ti":
         return
+    if getattr(args, "evaluate_npz", None):
+        # evaluate-npz supports ase/jaxmd/pycharmm with free_* and pbc_* setups.
+        return
 
     pycharmm_setups = _pycharmm_setups()
     if args.backend == "auto":

@@ -90,7 +90,41 @@ def test_ensure_jax_cuda_toolchain_required_raises_when_missing(monkeypatch):
         except RuntimeError as exc:
             raised = True
             assert "ptxas not found" in str(exc)
+            assert "python:" in str(exc)
         assert raised
+
+
+def test_find_ptxas_from_system_cuda_home(tmp_path, monkeypatch):
+    cuda_bin = tmp_path / "cuda" / "bin"
+    cuda_bin.mkdir(parents=True)
+    (cuda_bin / "ptxas").write_bytes(b"stub")
+    monkeypatch.setenv("CUDA_HOME", str(tmp_path / "cuda"))
+    monkeypatch.setattr(jax_gpu_warmup, "_site_package_roots", lambda: [])
+    monkeypatch.setattr(jax_gpu_warmup, "_ptxas_from_nvidia_namespace", lambda: None)
+    monkeypatch.setattr(jax_gpu_warmup, "_ptxas_from_importlib_metadata", lambda: None)
+    jax_gpu_warmup.find_bundled_ptxas_dir.cache_clear()
+    assert jax_gpu_warmup.find_bundled_ptxas_dir() == cuda_bin.resolve()
+    jax_gpu_warmup.find_bundled_ptxas_dir.cache_clear()
+
+
+def test_find_ptxas_from_nvidia_namespace(tmp_path, monkeypatch):
+    ptxas_dir = tmp_path / "nvidia" / "cu13" / "bin"
+    ptxas_dir.mkdir(parents=True)
+    (ptxas_dir / "ptxas").write_bytes(b"stub")
+    from importlib.machinery import ModuleSpec
+    import importlib.util
+
+    spec = ModuleSpec("nvidia", loader=None, is_package=True)
+    spec.submodule_search_locations = [str(tmp_path / "nvidia")]
+    monkeypatch.setattr(
+        importlib.util,
+        "find_spec",
+        lambda name: spec if name == "nvidia" else None,
+    )
+    monkeypatch.setattr(jax_gpu_warmup, "_site_package_roots", lambda: [])
+    jax_gpu_warmup.find_bundled_ptxas_dir.cache_clear()
+    assert jax_gpu_warmup.find_bundled_ptxas_dir() == ptxas_dir.resolve()
+    jax_gpu_warmup.find_bundled_ptxas_dir.cache_clear()
 
 
 def test_jax_compile_timers_log_passes(capsys, monkeypatch):
