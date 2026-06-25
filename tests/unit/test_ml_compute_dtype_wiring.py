@@ -92,9 +92,9 @@ def test_decomposed_calculator_casts_positions_with_configured_dtype():
         ml_compute_dtype="float32",
     )
     mock_energy = jnp.array(0.0, dtype=jnp.float32)
-    mock_grad = jnp.zeros((8, 3), dtype=jnp.float32)
-    mock_vg = MagicMock(return_value=(mock_energy, mock_grad))
-    calc._get_value_and_grad_fn = MagicMock(return_value=mock_vg)
+    mock_forces = jnp.zeros((8, 3), dtype=jnp.float32)
+    mock_forward = MagicMock(return_value=(mock_energy, mock_forces))
+    calc._get_spherical_forward_fn = MagicMock(return_value=mock_forward)
     n = 8
     x = np.ones(n, dtype=np.float64)
     y = np.zeros(n, dtype=np.float64)
@@ -113,7 +113,7 @@ def test_decomposed_calculator_casts_positions_with_configured_dtype():
             n, 0, 0, None, x, y, zc, dx, dy, dz, 0, 0, None, None, None, None, None, None, None
         )
 
-    positions = mock_vg.call_args.args[0]
+    positions = mock_forward.call_args.args[0]
     assert positions.dtype == jnp.float32
     assert np.asarray(dz, dtype=np.float64).dtype == np.float64
 
