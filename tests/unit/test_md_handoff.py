@@ -127,22 +127,47 @@ def test_is_usable_restart_template_quiet_suppresses_natom_mismatch_stderr(
     assert "NATOM mismatch" in capsys.readouterr().err
 
 
-def test_find_usable_fallback_template_finds_sibling_campaign_handoff(
+def test_find_usable_fallback_template_stays_within_campaign_root(
     nve_stub: Path, tmp_path: Path
 ) -> None:
     from mmml.cli.run.md_handoff import _find_usable_fallback_template
 
-    results = tmp_path / "results" / "test01"
-    bad = results / "dcm_20" / "handoff" / "final.res"
+    results = tmp_path / "runned" / "tests" / "test01" / "results"
+    bad = results / "dcm_large_201" / "jaxmd_nve" / "handoff" / "final.res"
     bad.parent.mkdir(parents=True)
     bad.write_text("continue_seed_style_invalid")
 
-    good = results / "dcm_large_25" / "pycharmm_equil" / "handoff" / "final.res"
-    good.parent.mkdir(parents=True)
-    good.write_text(nve_stub.read_text(encoding="ascii"), encoding="ascii")
+    in_campaign = results / "dcm_large_201" / "pycharmm_equil" / "handoff" / "final.res"
+    in_campaign.parent.mkdir(parents=True)
+    in_campaign.write_text(nve_stub.read_text(encoding="ascii"), encoding="ascii")
+
+    sibling_campaign = results / "dcm_large_25" / "pycharmm_equil" / "handoff" / "final.res"
+    sibling_campaign.parent.mkdir(parents=True)
+    sibling_campaign.write_text(nve_stub.read_text(encoding="ascii"), encoding="ascii")
 
     found = _find_usable_fallback_template(bad, expected_natom=20)
-    assert found == good.resolve()
+    assert found == in_campaign.resolve()
+    assert found != sibling_campaign.resolve()
+
+
+def test_campaign_root_from_handoff_path_resolves_run_directory(tmp_path: Path) -> None:
+    from mmml.cli.run.md_handoff import _campaign_root_from_handoff_path
+
+    handoff = (
+        tmp_path
+        / "runned"
+        / "tests"
+        / "test01"
+        / "results"
+        / "dcm_large_201"
+        / "jaxmd_nve"
+        / "handoff"
+        / "final.res"
+    )
+    root = _campaign_root_from_handoff_path(handoff)
+    assert root == (
+        tmp_path / "runned" / "tests" / "test01" / "results" / "dcm_large_201"
+    ).resolve()
 
 
 def test_resolve_handoff_restart_template_prefers_heat_over_overlap(
