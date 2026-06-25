@@ -1200,9 +1200,10 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         )
 
     setup_charmm_environment(use_pbc=charmm_pbc, cubic_box_side_A=box_side)
-    sync_charmm_positions(r)
     handoff_coords_in_memory = False
     if handoff_in is not None:
+        from dataclasses import replace
+
         from mmml.cli.run.md_handoff import (
             align_handoff_positions_for_charmm_pbc,
             monomer_offsets_uniform,
@@ -1219,6 +1220,8 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 quiet=bool(args.quiet),
             )
         sync_charmm_positions(handoff_positions)
+        r = np.asarray(handoff_positions, dtype=np.float64)
+        handoff_in = replace(handoff_in, positions=r)
 
         seed_restart = prepare_pycharmm_handoff_continuation(
             handoff_in,
@@ -1232,6 +1235,8 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         # Handoff positions are already in CHARMM; ``continue_seed.res`` is setup-only
         # and must not be READYN'd during overlap dynamics (missing CPT/barostat fields).
         handoff_coords_in_memory = True
+    else:
+        sync_charmm_positions(r)
 
     vmd_topo_psf = paths["vmd_psf"]
     if getattr(args, "skip_cluster_build", False) and getattr(args, "from_psf", None):
@@ -1342,6 +1347,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         baseline = record_mm_baseline_strain(verbose=not args.quiet)
         assert_pre_min_bonded_geometry(args, baseline=baseline)
 
+    r = get_charmm_positions_array()
     ctx, pyCModel = _register_mlpot_context(
         z,
         r,
