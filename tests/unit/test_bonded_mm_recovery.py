@@ -1238,6 +1238,9 @@ def test_restore_charmm_state_from_restart_parses_and_syncs_positions(tmp_path):
         "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
         return_value=__import__("contextlib").nullcontext(),
     ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        return_value=np.zeros((2, 3), dtype=float),
+    ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
         side_effect=_capture_sync,
     ):
@@ -1249,6 +1252,7 @@ def test_restore_charmm_state_from_restart_parses_and_syncs_positions(tmp_path):
     assert "open read unit 93" in script
     assert str(restart) in script
     assert "read restart unit 93" in script
+    assert "UPDATE" in script
 
 
 def test_restore_charmm_state_from_restart_raises_without_finite_coords(tmp_path):
