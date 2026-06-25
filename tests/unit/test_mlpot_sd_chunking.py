@@ -135,8 +135,8 @@ def test_run_minimize_in_chunks_splits_long_pbc_sd():
         )
 
     assert result.completed is True
-    assert minimize.run_sd.call_count == 3
-    assert [call.kwargs["nstep"] for call in minimize.run_sd.call_args_list] == [200, 200, 50]
+    assert minimize.run_sd.call_count == 4
+    assert [call.kwargs["nstep"] for call in minimize.run_sd.call_args_list] == [200, 200, 25, 25]
 
 
 def test_run_minimize_in_chunks_watchdog_stops_early():
