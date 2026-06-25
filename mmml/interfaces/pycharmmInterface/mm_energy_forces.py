@@ -41,6 +41,28 @@ except Exception:
     _estimate_max_pairs = None
 
 try:
+    from mmml.interfaces.pycharmmInterface.nl_reference import have_vesin
+except Exception:
+    def have_vesin() -> bool:
+        return False
+
+try:
+    from mmml.interfaces.pycharmmInterface.nl_backend import (
+        build_mm_pairs_with_backend,
+        pick_static_rebuild_backend,
+        resolve_mm_nl_backend,
+    )
+except Exception:
+    def build_mm_pairs_with_backend(*args, **kwargs):
+        raise RuntimeError("nl_backend unavailable")
+
+    def pick_static_rebuild_backend(*args, **kwargs):
+        return "cell_list"
+
+    def resolve_mm_nl_backend(name=None):
+        return "cell_list"
+
+try:
     from mmml.interfaces.pycharmmInterface.jax_md_neighbor_list import (
         have_jax_md,
         create_jax_md_neighbor_list,
@@ -105,6 +127,39 @@ def _filter_pairs_by_com_min(
         if r < mm_r_min:
             out_mask[k] = False
     return out_mask
+
+
+def neighbor_pair_cache_should_reuse(
+    *,
+    calls: int,
+    interval: int,
+    skin: float,
+    R: np.ndarray,
+    last_R: np.ndarray | None,
+    box: np.ndarray | None,
+    last_box: np.ndarray | None,
+    have_cache: bool,
+    box_delta_tol: float = 1e-8,
+) -> bool:
+    """Return True when ``update_mm_pairs`` may reuse cached pair_idx/pair_mask."""
+    if not have_cache:
+        return False
+
+    interval_i = int(max(1, interval))
+    skin_f = float(max(0.0, skin))
+
+    box_delta = 0.0
+    if box is not None and last_box is not None:
+        box_delta = float(np.max(np.abs(np.asarray(box) - np.asarray(last_box))))
+
+    if skin_f > 0.0 and last_R is not None:
+        max_disp = float(np.max(np.linalg.norm(R - last_R, axis=1)))
+        return max_disp <= skin_f and box_delta <= box_delta_tol
+
+    if skin_f == 0.0 and (int(calls) % interval_i != 0):
+        return box_delta <= box_delta_tol
+
+    return False
 
 
 def _box_to_cell_3x3(box: Array) -> Array:
@@ -312,6 +367,7 @@ def build_mm_energy_forces_fn(
     jax_md_overflow_fallback_to_cell_list: bool = True,
     jax_md_update_interval: int = 1,
     jax_md_skin_distance: float = 0.0,
+    mm_nl_backend: str = "auto",
     debug: bool = False,
     ml_compute_dtype: str | None = None,
     defer_xla_gpu_warmup: bool = False,
@@ -409,7 +465,7 @@ def build_mm_energy_forces_fn(
     _use_cell_list = (
         pbc_cell is not None
         and not _use_jax_md_nbrs
-        and _cell_list_pairs is not None
+        and (_cell_list_pairs is not None or have_vesin())
     )
 
     def _create_jax_md_bundle(capacity_multiplier: float):
@@ -435,42 +491,39 @@ def build_mm_energy_forces_fn(
             _pair_mask_cell = [None]
         else:
             _use_jax_md_nbrs = False
-            _use_cell_list = pbc_cell is not None and _cell_list_pairs is not None
+            _use_cell_list = pbc_cell is not None and (
+                _cell_list_pairs is not None or have_vesin()
+            )
 
     if _use_cell_list:
         _mm_switch_width_dist = mm_switch_on + mm_switch_width
         _offsets_np = np.array([int(monomer_offsets[k]) for k in range(len(monomer_offsets))])
-        _cl_i, _cl_j, _cl_mask, _n_valid, _max_pairs = _build_cell_list_pairs_with_retry(
+        _static_backend = pick_static_rebuild_backend(
+            mm_nl_backend,
+            use_jax_md_neighbor_list=False,
+        )
+        _backend_req = "cell_list" if _static_backend == "cell_list" else "vesin"
+        _cl_i, _cl_j, _cl_mask, _n_valid, _max_pairs, _nl_used = build_mm_pairs_with_backend(
+            _backend_req,
             positions=np.asarray(R),
-            pbc_cell=np.asarray(pbc_cell),
+            box=np.asarray(pbc_cell),
             cutoff=_mm_switch_width_dist,
-            max_pairs=max_pairs,
             monomer_offsets=_offsets_np,
             atoms_per_monomer_list=atoms_per_monomer_list,
-            total_atoms=total_atoms,
+            mm_r_min=mm_r_min,
+            max_pairs=max_pairs,
             cell_list_safety_factor=cell_list_safety_factor,
             cell_list_density_estimate=cell_list_density_estimate,
+            total_atoms=total_atoms,
             debug=debug,
         )
-        if mm_r_min is not None:
-            _monomer_id_for_filter = np.empty(total_atoms, dtype=np.int32)
-            for mi in range(n_monomers):
-                _monomer_id_for_filter[_offsets_np[mi]:_offsets_np[mi + 1]] = mi
-            _cl_mask = _filter_pairs_by_com_min(
-                np.asarray(R),
-                np.asarray(_cl_i),
-                np.asarray(_cl_j),
-                np.asarray(_cl_mask, dtype=bool),
-                _offsets_np,
-                _monomer_id_for_filter,
-                mm_r_min,
-                pbc_cell=np.asarray(pbc_cell) if pbc_cell is not None else None,
+        if debug:
+            print(
+                f"[get_MM] {_nl_used} backend: {_n_valid} valid pairs "
+                f"out of max_pairs={_max_pairs}"
             )
         pair_idx_atom_atom = jnp.stack([_cl_i, _cl_j], axis=1)
         _cl_mask_jnp = jnp.asarray(_cl_mask, dtype=ml_jnp_dtype)
-
-        if debug:
-            print(f"[get_MM] Cell list: {_n_valid} valid pairs out of max_pairs={_max_pairs}")
 
         _monomer_id_np = np.empty(total_atoms, dtype=np.int32)
         for mi in range(n_monomers):
@@ -813,19 +866,20 @@ def build_mm_energy_forces_fn(
             switched_energy = jnp.where(jnp.isfinite(switched_energy), switched_energy, 0.0)
             return switched_energy, forces
 
+        def _fallback_backend_request() -> str:
+            resolved = resolve_mm_nl_backend(mm_nl_backend)
+            if resolved == "cell_list":
+                return "cell_list"
+            if resolved == "vesin":
+                return "vesin"
+            return "vesin"
+
         def _cell_list_fallback_pairs(
             positions_in: np.ndarray,
             _nbr_debug: bool,
             box_in: Optional[np.ndarray] = None,
         ) -> Tuple[Array, Array]:
-            if (
-                not jax_md_overflow_fallback_to_cell_list
-                or _cell_list_pairs is None
-                or _estimate_max_pairs is None
-            ):
-                raise RuntimeError("Neighbor list failed and cell-list fallback is unavailable")
             cutoff = mm_switch_on + mm_switch_width
-            # Use dynamic box_in if available, otherwise fall back to setup pbc_cell
             current_pbc_cell = pbc_cell
             if box_in is not None:
                 box_np = np.asarray(box_in, dtype=np.float64)
@@ -833,32 +887,56 @@ def build_mm_energy_forces_fn(
                     current_pbc_cell = np.diag(box_np)
                 else:
                     current_pbc_cell = box_np
-            cl_i, cl_j, cl_mask, _, fallback_max_pairs = _build_cell_list_pairs_with_retry(
-                positions=np.asarray(positions_in, dtype=np.float64),
-                pbc_cell=np.asarray(current_pbc_cell),
-                cutoff=cutoff,
-                max_pairs=_fallback_max_pairs_cell[0],
-                monomer_offsets=_offsets_np,
-                atoms_per_monomer_list=atoms_per_monomer_list,
-                total_atoms=total_atoms,
-                cell_list_safety_factor=max(float(cell_list_safety_factor), 4.0),
-                cell_list_density_estimate=cell_list_density_estimate,
-                debug=_nbr_debug,
-            )
-            _fallback_max_pairs_cell[0] = fallback_max_pairs
-            if mm_r_min is not None:
-                cl_mask = _filter_pairs_by_com_min(
-                    np.asarray(positions_in, dtype=np.float64),
-                    np.asarray(cl_i),
-                    np.asarray(cl_j),
-                    np.asarray(cl_mask, dtype=bool),
-                    _offsets_np,
-                    np.asarray(_monomer_id_jnp),
-                    mm_r_min,
-                    pbc_cell=np.asarray(current_pbc_cell) if current_pbc_cell is not None else None,
+            try:
+                cl_i, cl_j, cl_mask, _, fallback_max_pairs, used = build_mm_pairs_with_backend(
+                    _fallback_backend_request(),
+                    positions=np.asarray(positions_in, dtype=np.float64),
+                    box=np.asarray(current_pbc_cell),
+                    cutoff=cutoff,
+                    monomer_offsets=_offsets_np,
+                    atoms_per_monomer_list=atoms_per_monomer_list,
+                    mm_r_min=mm_r_min,
+                    max_pairs=_fallback_max_pairs_cell[0],
+                    cell_list_safety_factor=max(float(cell_list_safety_factor), 4.0),
+                    cell_list_density_estimate=cell_list_density_estimate,
+                    total_atoms=total_atoms,
+                    debug=_nbr_debug,
                 )
+            except Exception as exc:
+                if (
+                    not jax_md_overflow_fallback_to_cell_list
+                    or _cell_list_pairs is None
+                ):
+                    raise RuntimeError(
+                        "Neighbor list failed and rebuild fallback is unavailable"
+                    ) from exc
+                cl_i, cl_j, cl_mask, _, fallback_max_pairs = _build_cell_list_pairs_with_retry(
+                    positions=np.asarray(positions_in, dtype=np.float64),
+                    pbc_cell=np.asarray(current_pbc_cell),
+                    cutoff=cutoff,
+                    max_pairs=_fallback_max_pairs_cell[0],
+                    monomer_offsets=_offsets_np,
+                    atoms_per_monomer_list=atoms_per_monomer_list,
+                    total_atoms=total_atoms,
+                    cell_list_safety_factor=max(float(cell_list_safety_factor), 4.0),
+                    cell_list_density_estimate=cell_list_density_estimate,
+                    debug=_nbr_debug,
+                )
+                used = "cell_list"
+                if mm_r_min is not None:
+                    cl_mask = _filter_pairs_by_com_min(
+                        np.asarray(positions_in, dtype=np.float64),
+                        np.asarray(cl_i),
+                        np.asarray(cl_j),
+                        np.asarray(cl_mask, dtype=bool),
+                        _offsets_np,
+                        np.asarray(_monomer_id_jnp),
+                        mm_r_min,
+                        pbc_cell=np.asarray(current_pbc_cell) if current_pbc_cell is not None else None,
+                    )
+            _fallback_max_pairs_cell[0] = fallback_max_pairs
             if _nbr_debug:
-                print(f"[nbr] fallback to cell-list max_pairs={fallback_max_pairs}")
+                print(f"[nbr] fallback via {used} max_pairs={fallback_max_pairs}")
             _pair_stats["fallbacks"] += 1
             return (
                 jnp.stack([jnp.asarray(cl_i), jnp.asarray(cl_j)], axis=1),
@@ -896,21 +974,18 @@ def build_mm_energy_forces_fn(
                 and _pair_mask_cell[0] is not None
             )
 
-            if have_cache:
-                if skin > 0.0 and _last_positions[0] is not None:
-                    max_disp = float(np.max(np.linalg.norm(R - _last_positions[0], axis=1)))
-
-                    box_delta = 0.0
-                    if box is not None and _last_box[0] is not None:
-                        box_delta = float(np.max(np.abs(np.asarray(box) - _last_box[0])))
-
-                    if max_disp <= skin and box_delta <= 1e-8:
-                        _pair_stats["reused"] += 1
-                        return _pair_idx_cell[0], _pair_mask_cell[0]
-
-                elif skin == 0.0 and (_pair_stats["calls"] % interval != 0):
-                    _pair_stats["reused"] += 1
-                    return _pair_idx_cell[0], _pair_mask_cell[0]
+            if neighbor_pair_cache_should_reuse(
+                calls=_pair_stats["calls"],
+                interval=interval,
+                skin=skin,
+                R=R,
+                last_R=_last_positions[0],
+                box=box,
+                last_box=_last_box[0],
+                have_cache=have_cache,
+            ):
+                _pair_stats["reused"] += 1
+                return _pair_idx_cell[0], _pair_mask_cell[0]
 
             nbrs = _nbrs[0]
             kwargs = {} if (box is None or not fractional_coordinates) else {"box": jnp.asarray(box)}
