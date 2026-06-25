@@ -1298,7 +1298,6 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         if charmm_pbc and box_side is not None:
             from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
                 find_latest_pretreat_mm_restart,
-                sync_charmm_crystal_after_mm_pretreat,
                 sync_workflow_pbc_box_side_after_mm_pretreat,
             )
 
@@ -1313,16 +1312,13 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 args=args,
                 quiet=bool(args.quiet),
             )
-            sync_charmm_crystal_after_mm_pretreat(
-                float(box_side),
-                quiet=bool(args.quiet),
-            )
         else:
             from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
                 find_latest_pretreat_mm_restart,
             )
 
             pretreat_restart_path = find_latest_pretreat_mm_restart(paths)
+        r = get_charmm_positions_array()
         print_charmm_mm_pretreat_handoff_panel(
             r,
             n_monomers=n_mol,
@@ -1403,9 +1399,16 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         ctx.cubic_box_side_A = float(box_side)
         ctx.charmm_cubic_box_side_A = float(box_side)
 
-    # Dummy SD step to ensure CHARMM neighbor list is configured for MLPot
-    import pycharmm.lingo
-    pycharmm.lingo.charmm_script("mini sd nstep 0\nenergy\n")
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        refresh_mlpot_energy_and_grms,
+    )
+
+    refresh_mlpot_energy_and_grms(
+        ctx,
+        context="MLpot list sync before SD minimize" if not args.quiet else "",
+        reregister=False,
+        verbose=False,
+    )
 
     restart_from = (
         Path(args.restart_from).expanduser().resolve()

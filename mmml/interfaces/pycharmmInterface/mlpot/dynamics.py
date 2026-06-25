@@ -430,13 +430,16 @@ def minimize_bonded_mm_recovery(
             run_charmm_script_quiet,
         )
 
-        run_charmm_script_quiet("ENER")
+        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+            charmm_grms_after_ener_force,
+        )
+
         if config.nstep_sd <= 0:
-            return float(charmm_grms())
+            return charmm_grms_after_ener_force()
 
         angl_before = charmm_bonded_term_kcalmol("ANGL")
         bond_before = charmm_bonded_term_kcalmol("BOND")
-        grms_before = float(charmm_grms())
+        grms_before = charmm_grms_after_ener_force()
         _log_bonded_term_diagnostics(verbose=config.verbose)
         if config.verbose:
             msg = (
@@ -454,8 +457,7 @@ def minimize_bonded_mm_recovery(
 
         with charmm_quiet_output():
             minimize.run_sd(**sd_kw)
-        run_charmm_script_quiet("ENER")
-        grms = float(charmm_grms())
+        grms = charmm_grms_after_ener_force()
         angl_after = charmm_bonded_term_kcalmol("ANGL")
         if config.verbose:
             internal_after = charmm_internal_energy_kcalmol()
@@ -3171,11 +3173,13 @@ def minimize_with_mlpot(
             # placement that CHARMM MM pre-min could not fully resolve), or GRMS is
             # still large after CHARMM pretreat, run a bonded-only rescue SD *before*
             # the MLpot SD so the ML potential starts from a geometry it can minimize.
-            from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+            from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+                charmm_grms_after_ener_force,
+            )
 
             _threshold = config.pre_sd_bonded_recovery_energy_kcalmol
             _grms_thr = config.pre_sd_bonded_recovery_grms_kcalmol_A
-            _grms = float(charmm_grms())
+            _grms = charmm_grms_after_ener_force()
             _user_hot = _threshold is not None and pre_sd_user > float(_threshold)
             _grms_hot = _grms_thr is not None and _grms > float(_grms_thr)
             if _user_hot or _grms_hot:
