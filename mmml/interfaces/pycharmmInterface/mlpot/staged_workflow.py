@@ -1530,9 +1530,13 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 mlpot_ctx=ctx,
             )
             if overlap_rescued:
-                ctx.reregister_mlpot()
-                refresh_mlpot_energy_and_grms(
+                from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+                    finalize_overlap_rescue_for_dynamics,
+                )
+
+                finalize_overlap_rescue_for_dynamics(
                     ctx,
+                    stage_overlap_pre,
                     context="Post overlap rescue (pre-dynamics)",
                 )
 
