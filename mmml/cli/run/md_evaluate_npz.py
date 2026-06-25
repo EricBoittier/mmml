@@ -64,6 +64,88 @@ def forces_ev_ang_to_hartree_bohr(forces: np.ndarray) -> np.ndarray:
     return np.asarray(forces, dtype=np.float64) * EV_ANG_TO_HARTREE_BOHR
 
 
+def _linear_sum_assignment(cost: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    try:
+        from scipy.optimize import linear_sum_assignment
+
+        return linear_sum_assignment(cost)
+    except Exception:
+        import itertools
+
+        n_rows, n_cols = cost.shape
+        if n_rows != n_cols or n_rows > 9:
+            raise RuntimeError(
+                "scipy is required for reference atom reordering when n_atoms > 9"
+            ) from None
+        best_perm: tuple[int, ...] | None = None
+        best_cost = float("inf")
+        for perm in itertools.permutations(range(n_cols)):
+            value = float(sum(cost[i, perm[i]] for i in range(n_rows)))
+            if value < best_cost:
+                best_cost = value
+                best_perm = perm
+        assert best_perm is not None
+        return np.arange(n_rows), np.asarray(best_perm, dtype=int)
+
+
+def _assign_atoms_by_element(
+    source_positions: np.ndarray,
+    source_numbers: np.ndarray,
+    target_positions: np.ndarray,
+    target_numbers: np.ndarray,
+) -> np.ndarray:
+    if sorted(source_numbers.tolist()) != sorted(target_numbers.tolist()):
+        raise ValueError("Reference/evaluate atomic-number multisets differ")
+    permutation = np.empty(int(len(target_numbers)), dtype=int)
+    for atomic_number in sorted(set(int(z) for z in target_numbers.tolist())):
+        target_idx = np.where(target_numbers == atomic_number)[0]
+        source_idx = np.where(source_numbers == atomic_number)[0]
+        diff = target_positions[target_idx, None, :] - source_positions[source_idx][None, :, :]
+        cost = np.linalg.norm(diff, axis=2)
+        rows, cols = _linear_sum_assignment(cost)
+        permutation[target_idx[rows]] = source_idx[cols]
+    return permutation
+
+
+def align_reference_frame_to_evaluate(
+    reference_positions: np.ndarray,
+    reference_numbers: np.ndarray,
+    evaluate_positions: np.ndarray,
+    evaluate_numbers: np.ndarray,
+    *,
+    reference_forces: np.ndarray | None = None,
+) -> tuple[np.ndarray, np.ndarray | None, dict[str, Any]]:
+    """Reorder reference rows to match evaluate atom order (geometry + element matching)."""
+    ref_r = np.asarray(reference_positions, dtype=np.float64).reshape(-1, 3)
+    ref_z = np.asarray(reference_numbers, dtype=np.int32).reshape(-1)
+    eval_r = np.asarray(evaluate_positions, dtype=np.float64).reshape(-1, 3)
+    eval_z = np.asarray(evaluate_numbers, dtype=np.int32).reshape(-1)
+    if ref_r.shape[0] != eval_r.shape[0]:
+        raise ValueError(
+            f"Reference has {ref_r.shape[0]} atoms but evaluate geometry has {eval_r.shape[0]}"
+        )
+    meta: dict[str, Any] = {"reference_reordered": False}
+    if np.array_equal(ref_z, eval_z):
+        ref_f = (
+            None
+            if reference_forces is None
+            else np.asarray(reference_forces, dtype=np.float64).reshape(-1, 3)
+        )
+        return ref_r, ref_f, meta
+
+    perm = _assign_atoms_by_element(ref_r, ref_z, eval_r, eval_z)
+    ref_r_aligned = ref_r[perm]
+    ref_f_aligned = None
+    if reference_forces is not None:
+        ref_f_aligned = np.asarray(reference_forces, dtype=np.float64).reshape(-1, 3)[perm]
+    meta["reference_reordered"] = True
+    meta["reference_permutation"] = perm.tolist()
+    meta["position_rmsd_after_reorder_A"] = float(
+        np.sqrt(np.mean((ref_r_aligned - eval_r) ** 2))
+    )
+    return ref_r_aligned, ref_f_aligned, meta
+
+
 def _forces_from_metrics(metrics: dict[str, Any]) -> np.ndarray | None:
     if "forces_eV_A" in metrics:
         return np.asarray(metrics["forces_eV_A"], dtype=np.float64)
@@ -163,13 +245,21 @@ def compare_evaluate_to_reference_npz(
             raise ValueError(
                 f"Reference frame has N={ref_n} atoms but evaluate geometry has {n_atoms}"
             )
-        if not np.array_equal(ref_z, np.asarray(atomic_numbers, dtype=np.int32)):
-            raise ValueError(
-                "Reference Z does not match evaluate geometry (atom order or composition mismatch)"
-            )
-        pos_rmsd = float(
-            np.sqrt(np.mean((ref_r - np.asarray(positions, dtype=np.float64)) ** 2))
+        eval_z = np.asarray(atomic_numbers, dtype=np.int32).reshape(-1)
+        eval_r = np.asarray(positions, dtype=np.float64).reshape(-1, 3)
+        ref_f_raw = (
+            np.asarray(ref["F"][ref_frame, :ref_n], dtype=np.float64)
+            if forces_eV_A is not None and "F" in ref.files
+            else None
         )
+        ref_r, ref_f_raw, align_meta = align_reference_frame_to_evaluate(
+            ref_r,
+            ref_z,
+            eval_r,
+            eval_z,
+            reference_forces=ref_f_raw,
+        )
+        pos_rmsd = float(np.sqrt(np.mean((ref_r - eval_r) ** 2)))
         out: dict[str, Any] = {
             "reference_npz": str(ref_path),
             "reference_frame": ref_frame,
@@ -177,6 +267,7 @@ def compare_evaluate_to_reference_npz(
             "reference_force_unit": reference_force_unit,
             "position_rmsd_A": pos_rmsd,
             "n_atoms": n_atoms,
+            **align_meta,
         }
         if "E" in ref.files:
             ref_e_raw = float(np.asarray(ref["E"], dtype=np.float64).reshape(-1)[ref_frame])
@@ -187,8 +278,7 @@ def compare_evaluate_to_reference_npz(
             out["predicted_energy_eV"] = float(energy_eV)
             out["delta_energy_eV"] = delta_e
             out["abs_delta_energy_eV"] = abs(delta_e)
-        if forces_eV_A is not None and "F" in ref.files:
-            ref_f_raw = np.asarray(ref["F"][ref_frame, :ref_n], dtype=np.float64)
+        if forces_eV_A is not None and ref_f_raw is not None:
             unit_l = reference_force_unit.lower()
             if unit_l in {"hartree_bohr", "hartree/bohr", "ha/bohr"}:
                 ref_f_ev = forces_hartree_bohr_to_ev_ang(ref_f_raw)
@@ -708,26 +798,41 @@ def run_evaluate_npz(args: Any) -> int:
         ref_path = getattr(args, "reference_npz", None)
     if ref_path is not None and energy_eV is not None:
         ref_frame = int(getattr(args, "evaluate_reference_frame", frame) or frame)
-        compare = compare_evaluate_to_reference_npz(
-            Path(ref_path),
-            frame=ref_frame,
-            atomic_numbers=z,
-            positions=pos_out,
-            energy_eV=energy_eV,
-            forces_eV_A=forces_eV_A,
-            reference_energy_unit=str(
-                getattr(args, "evaluate_reference_energy_unit", "hartree")
-            ),
-            reference_force_unit=str(
-                getattr(args, "evaluate_reference_force_unit", "hartree_bohr")
-            ),
-        )
         compare_path = getattr(args, "evaluate_compare_output", None)
         if compare_path is None:
             compare_path = out_dir / "evaluate_compare.json"
         else:
             compare_path = Path(compare_path).expanduser()
         compare_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            compare = compare_evaluate_to_reference_npz(
+                Path(ref_path),
+                frame=ref_frame,
+                atomic_numbers=z,
+                positions=pos_out,
+                energy_eV=energy_eV,
+                forces_eV_A=forces_eV_A,
+                reference_energy_unit=str(
+                    getattr(args, "evaluate_reference_energy_unit", "hartree")
+                ),
+                reference_force_unit=str(
+                    getattr(args, "evaluate_reference_force_unit", "hartree_bohr")
+                ),
+            )
+            compare["status"] = "ok"
+        except Exception as exc:
+            compare = {
+                "status": "error",
+                "error": f"{type(exc).__name__}: {exc}",
+                "reference_npz": str(Path(ref_path).expanduser().resolve()),
+                "reference_frame": ref_frame,
+            }
+            if not getattr(args, "quiet", False):
+                print(
+                    f"mmml md-system: evaluate reference compare failed: {exc}",
+                    file=__import__("sys").stderr,
+                    flush=True,
+                )
         compare_path.write_text(json.dumps(compare, indent=2), encoding="utf-8")
         result["reference_compare"] = compare
         artifacts["compare_json"] = str(compare_path)
@@ -745,7 +850,9 @@ def run_evaluate_npz(args: Any) -> int:
             print(f"  {label} = {path}", flush=True)
         if "reference_compare" in result:
             cmp = result["reference_compare"]
-            if "delta_energy_eV" in cmp:
+            if cmp.get("status") == "error":
+                print(f"  compare error: {cmp.get('error')}", flush=True)
+            elif "delta_energy_eV" in cmp:
                 print(
                     f"  vs reference: dE = {cmp['delta_energy_eV']:.6f} eV "
                     f"(|dE| = {cmp['abs_delta_energy_eV']:.6f} eV)",
