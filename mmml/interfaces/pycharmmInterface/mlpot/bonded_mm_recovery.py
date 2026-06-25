@@ -190,6 +190,31 @@ def restore_charmm_state_from_restart(
     sync_charmm_positions(pos)
 
 
+def restore_charmm_state_from_crd(crd_path: PathLike) -> None:
+    """Load coordinates from a CHARMM CRD card into memory."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import load_minimized_coordinates
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+
+    path = Path(crd_path).expanduser().resolve()
+    if not path.is_file():
+        raise FileNotFoundError(f"CRD not found: {path}")
+    load_minimized_coordinates(path)
+    pos = get_charmm_positions_array()
+    if pos is None or not np.all(np.isfinite(pos)):
+        raise RuntimeError(f"CRD {path.name} did not yield finite CHARMM coordinates")
+
+
+def charmm_memory_coordinates_usable() -> bool:
+    """True when the active CHARMM session has finite coordinates in memory."""
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+
+    try:
+        pos = get_charmm_positions_array()
+    except Exception:
+        return False
+    return pos is not None and pos.size > 0 and bool(np.all(np.isfinite(pos)))
+
+
 def _bonded_cfg_from_overlap_config(config: Any) -> BondedMmMiniConfig:
     sd_steps = getattr(config, "intra_rescue_sd_steps", None)
     if sd_steps is None:

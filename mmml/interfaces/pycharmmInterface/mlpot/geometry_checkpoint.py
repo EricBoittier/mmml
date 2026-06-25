@@ -126,12 +126,19 @@ def build_geometry_recovery_candidates(overlap: Any) -> list[Path]:
     return ordered
 
 
+def is_geometry_recovery_crd_path(path: Path | str) -> bool:
+    """True for CHARMM coordinate cards used in the geometry recovery ladder."""
+    return Path(path).suffix.lower() == ".crd"
+
+
 def first_valid_restart_path(candidates: list[Path] | tuple[Path, ...]) -> Path | None:
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import restart_has_nonfinite_coordinates
     import sys
 
     for cand in candidates:
+        if is_geometry_recovery_crd_path(cand):
+            continue
         valid = _valid_restart_file(cand)
         if valid is not None:
             if restart_has_nonfinite_coordinates(valid):
@@ -139,6 +146,17 @@ def first_valid_restart_path(candidates: list[Path] | tuple[Path, ...]) -> Path 
                 valid.rename(valid.with_suffix(".res.corrupt"))
                 continue
             return valid
+    return None
+
+
+def first_valid_geometry_crd_path(candidates: list[Path] | tuple[Path, ...]) -> Path | None:
+    """First non-empty ``.crd`` candidate in the recovery ladder."""
+    for cand in candidates:
+        p = Path(cand)
+        if not is_geometry_recovery_crd_path(p):
+            continue
+        if p.is_file() and p.stat().st_size > 0:
+            return p.resolve()
     return None
 
 
@@ -345,18 +363,44 @@ def restore_geometry_from_ladder(
     candidates: list[Path] | tuple[Path, ...],
     *,
     label: str = "geometry recovery",
+    allow_in_memory: bool = False,
 ) -> Path:
-    """Load the first valid restart in ``candidates`` into CHARMM."""
+    """Load the first usable geometry source in ``candidates`` into CHARMM.
+
+    Tries valid ``.res`` restarts first, then ``.crd`` coordinate cards (e.g.
+    ``03_bonded_mm_after_mini_*.crd``), then optionally the active in-memory
+    CHARMM coordinates when ``allow_in_memory`` is true.
+    """
     from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        charmm_memory_coordinates_usable,
+        restore_charmm_state_from_crd,
         restore_charmm_state_from_restart,
     )
 
     path = first_valid_restart_path(candidates)
-    if path is None:
-        raise RuntimeError(f"{label}: no valid restart in geometry checkpoint ladder")
-    restore_charmm_state_from_restart(path)
-    print(f"{label}: restored CHARMM state from {path.name}", flush=True)
-    return path
+    if path is not None:
+        restore_charmm_state_from_restart(path)
+        print(f"{label}: restored CHARMM state from {path.name}", flush=True)
+        return path
+
+    crd = first_valid_geometry_crd_path(candidates)
+    if crd is not None:
+        restore_charmm_state_from_crd(crd)
+        print(
+            f"{label}: restored CHARMM coordinates from {crd.name} (CRD fallback)",
+            flush=True,
+        )
+        return crd
+
+    if allow_in_memory and charmm_memory_coordinates_usable():
+        print(
+            f"{label}: using in-memory CHARMM coordinates "
+            "(no valid restart/CRD on disk)",
+            flush=True,
+        )
+        return Path("<in-memory>")
+
+    raise RuntimeError(f"{label}: no valid restart in geometry checkpoint ladder")
 
 
 def attach_geometry_checkpoints_to_overlap(
@@ -403,7 +447,7 @@ def attempt_overlap_early_abort_recovery(
 
     label = f"early-abort recovery ({overlap_context})"
     try:
-        restore_geometry_from_ladder(candidates, label=label)
+        restore_geometry_from_ladder(candidates, label=label, allow_in_memory=True)
         return True
     except RuntimeError:
         tried = ", ".join(p.name for p in candidates) or "(none)"
@@ -445,7 +489,7 @@ def ensure_restartable_before_overlap_chunk(
 
     label = f"pre-chunk geometry reload ({overlap_context})"
     try:
-        restore_geometry_from_ladder(candidates, label=label)
+        restore_geometry_from_ladder(candidates, label=label, allow_in_memory=True)
         return
     except RuntimeError:
         pass
