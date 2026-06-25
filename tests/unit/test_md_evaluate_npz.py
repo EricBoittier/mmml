@@ -14,6 +14,8 @@ from mmml.cli.run.md_evaluate_npz import (
     EvaluateNpzPayload,
     compare_evaluate_to_reference_npz,
     load_evaluate_npz,
+    permute_handoff_array_to_evaluator_z,
+    positions_for_evaluator_z,
     resolve_evaluate_use_pbc,
     resolve_evaluate_max_frames,
     resolve_reference_units,
@@ -152,6 +154,56 @@ def test_compare_evaluate_reorders_psf_order_reference(tmp_path: Path) -> None:
     assert cmp["reference_reordered"] is True
     assert cmp["position_rmsd_A"] == pytest.approx(0.0, abs=1e-12)
     assert cmp["delta_energy_eV"] == pytest.approx(0.0, abs=1e-6)
+
+
+def test_positions_for_evaluator_z_reorders_psf_order_dcm_like() -> None:
+    perm = np.array([0, 3, 4, 1, 2], dtype=int)
+    charmm_z = np.array([6, 1, 1, 17, 17, 6, 1, 1, 17, 17], dtype=np.int32)
+    charmm_r = np.random.default_rng(7).random((10, 3))
+    psf_z = charmm_z.reshape(2, 5)[:, perm].reshape(-1)
+    psf_r = charmm_r.reshape(2, 5, 3)[:, perm, :].reshape(10, 3)
+    aligned, meta = positions_for_evaluator_z(
+        psf_r,
+        psf_z,
+        charmm_z,
+        geometry_hint=charmm_r,
+        atoms_per_list=[5, 5],
+    )
+    assert meta["geometry_reordered"] is True
+    np.testing.assert_allclose(aligned, charmm_r, atol=1e-12)
+
+
+def test_positions_for_evaluator_z_identity_for_psf_reference() -> None:
+    perm = np.array([0, 3, 4, 1, 2], dtype=int)
+    charmm_z = np.array([6, 1, 1, 17, 17], dtype=np.int32)
+    charmm_r = np.random.default_rng(9).random((5, 3))
+    psf_z = charmm_z[perm]
+    psf_r = charmm_r[perm]
+    aligned, meta = positions_for_evaluator_z(
+        psf_r,
+        psf_z,
+        psf_z,
+        atoms_per_list=[5],
+    )
+    assert meta["geometry_reordered"] is False
+    np.testing.assert_allclose(aligned, psf_r, atol=1e-12)
+
+
+def test_permute_handoff_charges_to_psf_order() -> None:
+    perm = np.array([0, 3, 4, 1, 2], dtype=int)
+    charmm_z = np.array([6, 1, 1, 17, 17], dtype=np.int32)
+    charmm_r = np.random.default_rng(8).random((5, 3))
+    psf_z = charmm_z[perm]
+    charmm_q = np.linspace(-0.2, 0.2, 5)
+    psf_q = charmm_q[perm]
+    out = permute_handoff_array_to_evaluator_z(
+        charmm_q,
+        handoff_positions=charmm_r,
+        handoff_numbers=charmm_z,
+        evaluator_numbers=psf_z,
+        atoms_per_list=[5],
+    )
+    np.testing.assert_allclose(out, psf_q)
 
 
 def test_resolve_evaluate_max_frames_defaults_to_one() -> None:

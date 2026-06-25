@@ -56,7 +56,7 @@ docker-compose exec mmml-cpu bash
 ```python
 import numpy as np
 from pathlib import Path
-from mmml.pycharmmInterface.mmml_calculator import setup_calculator, ev2kcalmol
+from mmml.pycharmmInterface.mmml_calculator import setup_calculator
 import ase
 
 ATOMS_PER_MONOMER = 10
@@ -72,8 +72,8 @@ factory = setup_calculator(
     doMM=False,
     model_restart_path=ckpt,
     MAX_ATOMS_PER_SYSTEM=ATOMS_PER_MONOMER * N_MONOMERS,
-    ml_energy_conversion_factor=ev2kcalmol,
-    ml_force_conversion_factor=ev2kcalmol,
+    ml_energy_conversion_factor=1,
+    ml_force_conversion_factor=1,
 )
 
 calc, _ = factory(atomic_numbers=Z, atomic_positions=R, n_monomers=N_MONOMERS)

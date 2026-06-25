@@ -223,8 +223,8 @@ def test_ml_energy_matches_reference_when_data_available():
 		doMM=False,
 		model_restart_path=ckpt,
 		MAX_ATOMS_PER_SYSTEM=20,
-		ml_energy_conversion_factor=ev2kcalmol,
-		ml_force_conversion_factor=ev2kcalmol,
+		ml_energy_conversion_factor=1,
+		ml_force_conversion_factor=1,
 	)
 
 	# ASE atoms (lazy import and skip if missing)

@@ -74,6 +74,32 @@ def test_load_geometry_npz_positions_only(tmp_path: Path) -> None:
     assert payload.handoff.atomic_numbers.size == 0
 
 
+def test_evaluate_hybrid_mse_converts_hartree_reference() -> None:
+    from mmml.interfaces.pycharmmInterface.hybrid_reference import evaluate_hybrid_mse_on_frames
+
+    class _FakeAtoms:
+        def set_positions(self, _pos) -> None:
+            return None
+
+        def get_potential_energy(self) -> float:
+            return -27.211386
+
+        def get_forces(self) -> np.ndarray:
+            return np.zeros((2, 3))
+
+    metrics = evaluate_hybrid_mse_on_frames(
+        _FakeAtoms(),
+        R_all=np.zeros((1, 2, 3)),
+        frame_indices=np.array([0], dtype=int),
+        E_all=np.array([-1.0]),
+        F_all=None,
+        has_E=True,
+        has_F=False,
+        reference_energy_unit="hartree",
+    )
+    assert metrics["mse_energy"] == pytest.approx(0.0, abs=1e-6)
+
+
 def test_load_geometry_npz_trajectory_frame(tmp_path: Path) -> None:
     R = np.random.default_rng(1).random((3, 10, 3))
     Z = np.broadcast_to(np.array([6, 1, 1, 17, 17] * 2, dtype=np.int32), (3, 10))

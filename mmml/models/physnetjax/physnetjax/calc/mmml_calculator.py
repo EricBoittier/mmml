@@ -455,10 +455,10 @@ def prepare_batches_md(
 
 
 class ModelOutput(NamedTuple):
-    energy: Array  # Shape: (,), total energy in kcal/mol
-    forces: Array  # Shape: (n_atoms, 3), forces in kcal/mol/Å
-    dH: Array # Shape: (,), total interaction energy in kcal/mol
-    internal_E: Array # Shape: (,) total internal energy in kcal/mol
+    energy: Array  # Shape: (,), total energy in eV
+    forces: Array  # Shape: (n_atoms, 3), forces in eV/Å
+    dH: Array # Shape: (,), total interaction energy in eV
+    internal_E: Array # Shape: (,) total internal energy in eV
     internal_F: Array
     mm_E: Array
     mm_F: Array
@@ -857,8 +857,8 @@ def get_spherical_cutoff_calculator(
             ml_2b_F=ml_2b_F,
             internal_E=internal_E,
             internal_F=internal_F,
-            mm_E=mm_E if doMM else 0.0,
-            mm_F=mm_grad if doMM else jnp.zeros_like(out_F),
+            mm_E=mm_E,
+            mm_F=mm_grad,
         )
 
     def just_E(R, Z):

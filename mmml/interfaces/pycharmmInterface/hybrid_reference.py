@@ -11,9 +11,11 @@ from typing import Any, Callable
 import numpy as np
 
 from mmml.cli.run.md_handoff import MdHandoffState, load_handoff_from_npz
-from mmml.interfaces.pycharmmInterface.cutoffs import (
-    CutoffParameters,
-    cutoff_search_result_dict,
+from mmml.data.units import (
+    energy_to_ev,
+    forces_to_ev_angstrom,
+    infer_reference_energy_unit,
+    infer_reference_force_unit,
 )
 
 
@@ -42,6 +44,8 @@ class ReferenceTrajectory:
     has_E: bool
     has_F: bool
     n_frames: int
+    energy_unit: str = "ev"
+    force_unit: str = "ev_angstrom"
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -195,6 +199,9 @@ def load_reference_trajectory_npz(
     stride = max(1, n_valid // max(1, n_eval))
     frame_indices = sorted_valid[::stride][:n_eval]
 
+    energy_unit = infer_reference_energy_unit(path)
+    force_unit = infer_reference_force_unit(path)
+
     return ReferenceTrajectory(
         path=path,
         R=R_all,
@@ -206,6 +213,8 @@ def load_reference_trajectory_npz(
         has_E=has_E,
         has_F=has_F,
         n_frames=n_frames,
+        energy_unit=energy_unit,
+        force_unit=force_unit,
         metadata=dict(meta),
     )
 
@@ -221,6 +230,8 @@ def evaluate_hybrid_mse_on_frames(
     has_F: bool,
     energy_weight: float = 1.0,
     force_weight: float = 1.0,
+    reference_energy_unit: str = "ev",
+    reference_force_unit: str = "ev_angstrom",
 ) -> dict[str, float]:
     """Weighted MSE of hybrid calculator vs reference on selected frames."""
     se_e, se_f, n_e, n_f = 0.0, 0.0, 0, 0
@@ -229,10 +240,15 @@ def evaluate_hybrid_mse_on_frames(
         pred_E = float(atoms.get_potential_energy())
         pred_F = np.asarray(atoms.get_forces())
         if has_E and E_all is not None:
-            se_e += (pred_E - float(E_all[int(i)])) ** 2
+            ref_E = float(energy_to_ev(float(E_all[int(i)]), reference_energy_unit))
+            se_e += (pred_E - ref_E) ** 2
             n_e += 1
         if has_F and F_all is not None:
-            se_f += float(np.mean((np.asarray(F_all[int(i)]) - pred_F) ** 2))
+            ref_F = np.asarray(
+                forces_to_ev_angstrom(np.asarray(F_all[int(i)]), reference_force_unit),
+                dtype=np.float64,
+            )
+            se_f += float(np.mean((ref_F - pred_F) ** 2))
             n_f += 1
     mse_e = (se_e / max(n_e, 1)) if has_E else 0.0
     mse_f = (se_f / max(n_f, 1)) if has_F else 0.0
@@ -262,6 +278,8 @@ def evaluate_cutoff_triple(
     energy_weight: float,
     force_weight: float,
     complementary_handoff: bool = True,
+    reference_energy_unit: str = "ev",
+    reference_force_unit: str = "ev_angstrom",
 ) -> dict[str, float]:
     """Evaluate one cutoff triple; ``attach_calculator`` sets ``atoms.calc``."""
     cutoff = CutoffParameters(
@@ -281,6 +299,8 @@ def evaluate_cutoff_triple(
         has_F=has_F,
         energy_weight=energy_weight,
         force_weight=force_weight,
+        reference_energy_unit=reference_energy_unit,
+        reference_force_unit=reference_force_unit,
     )
     return cutoff_search_result_dict(
         ml_switch_width=ml_switch_width,
@@ -324,6 +344,8 @@ def run_cutoff_grid_search(
             energy_weight=energy_weight,
             force_weight=force_weight,
             complementary_handoff=complementary_handoff,
+            reference_energy_unit=reference.energy_unit,
+            reference_force_unit=reference.force_unit,
         )
         results.append(res)
         if verbose:
