@@ -706,21 +706,9 @@ def build_decomposed_mlpot_model(
         ),
     )
     if verbose:
-        _print_setup_calculator_factory_summary(
-            factory,
-            checkpoint=ckpt,
-            n_monomers=int(n_monomers),
-            atoms_per_monomer=per,
-            do_ml=do_ml,
-            do_mm=do_mm,
-            do_ml_dimer=do_ml_dimer,
-            cutoff_params=cutoff_params,
-            max_atoms_per_system=max_atoms,
-            ml_batch_size=batch_size,
-            ml_gpu_count=gpu_count,
-            ml_max_active_dimers=ml_max_active_dimers,
-            cell=cell,
-        )
+        from mmml.interfaces.pycharmmInterface.mlpot.setup import report_charmm_topology_summary
+
+        report_charmm_topology_summary()
     if defer_jax_until_mlpot_registered:
         return DecomposedMlpotModel(
             None,

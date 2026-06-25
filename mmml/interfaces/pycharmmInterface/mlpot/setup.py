@@ -692,6 +692,13 @@ def refresh_nbonds_after_mlpot_pbc(
         apply_pbc_nbonds(nbxmod=nbxmod, cubic_box_side_A=side)
 
 
+def report_charmm_topology_summary(*, quiet: bool = False) -> bool:
+    """Emit Rich PSF summary when CHARMM topology is loaded in memory."""
+    from mmml.utils.rich_report import emit_charmm_topology_summary
+
+    return emit_charmm_topology_summary(quiet=quiet)
+
+
 def load_cluster_from_artifacts(
     args: Any,
 ) -> tuple[np.ndarray, np.ndarray, int, str]:
@@ -767,10 +774,7 @@ def load_cluster_from_artifacts(
 
     tag = str(getattr(args, "tag", None) or psf_path.stem.replace("mini_full_mlpot_", ""))
     if not getattr(args, "quiet", False):
-        print(
-            f"Loaded cluster from {topology_psf.name} + {crd_path.name}",
-            flush=True,
-        )
+        report_charmm_topology_summary()
     return z, r, n_mol, tag
 
 
