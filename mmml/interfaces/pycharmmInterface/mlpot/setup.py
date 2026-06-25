@@ -140,6 +140,7 @@ class MlpotContext:
     topology_fingerprint: Any = None
     pre_mlpot_iblo: list[int] | None = None
     pre_mlpot_inb: list[int] | None = None
+    sd_watchdog_baseline_grms: float | None = None
 
     def unset(self) -> None:
         self.mlpot.unset_mlpot()

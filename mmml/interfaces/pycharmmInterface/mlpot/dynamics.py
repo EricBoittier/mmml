@@ -606,6 +606,14 @@ class MinimizeWithMlpotConfig:
     # Stop SD/ABNR early when hybrid GRMS exceeds ``factor * initial`` or rises sharply.
     sd_grms_watchdog_factor: float = 2.5
     sd_abort_on_grms_increase: bool = True
+    # ASE BFGS on hybrid calculator before MLpot SD (geometry_stress / high GRMS).
+    calculator_pre_minimize: bool = True
+    calculator_minimize_steps: int = 200
+    calculator_minimize_fmax_ev_a: float = 0.05
+    calculator_bfgs_maxstep: float = 0.05
+    quiet_bfgs: bool = False
+    # Watchdog compares chunk GRMS to this baseline (post calculator mini if run).
+    sd_watchdog_initial_grms: float | None = None
 
 
 @dataclass(frozen=True)
@@ -855,7 +863,12 @@ def _run_minimize_in_chunks(
 
     initial_grms: float | None = None
     previous_grms: float | None = None
-    if config.mlpot_ctx is not None:
+    if config.sd_watchdog_initial_grms is not None and np.isfinite(
+        config.sd_watchdog_initial_grms
+    ):
+        initial_grms = float(config.sd_watchdog_initial_grms)
+        previous_grms = initial_grms
+    elif config.mlpot_ctx is not None:
         initial_grms = resolve_mlpot_grms_kcalmol_A(config.mlpot_ctx, context="")
         previous_grms = initial_grms
 
@@ -3899,7 +3912,21 @@ def minimize_with_mlpot(
                 bonded_recovery_tolgrd=config.tolgrd,
                 context_prefix="Pre-SD",
                 verbose=config.verbose,
+                calculator_minimize=config.calculator_pre_minimize,
+                calculator_minimize_steps=config.calculator_minimize_steps,
+                calculator_minimize_fmax_ev_a=config.calculator_minimize_fmax_ev_a,
+                calculator_bfgs_maxstep=config.calculator_bfgs_maxstep,
+                quiet_bfgs=config.quiet_bfgs,
             )
+            baseline = getattr(config.mlpot_ctx, "sd_watchdog_baseline_grms", None)
+            if baseline is not None and np.isfinite(baseline):
+                config.sd_watchdog_initial_grms = float(baseline)
+                if config.verbose:
+                    print(
+                        f"MLpot SD watchdog baseline: hybrid GRMS={float(baseline):.4f} "
+                        "kcal/mol/Å (post calculator pre-minimize)",
+                        flush=True,
+                    )
         sd_result = _run_mlpot_sd_then_abnr(
             minimize,
             pycharmm,

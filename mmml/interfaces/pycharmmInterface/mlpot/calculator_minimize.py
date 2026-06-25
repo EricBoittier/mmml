@@ -1,0 +1,155 @@
+"""Hybrid JAX calculator minimization on CHARMM coordinates before MLpot SD."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any
+
+import numpy as np
+
+from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    mlpot_hybrid_grms_from_calculator,
+    mlpot_spherical_energy_forces_ev_angstrom,
+)
+
+
+@dataclass
+class HybridCalculatorMinimizeConfig:
+    """ASE BFGS on the full hybrid calculator (synced to CHARMM coords)."""
+
+    max_steps: int = 200
+    fmax_ev_a: float = 0.05
+    bfgs_maxstep: float = 0.05
+    verbose: bool = True
+    quiet_bfgs: bool = False
+
+
+def _hybrid_mlpot_ase_calculator_class():
+    import ase.calculators.calculator as ase_calc
+
+    class HybridMlpotAseCalculator(ase_calc.Calculator):
+        """Minimal ASE calculator wrapping ``spherical_fn`` for BFGS pre-minimization."""
+
+        implemented_properties = ["energy", "forces"]
+
+        def __init__(self, mlpot_ctx: Any) -> None:
+            super().__init__()
+            self.mlpot_ctx = mlpot_ctx
+            pyCModel = getattr(mlpot_ctx, "pyCModel", None)
+            if pyCModel is None:
+                raise RuntimeError("HybridMlpotAseCalculator requires mlpot_ctx.pyCModel")
+            self._pyCModel = pyCModel
+            self.use_pbc = bool(getattr(mlpot_ctx, "use_pbc", False))
+            box = getattr(mlpot_ctx, "cubic_box_side_A", None)
+            if box is None:
+                box = getattr(mlpot_ctx, "charmm_cubic_box_side_A", None)
+            self._box_A = float(box) if box is not None else None
+
+        def calculate(
+            self,
+            atoms,
+            properties,
+            system_changes,
+        ) -> None:
+            super().calculate(atoms, properties, system_changes)
+            pos = np.asarray(atoms.get_positions(), dtype=np.float64)
+            evald = mlpot_spherical_energy_forces_ev_angstrom(
+                self._pyCModel,
+                positions=pos,
+                use_pbc=self.use_pbc,
+                box_A=self._box_A,
+            )
+            if evald is None:
+                raise RuntimeError(
+                    "hybrid spherical_fn evaluation failed during calculator mini"
+                )
+            energy_ev, forces_ev = evald
+            self.results["energy"] = float(energy_ev)
+            self.results["forces"] = np.asarray(forces_ev, dtype=np.float64)
+
+    return HybridMlpotAseCalculator
+
+
+def _promote_mlpot_jax_for_calculator_mini(mlpot_ctx: Any, *, verbose: bool) -> None:
+    pyCModel = getattr(mlpot_ctx, "pyCModel", None)
+    promote = getattr(pyCModel, "promote_jax_factory_to_gpu", None)
+    if callable(promote):
+        promote()
+        if verbose:
+            print(
+                "Pre-SD hybrid calculator minimize: promoted JAX factory to GPU",
+                flush=True,
+            )
+        return
+    from mmml.utils.jax_gpu_warmup import ensure_xla_gpu_warmed
+
+    ensure_xla_gpu_warmed(force=True)
+
+
+def minimize_hybrid_calculator_before_sd(
+    mlpot_ctx: Any,
+    config: HybridCalculatorMinimizeConfig,
+    *,
+    context_prefix: str = "Pre-SD",
+) -> float:
+    """Relax CHARMM coordinates with ASE BFGS on the hybrid calculator.
+
+    Returns hybrid GRMS (kcal/mol/Å) after minimization (watchdog baseline).
+    """
+    import ase
+    from ase.optimize import BFGS
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        invalidate_mlpot_calculator_caches,
+        sync_charmm_lists_after_mini,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        get_charmm_positions_array,
+        sync_charmm_positions,
+    )
+
+    z = getattr(mlpot_ctx, "ml_Z", None)
+    if z is None:
+        raise RuntimeError("mlpot_ctx.ml_Z required for hybrid calculator minimize")
+
+    _promote_mlpot_jax_for_calculator_mini(mlpot_ctx, verbose=config.verbose)
+    pos0 = get_charmm_positions_array()
+    grms0 = mlpot_hybrid_grms_from_calculator(mlpot_ctx, positions=pos0)
+    if config.verbose:
+        grms_txt = f"{grms0:.4f}" if grms0 is not None and np.isfinite(grms0) else "?"
+        print(
+            f"{context_prefix} hybrid calculator BFGS: start GRMS={grms_txt} "
+            f"kcal/mol/Å (max {config.max_steps} steps, fmax={config.fmax_ev_a} eV/Å)",
+            flush=True,
+        )
+
+    atoms = ase.Atoms(numbers=np.asarray(z, dtype=int), positions=pos0)
+    atoms.calc = _hybrid_mlpot_ase_calculator_class()(mlpot_ctx)
+    opt = BFGS(
+        atoms,
+        logfile=None if config.quiet_bfgs else "-",
+        maxstep=float(config.bfgs_maxstep),
+    )
+    opt.run(fmax=float(config.fmax_ev_a), steps=int(config.max_steps))
+
+    sync_charmm_positions(np.asarray(atoms.get_positions(), dtype=np.float64))
+    sync_charmm_lists_after_mini(quiet=True)
+    invalidate_mlpot_calculator_caches(mlpot_ctx)
+    mlpot_ctx.reregister_mlpot(verbose=False)
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms_after_ener_force
+
+    charmm_grms_after_ener_force()
+
+    grms1 = mlpot_hybrid_grms_from_calculator(mlpot_ctx)
+    if grms1 is None or not np.isfinite(grms1):
+        raise RuntimeError("hybrid GRMS unavailable after calculator minimize")
+    if config.verbose:
+        fmax = float(np.abs(atoms.get_forces()).max())
+        print(
+            f"{context_prefix} hybrid calculator BFGS done: "
+            f"GRMS {grms_txt} -> {grms1:.4f} kcal/mol/Å, "
+            f"fmax={fmax:.6f} eV/Å, steps={opt.get_number_of_steps()}",
+            flush=True,
+        )
+    mlpot_ctx.sd_watchdog_baseline_grms = float(grms1)
+    return float(grms1)
