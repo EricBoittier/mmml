@@ -259,6 +259,59 @@ def energy_to_ev(values: np.ndarray | float, unit: str) -> np.ndarray | float:
     return convert_energy(values, unit, "ev")
 
 
+def _as_numeric_energy_array(values: np.ndarray) -> np.ndarray:
+    """Coerce NPZ ``E`` values to float64, rejecting unit-label strings."""
+    raw = np.asarray(values, dtype=object).reshape(-1)
+    out = np.empty(int(raw.shape[0]), dtype=np.float64)
+    for i, val in enumerate(raw):
+        if isinstance(val, (str, bytes)):
+            text = val.decode("utf-8") if isinstance(val, bytes) else str(val)
+            raise ValueError(
+                f"Reference energy index {i} is non-numeric ({text!r}). "
+                "Use numeric 'E' or canonical 'E_eV' arrays."
+            )
+        out[i] = float(val)
+    return out
+
+
+def load_reference_energies_from_npz(
+    data: Any,
+    *,
+    path: Path | str | None = None,
+) -> tuple[np.ndarray | None, str]:
+    """Load per-frame reference energies and their unit from an NPZ."""
+    files = list(getattr(data, "files", data.keys()))
+    if "E_eV" in files:
+        e = np.asarray(data["E_eV"], dtype=np.float64).reshape(-1)
+        return e, "ev"
+    if "E" not in files:
+        return None, infer_reference_energy_unit(path)
+    try:
+        e = np.asarray(data["E"], dtype=np.float64).reshape(-1)
+    except (ValueError, TypeError):
+        e = _as_numeric_energy_array(np.asarray(data["E"]))
+    return e, infer_reference_energy_unit(path)
+
+
+def reference_energy_ev_at_frame(
+    data: Any,
+    frame: int,
+    *,
+    path: Path | str | None = None,
+    energy_unit: str | None = None,
+) -> tuple[float, str, float]:
+    """Return ``(energy_eV, unit, raw_value)`` for one reference frame."""
+    energies, default_unit = load_reference_energies_from_npz(data, path=path)
+    if energies is None:
+        raise KeyError("Reference NPZ has no numeric 'E' or 'E_eV' energies")
+    unit = str(energy_unit or default_unit)
+    raw = float(energies[int(frame)])
+    if normalize_energy_unit(unit) == "ev":
+        return raw, unit, raw
+    ev = float(energy_to_ev(raw, unit))
+    return ev, unit, raw
+
+
 def forces_to_ev_angstrom(values: np.ndarray | float, unit: str) -> np.ndarray | float:
     """Convert forces to eV/Angstrom (convenience wrapper)."""
     return convert_forces(values, unit, "ev_angstrom")
@@ -465,19 +518,25 @@ def _infer_reference_units_from_arrays(npz_path: Path | str) -> tuple[str | None
     p = Path(npz_path).expanduser()
     try:
         with np.load(p, allow_pickle=True) as data:
+            if "E_eV" in data.files:
+                return "ev", "ev_angstrom"
             meta_e, meta_f = _units_from_npz_metadata_json(data.get("metadata"))
             if meta_e is not None or meta_f is not None:
                 return meta_e, meta_f
             if "E" not in data.files:
                 return None, None
-            e = np.asarray(data["E"], dtype=np.float64).reshape(-1)
+            try:
+                e = load_reference_energies_from_npz(data, path=p)[0]
+            except ValueError:
+                return None, None
+            if e is None or e.size == 0:
+                return None, None
             e_sample = e[np.isfinite(e)][:32]
             if e_sample.size == 0:
                 return None, None
             if "F" in data.files and np.size(data["F"]) > 0:
                 f = np.asarray(data["F"], dtype=np.float64)
                 f_mag = float(np.nanmax(np.abs(f)))
-                # PySCF hartree/bohr gradients are typically << 1; eV/Å are O(0.1–10).
                 if f_mag >= 0.5:
                     return "ev", "ev_angstrom"
                 if f_mag > 0.0:

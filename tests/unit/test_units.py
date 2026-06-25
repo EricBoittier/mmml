@@ -110,6 +110,33 @@ def test_units_from_npz_embedded_metadata(tmp_path: Path) -> None:
     assert manifest.energy_unit() == "hartree"
 
 
+def test_load_reference_energies_prefers_e_ev(tmp_path: Path) -> None:
+    from mmml.data.units import load_reference_energies_from_npz
+
+    path = tmp_path / "ref.npz"
+    np.savez_compressed(
+        path,
+        E=np.array(["eV"]),
+        E_eV=np.array([-43.0, -44.0]),
+    )
+    with np.load(path) as data:
+        e, unit = load_reference_energies_from_npz(data, path=path)
+    assert unit == "ev"
+    np.testing.assert_allclose(e, [-43.0, -44.0])
+
+
+def test_reference_energy_ev_at_frame_uses_e_ev(tmp_path: Path) -> None:
+    from mmml.data.units import reference_energy_ev_at_frame
+
+    path = tmp_path / "ref.npz"
+    np.savez_compressed(path, E=np.array(["eV"]), E_eV=np.array([-43.5, -44.0]))
+    with np.load(path) as data:
+        ev, unit, raw = reference_energy_ev_at_frame(data, 1, path=path)
+    assert unit == "ev"
+    assert ev == pytest.approx(-44.0)
+    assert raw == pytest.approx(-44.0)
+
+
 def test_infer_reference_units_from_force_magnitudes(tmp_path: Path) -> None:
     from mmml.data.units import infer_reference_energy_unit, infer_reference_force_unit
 

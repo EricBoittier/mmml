@@ -16,6 +16,7 @@ from mmml.data.units import (
     forces_to_ev_angstrom,
     infer_reference_energy_unit,
     infer_reference_force_unit,
+    load_reference_energies_from_npz,
 )
 
 
@@ -168,6 +169,13 @@ def load_reference_trajectory_npz(
         else:
             meta = {}
 
+        energy_values, energy_unit = load_reference_energies_from_npz(dataset, path=path)
+        if energy_values is not None:
+            E_all = energy_values
+        else:
+            energy_unit = infer_reference_energy_unit(path)
+        force_unit = infer_reference_force_unit(path)
+
     has_E = E_all is not None and np.size(E_all) > 0
     has_F = F_all is not None and np.size(F_all) > 0
     n_frames = int(R_all.shape[0])
@@ -198,9 +206,6 @@ def load_reference_trajectory_npz(
     n_valid = len(sorted_valid)
     stride = max(1, n_valid // max(1, n_eval))
     frame_indices = sorted_valid[::stride][:n_eval]
-
-    energy_unit = infer_reference_energy_unit(path)
-    force_unit = infer_reference_force_unit(path)
 
     return ReferenceTrajectory(
         path=path,

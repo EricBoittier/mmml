@@ -34,6 +34,7 @@ from mmml.data.units import (
     infer_reference_force_unit,
     normalize_energy_unit,
     normalize_force_unit,
+    reference_energy_ev_at_frame,
 )
 from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
 
@@ -626,11 +627,16 @@ def compare_evaluate_to_reference_npz(
             "n_atoms": n_atoms,
             **align_meta,
         }
-        if "E" in ref.files:
-            ref_e_raw = float(np.asarray(ref["E"], dtype=np.float64).reshape(-1)[ref_frame])
-            ref_e_ev = float(energy_to_ev(ref_e_raw, reference_energy_unit))
+        if "E" in ref.files or "E_eV" in ref.files:
+            ref_e_ev, unit_used, ref_e_raw = reference_energy_ev_at_frame(
+                ref,
+                ref_frame,
+                path=ref_path,
+                energy_unit=reference_energy_unit,
+            )
             delta_e = float(energy_eV) - ref_e_ev
             out["reference_energy_raw"] = ref_e_raw
+            out["reference_energy_unit"] = unit_used
             out["reference_energy_eV"] = ref_e_ev
             out["predicted_energy_eV"] = float(energy_eV)
             out["delta_energy_eV"] = delta_e
