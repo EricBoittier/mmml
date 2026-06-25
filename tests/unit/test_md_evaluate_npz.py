@@ -318,6 +318,54 @@ def test_save_evaluate_extxyz_includes_forces(tmp_path: Path) -> None:
     assert atoms.get_potential_energy() == pytest.approx(-2.0)
 
 
+def test_center_positions_at_com_moves_mass_weighted_origin() -> None:
+    from mmml.cli.run.md_evaluate_npz import center_positions_at_com
+
+    z = np.array([6, 1, 1], dtype=int)
+    pos = np.array([[1.0, 0.0, 0.0], [4.0, 0.0, 0.0], [7.0, 0.0, 0.0]])
+    centered = center_positions_at_com(pos, z)
+    from ase.data import atomic_masses
+
+    masses = atomic_masses[z]
+    com = np.average(pos, axis=0, weights=masses)
+    np.testing.assert_allclose(centered.mean(axis=0, weights=masses), 0.0, atol=1e-12)
+
+
+def test_save_evaluate_compare_extxyz_trajectories_writes_three_layers(tmp_path: Path) -> None:
+    from ase.io import read
+
+    from mmml.cli.run.md_evaluate_npz import save_evaluate_compare_extxyz_trajectories
+
+    z = np.array([6, 1, 1, 17, 17], dtype=np.int32)
+    r = np.array([[[1.0, 2.0, 3.0]] * 5])
+    model_f = np.array([[[1.0, 0.0, 0.0]] * 5])
+    ref_f = np.array([[[0.5, 0.0, 0.0]] * 5])
+    artifacts = save_evaluate_compare_extxyz_trajectories(
+        tmp_path,
+        atomic_numbers=z,
+        positions=r,
+        model_energies_eV=np.array([-1.0]),
+        model_forces_eV_A=model_f,
+        reference_energies_eV=np.array([-1.2]),
+        reference_forces_eV_A=ref_f,
+        prefix="evaluate",
+    )
+    assert (tmp_path / "evaluate_ground_truth.extxyz").is_file()
+    assert (tmp_path / "evaluate_model.extxyz").is_file()
+    assert (tmp_path / "evaluate_difference.extxyz").is_file()
+    assert (tmp_path / "evaluate.extxyz").is_file()
+
+    gt = read(str(tmp_path / "evaluate_ground_truth.extxyz"), index=0)
+    model = read(str(tmp_path / "evaluate_model.extxyz"), index=0)
+    diff = read(str(tmp_path / "evaluate_difference.extxyz"), index=0)
+    np.testing.assert_allclose(gt.get_positions().mean(axis=0), 0.0, atol=1e-10)
+    np.testing.assert_allclose(model.get_forces(), model_f[0])
+    np.testing.assert_allclose(gt.get_forces(), ref_f[0])
+    np.testing.assert_allclose(diff.get_forces(), model_f[0] - ref_f[0])
+    assert diff.get_potential_energy() == pytest.approx(-1.0 - (-1.2))
+    assert artifacts["extxyz_difference"] == str(tmp_path / "evaluate_difference.extxyz")
+
+
 def test_resolve_evaluate_use_pbc_from_setup() -> None:
     handoff = MdHandoffState(
         positions=np.zeros((3, 3)),
