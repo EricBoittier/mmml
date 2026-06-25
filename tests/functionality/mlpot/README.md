@@ -139,6 +139,39 @@ pytest tests/functionality/mlpot/test_mlpot_energy_matches_ase.py -q
 pytest tests/functionality/mlpot/test_pycharmm_conversion.py -q
 ```
 
+## `md-system --dyna-probe` (evaluate + 1-step NVE)
+
+Compares all PyCHARMM force lanes **before and after** one NVE integration step — useful when
+`evaluate-npz` energy matches MP2 but `charmm_total` forces do not.
+
+```bash
+REF=artifacts/dcm_mp2_round2/new-dcm-round-2-only_MP2_41950_dimers_psf_order.npz
+FRAME=16566
+OUT=artifacts/eval_smoke/frame_${FRAME}/dyna_probe
+
+mmml md-system --dyna-probe \
+  --evaluate-npz "$REF" --evaluate-frame "$FRAME" \
+  --evaluate-reference-npz "$REF" --evaluate-reference-frame "$FRAME" \
+  --composition DCM:2 --backend pycharmm --setup free_nve \
+  --ml-switch-width 0.1 --mm-switch-on 6.0 --mm-switch-width 3.0 \
+  --dyna-probe-nstep 1 --dyna-probe-dt-fs 0.5 --no-echeck \
+  --output-dir "$OUT" --quiet
+
+python -c "
+import json
+d=json.load(open('${OUT}/dyna_probe.json'))
+for s in d['snapshots']:
+    rc=s.get('reference_compare',{})
+    print(s['label'], 'force_rmse', rc.get('force_rmse_eV_A'),
+          'spherical', rc.get('force_rmse_spherical_fn_eV_A'),
+          'charmm', rc.get('force_rmse_charmm_total_eV_A'))
+"
+```
+
+Pass criteria: `force_rmse_spherical_fn_eV_A` ≈ ASE evaluate-npz (~0.003 for frame 16566);
+`force_rmse_charmm_total_eV_A` exposes the static CHARMM export bug if still ~0.25.
+Post-dyna `cross_lane_force_rmse_eV_A` shows whether DYNA changes the mismatch.
+
 ## Library module
 
 Reusable API: `mmml/interfaces/pycharmmInterface/mlpot/` — see `mlpot/README.md`.
