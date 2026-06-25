@@ -1413,12 +1413,71 @@ def mlpot_hybrid_forces_ev_angstrom(
     return np.asarray(forces_kcal, dtype=np.float64) / float(ev2kcalmol)
 
 
+def mlpot_spherical_forces_ev_angstrom(
+    pyCModel: Any,
+    *,
+    positions: np.ndarray,
+    use_pbc: bool,
+    box_A: float | None,
+) -> np.ndarray | None:
+    """Evaluate hybrid ML/MM forces via ``spherical_fn`` (matches ASE evaluate-npz)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+        DecomposedMlpotCalculator,
+        DecomposedMlpotModel,
+    )
+
+    if not isinstance(pyCModel, DecomposedMlpotModel):
+        return None
+    calc = pyCModel.get_pycharmm_calculator()
+    if not isinstance(calc, DecomposedMlpotCalculator) or calc.spherical_fn is None:
+        return None
+
+    import jax
+    import jax.numpy as jnp
+
+    pos_np = np.asarray(positions, dtype=np.float64).reshape(-1, 3)
+    n = int(pos_np.shape[0])
+    pos_j = jnp.asarray(pos_np, dtype=jnp.float32)
+    z_j = jnp.asarray(calc.atomic_numbers[:n], dtype=jnp.int32)
+    kwargs: dict[str, Any] = dict(
+        positions=pos_j,
+        atomic_numbers=z_j,
+        n_monomers=int(calc.n_monomers),
+        cutoff_params=calc.cutoff_params,
+        doML=True,
+        doMM=bool(calc.do_mm),
+        doML_dimer=True,
+    )
+    if use_pbc and box_A is not None:
+        box_j = jnp.array([float(box_A), float(box_A), float(box_A)], dtype=jnp.float32)
+        kwargs["box"] = box_j
+        mm_pair_idx, mm_pair_mask, use_mm_pairs = calc._resolve_mm_pairs(pos_np, box_j)
+        if use_mm_pairs:
+            kwargs["mm_pair_idx"] = mm_pair_idx
+            kwargs["mm_pair_mask"] = mm_pair_mask
+    out = calc.spherical_fn(**kwargs)
+    forces = np.asarray(jax.device_get(out.forces), dtype=np.float64).reshape(n, 3)
+    return forces
+
+
 def resolve_evaluate_forces_ev_angstrom(
     pyCModel: Any,
     *,
     natom: int,
+    positions: np.ndarray | None = None,
+    use_pbc: bool = False,
+    box_A: float | None = None,
 ) -> tuple[np.ndarray, str]:
-    """Forces for evaluate/compare: MLpot callback first, CHARMM total fallback."""
+    """Forces for evaluate/compare: spherical_fn, MLpot callback, CHARMM fallback."""
+    if positions is not None:
+        spherical = mlpot_spherical_forces_ev_angstrom(
+            pyCModel,
+            positions=positions,
+            use_pbc=use_pbc,
+            box_A=box_A,
+        )
+        if spherical is not None and int(spherical.shape[0]) == int(natom):
+            return np.asarray(spherical, dtype=np.float64), "spherical_fn"
     hybrid = mlpot_hybrid_forces_ev_angstrom(pyCModel, natom=natom)
     if hybrid is not None and int(hybrid.shape[0]) == int(natom):
         return np.asarray(hybrid, dtype=np.float64), "mlpot_callback"
