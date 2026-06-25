@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
 
 from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+    HybridCalculatorMinimizeConfig,
     _BestMinimizationFrame,
+    _run_hybrid_calculator_bfgs,
     hybrid_calculator_mini_eligible,
     should_abort_bfgs_fmax,
     spike_fmax_limit_ev_a,
@@ -75,3 +77,52 @@ def test_best_minimization_frame_tracks_lowest_fmax():
     frame.restore_best_force()
     atoms.set_positions.assert_called_once()
     np.testing.assert_array_equal(atoms.set_positions.call_args.args[0], np.ones((1, 3)))
+
+
+def test_run_hybrid_calculator_bfgs_stops_on_spike_without_stopiteration():
+    atoms = MagicMock()
+    atoms.get_forces.side_effect = [
+        np.array([[2.0, 0.0, 0.0]]),
+        np.array([[2.0, 0.0, 0.0]]),
+        np.array([[2.0, 0.0, 0.0]]),
+        np.array([[60.0, 0.0, 0.0]]),
+        np.array([[60.0, 0.0, 0.0]]),
+    ]
+    atoms.get_positions.return_value = np.zeros((1, 3))
+
+    class FakeOpt:
+        def __init__(self, *args, **kwargs) -> None:
+            self._n = 0
+            self._callbacks = []
+
+        def attach(self, fn, interval=1):
+            self._callbacks.append(fn)
+
+        def get_number_of_steps(self):
+            return self._n
+
+        def irun(self, fmax, steps):
+            for _ in range(2):
+                self._n += 1
+                for fn in self._callbacks:
+                    fn()
+                yield False
+
+    config = HybridCalculatorMinimizeConfig(
+        max_steps=50,
+        quiet_bfgs=True,
+        use_bfgs_line_search=False,
+        verbose=True,
+    )
+
+    with patch("ase.optimize.BFGS", FakeOpt):
+        opt, best_frame, stopped = _run_hybrid_calculator_bfgs(
+            atoms,
+            config,
+            context_prefix="Test",
+            initial_fmax_ev_a=2.0,
+        )
+
+    assert stopped is True
+    assert best_frame.best_force_fmax == pytest.approx(2.0)
+    assert opt.get_number_of_steps() == 2
