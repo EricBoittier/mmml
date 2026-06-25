@@ -182,16 +182,24 @@ def ensure_monomer_3d_coords(
 
 def relax_monomer_geometry_for_cluster(
     residue: str,
+    *,
+    nstep_sd: int = 500,
+    nstep_abnr: int = 200,
 ) -> tuple[np.ndarray, list[str], np.ndarray]:
-    """Build a 3D monomer from IC tables without CHARMM minimization.
-
-    Cluster assembly only needs a non-flat placement geometry. SD/ABNR minimization
-    can segfault in ``ebondfs`` on some cluster CHARMM builds (notably DCM in notebooks).
-    For production geometries use ``build_cluster_from_reference_npz`` instead.
-    """
+    """Build and CHARMM-minimize an isolated monomer for cluster assembly."""
     from mmml.cli.run.md_pbc_suite.ase import _read_cgenff_toppar, _reset_pycharmm_system
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import prepare_charmm_vacuum
+    from mmml.interfaces.pycharmmInterface.cluster_geometry import ensure_charmm_session_ready
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        CharmmMmMinimizeConfig,
+        minimize_charmm_mm_only,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        get_charmm_positions_array,
+        prepare_charmm_vacuum,
+        sync_charmm_positions,
+    )
 
+    ensure_charmm_session_ready()
     residue = residue.upper()
     _reset_pycharmm_system()
     prepare_charmm_vacuum()
@@ -211,13 +219,25 @@ def relax_monomer_geometry_for_cluster(
 
     if not _monomer_geometry_is_3d(coords):
         coords = ensure_monomer_3d_coords(coords)
+    sync_charmm_positions(coords)
+
+    minimize_charmm_mm_only(
+        CharmmMmMinimizeConfig(
+            nstep_sd=int(nstep_sd),
+            nstep_abnr=int(nstep_abnr),
+            nprint=50,
+            verbose=False,
+            show_energy=False,
+        )
+    )
+    coords = get_charmm_positions_array()
 
     if not _monomer_geometry_is_3d(coords):
         span = np.ptp(coords, axis=0)
         raise RuntimeError(
-            f"Monomer {residue} IC geometry is not 3D (spans Å x={span[0]:.2f} "
-            f"y={span[1]:.2f} z={span[2]:.2f}). "
-            "Pass reference_npz= to build_ase_cluster with a PSF-order reference NPZ."
+            f"Monomer {residue} not 3D after CHARMM minimize "
+            f"(spans Å x={span[0]:.2f} y={span[1]:.2f} z={span[2]:.2f}). "
+            "Try build_ase_cluster(..., reference_npz=...) with a PSF-order NPZ."
         )
 
     z = np.asarray(get_Z_from_psf(), dtype=int)
@@ -236,10 +256,12 @@ def build_cluster_from_reference_npz(
     frame: int = 0,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Build CHARMM PSF for ``residue``×``n_molecules`` and load positions from reference NPZ."""
+    from mmml.interfaces.pycharmmInterface.cluster_geometry import ensure_charmm_session_ready
     from mmml.cli.run.md_pbc_suite.ase import _build_cluster_psf_topology_only
     from mmml.interfaces.pycharmmInterface.cluster_geometry import reference_frame_geometry
     from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
+    ensure_charmm_session_ready()
     ref_z, ref_r = reference_frame_geometry(reference_npz, frame=frame)
     n_atoms = int(len(ref_z))
     if n_atoms % int(n_molecules) != 0:

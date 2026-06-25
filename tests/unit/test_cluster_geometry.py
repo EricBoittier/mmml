@@ -66,3 +66,36 @@ def test_ensure_monomer_3d_coords_breaks_collinear() -> None:
     span = np.ptp(spread, axis=0)
     assert float(span[1]) >= 0.3
     assert float(span[2]) >= 0.3
+
+
+def test_ensure_charmm_session_ready_sets_bomlev(monkeypatch: pytest.MonkeyPatch) -> None:
+    from mmml.interfaces.pycharmmInterface import cluster_geometry as cg
+
+    cg._charmm_session_ready = False
+    calls: list[int] = []
+
+    def _fake_apply(*, prnlev: int, warnlev: int, bomlev: int) -> dict[str, int]:
+        calls.append(int(bomlev))
+        return {"prnlev": prnlev, "warnlev": warnlev, "bomlev": bomlev}
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.apply_charmm_verbosity",
+        _fake_apply,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.utils.set_up_directories",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.prepare_charmm_vacuum",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.import_pycharmm.reset_block",
+        lambda: None,
+    )
+
+    cg.ensure_charmm_session_ready()
+    assert calls == [-2]
+    cg.ensure_charmm_session_ready()
+    assert calls == [-2]

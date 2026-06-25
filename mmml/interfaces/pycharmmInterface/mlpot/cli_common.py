@@ -898,13 +898,17 @@ def build_ase_cluster(
     """Build a homogeneous CHARMM PSF-ordered cluster for ASE / hybrid calculators.
 
     Residues with bundled 3D templates (ACO, MEOH) use those templates; all others
-    use IC + deterministic 3D spread plus composition placement (no CHARMM minimize).
+    use IC + CHARMM SD/ABNR monomer minimization plus composition placement.
 
     When ``reference_npz`` is set, build the PSF and load coordinates from that file
-    (must be PSF-order and match ``residue`` × ``n_molecules``). Prefer this for DCM
-    and other residues on cluster/notebook CHARMM builds that segfault in ``ebondfs``.
+    (must be PSF-order and match ``residue`` × ``n_molecules``).
+
+    In Jupyter, call :func:`ensure_charmm_session_ready` once per kernel first (this
+    function calls it automatically).
     """
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    from mmml.interfaces.pycharmmInterface.cluster_geometry import ensure_charmm_session_ready
+
+    ensure_charmm_session_ready()
     from mmml.cli.run.md_pbc_suite.cluster import (
         _build_psf_ordered_cluster,
         build_cluster_from_reference_npz,
@@ -921,13 +925,7 @@ def build_ase_cluster(
     else:
         z, r = _build_psf_ordered_cluster(residue.upper(), n_molecules, spacing)
         sync_charmm_positions(r)
-    n_per = int(len(z) // max(int(n_molecules), 1))
-    min_extent = max(0.9, min(1.5, 0.22 * float(n_per)))
-    validate_cluster_geometry(
-        r,
-        n_molecules=n_molecules,
-        min_monomer_extent=min_extent,
-    )
+    validate_cluster_geometry(r, n_molecules=n_molecules)
     return z, r
 
 
@@ -960,6 +958,20 @@ def prepare_vacuum_nbonds_for_mm() -> None:
     )
 
     _prepare_vacuum_nbonds_for_mm()
+
+
+def ensure_charmm_session_ready(**kwargs: Any) -> None:
+    """Initialize CHARMM for notebooks (``bomlev=-2``, vacuum, MM BLOCK)."""
+    from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+        ensure_charmm_session_ready as _ensure_charmm_session_ready,
+    )
+
+    _ensure_charmm_session_ready(**kwargs)
+
+
+def prepare_charmm_notebook(**kwargs: Any) -> None:
+    """Alias for :func:`ensure_charmm_session_ready`."""
+    ensure_charmm_session_ready(**kwargs)
 
 
 def composition_tag(composition: list[tuple[str, int]] | None, residue: str, n_molecules: int) -> str:

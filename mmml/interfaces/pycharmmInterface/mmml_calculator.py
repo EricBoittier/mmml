@@ -226,6 +226,8 @@ from mmml.interfaces.pycharmmInterface.cutoffs import (
     DEFAULT_MM_SWITCH_WIDTH,
     CutoffParameters,
     GAMMA_ON,
+    _resolve_ml_switch_width,
+    _resolve_mm_switch_width,
 )
 
 
@@ -412,10 +414,14 @@ def setup_calculator(
     ml_jnp_dtype = resolve_ml_compute_dtype(ml_compute_dtype)
     ml_np_dtype = ml_numpy_dtype(ml_jnp_dtype)
 
-    if ml_switch_width is not None:
-        ml_switch_width = ml_switch_width
-    if mm_cutoff is not None:
-        mm_switch_width = mm_cutoff
+    ml_switch_width = _resolve_ml_switch_width(
+        ml_switch_width,
+        ml_cutoff_distance=ml_cutoff_distance,
+    )
+    mm_switch_width = _resolve_mm_switch_width(
+        mm_switch_width,
+        mm_cutoff=mm_cutoff,
+    )
 
     # --- Normalise ATOMS_PER_MONOMER into a per-monomer list ----------------
     if isinstance(ATOMS_PER_MONOMER, (list, tuple, np.ndarray)):

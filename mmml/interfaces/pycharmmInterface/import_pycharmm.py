@@ -216,6 +216,19 @@ def capture_neighbour_list():
 
 reset_block()
 
+
+def _init_charmm_default_levels() -> None:
+    """Match ``mmml md-system`` defaults; ``bomlev 0`` aborts minimize in notebooks."""
+    try:
+        from mmml.interfaces.pycharmmInterface.mlpot.setup import apply_charmm_verbosity
+
+        apply_charmm_verbosity(prnlev=5, warnlev=5, bomlev=-2)
+    except Exception:
+        pass
+
+
+_init_charmm_default_levels()
+
 _domdec_vacuum_disabled = False
 _domdec_disabled_early = False
 
