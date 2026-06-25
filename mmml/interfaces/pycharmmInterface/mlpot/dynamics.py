@@ -608,6 +608,16 @@ class MinimizeWithMlpotConfig:
     sd_abort_on_grms_increase: bool = True
 
 
+@dataclass(frozen=True)
+class MlpotSdChunkResult:
+    """Outcome of one chunked SD/ABNR pass under MLpot."""
+
+    completed: bool
+    rolled_back: bool = False
+    last_grms: float | None = None
+    rolled_back_chunk: int = 0
+
+
 def _import_pycharmm_modules():
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
@@ -686,7 +696,23 @@ def _mlpot_sd_chunk_nstep(config: MinimizeWithMlpotConfig) -> int:
     if config.sd_chunk_nstep is not None:
         return max(1, int(config.sd_chunk_nstep))
     pbc = bool(getattr(config.mlpot_ctx, "use_pbc", False)) if config.mlpot_ctx else False
-    return 50 if pbc else 500
+    return 25 if pbc else 500
+
+
+def _effective_mlpot_sd_chunk_nstep(
+    config: MinimizeWithMlpotConfig,
+    *,
+    previous_grms: float | None,
+) -> int:
+    """Shrink PBC chunks when hybrid GRMS is already low (stale-list risk)."""
+    cap = _mlpot_sd_chunk_nstep(config)
+    if previous_grms is None or not np.isfinite(previous_grms):
+        return cap
+    if previous_grms < 1.0:
+        return max(1, min(cap, 10))
+    if previous_grms < 5.0:
+        return max(1, min(cap, 25))
+    return cap
 
 
 def _maybe_abort_sd_on_grms(
@@ -762,6 +788,39 @@ def _sync_mlpot_lists_after_sd_chunk(
     )
 
 
+def _rollback_mlpot_sd_chunk_geometry(
+    config: MinimizeWithMlpotConfig,
+    positions: np.ndarray,
+    *,
+    pass_label: str,
+    chunk_index: int,
+    bad_grms: float,
+    good_grms: float | None,
+) -> None:
+    """Restore last good coordinates after an intra-chunk list/force blow-up."""
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+
+    sync_charmm_positions(positions)
+    sync_charmm_lists_after_mini(quiet=True)
+    invalidate_mlpot_calculator_caches(config.mlpot_ctx)
+    if config.mlpot_ctx is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import refresh_mlpot_energy_and_grms
+
+        refresh_mlpot_energy_and_grms(
+            config.mlpot_ctx,
+            context="",
+            reregister=False,
+            verbose=False,
+        )
+    if config.verbose:
+        good_txt = f"{good_grms:.4f}" if good_grms is not None else "?"
+        print(
+            f"MLpot SD rollback ({pass_label}): restored coords from chunk {chunk_index} "
+            f"(GRMS {good_txt} kcal/mol/Å) after spike to {bad_grms:.4f}",
+            flush=True,
+        )
+
+
 def _run_minimize_in_chunks(
     minimize: Any,
     pycharmm: Any,
@@ -772,25 +831,25 @@ def _run_minimize_in_chunks(
     pass_label: str,
     method: str,
     run_attr: str,
-) -> bool:
-    """Run ``run_sd`` or ``run_abnr`` in chunks with list sync between chunks.
-
-    Returns False if the GRMS watchdog aborted minimization early.
-    """
+) -> MlpotSdChunkResult:
+    """Run ``run_sd`` or ``run_abnr`` in chunks with list sync between chunks."""
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_quiet_output
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_mlpot_grms_kcalmol_A
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
     remaining = max(0, int(total_nstep))
     if remaining <= 0:
-        return True
+        return MlpotSdChunkResult(completed=True)
 
     run_fn = getattr(minimize, run_attr)
     chunk_cap = _mlpot_sd_chunk_nstep(config)
-    n_chunks = max(1, (remaining + chunk_cap - 1) // chunk_cap)
+    min_chunk = min(chunk_cap, 10)
+    n_chunks = max(1, (remaining + min_chunk - 1) // min_chunk)
     if config.verbose and n_chunks > 1:
         print(
-            f"{method} {pass_label}: {remaining} steps in {n_chunks} chunks "
-            f"(≤{chunk_cap} steps/chunk, inbfrq=0 + UPDATE between chunks)",
+            f"{method} {pass_label}: {remaining} steps in up to {n_chunks} chunks "
+            f"(≤{chunk_cap} steps/chunk, adaptive down to {min_chunk}, "
+            "inbfrq=0 + UPDATE between chunks)",
             flush=True,
         )
 
@@ -800,10 +859,14 @@ def _run_minimize_in_chunks(
         initial_grms = resolve_mlpot_grms_kcalmol_A(config.mlpot_ctx, context="")
         previous_grms = initial_grms
 
+    last_good_positions: np.ndarray | None = None
+    last_good_grms: float | None = None
+    last_good_chunk = 0
+
     chunk_index = 0
     while remaining > 0:
         chunk_index += 1
-        step = min(chunk_cap, remaining)
+        step = min(_effective_mlpot_sd_chunk_nstep(config, previous_grms=previous_grms), remaining)
         kw = {**base_kw, "nstep": step}
         _prepare_mlpot_sd_list_frequencies(pycharmm, sd_kw=kw)
         if config.verbose:
@@ -837,10 +900,28 @@ def _run_minimize_in_chunks(
             pass_label=pass_label,
             step_label=f"after chunk {chunk_index}",
         ):
-            return False
+            if last_good_positions is not None:
+                _rollback_mlpot_sd_chunk_geometry(
+                    config,
+                    last_good_positions,
+                    pass_label=pass_label,
+                    chunk_index=last_good_chunk,
+                    bad_grms=grms,
+                    good_grms=last_good_grms,
+                )
+                return MlpotSdChunkResult(
+                    completed=False,
+                    rolled_back=True,
+                    last_grms=last_good_grms,
+                    rolled_back_chunk=last_good_chunk,
+                )
+            return MlpotSdChunkResult(completed=False)
         if grms is not None:
             previous_grms = grms
-    return True
+            last_good_positions = get_charmm_positions_array().copy()
+            last_good_grms = grms
+            last_good_chunk = chunk_index
+    return MlpotSdChunkResult(completed=True, last_grms=previous_grms)
 
 
 def apply_dyn_inbfrq_from_args(
@@ -3727,12 +3808,9 @@ def _run_mlpot_sd_then_abnr(
     sd_kw: dict[str, Any],
     *,
     pass_label: str,
-) -> bool:
-    """One SD pass followed by ABNR (same ``nstep`` by default) under MLpot.
-
-    Returns False if the GRMS watchdog stopped minimization early.
-    """
-    if not _run_minimize_in_chunks(
+) -> MlpotSdChunkResult:
+    """One SD pass followed by ABNR (same ``nstep`` by default) under MLpot."""
+    sd_result = _run_minimize_in_chunks(
         minimize,
         pycharmm,
         config,
@@ -3741,12 +3819,13 @@ def _run_mlpot_sd_then_abnr(
         pass_label=pass_label,
         method="SD",
         run_attr="run_sd",
-    ):
-        return False
+    )
+    if not sd_result.completed:
+        return sd_result
 
     abnr_n = _resolved_abnr_nstep(config)
     if abnr_n <= 0:
-        return True
+        return sd_result
 
     abnr_kw = {
         "nprint": config.nprint,
@@ -3821,18 +3900,30 @@ def minimize_with_mlpot(
                 context_prefix="Pre-SD",
                 verbose=config.verbose,
             )
-        sd_ok = _run_mlpot_sd_then_abnr(
+        sd_result = _run_mlpot_sd_then_abnr(
             minimize,
             pycharmm,
             config,
             sd_kw,
             pass_label="pass 1 (free, all atoms)",
         )
-        if not sd_ok:
-            raise RuntimeError(
-                "MLpot SD pass 1 stopped early: hybrid GRMS watchdog triggered "
-                "(lists/forces diverged during inbfrq=0 minimization)"
-            )
+        if not sd_result.completed:
+            if sd_result.rolled_back:
+                grms_txt = (
+                    f"{sd_result.last_grms:.4f}"
+                    if sd_result.last_grms is not None
+                    else "?"
+                )
+                print(
+                    "MLpot SD pass 1 partial: watchdog stopped further chunks; "
+                    f"geometry restored (GRMS≈{grms_txt} kcal/mol/Å)",
+                    flush=True,
+                )
+            else:
+                raise RuntimeError(
+                    "MLpot SD pass 1 stopped early: hybrid GRMS watchdog triggered "
+                    "(lists/forces diverged during inbfrq=0 minimization)"
+                )
         sync_charmm_lists_after_mini(quiet=not config.verbose)
         invalidate_mlpot_calculator_caches(config.mlpot_ctx)
         if config.verbose and config.mlpot_ctx is not None:
@@ -3852,18 +3943,31 @@ def minimize_with_mlpot(
         if config.fixed_ml_selection is not None:
             n_fix = len(config.fixed_ml_selection.get_atom_indexes())
             cons_fix.setup(config.fixed_ml_selection)
-            sd_ok = _run_mlpot_sd_then_abnr(
+            sd_result = _run_mlpot_sd_then_abnr(
                 minimize,
                 pycharmm,
                 config,
                 sd_kw,
                 pass_label=f"pass 2 (cons_fix, {n_fix} atoms)",
             )
-            if not sd_ok:
-                raise RuntimeError(
-                    f"MLpot SD pass 2 (cons_fix, {n_fix} atoms) stopped early: "
-                    "hybrid GRMS watchdog triggered"
-                )
+            if not sd_result.completed:
+                if sd_result.rolled_back:
+                    grms_txt = (
+                        f"{sd_result.last_grms:.4f}"
+                        if sd_result.last_grms is not None
+                        else "?"
+                    )
+                    print(
+                        f"MLpot SD pass 2 partial (cons_fix, {n_fix} atoms): "
+                        "watchdog stopped further chunks; "
+                        f"geometry restored (GRMS≈{grms_txt} kcal/mol/Å)",
+                        flush=True,
+                    )
+                else:
+                    raise RuntimeError(
+                        f"MLpot SD pass 2 (cons_fix, {n_fix} atoms) stopped early: "
+                        "hybrid GRMS watchdog triggered"
+                    )
             sync_charmm_lists_after_mini(quiet=not config.verbose)
             invalidate_mlpot_calculator_caches(config.mlpot_ctx)
             if config.verbose and config.mlpot_ctx is not None:
