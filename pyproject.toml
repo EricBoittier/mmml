@@ -74,6 +74,11 @@ plotting = [
     "polars",
 ]
 
+# Neighbor-list validation (Vesin reference oracle; not required at runtime)
+nl-validation = [
+    "vesin",
+]
+
 # Multistate Bennett acceptance ratio (also in core deps; kept for explicit installs)
 mbar = [
     "pymbar>=4.0",
