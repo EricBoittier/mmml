@@ -491,7 +491,7 @@ def test_resolve_mlpot_mic_box_side_A_skips_restart_when_crystal_active(tmp_path
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_mlpot_mic_box_side_A",
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
         return_value=(28.0, "pbound"),
     ) as mock_resolve:
         side, source = resolve_mlpot_mic_box_side_A(
