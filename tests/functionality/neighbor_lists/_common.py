@@ -18,11 +18,15 @@ def print_header(title: str) -> None:
 
 
 def print_pass(msg: str) -> None:
-    print(f"PASS: {msg}")
+    from mmml.utils.rich_report import emit_status
+
+    emit_status(True, msg)
 
 
 def print_fail(msg: str) -> None:
-    print(f"FAIL: {msg}")
+    from mmml.utils.rich_report import emit_status
+
+    emit_status(False, msg)
 
 
 def two_dimer_cluster(

@@ -102,17 +102,23 @@ def apply_jax_compile_xla_flags(*, quiet: bool = False) -> int:
     existing = (os.environ.get("XLA_FLAGS") or "").strip()
     if "xla_cpu_multi_thread_eigen" in existing or "intra_op_parallelism_threads" in existing:
         if not quiet and not _truthy("MMML_QUIET"):
-            print(
-                "mmml: JAX compile XLA_FLAGS already set; not overriding",
-                flush=True,
+            from mmml.utils.rich_report import emit_tagged
+
+            emit_tagged(
+                "mmml",
+                "JAX compile XLA_FLAGS already set; not overriding",
+                tag_style="bold magenta",
             )
         return n
     merged = f"{existing} {flags}".strip() if existing else flags
     os.environ["XLA_FLAGS"] = merged
     if not quiet and not _truthy("MMML_QUIET"):
-        print(
-            f"mmml: JAX compile XLA_FLAGS intra_op_parallelism_threads={n}",
-            flush=True,
+        from mmml.utils.rich_report import emit_tagged
+
+        emit_tagged(
+            "mmml",
+            f"JAX compile XLA_FLAGS intra_op_parallelism_threads={n}",
+            tag_style="bold magenta",
         )
     return n
 
@@ -130,11 +136,13 @@ def jax_compile_threads_context(*, quiet: bool = False) -> Iterator[int]:
     for key in _OPENMP_LIKE_VARS:
         os.environ[key] = thread_s
     if not quiet and not _truthy("MMML_QUIET"):
+        from mmml.utils.rich_report import emit_tagged
+
         prev_omp = saved.get("OMP_NUM_THREADS")
-        print(
-            f"mmml: JAX compile threads={n} "
-            f"(OMP {prev_omp!r} -> {thread_s}; restored after warmup)",
-            flush=True,
+        emit_tagged(
+            "mmml",
+            f"JAX compile threads={n} (OMP {prev_omp!r} -> {thread_s}; restored after warmup)",
+            tag_style="bold magenta",
         )
     try:
         yield n
