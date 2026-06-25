@@ -12,6 +12,7 @@ import pytest
 
 from mmml.cli.run.md_evaluate_npz import (
     EvaluateNpzPayload,
+    _reference_com_dist_A,
     compare_evaluate_to_reference_npz,
     load_evaluate_npz,
     permute_handoff_array_to_evaluator_z,
@@ -20,6 +21,7 @@ from mmml.cli.run.md_evaluate_npz import (
     resolve_evaluate_max_frames,
     resolve_reference_units,
     run_evaluate_npz,
+    save_evaluate_compare_diagnostics,
     save_evaluate_extxyz,
     save_evaluate_extxyz_multi,
     save_evaluate_trajectory_npz,
@@ -726,3 +728,60 @@ def test_evaluate_pycharmm_returns_forces_ev_angstrom(
         forces_kcal / float(ev2kcalmol),
     )
     assert metrics["max_force_eV_A"] == pytest.approx(2.0)
+
+
+def test_reference_com_dist_A_from_trajectory() -> None:
+    class _Ref:
+        com_distances = np.array([2.5, 4.0, 6.5], dtype=np.float64)
+
+    assert _reference_com_dist_A(_Ref(), 1) == pytest.approx(4.0)
+    assert _reference_com_dist_A(_Ref(), 99) is None
+    assert _reference_com_dist_A(object(), 0) is None
+
+
+def test_save_evaluate_compare_diagnostics_writes_csv_and_summary(tmp_path: Path) -> None:
+    per_frame = [
+        {
+            "status": "ok",
+            "reference_frame": 10,
+            "reference_source_index": 100,
+            "com_dist_A": 3.0,
+            "delta_energy_eV": 0.01,
+            "abs_delta_energy_eV": 0.01,
+            "force_rmse_eV_A": 0.25,
+            "force_mae_eV_A": 0.10,
+            "force_max_abs_eV_A": 0.73,
+        },
+        {
+            "status": "ok",
+            "reference_frame": 20,
+            "reference_source_index": 200,
+            "com_dist_A": 5.5,
+            "delta_energy_eV": -0.002,
+            "abs_delta_energy_eV": 0.002,
+            "force_rmse_eV_A": 0.003,
+            "force_mae_eV_A": 0.002,
+            "force_max_abs_eV_A": 0.007,
+        },
+        {
+            "status": "error",
+            "reference_frame": 30,
+            "error": "boom",
+        },
+    ]
+    artifacts, summary = save_evaluate_compare_diagnostics(
+        tmp_path,
+        per_frame,
+        backend="pycharmm",
+    )
+    csv_path = tmp_path / "evaluate_compare_diagnostics.csv"
+    assert artifacts["compare_diagnostics_csv"] == str(csv_path)
+    assert csv_path.is_file()
+    lines = csv_path.read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) == 3
+    assert "com_dist_A" in lines[0]
+    assert summary["n_frames"] == 2
+    assert summary["com_dist_A_min"] == pytest.approx(3.0)
+    assert summary["com_dist_A_max"] == pytest.approx(5.5)
+    assert summary["mean_force_rmse_eV_A"] == pytest.approx((0.25 + 0.003) / 2)
+    assert summary["corr_com_force_rmse"] == pytest.approx(-1.0, abs=1e-12)
