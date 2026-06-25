@@ -740,6 +740,43 @@ def test_reference_com_dist_A_from_trajectory() -> None:
     assert _reference_com_dist_A(object(), 0) is None
 
 
+def test_build_atoms_for_evaluate_preserves_r0_when_requested() -> None:
+    from mmml.cli.run.md_evaluate_npz import _build_atoms_for_evaluate
+
+    perm = np.array([0, 3, 4, 1, 2], dtype=int)
+    charmm_z = np.array([6, 1, 1, 17, 17], dtype=np.int32)
+    charmm_r = np.random.default_rng(11).random((5, 3))
+    psf_r = charmm_r[perm]
+    handoff = MdHandoffState(
+        positions=psf_r,
+        atomic_numbers=charmm_z[perm],
+        pbc=False,
+    )
+    monomer_offsets = np.array([0, 5], dtype=int)
+    aligned_r = charmm_r.copy()
+
+    corrupted = _build_atoms_for_evaluate(
+        z=charmm_z,
+        r0=aligned_r,
+        handoff=handoff,
+        monomer_offsets=monomer_offsets,
+        use_pbc=False,
+        L=None,
+        preserve_r0=False,
+    )
+    preserved = _build_atoms_for_evaluate(
+        z=charmm_z,
+        r0=aligned_r,
+        handoff=handoff,
+        monomer_offsets=monomer_offsets,
+        use_pbc=False,
+        L=None,
+        preserve_r0=True,
+    )
+    assert not np.allclose(corrupted.get_positions(), aligned_r, atol=1e-12)
+    np.testing.assert_allclose(preserved.get_positions(), aligned_r, atol=1e-12)
+
+
 def test_classify_ml_regime() -> None:
     assert classify_ml_regime(5.0, ml_switch_width=0.1, mm_switch_on=6.0) == "pure_ml"
     assert classify_ml_regime(5.95, ml_switch_width=0.1, mm_switch_on=6.0) == "handoff"
