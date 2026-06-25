@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
@@ -427,6 +427,25 @@ def attach_geometry_checkpoints_to_overlap(
     )
 
 
+GeometryRecoverySource = Literal["restart", "crd", "memory", "run_state"]
+
+
+@dataclass(frozen=True)
+class GeometryRecoveryResult:
+    """Outcome of overlap geometry reload after a short dynamics abort."""
+
+    ok: bool
+    source: GeometryRecoverySource | None = None
+
+
+def _geometry_recovery_source_from_path(path: Path) -> GeometryRecoverySource:
+    if path == Path("<in-memory>"):
+        return "memory"
+    if path.suffix.lower() == ".crd":
+        return "crd"
+    return "restart"
+
+
 def attempt_overlap_early_abort_recovery(
     overlap: Any,
     *,
@@ -435,20 +454,25 @@ def attempt_overlap_early_abort_recovery(
     steps_before_chunk: int,
     overlap_context: str,
     overlap_run_state_dir: Path | None = None,
-) -> bool:
-    """Reload geometry after a short chunk abort; return True when CHARMM was restored."""
+) -> GeometryRecoveryResult:
+    """Reload geometry after a short chunk abort.
+
+    When ``source`` is ``memory``, CHARMM still holds coordinates, velocities,
+    and barostat state from the aborted chunk; callers must not Boltzmann-
+    reassign velocities before retrying the chunk.
+    """
     if overlap is None or overlap.action != "rescue":
-        return False
+        return GeometryRecoveryResult(False)
     integrated = int(steps_done) - int(steps_before_chunk)
     if integrated <= 0:
-        return False
+        return GeometryRecoveryResult(False)
 
     candidates = build_geometry_recovery_candidates(overlap)
 
     label = f"early-abort recovery ({overlap_context})"
     try:
-        restore_geometry_from_ladder(candidates, label=label, allow_in_memory=True)
-        return True
+        path = restore_geometry_from_ladder(candidates, label=label, allow_in_memory=True)
+        return GeometryRecoveryResult(True, _geometry_recovery_source_from_path(path))
     except RuntimeError:
         tried = ", ".join(p.name for p in candidates) or "(none)"
         print(
@@ -462,8 +486,8 @@ def attempt_overlap_early_abort_recovery(
         )
 
         if restore_positions_from_overlap_run_state(overlap_run_state_dir, label=label):
-            return True
-    return False
+            return GeometryRecoveryResult(True, "run_state")
+    return GeometryRecoveryResult(False)
 
 
 def ensure_restartable_before_overlap_chunk(
