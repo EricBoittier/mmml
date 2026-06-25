@@ -748,8 +748,13 @@ def relieve_intramonomer_clashes(
         min_distance=threshold,
     )
     if verbose:
+        after_txt = (
+            "cleared (no pairs below threshold)"
+            if not np.isfinite(after) or after >= threshold
+            else f"{after:.4f} Å"
+        )
         print(
-            f"{context}: intra-monomer distance {before:.4f} -> {after:.4f} Å "
+            f"{context}: intra-monomer distance {before:.4f} -> {after_txt} "
             f"(target {threshold:.4f} Å)",
             flush=True,
         )
