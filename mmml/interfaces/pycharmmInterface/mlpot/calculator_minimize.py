@@ -199,30 +199,18 @@ def _run_hybrid_calculator_bfgs(
     prev_best_fmax = float("inf")
 
     def _record_step() -> None:
-        nonlocal steps_since_improvement, prev_best_fmax, stopped_on_spike
+        nonlocal steps_since_improvement, prev_best_fmax
         best_frame.record(f"step_{opt.get_number_of_steps()}")
         if best_frame.best_force_fmax < prev_best_fmax * float(config.stall_improvement_ratio):
             steps_since_improvement = 0
             prev_best_fmax = float(best_frame.best_force_fmax)
         else:
             steps_since_improvement += 1
-        if (
-            steps_since_improvement >= int(config.stall_patience_steps)
-            and opt.get_number_of_steps() >= int(config.stall_patience_steps)
-            and best_frame.best_force_fmax > float(config.fmax_ev_a) * 10.0
-        ):
-            stopped_on_spike = True
-            if config.verbose:
-                print(
-                    f"{context_prefix} hybrid calculator BFGS: "
-                    f"stalled at fmax={best_frame.best_force_fmax:.4f} eV/Å "
-                    f"for {steps_since_improvement} steps; stopping",
-                    flush=True,
-                )
-            raise StopIteration
 
-    def _abort_on_spike() -> None:
+    def _check_guards() -> None:
         nonlocal stopped_on_spike
+        if stopped_on_spike:
+            return
         fmax = float(np.abs(atoms.get_forces()).max())
         if should_abort_bfgs_fmax(
             fmax,
@@ -239,7 +227,20 @@ def _run_hybrid_calculator_bfgs(
                     f"fmax guard triggered ({fmax_txt} eV/Å); stopping",
                     flush=True,
                 )
-            raise StopIteration
+            return
+        if (
+            steps_since_improvement >= int(config.stall_patience_steps)
+            and opt.get_number_of_steps() >= int(config.stall_patience_steps)
+            and best_frame.best_force_fmax > float(config.fmax_ev_a) * 10.0
+        ):
+            stopped_on_spike = True
+            if config.verbose:
+                print(
+                    f"{context_prefix} hybrid calculator BFGS: "
+                    f"stalled at fmax={best_frame.best_force_fmax:.4f} eV/Å "
+                    f"for {steps_since_improvement} steps; stopping",
+                    flush=True,
+                )
 
     opt = BfgsOptimizer(
         atoms,
@@ -247,11 +248,13 @@ def _run_hybrid_calculator_bfgs(
         maxstep=float(config.bfgs_maxstep),
     )
     opt.attach(_record_step, interval=1)
-    opt.attach(_abort_on_spike, interval=1)
-    try:
-        opt.run(fmax=float(config.fmax_ev_a), steps=int(config.max_steps))
-    except StopIteration:
-        pass
+    opt.attach(_check_guards, interval=1)
+    for converged in opt.irun(
+        fmax=float(config.fmax_ev_a),
+        steps=int(config.max_steps),
+    ):
+        if stopped_on_spike or converged:
+            break
     best_frame.record("final")
     return opt, best_frame, stopped_on_spike
 
