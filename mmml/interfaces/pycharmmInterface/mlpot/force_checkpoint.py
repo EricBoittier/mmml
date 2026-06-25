@@ -120,19 +120,13 @@ def maybe_record_forces(
     if writer is None or not writer.should_save(step):
         return
     try:
-        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-        import pycharmm.coor as coor
-
-        fdf = coor.get_forces()
-        total = np.column_stack(
-            [
-                fdf["dx"].to_numpy(dtype=float),
-                fdf["dy"].to_numpy(dtype=float),
-                fdf["dz"].to_numpy(dtype=float),
-            ]
+        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+            charmm_positions_angstrom,
+            charmm_total_forces_kcalmol_A,
         )
-        pos_df = coor.get_positions()
-        pos = pos_df[["x", "y", "z"]].to_numpy(dtype=float)
+
+        total = charmm_total_forces_kcalmol_A()
+        pos = charmm_positions_angstrom()
     except Exception:
         return
     writer.record(step, total_forces=total, positions=pos, ml_forces=ml_forces)
