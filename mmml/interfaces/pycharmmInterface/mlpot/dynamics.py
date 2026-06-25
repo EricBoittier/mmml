@@ -3918,12 +3918,20 @@ def minimize_with_mlpot(
                 calculator_bfgs_maxstep=config.calculator_bfgs_maxstep,
                 quiet_bfgs=config.quiet_bfgs,
             )
-            baseline = getattr(config.mlpot_ctx, "sd_watchdog_baseline_grms", None)
-            if baseline is not None and np.isfinite(baseline):
-                config.sd_watchdog_initial_grms = float(baseline)
+            baseline_raw = getattr(config.mlpot_ctx, "sd_watchdog_baseline_grms", None)
+            baseline: float | None = None
+            if baseline_raw is not None:
+                try:
+                    candidate = float(baseline_raw)
+                except (TypeError, ValueError):
+                    candidate = float("nan")
+                if np.isfinite(candidate):
+                    baseline = float(candidate)
+            if baseline is not None:
+                config.sd_watchdog_initial_grms = baseline
                 if config.verbose:
                     print(
-                        f"MLpot SD watchdog baseline: hybrid GRMS={float(baseline):.4f} "
+                        f"MLpot SD watchdog baseline: hybrid GRMS={baseline:.4f} "
                         "kcal/mol/Å (post calculator pre-minimize)",
                         flush=True,
                     )
