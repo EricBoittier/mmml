@@ -662,6 +662,8 @@ def get_spherical_cutoff_calculator(
         internal_F = 0
         ml_2b_E = 0
         ml_2b_F = 0
+        mm_E = jnp.array(0.0)
+        mm_grad = jnp.zeros_like(positions)
         
         if doML:
             # print("doML")
@@ -669,9 +671,9 @@ def get_spherical_cutoff_calculator(
             
             output = apply_model(batches["Z"], batches["R"])
 
-            # convert to kcal/mol bc electrostatics use CHARMM 
-            f = output["forces"] / (ase.units.kcal/ase.units.mol)
-            e = output["energy"] / (ase.units.kcal/ase.units.mol)
+            # Model outputs eV / eV-Å; keep in eV for hybrid sums
+            f = output["forces"]
+            e = output["energy"]
            
             # energies from a batch of monomers and dimers
             ml_monomer_energy = jnp.array(e[:n_monomers]).flatten()
@@ -831,6 +833,10 @@ def get_spherical_cutoff_calculator(
             # print("doMM")
             # MM energy and forces
             mm_E, mm_grad = MM_energy_and_gradient(positions)
+            from mmml.data.units import KCAL_MOL_TO_EV
+
+            mm_E = mm_E * KCAL_MOL_TO_EV
+            mm_grad = mm_grad * KCAL_MOL_TO_EV
             out_E += mm_E
             out_F += mm_grad
             dH += mm_E
@@ -843,15 +849,17 @@ def get_spherical_cutoff_calculator(
                 jax.debug.print("mm_grad\n{x}", x=mm_grad)
 
 
-        return ModelOutput(energy=out_E.sum() * (ase.units.kcal/ase.units.mol),
-                           forces=out_F  * (ase.units.kcal/ase.units.mol), 
-                           dH=dH * (ase.units.kcal/ase.units.mol), 
-                           ml_2b_E=ml_2b_E * (ase.units.kcal/ase.units.mol),
-                           ml_2b_F=ml_2b_F * (ase.units.kcal/ase.units.mol),
-                           internal_E=internal_E * (ase.units.kcal/ase.units.mol),   
-                           internal_F=internal_F * (ase.units.kcal/ase.units.mol),
-                           mm_E = mm_E * (ase.units.kcal/ase.units.mol),
-                           mm_F = mm_grad * (ase.units.kcal/ase.units.mol))
+        return ModelOutput(
+            energy=out_E.sum(),
+            forces=out_F,
+            dH=dH,
+            ml_2b_E=ml_2b_E,
+            ml_2b_F=ml_2b_F,
+            internal_E=internal_E,
+            internal_F=internal_F,
+            mm_E=mm_E if doMM else 0.0,
+            mm_F=mm_grad if doMM else jnp.zeros_like(out_F),
+        )
 
     def just_E(R, Z):
         return spherical_cutoff_calculator(R, Z).energy

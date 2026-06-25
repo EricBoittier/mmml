@@ -3,8 +3,11 @@ from typing import Tuple, Union
 
 import ase
 import numpy as np
-from ase.units import Bohr, Hartree
-
+from mmml.data.units import (
+    HARTREE_BOHR_TO_EV_ANGSTROM,
+    subtract_atom_refs,
+    units_from_npz,
+)
 from physnetjax.utils.enums import (
     check_keys,
     Z_KEYS,
@@ -19,13 +22,10 @@ from physnetjax.utils.enums import (
 )
 from physnetjax.utils.enums import MolecularData
 
-# Constants
-HARTREE_PER_BOHR_TO_EV_PER_ANGSTROM = Hartree / Bohr
+HARTREE_PER_BOHR_TO_EV_PER_ANGSTROM = HARTREE_BOHR_TO_EV_ANGSTROM
 MAX_N_ATOMS = 37
 MAX_GRID_POINTS = 10000
 BOHR_TO_ANGSTROM = 0.529177
-
-from physnetjax.data.data import ATOM_ENERGIES_HARTREE
 
 
 def process_npz_file(filepath: Path) -> Tuple[Union[dict, None], int]:
@@ -66,8 +66,13 @@ def process_npz_file(filepath: Path) -> Tuple[Union[dict, None], int]:
 
         ekey = check_keys(E_KEYS, data_keys)
         if ekey is not None:
-            atom_energies = np.take(ATOM_ENERGIES_HARTREE, Z)
-            output[MolecularData.ENERGY.value] = load[ekey] - np.sum(atom_energies)
+            manifest = units_from_npz(filepath)
+            energy_unit = manifest.energy_unit() if manifest is not None else "ev"
+            output[MolecularData.ENERGY.value] = subtract_atom_refs(
+                load[ekey],
+                Z,
+                energy_unit=energy_unit,
+            )
 
         dipkey = check_keys(D_KEYS, data_keys)
         if dipkey is not None:

@@ -28,7 +28,7 @@ warnings.filterwarnings("ignore", category=RuntimeWarning, message=".*Task was d
 
 from mmml.models.physnetjax.physnetjax.data.data import print_shapes
 from mmml.models.physnetjax.physnetjax.directories import BASE_CKPT_DIR, print_paths
-from mmml.models.physnetjax.physnetjax.restart.restart import orbax_checkpointer, restart_training
+from mmml.data.units import TRAINING_UNITS
 from mmml.models.physnetjax.physnetjax.training.evalstep import eval_step
 from mmml.models.physnetjax.physnetjax.training.optimizer import (
     base_optimizer,
@@ -298,6 +298,7 @@ def train_model(
         "num_atoms": num_atoms,
         "rot_augment": rot_augment,
         "rot_perturbation": rot_perturbation,
+        "training_units": dict(TRAINING_UNITS),
     }
     if batch_method == "advanced":
         train_params_dict.update(batch_args_dict)
@@ -569,6 +570,7 @@ def train_model(
                     "best_loss": best_loss,
                     "lr_eff": lr_eff,
                     "objectives": obj_res,
+                    "training_units": dict(TRAINING_UNITS),
                 }
                 save_args = orbax_utils.save_args_from_target(ckpt)
                 with warnings.catch_warnings():

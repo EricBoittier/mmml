@@ -16,6 +16,7 @@ from mmml.cli.run.md_evaluate_npz import (
     load_evaluate_npz,
     resolve_evaluate_use_pbc,
     resolve_evaluate_max_frames,
+    resolve_reference_units,
     run_evaluate_npz,
     save_evaluate_extxyz,
     save_evaluate_extxyz_multi,
@@ -172,6 +173,36 @@ def test_should_evaluate_reference_trajectory() -> None:
         )
         is True
     )
+
+
+def test_resolve_reference_units_respects_manifest_when_cli_unset(tmp_path: Path) -> None:
+    from mmml.data.units import UnitsManifestV2
+
+    manifest = UnitsManifestV2(
+        arrays={"E": "ev", "F": "ev_angstrom", "R": "angstrom"},
+    )
+    (tmp_path / "units_manifest.json").write_text(
+        json.dumps(manifest.to_dict()),
+        encoding="utf-8",
+    )
+    ref = tmp_path / "ref.npz"
+    np.savez_compressed(
+        ref,
+        E=np.array([-43.0]),
+        F=np.ones((1, 10, 3)),
+        R=np.zeros((1, 10, 3)),
+        Z=np.ones((1, 10), dtype=int),
+        N=np.array([10], dtype=int),
+    )
+    e_unit, f_unit = resolve_reference_units(
+        ref,
+        Namespace(
+            evaluate_reference_energy_unit=None,
+            evaluate_reference_force_unit=None,
+        ),
+    )
+    assert e_unit == "ev"
+    assert f_unit == "ev_angstrom"
 
 
 def test_save_evaluate_trajectory_npz_multi_roundtrip(tmp_path: Path) -> None:
@@ -422,3 +453,63 @@ def test_md_system_evaluate_npz_manifest_exit_code_success(
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert manifest["exit_code"] == 0
     assert manifest["backend"] == "ase"
+
+
+def test_normalize_metrics_converts_hartree_labeled_ev() -> None:
+    from mmml.cli.run.md_evaluate_npz import normalize_metrics_to_ev
+
+    metrics = normalize_metrics_to_ev(
+        {
+            "energy_eV": -43.31,
+            "energy_unit": "hartree",
+            "forces_eV_A": np.array([[0.01, 0.0, 0.0]]),
+            "force_unit": "hartree_bohr",
+        }
+    )
+    assert metrics["energy_eV"] == pytest.approx(-43.31 * 27.211386, rel=1e-6)
+    assert metrics["units"]["energy"] == "eV"
+
+
+def test_save_evaluate_npz_e_and_e_ev_consistent(tmp_path: Path) -> None:
+    from mmml.data.units import EV_TO_HARTREE
+
+    z = np.array([6, 1, 1], dtype=np.int32)
+    r = np.zeros((3, 3))
+    f = np.zeros((3, 3))
+    path = tmp_path / "eval.npz"
+    save_evaluate_trajectory_npz(
+        path,
+        atomic_numbers=z,
+        positions=r,
+        energy_eV=-27.211386,
+        forces_eV_A=f,
+    )
+    with np.load(path, allow_pickle=True) as data:
+        assert data["E_eV"][0] == pytest.approx(-27.211386)
+        assert data["E"][0] == pytest.approx(-1.0, rel=1e-6)
+        assert float(data["E"][0]) == pytest.approx(float(data["E_eV"][0]) * EV_TO_HARTREE)
+
+
+def test_compare_autodetects_ev_reference(tmp_path: Path) -> None:
+    z = np.array([1, 1], dtype=np.int32)
+    r = np.zeros((2, 3))
+    meta = json.dumps({"E": "ev", "F": "ev_angstrom", "R": "angstrom"})
+    ref_path = tmp_path / "ref_ev.npz"
+    np.savez_compressed(
+        ref_path,
+        N=np.array([2], dtype=int),
+        Z=z.reshape(1, 2),
+        R=r.reshape(1, 2, 3),
+        E=np.array([-10.0], dtype=np.float64),
+        _mmml_units=np.array(meta),
+    )
+    cmp = compare_evaluate_to_reference_npz(
+        ref_path,
+        frame=0,
+        atomic_numbers=z,
+        positions=r,
+        energy_eV=-10.01,
+        forces_eV_A=None,
+    )
+    assert cmp["delta_energy_eV"] == pytest.approx(-0.01, abs=1e-6)
+    assert cmp["reference_energy_unit"] == "ev"

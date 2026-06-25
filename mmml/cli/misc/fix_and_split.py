@@ -1777,6 +1777,17 @@ def fix_and_split_data(
         efd_fixed['Z'] = np.broadcast_to(Z_raw[np.newaxis, :], (n_samples, Z_raw.shape[0]))
     efd_fixed['Z'] = npz_z_array_to_atomic_numbers(np.asarray(efd_fixed['Z']))
 
+    for key in ("efield_energy", "efield_scf_energy"):
+        if key in efd_fixed:
+            efd_fixed[key] = convert_energy_array(efd_fixed[key], energy_in, energy_out)
+    if "efield_scf_F" in efd_fixed:
+        efd_fixed["efield_scf_F"] = convert_force_array(
+            efd_fixed["efield_scf_F"], force_in, force_out
+        )
+    for key in ("efield_scf_D", "efield_D", "D"):
+        if key in efd_fixed:
+            efd_fixed[key] = convert_dipole_array(efd_fixed[key], dipole_in, dipole_out)
+
     # Update grid data with fixed coordinates (if grid exists)
     grid_fixed = None
     if has_grid and grid_data is not None:
@@ -1814,6 +1825,35 @@ def fix_and_split_data(
     if verbose and aux_scaled:
         print(f"\n  Auxiliary/grid arrays scaled: {', '.join(dict.fromkeys(aux_scaled))}")
 
+    units_manifest = UnitsManifest(
+        coords_in=coords_in,
+        coords_out=effective_coords_out,
+        coords_detected=coords_detected,
+        energy_in=energy_in,
+        energy_out=effective_energy_out,
+        force_in=force_in,
+        force_out=effective_force_out,
+        dipole_in=dipole_in if "Dxyz" in efd_data else None,
+        dipole_out=effective_dipole_out if "Dxyz" in efd_data else None,
+        grid_coords_in=grid_coords_in if has_grid else None,
+        grid_coords_out=effective_grid_coords_out if has_grid else None,
+        esp_values="hartree/e",
+        flip_forces=flip_forces,
+        preserve_units=preserve_units,
+        notes=manifest_notes,
+    )
+    from mmml.data.units import UnitsManifestV2
+
+    manifest_v2 = UnitsManifestV2.from_dict(asdict(units_manifest))
+    manifest_v2.schema_version = 2
+    manifest_v2.canonical = {
+        "energy": "ev",
+        "force": "ev_angstrom",
+        "coords": "angstrom",
+    }
+    manifest_payload = manifest_v2.to_dict()
+    units_embed = np.array(json.dumps(manifest_v2.arrays))
+
     # =========================================================================
     # Save split datasets
     # =========================================================================
@@ -1838,6 +1878,7 @@ def fix_and_split_data(
         
         # Create EFD split
         efd_split = {k: _index_if_sample_dim(v, split_indices) for k, v in efd_fixed.items()}
+        efd_split["_mmml_units"] = units_embed
         efd_out = output_dir / f"energies_forces_dipoles_{split_name}.npz"
         np.savez_compressed(efd_out, **efd_split)
         
@@ -1848,6 +1889,7 @@ def fix_and_split_data(
         # Create grid split (only if grid data exists)
         if has_grid and grid_fixed is not None:
             grid_split = {k: _index_if_sample_dim(v, split_indices) for k, v in grid_fixed.items()}
+            grid_split["_mmml_units"] = units_embed
             grid_out = output_dir / f"grids_esp_{split_name}.npz"
             np.savez_compressed(grid_out, **grid_split)
             
@@ -1869,26 +1911,9 @@ def fix_and_split_data(
         if verbose:
             print(f"✓ Energy Z-scale stats saved to {stats_out.name}")
 
-    units_manifest = UnitsManifest(
-        coords_in=coords_in,
-        coords_out=effective_coords_out,
-        coords_detected=coords_detected,
-        energy_in=energy_in,
-        energy_out=effective_energy_out,
-        force_in=force_in,
-        force_out=effective_force_out,
-        dipole_in=dipole_in if "Dxyz" in efd_data else None,
-        dipole_out=effective_dipole_out if "Dxyz" in efd_data else None,
-        grid_coords_in=grid_coords_in if has_grid else None,
-        grid_coords_out=effective_grid_coords_out if has_grid else None,
-        esp_values="hartree/e",
-        flip_forces=flip_forces,
-        preserve_units=preserve_units,
-        notes=manifest_notes,
-    )
     manifest_out = output_dir / "units_manifest.json"
     with open(manifest_out, "w") as f:
-        json.dump(asdict(units_manifest), f, indent=2)
+        json.dump(manifest_payload, f, indent=2)
         f.write("\n")
     if verbose:
         print(f"✓ Units manifest saved to {manifest_out.name}")

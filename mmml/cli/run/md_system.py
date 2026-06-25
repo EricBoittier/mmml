@@ -1211,14 +1211,20 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--evaluate-reference-energy-unit",
         choices=("hartree", "ev", "kcal_mol"),
-        default="hartree",
-        help="Unit of E in --evaluate-reference-npz (default: hartree for MP2 exports).",
+        default=None,
+        help=(
+            "Unit of E in --evaluate-reference-npz. Default: infer from NPZ "
+            "_mmml_units / units_manifest.json / force magnitudes (else hartree)."
+        ),
     )
     parser.add_argument(
         "--evaluate-reference-force-unit",
         choices=("hartree_bohr", "ev_ang"),
-        default="hartree_bohr",
-        help="Unit of F in --evaluate-reference-npz (default: hartree_bohr for PySCF).",
+        default=None,
+        help=(
+            "Unit of F in --evaluate-reference-npz. Default: infer from NPZ metadata "
+            "or force magnitudes (else hartree_bohr)."
+        ),
     )
     parser.add_argument(
         "--evaluate-compare-output",
