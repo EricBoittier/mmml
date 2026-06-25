@@ -523,6 +523,36 @@ def test_decomposed_calculator_passes_charmm_box_to_spherical_fn():
     assert float(box[0, 0]) == pytest.approx(39.0)
 
 
+def test_decomposed_calculator_propagates_box_sync_failure():
+    z = np.zeros(8, dtype=int)
+    calc = DecomposedMlpotCalculator(
+        MagicMock(),
+        CutoffParameters(),
+        2,
+        z,
+        cell=40.0,
+    )
+    n = 8
+    x = np.zeros(n, dtype=np.float64)
+    y = np.zeros(n, dtype=np.float64)
+    zc = np.zeros(n, dtype=np.float64)
+    dx = np.zeros(n, dtype=np.float64)
+    dy = np.zeros(n, dtype=np.float64)
+    dz = np.zeros(n, dtype=np.float64)
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
+        side_effect=RuntimeError("CHARMM box is not cubic"),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
+        return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()),
+    ):
+        with pytest.raises(RuntimeError, match="not cubic"):
+            calc.calculate_charmm(
+                n, 0, 0, None, x, y, zc, dx, dy, dz, 0, 0, None, None, None, None, None, None, None
+            )
+    assert calc._cell == pytest.approx(40.0)
+
+
 def test_value_and_grad_fn_cached_across_callbacks(monkeypatch):
     monkeypatch.setenv("MMML_MLPOT_DEVICE", "cpu")
     z = np.zeros(8, dtype=int)

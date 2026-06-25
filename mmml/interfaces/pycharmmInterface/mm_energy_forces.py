@@ -909,8 +909,14 @@ def build_mm_energy_forces_fn(
                         return _pair_idx_cell[0], _pair_mask_cell[0]
 
                 elif skin == 0.0 and (_pair_stats["calls"] % interval != 0):
-                    _pair_stats["reused"] += 1
-                    return _pair_idx_cell[0], _pair_mask_cell[0]
+                    box_delta = 0.0
+                    if box is not None and _last_box[0] is not None:
+                        box_delta = float(
+                            np.max(np.abs(np.asarray(box) - _last_box[0]))
+                        )
+                    if box_delta <= 1e-8:
+                        _pair_stats["reused"] += 1
+                        return _pair_idx_cell[0], _pair_mask_cell[0]
 
             nbrs = _nbrs[0]
             kwargs = {} if (box is None or not fractional_coordinates) else {"box": jnp.asarray(box)}
