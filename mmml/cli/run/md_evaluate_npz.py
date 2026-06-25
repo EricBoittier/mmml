@@ -217,6 +217,96 @@ def save_evaluate_extxyz(
     write(str(path), atoms, format="extxyz")
 
 
+def save_evaluate_trajectory_npz_multi(
+    path: Path,
+    *,
+    atomic_numbers: np.ndarray,
+    positions: np.ndarray,
+    energies_eV: np.ndarray,
+    forces_eV_A: np.ndarray | None,
+    frame_indices: np.ndarray | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    """Write multi-frame trajectory NPZ (R/F/E/Z/N)."""
+    z = np.asarray(atomic_numbers, dtype=np.int32).reshape(-1)
+    r = np.asarray(positions, dtype=np.float64)
+    if r.ndim != 3:
+        raise ValueError(f"positions must be (n_frames, n_atoms, 3), got {r.shape}")
+    n_frames, n_atoms, _ = r.shape
+    if int(len(z)) != int(n_atoms):
+        raise ValueError(f"atomic_numbers length {len(z)} != n_atoms {n_atoms}")
+    e_ev = np.asarray(energies_eV, dtype=np.float64).reshape(-1)
+    if int(e_ev.shape[0]) != int(n_frames):
+        raise ValueError(f"energies length {e_ev.shape[0]} != n_frames {n_frames}")
+    payload: dict[str, Any] = {
+        "N": np.full(n_frames, n_atoms, dtype=np.int32),
+        "Z": np.broadcast_to(z.reshape(1, n_atoms), (n_frames, n_atoms)).copy(),
+        "R": r,
+        "E": e_ev * EV_TO_HARTREE,
+        "E_eV": e_ev,
+    }
+    if frame_indices is not None:
+        payload["source_indices"] = np.asarray(frame_indices, dtype=np.int32).reshape(-1)
+    if forces_eV_A is not None:
+        f_ev = np.asarray(forces_eV_A, dtype=np.float64)
+        if f_ev.shape != (n_frames, n_atoms, 3):
+            raise ValueError(f"forces shape {f_ev.shape} != ({n_frames}, {n_atoms}, 3)")
+        payload["F"] = f_ev
+        payload["F_hartree_bohr"] = forces_ev_ang_to_hartree_bohr(f_ev.reshape(-1, 3)).reshape(
+            n_frames, n_atoms, 3
+        )
+    if metadata:
+        payload["metadata"] = json.dumps(metadata)
+    path = Path(path).expanduser()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(path, **payload)
+
+
+def save_evaluate_extxyz_multi(
+    path: Path,
+    *,
+    atomic_numbers: np.ndarray,
+    positions: np.ndarray,
+    energies_eV: np.ndarray,
+    forces_eV_A: np.ndarray | None,
+) -> None:
+    """Write multi-frame extended XYZ with attached energy/forces."""
+    from ase import Atoms
+    from ase.calculators.singlepoint import SinglePointCalculator
+    from ase.io import write
+
+    z = np.asarray(atomic_numbers, dtype=int).reshape(-1)
+    r = np.asarray(positions, dtype=np.float64)
+    e_ev = np.asarray(energies_eV, dtype=np.float64).reshape(-1)
+    n_frames = int(r.shape[0])
+    frames: list[Any] = []
+    for i in range(n_frames):
+        atoms = Atoms(numbers=z, positions=r[i])
+        calc_kwargs: dict[str, Any] = {"energy": float(e_ev[i])}
+        if forces_eV_A is not None:
+            calc_kwargs["forces"] = np.asarray(forces_eV_A[i], dtype=np.float64)
+        atoms.calc = SinglePointCalculator(atoms, **calc_kwargs)
+        frames.append(atoms)
+    path = Path(path).expanduser()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    write(str(path), frames, format="extxyz")
+
+
+def resolve_evaluate_max_frames(args: Any) -> int:
+    """Frame cap for --evaluate-npz batch runs against --evaluate-reference-npz."""
+    raw = getattr(args, "max_frames", None)
+    if raw is None:
+        return 1
+    return int(raw)
+
+
+def should_evaluate_reference_trajectory(args: Any) -> bool:
+    """True when MMML should loop over frames from --evaluate-reference-npz."""
+    if getattr(args, "evaluate_reference_npz", None) is None:
+        return False
+    return resolve_evaluate_max_frames(args) != 1
+
+
 def compare_evaluate_to_reference_npz(
     reference_path: Path,
     *,
@@ -351,7 +441,7 @@ def _build_atoms_for_evaluate(
     return atoms
 
 
-def _evaluate_ase_mmml(
+def _attach_ase_mmml_calculator(
     args: Any,
     *,
     atoms: Any,
@@ -362,7 +452,7 @@ def _evaluate_ase_mmml(
     use_pbc: bool,
     L: float | None,
     at_codes_override: np.ndarray | None,
-) -> dict[str, Any]:
+) -> Any:
     from mmml.cli.run.md_pbc_suite.ase import _factory_mmml
 
     ml_w, mm_on, mm_w = _mmml_cutoff_args(args)
@@ -400,6 +490,17 @@ def _evaluate_ase_mmml(
         at_codes_override=at_codes_override,
     )
     atoms.calc = calc
+    return calc
+
+
+def _evaluate_atoms_mmml(
+    atoms: Any,
+    *,
+    z: np.ndarray,
+    n_monomers: int,
+    use_pbc: bool,
+    L: float | None,
+) -> dict[str, Any]:
     energy_eV = float(atoms.get_potential_energy())
     forces = np.asarray(atoms.get_forces(), dtype=np.float64)
     return {
@@ -413,6 +514,38 @@ def _evaluate_ase_mmml(
         "pbc": bool(use_pbc),
         "box_A": float(L) if L is not None else None,
     }
+
+
+def _evaluate_ase_mmml(
+    args: Any,
+    *,
+    atoms: Any,
+    z: np.ndarray,
+    n_monomers: int,
+    atoms_per_list: list[int],
+    base_ckpt_dir: Path,
+    use_pbc: bool,
+    L: float | None,
+    at_codes_override: np.ndarray | None,
+) -> dict[str, Any]:
+    _attach_ase_mmml_calculator(
+        args,
+        atoms=atoms,
+        z=z,
+        n_monomers=n_monomers,
+        atoms_per_list=atoms_per_list,
+        base_ckpt_dir=base_ckpt_dir,
+        use_pbc=use_pbc,
+        L=L,
+        at_codes_override=at_codes_override,
+    )
+    return _evaluate_atoms_mmml(
+        atoms,
+        z=z,
+        n_monomers=n_monomers,
+        use_pbc=use_pbc,
+        L=L,
+    )
 
 
 def _evaluate_jaxmd_mmml(
@@ -610,10 +743,11 @@ def _evaluate_pycharmm(
     }
 
 
-def run_evaluate_npz(args: Any) -> int:
-    """Evaluate MMML energy/forces at NPZ geometry in the selected backend runtime."""
+def _prepare_evaluate_npz_context(args: Any) -> dict[str, Any]:
+    """Shared setup for single- and multi-frame ``--evaluate-npz`` runs."""
     from mmml.cli.base import resolve_checkpoint_paths
     from mmml.cli.run.md_pbc_suite.ase import _cubic_box_length, _parse_composition
+    from mmml.interfaces.pycharmmInterface.hybrid_reference import load_reference_trajectory_npz
 
     npz_path = Path(args.evaluate_npz).expanduser().resolve()
     frame = int(getattr(args, "evaluate_frame", 0) or 0)
@@ -641,17 +775,6 @@ def run_evaluate_npz(args: Any) -> int:
     else:
         handoff_composition = [(residue_labels[0], n_monomers)]
 
-    ensure_psf_for_handoff_cluster(
-        composition=handoff_composition,
-        atomic_numbers=z,
-        atoms_per_list=atoms_per_list,
-        residue_labels=residue_labels,
-        positions=r0,
-        quiet=bool(getattr(args, "quiet", False)),
-    )
-    if payload.charges is not None:
-        apply_npz_charges_to_psf(payload.charges)
-
     use_pbc = resolve_evaluate_use_pbc(args, handoff)
     auto_L = float(_cubic_box_length(r0, float(getattr(args, "ml_cutoff", 0.1))))
     L_resolved, box_source, box_warnings = resolve_handoff_box(
@@ -670,14 +793,333 @@ def run_evaluate_npz(args: Any) -> int:
             Path(args.checkpoint).expanduser().resolve()
         )
 
-    atoms = _build_atoms_for_evaluate(
-        z=z,
-        r0=r0,
-        handoff=handoff,
-        monomer_offsets=monomer_offsets,
-        use_pbc=use_pbc,
-        L=L,
+    reference = None
+    ref_path = getattr(args, "evaluate_reference_npz", None)
+    if ref_path is not None and should_evaluate_reference_trajectory(args):
+        ref_path = Path(ref_path).expanduser().resolve()
+        n_atoms_monomer = int(len(z) // n_monomers)
+        reference = load_reference_trajectory_npz(
+            ref_path,
+            z_fallback=z,
+            n_atoms_monomer=n_atoms_monomer,
+            n_monomers=n_monomers,
+            max_frames=resolve_evaluate_max_frames(args),
+        )
+        r0 = np.asarray(reference.R[int(reference.frame_indices[0])], dtype=np.float64)
+
+    ensure_psf_for_handoff_cluster(
+        composition=handoff_composition,
+        atomic_numbers=z,
+        atoms_per_list=atoms_per_list,
+        residue_labels=residue_labels,
+        positions=r0,
+        quiet=bool(getattr(args, "quiet", False)),
     )
+    if payload.charges is not None:
+        apply_npz_charges_to_psf(payload.charges)
+
+    if reference is not None:
+        from ase import Atoms
+
+        pos = np.asarray(r0, dtype=np.float64)
+        if use_pbc and L is not None:
+            pos = pos - pos.mean(axis=0) + 0.5 * float(L)
+        atoms = Atoms(numbers=z, positions=pos)
+        if use_pbc and L is not None:
+            atoms.set_cell([float(L), float(L), float(L)])
+            atoms.set_pbc(True)
+        else:
+            atoms.set_pbc(False)
+    else:
+        atoms = _build_atoms_for_evaluate(
+            z=z,
+            r0=r0,
+            handoff=handoff,
+            monomer_offsets=monomer_offsets,
+            use_pbc=use_pbc,
+            L=L,
+        )
+
+    return {
+        "npz_path": npz_path,
+        "frame": frame,
+        "payload": payload,
+        "handoff": handoff,
+        "z": z,
+        "atoms_per_list": atoms_per_list,
+        "residue_labels": residue_labels,
+        "n_monomers": n_monomers,
+        "use_pbc": use_pbc,
+        "L": L,
+        "box_source": box_source,
+        "box_warnings": box_warnings,
+        "base_ckpt_dir": base_ckpt_dir,
+        "atoms": atoms,
+        "reference": reference,
+    }
+
+
+def _evaluate_reference_trajectory(args: Any, ctx: dict[str, Any]) -> int:
+    """Evaluate MMML on multiple frames from ``--evaluate-reference-npz``."""
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import prepare_serial_charmm_mpi_env
+    from mmml.interfaces.pycharmmInterface.jax_compile_threads import apply_jax_compile_xla_flags
+    from mmml.interfaces.pycharmmInterface.jax_device_policy import (
+        apply_mlpot_jax_compilation_cache_env,
+    )
+
+    reference = ctx["reference"]
+    assert reference is not None
+    backend = _resolve_evaluate_backend(args)
+    if backend not in {"ase", "jaxmd", "pycharmm"}:
+        raise ValueError(
+            f"Reference trajectory evaluation supports ase/jaxmd/pycharmm backends, got {backend!r}"
+        )
+    if backend == "pycharmm":
+        prepare_serial_charmm_mpi_env()
+        apply_mlpot_jax_compilation_cache_env(quiet=True)
+        apply_jax_compile_xla_flags(quiet=True)
+
+    z = ctx["z"]
+    atoms = ctx["atoms"]
+    n_monomers = ctx["n_monomers"]
+    atoms_per_list = ctx["atoms_per_list"]
+    base_ckpt_dir = ctx["base_ckpt_dir"]
+    use_pbc = ctx["use_pbc"]
+    L = ctx["L"]
+    payload = ctx["payload"]
+    frame_indices = np.asarray(reference.frame_indices, dtype=int).reshape(-1)
+    n_eval = int(len(frame_indices))
+
+    if backend == "ase":
+        _attach_ase_mmml_calculator(
+            args,
+            atoms=atoms,
+            z=z,
+            n_monomers=n_monomers,
+            atoms_per_list=atoms_per_list,
+            base_ckpt_dir=base_ckpt_dir,
+            use_pbc=use_pbc,
+            L=L,
+            at_codes_override=payload.at_codes,
+        )
+    elif backend == "jaxmd":
+        _evaluate_jaxmd_mmml(
+            args,
+            atoms=atoms,
+            z=z,
+            n_monomers=n_monomers,
+            atoms_per_list=atoms_per_list,
+            base_ckpt_dir=base_ckpt_dir,
+            use_pbc=use_pbc,
+            L=L,
+            at_codes_override=payload.at_codes,
+        )
+    else:
+        _evaluate_pycharmm(
+            args,
+            z=z,
+            positions=atoms.get_positions(),
+            n_monomers=n_monomers,
+            use_pbc=use_pbc,
+            L=L,
+        )
+
+    energies: list[float] = []
+    forces_list: list[np.ndarray] = []
+    positions_out: list[np.ndarray] = []
+    per_frame_compare: list[dict[str, Any]] = []
+    ref_energy_unit = str(getattr(args, "evaluate_reference_energy_unit", "hartree"))
+    ref_force_unit = str(getattr(args, "evaluate_reference_force_unit", "hartree_bohr"))
+
+    if not getattr(args, "quiet", False):
+        print(
+            f"mmml md-system evaluate-npz ({backend}): "
+            f"evaluating {n_eval} frames from {reference.path.name}",
+            flush=True,
+        )
+
+    for ref_frame in frame_indices:
+        pos = np.asarray(reference.R[int(ref_frame)], dtype=np.float64)
+        atoms.set_positions(pos)
+        if backend == "pycharmm":
+            metrics = _evaluate_pycharmm(
+                args,
+                z=z,
+                positions=pos,
+                n_monomers=n_monomers,
+                use_pbc=use_pbc,
+                L=L,
+            )
+        else:
+            metrics = _evaluate_atoms_mmml(
+                atoms,
+                z=z,
+                n_monomers=n_monomers,
+                use_pbc=use_pbc,
+                L=L,
+            )
+        energy_eV = float(metrics["energy_eV"])
+        forces_raw = metrics.get("forces_eV_A")
+        if forces_raw is not None:
+            forces = np.asarray(forces_raw, dtype=np.float64).reshape(-1, 3)
+        else:
+            forces = np.empty((0, 3))
+        energies.append(energy_eV)
+        positions_out.append(np.asarray(atoms.get_positions(), dtype=np.float64))
+        if forces.shape == (len(z), 3):
+            forces_list.append(forces)
+        try:
+            cmp = compare_evaluate_to_reference_npz(
+                reference.path,
+                frame=int(ref_frame),
+                atomic_numbers=z,
+                positions=positions_out[-1],
+                energy_eV=energy_eV,
+                forces_eV_A=forces if forces.shape == (len(z), 3) else None,
+                reference_energy_unit=ref_energy_unit,
+                reference_force_unit=ref_force_unit,
+            )
+            cmp["status"] = "ok"
+        except Exception as exc:
+            cmp = {
+                "status": "error",
+                "error": f"{type(exc).__name__}: {exc}",
+                "reference_frame": int(ref_frame),
+            }
+        per_frame_compare.append(cmp)
+
+    energies_arr = np.asarray(energies, dtype=np.float64)
+    forces_arr = np.stack(forces_list, axis=0) if forces_list else None
+    positions_arr = np.stack(positions_out, axis=0)
+
+    out_dir = Path(getattr(args, "output_dir", Path("artifacts/md_evaluate"))).expanduser()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = getattr(args, "evaluate_output", None)
+    if out_path is None:
+        out_path = out_dir / "evaluate.json"
+    else:
+        out_path = Path(out_path).expanduser()
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    ok_compares = [c for c in per_frame_compare if c.get("status") == "ok"]
+    compare_summary: dict[str, Any] = {
+        "status": "ok" if ok_compares else "error",
+        "reference_npz": str(reference.path),
+        "n_frames": n_eval,
+        "frame_indices": frame_indices.tolist(),
+        "per_frame": per_frame_compare,
+    }
+    if ok_compares and "delta_energy_eV" in ok_compares[0]:
+        delta_e = np.asarray([c["delta_energy_eV"] for c in ok_compares], dtype=np.float64)
+        compare_summary["mean_delta_energy_eV"] = float(delta_e.mean())
+        compare_summary["rmse_delta_energy_eV"] = float(np.sqrt(np.mean(delta_e**2)))
+        compare_summary["max_abs_delta_energy_eV"] = float(np.max(np.abs(delta_e)))
+    if ok_compares and "force_rmse_eV_A" in ok_compares[0]:
+        force_rmse = np.asarray([c["force_rmse_eV_A"] for c in ok_compares], dtype=np.float64)
+        compare_summary["mean_force_rmse_eV_A"] = float(force_rmse.mean())
+
+    result: dict[str, Any] = {
+        "backend": backend,
+        "setup": str(getattr(args, "setup", "")),
+        "npz": str(ctx["npz_path"]),
+        "composition": getattr(args, "composition", None),
+        "checkpoint": str(base_ckpt_dir),
+        "box_source": ctx["box_source"],
+        "box_warnings": ctx["box_warnings"],
+        "n_eval_frames": n_eval,
+        "reference_compare": compare_summary,
+        "mm_params_from_npz": {
+            "charges": payload.charges is not None,
+            "at_codes": payload.at_codes is not None,
+            "epsilon": payload.epsilon is not None,
+            "sigma": payload.sigma is not None,
+        },
+        "metrics": {
+            "energy_eV": energies_arr.tolist(),
+            "max_force_eV_A": [
+                float(np.abs(f).max()) for f in (forces_list or [np.empty((len(z), 3))])
+            ],
+        },
+    }
+
+    artifacts: dict[str, str] = {}
+    if not bool(getattr(args, "no_evaluate_save_artifacts", False)):
+        npz_out = getattr(args, "evaluate_forces_npz", None) or out_dir / "evaluate.npz"
+        npz_out = Path(npz_out).expanduser()
+        save_evaluate_trajectory_npz_multi(
+            npz_out,
+            atomic_numbers=z,
+            positions=positions_arr,
+            energies_eV=energies_arr,
+            forces_eV_A=forces_arr,
+            frame_indices=frame_indices,
+            metadata={
+                "backend": backend,
+                "composition": getattr(args, "composition", None),
+                "source_npz": str(ctx["npz_path"]),
+                "reference_npz": str(reference.path),
+            },
+        )
+        artifacts["npz"] = str(npz_out)
+
+        traj_out = getattr(args, "evaluate_traj", None) or out_dir / "evaluate.extxyz"
+        traj_out = Path(traj_out).expanduser()
+        save_evaluate_extxyz_multi(
+            traj_out,
+            atomic_numbers=z,
+            positions=positions_arr,
+            energies_eV=energies_arr,
+            forces_eV_A=forces_arr,
+        )
+        artifacts["extxyz"] = str(traj_out)
+
+        compare_path = getattr(args, "evaluate_compare_output", None) or out_dir / "evaluate_compare.json"
+        compare_path = Path(compare_path).expanduser()
+        compare_path.parent.mkdir(parents=True, exist_ok=True)
+        compare_path.write_text(json.dumps(compare_summary, indent=2), encoding="utf-8")
+        artifacts["compare_json"] = str(compare_path)
+
+    if artifacts:
+        result["artifacts"] = artifacts
+    out_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
+
+    if not getattr(args, "quiet", False):
+        print(f"  wrote {n_eval} frames to trajectory", flush=True)
+        print(f"  wrote {out_path}", flush=True)
+        for label, path in artifacts.items():
+            print(f"  {label} = {path}", flush=True)
+        if compare_summary.get("mean_delta_energy_eV") is not None:
+            print(
+                f"  vs reference: mean dE = {compare_summary['mean_delta_energy_eV']:.6f} eV "
+                f"(RMSE = {compare_summary['rmse_delta_energy_eV']:.6f} eV)",
+                flush=True,
+            )
+        if compare_summary.get("mean_force_rmse_eV_A") is not None:
+            print(
+                f"  vs reference: mean force RMSE = {compare_summary['mean_force_rmse_eV_A']:.6f} eV/A",
+                flush=True,
+            )
+    return 0
+
+
+def run_evaluate_npz(args: Any) -> int:
+    """Evaluate MMML energy/forces at NPZ geometry in the selected backend runtime."""
+    ctx = _prepare_evaluate_npz_context(args)
+    if ctx["reference"] is not None:
+        return _evaluate_reference_trajectory(args, ctx)
+
+    npz_path = ctx["npz_path"]
+    frame = ctx["frame"]
+    payload = ctx["payload"]
+    z = ctx["z"]
+    atoms_per_list = ctx["atoms_per_list"]
+    n_monomers = ctx["n_monomers"]
+    use_pbc = ctx["use_pbc"]
+    L = ctx["L"]
+    box_source = ctx["box_source"]
+    box_warnings = ctx["box_warnings"]
+    base_ckpt_dir = ctx["base_ckpt_dir"]
+    atoms = ctx["atoms"]
 
     backend = _resolve_evaluate_backend(args)
     if backend == "pycharmm":

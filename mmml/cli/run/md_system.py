@@ -1198,7 +1198,8 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="PATH",
         help=(
             "MP2/QM reference trajectory NPZ (keys R, E, optional F) for on-the-fly "
-            "comparison; writes evaluate_compare.json."
+            "comparison; writes evaluate_compare.json. With --max-frames > 1, "
+            "geometries are taken from this file and a multi-frame evaluate.extxyz is written."
         ),
     )
     parser.add_argument(
