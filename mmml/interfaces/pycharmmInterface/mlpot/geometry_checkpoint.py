@@ -177,6 +177,48 @@ def build_early_abort_recovery_candidates(
     return ordered
 
 
+def _early_abort_trust_in_memory(
+    overlap: Any,
+    *,
+    integrated: int,
+    chunk_nstep: int,
+    chunk_index: int,
+    cpt: bool,
+    mlpot_ctx: Any | None,
+) -> bool:
+    """Whether in-memory CHARMM state is safe to continue after a mid-chunk abort."""
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        charmm_memory_coordinates_usable,
+    )
+
+    if not charmm_memory_coordinates_usable():
+        return False
+
+    if mlpot_ctx is None:
+        if cpt and chunk_index == 0 and integrated <= 4:
+            return False
+        return integrated >= max(2, chunk_nstep // 10)
+
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        resolve_mlpot_grms_kcalmol_A,
+    )
+
+    n_mon = max(1, int(getattr(overlap, "n_monomers", 1) or 1))
+    limit = max(50.0, 50.0 * (float(n_mon) ** 0.5))
+    grms = resolve_mlpot_grms_kcalmol_A(
+        mlpot_ctx,
+        context="early-abort memory gate",
+    )
+    if grms > limit:
+        print(
+            f"early-abort memory gate: hybrid GRMS {grms:.2f} kcal/mol/Å > "
+            f"{limit:.0f} — not continuing from in-memory state",
+            flush=True,
+        )
+        return False
+    return True
+
+
 def is_geometry_recovery_crd_path(path: Path | str) -> bool:
     """True for CHARMM coordinate cards used in the geometry recovery ladder."""
     return Path(path).suffix.lower() == ".crd"
@@ -507,6 +549,9 @@ def attempt_overlap_early_abort_recovery(
     overlap_run_state_dir: Path | None = None,
     overlap_restart_read: Path | str | None = None,
     segment_restart_read: Path | str | None = None,
+    mlpot_ctx: Any | None = None,
+    cpt: bool = False,
+    chunk_index: int = 0,
 ) -> GeometryRecoveryResult:
     """Reload geometry after a short chunk abort.
 
@@ -547,6 +592,22 @@ def attempt_overlap_early_abort_recovery(
 
         if restore_positions_from_overlap_run_state(overlap_run_state_dir, label=label):
             return GeometryRecoveryResult(True, "run_state")
+
+    if _early_abort_trust_in_memory(
+        overlap,
+        integrated=integrated,
+        chunk_nstep=int(chunk_nstep),
+        chunk_index=int(chunk_index),
+        cpt=bool(cpt),
+        mlpot_ctx=mlpot_ctx,
+    ):
+        print(
+            f"{label}: using in-memory CHARMM coordinates "
+            "(no valid restart/CRD on disk; hybrid GRMS gate passed)",
+            flush=True,
+        )
+        return GeometryRecoveryResult(True, "memory")
+
     return GeometryRecoveryResult(False)
 
 

@@ -28,6 +28,19 @@ def _mock_bond_exclusion_pairs_unless_targeted(request):
     if request.node.name == "test_bond_exclusion_pairs_handles_empty_get_ib_jb":
         yield
         return
+    skip_segment_mock = request.node.name in {
+        "test_ensure_segment_restart_checkpoint_returns_existing",
+        "test_ensure_segment_restart_checkpoint_writes_file",
+        "test_refresh_overlap_prior_segment_restart_rewrites_scratch",
+    }
+    segment_patch = (
+        nullcontext()
+        if skip_segment_mock
+        else mock.patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
+            side_effect=lambda p: Path(p).resolve() if p is not None else None,
+        )
+    )
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard._bond_exclusion_pairs",
         return_value=frozenset(),
@@ -35,7 +48,9 @@ def _mock_bond_exclusion_pairs_unless_targeted(request):
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_restart_write_after_chunk",
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
-    ):
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+    ), segment_patch:
         yield
 
 
@@ -260,9 +275,11 @@ def test_overlap_early_abort_multi_chunk_cpt_materializes_readyn(tmp_path, capsy
             Path(_io.restart_write).write_text(f"REST {step} 0\n", encoding="utf-8")
         return mock.Mock()
 
-    def fake_materialize(chunk_io, *, steps_before_chunk, overlap_context, **kwargs):
+    def fake_materialize(chunk_io, chunk_kw, **kwargs):
         read = Path(chunk_io.restart_read or slot_a)
         read.write_text("REST 0 500\n", encoding="utf-8")
+        chunk_kw["restart"] = True
+        chunk_kw["iasvel"] = 0
         return CharmmTrajectoryFiles(
             restart_read=read,
             restart_write=chunk_io.restart_write,
@@ -283,13 +300,18 @@ def test_overlap_early_abort_multi_chunk_cpt_materializes_readyn(tmp_path, capsy
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
+        side_effect=lambda p: Path(p).resolve(),
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
         side_effect=lambda path: int(Path(path).read_text().split()[1]),
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.attempt_overlap_early_abort_recovery",
         return_value=GeometryRecoveryResult(True, "restart"),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._materialize_early_abort_restart_handoff",
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._materialize_post_rescue_restart_handoff",
         side_effect=fake_materialize,
     ) as materialize:
         run_dynamics_with_io(
@@ -302,13 +324,79 @@ def test_overlap_early_abort_multi_chunk_cpt_materializes_readyn(tmp_path, capsy
 
     assert len(calls) == 3
     materialize.assert_called_once()
-    assert calls[1][0]["restart"] is True
-    assert calls[1][0]["iasvel"] == 0
-    assert "iunrea" not in calls[1][0]
+    assert calls[1][0]["restart"] is False
+    assert calls[2][0]["restart"] is True
+    assert calls[2][0]["iasvel"] == 0
+    assert "iunrea" not in calls[2][0]
+
+
+def test_overlap_early_abort_memory_recovery_skips_overlap_check(tmp_path):
+    """In-memory echeck abort must not trigger bonded overlap rescue before retry."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+        GeometryRecoveryResult,
+    )
+
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        min_distance_A=1.5,
+        check_interval=500,
+        n_monomers=13,
+        use_pbc=True,
+    )
+
+    calls: list[int] = []
+
+    def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
+        if _io is not None and _io.restart_write is not None:
+            step = 40 if len(calls) == 0 else 500
+            calls.append(step)
+            Path(_io.restart_write).write_text(f"REST {step} 1\n", encoding="utf-8")
+        return mock.Mock()
+
+    overlap_contexts: list[str] = []
+
+    def track_overlap_check(_cfg, *, context, step=None, mlpot_ctx=None):
+        overlap_contexts.append(context)
+        return (5.0, False)
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        side_effect=fake_chunk,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+        side_effect=track_overlap_check,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.finalize_overlap_rescue_for_dynamics",
+    ) as finalize, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
+        side_effect=lambda p: Path(p).resolve(),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
+        side_effect=lambda path: int(Path(path).read_text().split()[1]),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.attempt_overlap_early_abort_recovery",
+        return_value=GeometryRecoveryResult(True, "memory"),
+    ):
+        run_dynamics_with_io(
+            {"nstep": 1000, "cpt": True, "hoover reft": 90.0},
+            CharmmTrajectoryFiles(restart_write=tmp_path / "heat.res"),
+            overlap=cfg,
+            overlap_context="HEAT",
+            mlpot_ctx=mock.Mock(),
+        )
+
+    finalize.assert_called_once()
+    assert not any("after early-abort recovery" in c for c in overlap_contexts)
+    assert "HEAT" in overlap_contexts
 
 
 def test_overlap_early_abort_disk_recovery_cpt_retries_with_readyn(tmp_path, capsys):
-    """Disk early-abort recovery on Hoover CPT must not retry with iunrea=-1."""
+    """Disk early-abort recovery on Hoover CPT materializes READYN for retry."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
     from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
         GeometryRecoveryResult,
@@ -339,6 +427,18 @@ def test_overlap_early_abort_disk_recovery_cpt_retries_with_readyn(tmp_path, cap
             Path(_io.restart_write).write_text(f"REST {step} 0\n", encoding="utf-8")
         return mock.Mock()
 
+    def fake_materialize(chunk_io, chunk_kw, **kwargs):
+        chunk_kw["restart"] = True
+        chunk_kw["iasvel"] = 0
+        return CharmmTrajectoryFiles(
+            restart_read=slot_a,
+            restart_write=chunk_io.restart_write,
+            trajectory=chunk_io.trajectory,
+            restart_read_unit=chunk_io.restart_read_unit,
+            restart_write_unit=chunk_io.restart_write_unit,
+            trajectory_unit=chunk_io.trajectory_unit,
+        )
+
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
@@ -350,20 +450,22 @@ def test_overlap_early_abort_disk_recovery_cpt_retries_with_readyn(tmp_path, cap
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
+        side_effect=lambda p: Path(p).resolve(),
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._assign_post_rescue_velocities_and_crystal",
-    ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.rewrite_dynamics_restart_validated",
-        return_value=True,
-    ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.patch_restart_global_step",
-        return_value=True,
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
         side_effect=lambda path: int(Path(path).read_text().split()[1]),
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.attempt_overlap_early_abort_recovery",
         return_value=GeometryRecoveryResult(True, "restart"),
-    ):
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._materialize_post_rescue_restart_handoff",
+        side_effect=fake_materialize,
+    ) as materialize:
         run_dynamics_with_io(
             {
                 "nstep": 1000,
@@ -379,12 +481,13 @@ def test_overlap_early_abort_disk_recovery_cpt_retries_with_readyn(tmp_path, cap
         )
 
     assert len(calls) == 3
-    retry_kw, retry_io = calls[1]
+    materialize.assert_called_once()
+    retry_kw, retry_io = calls[2]
+    assert calls[1][0]["restart"] is False
     assert retry_kw["restart"] is True
     assert retry_kw["iasvel"] == 0
     assert "iunrea" not in retry_kw
     assert retry_io is not None and retry_io.restart_read is not None
-    assert "early-abort restart handoff" in capsys.readouterr().out
 
 
 def test_resolve_defaults_to_rescue_and_1p5A():
@@ -577,12 +680,13 @@ def test_refresh_overlap_prior_segment_restart(tmp_path):
     assert updated.prior_segment_restart == valid_path
 
 
-def test_refresh_overlap_prior_segment_restart_skips_scratch(tmp_path):
+def test_refresh_overlap_prior_segment_restart_rewrites_scratch(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         refresh_overlap_prior_segment_restart,
     )
 
     scratch = tmp_path / "heat_dcm_10.0.overlap_a.res"
+    valid = scratch.resolve()
     base = DynamicsOverlapConfig(
         action="rescue",
         n_monomers=2,
@@ -590,10 +694,12 @@ def test_refresh_overlap_prior_segment_restart_skips_scratch(tmp_path):
     )
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
+        return_value=valid,
     ) as ensure:
         updated = refresh_overlap_prior_segment_restart(base, restart_path=scratch)
-    ensure.assert_not_called()
-    assert updated is base
+    ensure.assert_called_once_with(scratch)
+    assert updated is not None
+    assert updated.prior_segment_restart == valid
 
 
 def test_attach_prior_keeps_staged_prior_when_rerun_attach_fails(tmp_path):
@@ -1269,6 +1375,11 @@ def test_overlap_post_rescue_handoff_uses_readyn_restart(tmp_path, capsys):
     ) as post_rescue, mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
+        side_effect=lambda p: Path(p).resolve(),
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
         side_effect=lambda path: 500 * len(calls),
     ):
@@ -1284,7 +1395,7 @@ def test_overlap_post_rescue_handoff_uses_readyn_restart(tmp_path, capsys):
     assert calls[0][0]["restart"] is False
     assert calls[1][0]["restart"] is True
     assert calls[1][0]["iasvel"] == 0
-    assert calls[2][0]["restart"] is True
+    assert calls[2][0]["restart"] is False
     finalize.assert_called_once()
     materialize.assert_called_once()
     post_rescue.assert_not_called()
@@ -1392,6 +1503,11 @@ def test_mlpot_overlap_chunks_continue_in_memory_without_readyn(tmp_path):
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
+        side_effect=lambda p: Path(p).resolve(),
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
         return_value=2,
     ):
@@ -1405,11 +1521,10 @@ def test_mlpot_overlap_chunks_continue_in_memory_without_readyn(tmp_path):
 
     assert [c["nstep"] for c in calls] == [2, 2, 2]
     assert calls[0]["restart"] is False
-    assert calls[1]["restart"] is True
-    assert calls[1].get("iunrea") == 3
-    assert calls[1].get("iasvel") == 0
-    assert calls[2]["restart"] is True
-    assert calls[2].get("iasvel") == 0
+    assert calls[1]["restart"] is False
+    assert calls[1].get("iunrea", -1) == -1
+    assert calls[2]["restart"] is False
+    assert calls[2].get("iunrea", -1) == -1
 
 
 def test_mlpot_overlap_chunks_use_scratch_restart_handoff(tmp_path, monkeypatch):
@@ -2122,11 +2237,11 @@ def test_run_dynamics_with_io_mlpot_defaults_overlap_memory_handoff(tmp_path):
         )
     assert len(calls) == 3
     assert calls[0]["restart"] is False
-    assert calls[1]["restart"] is True
-    assert calls[2]["restart"] is True
+    assert calls[1]["restart"] is False
+    assert calls[2]["restart"] is False
     assert calls[0].get("iunrea") == -1
-    assert calls[1].get("iunrea") == 3
-    assert calls[2].get("iunrea") == 3
+    assert calls[1].get("iunrea", -1) == -1
+    assert calls[2].get("iunrea", -1) == -1
 
 
 def test_ensure_valid_overlap_scratch_restart_raises_on_rest_minus_one(tmp_path):
@@ -2777,6 +2892,60 @@ def test_post_rescue_bath_target_prefers_hoover_reft_for_cpt_prod():
     assert chunk_kw["firstt"] == 90.0
 
 
+def test_mlpot_memory_handoff_skips_readyn_on_all_chunks(tmp_path):
+    """MLpot overlap must not READYN scratch restarts on chunk > 0 (CPT blow-up)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+        GeometryRecoveryResult,
+    )
+
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        min_distance_A=1.5,
+        check_interval=500,
+        n_monomers=13,
+        use_pbc=True,
+        memory_handoff=True,
+    )
+    calls: list[dict] = []
+
+    def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
+        calls.append(dict(kw))
+        if _io is not None and _io.restart_write is not None:
+            step = 500 * len(calls)
+            Path(_io.restart_write).write_text(f"REST {step} 0\n", encoding="utf-8")
+        return mock.Mock()
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        side_effect=fake_chunk,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+        return_value=(5.0, False),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
+        side_effect=lambda path: int(Path(path).read_text().split()[1]),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
+        side_effect=lambda p: Path(p).resolve(),
+    ):
+        run_dynamics_with_io(
+            {"nstep": 1000, "cpt": True, "hoover reft": 60.0},
+            CharmmTrajectoryFiles(restart_write=tmp_path / "heat.res"),
+            overlap=cfg,
+            overlap_context="HEAT",
+            mlpot_ctx=mock.Mock(),
+        )
+
+    assert len(calls) == 2
+    assert all(c.get("restart") is False for c in calls)
+    assert all(c.get("iunrea") == -1 for c in calls)
+
+
 def test_valid_overlap_chunk_restart_read_rejects_handoff_seed(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _overlap_chunk_uses_memory_handoff,
@@ -2791,4 +2960,10 @@ def test_valid_overlap_chunk_restart_read_rejects_handoff_seed(tmp_path):
     overlap = DynamicsOverlapConfig(memory_handoff=True)
     assert _overlap_chunk_uses_memory_handoff(
         object(), chunk_index=0, n_chunks=4, overlap=overlap
+    )
+    assert _overlap_chunk_uses_memory_handoff(
+        object(), chunk_index=3, n_chunks=4, overlap=overlap
+    )
+    assert not _overlap_chunk_uses_memory_handoff(
+        None, chunk_index=1, n_chunks=4, overlap=overlap
     )
