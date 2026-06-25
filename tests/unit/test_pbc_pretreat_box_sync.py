@@ -1,0 +1,36 @@
+"""PBC box sync after CHARMM MM pretreat (NPT vs density estimate)."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from unittest import mock
+
+from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    sync_workflow_pbc_box_side_after_mm_pretreat,
+)
+
+
+def test_sync_workflow_pbc_box_side_after_mm_pretreat_updates_live_box() -> None:
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
+        return_value=(39.99, "pbound"),
+    ):
+        synced = sync_workflow_pbc_box_side_after_mm_pretreat(
+            28.0,
+            pretreat_restart=Path("/tmp/charmm_mm_equi_dcm_25.res"),
+            quiet=True,
+        )
+    assert synced == 39.99
+
+
+def test_sync_workflow_pbc_box_side_after_mm_pretreat_noop_when_unchanged() -> None:
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
+        return_value=(28.0, "fallback"),
+    ):
+        synced = sync_workflow_pbc_box_side_after_mm_pretreat(28.0, quiet=True)
+    assert synced == 28.0
+
+
+def test_sync_workflow_pbc_box_side_after_mm_pretreat_none_when_not_pbc() -> None:
+    assert sync_workflow_pbc_box_side_after_mm_pretreat(None, quiet=True) is None

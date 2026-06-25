@@ -1278,6 +1278,26 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             skip_minimize=handoff_in is not None,
         )
         sync_charmm_positions(r)
+        if charmm_pbc and box_side is not None:
+            from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+                sync_workflow_pbc_box_side_after_mm_pretreat,
+            )
+
+            pretreat_restart = None
+            for key in (
+                "charmm_mm_prod_res",
+                "charmm_mm_equi_res",
+                "charmm_mm_heat_res",
+            ):
+                candidate = paths.get(key)
+                if candidate is not None and Path(candidate).is_file():
+                    pretreat_restart = Path(candidate)
+                    break
+            box_side = sync_workflow_pbc_box_side_after_mm_pretreat(
+                box_side,
+                pretreat_restart=pretreat_restart,
+                quiet=bool(args.quiet),
+            )
     elif "mini" in stages and not getattr(args, "skip_cluster_build", False):
         save_mini = bool(getattr(args, "save", True))
         mini_dcd_nsavc = resolve_dcd_nsavc_for_args(args, nstep=mini_nstep)
