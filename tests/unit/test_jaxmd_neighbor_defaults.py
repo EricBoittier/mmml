@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from mmml.cli.run.jaxmd_runner import resolve_jaxmd_steps_per_loop_call
+import jax.numpy as jnp
+
+from mmml.cli.run.jaxmd_runner import _nl_update_positions, resolve_jaxmd_steps_per_loop_call
 from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
     DEFAULT_JAX_MD_SKIN_DISTANCE_A,
     format_mm_pair_update_stats_summary,
@@ -27,6 +29,19 @@ def resolve_pbc_loop_steps(jax_md_update_interval: int | None) -> int:
 
 def test_default_skin_is_quarter_angstrom():
     assert DEFAULT_JAX_MD_SKIN_DISTANCE_A == 0.25
+
+
+def test_nl_update_positions_preserves_jax_arrays(monkeypatch):
+    monkeypatch.delenv("MMML_MM_NL_FORCE_HOST", raising=False)
+    positions = jnp.zeros((2, 3))
+    assert _nl_update_positions(positions) is positions
+
+
+def test_nl_update_positions_force_host_escape_hatch(monkeypatch):
+    monkeypatch.setenv("MMML_MM_NL_FORCE_HOST", "1")
+    positions = jnp.zeros((2, 3))
+    out = _nl_update_positions(positions)
+    assert isinstance(out, np.ndarray)
 
 
 def test_skin_zero_interval_one_never_reuses():

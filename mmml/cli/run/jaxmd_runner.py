@@ -30,10 +30,10 @@ from typing import Callable, Optional
 
 
 def _nl_update_positions(positions):
-    """Host NumPy for CPU NL; pass JAX GPU arrays through when ``MMML_MM_NL_DEVICE=gpu``."""
-    from mmml.interfaces.pycharmmInterface.nl_gpu import resolve_mm_nl_device
+    """Pass JAX arrays to ``update_mm_pairs`` so it can avoid host sync on cache hits."""
+    import os
 
-    if resolve_mm_nl_device() == "gpu" and hasattr(positions, "__dlpack_device__"):
+    if hasattr(positions, "__dlpack_device__") and os.environ.get("MMML_MM_NL_FORCE_HOST") != "1":
         return positions
     return np.asarray(positions)
 
