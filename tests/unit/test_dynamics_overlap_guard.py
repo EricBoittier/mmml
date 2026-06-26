@@ -948,6 +948,60 @@ def test_extent_rescue_fails_clearly_without_prior():
             )
 
 
+def test_extent_rescue_uses_geometry_baseline_when_prior_unset(tmp_path):
+    baseline = tmp_path / "baseline.res"
+    write_minimal_restart(baseline)
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        min_distance_A=0.0,
+        intra_min_distance_A=0.0,
+        max_monomer_extent_A=12.0,
+        n_monomers=2,
+        use_pbc=False,
+        prior_segment_restart=None,
+        geometry_baseline_restart=baseline,
+        rescue=OverlapRescueConfig(nstep_sd=10, nstep_abnr=0, verbose=False),
+    )
+    bad_pos = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [30.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+        ],
+        dtype=float,
+    )
+    good_pos = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [5.0, 0.0, 0.0],
+            [5.0, 1.0, 0.0],
+            [5.5, 0.5, 0.0],
+        ],
+        dtype=float,
+    )
+    ctx = mock.MagicMock()
+    positions = {"current": bad_pos.copy()}
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        side_effect=lambda: positions["current"],
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.run_extent_recovery_from_prior_restart",
+        side_effect=lambda *a, **k: positions.update(current=good_pos.copy()),
+    ) as extent_recovery:
+        extent, rescued = check_dynamics_overlap(
+            cfg, context="heat segment 1/10", step=800, mlpot_ctx=ctx
+        )
+    assert rescued is True
+    extent_recovery.assert_called_once()
+    assert extent_recovery.call_args.kwargs["prior_restart"] == baseline.resolve()
+
+
 def test_resolve_intra_min_distance_zero_disables_intra_only():
     args = argparse.Namespace(dynamics_intra_min_distance=0.0)
     cfg = resolve_dynamics_overlap_config(args, n_monomers=4, use_pbc=False)
