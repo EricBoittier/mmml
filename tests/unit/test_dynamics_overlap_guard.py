@@ -3324,9 +3324,11 @@ def test_post_rescue_bath_target_prefers_hoover_reft_for_cpt_prod():
     assert chunk_kw["firstt"] == 90.0
 
 
-def test_mlpot_cpt_overlap_uses_scratch_restart_handoff(tmp_path):
+def test_mlpot_cpt_overlap_uses_scratch_restart_handoff(tmp_path, monkeypatch):
     """CPT overlap ignores memory_handoff and READYNs scratch restarts."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+
+    monkeypatch.setenv("MMML_CPT_READYN_SUBCHUNK", "1")
 
     cfg = DynamicsOverlapConfig(
         action="rescue",
