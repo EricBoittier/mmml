@@ -60,6 +60,13 @@ def resolve_lr_solver_arg(args: Any | None) -> str | None:
     return os.environ.get("MMML_LR_SOLVER")
 
 
+def resolve_periodic_charmm_vdw(args: Any | None) -> bool:
+    """Whether periodic_external keeps CHARMM IMAGE VDW on (default True)."""
+    if args is None:
+        return True
+    return bool(getattr(args, "periodic_charmm_vdw", True))
+
+
 def build_periodic_mm_config(args: Any | None) -> PeriodicMmConfig | None:
     if resolve_mm_nonbond_mode(args) != "periodic_external":
         return None
@@ -75,7 +82,11 @@ def build_periodic_mm_config(args: Any | None) -> PeriodicMmConfig | None:
         getattr(args, "scafacos_method", None)
         or os.environ.get("SCAFACOS_METHOD", "p2nfft")
     ).strip()
-    return PeriodicMmConfig(lr_solver=lr, scafacos_method=method)
+    return PeriodicMmConfig(
+        lr_solver=lr,
+        scafacos_method=method,
+        charmm_vdw=resolve_periodic_charmm_vdw(args),
+    )
 
 
 def validate_periodic_mm_args(
@@ -178,7 +189,8 @@ def cluster_extent_from_positions(positions: np.ndarray) -> float:
 
 
 def periodic_mm_status_line(cfg: PeriodicMmConfig, *, box_side_A: float) -> str:
+    lj = "CHARMM IMAGE VDW" if cfg.charmm_vdw else "none (CHARMM VDW off)"
     return (
         f"periodic_external MM: Coulomb={cfg.lr_solver} ({cfg.scafacos_method}), "
-        f"LJ=CHARMM IMAGE VDW, JAX real-space MM off, L={float(box_side_A):.3f} Å"
+        f"LJ={lj}, JAX real-space MM off, L={float(box_side_A):.3f} Å"
     )

@@ -140,6 +140,8 @@ Wired into `mmml md-system` / staged PyCHARMM workflows:
 
 Requires `--setup pbc_*`, `libfcs`, and adequate `--box-size` (validated in `periodic_mm.py`).
 
+Use `--no-periodic-charmm-vdw` to disable CHARMM IMAGE VDW (ScaFaCoS Coulomb only).
+
 See [LONG_RANGE_ELECTROSTATICS.md](../pycharmmInterface/mlpot/LONG_RANGE_ELECTROSTATICS.md) for box rules and limitations.
 
 ## License note

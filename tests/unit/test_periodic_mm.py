@@ -81,6 +81,36 @@ def test_min_cubic_box_scales_with_extent():
     assert need >= 15.0
 
 
+def test_build_periodic_mm_config_charmm_vdw_flag():
+    args = argparse.Namespace(
+        mm_nonbond_mode="periodic_external",
+        lr_solver="scafacos",
+        periodic_charmm_vdw=False,
+    )
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
+        return_value="scafacos",
+    ):
+        cfg = build_periodic_mm_config(args)
+    assert cfg is not None
+    assert cfg.charmm_vdw is False
+
+
+def test_periodic_mm_status_line_no_vdw():
+    from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm import (
+        PeriodicMmConfig,
+        periodic_mm_status_line,
+    )
+
+    cfg = PeriodicMmConfig(
+        lr_solver="scafacos",
+        scafacos_method="p2nfft",
+        charmm_vdw=False,
+    )
+    line = periodic_mm_status_line(cfg, box_side_A=40.0)
+    assert "CHARMM VDW off" in line
+
+
 def test_periodic_mm_external_adds_coulomb():
     from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm import PeriodicMmConfig
     from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm_external import (

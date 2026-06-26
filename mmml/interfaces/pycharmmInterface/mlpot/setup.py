@@ -918,6 +918,7 @@ def register_mlpot(
     mm_internal_scale: float = 0.0,
     cubic_box_side_A: float | None = None,
     mm_nonbond_mode: str = "jax_mic",
+    periodic_charmm_vdw: bool = True,
     verbose: bool = False,
     **kwargs: Any,
 ) -> MlpotContext:
@@ -978,19 +979,18 @@ def register_mlpot(
             _require_mlpot_skip_iblo_support(pycharmm)
             _install_ml_exclusions(ml_selection)
             skip_iblo_inb_update = True
-        block_tag = (
-            apply_mlpot_periodic_external_block(
+        if periodic_external and periodic_charmm_vdw:
+            block_tag = apply_mlpot_periodic_external_block(
                 ml_selection,
                 mm_internal_scale=float(mm_internal_scale),
                 verbose=verbose,
             )
-            if periodic_external
-            else apply_mlpot_energy_block(
+        else:
+            block_tag = apply_mlpot_energy_block(
                 ml_selection,
                 mm_internal_scale=float(mm_internal_scale),
                 verbose=verbose,
             )
-        )
         mlpot = pycharmm.MLpot(
             ml_model=pyCModel,
             ml_Z=z_ml,

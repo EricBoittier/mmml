@@ -319,6 +319,17 @@ def test_build_pycharmm_command_forwards_periodic_mm_flags():
     assert cmd[cmd.index("--scafacos-method") + 1] == "p3m"
 
 
+def test_build_pycharmm_command_forwards_no_periodic_charmm_vdw():
+    cmd = build_pycharmm_command(
+        _pycharmm_args(
+            mm_nonbond_mode="periodic_external",
+            lr_solver="scafacos",
+            periodic_charmm_vdw=False,
+        )
+    )
+    assert "--no-periodic-charmm-vdw" in cmd
+
+
 def test_pycharmm_run_summary_composition():
     summary = _pycharmm_run_summary(_pycharmm_args())
     assert "composition=DCM:20" in summary

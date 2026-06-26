@@ -153,6 +153,19 @@ mmml md-system --setup pbc_nvt --backend pycharmm \
   --mm-nonbond-mode periodic_external --lr-solver scafacos
 ```
 
+### Coulomb only (no CHARMM IMAGE VDW)
+
+ScaFaCoS Coulomb with CHARMM VDW and JAX real-space MM both off:
+
+```bash
+mmml md-system --setup pbc_nvt --backend pycharmm \
+  --composition DCM:20 --box-size 45 \
+  --mm-nonbond-mode periodic_external --lr-solver scafacos \
+  --no-periodic-charmm-vdw
+```
+
+Nonbond interactions are then **ScaFaCoS Coulomb + ML (PhysNet)** only. There is no separate LJ term unless the ML model includes it.
+
 ### Box size
 
 The cubic edge must satisfy:
