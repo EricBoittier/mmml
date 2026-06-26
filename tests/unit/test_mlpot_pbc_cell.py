@@ -21,6 +21,38 @@ from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
 )
 
 
+def test_build_decomposed_mlpot_verbose_with_cell_does_not_crash():
+    """Regression: periodic_mm_config was read before assignment (UnboundLocalError)."""
+    z = np.array([6, 1, 1, 1, 6, 1, 1, 1], dtype=int)
+    per = [4, 4]
+    factory = MagicMock(return_value=(None, MagicMock(), None))
+    args = type(
+        "Args",
+        (),
+        {"mm_nonbond_mode": "jax_mic", "ml_spatial_mpi": None, "max_pairs": None},
+    )()
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.setup_calculator",
+        return_value=factory,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.unpack_factory_result",
+        return_value=(None, MagicMock(), None),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
+        return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()),
+    ):
+        model = build_decomposed_mlpot_model(
+            "/tmp/fake_ckpt.json",
+            z,
+            per,
+            2,
+            cell=30.0,
+            verbose=True,
+            args=args,
+        )
+    assert model._cell == 30.0
+
+
 def test_build_decomposed_mlpot_passes_cell_to_setup_calculator():
     z = np.array([6, 1, 1, 1, 6, 1, 1, 1], dtype=int)
     per = [4, 4]
