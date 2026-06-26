@@ -34,6 +34,8 @@ do not.
 | 4 | `04_update_mm_pairs_integration.py` | yes | live `update_mm_pairs` stats (`reused`, `updates`) |
 | 5 | `05_compare_nl_backends.py` | optional | Vesin / jax-md / ASE / cell-list / PyCHARMM matrix |
 | 6 | `06_extreme_pbc_nl.py` | optional | tight PBC boxes, face wraps, orthorhombic cells |
+| 7 | `07_liquid_density_nl.py` | optional | bulk liquid ρ (ACO/DCM) parity at realistic N/L |
+| 8 | `08_benchmark_nl_backends.py` | optional | median wall-time per NL backend (cold build + jax-md update) |
 
 Synthetic cases omit PyCHARMM (no PSF). When `pycharmm` is in `--backends`, matching
 `charmm_*` CGENFF analog cases run automatically (e.g. `charmm_high_cutoff_fraction`
@@ -43,6 +45,14 @@ Synthetic cases omit PyCHARMM (no PSF). When `pycharmm` is in `--backends`, matc
 uv run python tests/functionality/neighbor_lists/06_extreme_pbc_nl.py --with-charmm
 uv run python tests/functionality/neighbor_lists/06_extreme_pbc_nl.py \\
     --case charmm_high_cutoff_fraction --backends vesin,jax_md,ase,pycharmm
+```
+
+Liquid-density parity and NL speed benchmark:
+
+```bash
+uv run python tests/functionality/neighbor_lists/07_liquid_density_nl.py
+uv run python tests/functionality/neighbor_lists/08_benchmark_nl_backends.py \\
+    --case synthetic_aco_liquid_n16 --backends vesin,jax_md,ase,cell_list
 ```
 
 ## Quick run
