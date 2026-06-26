@@ -141,6 +141,7 @@ def format_mm_pair_update_stats_summary(stats: dict) -> str:
     reallocs = int(stats.get("reallocs", 0))
     fallbacks = int(stats.get("fallbacks", 0))
     host_syncs = int(stats.get("host_syncs", 0))
+    device_skin_checks = int(stats.get("device_skin_checks", 0))
     cpu_rebuilds = int(stats.get("cpu_rebuilds", 0))
     gpu_rebuilds = int(stats.get("gpu_rebuilds", 0))
     capacity_grows = int(stats.get("capacity_grows", 0))
@@ -148,7 +149,8 @@ def format_mm_pair_update_stats_summary(stats: dict) -> str:
     return (
         f"[jaxmd_nbr] pair-list cache: {reused}/{calls} reused ({pct:.1f}%), "
         f"{updates} rebuilds (cpu={cpu_rebuilds}, gpu={gpu_rebuilds}), "
-        f"host_syncs={host_syncs}, capacity_grows={capacity_grows}, "
+        f"host_syncs={host_syncs}, device_skin_checks={device_skin_checks}, "
+        f"capacity_grows={capacity_grows}, "
         f"reallocs={reallocs}, fallbacks={fallbacks}"
     )
 
@@ -849,6 +851,7 @@ def build_mm_energy_forces_fn(
             "fallbacks": 0,
             "cache_checks": 0,
             "host_syncs": 0,
+            "device_skin_checks": 0,
             "cpu_rebuilds": 0,
             "gpu_rebuilds": 0,
             "capacity_grows": 0,
@@ -862,6 +865,7 @@ def build_mm_energy_forces_fn(
         }
         _last_positions = [None]
         _last_cartesian_positions = [None]
+        _last_cartesian_positions_jax = [None]
         _last_box = [None]
         _fallback_max_pairs_cell = [int(_n_static_pairs)]
 
@@ -1059,6 +1063,16 @@ def build_mm_energy_forces_fn(
                 cell = _box_to_cell_3x3(jnp.asarray(pbc_cell, dtype=pos.dtype))
             return pos @ cell
 
+        @jax.jit
+        def _max_cartesian_displacement(current: Array, previous: Array) -> Array:
+            return jnp.max(jnp.linalg.norm(current - previous, axis=1))
+
+        def _box_delta_within_tolerance(box_in: Optional[np.ndarray]) -> bool:
+            if box_in is None or _last_box[0] is None:
+                return box_in is None and _last_box[0] is None
+            box_delta = float(np.max(np.abs(np.asarray(box_in) - np.asarray(_last_box[0]))))
+            return box_delta <= 1e-8
+
         def _gpu_interval_reuse_allowed(box_in: Optional[np.ndarray], interval: int, skin: float) -> bool:
             if skin > 0.0 or not (
                 _pair_idx_cell[0] is not None and _pair_mask_cell[0] is not None
@@ -1066,10 +1080,7 @@ def build_mm_energy_forces_fn(
                 return False
             if _pair_stats["calls"] % int(max(1, interval)) == 0:
                 return False
-            if box_in is None or _last_box[0] is None:
-                return box_in is None and _last_box[0] is None
-            box_delta = float(np.max(np.abs(np.asarray(box_in) - np.asarray(_last_box[0]))))
-            return box_delta <= 1e-8
+            return _box_delta_within_tolerance(box_in)
 
         def _rebuild_pairs_with_static_backend(
             positions_in: np.ndarray,
@@ -1212,6 +1223,7 @@ def build_mm_energy_forces_fn(
                     _pair_idx_cell[0] = pair_idx
                     _pair_mask_cell[0] = pair_mask
                     _last_cartesian_positions[0] = None
+                    _last_cartesian_positions_jax[0] = None
                     _last_box[0] = None if box is None else np.asarray(box, dtype=np.float64).copy()
                     _pair_stats["updates"] += 1
                     _pair_stats["last_reuse_reason"] = (
@@ -1222,6 +1234,27 @@ def build_mm_energy_forces_fn(
                     _pair_stats["cache_reuse_reason"] = _pair_stats["last_reuse_reason"]
                     _pair_stats["pair_capacity"] = int(pair_idx.shape[0])
                     return pair_idx, pair_mask
+
+            if (
+                _use_rebuild_nbrs
+                and positions_jax is not None
+                and have_cache
+                and skin > 0.0
+                and _last_cartesian_positions_jax[0] is not None
+                and _box_delta_within_tolerance(box)
+            ):
+                _pair_stats["cache_checks"] += 1
+                _pair_stats["device_skin_checks"] += 1
+                R_cart_jax = _jax_cartesian_for_nl_build(positions_jax, box)
+                max_disp = _max_cartesian_displacement(
+                    R_cart_jax,
+                    _last_cartesian_positions_jax[0],
+                )
+                if bool(np.asarray(jax.device_get(max_disp <= skin))):
+                    _pair_stats["reused"] += 1
+                    _pair_stats["cache_reuse_reason"] = "device_skin"
+                    _pair_stats["last_reuse_reason"] = "device_skin"
+                    return _pair_idx_cell[0], _pair_mask_cell[0]
 
             if positions_jax is not None:
                 _pair_stats["host_syncs"] += 1
@@ -1243,6 +1276,16 @@ def build_mm_energy_forces_fn(
                 have_cache=have_cache,
             ):
                 _pair_stats["reused"] += 1
+                if (
+                    positions_jax is not None
+                    and skin > 0.0
+                    and _last_cartesian_positions_jax[0] is None
+                    and _last_cartesian_positions[0] is not None
+                ):
+                    _last_cartesian_positions_jax[0] = jnp.asarray(
+                        _last_cartesian_positions[0],
+                        dtype=jnp.asarray(positions_jax).dtype,
+                    )
                 _pair_stats["cache_reuse_reason"] = "cpu_skin_or_interval"
                 _pair_stats["last_reuse_reason"] = "cpu_skin_or_interval"
                 return _pair_idx_cell[0], _pair_mask_cell[0]
@@ -1257,6 +1300,11 @@ def build_mm_energy_forces_fn(
                 _pair_idx_cell[0] = pair_idx
                 _pair_mask_cell[0] = pair_mask
                 _last_cartesian_positions[0] = R_cart.copy()
+                _last_cartesian_positions_jax[0] = (
+                    _jax_cartesian_for_nl_build(positions_jax, box)
+                    if positions_jax is not None
+                    else None
+                )
                 _last_box[0] = None if box is None else np.asarray(box, dtype=np.float64).copy()
                 _pair_stats["updates"] += 1
                 _pair_stats["cache_reuse_reason"] = "cpu_rebuild"
