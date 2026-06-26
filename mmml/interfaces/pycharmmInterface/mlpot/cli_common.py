@@ -471,7 +471,7 @@ def resolve_charmm_mm_pretreat_for_staged(
     return True
 
 
-DEFAULT_CHARMM_MM_PRETREAT_DT_FS = 2.0
+DEFAULT_CHARMM_MM_PRETREAT_DT_FS = 1.0
 
 
 @dataclass(frozen=True)
@@ -616,7 +616,7 @@ def add_charmm_mm_pretreat_physics_args(group: Any) -> None:
         default=DEFAULT_CHARMM_MM_PRETREAT_DT_FS,
         metavar="FS",
         help=(
-            "Pretreat CHARMM dynamics timestep in fs (default: 2.0). "
+            "Pretreat CHARMM dynamics timestep in fs (default: 1.0). "
             "Independent of MLpot --dt-fs."
         ),
     )

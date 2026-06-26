@@ -433,6 +433,9 @@ def run_charmm_mm_pretreat_before_mlpot(
             heat_firstt, heat_finalt = resolve_heat_firstt_finalt(args, default_temp=temp)
             heat_integrated = max(0, int(pretreat_resume.heat_integrated_step))
             n_heat_run = max(1, n_heat - heat_integrated) if heat_integrated > 0 else n_heat
+            heat_echeck = echeck
+            if getattr(args, "no_echeck", False) or getattr(args, "no_echeck_heat", False):
+                heat_echeck = -1.0
             save_interval_ps = timestep_ps * max(
                 1,
                 resolve_dcd_nsavc(
@@ -449,7 +452,7 @@ def run_charmm_mm_pretreat_before_mlpot(
                 temp=temp,
                 firstt=heat_firstt,
                 finalt=heat_finalt,
-                echeck=echeck,
+                echeck=heat_echeck,
                 use_pbc=use_pbc,
                 ihtfrq=resolve_heat_ihtfrq(args, nstep=n_heat_run),
             )
