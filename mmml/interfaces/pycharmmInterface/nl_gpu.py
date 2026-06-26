@@ -2,6 +2,11 @@
 
 Enabled when ``MMML_MM_NL_DEVICE=gpu``, CuPy and ``vesin>=0.5`` are available,
 and positions already reside on the JAX GPU (e.g. ``jaxmd_runner`` block boundary).
+
+Contract: callers pass Cartesian Å positions on device and a scalar, ``(3,)``,
+or ``(3, 3)`` Å cell. The returned JAX arrays are padded ``pair_idx`` with shape
+``(capacity, 2)`` and boolean ``pair_mask`` with shape ``(capacity,)``. Only
+``mask == True`` entries are valid; pair order is not stable API.
 """
 
 from __future__ import annotations
@@ -91,7 +96,7 @@ def rebuild_vesin_pairs_gpu(
     total_atoms: int | None = None,
     debug: bool = False,
 ) -> Tuple[object, object, str]:
-    """Build MM pairs on GPU; return ``(pair_idx_jax, pair_mask_jax, backend_label)``."""
+    """Build padded MM pairs on GPU from Cartesian Å coordinates."""
     if not gpu_nl_path_available():
         raise RuntimeError("GPU NL path requires MMML_MM_NL_DEVICE=gpu, cupy, and vesin>=0.5")
 
@@ -100,8 +105,6 @@ def rebuild_vesin_pairs_gpu(
     offsets = np.asarray(monomer_offsets, dtype=np.int32)
     monomer_id = monomer_id_from_offsets(offsets, n_atoms)
     cell_mat = cell_matrix_3x3(np.asarray(box, dtype=np.float64))
-    box_cp = cp.asarray(cell_mat)
-
     i_raw, j_raw, dist_raw = vesin_raw_half_list(
         pos_cp,
         cell_mat,
