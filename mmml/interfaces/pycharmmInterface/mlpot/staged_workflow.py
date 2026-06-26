@@ -1806,6 +1806,14 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     calculator_minimize_fmax_ev_a=float(getattr(args, "pre_min_fmax", 0.05)),
                     calculator_bfgs_maxstep=float(getattr(args, "bfgs_maxstep", 0.05)),
                     quiet_bfgs=bool(getattr(args, "quiet_bfgs", False)),
+                    calculator_fire_steps=int(getattr(args, "fire_min_steps", 200) or 200),
+                    calculator_fire_fmax_ev_a=float(
+                        getattr(args, "rescue_fire_fmax", None)
+                        or getattr(args, "pre_min_fmax", 0.05)
+                    ),
+                    calculator_fire_maxstep=float(
+                        getattr(args, "fire_min_maxstep", 0.2) or 0.2
+                    ),
                 )
             )
             if save_mini and legacy_mlpot is not None:
@@ -1974,6 +1982,14 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     calculator_minimize_fmax_ev_a=float(getattr(args, "pre_min_fmax", 0.05)),
                     calculator_bfgs_maxstep=float(getattr(args, "bfgs_maxstep", 0.05)),
                     quiet_bfgs=bool(getattr(args, "quiet_bfgs", False)),
+                    calculator_fire_steps=int(getattr(args, "fire_min_steps", 200) or 200),
+                    calculator_fire_fmax_ev_a=float(
+                        getattr(args, "rescue_fire_fmax", None)
+                        or getattr(args, "pre_min_fmax", 0.05)
+                    ),
+                    calculator_fire_maxstep=float(
+                        getattr(args, "fire_min_maxstep", 0.2) or 0.2
+                    ),
                 )
             )
             sync_charmm_positions(get_charmm_positions_array())

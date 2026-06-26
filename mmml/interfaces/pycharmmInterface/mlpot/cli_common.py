@@ -2121,6 +2121,9 @@ def prepare_mlpot_hybrid_state_for_sd(
     calculator_minimize_fmax_ev_a: float = 0.05,
     calculator_bfgs_maxstep: float = 0.05,
     quiet_bfgs: bool = False,
+    calculator_fire_steps: int = 200,
+    calculator_fire_fmax_ev_a: float | None = None,
+    calculator_fire_maxstep: float = 0.2,
 ) -> tuple[float, float]:
     """Resync, optional bonded recovery, and abort if hybrid GRMS remains too high.
 
@@ -2161,6 +2164,7 @@ def prepare_mlpot_hybrid_state_for_sd(
         HybridCalculatorMinimizeConfig,
         hybrid_calculator_mini_eligible,
         minimize_hybrid_calculator_before_sd,
+        minimize_hybrid_calculator_fire_before_sd,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         BondedMmMiniConfig,
@@ -2168,14 +2172,25 @@ def prepare_mlpot_hybrid_state_for_sd(
     )
 
     max_start_grms = float(grms_limit) if grms_limit is not None else 50.0
+    fire_fmax = (
+        float(calculator_fire_fmax_ev_a)
+        if calculator_fire_fmax_ev_a is not None
+        else float(calculator_minimize_fmax_ev_a)
+    )
     ran_calculator_mini = False
+    ran_calculator_fire = False
     ran_bonded_recovery = False
+
+    def _effective_max_start(*, force: bool) -> float:
+        if force:
+            return float("inf")
+        return max_start_grms
 
     def _run_calculator_mini(phase: str, *, force: bool = False) -> None:
         nonlocal hybrid_grms, user, diag, grms_hot, user_hot, ran_calculator_mini
         if not calculator_minimize:
             return
-        if float(hybrid_grms) > max_start_grms:
+        if not force and float(hybrid_grms) > max_start_grms:
             if verbose:
                 print(
                     f"{context_prefix}: defer calculator BFGS ({phase}) "
@@ -2192,6 +2207,7 @@ def prepare_mlpot_hybrid_state_for_sd(
             user_hot=user_hot,
         ):
             return
+        start_cap = _effective_max_start(force=force)
         hybrid_grms = minimize_hybrid_calculator_before_sd(
             mlpot_ctx,
             HybridCalculatorMinimizeConfig(
@@ -2200,9 +2216,10 @@ def prepare_mlpot_hybrid_state_for_sd(
                 bfgs_maxstep=float(calculator_bfgs_maxstep),
                 verbose=verbose,
                 quiet_bfgs=quiet_bfgs,
-                max_start_grms_kcalmol_A=max_start_grms,
+                max_start_grms_kcalmol_A=start_cap,
+                max_initial_fmax_ev_a=1000.0 if force else 100.0,
             ),
-            context_prefix=context_prefix,
+            context_prefix=f"{context_prefix} ({phase})",
         )
         ran_calculator_mini = True
         diag = measure_hybrid_charmm_grms(mlpot_ctx)
@@ -2214,6 +2231,41 @@ def prepare_mlpot_hybrid_state_for_sd(
         user = assert_mlpot_user_active(
             mlpot_ctx,
             context=f"{context_prefix} MLpot SD (post calculator mini)",
+            quiet=not verbose,
+        )
+        user_hot = energy_limit is not None and user > float(energy_limit)
+
+    def _run_calculator_fire(phase: str, *, force: bool = False) -> None:
+        nonlocal hybrid_grms, user, diag, grms_hot, user_hot, ran_calculator_fire
+        if not calculator_minimize or int(calculator_fire_steps) <= 0:
+            return
+        if not force and float(hybrid_grms) > max_start_grms:
+            if verbose:
+                print(
+                    f"{context_prefix}: defer calculator FIRE ({phase}) "
+                    f"(GRMS {hybrid_grms:.1f} > {max_start_grms:.1f} kcal/mol/Å)",
+                    flush=True,
+                )
+            return
+        hybrid_grms = minimize_hybrid_calculator_fire_before_sd(
+            mlpot_ctx,
+            max_steps=int(calculator_fire_steps),
+            fmax_ev_a=float(fire_fmax),
+            fire_maxstep=float(calculator_fire_maxstep),
+            verbose=verbose,
+            max_start_grms_kcalmol_A=_effective_max_start(force=force),
+            context_prefix=f"{context_prefix} ({phase})",
+        )
+        ran_calculator_fire = True
+        diag = measure_hybrid_charmm_grms(mlpot_ctx)
+        _print_hybrid_charmm_grms_diag(
+            f"{context_prefix} post-FIRE hybrid GRMS" if verbose else "",
+            diag,
+        )
+        grms_hot = grms_limit is not None and hybrid_grms > float(grms_limit)
+        user = assert_mlpot_user_active(
+            mlpot_ctx,
+            context=f"{context_prefix} MLpot SD (post calculator FIRE)",
             quiet=not verbose,
         )
         user_hot = energy_limit is not None and user > float(energy_limit)
@@ -2279,19 +2331,42 @@ def prepare_mlpot_hybrid_state_for_sd(
     if grms_hot or user_hot:
         _run_bonded_recovery()
 
-    if calculator_minimize and not ran_calculator_mini and hybrid_grms <= max_start_grms:
-        _run_calculator_mini("post-recovery", force=ran_bonded_recovery)
+    still_hot = grms_limit is not None and hybrid_grms > float(grms_limit)
+    if calculator_minimize and not ran_calculator_mini and (
+        hybrid_grms <= max_start_grms or ran_bonded_recovery
+    ):
+        _run_calculator_mini(
+            "post-recovery",
+            force=bool(ran_bonded_recovery and still_hot),
+        )
+        still_hot = grms_limit is not None and hybrid_grms > float(grms_limit)
+
+    if calculator_minimize and still_hot:
+        if not ran_calculator_mini:
+            _run_calculator_mini("post-recovery", force=True)
+            still_hot = grms_limit is not None and hybrid_grms > float(grms_limit)
+        if still_hot:
+            _run_calculator_fire("post-recovery", force=True)
+            still_hot = grms_limit is not None and hybrid_grms > float(grms_limit)
 
     if (grms_hot or user_hot) and not ran_bonded_recovery:
         _run_bonded_recovery()
+        still_hot = grms_limit is not None and hybrid_grms > float(grms_limit)
+        if calculator_minimize and still_hot:
+            _run_calculator_mini("post-recovery", force=True)
+            still_hot = grms_limit is not None and hybrid_grms > float(grms_limit)
+            if still_hot:
+                _run_calculator_fire("post-recovery", force=True)
+                still_hot = grms_limit is not None and hybrid_grms > float(grms_limit)
 
     if grms_limit is not None and hybrid_grms > float(grms_limit):
         msg = (
             f"{context_prefix}: hybrid GRMS {hybrid_grms:.2f} kcal/mol/Å > "
-            f"{float(grms_limit):.1f} after resync/recovery; refusing MLpot SD. "
-            "Try more pretreat/--mini-nstep, a composition checkpoint, or "
-            "MMML_MLPOT_ALLOW_HIGH_GRMS (not recommended)."
+            f"{float(grms_limit):.1f} after resync/recovery"
         )
+        if ran_calculator_mini or ran_calculator_fire:
+            msg += ", bonded-MM recovery, and hybrid calculator BFGS/FIRE"
+        msg += "; refusing MLpot SD. Try more pretreat/--mini-nstep, a composition checkpoint, or MMML_MLPOT_ALLOW_HIGH_GRMS (not recommended)."
         if not allow_high_grms:
             raise RuntimeError(msg)
         print(f"WARN: {msg}", flush=True)
