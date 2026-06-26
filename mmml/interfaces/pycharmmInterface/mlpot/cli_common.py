@@ -485,6 +485,9 @@ class CharmmMmPretreatSettings:
     ps_heat: float | None
     ps_equi: float
     ps_prod: float
+    inbfrq: int
+    imgfrq: int
+    ixtfrq: int
 
 
 def resolve_charmm_mm_pretreat_settings(args: Any) -> CharmmMmPretreatSettings:
@@ -522,6 +525,9 @@ def resolve_charmm_mm_pretreat_settings(args: Any) -> CharmmMmPretreatSettings:
         ps_heat=ps_heat,
         ps_equi=ps_equi,
         ps_prod=ps_prod,
+        inbfrq=resolve_pretreat_dyn_inbfrq(args, dt_fs=dt_fs),
+        imgfrq=resolve_pretreat_dyn_imgfrq(args, dt_fs=dt_fs),
+        ixtfrq=resolve_pretreat_dyn_ixtfrq(args, dt_fs=dt_fs),
     )
 
 
@@ -541,6 +547,65 @@ def resolve_pretreat_dynamics_print_kwargs(*, nstep: int) -> dict[str, int]:
     """Suppress CHARMM dynamics status lines during pretreat (single summary at end)."""
     n = max(1, int(nstep))
     return {"nprint": n, "iprfrq": n, "isvfrq": n}
+
+
+REF_MLPOT_DYN_DT_FS = 0.25
+REF_MLPOT_DYN_INBFRQ = 50
+REF_MLPOT_DYN_IXTFRQ = 1000
+
+
+def _pretreat_dyn_freq_scale(dt_fs: float) -> float:
+    """Scale list-rebuild cadence with pretreat dt (larger dt → less frequent updates)."""
+    return max(1.0, float(dt_fs) / REF_MLPOT_DYN_DT_FS)
+
+
+def resolve_pretreat_dyn_inbfrq(args: Any, *, dt_fs: float) -> int:
+    """Pretreat CHARMM ``inbfrq`` (default scales with ``--charmm-mm-pretreat-dt-fs``)."""
+    raw = getattr(args, "charmm_mm_pretreat_inbfrq", None)
+    if raw is not None:
+        return int(raw)
+    scale = _pretreat_dyn_freq_scale(dt_fs)
+    return max(REF_MLPOT_DYN_INBFRQ, int(round(REF_MLPOT_DYN_INBFRQ * scale)))
+
+
+def resolve_pretreat_dyn_imgfrq(args: Any, *, dt_fs: float) -> int:
+    """Pretreat PBC image/HB list cadence (``imgfrq`` / ``ihbfrq`` / ``ilbfrq``)."""
+    raw = getattr(args, "charmm_mm_pretreat_imgfrq", None)
+    if raw is not None:
+        return int(raw)
+    return resolve_pretreat_dyn_inbfrq(args, dt_fs=dt_fs)
+
+
+def resolve_pretreat_dyn_ixtfrq(args: Any, *, dt_fs: float) -> int:
+    """Pretreat crystal transform cadence (``ixtfrq``)."""
+    raw = getattr(args, "charmm_mm_pretreat_ixtfrq", None)
+    if raw is not None:
+        return int(raw)
+    scale = _pretreat_dyn_freq_scale(dt_fs)
+    return max(REF_MLPOT_DYN_IXTFRQ, int(round(REF_MLPOT_DYN_IXTFRQ * scale)))
+
+
+def apply_pretreat_dyn_freq_kwargs(
+    kw: dict[str, Any],
+    args: Any,
+    *,
+    use_pbc: bool,
+    dt_fs: float,
+) -> None:
+    """Lower pretreat list-update frequency vs MLpot dynamics (scaled ``inbfrq`` / ``imgfrq``)."""
+    inb = resolve_pretreat_dyn_inbfrq(args, dt_fs=dt_fs)
+    kw["inbfrq"] = inb
+    if use_pbc:
+        img = resolve_pretreat_dyn_imgfrq(args, dt_fs=dt_fs)
+        kw["imgfrq"] = img
+        kw["ihbfrq"] = img
+        kw["ilbfrq"] = img
+        if "ixtfrq" in kw:
+            kw["ixtfrq"] = resolve_pretreat_dyn_ixtfrq(args, dt_fs=dt_fs)
+    else:
+        kw["imgfrq"] = 0
+        kw["ihbfrq"] = 0
+        kw["ilbfrq"] = 0
 
 
 def add_charmm_mm_pretreat_physics_args(group: Any) -> None:
@@ -570,6 +635,33 @@ def add_charmm_mm_pretreat_physics_args(group: Any) -> None:
         help=(
             "Pretreat CHARMM NPT reference pressure (default: --npt-pressure or --pressure)."
         ),
+    )
+    group.add_argument(
+        "--charmm-mm-pretreat-inbfrq",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "Pretreat CHARMM nonbond list rebuild cadence (inbfrq). "
+            "Default scales with --charmm-mm-pretreat-dt-fs (400 at 2 fs vs 50 for MLpot)."
+        ),
+    )
+    group.add_argument(
+        "--charmm-mm-pretreat-imgfrq",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "Pretreat PBC image/HB list cadence (imgfrq/ihbfrq/ilbfrq). "
+            "Default matches pretreat inbfrq."
+        ),
+    )
+    group.add_argument(
+        "--charmm-mm-pretreat-ixtfrq",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Pretreat crystal transform cadence (ixtfrq; default scales with pretreat dt).",
     )
 
 

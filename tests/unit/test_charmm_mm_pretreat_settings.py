@@ -9,9 +9,11 @@ import pytest
 from mmml.cli.run.md_system import build_pycharmm_command
 from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     DEFAULT_CHARMM_MM_PRETREAT_DT_FS,
+    apply_pretreat_dyn_freq_kwargs,
     resolve_charmm_mm_pretreat_heat_nstep,
     resolve_charmm_mm_pretreat_settings,
     resolve_pretreat_dynamics_print_kwargs,
+    resolve_pretreat_dyn_inbfrq,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import (
     build_charmm_mm_pretreat_handoff_sections,
@@ -31,6 +33,9 @@ def test_resolve_charmm_mm_pretreat_settings_defaults():
     assert pretreat.timestep_ps == pytest.approx(0.002)
     assert pretreat.temperature_K == pytest.approx(310.0)
     assert pretreat.pressure_atm == pytest.approx(1.5)
+    assert pretreat.inbfrq == 400
+    assert pretreat.imgfrq == 400
+    assert pretreat.ixtfrq == 8000
 
 
 def test_resolve_charmm_mm_pretreat_settings_explicit_overrides():
@@ -86,6 +91,9 @@ def test_build_pretreat_handoff_includes_thermodynamics_section():
         ps_heat=10.0,
         ps_equi=0.0,
         ps_prod=0.0,
+        inbfrq=400,
+        imgfrq=400,
+        ixtfrq=8000,
     )
     sections = build_charmm_mm_pretreat_handoff_sections(
         pos,
@@ -102,7 +110,41 @@ def test_build_pretreat_handoff_includes_thermodynamics_section():
     assert thermo["temperature_K"] == "300.00"
     assert thermo["pressure_atm"] == "1.0000"
     assert thermo["heat_ps"] == "10.000"
+    assert thermo["inbfrq"] == 400
     assert "density_g/cm³" in thermo
+
+
+def test_resolve_pretreat_dyn_inbfrq_scales_with_dt():
+    args = argparse.Namespace()
+    assert resolve_pretreat_dyn_inbfrq(args, dt_fs=0.25) == 50
+    assert resolve_pretreat_dyn_inbfrq(args, dt_fs=2.0) == 400
+
+
+def test_apply_pretreat_dyn_freq_kwargs_pbc():
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        apply_pretreat_dyn_freq_kwargs,
+    )
+
+    args = argparse.Namespace(charmm_mm_pretreat_dt_fs=2.0)
+    kw = {"inbfrq": 50, "imgfrq": 50, "ihbfrq": 50, "ilbfrq": 50, "ixtfrq": 1000}
+    apply_pretreat_dyn_freq_kwargs(kw, args, use_pbc=True, dt_fs=2.0)
+    assert kw["inbfrq"] == 400
+    assert kw["imgfrq"] == 400
+    assert kw["ixtfrq"] == 8000
+
+
+def test_build_pycharmm_command_forwards_pretreat_freq_flags():
+    cmd = build_pycharmm_command(
+        _pycharmm_args(
+            charmm_mm_pretreat=True,
+            charmm_mm_pretreat_inbfrq=300,
+            charmm_mm_pretreat_imgfrq=250,
+        )
+    )
+    idx = cmd.index("--charmm-mm-pretreat-inbfrq")
+    assert cmd[idx + 1] == "300"
+    idx = cmd.index("--charmm-mm-pretreat-imgfrq")
+    assert cmd[idx + 1] == "250"
 
 
 def test_build_pycharmm_command_forwards_pretreat_physics_flags():

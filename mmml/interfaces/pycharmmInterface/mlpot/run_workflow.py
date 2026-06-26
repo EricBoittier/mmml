@@ -148,25 +148,13 @@ def _pretreat_npt_cpt_builder_options(
 def _resolve_charmm_mm_pretreat_heat_nstep(args: argparse.Namespace, *, timestep_ps: float) -> int:
     """Backward-compatible wrapper; prefer :func:`resolve_charmm_mm_pretreat_heat_nstep`."""
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
-        CharmmMmPretreatSettings,
         resolve_charmm_mm_pretreat_heat_nstep,
+        resolve_charmm_mm_pretreat_settings,
     )
 
-    settings = CharmmMmPretreatSettings(
-        dt_fs=float(timestep_ps) * 1000.0,
-        timestep_ps=float(timestep_ps),
-        temperature_K=float(getattr(args, "temperature", 300.0)),
-        pressure_atm=float(getattr(args, "npt_pressure", getattr(args, "pressure", 1.0))),
-        ps_heat=(
-            float(getattr(args, "charmm_mm_pretreat_ps_heat"))
-            if getattr(args, "charmm_mm_pretreat_ps_heat", None) is not None
-            and float(getattr(args, "charmm_mm_pretreat_ps_heat")) > 0.0
-            else None
-        ),
-        ps_equi=float(getattr(args, "charmm_mm_pretreat_ps_equi", 0.0) or 0.0),
-        ps_prod=float(getattr(args, "charmm_mm_pretreat_ps_prod", 0.0) or 0.0),
+    return resolve_charmm_mm_pretreat_heat_nstep(
+        args, settings=resolve_charmm_mm_pretreat_settings(args)
     )
-    return resolve_charmm_mm_pretreat_heat_nstep(args, settings=settings)
 
 
 def _pretreat_use_fixed_box_nvt(args: argparse.Namespace, *, use_pbc: bool) -> bool:
@@ -225,6 +213,7 @@ def _run_charmm_mm_pretreat_cpt_stage(
     )
     save_interval_ps = timestep_ps * max(1, dcd_nsavc)
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        apply_pretreat_dyn_freq_kwargs,
         resolve_pretreat_dynamics_print_kwargs,
     )
 
@@ -280,6 +269,12 @@ def _run_charmm_mm_pretreat_cpt_stage(
     kw["nprint"] = dyn_print["nprint"]
     kw["iprfrq"] = dyn_print["iprfrq"]
     kw["isvfrq"] = dyn_print["isvfrq"]
+    apply_pretreat_dyn_freq_kwargs(
+        kw,
+        args,
+        use_pbc=use_pbc,
+        dt_fs=float(timestep_ps) * 1000.0,
+    )
     kw["new"] = False
     kw["start"] = False
     kw["restart"] = False
@@ -355,6 +350,7 @@ def run_charmm_mm_pretreat_before_mlpot(
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_quiet_output
     from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        apply_pretreat_dyn_freq_kwargs,
         resolve_charmm_mm_pretreat_heat_nstep,
         resolve_charmm_mm_pretreat_settings,
         resolve_pretreat_dynamics_print_kwargs,
@@ -428,6 +424,8 @@ def run_charmm_mm_pretreat_before_mlpot(
                     if save
                     else 0,
                     use_pbc=use_pbc,
+                    inbfrq=pretreat.inbfrq,
+                    ihbfrq=pretreat.imgfrq if use_pbc else 0,
                 )
             )
 
@@ -464,6 +462,12 @@ def run_charmm_mm_pretreat_before_mlpot(
             kw["iasvel"] = 1
             apply_heat_ramp_frequencies(
                 kw, nstep=n_heat_run, ihtfrq=resolve_heat_ihtfrq(args, nstep=n_heat_run)
+            )
+            apply_pretreat_dyn_freq_kwargs(
+                kw,
+                args,
+                use_pbc=use_pbc,
+                dt_fs=pretreat.dt_fs,
             )
 
             io = CharmmTrajectoryFiles(
@@ -1378,6 +1382,10 @@ def build_charmm_mm_pretreat_handoff_sections(
         thermo["timestep_ps"] = f"{float(pretreat_settings.timestep_ps):.6f}"
         thermo["temperature_K"] = f"{float(pretreat_settings.temperature_K):.2f}"
         thermo["pressure_atm"] = f"{float(pretreat_settings.pressure_atm):.4f}"
+        thermo["inbfrq"] = int(pretreat_settings.inbfrq)
+        if use_pbc:
+            thermo["imgfrq"] = int(pretreat_settings.imgfrq)
+            thermo["ixtfrq"] = int(pretreat_settings.ixtfrq)
         if pretreat_settings.ps_heat is not None:
             thermo["heat_ps"] = f"{float(pretreat_settings.ps_heat):.3f}"
         elif pretreat_heat_nstep is not None:
