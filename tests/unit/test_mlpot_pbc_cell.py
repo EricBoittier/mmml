@@ -264,6 +264,8 @@ def test_register_mlpot_context_forwards_cell():
         fake_sel,
         use_pbc=True,
         mm_internal_scale=0.0,
+        mm_nonbond_mode="jax_mic",
+        periodic_charmm_vdw=True,
         cubic_box_side_A=20.0,
         verbose=False,
     )

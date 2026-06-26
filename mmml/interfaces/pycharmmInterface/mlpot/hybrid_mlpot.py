@@ -104,11 +104,13 @@ class DecomposedMlpotCalculator:
         *,
         spatial_mpi: bool = False,
         atoms_per_monomer: Sequence[int] | None = None,
+        periodic_mm_config: Any | None = None,
     ) -> None:
         self.spherical_fn = spherical_fn
         self.cutoff_params = cutoff_params
         self.n_monomers = int(n_monomers)
         self.do_mm = bool(do_mm)
+        self._periodic_mm_config = periodic_mm_config
         self._get_update_fn = get_update_fn
         self._ml_compute_dtype = ml_compute_dtype
         self._spatial_mpi = bool(spatial_mpi)
@@ -425,6 +427,20 @@ class DecomposedMlpotCalculator:
             parent._last_ml_forces = self.last_ml_forces
         if mlpot_profiling_enabled():
             get_mlpot_profile_stats().record_ml(time.perf_counter() - t0)
+        periodic_cfg = getattr(self, "_periodic_mm_config", None)
+        if periodic_cfg is not None and run_ml and self._cell:
+            from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm_external import (
+                add_periodic_coulomb_to_callback,
+            )
+
+            side = float(self._cell)
+            e_kcal, forces = add_periodic_coulomb_to_callback(
+                pos,
+                box_side_A=side,
+                cfg=periodic_cfg,
+                energy_kcal=float(e_kcal),
+                forces_kcal=np.asarray(forces, dtype=np.float64),
+            )
         for i in range(n):
             dx[i] -= forces[i, 0]
             dy[i] -= forces[i, 1]
@@ -452,6 +468,7 @@ class DecomposedMlpotModel:
         spatial_mpi: bool = False,
         atoms_per_monomer: Sequence[int] | None = None,
         defer_jax_until_after_sd: bool = False,
+        periodic_mm_config: Any | None = None,
     ) -> None:
         self._spherical_fn = spherical_fn
         self._cutoff_params = cutoff_params
@@ -459,6 +476,7 @@ class DecomposedMlpotModel:
         self._atomic_numbers = np.asarray(atomic_numbers, dtype=int)
         self._cell = float(cell) if cell else False
         self._do_mm = bool(do_mm)
+        self._periodic_mm_config = periodic_mm_config
         self._get_update_fn = get_update_fn
         self._ml_compute_dtype = ml_compute_dtype
         self._spatial_mpi = bool(spatial_mpi)
@@ -576,6 +594,7 @@ class DecomposedMlpotModel:
             ml_compute_dtype=self._ml_compute_dtype,
             spatial_mpi=self._spatial_mpi,
             atoms_per_monomer=self._atoms_per_monomer,
+            periodic_mm_config=self._periodic_mm_config,
         )
         calc._parent_model = self
         self._registered_calculator = calc
@@ -678,13 +697,29 @@ def build_decomposed_mlpot_model(
             f"Decomposed MLpot: MIC PBC cubic cell={float(cell):.3f} Å",
             flush=True,
         )
+    if verbose and periodic_mm_config is not None and cell:
+        from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm import (
+            periodic_mm_status_line,
+        )
+
+        print(
+            periodic_mm_status_line(periodic_mm_config, box_side_A=float(cell)),
+            flush=True,
+        )
     if verbose and max_pairs is not None:
         print(
             f"Decomposed MLpot: max_pairs={int(max_pairs)} (PBC cell-list buffer)",
             flush=True,
         )
     do_ml = True
-    do_mm = True
+    from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm import (
+        build_periodic_mm_config,
+        resolve_mm_nonbond_mode,
+    )
+
+    periodic_mm_config = build_periodic_mm_config(args)
+    periodic_mode = resolve_mm_nonbond_mode(args) == "periodic_external"
+    do_mm = not periodic_mode
     do_ml_dimer = True
     factory = setup_calculator(
         ATOMS_PER_MONOMER=per,
@@ -736,6 +771,7 @@ def build_decomposed_mlpot_model(
             spatial_mpi=spatial_mpi,
             atoms_per_monomer=per,
             defer_jax_until_after_sd=defer_jax_until_after_sd,
+            periodic_mm_config=periodic_mm_config,
         )
     r0 = np.zeros((len(z), 3), dtype=np.float64)
     from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_context
@@ -771,6 +807,7 @@ def build_decomposed_mlpot_model(
         ml_compute_dtype=ml_compute_dtype,
         spatial_mpi=spatial_mpi,
         atoms_per_monomer=per,
+        periodic_mm_config=periodic_mm_config,
     )
     return model
 

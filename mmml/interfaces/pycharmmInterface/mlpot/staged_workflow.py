@@ -1368,6 +1368,31 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 flush=True,
             )
 
+    from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm import (
+        assert_periodic_mm_box_side,
+        cluster_extent_from_positions,
+        periodic_mm_status_line,
+        resolve_mm_nonbond_mode,
+        validate_periodic_mm_args,
+    )
+
+    if resolve_mm_nonbond_mode(args) == "periodic_external":
+        periodic_cfg = validate_periodic_mm_args(
+            args,
+            charmm_pbc=charmm_pbc,
+            mlpot_pbc=mlpot_pbc,
+            box_side_A=box_side,
+        )
+        assert_periodic_mm_box_side(
+            float(box_side),
+            cluster_extent_A=cluster_extent_from_positions(r),
+        )
+        if not args.quiet:
+            print(
+                periodic_mm_status_line(periodic_cfg, box_side_A=float(box_side)),
+                flush=True,
+            )
+
     dt_fs = float(getattr(args, "dt_fs", 0.25))
     timestep_ps = timestep_ps_from_dt_fs(dt_fs)
     if getattr(args, "timestep_ps", None) is not None:
