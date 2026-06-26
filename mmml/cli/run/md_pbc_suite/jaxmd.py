@@ -1150,25 +1150,13 @@ def main(argv: list[str] | None = None) -> int:
         initial_velocities=initial_velocities,
         minimization_skipped=bool(skip_pre_min),
     )
-    # For NPT path in jaxmd_runner, neighbor list is refreshed once per recording block.
-    if args.ensemble == "npt":
+    actual_nbr_interval = int(max(1, getattr(run_sim, "neighbor_update_interval_steps", 1)))
+    expected_nbr_updates = int(nsteps // actual_nbr_interval) if not free_space and get_update_fn is not None else 0
+    if not free_space and get_update_fn is not None:
         print(
-            f"[jaxmd_nbr] update cadence: every {max(1, args.steps_per_recording)} MD steps "
-            f"(records={int(round(args.ps * 1000.0 / args.dt_fs)) // max(1, args.steps_per_recording)})"
-        )
-        print(
-            "[jaxmd_nbr] internal updater settings (configured pre-min reuse): "
-            f"update_interval_calls={effective_update_interval}, skin_distance={effective_skin:.3f} A"
-        )
-    elif args.ensemble == "nvt":
-        print(
-            "[jaxmd_nbr] internal updater settings (NVT fixed-box reuse): "
-            f"update_interval_calls={effective_update_interval}, skin_distance={effective_skin:.3f} A"
-        )
-    elif args.ensemble == "nve" and not free_space:
-        print(
-            "[jaxmd_nbr] NVE PBC: neighbor list refresh every MD step "
-            f"(update_interval_calls={effective_update_interval}, skin_distance={effective_skin:.3f} A)"
+            f"[jaxmd_nbr] update cadence: every {actual_nbr_interval} MD steps "
+            f"(expected_updates={expected_nbr_updates}, requested_interval={effective_update_interval}, "
+            f"skin_distance={effective_skin:.3f} A)"
         )
     update_fn_live = get_update_fn(np.asarray(atoms.get_positions(), dtype=np.float64), cutoff) if get_update_fn else None
     key = random.PRNGKey(args.seed)

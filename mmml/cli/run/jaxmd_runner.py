@@ -47,22 +47,35 @@ def resolve_jaxmd_steps_per_loop_call(
     has_update_fn: bool,
     jax_md_update_interval: int | None,
 ) -> int:
-    """MD steps per JIT block before refreshing PBC MM neighbor lists.
+    """Return the JAX-MD block size that also controls MM pair refresh cadence.
 
-    The dynamic MM pair list is passed into the compiled step as data. For PBC
-    hybrid dynamics, ``jax_md_update_interval`` therefore controls both the
-    Python neighbor-list refresh cadence and the JIT block length. The default
-    remains one step for conservative behavior, but explicit larger intervals
-    avoid per-step host synchronization in CPU neighbor-list mode.
+    The hybrid calculator passes the MM pair list into the compiled integrator
+    step as data. In PBC runs with an update function, the interval must
+    therefore mean two things at once:
+
+    - how often Python rebuilds the neighbor list;
+    - how many MD steps a single compiled JAX block advances before returning.
+
+    The default is intentionally conservative for PBC (`1` step), because stale
+    MM pairs can produce wrong forces. Explicit larger intervals are allowed for
+    stable NVT/NVE runs where avoiding per-step host synchronization matters.
+    The final value always divides ``steps_per_recording`` so each recording
+    block ends exactly on a neighbor-list refresh boundary.
     """
-    target = int(jax_md_update_interval or 1) if (use_pbc and has_update_fn) else int(jax_md_update_interval or 100)
-    if target <= 0:
-        target = 1 if (use_pbc and has_update_fn) else 100
-    steps_per_loop_call = min(target, int(steps_per_recording))
-    for d in range(steps_per_loop_call, 0, -1):
-        if int(steps_per_recording) % d == 0:
-            return d
-    return steps_per_loop_call
+    has_dynamic_pbc_pairs = use_pbc and has_update_fn
+    conservative_pbc_interval = 1
+    non_pbc_batch_interval = 100
+    default_interval = conservative_pbc_interval if has_dynamic_pbc_pairs else non_pbc_batch_interval
+
+    requested_interval = int(jax_md_update_interval or default_interval)
+    if requested_interval <= 0:
+        requested_interval = default_interval
+
+    max_block_steps = min(requested_interval, int(steps_per_recording))
+    for candidate_block_steps in range(max_block_steps, 0, -1):
+        if int(steps_per_recording) % candidate_block_steps == 0:
+            return candidate_block_steps
+    return max_block_steps
 
 # JAX-MD integrator carry (positions, momenta) must stay float32 even when the hybrid
 # calculator runs ML/MM interior math in float64 (ml_compute_dtype=float64).

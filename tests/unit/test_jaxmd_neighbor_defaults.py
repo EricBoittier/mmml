@@ -11,21 +11,34 @@ from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
 import numpy as np
 
 
+PBC_RECORDING_BLOCK_STEPS = 800
+PBC_BOX_A = np.array([40.0, 40.0, 40.0])
+
+
+def resolve_pbc_loop_steps(jax_md_update_interval: int | None) -> int:
+    """Resolve the production PBC case: dynamic MM pairs inside a fixed recording block."""
+    return resolve_jaxmd_steps_per_loop_call(
+        steps_per_recording=PBC_RECORDING_BLOCK_STEPS,
+        use_pbc=True,
+        has_update_fn=True,
+        jax_md_update_interval=jax_md_update_interval,
+    )
+
+
 def test_default_skin_is_quarter_angstrom():
     assert DEFAULT_JAX_MD_SKIN_DISTANCE_A == 0.25
 
 
 def test_skin_zero_interval_one_never_reuses():
     R = np.zeros((4, 3), dtype=np.float64)
-    box = np.array([40.0, 40.0, 40.0])
     assert not neighbor_pair_cache_should_reuse(
         calls=1,
         interval=1,
         skin=0.0,
         R=R,
         last_R=R.copy(),
-        box=box,
-        last_box=box.copy(),
+        box=PBC_BOX_A,
+        last_box=PBC_BOX_A.copy(),
         have_cache=True,
     )
 
@@ -34,53 +47,28 @@ def test_default_skin_interval_one_reuses_small_step():
     R0 = np.zeros((4, 3), dtype=np.float64)
     R1 = R0.copy()
     R1[0, 0] = 0.1
-    box = np.array([40.0, 40.0, 40.0])
     assert neighbor_pair_cache_should_reuse(
         calls=1,
         interval=1,
         skin=DEFAULT_JAX_MD_SKIN_DISTANCE_A,
         R=R1,
         last_R=R0,
-        box=box,
-        last_box=box.copy(),
+        box=PBC_BOX_A,
+        last_box=PBC_BOX_A.copy(),
         have_cache=True,
     )
 
 
 def test_resolve_steps_per_loop_call_defaults_to_one_for_pbc_with_update_fn():
-    assert (
-        resolve_jaxmd_steps_per_loop_call(
-            steps_per_recording=800,
-            use_pbc=True,
-            has_update_fn=True,
-            jax_md_update_interval=None,
-        )
-        == 1
-    )
+    assert resolve_pbc_loop_steps(jax_md_update_interval=None) == 1
 
 
 def test_resolve_steps_per_loop_call_honors_pbc_update_interval():
-    assert (
-        resolve_jaxmd_steps_per_loop_call(
-            steps_per_recording=800,
-            use_pbc=True,
-            has_update_fn=True,
-            jax_md_update_interval=10,
-        )
-        == 10
-    )
+    assert resolve_pbc_loop_steps(jax_md_update_interval=10) == 10
 
 
 def test_resolve_steps_per_loop_call_uses_divisor_for_recording_blocks():
-    assert (
-        resolve_jaxmd_steps_per_loop_call(
-            steps_per_recording=800,
-            use_pbc=True,
-            has_update_fn=True,
-            jax_md_update_interval=30,
-        )
-        == 25
-    )
+    assert resolve_pbc_loop_steps(jax_md_update_interval=30) == 25
 
 
 def test_format_mm_pair_update_stats_summary():

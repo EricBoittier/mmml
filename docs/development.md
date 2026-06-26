@@ -13,13 +13,25 @@ pytest
 Build static docs:
 
 ```bash
-mkdocs build
+make docs-build
+```
+
+Build with the same strict checks used in CI:
+
+```bash
+make docs-strict
+```
+
+Export a single PDF from the MkDocs navigation:
+
+```bash
+make docs-pdf
 ```
 
 Serve docs in watch mode:
 
 ```bash
-mkdocs serve
+make docs-serve
 ```
 
 ## Notes
