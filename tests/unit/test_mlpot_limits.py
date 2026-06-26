@@ -75,6 +75,29 @@ def test_required_max_npr_margin():
     assert mlpot_limits.required_max_npr(825, pbc=True) > 4_000_000
 
 
+def test_select_npr_tier_dcm_206_pbc_l35():
+    assert mlpot_limits.select_npr_tier(1030, pbc=True, box_side_A=35.0) == "xlarge"
+    assert mlpot_limits.tier_max_npr("xlarge") == 12_000_000
+
+
+def test_preflight_mlpot_registration_limits_delegates(monkeypatch):
+    called: list[tuple] = []
+
+    def _fake_validate(n_ml, *, pbc, box_side_A):
+        called.append((n_ml, pbc, box_side_A))
+
+    monkeypatch.setattr(mlpot_limits, "validate_mlpot_system_size", _fake_validate)
+    monkeypatch.setattr(
+        mlpot_limits,
+        "pbc_pair_budget_box_side_A",
+        lambda n, box: float(box) if box else None,
+    )
+    mlpot_limits.preflight_mlpot_registration_limits(
+        1030, mlpot_pbc=True, box_side_A=35.0
+    )
+    assert called == [(1030, True, 35.0)]
+
+
 def test_ensure_mlpot_limits_for_system_raises_with_tier(monkeypatch):
     monkeypatch.setenv("MMML_CHARMM_MLPOT_MAX_ML", "50000")
     monkeypatch.setenv("MMML_CHARMM_MLPOT_MAX_PAIRS", "3998000")

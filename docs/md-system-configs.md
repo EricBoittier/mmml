@@ -205,6 +205,33 @@ mmml md-system \
 4. **Lattice ABNR** — `mini_lattice_abnr_steps: 200` optimizes the cubic cell (and optionally coordinates) under PBC.
 5. **Mini box equil** — `mini_box_equil_ps: 2.0` short CPT NPT before MLpot registration (`mini_box_equil_allow_fixed_box: true` when `box_size` is set).
 
+### CHARMM MLpot compile limits (`max_Npr`)
+
+PyCHARMM MLpot stores ML atom-pair lists in fixed Fortran buffers sized at **compile time** (`api_func.F90` → `max_Npr`). PBC MIC systems multiply pair count by periodic image copies (~6–8× for dense boxes).
+
+| System | ML atoms | Box (Å) | Pairs (approx) | Tier | `max_Npr` |
+|--------|----------|---------|----------------|------|-----------|
+| DCM:90 | 450 | — | 0.2M | default | 4M |
+| DCM:165 | 825 | — | 4M+ | large | 8M |
+| **DCM:206** | **1030** | **35** | **8.3M** | **xlarge** | **12M** |
+| ACO:266 @ L=32 | 2660 | 32 | 36M+ | xxlarge | 36M |
+
+Before a large PBC run (or after changing composition/box), rebuild the matching tier **once per node/cache**:
+
+```bash
+cd /path/to/mmml
+./scripts/ensure_charmm_mlpot_limits.sh --n-ml 1030 --pbc --box-size 35
+export CHARMM_LIB_DIR="${CHARMM_LIB_DIR:-$HOME/.cache/mmml-charmm-build/tier_12000000_nodomdec/lib}"
+```
+
+Add `export CHARMM_LIB_DIR=...` to your job script or Slurm prolog. Staged workflows now **preflight** this check right after box sizing (before CHARMM MM pretreat) so you do not waste pretreat time on an undersized lib.
+
+Pre-build all tiers on a login node (optional):
+
+```bash
+bash workflows/pbc_solvent_burst/scripts/prebuild_charmm_tiers.sh
+```
+
 **Post-mini rescue ladder** (runs when GRMS > `max_grms_before_dyn` after MLpot SD and the existing jiggle recovery):
 
 | Step | Tool | Purpose |
