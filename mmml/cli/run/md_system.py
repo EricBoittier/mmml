@@ -203,6 +203,9 @@ def build_parser() -> argparse.ArgumentParser:
     from mmml.interfaces.pyxtal_placement import add_pyxtal_cluster_args
 
     add_pyxtal_cluster_args(parser)
+    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import add_box_sizing_args
+
+    add_box_sizing_args(parser)
     parser.add_argument(
         "--save-run-state",
         action="store_true",
@@ -1639,6 +1642,40 @@ def _validate_packmol_sphere_args(args: argparse.Namespace) -> None:
     _validate_packmol_args(args)
 
 
+def _validate_box_sizing_args(args: argparse.Namespace) -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+        parse_composition_dict,
+        resolve_box_auto_mode,
+        resolve_target_density_g_cm3,
+    )
+
+    if getattr(args, "box_size", None) is not None:
+        return
+    try:
+        mode = resolve_box_auto_mode(args)
+    except ValueError as exc:
+        raise ValueError(str(exc)) from exc
+    if mode != "density":
+        return
+    comp = parse_composition_dict(getattr(args, "composition", None))
+    resolve_target_density_g_cm3(args, comp)
+
+
+def _append_box_sizing_args(cmd: list[str], args: argparse.Namespace) -> None:
+    if getattr(args, "box_auto", None) is not None:
+        cmd.extend(["--box-auto", str(args.box_auto)])
+    _append_optional(cmd, "--target-density-g-cm3", getattr(args, "target_density_g_cm3", None))
+    _append_optional(cmd, "--bulk-density-fraction", getattr(args, "bulk_density_fraction", None))
+    ps = float(getattr(args, "mini_box_equil_ps", 0.0) or 0.0)
+    if ps > 0.0:
+        cmd.extend(["--mini-box-equil-ps", str(ps)])
+    if getattr(args, "mini_box_equil_allow_fixed_box", False):
+        cmd.append("--mini-box-equil-allow-fixed-box")
+    jax_ps = float(getattr(args, "jaxmd_mini_box_equil_ps", 0.0) or 0.0)
+    if jax_ps > 0.0:
+        cmd.extend(["--jaxmd-mini-box-equil-ps", str(jax_ps)])
+
+
 def _validate_pyxtal_args(args: argparse.Namespace) -> None:
     from mmml.interfaces.pyxtal_placement import validate_pyxtal_cluster_args
 
@@ -2146,6 +2183,7 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd.extend(["--fb-selection", str(args.flat_bottom_selection)])
     cmd.extend(["--seed", str(args.seed)])
     _append_pyxtal_args(cmd, args)
+    _append_box_sizing_args(cmd, args)
     _append_packmol_sphere_args(cmd, args)
     _append_boolean_optional_flag(
         cmd, "--reuse-packmol-cache", bool(getattr(args, "reuse_packmol_cache", True))
@@ -2291,6 +2329,7 @@ def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
     cmd.extend(["--seed", str(args.seed)])
     cmd.extend(["--min-intermonomer-atom-distance", str(args.min_intermonomer_atom_distance)])
     _append_pyxtal_args(cmd, args)
+    _append_box_sizing_args(cmd, args)
     _append_packmol_sphere_args(cmd, args)
     _append_optional(cmd, "--flat-bottom-radius", args.flat_bottom_radius)
     if args.flat_bottom_radius is not None:
@@ -2465,6 +2504,7 @@ def main() -> int:
         try:
             if not getattr(args, "evaluate_npz", None):
                 _validate_pyxtal_args(args)
+                _validate_box_sizing_args(args)
                 _validate_packmol_args(args)
         except ValueError as exc:
             print(f"mmml md-system: error: {exc}", file=sys.stderr)

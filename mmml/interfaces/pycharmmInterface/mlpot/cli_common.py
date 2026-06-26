@@ -2940,11 +2940,20 @@ def resolve_use_pbc(args: argparse.Namespace) -> bool:
 
 
 def resolve_pbc_box_side(args: argparse.Namespace, positions: np.ndarray) -> float:
-    if getattr(args, "box_size", None) is not None:
-        return float(args.box_size)
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
-        cubic_box_length_from_geometry,
+    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+        parse_composition_dict,
+        resolve_initial_pbc_box_side,
     )
 
-    ml_cutoff = float(getattr(args, "ml_cutoff", 12.0))
-    return cubic_box_length_from_geometry(positions, ml_cutoff=ml_cutoff)
+    comp = parse_composition_dict(getattr(args, "composition", None))
+    n_mol = int(getattr(args, "n_molecules", 0) or 0) or None
+    if comp is not None and n_mol is None:
+        n_mol = int(sum(comp.values()))
+    side, _source = resolve_initial_pbc_box_side(
+        args,
+        positions,
+        composition=comp,
+        n_molecules=n_mol,
+        ml_cutoff=float(getattr(args, "ml_cutoff", 12.0)),
+    )
+    return float(side)

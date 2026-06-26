@@ -213,6 +213,9 @@ def main(argv: list[str] | None = None) -> int:
         default=2.0,
         help="Packmol distance tolerance in Å (default: 2.0).",
     )
+    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import add_box_sizing_args
+
+    add_box_sizing_args(p)
     p.add_argument(
         "--flat-bottom-radius",
         type=float,
@@ -531,7 +534,13 @@ def main(argv: list[str] | None = None) -> int:
         r0 = _enforce_min_com_separation(r0, monomer_offsets, args.min_com_start_distance)
     ml_w, mm_on, mm_w = handoff_widths_from_args(args)
     free_space = bool(args.free_space)
-    auto_L = None if free_space else float(_cubic_box_length(r0, ml_w))
+    auto_L = None
+    if not free_space:
+        from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+            resolve_suite_auto_box_side,
+        )
+
+        auto_L, _auto_src = resolve_suite_auto_box_side(args, r0, ml_cutoff=ml_w)
     L, box_source, box_warnings = resolve_handoff_box(
         handoff_in,
         yaml_box_size=args.box_size,
@@ -541,6 +550,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     for msg in box_warnings:
         print(f"Handoff box: {msg}", flush=True)
+    jax_equil_ps = float(getattr(args, "jaxmd_mini_box_equil_ps", 0.0) or 0.0)
+    if jax_equil_ps > 0.0 and not free_space:
+        print(
+            "WARN: --jaxmd-mini-box-equil-ps is reserved for a future NPT prelude; "
+            "use --ensemble npt with a short --ps for cell equilibration today.",
+            flush=True,
+        )
     if free_space:
         if args.box_size is not None:
             print(

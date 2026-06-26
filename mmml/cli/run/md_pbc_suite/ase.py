@@ -1471,6 +1471,9 @@ def main(argv: list[str] | None = None) -> int:
     from mmml.interfaces.pyxtal_placement import add_pyxtal_cluster_args
 
     add_pyxtal_cluster_args(parser)
+    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import add_box_sizing_args
+
+    add_box_sizing_args(parser)
     parser.add_argument(
         "--flat-bottom-radius",
         type=float,
@@ -1749,7 +1752,9 @@ def main(argv: list[str] | None = None) -> int:
         )
         r0 = initial_atoms.get_positions()
 
-    auto_L = float(_cubic_box_length(r0, args.ml_cutoff))
+    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import resolve_suite_auto_box_side
+
+    auto_L, _auto_src = resolve_suite_auto_box_side(args, r0, ml_cutoff=float(args.ml_cutoff))
     L_resolved, box_source, box_warnings = resolve_handoff_box(
         handoff_in,
         yaml_box_size=args.box_size,
