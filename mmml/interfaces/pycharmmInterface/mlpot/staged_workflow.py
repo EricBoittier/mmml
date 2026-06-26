@@ -798,6 +798,8 @@ def _validate_dyn_stage_completion(
     nsavc: int,
     io: CharmmTrajectoryFiles,
     segment_note: str | None = None,
+    integrated_step: int | None = None,
+    salvaged_partial: bool = False,
 ) -> None:
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         assert_stage_dynamics_completed,
@@ -813,6 +815,8 @@ def _validate_dyn_stage_completion(
         restart_path=restart_path,
         allow_incomplete=bool(getattr(args, "allow_incomplete_dynamics", False)),
         segment_note=segment_note,
+        integrated_step=integrated_step,
+        salvaged_partial=salvaged_partial,
     )
 
 
@@ -2070,7 +2074,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         restart_prefix="heat",
                         restart_write=seg_io.restart_write,
                     )
-                    run_dynamics_with_io(
+                    dyn_result = run_dynamics_with_io(
                         kw,
                         seg_io,
                         overlap=stage_overlap,
@@ -2096,6 +2100,8 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                             if n_heat_segments > 1
                             else None
                         ),
+                        integrated_step=dyn_result.integrated_step,
+                        salvaged_partial=dyn_result.salvaged_partial,
                     )
                     ensure_segment_restart_checkpoint(seg_io.restart_write)
                     if baseline is not None or seg_i == n_heat_segments - 1:
@@ -2268,7 +2274,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                             temp=temp,
                             box_side=box_side,
                         )
-                    run_dynamics_with_io(
+                    dyn_result = run_dynamics_with_io(
                         kw,
                         seg_io,
                         overlap=stage_overlap,
@@ -2287,6 +2293,8 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         nstep=nstep,
                         nsavc=dcd_nsavc,
                         io=seg_io,
+                        integrated_step=dyn_result.integrated_step,
+                        salvaged_partial=dyn_result.salvaged_partial,
                     )
                     ensure_segment_restart_checkpoint(seg_io.restart_write)
                     memory_handoff_next = maybe_run_bonded_mm_mini_after_stage(
@@ -2428,7 +2436,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     )
                     if cpt_seed is not None:
                         restart_path = cpt_seed
-                    run_dynamics_with_io(
+                    dyn_result = run_dynamics_with_io(
                         kw,
                         seg_io,
                         overlap=stage_overlap,
@@ -2447,6 +2455,8 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         nstep=nstep,
                         nsavc=dcd_nsavc,
                         io=seg_io,
+                        integrated_step=dyn_result.integrated_step,
+                        salvaged_partial=dyn_result.salvaged_partial,
                     )
                     ensure_segment_restart_checkpoint(seg_io.restart_write)
                     memory_handoff_next = maybe_run_bonded_mm_mini_after_stage(
@@ -2737,7 +2747,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     temp=temp,
                     box_side=box_side,
                 )
-            run_dynamics_with_io(
+            dyn_result = run_dynamics_with_io(
                 kw,
                 io,
                 overlap=stage_overlap,
@@ -2758,6 +2768,8 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 nstep=nstep,
                 nsavc=dcd_nsavc,
                 io=io,
+                integrated_step=dyn_result.integrated_step,
+                salvaged_partial=dyn_result.salvaged_partial,
             )
             memory_handoff_next = maybe_run_bonded_mm_mini_after_stage(
                 ctx,

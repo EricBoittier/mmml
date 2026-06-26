@@ -4029,25 +4029,28 @@ def run_dynamics_with_io(
                     fallback_steps=expected_after,
                     steps_before_chunk=steps_before_chunk,
                 )
-                if reported_steps >= expected_after - 1:
-                    steps_done = max(reported_steps, expected_after)
-                else:
-                    steps_done = reported_steps
-                if chunk_state_corrupt:
-                    steps_done = min(
-                        steps_done,
-                        steps_before_chunk + max(0, chunk_nstep - 2),
-                    )
+                from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+                    classify_chunk_outcome,
+                    patch_restart_global_step,
+                    read_restart_last_step,
+                )
+
+                chunk_outcome = classify_chunk_outcome(
+                    steps_before_chunk=steps_before_chunk,
+                    chunk_nstep=chunk_nstep,
+                    reported_steps=reported_steps,
+                    chunk_state_corrupt=chunk_state_corrupt,
+                    restart_path=chunk_restart_path,
+                    overlap_context=overlap_context,
+                    chunk_index=chunk_index,
+                    n_chunks=n_chunks,
+                )
+                steps_done = chunk_outcome.integrated_step
                 if (
                     chunk_io is not None
                     and getattr(chunk_io, "restart_write", None) is not None
                     and steps_done >= expected_after - 1
                 ):
-                    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
-                        patch_restart_global_step,
-                        read_restart_last_step,
-                    )
-
                     restart_path = Path(chunk_io.restart_write)
                     header_step = read_restart_last_step(restart_path)
                     if header_step is None or header_step < expected_after - 1:
@@ -4062,10 +4065,10 @@ def run_dynamics_with_io(
                         mlpot_ctx=mlpot_ctx,
                         memory_handoff=overlap_memory_handoff or post_rescue_memory_this_chunk,
                     )
-                if steps_done < steps_before_chunk + chunk_nstep - 1:
+                if chunk_outcome.charmm_aborted:
                     print(
-                        f"overlap ({overlap_context}): integrated {steps_done}/{total_nstep} "
-                        "steps (echeck or CHARMM abort likely)",
+                        f"overlap ({overlap_context}): CHARMM abort at step "
+                        f"{steps_done}/{total_nstep}",
                         flush=True,
                     )
                     from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
@@ -4172,6 +4175,7 @@ def run_dynamics_with_io(
                                 post_rescue_handoff_applied = True
                             early_abort_memory_handoff = True
                         steps_done = steps_before_chunk
+                        abort_reason = "charmm_aborted"
                         rerun_chunk = True
                         retry_reason = (
                             "geometry recovery"
@@ -4185,6 +4189,12 @@ def run_dynamics_with_io(
                             flush=True,
                         )
                         continue
+                    print(
+                        f"overlap ({overlap_context}): early-abort will salvage "
+                        f"(recovery.ok={recovery.ok}, "
+                        f"retries={chunk_retry_count}/{_MAX_EARLY_ABORT_CHUNK_RETRIES})",
+                        flush=True,
+                    )
                     salvaged = _salvage_overlap_segment_progress(
                         chunk_io=chunk_io,
                         final_restart=final_restart,
@@ -4192,9 +4202,12 @@ def run_dynamics_with_io(
                         overlap_context=overlap_context,
                         mlpot_ctx=mlpot_ctx,
                         overlap_restart_read=overlap_restart_read_for_chunk,
+                        total_nstep=total_nstep,
                     )
                     if salvaged is not None:
                         steps_done = int(salvaged)
+                        salvaged_partial = True
+                        abort_reason = "charmm_aborted"
                         segment_aborted = False
                         rerun_chunk = False
                         chunk_index = n_chunks
@@ -4337,7 +4350,7 @@ def run_dynamics_with_io(
                         "(geometry recovery failed or chunk too short)"
                     )
             chunk_index += 1
-        completed = True
+        completed = steps_done >= total_nstep - 1 and not salvaged_partial
         if (
             any_post_rescue_restart_handoff
             and io is not None
@@ -4390,7 +4403,13 @@ def run_dynamics_with_io(
             )
         for f in trajectory_files:
             f.close()
-    return last_dyn
+    return _overlap_dynamics_result(
+        last_dyn,
+        integrated_step=steps_done,
+        completed_full=completed,
+        salvaged_partial=salvaged_partial,
+        abort_reason=abort_reason,
+    )
 
 
 def open_minimize_dcd(path: PathLike, *, unit: int = 51) -> Any:
