@@ -1171,6 +1171,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="PBC-aware FIRE steps after first minimization (default: 200).",
     )
     parser.add_argument(
+        "--jax-md-update-interval",
+        type=int,
+        default=1,
+        help=(
+            "JAX-MD/ASE PBC MM neighbor-list refresh interval in MD steps or calculator "
+            "calls (default: 1, conservative). Larger values reduce host/device sync "
+            "when pair-list stability has been validated."
+        ),
+    )
+    parser.add_argument(
+        "--jax-md-skin-distance",
+        type=float,
+        default=0.25,
+        help="JAX-MD/ASE PBC MM neighbor-list skin distance in Å (default: 0.25).",
+    )
+    parser.add_argument(
         "--evaluate-npz",
         type=Path,
         default=None,
@@ -1534,6 +1550,12 @@ def _append_suite_mmml_handoff_args(cmd: list[str], args: argparse.Namespace) ->
     cmd.extend(["--jaxmd-minimize-steps", str(getattr(args, "jaxmd_minimize_steps", 200))])
     cmd.extend(
         ["--jaxmd-pbc-minimize-steps", str(getattr(args, "jaxmd_pbc_minimize_steps", 2000))]
+    )
+    cmd.extend(
+        ["--jax-md-update-interval", str(getattr(args, "jax_md_update_interval", 1))]
+    )
+    cmd.extend(
+        ["--jax-md-skin-distance", str(getattr(args, "jax_md_skin_distance", 0.25))]
     )
     _append_boolean_optional_flag(
         cmd,

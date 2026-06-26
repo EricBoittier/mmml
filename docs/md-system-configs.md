@@ -15,6 +15,20 @@ mmml md-system --config mmml/cli/run/md_system.example.yaml --job-id jaxmd_prod
 
 The main goal for these configs is condensed-phase setup: build a dense molecular box, relax overlaps, hand it between PyCHARMM and JAX-MD, then run production with neighbor-list settings that are large and fresh enough for the density.
 
+```mermaid
+flowchart LR
+  CFG["YAML config\nsingle run or campaign"]
+  BUILD["builder\nPackmol, PyXtal, handoff, continue_from"]
+  EQUIL["PyCHARMM equilibration\nmini, heat, equi\nbonded cleanup + rescue"]
+  HANDOFF["handoff state\nbox, coordinates, velocities"]
+  JAX["JAX-MD production\nfixed-cell NVT/NVE or selected NPT"]
+  AUDIT["audit outputs\nsparse dimers, overlaps, trajectory"]
+
+  CFG --> BUILD --> EQUIL --> HANDOFF --> JAX --> AUDIT
+  CFG -. "run-specific overrides" .-> JAX
+  HANDOFF -. "resume / depends_on" .-> BUILD
+```
+
 ## File shapes
 
 A single-run config is a flat mapping. Keys are the Python form of CLI flags, so `--box-size` becomes `box_size`.
@@ -97,6 +111,23 @@ For condensed phase, keep the template staged and explicit:
 
 Avoid duplicate keys in YAML. If a setting appears twice, YAML keeps only the last value, which can hide mistakes. In particular, keep `dynamics_overlap_action` and `bonded_mm_mini` in one place, usually `defaults`.
 
+```mermaid
+sequenceDiagram
+  participant Config as campaign YAML
+  participant Planner as md-system planner
+  participant PyC as PyCHARMM leg
+  participant Handoff as handoff/state.npz
+  participant JAX as JAX-MD leg
+  participant Summary as campaign summary
+
+  Config->>Planner: defaults + runs
+  Planner->>PyC: pycharmm_equil
+  PyC->>Handoff: write box, positions, velocities
+  Planner->>JAX: jaxmd_prod depends_on pycharmm_equil
+  Handoff->>JAX: continue from equilibrated state
+  JAX->>Summary: status, artifacts, diagnostics
+```
+
 ## Builders for condensed phase
 
 `composition` uses `RES:N` entries such as `DCM:60` or `DCM:40,ACO:20`. A bare `RES` means one molecule. The builder determines the initial coordinates before minimization.
@@ -126,6 +157,22 @@ For small liquid boxes, start looser than the final density, minimize and heat, 
 ## Neighbor-list requirements
 
 Condensed phase fails quickly if the neighbor list is too small or refreshed too slowly. Treat neighbor-list sizing as part of the physical setup, not only a performance knob.
+
+```mermaid
+flowchart TB
+  DENSE["dense liquid box"]
+  CAP["max_pairs capacity"]
+  SKIN["skin distance\nreuse safe small moves"]
+  FRESH["update interval\nrefresh stale pairs"]
+  RUN["stable JAX-MD loop"]
+  FAIL["overflow, stale pairs,\nwrong forces, NaNs"]
+
+  DENSE --> CAP --> RUN
+  DENSE --> SKIN --> RUN
+  DENSE --> FRESH --> RUN
+  CAP -. "too small" .-> FAIL
+  FRESH -. "too slow" .-> FAIL
+```
 
 For JAX-MD:
 

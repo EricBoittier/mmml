@@ -19,10 +19,11 @@ from pathlib import Path
 from typing import Any, Iterable
 
 import yaml
+from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
-from reportlab.platypus import Image, PageBreak, Paragraph, Preformatted, SimpleDocTemplate, Spacer
+from reportlab.platypus import Image, PageBreak, Paragraph, Preformatted, SimpleDocTemplate, Spacer, Table, TableStyle
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -32,6 +33,7 @@ DEFAULT_OUTPUT = ROOT / "site" / "mmml-docs.pdf"
 LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 INLINE_CODE_RE = re.compile(r"`([^`]+)`")
 MERMAID_CLI_PACKAGE = "@mermaid-js/mermaid-cli"
+TABLE_SEPARATOR_RE = re.compile(r"^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$")
 
 
 class MkDocsConfigLoader(yaml.SafeLoader):
@@ -160,6 +162,78 @@ def mermaid_to_image_flowable(source: str, style_map: dict[str, ParagraphStyle])
         return [image, Spacer(1, 0.08 * inch)]
 
 
+def is_table_start(lines: list[str], index: int) -> bool:
+    """Return True when ``lines[index:]`` starts a Markdown pipe table."""
+    if index + 1 >= len(lines):
+        return False
+    return "|" in lines[index] and bool(TABLE_SEPARATOR_RE.match(lines[index + 1].strip()))
+
+
+def split_table_row(line: str) -> list[str]:
+    """Split one Markdown table row into cell text."""
+    stripped = line.strip()
+    if stripped.startswith("|"):
+        stripped = stripped[1:]
+    if stripped.endswith("|"):
+        stripped = stripped[:-1]
+    return [cell.strip() for cell in stripped.split("|")]
+
+
+def markdown_table_to_flowables(
+    table_lines: list[str],
+    style_map: dict[str, ParagraphStyle],
+) -> list[Any]:
+    """Render a Markdown pipe table as a styled ReportLab table."""
+    rows = [split_table_row(table_lines[0])]
+    rows.extend(split_table_row(line) for line in table_lines[2:])
+    if not rows:
+        return []
+
+    max_columns = max(len(row) for row in rows)
+    normalized_rows = [row + [""] * (max_columns - len(row)) for row in rows]
+    cell_style = ParagraphStyle(
+        "TableCell",
+        parent=style_map["Normal"],
+        fontSize=7.5,
+        leading=9,
+        wordWrap="CJK",
+    )
+    header_style = ParagraphStyle(
+        "TableHeader",
+        parent=cell_style,
+        fontName="Helvetica-Bold",
+        textColor=colors.HexColor("#111827"),
+    )
+    data = [
+        [
+            Paragraph(
+                inline_markdown_to_reportlab(cell),
+                header_style if row_index == 0 else cell_style,
+            )
+            for cell in row
+        ]
+        for row_index, row in enumerate(normalized_rows)
+    ]
+    available_width = 7.3 * inch
+    col_widths = [available_width / max_columns] * max_columns
+    table = Table(data, colWidths=col_widths, repeatRows=1, hAlign="LEFT")
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f3f4f6")),
+                ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#d1d5db")),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+                ("TOPPADDING", (0, 0), (-1, -1), 3),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#fafafa")]),
+            ]
+        )
+    )
+    return [table, Spacer(1, 0.1 * inch)]
+
+
 def markdown_page_to_flowables(title: str, path: Path, style_map: dict[str, ParagraphStyle]) -> list[Any]:
     """Render the Markdown subset used by the docs into ReportLab flowables."""
     flowables: list[Any] = [
@@ -172,7 +246,9 @@ def markdown_page_to_flowables(title: str, path: Path, style_map: dict[str, Para
     code_language = ""
     code_lines: list[str] = []
 
-    for line in lines:
+    line_index = 0
+    while line_index < len(lines):
+        line = lines[line_index]
         stripped = line.strip()
         if stripped.startswith("```"):
             if in_code_block:
@@ -188,26 +264,41 @@ def markdown_page_to_flowables(title: str, path: Path, style_map: dict[str, Para
             else:
                 in_code_block = True
                 code_language = stripped.removeprefix("```").strip().lower()
+            line_index += 1
             continue
         if in_code_block:
             code_lines.append(line)
+            line_index += 1
+            continue
+        if is_table_start(lines, line_index):
+            table_lines = [line]
+            line_index += 1
+            while line_index < len(lines) and "|" in lines[line_index].strip():
+                table_lines.append(lines[line_index])
+                line_index += 1
+            flowables.extend(markdown_table_to_flowables(table_lines, style_map))
             continue
         if not stripped:
             flowables.append(Spacer(1, 0.06 * inch))
+            line_index += 1
             continue
         if stripped.startswith("#"):
             level = len(stripped) - len(stripped.lstrip("#"))
             heading_text = stripped[level:].strip()
             if heading_text == title:
+                line_index += 1
                 continue
             style_name = "Heading2" if level <= 2 else "Heading3"
             flowables.append(Paragraph(inline_markdown_to_reportlab(heading_text), style_map[style_name]))
+            line_index += 1
             continue
         if stripped.startswith("- "):
             bullet_text = stripped[2:].strip()
             flowables.append(Paragraph(f"- {inline_markdown_to_reportlab(bullet_text)}", style_map["BulletBody"]))
+            line_index += 1
             continue
         flowables.append(Paragraph(inline_markdown_to_reportlab(stripped), style_map["Normal"]))
+        line_index += 1
 
     if code_lines:
         flowables.append(Preformatted("\n".join(code_lines), style_map["Code"]))
