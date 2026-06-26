@@ -123,6 +123,7 @@ def apply_mc_density_equalization(
     use_pbc: bool,
     handoff_present: bool = False,
     min_intermonomer_distance_A: float | None = None,
+    min_box_side_A: float | None = None,
 ) -> tuple[np.ndarray, float | None, McDensityResult]:
     """Apply default post-build MC density equalization when policy allows it."""
     enabled = bool(getattr(args, "mc_density_equalize", True))
@@ -239,11 +240,13 @@ def apply_mc_density_equalization(
     initial_L = float(box_side_A)
     initial_rho = float(total_mass_g) / (initial_L**3 * 1.0e-24)
     target_L = (float(total_mass_g) / (float(target) * 1.0e-24)) ** (1.0 / 3.0)
-    min_scale = float(getattr(args, "mc_density_min_scale", 0.75) or 0.75)
+    min_scale = float(getattr(args, "mc_density_min_scale", 0.35) or 0.35)
     max_scale = float(getattr(args, "mc_density_max_scale", 1.50) or 1.50)
     if min_scale <= 0.0 or max_scale <= 0.0 or min_scale > max_scale:
         raise ValueError("--mc-density-min-scale and --mc-density-max-scale must be positive with min <= max")
     min_L = initial_L * min_scale
+    if min_box_side_A is not None:
+        min_L = max(min_L, float(min_box_side_A))
     max_L = initial_L * max_scale
     target_L = float(np.clip(target_L, min_L, max_L))
     seed = getattr(args, "mc_density_seed", None)

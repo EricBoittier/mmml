@@ -119,6 +119,72 @@ def test_mc_density_equalization_uses_explicit_box_as_initial_side():
     assert new_pos.shape == pos.shape
 
 
+def test_mc_density_equalization_default_scale_can_shrink_large_packmol_box():
+    from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+        apply_mc_density_equalization,
+    )
+
+    args = _args(
+        composition="DCM:30",
+        box_size=40.0,
+        mc_density_target_g_cm3=None,
+        mc_density_min_scale=0.35,
+    )
+    pos = np.column_stack(
+        [
+            np.linspace(12.0, 28.0, 30),
+            np.full(30, 20.0),
+            np.full(30, 20.0),
+        ]
+    )
+    _new_pos, new_L, summary = apply_mc_density_equalization(
+        args,
+        pos,
+        atoms_per_list=[1] * 30,
+        composition={"DCM": 30},
+        box_side_A=40.0,
+        use_pbc=True,
+    )
+
+    assert summary.ran
+    assert new_L is not None
+    assert new_L < 30.0
+    assert summary.final_density_g_cm3 > 0.1567
+
+
+def test_mc_density_equalization_respects_mic_minimum_side():
+    from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+        apply_mc_density_equalization,
+    )
+
+    args = _args(
+        composition="DCM:30",
+        box_size=40.0,
+        mc_density_target_g_cm3=None,
+        mc_density_min_scale=0.35,
+    )
+    pos = np.column_stack(
+        [
+            np.linspace(12.0, 28.0, 30),
+            np.full(30, 20.0),
+            np.full(30, 20.0),
+        ]
+    )
+    _new_pos, new_L, summary = apply_mc_density_equalization(
+        args,
+        pos,
+        atoms_per_list=[1] * 30,
+        composition={"DCM": 30},
+        box_side_A=40.0,
+        use_pbc=True,
+        min_box_side_A=34.0,
+    )
+
+    assert summary.ran
+    assert new_L is not None
+    assert new_L >= 34.0
+
+
 def test_mc_density_equalization_skips_unknown_mixed_density_without_target():
     from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
         apply_mc_density_equalization,

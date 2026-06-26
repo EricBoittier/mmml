@@ -1769,6 +1769,9 @@ def main(argv: list[str] | None = None) -> int:
     from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
         apply_mc_density_equalization,
     )
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        cubic_box_length_from_geometry,
+    )
 
     r_pbc, L_after_mc, mc_density_summary = apply_mc_density_equalization(
         args,
@@ -1779,6 +1782,7 @@ def main(argv: list[str] | None = None) -> int:
         use_pbc=True,
         handoff_present=handoff_in is not None,
         min_intermonomer_distance_A=float(args.min_intermonomer_atom_distance),
+        min_box_side_A=cubic_box_length_from_geometry(r_pbc, ml_cutoff=float(args.ml_cutoff)),
     )
     if L_after_mc is not None:
         L = float(L_after_mc)

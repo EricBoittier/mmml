@@ -177,15 +177,17 @@ def neighbor_pair_cache_should_reuse(
     skin_f = float(max(0.0, skin))
 
     box_delta = 0.0
+    if (box is None) != (last_box is None):
+        return False
     if box is not None and last_box is not None:
         box_delta = float(np.max(np.abs(np.asarray(box) - np.asarray(last_box))))
+
+    if int(calls) % interval_i != 0:
+        return box_delta <= box_delta_tol
 
     if skin_f > 0.0 and last_R is not None:
         max_disp = float(np.max(np.linalg.norm(R - last_R, axis=1)))
         return max_disp <= skin_f and box_delta <= box_delta_tol
-
-    if skin_f == 0.0 and (int(calls) % interval_i != 0):
-        return box_delta <= box_delta_tol
 
     return False
 
@@ -1099,7 +1101,7 @@ def build_mm_energy_forces_fn(
             return box_delta <= 1e-8
 
         def _gpu_interval_reuse_allowed(box_in: Optional[np.ndarray], interval: int, skin: float) -> bool:
-            if skin > 0.0 or not (
+            if not (
                 _pair_idx_cell[0] is not None and _pair_mask_cell[0] is not None
             ):
                 return False
@@ -1275,6 +1277,11 @@ def build_mm_energy_forces_fn(
                 and _box_delta_within_tolerance(box)
             ):
                 _pair_stats["cache_checks"] += 1
+                if _gpu_interval_reuse_allowed(box, interval, skin):
+                    _pair_stats["reused"] += 1
+                    _pair_stats["cache_reuse_reason"] = "device_interval"
+                    _pair_stats["last_reuse_reason"] = "device_interval"
+                    return _pair_idx_cell[0], _pair_mask_cell[0]
                 _pair_stats["device_skin_checks"] += 1
                 R_cart_jax = _jax_cartesian_for_nl_build(positions_jax, box)
                 max_disp = _max_cartesian_displacement(

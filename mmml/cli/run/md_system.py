@@ -1702,8 +1702,8 @@ def _append_box_sizing_args(cmd: list[str], args: argparse.Namespace) -> None:
     if mc_temp != 0.02:
         cmd.extend(["--mc-density-temperature", str(mc_temp)])
     _append_optional(cmd, "--mc-density-seed", getattr(args, "mc_density_seed", None))
-    mc_min_scale = float(getattr(args, "mc_density_min_scale", 0.75) or 0.0)
-    if mc_min_scale != 0.75:
+    mc_min_scale = float(getattr(args, "mc_density_min_scale", 0.35) or 0.0)
+    if mc_min_scale != 0.35:
         cmd.extend(["--mc-density-min-scale", str(mc_min_scale)])
     mc_max_scale = float(getattr(args, "mc_density_max_scale", 1.50) or 0.0)
     if mc_max_scale != 1.50:
