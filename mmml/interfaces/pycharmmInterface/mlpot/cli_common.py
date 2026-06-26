@@ -2740,6 +2740,42 @@ def add_staged_md_args(parser: argparse.ArgumentParser) -> None:
             "Does not call update_bnbnd/upinb."
         ),
     )
+    group.add_argument(
+        "--mm-nonbond-mode",
+        type=str,
+        choices=("jax_mic", "periodic_external"),
+        default="jax_mic",
+        help=(
+            "MM nonbond backend for MLpot. jax_mic (default): switched JAX LJ+Coulomb "
+            "to ~13 Å. periodic_external: ScaFaCoS Coulomb + CHARMM IMAGE VDW; "
+            "requires --setup pbc_*, libfcs, and adequate --box-size."
+        ),
+    )
+    group.add_argument(
+        "--lr-solver",
+        type=str,
+        choices=("auto", "mic", "scafacos", "jax_pme"),
+        default=None,
+        help=(
+            "Long-range Coulomb solver for periodic_external (default: env MMML_LR_SOLVER "
+            "or auto). periodic_external requires scafacos."
+        ),
+    )
+    group.add_argument(
+        "--scafacos-method",
+        type=str,
+        default=None,
+        help="ScaFaCoS fcs_init method when --mm-nonbond-mode=periodic_external (default: p2nfft).",
+    )
+    group.add_argument(
+        "--periodic-charmm-vdw",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "With periodic_external: keep CHARMM IMAGE VDW on (default). "
+            "Use --no-periodic-charmm-vdw for ScaFaCoS Coulomb only (no CHARMM LJ)."
+        ),
+    )
 
 
 def resolve_dyn_inbfrq(args: argparse.Namespace) -> int | None:

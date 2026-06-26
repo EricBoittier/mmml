@@ -2,7 +2,7 @@
 
 Technical reference for how **CHARMM** and **MMML** neighbor lists interact in the ML-Pot hybrid potential, how update frequencies govern list freshness, and which mismatches are likely contributors to NVE instabilities.
 
-Related: [CHARMM_SETTINGS.md](CHARMM_SETTINGS.md) (CLI defaults), [README.md](README.md) (workflow order), Fortran patches under [`setup/`](../../../setup/).
+Related: [CHARMM_SETTINGS.md](CHARMM_SETTINGS.md) (CLI defaults), [README.md](README.md) (workflow order), [LONG_RANGE_ELECTROSTATICS.md](LONG_RANGE_ELECTROSTATICS.md) (ScaFaCoS / jax-pme), Fortran patches under [`setup/`](../../../setup/).
 
 ---
 

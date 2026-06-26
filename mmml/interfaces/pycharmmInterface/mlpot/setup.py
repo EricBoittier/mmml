@@ -917,12 +917,23 @@ def register_mlpot(
     use_pbc: bool = False,
     mm_internal_scale: float = 0.0,
     cubic_box_side_A: float | None = None,
+    mm_nonbond_mode: str = "jax_mic",
+    periodic_charmm_vdw: bool = True,
     verbose: bool = False,
     **kwargs: Any,
 ) -> MlpotContext:
     """Register ``pycharmm.MLpot`` and return a context manager-like handle."""
-    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_mlpot_energy_block
+    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
+        apply_mlpot_energy_block,
+        apply_mlpot_periodic_external_block,
+    )
     from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import validate_mlpot_system_size
+    from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm import resolve_mm_nonbond_mode
+
+    periodic_external = (
+        resolve_mm_nonbond_mode(type("_Args", (), {"mm_nonbond_mode": mm_nonbond_mode})())
+        == "periodic_external"
+    )
 
     pycharmm = _import_pycharmm()
     z_ml = physnet_ml_atomic_numbers(ml_Z)
@@ -968,11 +979,18 @@ def register_mlpot(
             _require_mlpot_skip_iblo_support(pycharmm)
             _install_ml_exclusions(ml_selection)
             skip_iblo_inb_update = True
-        block_tag = apply_mlpot_energy_block(
-            ml_selection,
-            mm_internal_scale=float(mm_internal_scale),
-            verbose=verbose,
-        )
+        if periodic_external and periodic_charmm_vdw:
+            block_tag = apply_mlpot_periodic_external_block(
+                ml_selection,
+                mm_internal_scale=float(mm_internal_scale),
+                verbose=verbose,
+            )
+        else:
+            block_tag = apply_mlpot_energy_block(
+                ml_selection,
+                mm_internal_scale=float(mm_internal_scale),
+                verbose=verbose,
+            )
         mlpot = pycharmm.MLpot(
             ml_model=pyCModel,
             ml_Z=z_ml,

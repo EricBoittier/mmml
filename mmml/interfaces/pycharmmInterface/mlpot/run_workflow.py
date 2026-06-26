@@ -717,6 +717,16 @@ def _register_mlpot_context(
         select_all_atoms(),
         use_pbc=mlpot_use_pbc,
         mm_internal_scale=mm_internal_scale,
+        mm_nonbond_mode=(
+            str(getattr(args, "mm_nonbond_mode", "jax_mic") or "jax_mic")
+            if args is not None
+            else "jax_mic"
+        ),
+        periodic_charmm_vdw=(
+            bool(getattr(args, "periodic_charmm_vdw", True))
+            if args is not None
+            else True
+        ),
         cubic_box_side_A=ml_cell,
         verbose=bool(getattr(args, "verbose", False)) if args is not None else False,
     )
