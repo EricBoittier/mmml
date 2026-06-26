@@ -2373,6 +2373,43 @@ def test_apply_overlap_chunk_restart_read_forces_iasvel_zero():
     assert kw["firstt"] == 240.0
 
 
+def test_apply_overlap_chunk_restart_read_preserves_cpt_npt_fresh_barostat():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
+
+    kw = {
+        "cpt": True,
+        "pmass": 93,
+        "tmass": 930,
+        "hoover reft": 20.0,
+        "restart": True,
+        "start": True,
+        "iasvel": 1,
+        "firstt": 20.0,
+    }
+    _apply_overlap_chunk_dynamics_kw(kw, chunk_index=0, has_restart_read=True)
+    assert kw["restart"] is True
+    assert kw["start"] is True
+    assert kw["iasvel"] == 1
+    assert kw["firstt"] == 20.0
+
+
+def test_apply_overlap_chunk_restart_read_cpt_npt_only_chunk_zero():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
+
+    kw = {
+        "cpt": True,
+        "pmass": 93,
+        "restart": True,
+        "start": True,
+        "iasvel": 1,
+        "firstt": 20.0,
+    }
+    _apply_overlap_chunk_dynamics_kw(kw, chunk_index=1, has_restart_read=True)
+    assert kw["start"] is False
+    assert kw["iasvel"] == 0
+    assert "firstt" not in kw
+
+
 def test_apply_overlap_chunk_hoover_chunk0_preserves_cold_start():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
 
