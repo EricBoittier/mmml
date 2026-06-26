@@ -482,12 +482,65 @@ def _build_cluster_from_composition_packmol(
     )
 
 
+def _build_cluster_from_composition_pyxtal(
+    *,
+    composition: list[tuple[str, int]],
+    space_group: int = 14,
+    dimension: int = 3,
+    factor: float = 1.0,
+    unit_stoichiometry: list[int] | None = None,
+    supercell_reps: tuple[int, int, int] | None = None,
+    seed: int | None = None,
+    max_attempts: int = 20,
+    charmm_sd_steps: int = 50,
+    charmm_abnr_steps: int = 100,
+    charmm_tolenr: float = 1e-3,
+    charmm_tolgrd: float = 1e-3,
+    scratch_dir: str | Path | None = None,
+    verbose: bool = True,
+    optimize_ase: bool = False,
+    optimize_ase_emt: bool = False,
+    trim_to_composition: bool = True,
+) -> tuple[np.ndarray, np.ndarray, list[int], list[str]]:
+    from mmml.cli.run.md_pbc_suite.cluster import build_pyxtal_composition_cluster
+
+    return build_pyxtal_composition_cluster(
+        composition=composition,
+        space_group=space_group,
+        dimension=dimension,
+        factor=factor,
+        unit_stoichiometry=unit_stoichiometry,
+        supercell_reps=supercell_reps,
+        seed=seed,
+        max_attempts=max_attempts,
+        charmm_sd_steps=charmm_sd_steps,
+        charmm_abnr_steps=charmm_abnr_steps,
+        charmm_tolenr=charmm_tolenr,
+        charmm_tolgrd=charmm_tolgrd,
+        scratch_dir=scratch_dir,
+        verbose=verbose,
+        optimize_ase=optimize_ase,
+        optimize_ase_emt=optimize_ase_emt,
+        trim_to_composition=trim_to_composition,
+    )
+
+
 def resolve_cluster_packmol(args: argparse.Namespace) -> bool:
     from mmml.interfaces.pycharmmInterface.packmol_placement import resolve_packmol_use
 
     return resolve_packmol_use(
         composition=getattr(args, "composition", None),
         packmol=getattr(args, "packmol", None),
+        pyxtal=getattr(args, "pyxtal", None),
+    )
+
+
+def resolve_cluster_pyxtal(args: argparse.Namespace) -> bool:
+    from mmml.interfaces.pyxtal_placement import resolve_pyxtal_use
+
+    return resolve_pyxtal_use(
+        composition=getattr(args, "composition", None),
+        pyxtal=getattr(args, "pyxtal", None),
     )
 
 
@@ -538,8 +591,12 @@ def build_initial_cluster_from_args(
         resolve_packmol_placement_mode,
         resolve_packmol_sphere_radius,
     )
+    from mmml.interfaces.pyxtal_placement import parse_supercell_reps
 
+    use_pyxtal = resolve_cluster_pyxtal(args)
     use_packmol = resolve_cluster_packmol(args)
+    if use_pyxtal and not args.composition:
+        raise ValueError("PyXtal placement requires --composition (e.g. MEOH:8).")
     if use_packmol and not args.composition:
         raise ValueError(
             "Packmol placement requires --composition (e.g. MEOH:30) "
@@ -549,7 +606,38 @@ def build_initial_cluster_from_args(
     if args.composition:
         composition = _parse_composition(args.composition)
         composition_summary = {res: int(cnt) for res, cnt in composition}
-        if use_packmol:
+        if use_pyxtal:
+            supercell_reps = None
+            if getattr(args, "pyxtal_supercell", None):
+                supercell_reps = parse_supercell_reps(str(args.pyxtal_supercell))
+            z, r0, atoms_per_list, residue_labels = _build_cluster_from_composition_pyxtal(
+                composition=composition,
+                space_group=int(getattr(args, "pyxtal_spg", 14)),
+                dimension=int(getattr(args, "pyxtal_dim", 3)),
+                factor=float(getattr(args, "pyxtal_factor", 1.0)),
+                unit_stoichiometry=getattr(args, "pyxtal_stoichiometry", None),
+                supercell_reps=supercell_reps,
+                seed=int(getattr(args, "seed", 0)),
+                max_attempts=int(getattr(args, "pyxtal_attempts", 20)),
+                charmm_sd_steps=int(getattr(args, "charmm_sd_steps", 50)),
+                charmm_abnr_steps=int(getattr(args, "charmm_abnr_steps", 100)),
+                charmm_tolenr=float(getattr(args, "charmm_tolenr", 1e-3)),
+                charmm_tolgrd=float(getattr(args, "charmm_tolgrd", 1e-3)),
+                scratch_dir=(
+                    Path(args.output_dir) / "pyxtal_cluster"
+                    if getattr(args, "output_dir", None) is not None
+                    else None
+                ),
+                verbose=not getattr(args, "quiet", False),
+                optimize_ase=bool(getattr(args, "optimize_pyxtal", False)),
+                optimize_ase_emt=bool(getattr(args, "optimize_pyxtal_emt", False)),
+                trim_to_composition=bool(getattr(args, "pyxtal_trim", True)),
+            )
+            print(
+                f"Cluster built with PyXtal: spg={int(getattr(args, 'pyxtal_spg', 14))} "
+                f"dim={int(getattr(args, 'pyxtal_dim', 3))}"
+            )
+        elif use_packmol:
             placement = resolve_packmol_placement_mode(
                 packmol_placement=getattr(args, "packmol_placement", None),
                 packmol_sphere=getattr(args, "packmol_sphere", None),
@@ -1380,6 +1468,9 @@ def main(argv: list[str] | None = None) -> int:
         default=2.0,
         help="Packmol distance tolerance in Angstrom when using --packmol-sphere (default: 2.0).",
     )
+    from mmml.interfaces.pyxtal_placement import add_pyxtal_cluster_args
+
+    add_pyxtal_cluster_args(parser)
     parser.add_argument(
         "--flat-bottom-radius",
         type=float,

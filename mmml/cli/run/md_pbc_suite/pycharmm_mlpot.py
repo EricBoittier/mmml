@@ -56,6 +56,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     add_cluster_args(parser)
     add_packmol_cache_args(parser)
+    from mmml.interfaces.pyxtal_placement import add_pyxtal_cluster_args
+
+    add_pyxtal_cluster_args(parser)
     add_run_state_checkpoint_args(parser)
     add_handoff_cutoff_args(parser)
     add_charmm_output_args(parser)

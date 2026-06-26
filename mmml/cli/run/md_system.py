@@ -200,6 +200,9 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="pycharmm: Packmol cache root (default: output-dir/.packmol_cache or MMML_PACKMOL_CACHE).",
     )
+    from mmml.interfaces.pyxtal_placement import add_pyxtal_cluster_args
+
+    add_pyxtal_cluster_args(parser)
     parser.add_argument(
         "--save-run-state",
         action="store_true",
@@ -1606,6 +1609,7 @@ def _validate_packmol_args(args: argparse.Namespace) -> None:
     if not resolve_packmol_use(
         composition=args.composition,
         packmol=getattr(args, "packmol", None),
+        pyxtal=getattr(args, "pyxtal", None),
     ):
         return
     if not args.composition:
@@ -1635,6 +1639,44 @@ def _validate_packmol_sphere_args(args: argparse.Namespace) -> None:
     _validate_packmol_args(args)
 
 
+def _validate_pyxtal_args(args: argparse.Namespace) -> None:
+    from mmml.interfaces.pyxtal_placement import validate_pyxtal_cluster_args
+
+    validate_pyxtal_cluster_args(
+        composition=args.composition,
+        pyxtal=getattr(args, "pyxtal", None),
+        packmol=getattr(args, "packmol", None),
+    )
+
+
+def _append_pyxtal_args(cmd: list[str], args: argparse.Namespace) -> None:
+    from mmml.interfaces.pyxtal_placement import resolve_pyxtal_use
+
+    if not resolve_pyxtal_use(
+        composition=args.composition,
+        pyxtal=getattr(args, "pyxtal", None),
+    ):
+        return
+    cmd.append("--pyxtal")
+    cmd.extend(["--pyxtal-spg", str(int(getattr(args, "pyxtal_spg", 14)))])
+    cmd.extend(["--pyxtal-dim", str(int(getattr(args, "pyxtal_dim", 3)))])
+    cmd.extend(["--pyxtal-factor", str(float(getattr(args, "pyxtal_factor", 1.0)))])
+    cmd.extend(["--pyxtal-attempts", str(int(getattr(args, "pyxtal_attempts", 20)))])
+    if getattr(args, "pyxtal_stoichiometry", None):
+        cmd.extend(
+            ["--pyxtal-stoichiometry", *[str(int(z)) for z in args.pyxtal_stoichiometry]]
+        )
+    if getattr(args, "pyxtal_supercell", None):
+        cmd.extend(["--pyxtal-supercell", str(args.pyxtal_supercell)])
+    _append_boolean_optional_flag(
+        cmd, "--pyxtal-trim", bool(getattr(args, "pyxtal_trim", True))
+    )
+    if getattr(args, "optimize_pyxtal", False):
+        cmd.append("--optimize-pyxtal")
+    if getattr(args, "optimize_pyxtal_emt", False):
+        cmd.append("--optimize-pyxtal-emt")
+
+
 def _append_packmol_args(cmd: list[str], args: argparse.Namespace) -> None:
     from mmml.interfaces.pycharmmInterface.packmol_placement import (
         resolve_packmol_placement_mode,
@@ -1644,6 +1686,7 @@ def _append_packmol_args(cmd: list[str], args: argparse.Namespace) -> None:
     if not resolve_packmol_use(
         composition=args.composition,
         packmol=getattr(args, "packmol", None),
+        pyxtal=getattr(args, "pyxtal", None),
     ):
         return
     placement = resolve_packmol_placement_mode(
@@ -2102,6 +2145,7 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd.extend(["--fb-forc", str(args.flat_bottom_k)])
         cmd.extend(["--fb-selection", str(args.flat_bottom_selection)])
     cmd.extend(["--seed", str(args.seed)])
+    _append_pyxtal_args(cmd, args)
     _append_packmol_sphere_args(cmd, args)
     _append_boolean_optional_flag(
         cmd, "--reuse-packmol-cache", bool(getattr(args, "reuse_packmol_cache", True))
@@ -2246,6 +2290,7 @@ def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
     _append_optional(cmd, "--template-pdb", args.template_pdb)
     cmd.extend(["--seed", str(args.seed)])
     cmd.extend(["--min-intermonomer-atom-distance", str(args.min_intermonomer_atom_distance)])
+    _append_pyxtal_args(cmd, args)
     _append_packmol_sphere_args(cmd, args)
     _append_optional(cmd, "--flat-bottom-radius", args.flat_bottom_radius)
     if args.flat_bottom_radius is not None:
@@ -2419,6 +2464,7 @@ def main() -> int:
     try:
         try:
             if not getattr(args, "evaluate_npz", None):
+                _validate_pyxtal_args(args)
                 _validate_packmol_args(args)
         except ValueError as exc:
             print(f"mmml md-system: error: {exc}", file=sys.stderr)
