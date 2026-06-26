@@ -2,7 +2,7 @@
 
 Technical reference for how **short-range** and **long-range** Coulomb interactions are handled in the hybrid ML/MM potential, and how optional backends (**ScaFaCoS**, **jax-pme**) plug in.
 
-Related: [NONBOND_LISTS.md](NONBOND_LISTS.md) (neighbor lists), [ScaFaCoS README](../../scafacosInterface/README.md) (installation), [`long_range_backend.py`](../long_range_backend.py) (Python selector).
+Related: [NONBOND_LISTS.md](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/mlpot/NONBOND_LISTS.md) (neighbor lists), [ScaFaCoS README](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/scafacosInterface/README.md) (installation), [`long_range_backend.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/long_range_backend.py) (Python selector).
 
 ---
 
@@ -64,7 +64,7 @@ flowchart TB
 
 ## Backend selection
 
-Implementation: [`long_range_backend.py`](../long_range_backend.py).
+Implementation: [`long_range_backend.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/long_range_backend.py).
 
 | Name | When chosen | Status |
 |------|-------------|--------|
@@ -83,7 +83,7 @@ python -c "from mmml.interfaces.pycharmmInterface.long_range_backend import desc
 
 ## ScaFaCoS interface contract
 
-Python module: [`scafacos_session.py`](../../scafacosInterface/scafacos_session.py).
+Python module: [`scafacos_session.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/scafacosInterface/scafacos_session.py).
 
 ### Lifecycle
 
@@ -217,12 +217,12 @@ Scripts belong under `tests/functionality/long_range/` (to be added when callbac
 | 1 | Charge subset | All atoms vs MM-only vs excluding ML monomer cores |
 | 2 | Differentiable path | ScaFaCoS is NumPy/MPI; JAX MM forces need `stop_gradient` or custom VJP for hybrid autodiff |
 | 3 | NpT box sync | ScaFaCoS box must track `sync_mlpot_pbc_cell_from_charmm` barostat updates each callback |
-| 4 | `idxu/idxv` embedding | CHARMM-derived ML–MM pair lists ([NONBOND_LISTS.md](NONBOND_LISTS.md)) may share ScaFaCoS short-range tables |
+| 4 | `idxu/idxv` embedding | CHARMM-derived ML–MM pair lists ([NONBOND_LISTS.md](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/mlpot/NONBOND_LISTS.md)) may share ScaFaCoS short-range tables |
 
 ---
 
 ## See also
 
-- [ScaFaCoS README](../../scafacosInterface/README.md) — install, API examples, license  
-- [NONBOND_LISTS.md](NONBOND_LISTS.md) — CHARMM vs JAX list cutoffs  
-- [CHARMM_SETTINGS.md](CHARMM_SETTINGS.md) — `cutnb`, `inbfrq`, PBC dynamics  
+- [ScaFaCoS README](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/scafacosInterface/README.md) — install, API examples, license  
+- [NONBOND_LISTS.md](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/mlpot/NONBOND_LISTS.md) — CHARMM vs JAX list cutoffs  
+- [CHARMM_SETTINGS.md](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/mlpot/CHARMM_SETTINGS.md) — `cutnb`, `inbfrq`, PBC dynamics  
