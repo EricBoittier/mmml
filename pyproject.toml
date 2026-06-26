@@ -79,6 +79,11 @@ nl-validation = [
     "vesin",
 ]
 
+# ScaFaCoS long-range Coulomb (libfcs built from source; see scafacosInterface/README.md)
+scafacos-interface = [
+    "mpi4py",
+]
+
 # CPU MD smoke testing: neighbor-list parity (Vesin), trajectory I/O, no CUDA.
 # Uses bundled examples/ckpts_json/DESdimers_params.json (ACO dimer, natoms=20).
 md-cpu = [
