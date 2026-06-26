@@ -2466,6 +2466,25 @@ def test_apply_overlap_chunk_hoover_chunk0_preserves_cold_start():
     assert kw["restart"] is False
 
 
+def test_apply_overlap_chunk_clears_start_for_scale_heat_chunk_zero():
+    """Overlap chunk 0 scale heat expects Boltzmann assign before dyna (start=False)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
+
+    kw = {
+        "start": True,
+        "firstt": 20.0,
+        "finalt": 100.0,
+        "iasvel": 1,
+        "iasors": 0,
+        "ihtfrq": 500,
+        "TEMINC": 1.0,
+    }
+    _apply_overlap_chunk_dynamics_kw(kw, chunk_index=0, has_restart_read=False)
+    assert kw["start"] is False
+    assert kw["iasvel"] == 1
+    assert kw["ihtfrq"] == 500
+
+
 def test_apply_overlap_chunk_preserves_heat_cold_start_kw():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
 

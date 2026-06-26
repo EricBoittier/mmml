@@ -512,28 +512,36 @@ def _configure_heat_dynamics_start(
         io.restart_read = None
         kw["restart"] = False
         kw["new"] = False
-        # Single dyna: Boltzmann at FIRSTT (start=True, iasvel=1).  A separate
-        # nstep=0 assign before Hoover CPT leaves barostat pistons uninitialized
-        # (garbage PIXX/PRESS at step 0) and triggers a second dynamc/lambdata_init
-        # that can segfault on BLOCK builds.
-        kw["iasvel"] = 1
-        kw["start"] = True
-        if not hoover_cpt_heat:
-            kw["iasors"] = 0
-        if not quiet:
-            if hoover_cpt_heat:
+        if hoover_cpt_heat:
+            # Single dyna: Boltzmann at FIRSTT (start=True, iasvel=1).  A separate
+            # nstep=0 assign before Hoover CPT leaves barostat pistons uninitialized
+            # (garbage PIXX/PRESS at step 0) and triggers a second dynamc/lambdata_init
+            # that can segfault on BLOCK builds.
+            kw["iasvel"] = 1
+            kw["start"] = True
+            if not quiet:
                 print(
                     f"HEAT: dyna start FIRSTT={firstt:.1f} K "
                     "(in-memory coords after mini); Hoover CPT NVT (no ihtfrq); "
                     "single dyna (no nstep=0 assign)",
                     flush=True,
                 )
-            else:
-                print(
-                    f"HEAT: dyna start FIRSTT={firstt:.1f} K "
-                    "(in-memory coords after mini); ihtfrq scales (iasors=0)",
-                    flush=True,
-                )
+            return
+        assign_velocities_at_temperature(
+            firstt,
+            timestep_ps=timestep_ps,
+            restart_path=None,
+            use_pbc=use_pbc,
+        )
+        kw["iasvel"] = 1
+        kw["iasors"] = 0
+        kw["start"] = False
+        if not quiet:
+            print(
+                f"HEAT: Boltzmann velocities at FIRSTT={firstt:.1f} K "
+                "(in-memory coords after mini); ihtfrq scales (iasors=0)",
+                flush=True,
+            )
         return
 
     if (

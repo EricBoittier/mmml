@@ -601,8 +601,8 @@ def test_configure_heat_dynamics_start_hoover_memory_handoff_no_comp_velocities(
     assert kw["iasvel"] == 1
 
 
-def test_configure_heat_dynamics_start_scale_memory_handoff_single_dyna():
-    """Scale heat after mini uses one dyna (start=True), not nstep=0 + heat."""
+def test_configure_heat_dynamics_start_scale_memory_handoff_assign_then_dyna():
+    """Scale heat after mini: nstep=0 assign, then dyna start=False (overlap-safe)."""
     io = CharmmTrajectoryFiles()
     kw = {
         "firstt": 26.0,
@@ -626,10 +626,10 @@ def test_configure_heat_dynamics_start_scale_memory_handoff_single_dyna():
             heat_thermostat="scale",
         )
 
-    assign.assert_not_called()
+    assign.assert_called_once()
     assert kw["restart"] is False
     assert kw["new"] is False
-    assert kw["start"] is True
+    assert kw["start"] is False
     assert kw["iasvel"] == 1
     assert kw["iasors"] == 0
 
