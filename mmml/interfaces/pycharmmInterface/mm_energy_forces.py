@@ -140,10 +140,16 @@ def format_mm_pair_update_stats_summary(stats: dict) -> str:
     updates = int(stats.get("updates", 0))
     reallocs = int(stats.get("reallocs", 0))
     fallbacks = int(stats.get("fallbacks", 0))
+    host_syncs = int(stats.get("host_syncs", 0))
+    cpu_rebuilds = int(stats.get("cpu_rebuilds", 0))
+    gpu_rebuilds = int(stats.get("gpu_rebuilds", 0))
+    capacity_grows = int(stats.get("capacity_grows", 0))
     pct = 100.0 * reused / max(1, calls)
     return (
         f"[jaxmd_nbr] pair-list cache: {reused}/{calls} reused ({pct:.1f}%), "
-        f"{updates} rebuilds, reallocs={reallocs}, fallbacks={fallbacks}"
+        f"{updates} rebuilds (cpu={cpu_rebuilds}, gpu={gpu_rebuilds}), "
+        f"host_syncs={host_syncs}, capacity_grows={capacity_grows}, "
+        f"reallocs={reallocs}, fallbacks={fallbacks}"
     )
 
 
@@ -202,6 +208,35 @@ def _fractional_positions_for_jax_md_neighbor_list(
     R_frac = np.asarray(R_frac - np.floor(R_frac), dtype=np.float64)
     box_diag = np.diagonal(cell_3x3).astype(np.float64)
     return R_frac, box_diag
+
+
+def _validate_dynamic_pair_contract(
+    pair_idx: Array,
+    pair_mask: Array,
+    *,
+    total_atoms: int,
+    label: str,
+) -> None:
+    """Debug-only contract checks for dynamic MM neighbor-list providers.
+
+    Dynamic providers return padded atom-pair indices with shape ``(capacity, 2)``
+    and a same-length validity mask. Valid entries are inter-atom pairs with
+    ``0 <= i,j < total_atoms``; invalid entries may contain padding values.
+    """
+    pair_idx_np = np.asarray(jax.device_get(pair_idx))
+    pair_mask_np = np.asarray(jax.device_get(pair_mask), dtype=bool).reshape(-1)
+    if pair_idx_np.ndim != 2 or pair_idx_np.shape[1] != 2:
+        raise ValueError(f"{label}: pair_idx must have shape (capacity, 2); got {pair_idx_np.shape}")
+    if pair_mask_np.shape[0] != pair_idx_np.shape[0]:
+        raise ValueError(
+            f"{label}: pair_mask length {pair_mask_np.shape[0]} does not match "
+            f"pair_idx capacity {pair_idx_np.shape[0]}"
+        )
+    valid_idx = pair_idx_np[pair_mask_np]
+    if valid_idx.size == 0:
+        return
+    if valid_idx.min() < 0 or valid_idx.max() >= int(total_atoms):
+        raise ValueError(f"{label}: valid pair indices out of atom range [0, {total_atoms})")
 
 
 def _box_to_cell_3x3(box: Array) -> Array:
@@ -812,15 +847,22 @@ def build_mm_energy_forces_fn(
             "reused": 0,
             "reallocs": 0,
             "fallbacks": 0,
+            "cache_checks": 0,
+            "host_syncs": 0,
+            "cpu_rebuilds": 0,
+            "gpu_rebuilds": 0,
+            "capacity_grows": 0,
             "com_filter_calls": 0,
             "capacity_multiplier": float(jax_md_capacity_multiplier),
+            "pair_capacity": int(_n_static_pairs),
             "update_interval": int(max(1, jax_md_update_interval)),
             "skin_distance": float(max(0.0, jax_md_skin_distance)),
+            "last_reuse_reason": "init",
         }
         _last_positions = [None]
         _last_cartesian_positions = [None]
         _last_box = [None]
-        _fallback_max_pairs_cell = [max_pairs]
+        _fallback_max_pairs_cell = [int(_n_static_pairs)]
 
         def calculate_mm_pair_energies_dynamic(
             positions: Array,
