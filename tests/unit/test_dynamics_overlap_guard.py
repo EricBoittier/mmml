@@ -2381,13 +2381,13 @@ def test_apply_overlap_chunk_restart_read_preserves_cpt_npt_fresh_barostat():
         "pmass": 93,
         "tmass": 930,
         "hoover reft": 20.0,
-        "restart": True,
+        "restart": False,
         "start": True,
         "iasvel": 1,
         "firstt": 20.0,
     }
-    _apply_overlap_chunk_dynamics_kw(kw, chunk_index=0, has_restart_read=True)
-    assert kw["restart"] is True
+    _apply_overlap_chunk_dynamics_kw(kw, chunk_index=0, has_restart_read=False)
+    assert kw["restart"] is False
     assert kw["start"] is True
     assert kw["iasvel"] == 1
     assert kw["firstt"] == 20.0

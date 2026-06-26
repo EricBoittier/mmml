@@ -818,7 +818,7 @@ def test_heat_multiseg_memory_handoff_reset_then_seed(tmp_path):
 
 
 def test_configure_equi_dynamics_start_from_heat_restart_file(tmp_path):
-    """EQUI CPT from heat restart: restart+start re-inits barostat (pmass=0 → NPT)."""
+    """EQUI CPT from heat restart: coords only, then dyna start (no READYN)."""
     heat = tmp_path / "heat_dcm_50.res"
     _write_restartable_res(heat, jhstrt=500)
     equi = tmp_path / "equi_dcm_50.res"
@@ -833,9 +833,21 @@ def test_configure_equi_dynamics_start_from_heat_restart_file(tmp_path):
         "iasvel": 0,
     }
 
-    with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.staged_workflow.ensure_charmm_crystal_for_cpt"
-    ) as crystal:
+    with (
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.staged_workflow.ensure_charmm_crystal_for_cpt"
+        ) as crystal,
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_coordinates",
+            return_value=__import__("numpy").zeros((10, 3)),
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.clear_comparison_coordinates",
+        ),
+    ):
         from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
             _configure_equi_dynamics_start,
         )
@@ -844,6 +856,7 @@ def test_configure_equi_dynamics_start_from_heat_restart_file(tmp_path):
             kw,
             io,
             restart_from_file=True,
+            coords_in_memory=False,
             use_pbc=True,
             quiet=True,
             temp=30.0,
@@ -851,11 +864,11 @@ def test_configure_equi_dynamics_start_from_heat_restart_file(tmp_path):
         )
 
     crystal.assert_called_once()
-    assert kw["restart"] is True
+    assert kw["restart"] is False
     assert kw["start"] is True
     assert kw["iasvel"] == 1
     assert kw["firstt"] == 30.0
-    assert io.restart_read == heat
+    assert io.restart_read is None
 
 
 def test_configure_equi_dynamics_start_survives_overlap_chunk_prep(tmp_path):
@@ -887,16 +900,18 @@ def test_configure_equi_dynamics_start_survives_overlap_chunk_prep(tmp_path):
             kw,
             io,
             restart_from_file=True,
+            coords_in_memory=True,
             use_pbc=True,
             quiet=True,
             temp=20.0,
             box_side=40.0,
         )
-    _apply_overlap_chunk_dynamics_kw(kw, chunk_index=0, has_restart_read=True)
-    assert kw["restart"] is True
+    _apply_overlap_chunk_dynamics_kw(kw, chunk_index=0, has_restart_read=False)
+    assert kw["restart"] is False
     assert kw["start"] is True
     assert kw["iasvel"] == 1
     assert kw["firstt"] == 20.0
+    assert io.restart_read is None
 
 
 def test_configure_equi_dynamics_start_skips_in_place_resume(tmp_path):
