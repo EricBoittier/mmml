@@ -2274,6 +2274,21 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         "--charmm-mm-pretreat-pressure",
         getattr(args, "charmm_mm_pretreat_pressure", None),
     )
+    _append_optional(
+        cmd,
+        "--charmm-mm-pretreat-inbfrq",
+        getattr(args, "charmm_mm_pretreat_inbfrq", None),
+    )
+    _append_optional(
+        cmd,
+        "--charmm-mm-pretreat-imgfrq",
+        getattr(args, "charmm_mm_pretreat_imgfrq", None),
+    )
+    _append_optional(
+        cmd,
+        "--charmm-mm-pretreat-ixtfrq",
+        getattr(args, "charmm_mm_pretreat_ixtfrq", None),
+    )
     if getattr(args, "ml_batch_size", None) is not None:
         cmd.extend(["--ml-batch-size", str(args.ml_batch_size)])
     if getattr(args, "ml_gpu_count", None) is not None:
