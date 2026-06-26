@@ -90,3 +90,32 @@ def test_dynamics_chunk_state_corrupt_checks_memory_and_restart(tmp_path):
             overlap_context="EQUI",
             restart_path=bad_restart,
         )
+
+
+def test_materialize_cpt_subchunk_skips_nstep0_velocity_assign(tmp_path):
+    """CPT sub-chunk handoff must snapshot in-memory barostat state, not nstep=0 assign."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _materialize_cpt_subchunk_restart_handoff,
+    )
+
+    write_path = tmp_path / "heat.cptsc_a.res"
+    chunk_kw = {"cpt": True, "hoover reft": 300.0, "timestep": 0.00025}
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.assign_velocities_at_temperature",
+    ) as assign, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.rewrite_dynamics_restart_validated",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._valid_restart_file",
+        return_value=write_path,
+    ):
+        _materialize_cpt_subchunk_restart_handoff(
+            write_path,
+            global_step=250,
+            overlap_context="HEAT",
+            mlpot_ctx=mock.Mock(),
+            chunk_kw=chunk_kw,
+        )
+
+    assign.assert_not_called()

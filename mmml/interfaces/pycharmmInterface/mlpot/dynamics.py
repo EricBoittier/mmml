@@ -2971,19 +2971,19 @@ def _materialize_cpt_subchunk_restart_handoff(
     mlpot_ctx: Optional["MlpotContext"] = None,
     chunk_kw: dict[str, Any] | None = None,
 ) -> Path:
-    """Write a validated READYN restart from in-memory state after a CPT sub-chunk."""
+    """Write a validated READYN restart from in-memory state after a CPT sub-chunk.
+
+    Do **not** Boltzmann-assign (``nstep=0``) before the write: that re-initializes
+    velocities but leaves Hoover CPT barostat pistons uninitialized, producing
+    garbage ``PIXX`` / ``PRESSI`` on the next ``READYN`` (same failure mode as a
+    separate assign before the first CPT ``dyna``).
+    """
     from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         rewrite_dynamics_restart_validated,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         patch_restart_global_step,
     )
-
-    if chunk_kw is not None and bool(chunk_kw.get("cpt")):
-        _assign_post_rescue_velocities_and_crystal(
-            chunk_kw,
-            mlpot_ctx=mlpot_ctx,
-        )
 
     if not rewrite_dynamics_restart_validated(write_path):
         raise RuntimeError(
