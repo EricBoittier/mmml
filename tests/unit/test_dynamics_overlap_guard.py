@@ -1841,6 +1841,57 @@ def test_mlpot_overlap_chunks_use_scratch_restart_handoff(tmp_path, monkeypatch)
     assert calls[2]["iasvel"] == 0
 
 
+def test_completed_overlap_refresh_repatches_final_restart_step(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_restart_last_step,
+    )
+
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        min_distance_A=0.3,
+        check_interval=400,
+        n_monomers=2,
+        use_pbc=True,
+    )
+    heat_res = tmp_path / "heat.res"
+    stale_restart = (
+        "REST    48       150\n"
+        "\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        f"{25:10d}{150:10d}{150:10d}{15:10d}{10:10d}{150:10d}\n"
+    )
+
+    def fake_chunk(_kw, _io, *, extra_iokw=None, **_kwargs):
+        assert _io is not None and _io.restart_write is not None
+        Path(_io.restart_write).write_text(stale_restart, encoding="utf-8")
+        return mock.Mock()
+
+    def stale_refresh(_write_path, *, final_restart, **_kwargs):
+        Path(final_restart).write_text(stale_restart, encoding="utf-8")
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        side_effect=fake_chunk,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+        return_value=(5.0, False),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._overlap_refresh_or_validate_scratch_restart",
+        side_effect=stale_refresh,
+    ):
+        result = run_dynamics_with_io(
+            {"nstep": 400, "nsavc": 16},
+            CharmmTrajectoryFiles(restart_write=heat_res),
+            overlap=cfg,
+            overlap_context="HEAT",
+            mlpot_ctx=mock.Mock(),
+        )
+
+    assert result.integrated_step == 400
+    assert read_restart_last_step(heat_res) == 400
+
+
 def test_overlap_memory_handoff_chunks_scratch_restart_handoff(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
