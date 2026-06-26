@@ -817,6 +817,102 @@ def test_heat_multiseg_memory_handoff_reset_then_seed(tmp_path):
     assert res.is_file()
 
 
+def test_configure_equi_dynamics_start_from_heat_restart_file(tmp_path):
+    """EQUI CPT from heat restart: restart+start re-inits barostat (pmass=0 → NPT)."""
+    heat = tmp_path / "heat_dcm_50.res"
+    _write_restartable_res(heat, jhstrt=500)
+    equi = tmp_path / "equi_dcm_50.res"
+    io = CharmmTrajectoryFiles(restart_read=heat, restart_write=equi)
+    kw = {
+        "cpt": True,
+        "hoover reft": 30.0,
+        "pmass": 84,
+        "tmass": 840,
+        "restart": True,
+        "start": False,
+        "iasvel": 0,
+    }
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.staged_workflow.ensure_charmm_crystal_for_cpt"
+    ) as crystal:
+        from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+            _configure_equi_dynamics_start,
+        )
+
+        _configure_equi_dynamics_start(
+            kw,
+            io,
+            restart_from_file=True,
+            use_pbc=True,
+            quiet=True,
+            temp=30.0,
+            box_side=40.0,
+        )
+
+    crystal.assert_called_once()
+    assert kw["restart"] is True
+    assert kw["start"] is True
+    assert kw["iasvel"] == 1
+    assert kw["firstt"] == 30.0
+    assert io.restart_read == heat
+
+
+def test_configure_equi_dynamics_start_skips_in_place_resume(tmp_path):
+    res = tmp_path / "equi_dcm_50.res"
+    _write_restartable_res(res, jhstrt=200)
+    io = CharmmTrajectoryFiles(restart_read=res, restart_write=res)
+    kw = {
+        "cpt": True,
+        "hoover reft": 300.0,
+        "pmass": 84,
+        "restart": True,
+        "start": False,
+    }
+
+    from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+        _configure_equi_dynamics_start,
+    )
+
+    _configure_equi_dynamics_start(
+        kw,
+        io,
+        restart_from_file=True,
+        use_pbc=True,
+        quiet=True,
+        temp=300.0,
+    )
+
+    assert kw["start"] is False
+
+
+def test_configure_equi_dynamics_start_skips_when_memory_handoff_already_configured():
+    io = CharmmTrajectoryFiles()
+    kw = {
+        "cpt": True,
+        "pmass": 84,
+        "restart": False,
+        "start": True,
+        "iasvel": 1,
+    }
+
+    from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+        _configure_equi_dynamics_start,
+    )
+
+    _configure_equi_dynamics_start(
+        kw,
+        io,
+        restart_from_file=False,
+        use_pbc=True,
+        quiet=True,
+        temp=300.0,
+    )
+
+    assert kw["restart"] is False
+    assert kw["start"] is True
+
+
 def test_configure_npt_dynamics_start_memory_handoff_no_readyn():
     """EQUI/PROD after bonded-MM: single CPT dyna start (no nstep=0 assign, no READYN)."""
     from unittest.mock import patch
