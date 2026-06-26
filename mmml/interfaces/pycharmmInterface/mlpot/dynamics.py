@@ -1158,6 +1158,28 @@ def hoover_cpt_heat_ramp_spec_from_kw(
     return {"firstt": t0, "finalt": t1}
 
 
+def _hoover_cpt_overlap_chunk_needs_cold_start(
+    chunk_kw: dict[str, Any],
+    *,
+    chunk_index: int,
+    has_restart_read: bool,
+    steps_done: int,
+) -> bool:
+    """True when overlap chunk 0 needs single-dyna Boltzmann + CPT barostat init."""
+    if int(chunk_index) != 0:
+        return False
+    if bool(chunk_kw.get("restart")) or has_restart_read:
+        return False
+    if int(steps_done) != 0:
+        return False
+    if not bool(chunk_kw.get("cpt")):
+        return False
+    # Post-nstep=0 Boltzmann assign (NPT / restart-file path): keep iasvel=0.
+    if chunk_kw.get("start") is False and int(chunk_kw.get("iasvel", 1)) == 0:
+        return False
+    return True
+
+
 def apply_hoover_cpt_heat_ramp_overlap_chunk(
     chunk_kw: dict[str, Any],
     *,
@@ -1179,15 +1201,17 @@ def apply_hoover_cpt_heat_ramp_overlap_chunk(
     chunk_kw["finalt"] = float(ramp_spec["finalt"])
     chunk_kw["tbath"] = float(ramp_spec["finalt"])
     chunk_kw["hoover reft"] = target
-    # Preserve single-dyna cold start on chunk 0 (``_configure_heat_dynamics_start``:
-    # ``start=True``, ``iasvel=1``).  Post-Boltzmann and later chunks keep
-    # ``iasvel=0`` / READYN or in-memory handoff velocities.
-    preserve_cold_start = (
-        chunk_index == 0
-        and not bool(chunk_kw.get("restart"))
-        and bool(chunk_kw.get("start"))
-    )
-    if not preserve_cold_start:
+    # Chunk 0 at segment start: single dyna with ``start`` + ``iasvel=1`` (see
+    # ``_configure_heat_dynamics_start``).  Later chunks / retries keep RAM vel.
+    if _hoover_cpt_overlap_chunk_needs_cold_start(
+        chunk_kw,
+        chunk_index=chunk_index,
+        has_restart_read=False,
+        steps_done=int(steps_done),
+    ):
+        chunk_kw["start"] = True
+        chunk_kw["iasvel"] = 1
+    else:
         chunk_kw["iasvel"] = 0
         chunk_kw["start"] = False
 
@@ -2903,8 +2927,16 @@ def _apply_overlap_chunk_dynamics_kw(
     elif preserve_cold_start and (
         "hoover reft" in chunk_kw or bool(chunk_kw.get("cpt"))
     ):
-        # Hoover CPT chunk 0: preserve start=True for single-dyna cold start (heat/NPT).
-        if bool(chunk_kw.get("start")):
+        # Hoover CPT chunk 0: single-dyna cold start (heat/NPT barostat init).
+        if _hoover_cpt_overlap_chunk_needs_cold_start(
+            chunk_kw,
+            chunk_index=chunk_index,
+            has_restart_read=has_restart_read,
+            steps_done=0,
+        ):
+            chunk_kw["iasvel"] = 1
+            chunk_kw["start"] = True
+        elif bool(chunk_kw.get("start")):
             chunk_kw["iasvel"] = 1
         elif int(chunk_kw.get("iasvel", 0)) == 1:
             chunk_kw["iasvel"] = 1
