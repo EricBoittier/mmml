@@ -12,6 +12,7 @@ _TESTS_ROOT = Path(__file__).resolve().parent
 # Paths (relative to tests/) that require a live PyCHARMM build.
 _PYCHARMM_PATH_PREFIXES = (
     "functionality/pycharmmETC/",
+    "functionality/charmm/",
     "functionality/mlpot/test_mlpot_energy_matches_ase.py",
     "functionality/mlpot/test_mlpot_dynamics_smoke.py",
     "functionality/mlpot/test_comp_velocities_integration.py",
