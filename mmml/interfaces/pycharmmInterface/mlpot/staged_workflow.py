@@ -1627,6 +1627,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             args,
             box_side=box_side,
             use_pbc=charmm_pbc,
+            pretreat_restart=pretreat_restart_path,
         )
         if new_side is not None:
             box_side = float(new_side)

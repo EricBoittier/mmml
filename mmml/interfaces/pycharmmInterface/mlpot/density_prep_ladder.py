@@ -362,6 +362,7 @@ def run_density_prep_ladder(
                         tolgrd=float(getattr(args, "charmm_tolgrd", 1e-3)),
                         nocoords=nocoords,
                         verbose=not quiet,
+                        fallback_side_A=box_side,
                     )
                     if new_side is not None:
                         box_side = float(new_side)

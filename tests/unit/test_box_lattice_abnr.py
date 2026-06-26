@@ -106,3 +106,92 @@ def test_run_charmm_lattice_abnr_skips_zero_steps():
     )
 
     assert run_charmm_lattice_abnr(nstep=0, tolenr=1e-3, tolgrd=1e-3) is None
+
+
+def test_run_charmm_lattice_abnr_uses_fallback_when_pbound_inactive():
+    from mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
+        run_charmm_lattice_abnr,
+    )
+
+    script_cls = MagicMock()
+    script_inst = MagicMock()
+    script_cls.return_value = script_inst
+    with (
+        _fake_pycharmm_script_module(script_cls),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
+            return_value=False,
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.sync_charmm_crystal_after_mm_pretreat",
+        ) as sync_crystal,
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
+            return_value=(35.0, "restart"),
+        ) as resolve_side,
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.apply_pbc_nbonds",
+        ) as apply_nb,
+        patch(
+            "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
+        ),
+    ):
+        side = run_charmm_lattice_abnr(
+            nstep=20,
+            tolenr=1e-3,
+            tolgrd=1e-3,
+            fallback_side_A=35.0,
+            restart_path="/tmp/prod.res",
+            verbose=False,
+        )
+    assert side == pytest.approx(35.0)
+    sync_crystal.assert_called_once_with(35.0, quiet=True)
+    resolve_side.assert_called_once_with(
+        fallback_side_A=35.0,
+        restart_path="/tmp/prod.res",
+    )
+    apply_nb.assert_called_once_with(nbxmod=5, cubic_box_side_A=35.0)
+
+
+def test_run_charmm_lattice_abnr_skips_restart_when_crystal_active():
+    from mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
+        run_charmm_lattice_abnr,
+    )
+
+    script_cls = MagicMock()
+    script_inst = MagicMock()
+    script_cls.return_value = script_inst
+    with (
+        _fake_pycharmm_script_module(script_cls),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
+            return_value=True,
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.sync_charmm_crystal_after_mm_pretreat",
+        ) as sync_crystal,
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
+            return_value=(36.0, "pbound"),
+        ) as resolve_side,
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.apply_pbc_nbonds",
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
+        ),
+    ):
+        side = run_charmm_lattice_abnr(
+            nstep=10,
+            tolenr=1e-3,
+            tolgrd=1e-3,
+            fallback_side_A=35.0,
+            restart_path="/tmp/prod.res",
+            verbose=False,
+        )
+    assert side == pytest.approx(36.0)
+    sync_crystal.assert_not_called()
+    resolve_side.assert_called_once_with(
+        fallback_side_A=35.0,
+        restart_path=None,
+    )
