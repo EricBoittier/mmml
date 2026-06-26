@@ -3274,10 +3274,27 @@ def _cpt_subchunk_restart_slot_paths(base: Path) -> tuple[Path, Path]:
     )
 
 
+def _cpt_subchunk_use_in_memory_handoff() -> bool:
+    """Continue Hoover CPT sub-chunks in-process unless scratch READYN is requested.
+
+    Plain ``write restart`` snapshots coordinates/velocities but **not** Hoover CPT
+    barostat piston internals.  ``READYN`` on ``.cptsc_*.res`` between sub-chunks
+    therefore yields garbage ``PIXX`` / ``PRESSI`` at dyna step 0.  Default is
+    in-memory continuation; set ``MMML_CPT_READYN_SUBCHUNK=1`` to opt into scratch
+    READYN (legacy / debugging only).
+    """
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import _truthy_env
+
+    if _truthy_env("MMML_CPT_READYN_SUBCHUNK"):
+        return False
+    return True
+
+
 def _apply_cpt_in_memory_continuation_kw(kw: dict[str, Any]) -> None:
     """In-process ``dyna`` continuation for CPT sub-chunks (no ``READYN``).
 
-    Legacy path when ``MMML_CPT_IN_MEMORY_SUBCHUNK=1``; resets global step/time.
+    Preserves Hoover CPT barostat state in RAM between sub-chunks.  Plain
+    ``write restart`` / ``READYN`` handoffs do not restore piston internals.
     """
     kw["restart"] = False
     kw["new"] = False
@@ -3292,7 +3309,11 @@ def _apply_cpt_in_memory_continuation_kw(kw: dict[str, Any]) -> None:
 
 
 def _apply_cpt_restart_continuation_kw(kw: dict[str, Any]) -> None:
-    """``READYN`` continuation for CPT sub-chunks (preserves barostat + global step)."""
+    """``READYN`` continuation for CPT sub-chunks (global step only; not barostat).
+
+    Requires a dynamics restart file with full CPT internals.  MMML scratch
+    ``write restart`` handoffs do **not** qualify — use in-memory sub-chunks instead.
+    """
     kw["restart"] = True
     kw["new"] = False
     kw["start"] = False
@@ -3633,13 +3654,12 @@ def _run_cpt_stability_subchunked(
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         validate_charmm_dynamics_state_after_chunk,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import _truthy_env
 
     total = int(total_nstep if total_nstep is not None else kw.get("nstep", 0))
     steps_done = 0
     last_dyn = None
     n_subchunks = (total + chunk_nstep - 1) // chunk_nstep
-    use_in_memory = _truthy_env("MMML_CPT_IN_MEMORY_SUBCHUNK")
+    use_in_memory = _cpt_subchunk_use_in_memory_handoff()
     final_write = (
         Path(io.restart_write)
         if io is not None and io.restart_write is not None
@@ -3661,7 +3681,7 @@ def _run_cpt_stability_subchunked(
         print(
             f"{overlap_context}: CPT stability chunking — {total} steps in "
             f"{n_subchunks} segment(s) of ≤{chunk_nstep} "
-            f"({mode}; avoids NaN barostat / image-update segfaults)",
+            f"({mode}; Hoover CPT barostat kept in RAM between sub-chunks)",
             flush=True,
         )
     while steps_done < total:

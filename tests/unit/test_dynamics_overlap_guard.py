@@ -2813,7 +2813,7 @@ def test_run_dynamics_with_io_cpt_overlap_subchunks(tmp_path):
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._materialize_cpt_subchunk_restart_handoff",
         side_effect=fake_materialize,
-    ), mock.patch(
+    ) as materialize, mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
@@ -2831,9 +2831,10 @@ def test_run_dynamics_with_io_cpt_overlap_subchunks(tmp_path):
             overlap_context="HEAT",
         )
 
-    # 2 overlap chunks of 500, each split into 2 CPT sub-chunks of 250
+    # 2 overlap chunks of 500, each split into 2 CPT sub-chunks of 250 (in-memory).
     assert calls == [250, 250, 250, 250]
-    assert restart_flags == [False, True, True, True]
+    assert restart_flags == [False, False, True, False]
+    materialize.assert_not_called()
     assert sum(calls) == 1000
 
 

@@ -11,6 +11,7 @@ import pytest
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     DEFAULT_CPT_DYNAMICS_CHUNK_NSTEP,
     _cpt_stability_chunk_nstep,
+    _cpt_subchunk_use_in_memory_handoff,
     _dynamics_chunk_state_corrupt,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
@@ -38,6 +39,16 @@ def test_cpt_stability_chunk_nstep_for_long_npt():
 def test_cpt_stability_chunk_nstep_env_override(monkeypatch):
     monkeypatch.setenv("MMML_CPT_DYNAMICS_CHUNK_NSTEP", "100")
     assert _cpt_stability_chunk_nstep({"cpt": True}, 500) == 100
+
+
+def test_cpt_subchunk_defaults_to_in_memory_handoff(monkeypatch):
+    monkeypatch.delenv("MMML_CPT_READYN_SUBCHUNK", raising=False)
+    assert _cpt_subchunk_use_in_memory_handoff() is True
+
+
+def test_cpt_subchunk_readyn_handoff_opt_in(monkeypatch):
+    monkeypatch.setenv("MMML_CPT_READYN_SUBCHUNK", "1")
+    assert _cpt_subchunk_use_in_memory_handoff() is False
 
 
 def test_charmm_coordinates_are_finite_detects_nan():
