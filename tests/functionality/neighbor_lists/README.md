@@ -32,6 +32,8 @@ do not.
 | 2 | `02_path_parity.py` | no | cell-list / Vesin backend / jax-md vs reference |
 | 3 | `03_skin_interval_audit.py` | no | `neighbor_pair_cache_should_reuse` (skin=0 box fix) |
 | 4 | `04_update_mm_pairs_integration.py` | yes | live `update_mm_pairs` stats (`reused`, `updates`) |
+| 5 | `05_compare_nl_backends.py` | optional | Vesin / jax-md / ASE / cell-list / PyCHARMM matrix |
+| 6 | `06_extreme_pbc_nl.py` | optional | tight PBC boxes, face wraps, orthorhombic cells |
 
 ## Quick run
 

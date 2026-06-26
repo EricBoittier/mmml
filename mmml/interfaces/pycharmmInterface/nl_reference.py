@@ -87,6 +87,24 @@ def extract_valid_pairs(
     return out
 
 
+def filter_pairs_under_cutoff(
+    pairs: Iterable[tuple[int, int]],
+    positions: np.ndarray,
+    cell: np.ndarray,
+    cutoff: float,
+) -> set[tuple[int, int]]:
+    """Keep pairs with MIC distance strictly below ``cutoff`` (reference contract)."""
+    R = np.asarray(positions, dtype=np.float64)
+    cell_mat = cell_matrix_3x3(cell)
+    cutoff_sq = float(cutoff) ** 2
+    out: set[tuple[int, int]] = set()
+    for ai, aj in pairs:
+        d = mic_distance(R, int(ai), int(aj), cell_mat)
+        if d * d < cutoff_sq:
+            out.add((int(ai), int(aj)))
+    return out
+
+
 def apply_mm_pair_filters(
     pairs: Iterable[tuple[int, int]],
     *,

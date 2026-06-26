@@ -37,6 +37,7 @@ from mmml.interfaces.pycharmmInterface.nl_backend import build_mm_pairs_with_bac
 from mmml.interfaces.pycharmmInterface.nl_reference import (
     compare_pair_sets,
     extract_valid_pairs,
+    filter_pairs_under_cutoff,
     have_vesin,
     reference_mic_pairs,
     vesin_mic_pairs,
@@ -62,7 +63,8 @@ def _jax_md_pairs(
     neighbor_fn, filter_fn, _monomer_id = bundle
     nbrs = neighbor_fn.allocate(np.asarray(positions, dtype=np.float64))
     pair_i, pair_j, mask = filter_fn(nbrs.idx)
-    return extract_valid_pairs(pair_i, pair_j, mask)
+    pairs = extract_valid_pairs(pair_i, pair_j, mask)
+    return filter_pairs_under_cutoff(pairs, positions, cell, cutoff)
 
 
 def _vesin_pairs(
@@ -139,7 +141,7 @@ def _ase_pairs(
             if i >= jj or int(mid[i]) == int(mid[jj]):
                 continue
             pairs.add((i, jj))
-    return pairs
+    return filter_pairs_under_cutoff(pairs, positions, cell, cutoff)
 
 
 def _pycharmm_pairs(
