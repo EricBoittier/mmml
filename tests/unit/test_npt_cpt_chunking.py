@@ -19,6 +19,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
     charmm_dynamics_state_is_finite,
     validate_charmm_dynamics_state_after_chunk,
 )
+from tests.unit.pycharmm_stubs import fake_pycharmm_modules
 
 
 def test_default_cpt_chunk_nstep_is_250():
@@ -41,22 +42,28 @@ def test_cpt_stability_chunk_nstep_env_override(monkeypatch):
 
 def test_charmm_coordinates_are_finite_detects_nan():
     pos = pd.DataFrame({"x": [0.0, np.nan], "y": [0.0, 0.0], "z": [0.0, 0.0]})
-    with mock.patch("pycharmm.coor.get_positions", return_value=pos):
+    fake_coor = mock.MagicMock()
+    fake_coor.get_positions.return_value = pos
+    with fake_pycharmm_modules(coor=fake_coor):
         assert not charmm_coordinates_are_finite()
 
 
 def test_charmm_dynamics_energy_is_finite_detects_nan():
     row = pd.DataFrame([{"USER": -1.0, "TOTE": np.nan}])
-    with mock.patch("pycharmm.energy.get_energy", return_value=row):
+    fake_energy = mock.MagicMock()
+    fake_energy.get_energy.return_value = row
+    with fake_pycharmm_modules(energy=fake_energy):
         assert not charmm_dynamics_energy_is_finite()
 
 
 def test_charmm_dynamics_state_is_finite_requires_both():
     pos = pd.DataFrame({"x": [0.0], "y": [0.0], "z": [0.0]})
     row = pd.DataFrame([{"USER": -1.0}])
-    with mock.patch("pycharmm.coor.get_positions", return_value=pos), mock.patch(
-        "pycharmm.energy.get_energy", return_value=row
-    ):
+    fake_coor = mock.MagicMock()
+    fake_coor.get_positions.return_value = pos
+    fake_energy = mock.MagicMock()
+    fake_energy.get_energy.return_value = row
+    with fake_pycharmm_modules(coor=fake_coor, energy=fake_energy):
         assert charmm_dynamics_state_is_finite()
 
 
