@@ -19,6 +19,9 @@ from mmml.interfaces.pycharmmInterface.cutoffs import (
     add_handoff_cutoff_grid_args,
 )
 from mmml.interfaces.pycharmmInterface.ml_dtypes import add_ml_compute_dtype_args
+from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    DEFAULT_CHARMM_MM_PRETREAT_DT_FS,
+)
 
 _DEFAULT_OUTPUT_DIR_STEMS = frozenset({"pycharmm_mlpot", "lambda_ti"})
 
@@ -697,7 +700,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="pycharmm: pretreat CHARMM ABNR steps (default: --charmm-abnr-steps)",
     )
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
-        DEFAULT_CHARMM_MM_PRETREAT_DT_FS,
         add_charmm_mm_pretreat_physics_args,
     )
 
