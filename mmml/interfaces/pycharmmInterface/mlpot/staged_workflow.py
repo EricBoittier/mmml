@@ -1373,6 +1373,17 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 flush=True,
             )
 
+    if mlpot_pbc:
+        from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import (
+            preflight_mlpot_registration_limits,
+        )
+
+        preflight_mlpot_registration_limits(
+            n_atoms,
+            mlpot_pbc=True,
+            box_side_A=box_side,
+        )
+
     from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm import (
         assert_periodic_mm_box_side,
         cluster_extent_from_positions,

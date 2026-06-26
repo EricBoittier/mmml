@@ -50,6 +50,9 @@ defaults:
   # --- CHARMM / MLpot minimization ---
   charmm_mm_pretreat: true
   charmm_mm_pretreat_dt_fs: 1.0
+  # PBC DCM:206 (1030 ML atoms @ L≈35 Å) needs xlarge tier (max_Npr=12M):
+  #   ./scripts/ensure_charmm_mlpot_limits.sh --n-ml 1030 --pbc --box-size 35
+  #   export CHARMM_LIB_DIR=~/.cache/mmml-charmm-build/tier_12000000_nodomdec/lib
   charmm_pre_minimize: true
   charmm_sd_steps: 1000
   charmm_abnr_steps: 1000

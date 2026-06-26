@@ -316,10 +316,19 @@ def validate_mlpot_system_size(
         if pbc and box_side_A is not None:
             rebuild += f" --box-size {float(box_side_A):g}"
         rebuild += "\n"
+        tier_note = ""
+        try:
+            tier = select_npr_tier_for_build(n_ml, pbc=pbc, box_side_A=box_side_A)
+            tier_note = (
+                f"Select tier {tier!r} (max_Npr={tier_max_npr(tier)}). "
+                f"Then export CHARMM_LIB_DIR before md-system:\n"
+            )
+        except ValueError:
+            pass
         raise ValueError(
             f"CHARMM MLpot pair buffers hold at most {status.max_npr} ML pairs "
-            f"(max_Npr); {n_ml} ML atoms need {n_pairs}{pbc_note}. Rebuild with "
-            f"larger max_Npr:\n"
+            f"(max_Npr); {n_ml} ML atoms need {n_pairs}{pbc_note}. "
+            f"{tier_note}Rebuild with larger max_Npr:\n"
             f"{rebuild}"
             f"{status.message()}"
         )
@@ -472,6 +481,25 @@ def ensure_mlpot_limits_for_system(
             f"{rebuild}\n"
             f"{status.message()}"
         )
+
+
+def preflight_mlpot_registration_limits(
+    n_ml_atoms: int,
+    *,
+    mlpot_pbc: bool,
+    box_side_A: float | None = None,
+) -> None:
+    """Fail before long CHARMM pretreat when ``libcharmm`` ``max_Npr`` is too small."""
+    budget_box = (
+        pbc_pair_budget_box_side_A(int(n_ml_atoms), box_side_A)
+        if mlpot_pbc
+        else None
+    )
+    validate_mlpot_system_size(
+        int(n_ml_atoms),
+        pbc=bool(mlpot_pbc),
+        box_side_A=budget_box,
+    )
 
 
 def estimate_ml_atoms(
