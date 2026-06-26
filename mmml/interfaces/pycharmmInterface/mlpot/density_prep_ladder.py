@@ -28,11 +28,18 @@ def resolve_density_prep_mode(args: argparse.Namespace) -> DensityPrepMode:
     raise ValueError(f"--density-prep-mode must be 'off' or 'resilient', got {raw!r}")
 
 
+def liquid_prep_enabled(args: argparse.Namespace) -> bool:
+    """True when the dense-liquid prep stack should run (shorthand or explicit mode)."""
+    if bool(getattr(args, "liquid_prep", False)):
+        return True
+    return resolve_density_prep_mode(args) == "resilient"
+
+
 def density_prep_ladder_enabled(args: argparse.Namespace) -> bool:
     explicit = getattr(args, "density_prep_ladder", None)
     if explicit is not None:
         return bool(explicit)
-    return resolve_density_prep_mode(args) == "resilient"
+    return liquid_prep_enabled(args)
 
 
 def _bump_int_attr(args: argparse.Namespace, name: str, floor: int) -> None:
@@ -42,8 +49,8 @@ def _bump_int_attr(args: argparse.Namespace, name: str, floor: int) -> None:
 
 
 def apply_density_prep_resilient_defaults(args: argparse.Namespace) -> None:
-    """Raise preventive mini/box knobs when ``density_prep_mode=resilient``."""
-    if resolve_density_prep_mode(args) != "resilient":
+    """Raise preventive mini/box knobs when ``liquid_prep`` or ``density_prep_mode=resilient``."""
+    if not liquid_prep_enabled(args):
         return
 
     if getattr(args, "density_prep_ladder", None) is None:

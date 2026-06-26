@@ -9,6 +9,7 @@ import numpy as np
 
 def _args(**overrides) -> argparse.Namespace:
     base = dict(
+        liquid_prep=False,
         density_prep_mode="off",
         density_prep_ladder=None,
         density_prep_ladder_max_rounds=3,
@@ -98,6 +99,29 @@ def test_ladder_skipped_when_grms_ok():
     assert side == 28.0
     assert summary.ran is False
     assert summary.reason == "grms_ok"
+
+
+def test_liquid_prep_shorthand_enables_defaults():
+    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+        apply_density_prep_resilient_defaults,
+        density_prep_ladder_enabled,
+        liquid_prep_enabled,
+    )
+
+    args = _args(liquid_prep=True)
+    assert liquid_prep_enabled(args)
+    apply_density_prep_resilient_defaults(args)
+    assert density_prep_ladder_enabled(args)
+    assert args.mini_lattice_abnr_steps == 200
+
+
+def test_build_pycharmm_command_forwards_liquid_prep():
+    from mmml.cli.run.md_system import build_pycharmm_command
+    from tests.unit.test_md_system_pycharmm_cmd import _pycharmm_args
+
+    cmd = build_pycharmm_command(_pycharmm_args(liquid_prep=True))
+    assert "--liquid-prep" in cmd
+    assert "--density-prep-mode" not in cmd
 
 
 def test_build_pycharmm_command_forwards_density_prep_flags():

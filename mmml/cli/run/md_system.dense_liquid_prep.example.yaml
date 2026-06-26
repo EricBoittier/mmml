@@ -38,8 +38,8 @@ defaults:
   mc_density_min_scale: 0.35
   mc_density_max_scale: 1.5
 
-  # --- Resilient prep (preventive + post-mini ladder) ---
-  density_prep_mode: resilient
+  # --- Resilient prep (preventive + post-mini ladder); use liquid_prep: true for one-flag setup ---
+  liquid_prep: true
   density_prep_ladder_max_rounds: 3
   density_prep_lattice_abnr_steps: 200
   mini_lattice_abnr_steps: 200
