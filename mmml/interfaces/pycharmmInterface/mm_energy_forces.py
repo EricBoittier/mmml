@@ -1048,6 +1048,28 @@ def build_mm_energy_forces_fn(
                 return np.diag(box_np) if box_np.ndim == 1 else box_np
             return np.asarray(pbc_cell, dtype=np.float64)
 
+        def _jax_cartesian_for_nl_build(positions_in: Array, box_in: Optional[np.ndarray]) -> Array:
+            pos = jnp.asarray(positions_in)
+            if not fractional_coordinates:
+                return pos
+            if box_in is not None:
+                cell = _box_to_cell_3x3(jnp.asarray(box_in, dtype=pos.dtype))
+            else:
+                cell = _box_to_cell_3x3(jnp.asarray(pbc_cell, dtype=pos.dtype))
+            return pos @ cell
+
+        def _gpu_interval_reuse_allowed(box_in: Optional[np.ndarray], interval: int, skin: float) -> bool:
+            if skin > 0.0 or not (
+                _pair_idx_cell[0] is not None and _pair_mask_cell[0] is not None
+            ):
+                return False
+            if _pair_stats["calls"] % int(max(1, interval)) == 0:
+                return False
+            if box_in is None or _last_box[0] is None:
+                return box_in is None and _last_box[0] is None
+            box_delta = float(np.max(np.abs(np.asarray(box_in) - np.asarray(_last_box[0]))))
+            return box_delta <= 1e-8
+
         def _rebuild_pairs_with_static_backend(
             positions_in: np.ndarray,
             box_in: Optional[np.ndarray],
@@ -1066,20 +1088,35 @@ def build_mm_energy_forces_fn(
                 and hasattr(positions_jax, "__dlpack_device__")
             ):
                 pbc_for_build = _pbc_cell_for_nl_build(box_in)
-                pair_idx, pair_mask, used = rebuild_vesin_pairs_gpu(
-                    positions_jax,
-                    pbc_for_build,
-                    cutoff=mm_switch_on + mm_switch_width,
-                    monomer_offsets=_offsets_np,
-                    mm_r_min=mm_r_min,
-                    max_pairs=_fallback_max_pairs_cell[0],
-                    cell_list_safety_factor=cell_list_safety_factor,
-                    cell_list_density_estimate=cell_list_density_estimate,
-                    total_atoms=total_atoms,
-                    debug=_nbr_debug,
-                )
+                pos_for_gpu = _jax_cartesian_for_nl_build(positions_jax, box_in)
+                while True:
+                    try:
+                        pair_idx, pair_mask, used = rebuild_vesin_pairs_gpu(
+                            pos_for_gpu,
+                            pbc_for_build,
+                            cutoff=mm_switch_on + mm_switch_width,
+                            monomer_offsets=_offsets_np,
+                            mm_r_min=mm_r_min,
+                            max_pairs=_fallback_max_pairs_cell[0],
+                            cell_list_safety_factor=cell_list_safety_factor,
+                            cell_list_density_estimate=cell_list_density_estimate,
+                            total_atoms=total_atoms,
+                            debug=_nbr_debug,
+                        )
+                        break
+                    except PairListTruncationError as exc:
+                        _fallback_max_pairs_cell[0] = int(exc.suggested_max_pairs)
+                        _pair_stats["capacity_grows"] += 1
+                        _pair_stats["pair_capacity"] = int(_fallback_max_pairs_cell[0])
                 if _nbr_debug:
                     print(f"[nbr] rebuild via {used}")
+                    _validate_dynamic_pair_contract(
+                        pair_idx,
+                        pair_mask,
+                        total_atoms=total_atoms,
+                        label=used,
+                    )
+                _pair_stats["gpu_rebuilds"] += 1
                 return pair_idx, pair_mask
 
             R_build = _cartesian_for_nl_build(positions_in, box_in)
@@ -1090,34 +1127,59 @@ def build_mm_energy_forces_fn(
             )
             if backend_req == "jax_md":
                 backend_req = "vesin" if have_vesin() else "cell_list"
-            cl_i, cl_j, cl_mask, n_valid, capacity, used = build_mm_pairs_with_backend(
-                backend_req,
-                positions=R_build,
-                box=pbc_for_build,
-                cutoff=mm_switch_on + mm_switch_width,
-                monomer_offsets=_offsets_np,
-                atoms_per_monomer_list=atoms_per_monomer_list,
-                mm_r_min=mm_r_min,
-                max_pairs=_fallback_max_pairs_cell[0],
-                cell_list_safety_factor=cell_list_safety_factor,
-                cell_list_density_estimate=cell_list_density_estimate,
-                total_atoms=total_atoms,
-                debug=_nbr_debug,
-            )
+            while True:
+                try:
+                    cl_i, cl_j, cl_mask, n_valid, capacity, used = build_mm_pairs_with_backend(
+                        backend_req,
+                        positions=R_build,
+                        box=pbc_for_build,
+                        cutoff=mm_switch_on + mm_switch_width,
+                        monomer_offsets=_offsets_np,
+                        atoms_per_monomer_list=atoms_per_monomer_list,
+                        mm_r_min=mm_r_min,
+                        max_pairs=_fallback_max_pairs_cell[0],
+                        cell_list_safety_factor=cell_list_safety_factor,
+                        cell_list_density_estimate=cell_list_density_estimate,
+                        total_atoms=total_atoms,
+                        debug=_nbr_debug,
+                    )
+                    break
+                except PairListTruncationError as exc:
+                    _fallback_max_pairs_cell[0] = int(exc.suggested_max_pairs)
+                    _pair_stats["capacity_grows"] += 1
+                    _pair_stats["pair_capacity"] = int(_fallback_max_pairs_cell[0])
+            if int(capacity) != int(_fallback_max_pairs_cell[0]):
+                if int(capacity) > int(_fallback_max_pairs_cell[0]):
+                    _pair_stats["capacity_grows"] += 1
+                _fallback_max_pairs_cell[0] = int(capacity)
+                _pair_stats["pair_capacity"] = int(capacity)
             if _nbr_debug:
                 print(f"[nbr] rebuild via {used}: n_valid={n_valid} capacity={capacity}")
+            pair_idx_out = jnp.stack([jnp.asarray(cl_i), jnp.asarray(cl_j)], axis=1)
+            pair_mask_out = jnp.asarray(cl_mask, dtype=ml_jnp_dtype)
+            if _nbr_debug:
+                _validate_dynamic_pair_contract(
+                    pair_idx_out,
+                    pair_mask_out,
+                    total_atoms=total_atoms,
+                    label=used,
+                )
+            _pair_stats["cpu_rebuilds"] += 1
             return (
-                jnp.stack([jnp.asarray(cl_i), jnp.asarray(cl_j)], axis=1),
-                jnp.asarray(cl_mask, dtype=ml_jnp_dtype),
+                pair_idx_out,
+                pair_mask_out,
             )
 
         def update_mm_pairs(positions: np.ndarray, box: Optional[np.ndarray] = None) -> Tuple[Array, Array]:
+            """Return padded dynamic MM pairs.
+
+            Contract: callers pass Cartesian positions unless ``fractional_coordinates``
+            was configured, in which case positions are fractional and ``box`` supplies
+            the current cell. Results have stable shape ``(capacity, 2)`` for
+            ``pair_idx`` and ``(capacity,)`` for ``pair_mask`` until an explicit
+            capacity grow is required.
+            """
             positions_jax = positions if hasattr(positions, "__dlpack_device__") else None
-            R_cart = (
-                np.asarray(jax.device_get(positions), dtype=np.float64)
-                if positions_jax is not None
-                else np.asarray(positions, dtype=np.float64)
-            )
             _nbr_debug = debug
             _pair_stats["calls"] += 1
 
@@ -1129,7 +1191,44 @@ def build_mm_energy_forces_fn(
                 and _pair_mask_cell[0] is not None
             )
 
+            if _use_rebuild_nbrs and positions_jax is not None:
+                from mmml.interfaces.pycharmmInterface.nl_gpu import gpu_nl_path_available
+
+                if gpu_nl_path_available():
+                    _pair_stats["cache_checks"] += 1
+                    if _gpu_interval_reuse_allowed(box, interval, skin):
+                        _pair_stats["reused"] += 1
+                        _pair_stats["last_reuse_reason"] = "gpu_interval_box_stable"
+                        return _pair_idx_cell[0], _pair_mask_cell[0]
+
+                    pair_idx, pair_mask = _rebuild_pairs_with_static_backend(
+                        np.empty((0, 3), dtype=np.float64),
+                        box,
+                        _nbr_debug,
+                        positions_jax=positions_jax,
+                    )
+                    _pair_idx_cell[0] = pair_idx
+                    _pair_mask_cell[0] = pair_mask
+                    _last_cartesian_positions[0] = None
+                    _last_box[0] = None if box is None else np.asarray(box, dtype=np.float64).copy()
+                    _pair_stats["updates"] += 1
+                    _pair_stats["last_reuse_reason"] = (
+                        "gpu_rebuild_no_host_skin_cache"
+                        if skin > 0.0
+                        else "gpu_rebuild"
+                    )
+                    _pair_stats["pair_capacity"] = int(pair_idx.shape[0])
+                    return pair_idx, pair_mask
+
+            if positions_jax is not None:
+                _pair_stats["host_syncs"] += 1
+                positions_np = np.asarray(jax.device_get(positions), dtype=np.float64)
+            else:
+                positions_np = np.asarray(positions, dtype=np.float64)
+            R_cart = _cartesian_for_nl_build(positions_np, box)
+
             # Skin/interval reuse on Cartesian coords (skip fractional wrap + inv on hot path).
+            _pair_stats["cache_checks"] += 1
             if neighbor_pair_cache_should_reuse(
                 calls=_pair_stats["calls"],
                 interval=interval,
@@ -1141,11 +1240,12 @@ def build_mm_energy_forces_fn(
                 have_cache=have_cache,
             ):
                 _pair_stats["reused"] += 1
+                _pair_stats["last_reuse_reason"] = "cpu_skin_or_interval"
                 return _pair_idx_cell[0], _pair_mask_cell[0]
 
             if _use_rebuild_nbrs:
                 pair_idx, pair_mask = _rebuild_pairs_with_static_backend(
-                    R_cart,
+                    positions_np,
                     box,
                     _nbr_debug,
                     positions_jax=positions_jax,
@@ -1155,6 +1255,8 @@ def build_mm_energy_forces_fn(
                 _last_cartesian_positions[0] = R_cart.copy()
                 _last_box[0] = None if box is None else np.asarray(box, dtype=np.float64).copy()
                 _pair_stats["updates"] += 1
+                _pair_stats["last_reuse_reason"] = "cpu_rebuild"
+                _pair_stats["pair_capacity"] = int(pair_idx.shape[0])
                 if _nbr_debug:
                     n_valid = int(np.sum(np.asarray(jax.device_get(pair_mask))))
                     capacity = int(pair_idx.shape[0])
@@ -1164,9 +1266,9 @@ def build_mm_energy_forces_fn(
                     )
                 return pair_idx, pair_mask
 
-            R = R_cart
+            R = positions_np
             if fractional_coordinates and box is None:
-                R, box = _fractional_positions_for_jax_md_neighbor_list(R_cart, pbc_cell)
+                R, box = _fractional_positions_for_jax_md_neighbor_list(positions_np, pbc_cell)
 
             nbrs = _nbrs[0]
             kwargs = {} if (box is None or not fractional_coordinates) else {"box": jnp.asarray(box)}
