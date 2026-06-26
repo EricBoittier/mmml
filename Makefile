@@ -6,6 +6,7 @@ help:
 	@echo ""
 	@echo "Installation:"
 	@echo "  make install          - Install with uv (CPU only)"
+	@echo "  make install-md-cpu   - Install CPU MD smoke extras (Vesin, mdanalysis)"
 	@echo "  make install-gpu      - Install with uv (GPU/CUDA 13, default)"
 	@echo "  make install-gpu-cuda12 - Install with uv (GPU/CUDA 12)"
 	@echo "  make install-dev      - Install with development dependencies"
@@ -64,6 +65,9 @@ help:
 
 install:
 	uv sync
+
+install-md-cpu:
+	uv sync --extra md-cpu
 
 install-gpu:
 	uv pip install --find-links https://storage.googleapis.com/jax-releases/jax_cuda_releases.html jax jaxlib jax-cuda13-plugin jax-cuda13-pjrt
