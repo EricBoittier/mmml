@@ -221,6 +221,13 @@ MMML exposes an optional GPU rebuild path for **JAX-held positions** (primarily
 
 Requirements: `uv sync --extra gpu` (CuPy + JAX CUDA), `vesin>=0.5.0`, CUDA GPU.
 
+Dynamic MM pair providers share one contract:
+
+- Rebuild inputs are Cartesian Å coordinates plus a scalar, `(3,)`, or `(3, 3)` Å cell. `jaxmd_runner.py` may keep simulation state in fractional coordinates, but `update_mm_pairs` converts those coordinates to Cartesian before CPU/GPU Vesin rebuilds.
+- Backends return padded half-lists: `pair_idx.shape == (capacity, 2)`, `pair_mask.shape == (capacity,)`, `pair_idx.dtype == int32`, and `pair_mask` is boolean/0-1. Only mask-true entries are valid.
+- Pair order is not stable API. Validation compares pair sets, not array order.
+- Pair capacity stays fixed across rebuilds until truncation/overflow forces an explicit growth. Capacity growth is counted in `mm_pair_update_stats["capacity_grows"]`.
+
 | Path | When it helps | When it does not |
 |------|---------------|------------------|
 | CPU Vesin + skin (default) | PyCHARMM hybrid MD; coords already on host | — |
@@ -229,11 +236,27 @@ Requirements: `uv sync --extra gpu` (CuPy + JAX CUDA), `vesin>=0.5.0`, CUDA GPU.
 
 `jaxmd_runner` passes GPU positions through to `update_mm_pairs` when
 `MMML_MM_NL_DEVICE=gpu` ([`_nl_update_positions`](../cli/run/jaxmd_runner.py)).
-Skin/displacement cache checks still use host Cartesian coords today.
+GPU mode avoids the unconditional host sync before Vesin rebuilds. Until a
+device-side displacement cache exists, skin-based reuse is disabled in GPU mode;
+safe interval reuse is allowed only when the box is unchanged.
 
 Tune CUDA pair capacity with `VESIN_CUDA_MAX_PAIRS_PER_POINT` (default 256).
 
-Validation scripts: `10_vesin_cupy_parity.py`, `11_gpu_nl_sync_profile.py` (run on GPU node).
+Validation sequence before recommending GPU NL on a new CUDA environment:
+
+```bash
+uv run pytest tests/unit/test_neighbor_pair_cache.py tests/unit/test_liquid_density_nl.py tests/unit/test_nl_reference_vectorized.py
+uv run python tests/functionality/neighbor_lists/04_update_mm_pairs_integration.py --mm-nl-backend vesin
+uv run python tests/functionality/neighbor_lists/10_vesin_cupy_parity.py --case synthetic_aco_liquid_n32_rho150
+MMML_MM_NL_DEVICE=gpu uv run python tests/functionality/neighbor_lists/11_gpu_nl_sync_profile.py --case synthetic_aco_liquid_n32_rho150
+```
+
+Acceptance criteria:
+
+- CPU parity tests pass for Vesin/vectorized filters, `mm_r_min`, orthorhombic PBC, and dense liquid cases.
+- GPU parity script reports the same CPU/GPU pair set for the selected case.
+- Sync profile shows `gpu_vesin_dlpack_ms < d2h_positions_ms + cpu_vesin_build_ms + h2d_pairs_ms` on the target GPU node.
+- A short local JAX-MD smoke run has stable energy/pair-count behavior compared with CPU Vesin before longer production use.
 
 The cadence and method of updating these lists depend on the **simulation runner/backend**:
 
