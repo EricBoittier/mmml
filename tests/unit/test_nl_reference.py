@@ -7,6 +7,7 @@ import numpy as np
 from mmml.interfaces.pycharmmInterface.nl_reference import (
     brute_force_mic_pairs,
     compare_pair_sets,
+    filter_pairs_under_cutoff,
     monomer_id_from_offsets,
 )
 
@@ -31,6 +32,14 @@ def test_brute_force_two_dimer_pairs() -> None:
     for ai, aj in pairs:
         assert mid[ai] != mid[aj]
         assert ai < aj
+
+
+def test_filter_pairs_under_cutoff_drops_shell_pairs() -> None:
+    pos = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [5.0, 0.0, 0.0], [6.0, 0.0, 0.0]])
+    cell = 30.0 * np.eye(3)
+    raw = {(0, 2), (0, 3)}
+    filtered = filter_pairs_under_cutoff(raw, pos, cell, cutoff=6.0)
+    assert filtered == {(0, 2)}
 
 
 def test_compare_pair_sets_symmetric_diff() -> None:

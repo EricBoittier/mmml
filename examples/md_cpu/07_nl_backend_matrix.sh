@@ -14,6 +14,10 @@ for cutoff in 10 13 15; do
     --backends vesin,jax_md,ase,cell_list
 done
 
+echo "=== Extreme PBC NL cases (tight box, face wrap, orthorhombic, …) ==="
+uv run python tests/functionality/neighbor_lists/06_extreme_pbc_nl.py \
+  --backends vesin,jax_md,ase,cell_list
+
 if [[ -n "${RUN_CHARMM_NL:-}" ]]; then
   echo "=== NL matrix: CHARMM ACO:2 (requires PyCHARMM) ==="
   uv run python tests/functionality/neighbor_lists/05_compare_nl_backends.py \
