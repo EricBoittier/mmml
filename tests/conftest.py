@@ -3,13 +3,23 @@
 from __future__ import annotations
 
 import os
+import shutil
 from pathlib import Path
 
 import pytest
 
-pytest_plugins = ["tests.functionality.pycharmmETC.conftest"]
+from tests.functionality.pycharmmETC._paths import PYCHARMMETC_DIR
 
 _TESTS_ROOT = Path(__file__).resolve().parent
+
+# Committed inputs copied into each isolated PyCHARMM workdir when present.
+_PYCHARMM_SEED_PDBS = (
+    "initial.pdb",
+    "init-packmol.pdb",
+    "aco.pdb",
+    "init-tip3.pdb",
+    "tip3.pdb",
+)
 
 # Paths (relative to tests/) that require a live PyCHARMM build.
 _PYCHARMM_PATH_PREFIXES = (
@@ -80,6 +90,19 @@ def jax_gpu_available() -> bool:
         return bool(jax.devices("gpu"))
     except Exception:
         return False
+
+
+@pytest.fixture
+def pycharmm_workdir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Temporary cwd with seed PDBs; PyCHARMM outputs stay out of the git tree."""
+    for sub in ("pdb", "psf", "packmol", "res", "dcd", "xyz"):
+        (tmp_path / sub).mkdir()
+    for name in _PYCHARMM_SEED_PDBS:
+        src = PYCHARMMETC_DIR / "pdb" / name
+        if src.is_file():
+            shutil.copy2(src, tmp_path / "pdb" / name)
+    monkeypatch.chdir(tmp_path)
+    return tmp_path
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
