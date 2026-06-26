@@ -79,6 +79,14 @@ nl-validation = [
     "vesin",
 ]
 
+# CPU MD smoke testing: neighbor-list parity (Vesin), trajectory I/O, no CUDA.
+# Uses bundled examples/ckpts_json/DESdimers_params.json (ACO dimer, natoms=20).
+md-cpu = [
+    "vesin",
+    "mdanalysis",
+    "mda-xdrlib",
+]
+
 # Multistate Bennett acceptance ratio (also in core deps; kept for explicit installs)
 mbar = [
     "pymbar>=4.0",
@@ -223,7 +231,7 @@ all-cuda13 = [
 
 # CPU-only full installation (no GPU dependencies)
 all-cpu = [
-    "mmml[quantum,ml,viz,md,chem,data,notebooks,experiments,plotting]",
+    "mmml[quantum,ml,viz,md,md-cpu,chem,data,notebooks,experiments,plotting]",
 ]
 
 [tool.uv.sources]
