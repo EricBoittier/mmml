@@ -373,13 +373,15 @@ def add_pyxtal_cluster_args(parser: argparse.ArgumentParser) -> None:
             "keep the first N and warn (default: on)."
         ),
     )
-    opt = group.add_argument_group("PyXtal ASE pre-relax (optional)")
-    opt.add_argument(
+    group.add_argument(
         "--optimize-pyxtal",
         action="store_true",
-        help="ASE-relax the PyXtal structure before CHARMM MM cluster minimize.",
+        help=(
+            "Optional ASE pre-relax of the PyXtal structure before CHARMM MM "
+            "cluster minimize."
+        ),
     )
-    opt.add_argument(
+    group.add_argument(
         "--optimize-pyxtal-emt",
         action="store_true",
         help="Use ASE EMT for --optimize-pyxtal (smoke tests only).",
