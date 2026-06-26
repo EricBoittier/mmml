@@ -163,17 +163,6 @@ def apply_mc_density_equalization(
             initial_density_g_cm3=None,
             final_density_g_cm3=None,
         )
-    if getattr(args, "box_size", None) is not None:
-        return pos, box_side_A, McDensityResult(
-            enabled=True,
-            ran=False,
-            reason="fixed_box",
-            initial_box_A=box_side_A,
-            final_box_A=box_side_A,
-            target_density_g_cm3=None,
-            initial_density_g_cm3=None,
-            final_density_g_cm3=None,
-        )
     if comp is None:
         return pos, box_side_A, McDensityResult(
             enabled=True,
