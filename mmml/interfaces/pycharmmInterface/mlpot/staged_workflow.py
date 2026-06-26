@@ -939,6 +939,61 @@ def _configure_npt_dynamics_start(
         )
 
 
+def _equi_in_place_restart(io: CharmmTrajectoryFiles) -> bool:
+    """True when equi reads and writes the same ``.res`` (resume interrupted equi)."""
+    if io.restart_read is None or io.restart_write is None:
+        return False
+    return Path(io.restart_read).resolve() == Path(io.restart_write).resolve()
+
+
+def _configure_equi_dynamics_start(
+    kw: dict[str, Any],
+    io: CharmmTrajectoryFiles,
+    *,
+    restart_from_file: bool,
+    use_pbc: bool,
+    quiet: bool,
+    temp: float,
+    box_side: float | None = None,
+    first_segment: bool = True,
+) -> None:
+    """Fresh CPT barostat when EQUI restarts from HEAT/NVE (``pmass=0`` → NPT).
+
+    HEAT Hoover NVT uses ``pmass=0``.  ``dyna restart`` without ``start`` leaves
+    barostat pistons uninitialized for NPT EQUI (garbage ``PIXX`` / ``PRESSI`` at
+    step 0).  Mirror HEAT's ``restart+start`` single-dyna pattern.
+    """
+    if not first_segment:
+        return
+    if not bool(kw.get("cpt")):
+        return
+    pmass = kw.get("pmass")
+    if pmass is not None and int(pmass) == 0:
+        return
+    if kw.get("restart") is False and kw.get("start") is True:
+        return
+    if _equi_in_place_restart(io):
+        return
+    if not restart_from_file or io.restart_read is None:
+        return
+
+    target = float(kw.get("hoover reft", kw.get("treference", temp)))
+    if use_pbc and box_side is not None:
+        ensure_charmm_crystal_for_cpt(float(box_side), quiet=quiet)
+    kw["restart"] = True
+    kw["new"] = False
+    kw["start"] = True
+    kw["iasvel"] = 1
+    kw["firstt"] = target
+    if not quiet:
+        print(
+            f"EQUI: dyna restart+start at {target:.1f} K "
+            f"(coords from {io.restart_read}); fresh CPT barostat "
+            "(HEAT pmass=0 → NPT; single dyna, no nstep=0 assign)",
+            flush=True,
+        )
+
+
 def _maybe_configure_cpt_in_memory_overlap_start(
     *,
     stage: Literal["mini", "heat", "nve", "equi", "prod"],
@@ -2171,6 +2226,16 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     )
                     if cpt_seed is not None:
                         restart_path = cpt_seed
+                    elif seg_i == 0:
+                        _configure_equi_dynamics_start(
+                            kw,
+                            seg_io,
+                            restart_from_file=restart and seg_io.restart_read is not None,
+                            use_pbc=charmm_pbc,
+                            quiet=bool(args.quiet),
+                            temp=temp,
+                            box_side=box_side,
+                        )
                     run_dynamics_with_io(
                         kw,
                         seg_io,
@@ -2608,6 +2673,16 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             )
             if cpt_seed is not None:
                 restart_path = cpt_seed
+            elif stage == "equi":
+                _configure_equi_dynamics_start(
+                    kw,
+                    io,
+                    restart_from_file=restart and io.restart_read is not None,
+                    use_pbc=charmm_pbc,
+                    quiet=bool(args.quiet),
+                    temp=temp,
+                    box_side=box_side,
+                )
             run_dynamics_with_io(
                 kw,
                 io,
