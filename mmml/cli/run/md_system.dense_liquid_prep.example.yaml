@@ -48,6 +48,8 @@ defaults:
   mini_box_equil_allow_fixed_box: true
 
   # --- CHARMM / MLpot minimization ---
+  charmm_mm_pretreat: true
+  charmm_mm_pretreat_dt_fs: 1.0
   charmm_pre_minimize: true
   charmm_sd_steps: 1000
   charmm_abnr_steps: 1000

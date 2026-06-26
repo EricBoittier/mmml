@@ -30,12 +30,12 @@ def test_resolve_charmm_mm_pretreat_settings_defaults():
     )
     pretreat = resolve_charmm_mm_pretreat_settings(args)
     assert pretreat.dt_fs == pytest.approx(DEFAULT_CHARMM_MM_PRETREAT_DT_FS)
-    assert pretreat.timestep_ps == pytest.approx(0.002)
+    assert pretreat.timestep_ps == pytest.approx(0.001)
     assert pretreat.temperature_K == pytest.approx(310.0)
     assert pretreat.pressure_atm == pytest.approx(1.5)
-    assert pretreat.inbfrq == 400
-    assert pretreat.imgfrq == 400
-    assert pretreat.ixtfrq == 8000
+    assert pretreat.inbfrq == 200
+    assert pretreat.imgfrq == 200
+    assert pretreat.ixtfrq == 4000
 
 
 def test_resolve_charmm_mm_pretreat_settings_explicit_overrides():
@@ -146,6 +146,7 @@ def test_build_pretreat_handoff_includes_thermodynamics_section():
 def test_resolve_pretreat_dyn_inbfrq_scales_with_dt():
     args = argparse.Namespace()
     assert resolve_pretreat_dyn_inbfrq(args, dt_fs=0.25) == 50
+    assert resolve_pretreat_dyn_inbfrq(args, dt_fs=1.0) == 200
     assert resolve_pretreat_dyn_inbfrq(args, dt_fs=2.0) == 400
 
 
@@ -154,12 +155,12 @@ def test_apply_pretreat_dyn_freq_kwargs_pbc():
         apply_pretreat_dyn_freq_kwargs,
     )
 
-    args = argparse.Namespace(charmm_mm_pretreat_dt_fs=2.0)
+    args = argparse.Namespace(charmm_mm_pretreat_dt_fs=1.0)
     kw = {"inbfrq": 50, "imgfrq": 50, "ihbfrq": 50, "ilbfrq": 50, "ixtfrq": 1000}
-    apply_pretreat_dyn_freq_kwargs(kw, args, use_pbc=True, dt_fs=2.0)
-    assert kw["inbfrq"] == 400
-    assert kw["imgfrq"] == 400
-    assert kw["ixtfrq"] == 8000
+    apply_pretreat_dyn_freq_kwargs(kw, args, use_pbc=True, dt_fs=1.0)
+    assert kw["inbfrq"] == 200
+    assert kw["imgfrq"] == 200
+    assert kw["ixtfrq"] == 4000
 
 
 def test_build_pycharmm_command_forwards_pretreat_freq_flags():

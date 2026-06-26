@@ -554,6 +554,7 @@ box_size: 32.0
 target_density_g_cm3: 1.326
 density_prep_mode: resilient
 charmm_mm_pretreat: true
+charmm_mm_pretreat_dt_fs: 1.0
 charmm_mm_pretreat_ps_heat: 3.0
 charmm_mm_pretreat_ps_equi: 5.0
 charmm_mm_pretreat_ps_prod: 2.0
