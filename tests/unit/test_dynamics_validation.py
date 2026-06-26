@@ -38,6 +38,29 @@ def test_harmonize_nsavc_frequency():
     assert harmonize_nsavc_frequency(200, 500) == 125
 
 
+def test_nsavc_for_chunk_preserving_interval():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        nsavc_for_chunk_preserving_interval,
+    )
+
+    assert nsavc_for_chunk_preserving_interval(250, 500, 0) == 250
+    assert nsavc_for_chunk_preserving_interval(500, 500, 0) is None
+    assert nsavc_for_chunk_preserving_interval(500, 250, 0) is None
+    assert nsavc_for_chunk_preserving_interval(500, 250, 250) is None
+
+
+def test_install_target_dcd_metadata_from_interval_ps():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        install_target_dcd_metadata,
+        resolve_target_dcd_nsavc,
+    )
+
+    kw = {"dcd_interval_ps": 0.1, "timestep": 0.0002, "nsavc": 125}
+    install_target_dcd_metadata(kw)
+    assert resolve_target_dcd_nsavc(kw) == 500
+    assert kw["_dcd_interval_ps"] == pytest.approx(0.1)
+
+
 def test_expected_overlap_chunk_dcd_frame_count_benz30_equi_case():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         expected_overlap_chunk_dcd_frame_count,

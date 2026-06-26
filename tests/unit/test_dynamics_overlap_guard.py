@@ -2722,6 +2722,24 @@ def test_harmonize_dynamics_frequency_for_remainder_chunk():
     _harmonize_overlap_chunk_frequencies(kw3, 40)
     assert kw3["nsavc"] == 20
 
+    kw4 = {
+        "nsavc": 250,
+        "_target_dcd_nsavc": 250,
+        "_dcd_interval_ps": 0.05,
+        "timestep": 0.0002,
+    }
+    _harmonize_overlap_chunk_frequencies(kw4, 500, global_step_start=0)
+    assert kw4["nsavc"] == 250
+
+    kw5 = {
+        "nsavc": 250,
+        "_target_dcd_nsavc": 500,
+        "_dcd_interval_ps": 0.1,
+        "timestep": 0.0002,
+    }
+    _harmonize_overlap_chunk_frequencies(kw5, 250, global_step_start=0)
+    assert "nsavc" not in kw5
+
 
 def test_apply_dyn_imgfrq_from_args_sets_pbc_list_freqs():
     from argparse import Namespace
