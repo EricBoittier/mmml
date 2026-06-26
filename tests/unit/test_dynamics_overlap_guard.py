@@ -2454,6 +2454,64 @@ def test_effective_overlap_check_interval_respects_nsavc():
     assert effective_overlap_check_interval(8000, 200, nsavc=100) == 200
 
 
+def test_effective_overlap_check_interval_cpt_ignores_large_nsavc():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        effective_overlap_check_interval,
+    )
+
+    # Without cpt, nsavc=10000 forces interval >= 10001 (often much larger).
+    assert effective_overlap_check_interval(500000, 500, nsavc=10000) == 10000
+    # CPT overlap harmonizes nsavc per chunk; keep the requested overlap interval.
+    assert effective_overlap_check_interval(500000, 500, nsavc=10000, cpt=True) == 500
+
+
+def test_run_dynamics_with_io_cpt_overlap_subchunks():
+    cfg = DynamicsOverlapConfig(
+        action="error",
+        min_distance_A=0.5,
+        check_interval=500,
+        n_monomers=2,
+        use_pbc=False,
+    )
+    pos_ok = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [5.0, 0.0, 0.0],
+            [6.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    calls: list[int] = []
+
+    def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
+        calls.append(int(kw["nstep"]))
+        return mock.Mock()
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        side_effect=fake_chunk,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        return_value=pos_ok,
+    ):
+        run_dynamics_with_io(
+            {"nstep": 1000, "nsavc": 10000, "cpt": True},
+            None,
+            overlap=cfg,
+            overlap_context="HEAT",
+        )
+
+    # 2 overlap chunks of 500, each split into 2 CPT sub-chunks of 250
+    assert calls == [250, 250, 250, 250]
+    assert sum(calls) == 1000
+
+
 def test_run_dynamics_with_io_uses_even_overlap_chunks(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
