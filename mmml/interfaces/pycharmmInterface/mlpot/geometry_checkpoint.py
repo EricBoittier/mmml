@@ -360,18 +360,35 @@ class PretreatResumeState:
 
 
 def _pretreat_expected_nstep(args: Any, *, timestep_ps: float, ps: float) -> int:
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        resolve_charmm_mm_pretreat_settings,
+    )
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import ps_to_nsteps
 
-    return max(1, ps_to_nsteps(timestep_ps, ps))
+    pretreat = resolve_charmm_mm_pretreat_settings(args)
+    dt_ps = float(pretreat.timestep_ps) if pretreat.timestep_ps > 0.0 else float(timestep_ps)
+    return max(1, ps_to_nsteps(dt_ps, ps))
 
 
 def _resolve_charmm_mm_pretreat_heat_nstep(args: Any, *, timestep_ps: float) -> int:
-    ps_heat = getattr(args, "charmm_mm_pretreat_ps_heat", None)
-    if ps_heat is not None and float(ps_heat) > 0.0:
-        from mmml.interfaces.pycharmmInterface.mlpot.dynamics import ps_to_nsteps
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        resolve_charmm_mm_pretreat_heat_nstep,
+        resolve_charmm_mm_pretreat_settings,
+    )
 
-        return max(1, ps_to_nsteps(timestep_ps, float(ps_heat)))
-    return max(1, int(getattr(args, "charmm_mm_pretreat_heat_nstep", 2000)))
+    pretreat = resolve_charmm_mm_pretreat_settings(args)
+    if pretreat.timestep_ps > 0.0:
+        return resolve_charmm_mm_pretreat_heat_nstep(args, settings=pretreat)
+    settings = pretreat.__class__(
+        dt_fs=pretreat.dt_fs,
+        timestep_ps=float(timestep_ps),
+        temperature_K=pretreat.temperature_K,
+        pressure_atm=pretreat.pressure_atm,
+        ps_heat=pretreat.ps_heat,
+        ps_equi=pretreat.ps_equi,
+        ps_prod=pretreat.ps_prod,
+    )
+    return resolve_charmm_mm_pretreat_heat_nstep(args, settings=settings)
 
 
 def pretreat_stage_complete(

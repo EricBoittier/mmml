@@ -155,6 +155,8 @@ class CharmmMmMinimizeConfig:
     save_energy_json_path: Optional[PathLike] = None
     save_title: str = "CHARMM MM minimize"
     use_pbc: bool = False
+    inbfrq: int | None = None
+    ihbfrq: int | None = None
 
 
 def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
@@ -204,8 +206,12 @@ def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
         "nprint": max(1, int(config.nprint)),
         "tolenr": float(config.tolenr),
         "tolgrd": float(config.tolgrd),
-        "inbfrq": 50,
-        "ihbfrq": 50,
+        "inbfrq": int(config.inbfrq if config.inbfrq is not None else 50),
+        "ihbfrq": int(
+            config.ihbfrq
+            if config.ihbfrq is not None
+            else (50 if bool(config.use_pbc) else 0)
+        ),
         **dcd_kw,
     }
     try:
