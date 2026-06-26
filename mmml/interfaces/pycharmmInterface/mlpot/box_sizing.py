@@ -296,3 +296,30 @@ def add_box_sizing_args(parser: argparse.ArgumentParser) -> None:
             "before the main ensemble. 0=off."
         ),
     )
+    group.add_argument(
+        "--mini-lattice-abnr-steps",
+        type=int,
+        default=0,
+        metavar="N",
+        help=(
+            "PyCHARMM mini: CHARMM MINI ABNR LATTice steps to optimize the cubic unit cell "
+            "after coordinate-only CHARMM MM mini and before MLpot SD. 0=off. "
+            "Requires CRYSTAL/PBC."
+        ),
+    )
+    group.add_argument(
+        "--mini-lattice-abnr-nocoords",
+        action="store_true",
+        help=(
+            "With --mini-lattice-abnr-steps: optimize only the unit cell (NOCOordinates); "
+            "default optimizes coordinates and box together."
+        ),
+    )
+    group.add_argument(
+        "--mini-lattice-abnr-allow-fixed-box",
+        action="store_true",
+        help=(
+            "Allow --mini-lattice-abnr-steps even when --box-size is set "
+            "(default: fixed --box-size skips lattice minimization)."
+        ),
+    )

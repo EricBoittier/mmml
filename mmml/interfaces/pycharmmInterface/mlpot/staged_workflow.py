@@ -1459,7 +1459,38 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 grms_kcalmol_A=charmm_grms(),
             )
 
+    from mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
+        should_run_mini_lattice_abnr,
+    )
     from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import should_run_mini_box_equil
+
+    if should_run_mini_lattice_abnr(
+        args,
+        charmm_pbc=charmm_pbc,
+        stages=list(stages),
+    ):
+        from mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
+            run_mini_lattice_abnr,
+        )
+        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+            sync_workflow_pbc_box_side_after_mm_pretreat,
+        )
+
+        new_side = run_mini_lattice_abnr(
+            args,
+            box_side=box_side,
+            use_pbc=charmm_pbc,
+        )
+        if new_side is not None:
+            box_side = float(new_side)
+        if charmm_pbc and box_side is not None:
+            box_side = sync_workflow_pbc_box_side_after_mm_pretreat(
+                box_side,
+                pretreat_restart=None,
+                args=args,
+                quiet=bool(args.quiet),
+            )
+        r = get_charmm_positions_array()
 
     if should_run_mini_box_equil(
         args,

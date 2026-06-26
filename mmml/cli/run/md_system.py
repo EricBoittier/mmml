@@ -1674,6 +1674,13 @@ def _append_box_sizing_args(cmd: list[str], args: argparse.Namespace) -> None:
     jax_ps = float(getattr(args, "jaxmd_mini_box_equil_ps", 0.0) or 0.0)
     if jax_ps > 0.0:
         cmd.extend(["--jaxmd-mini-box-equil-ps", str(jax_ps)])
+    lattice_n = int(getattr(args, "mini_lattice_abnr_steps", 0) or 0)
+    if lattice_n > 0:
+        cmd.extend(["--mini-lattice-abnr-steps", str(lattice_n)])
+    if getattr(args, "mini_lattice_abnr_nocoords", False):
+        cmd.append("--mini-lattice-abnr-nocoords")
+    if getattr(args, "mini_lattice_abnr_allow_fixed_box", False):
+        cmd.append("--mini-lattice-abnr-allow-fixed-box")
 
 
 def _validate_pyxtal_args(args: argparse.Namespace) -> None:
