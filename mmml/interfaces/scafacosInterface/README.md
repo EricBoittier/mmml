@@ -126,11 +126,21 @@ MMML’s `scafacos_session.py` wraps the public ScaFaCoS frontend (see upstream 
 
 Hybrid ML/MM dynamics today:
 
-1. **CHARMM** — IMAGE lists + short-range `cdie` nonbonds; ML atoms have ELEC/VDW zeroed via BLOCK.
+1. **CHARMM** — IMAGE lists + short-range `cdie` nonbonds; ML atoms have ELEC/VDW zeroed via BLOCK (jax_mic mode).
 2. **JAX MM** — switched LJ + **truncated MIC Coulomb** to ~13 Å (`mm_switch_on + mm_switch_width`).
 3. **ScaFaCoS (optional)** — full periodic Coulomb for selected atom subsets; intended as a k-space supplement above the JAX cutoff.
 
-See [LONG_RANGE_ELECTROSTATICS.md](../pycharmmInterface/mlpot/LONG_RANGE_ELECTROSTATICS.md) for architecture, splitting short/long range, and planned `mm_energy_forces.py` wiring.
+### `periodic_external` mode (`--mm-nonbond-mode periodic_external`)
+
+Wired into `mmml md-system` / staged PyCHARMM workflows:
+
+- **JAX real-space LJ and Coulomb are off** (`doMM=False` in the ML JIT path).
+- **Coulomb** — ScaFaCoS in the MLpot callback (`periodic_mm_external.py`).
+- **Lennard-Jones** — CHARMM periodic VDW (BLOCK keeps VDW on, ELEC off). ScaFaCoS does **not** implement LJ.
+
+Requires `--setup pbc_*`, `libfcs`, and adequate `--box-size` (validated in `periodic_mm.py`).
+
+See [LONG_RANGE_ELECTROSTATICS.md](../pycharmmInterface/mlpot/LONG_RANGE_ELECTROSTATICS.md) for box rules and limitations.
 
 ## License note
 

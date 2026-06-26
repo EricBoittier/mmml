@@ -75,6 +75,59 @@ END
     )
 
 
+def apply_mlpot_periodic_external_block(
+    ml_selection: Any,
+    *,
+    mm_internal_scale: float = 0.0,
+    verbose: bool = False,
+) -> str:
+    """MLpot BLOCK for periodic external MM: CHARMM IMAGE VDW on, ELEC off (ScaFaCoS).
+
+    Bonded terms on ML atoms follow ``mm_internal_scale`` (same as
+    :func:`apply_mlpot_energy_block`).  Nonbond: JAX LJ/Coulomb are disabled;
+    CHARMM computes periodic VDW; Coulomb is added in the Python callback.
+    """
+    pycharmm = _import_pycharmm()
+    coeff = _mlpot_internal_block_coeff_line(mm_internal_scale)
+    if "ELEC 0.0 VDW 0.0" in coeff:
+        periodic_coeff = coeff.replace("ELEC 0.0 VDW 0.0", "ELEC 0.0 VDW 1.0")
+    elif "ELEC 0.0 VDW 1.0" in coeff:
+        periodic_coeff = coeff
+    else:
+        periodic_coeff = coeff + " ELEC 0.0 VDW 1.0"
+    n_total = int(pycharmm.coor.get_natom())
+    n_ml = len(ml_selection.get_atom_indexes())
+    if n_ml <= 0:
+        raise ValueError("ML selection is empty")
+    if n_ml >= n_total:
+        block = f"""BLOCK
+CALL 1 SELE ALL END
+COEFF 1 1 {periodic_coeff}
+END
+"""
+        summary = (
+            f"CHARMM BLOCK: periodic external MM ({n_total} atoms, "
+            f"CHARMM VDW on, ELEC off → ScaFaCoS)"
+        )
+        _run_block_script(summary, block, verbose=verbose)
+        return "all"
+
+    name = ml_selection.store(_ML_BLOCK_NAME)
+    block = f"""BLOCK
+CALL 1 SELE .NOT. @{name} END
+CALL 2 SELE @{name} END
+COEFF 1 1 1.0
+COEFF 2 2 {periodic_coeff}
+END
+"""
+    summary = (
+        f"CHARMM BLOCK: periodic external MM (MM atoms CHARMM VDW; "
+        f"ML atoms {periodic_coeff}; ELEC off → ScaFaCoS)"
+    )
+    _run_block_script(summary, block, verbose=verbose)
+    return name
+
+
 def apply_mlpot_energy_block(
     ml_selection: Any,
     *,

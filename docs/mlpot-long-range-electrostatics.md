@@ -136,6 +136,42 @@ A CHARMM-native ScaFaCoS hook (Fortran `iso_c_binding` wrapper, analogous to hel
 
 ---
 
+## Periodic external MM (`--mm-nonbond-mode periodic_external`)
+
+Requires **full PBC** (`--setup pbc_nve|pbc_nvt|pbc_npt`), **ML MIC** (default for `pbc_*`), and a built **ScaFaCoS** library.
+
+| Term | Backend | Notes |
+|------|---------|-------|
+| Coulomb | ScaFaCoS (`--lr-solver scafacos`) | Full periodic; JAX real-space Coulomb **off** |
+| Lennard-Jones | CHARMM IMAGE VDW | Switched VDW at `cutnb` (scaled to box); **not** ScaFaCoS |
+| JAX MM pairs | disabled | No truncated MIC LJ/Coulomb in callback |
+
+```bash
+export SCAFACOS_LIB=/path/to/libfcs.so
+mmml md-system --setup pbc_nvt --backend pycharmm \
+  --composition DCM:20 --box-size 45 \
+  --mm-nonbond-mode periodic_external --lr-solver scafacos
+```
+
+### Box size
+
+The cubic edge must satisfy:
+
+1. `L/2 > cutnb` (CHARMM IMAGE cutoff; auto-scaled via `pbc_nbond_cutoffs`)
+2. `L >= cluster_extent + 5 Å` (margin before images wrap the cluster)
+3. Minimum **20 Å** when extent is unknown at CLI parse time
+
+`staged_workflow` validates these after Packmol/MC density using actual coordinates.
+
+### Limitations
+
+- **Orthorhombic cubic** boxes only (ScaFaCoS + current CHARMM presets).
+- **No COM switching** on external MM terms — ML dimer handoff still applies to PhysNet; CHARMM VDW and ScaFaCoS Coulomb are unswitched. Avoid overlap at short COM distances or increase box spacing.
+- **jax_pme** is not wired for `periodic_external` yet (ScaFaCoS only).
+- **NpT**: ScaFaCoS box is refreshed each callback from the synced MIC cell side.
+
+---
+
 ## Configuration surface (planned CLI/YAML)
 
 | Flag / key | Maps to |
