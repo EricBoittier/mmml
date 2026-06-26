@@ -10,7 +10,11 @@ from __future__ import annotations
 
 import argparse
 import html
+import io
 import re
+import shutil
+import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -18,7 +22,7 @@ import yaml
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
-from reportlab.platypus import PageBreak, Paragraph, Preformatted, SimpleDocTemplate, Spacer
+from reportlab.platypus import Image, PageBreak, Paragraph, Preformatted, SimpleDocTemplate, Spacer
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -27,6 +31,19 @@ DOCS_DIR = ROOT / "docs"
 DEFAULT_OUTPUT = ROOT / "site" / "mmml-docs.pdf"
 LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 INLINE_CODE_RE = re.compile(r"`([^`]+)`")
+MERMAID_CLI_PACKAGE = "@mermaid-js/mermaid-cli"
+
+
+class MkDocsConfigLoader(yaml.SafeLoader):
+    """YAML loader that tolerates MkDocs extension function tags."""
+
+
+def _ignore_python_name_tag(loader: yaml.Loader, tag_suffix: str, node: yaml.Node) -> str:
+    """Keep local ``!!python/name`` MkDocs tags as strings for nav parsing."""
+    return f"!!python/name:{tag_suffix}"
+
+
+MkDocsConfigLoader.add_multi_constructor("tag:yaml.org,2002:python/name:", _ignore_python_name_tag)
 
 
 def iter_nav_pages(nav_items: Iterable[Any]) -> Iterable[tuple[str, Path]]:
@@ -47,7 +64,7 @@ def iter_nav_pages(nav_items: Iterable[Any]) -> Iterable[tuple[str, Path]]:
 def load_nav_pages() -> list[tuple[str, Path]]:
     """Read page order from ``mkdocs.yml``."""
     with MKDOCS_CONFIG.open("r", encoding="utf-8") as handle:
-        config = yaml.safe_load(handle)
+        config = yaml.load(handle, Loader=MkDocsConfigLoader)
     return list(iter_nav_pages(config.get("nav", [])))
 
 
@@ -87,6 +104,62 @@ def styles() -> dict[str, ParagraphStyle]:
     return base
 
 
+def mermaid_render_command() -> list[str] | None:
+    """Return a Mermaid CLI command prefix, using local ``mmdc`` or ``npx``."""
+    if shutil.which("mmdc"):
+        return ["mmdc"]
+    if shutil.which("npx"):
+        return ["npx", "-y", MERMAID_CLI_PACKAGE]
+    return None
+
+
+def mermaid_to_image_flowable(source: str, style_map: dict[str, ParagraphStyle]) -> list[Any]:
+    """Render Mermaid source to a PNG flowable, or return readable source fallback."""
+    command = mermaid_render_command()
+    if command is None:
+        return [
+            Paragraph("Mermaid diagram source (install mmdc/npx to render):", style_map["Normal"]),
+            Preformatted(source, style_map["Code"]),
+        ]
+
+    with tempfile.TemporaryDirectory(prefix="mmml-docs-mermaid-") as tmp_dir:
+        input_path = Path(tmp_dir) / "diagram.mmd"
+        output_path = Path(tmp_dir) / "diagram.png"
+        input_path.write_text(source, encoding="utf-8")
+        try:
+            subprocess.run(
+                [
+                    *command,
+                    "--input",
+                    str(input_path),
+                    "--output",
+                    str(output_path),
+                    "--backgroundColor",
+                    "white",
+                    "--scale",
+                    "2",
+                ],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=60,
+            )
+        except (subprocess.SubprocessError, OSError) as exc:
+            return [
+                Paragraph(f"Mermaid render failed ({html.escape(type(exc).__name__)}):", style_map["Normal"]),
+                Preformatted(source, style_map["Code"]),
+            ]
+
+        image = Image(io.BytesIO(output_path.read_bytes()))
+        max_width = 7.0 * inch
+        if image.drawWidth > max_width:
+            scale = max_width / image.drawWidth
+            image.drawWidth *= scale
+            image.drawHeight *= scale
+        return [image, Spacer(1, 0.08 * inch)]
+
+
 def markdown_page_to_flowables(title: str, path: Path, style_map: dict[str, ParagraphStyle]) -> list[Any]:
     """Render the Markdown subset used by the docs into ReportLab flowables."""
     flowables: list[Any] = [
@@ -96,18 +169,25 @@ def markdown_page_to_flowables(title: str, path: Path, style_map: dict[str, Para
     ]
     lines = (DOCS_DIR / path).read_text(encoding="utf-8").splitlines()
     in_code_block = False
+    code_language = ""
     code_lines: list[str] = []
 
     for line in lines:
         stripped = line.strip()
         if stripped.startswith("```"):
             if in_code_block:
-                flowables.append(Preformatted("\n".join(code_lines), style_map["Code"]))
+                code_source = "\n".join(code_lines)
+                if code_language == "mermaid":
+                    flowables.extend(mermaid_to_image_flowable(code_source, style_map))
+                else:
+                    flowables.append(Preformatted(code_source, style_map["Code"]))
                 flowables.append(Spacer(1, 0.08 * inch))
                 code_lines = []
+                code_language = ""
                 in_code_block = False
             else:
                 in_code_block = True
+                code_language = stripped.removeprefix("```").strip().lower()
             continue
         if in_code_block:
             code_lines.append(line)

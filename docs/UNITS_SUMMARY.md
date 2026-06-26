@@ -2,16 +2,42 @@
 
 This document summarizes the units used across MMML components (train_joint, fix_and_split, DCMNet, PhysNet, EF model, calculators) and the conversion factors applied.
 
-## Central Constants (`mmml.data.units`)
+## Central constants (`mmml.data.units`)
 
-| Constant | Value | Description |
-|----------|-------|-------------|
-| `BOHR_TO_ANGSTROM` | 0.529177 | 1 Bohr = 0.529 Å |
-| `ANGSTROM_TO_BOHR` | 1.88973 | 1 Å = 1.88973 Bohr |
-| `HARTREE_TO_EV` | 27.211386 | 1 Ha = 27.211 eV |
-| `HARTREE_BOHR_TO_EV_ANGSTROM` | 51.422 | 1 Ha/Bohr = 51.422 eV/Å |
-| `DEBYE_TO_EANGSTROM` | 0.208194 | 1 D = 0.208194 e·Å |
-| `EANGSTROM_TO_DEBYE` | 4.803204 | 1 e·Å = 4.803 D |
+MMML keeps user-facing MD and ASE-style calculator quantities in Å, eV, and eV/Å. Atomic-unit inputs are converted at dataset preparation or model-boundary time, not repeatedly inside production dynamics.
+
+### Conversion Quick Reference
+
+| Quantity | Atomic / external unit | MMML unit | Factor |
+|----------|-------------------------|-----------|-------:|
+| Length | Bohr | Å | `BOHR_TO_ANGSTROM = 0.529177` |
+| Length | Å | Bohr | `ANGSTROM_TO_BOHR = 1.88973` |
+| Energy | Hartree | eV | `HARTREE_TO_EV = 27.211386` |
+| Force | Hartree/Bohr | eV/Å | `HARTREE_BOHR_TO_EV_ANGSTROM = 51.422` |
+| Dipole | Debye | e·Å | `DEBYE_TO_EANGSTROM = 0.208194` |
+| Dipole | e·Å | Debye | `EANGSTROM_TO_DEBYE = 4.803204` |
+
+### Mental Model
+
+| When you see... | Treat it as... | Common place |
+|-----------------|----------------|--------------|
+| `R`, `positions`, `vdw_surface` | Å | training splits, ASE/JAX-MD, calculators |
+| `E`, `energy`, `E_eV` | eV | training, evaluation, hybrid sums |
+| `F`, `forces` | eV/Å | training, ASE/JAX-MD, hybrid sums |
+| `esp` | Hartree/e | electrostatic potential targets |
+| `Dxyz`, `dipole` | e·Å internally; Debye at ASE API boundary | DCMNet/PhysNet targets and outputs |
+
+```mermaid
+flowchart LR
+  AU["Atomic-unit sources\nHartree, Bohr, Debye"]
+  FS["fix_and_split\nunit conversion + manifest"]
+  TRAIN["training splits\nÅ, eV, eV/Å, e·Å"]
+  CKPT["checkpoint metadata\ntraining_units"]
+  CALC["hybrid calculator\nÅ, eV, eV/Å"]
+  API["ASE / JAX-MD APIs\nÅ, eV, eV/Å"]
+
+  AU --> FS --> TRAIN --> CKPT --> CALC --> API
+```
 
 ## Data Pipeline Units
 
@@ -42,6 +68,20 @@ Typical defaults (when not using `--preserve-units`):
 - **esp**: Hartree/e (unchanged)
 - **vdw_surface**: Angstrom (from Bohr/index if from PySCF)
 
+```mermaid
+flowchart TB
+  PYS["PySCF export\nE: Hartree\nF: Hartree/Bohr\nR/grid: Bohr or Å\nD: Debye"]
+  MAN["units_manifest.json\nrecords every conversion"]
+  SPLIT["fix_and_split defaults\nE: eV\nF: eV/Å\nR/grid: Å\nD: e·Å"]
+  PRES["--preserve-units\nkeeps source units\nlegacy only"]
+  TRAIN["train_joint\nexpects manifest-aware splits"]
+
+  PYS --> MAN
+  PYS --> SPLIT --> TRAIN
+  PYS --> PRES --> TRAIN
+  PRES -. "loader warns unless intentional" .-> TRAIN
+```
+
 ### train_joint (model I/O)
 - **R**: Angstrom
 - **E**: eV
@@ -68,6 +108,15 @@ Typical defaults (when not using `--preserve-units`):
 - PhysNet and DCMNet output dipole in e·Å
 - ASE expects dipole in Debye for `get_dipole_moment()` → multiply by `EANGSTROM_TO_DEBYE`
 
+```mermaid
+flowchart LR
+  POS["positions in Å"] --> RBOHR["r_bohr = r_A * ANGSTROM_TO_BOHR"]
+  CHG["charges in e"] --> ESP["ESP = q / r_bohr\nHartree/e"]
+  CHG --> DIP["dipole = sum(q * r_A)\ne·Å"]
+  DIP --> ASE["ASE dipole API\nDebye via EANGSTROM_TO_DEBYE"]
+  RBOHR --> ESP
+```
+
 ## Component-Specific Notes
 
 ### DCMNet `calc_esp` (electrostatics.py)
@@ -91,15 +140,31 @@ Typical defaults (when not using `--preserve-units`):
 - PyCHARMM MLpot callback still uses kcal/mol at the C API boundary only (`helper_mlp.py`).
 - ASE `get_potential_energy()` / `get_forces()` return eV and eV/Å; `results` include `energy_unit` metadata.
 
+```mermaid
+flowchart TB
+  ML["ML model\nenergy/forces in eV, eV/Å"]
+  LEGACY["legacy Hartree checkpoint\nconverted once at load"]
+  MM["CHARMM MM\nkcal/mol, kcal/mol/Å"]
+  CONV["calculator boundary\nconvert MM to eV, eV/Å"]
+  SUM["hybrid sum\neV + eV/Å"]
+  ASE["ASE / JAX-MD caller\nget_potential_energy, get_forces"]
+  MLPOT["PyCHARMM MLpot C API\nkcal/mol at callback boundary"]
+
+  LEGACY --> ML
+  ML --> SUM
+  MM --> CONV --> SUM --> ASE
+  SUM --> MLPOT
+```
+
 ## Pipeline stage table
 
-| Stage | Energy | Forces | Coordinates | Metadata |
-|-------|--------|--------|-------------|----------|
-| PySCF export | Hartree | Hartree/Bohr | Å (typ.) | `_mmml_units` in NPZ |
-| fix_and_split (default) | eV | eV/Å | Å | `units_manifest.json` v2 + `_mmml_units` in splits |
-| PhysNet training | eV | eV/Å | Å | `training_units` in Orbax checkpoint |
-| Hybrid inference (ASE/JAX-MD) | eV | eV/Å | Å | `evaluate.json` → `"units"` block |
-| CHARMM C API (MLpot only) | kcal/mol | kcal/mol/Å | Å | converted at FFI boundary |
+| Stage | Coordinates | Energy | Forces | Unit record |
+|-------|-------------|--------|--------|-------------|
+| PySCF export | Å or Bohr | Hartree | Hartree/Bohr | `_mmml_units` in NPZ |
+| `fix_and_split` default | Å | eV | eV/Å | `units_manifest.json` v2 + split metadata |
+| PhysNet / DCMNet training | Å | eV | eV/Å | `training_units` in checkpoint |
+| Hybrid inference | Å | eV | eV/Å | `evaluate.json` `"units"` block |
+| PyCHARMM MLpot C API only | Å | kcal/mol | kcal/mol/Å | converted at FFI boundary |
 
 ## Verification checklist
 
