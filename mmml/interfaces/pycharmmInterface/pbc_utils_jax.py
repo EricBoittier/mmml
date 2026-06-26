@@ -109,6 +109,40 @@ def wrap_groups_by_id(
     return R + atom_shift
 
 
+def wrap_groups_by_id_with_weight_sum(
+    R: Array,
+    group_id: Array,
+    group_weight_sum: Array,
+    cell: Array,
+    mass: Optional[Array] = None,
+) -> Array:
+    """Fast molecular wrapping for full-coverage atom-to-group ids.
+
+    ``group_weight_sum`` is precomputed for the supplied ``group_id`` and
+    ``mass``. This is intended for hot loops where every atom belongs to a group.
+    """
+    R = jnp.asarray(R)
+    group_id = jnp.asarray(group_id, dtype=jnp.int32)
+    group_weight_sum = jnp.asarray(group_weight_sum, dtype=R.dtype)
+    n_groups = int(group_weight_sum.shape[0])
+
+    if mass is not None:
+        weights = jnp.asarray(mass, dtype=R.dtype)
+    else:
+        weights = jnp.ones((R.shape[0],), dtype=R.dtype)
+
+    group_pos_sum = jax.ops.segment_sum(
+        R * weights[:, None],
+        group_id,
+        num_segments=n_groups,
+    )
+    com = group_pos_sum / group_weight_sum[:, None]
+    S_com = frac_coords(com, cell)
+    lattice_shift = -jnp.floor(S_com)
+    cart_shift = cart_coords(lattice_shift, cell)
+    return R + cart_shift[group_id]
+
+
 def wrap_groups(
     R: Array, groups: list[Array], cell: Array, mass: Optional[Array] = None
 ) -> Array:

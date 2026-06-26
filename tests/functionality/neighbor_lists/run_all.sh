@@ -12,7 +12,8 @@ uv run python "$DIR/02_path_parity.py" "$@"
 uv run python "$DIR/03_skin_interval_audit.py" "$@"
 uv run python "$DIR/03_skin_interval_audit.py" --skin 0.5 --interval 1 "$@"
 uv run python "$DIR/06_extreme_pbc_nl.py" "$@"
-uv run python "$DIR/07_liquid_density_nl.py" "$@"
+uv run python "$DIR/07_liquid_density_nl.py" --case synthetic_aco_liquid_n32_rho125 --case synthetic_aco_liquid_n32_rho150 "$@"
+uv run python "$DIR/09_nl_motion_stress.py" "$@"
 echo "=== NL benchmark (liquid-density smoke) ==="
 uv run python "$DIR/08_benchmark_nl_backends.py" \
   --case synthetic_aco_liquid_n32 --backends vesin,jax_md,ase,cell_list \
