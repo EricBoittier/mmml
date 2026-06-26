@@ -19,6 +19,7 @@ def main():
 Available commands:
   make-res    Generate residue (PDB, PSF, topology) via PyCHARMM/CGENFF
   make-box    Pack molecules into periodic box (vacuum or solvated)
+  build-crystal  Build symmetry-aware crystals with PyXtal (+ optional ASE opt)
   run         MM/ML simulation (ASE + JAX-MD with hybrid calculator)
   md-system   Run mixed-composition MD setups (free/pbc NVE/NVT + pbc NPT + lambda TI)
   lambda-mbar MBAR post-processing for lambda-dynamics runs
@@ -54,6 +55,8 @@ Available commands:
 Examples:
   mmml make-res --res CYBZ
   mmml make-box --res CYBZ --n 50 --side_length 25.0
+  mmml build-crystal -m benzene.xyz --spg 14 --z 2 -o crystal.extxyz
+  mmml build-crystal -m h2o.xyz --spg 36 --z 4 --optimize --emt -o h2o.cif
   mmml md-system --setup pbc_npt --composition MEOH:5,TIP3:5 --temperature 300 --pressure 1.0
   mmml md-system --setup free_nvt --backend jaxmd --composition ACO:30 --packmol-radius 22 --flat-bottom-radius 20 --temperature 250
   mmml md-system --setup free_nve --backend pycharmm --residue ACO --n-molecules 4 --flat-bottom-radius 20 --ps 0.5
@@ -96,7 +99,7 @@ For help on a specific command:
     
     parser.add_argument(
         'command',
-        choices=['make-res', 'make-box', 'run', 'md-system', 'lambda-mbar', 'run-pycharmm', 'pycharmm-two-residue-sample', 'xml2npz', 'validate', 'train', 'train-joint', 'evaluate', 'downstream',
+        choices=['make-res', 'make-box', 'build-crystal', 'run', 'md-system', 'lambda-mbar', 'run-pycharmm', 'pycharmm-two-residue-sample', 'xml2npz', 'validate', 'train', 'train-joint', 'evaluate', 'downstream',
                   'fix-and-split', 'pyscf-dft', 'pyscf-mp2', 'pyscf-evaluate', 'pyscf-evaluate-mp2', 'verify-esp-alignment', 'normal-mode-sample', 'physnet-train', 'physnet-md', 'physnet-evaluate', 'ef-train', 'ef-evaluate', 'ef-md',
                   'active-learning', 'kernel-fit', 'interpolate-xyz', 'unwrap-traj', 'sample-diverse-xyz', 'gui', 'extract-checkpoint-metrics', 'orbax-to-json', 'orca-server', 'orca-client', 'orca-external'],
         help='Command to run'
@@ -119,6 +122,11 @@ For help on a specific command:
         from .misc import make_box_cli
         sys.argv = ['mmml make-box'] + args.args
         return make_box_cli.main()
+
+    elif args.command == 'build-crystal':
+        from .misc import build_crystal_cli
+        sys.argv = ['mmml build-crystal'] + args.args
+        return build_crystal_cli.main()
 
     elif args.command == 'run':
         from .run.run_sim import main as run_sim_main
