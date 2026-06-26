@@ -437,6 +437,49 @@ def test_read_restart_last_step_prefers_jhstrt_over_segment_nstep(tmp_path):
     assert read_restart_last_step(res) == 8000
 
 
+def test_valid_restart_file_rejects_coordinate_files(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
+
+    crd = tmp_path / "03_bmm.crd"
+    crd.write_text("title\n  2\n", encoding="utf-8")
+    assert _valid_restart_file(crd) is None
+
+    res = tmp_path / "valid.res"
+    res.write_text(
+        "REST     0     1\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        "         2           0           0           0           0           0           0\n",
+        encoding="utf-8",
+    )
+    assert _valid_restart_file(res) == res
+
+
+def test_integrated_step_from_restart_segment_local_scratch(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        CharmmTrajectoryFiles,
+        _integrated_step_from_restart,
+    )
+
+    res = tmp_path / "overlap_a.res"
+    res.write_text(
+        "REST    48     0\n"
+        "\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        "          25         100         100         100          10         100\n",
+        encoding="utf-8",
+    )
+    io = CharmmTrajectoryFiles(restart_write=res)
+    assert (
+        _integrated_step_from_restart(
+            chunk_io=io,
+            final_restart=res,
+            fallback_steps=8100,
+            steps_before_chunk=8000,
+        )
+        == 8100
+    )
+
+
 def test_integrated_step_from_restart_stale_nstep_field(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
