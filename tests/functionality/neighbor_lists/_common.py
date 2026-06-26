@@ -367,6 +367,295 @@ def build_extreme_pbc_case(
     return positions, cell, offsets, monomer_id, cutoff, desc
 
 
+def liquid_density_grid_com_positions(
+    n_monomers: int,
+    box_side: float,
+    *,
+    inset_fraction: float = 0.1,
+) -> np.ndarray:
+    """Place monomer COMs on a 3D grid inside a cubic box (liquid-like packing)."""
+    n = int(n_monomers)
+    if n <= 0:
+        raise ValueError(f"n_monomers must be positive, got {n_monomers}")
+    n_side = int(np.ceil(n ** (1.0 / 3.0)))
+    inset = float(box_side) * float(inset_fraction)
+    usable = float(box_side) - 2.0 * inset
+    step = usable / max(n_side - 1, 1) if n_side > 1 else 0.0
+    coms = np.zeros((n, 3), dtype=np.float64)
+    for i in range(n):
+        ix = i % n_side
+        iy = (i // n_side) % n_side
+        iz = i // (n_side * n_side)
+        coms[i] = inset + step * np.array([ix, iy, iz], dtype=np.float64)
+    return coms
+
+
+def _resolve_liquid_target_density_g_cm3(
+    composition: dict[str, int],
+    *,
+    bulk_density_fraction: float = 1.0,
+    target_density_g_cm3: float | None = None,
+) -> float:
+    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import SOLVENT_BULK_PROPS
+
+    if target_density_g_cm3 is not None:
+        rho = float(target_density_g_cm3)
+        if rho <= 0.0:
+            raise ValueError(f"target_density_g_cm3 must be positive, got {rho}")
+        return rho
+    if len(composition) != 1:
+        raise ValueError(
+            "bulk_density_fraction requires a single-species composition "
+            "(e.g. ACO:16); pass target_density_g_cm3 for mixtures."
+        )
+    residue = next(iter(composition))
+    key = str(residue).strip().upper()
+    props = SOLVENT_BULK_PROPS.get(key)
+    if props is None:
+        raise ValueError(f"no bulk density for residue {key!r}")
+    frac = float(bulk_density_fraction)
+    if frac <= 0.0:
+        raise ValueError(f"bulk_density_fraction must be positive, got {frac}")
+    return float(props["rho_g_cm3"]) * frac
+
+
+def liquid_density_box_side_for_composition(
+    composition: dict[str, int],
+    *,
+    bulk_density_fraction: float = 1.0,
+    target_density_g_cm3: float | None = None,
+    box_side: float | None = None,
+    min_side_A: float | None = None,
+) -> tuple[float, float]:
+    """Return ``(box_side_A, target_density_g_cm3)`` for a liquid-density cubic box."""
+    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+        cubic_box_side_from_target_density,
+        total_mass_g_for_composition,
+    )
+
+    n_mol = int(sum(composition.values()))
+    rho = _resolve_liquid_target_density_g_cm3(
+        composition,
+        bulk_density_fraction=bulk_density_fraction,
+        target_density_g_cm3=target_density_g_cm3,
+    )
+    if box_side is not None:
+        return float(box_side), rho
+    mass_g = total_mass_g_for_composition(composition)
+    side = cubic_box_side_from_target_density(
+        n_molecules=n_mol,
+        total_mass_g=mass_g,
+        target_density_g_cm3=rho,
+        min_side_A=min_side_A,
+    )
+    return side, rho
+
+
+def liquid_density_spacing(box_side: float, n_monomers: int) -> float:
+    """Grid spacing for liquid-density placement inside a cubic box."""
+    n_side = max(int(np.ceil(int(n_monomers) ** (1.0 / 3.0))), 1)
+    return float(box_side) / float(n_side) * 0.9
+
+
+def liquid_density_synthetic_cases() -> list[dict[str, object]]:
+    """Synthetic toy clusters at experimental bulk liquid densities."""
+  # fmt: off
+    return [
+        {
+            "name": "synthetic_aco_liquid_n16",
+            "description": "16 toy monomers in an ACO bulk-density cube (~0.784 g/cm³)",
+            "composition": {"ACO": 16},
+            "bulk_density_fraction": 1.0,
+            "cutoff": 13.0,
+        },
+        {
+            "name": "synthetic_dcm_liquid_n16",
+            "description": "16 toy monomers in a DCM bulk-density cube (~1.326 g/cm³)",
+            "composition": {"DCM": 16},
+            "bulk_density_fraction": 1.0,
+            "cutoff": 13.0,
+        },
+        {
+            "name": "synthetic_aco_liquid_n32",
+            "description": "32 toy monomers in an ACO bulk-density cube",
+            "composition": {"ACO": 32},
+            "bulk_density_fraction": 1.0,
+            "cutoff": 13.0,
+        },
+        {
+            "name": "synthetic_dcm_liquid_n32",
+            "description": "32 toy monomers in a DCM bulk-density cube",
+            "composition": {"DCM": 32},
+            "bulk_density_fraction": 1.0,
+            "cutoff": 13.0,
+        },
+        {
+            "name": "synthetic_aco_liquid_box25",
+            "description": "ACO:N capped at bulk ρ in a 25 Å cube (N≤32 for NL tests)",
+            "solvent": "ACO",
+            "box_side": 25.0,
+            "bulk_density_fraction": 1.0,
+            "max_monomers": 32,
+            "cutoff": 13.0,
+        },
+        {
+            "name": "synthetic_dcm_liquid_box25",
+            "description": "DCM:N capped at bulk ρ in a 25 Å cube (N≤32)",
+            "solvent": "DCM",
+            "box_side": 25.0,
+            "bulk_density_fraction": 1.0,
+            "max_monomers": 32,
+            "cutoff": 13.0,
+        },
+    ]
+  # fmt: on
+
+
+def charmm_liquid_density_cases() -> list[dict[str, object]]:
+    """CGENFF clusters at bulk liquid densities (requires PyCHARMM)."""
+  # fmt: off
+    return [
+        {
+            "name": "charmm_aco_liquid_n16",
+            "description": "ACO:16 CGENFF cluster, cubic box from bulk acetone ρ",
+            "composition": "ACO:16",
+            "bulk_density_fraction": 1.0,
+            "cutoff": 13.0,
+        },
+        {
+            "name": "charmm_dcm_liquid_n16",
+            "description": "DCM:16 CGENFF cluster, cubic box from bulk DCM ρ",
+            "composition": "DCM:16",
+            "bulk_density_fraction": 1.0,
+            "cutoff": 13.0,
+        },
+        {
+            "name": "charmm_aco_liquid_n32",
+            "description": "ACO:32 CGENFF cluster, cubic box from bulk acetone ρ",
+            "composition": "ACO:32",
+            "bulk_density_fraction": 1.0,
+            "cutoff": 13.0,
+        },
+        {
+            "name": "charmm_dcm_liquid_n32",
+            "description": "DCM:32 CGENFF cluster, cubic box from bulk DCM ρ",
+            "composition": "DCM:32",
+            "bulk_density_fraction": 1.0,
+            "cutoff": 13.0,
+        },
+        {
+            "name": "charmm_aco_liquid_box25",
+            "description": "ACO:N capped at bulk ρ in a 25 Å cube (N≤32)",
+            "solvent": "ACO",
+            "box_side": 25.0,
+            "bulk_density_fraction": 1.0,
+            "max_monomers": 32,
+            "cutoff": 13.0,
+        },
+        {
+            "name": "charmm_dcm_liquid_box25",
+            "description": "DCM:N capped at bulk ρ in a 25 Å cube (N≤32)",
+            "solvent": "DCM",
+            "box_side": 25.0,
+            "bulk_density_fraction": 1.0,
+            "max_monomers": 32,
+            "cutoff": 13.0,
+        },
+    ]
+  # fmt: on
+
+
+def _composition_dict_from_liquid_case(case: dict[str, object]) -> dict[str, int]:
+    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import parse_composition_dict
+
+    if "composition" in case:
+        if isinstance(case["composition"], dict):
+            return {str(k): int(v) for k, v in case["composition"].items()}
+        return parse_composition_dict(str(case["composition"])) or {}
+    solvent = str(case["solvent"]).strip().upper()
+    from workflows.pbc_solvent_burst.scripts.bulk_density import n_monomers_at_bulk_density
+
+    n = n_monomers_at_bulk_density(
+        solvent,
+        float(case["box_side"]),
+        float(case.get("bulk_density_fraction", 1.0)),
+    )
+    max_n = case.get("max_monomers")
+    if max_n is not None:
+        n = min(int(n), int(max_n))
+    return {solvent: int(n)}
+
+
+def build_liquid_density_synthetic_case(
+    case: dict[str, object],
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float, str, float, float]:
+    """Build synthetic liquid-density geometry.
+
+    Returns geometry, cutoff, description, box_side, target_density_g_cm3.
+    """
+    comp = _composition_dict_from_liquid_case(case)
+    n_mol = int(sum(comp.values()))
+    side, rho = liquid_density_box_side_for_composition(
+        comp,
+        bulk_density_fraction=float(case.get("bulk_density_fraction", 1.0)),
+        target_density_g_cm3=case.get("target_density_g_cm3"),  # type: ignore[arg-type]
+        box_side=case.get("box_side"),  # type: ignore[arg-type]
+    )
+    coms = liquid_density_grid_com_positions(n_mol, side)
+    positions, cell, offsets, monomer_id = synthetic_monomer_cluster(
+        com_positions=coms,
+        cell=float(side),
+    )
+    cutoff = float(case["cutoff"])
+    desc = str(case.get("description", case.get("name", "liquid")))
+    return positions, cell, offsets, monomer_id, cutoff, desc, side, rho
+
+
+def setup_charmm_liquid_density_cluster(
+    case: dict[str, object],
+    *,
+    cutoff: float = 13.0,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, float, float, float]:
+    """Build CGENFF cluster in a liquid-density cubic box with PBC nbonds.
+
+    Returns ``(positions, cell, offsets, monomer_id, atomic_numbers, eff_cutoff,
+    box_side, target_density_g_cm3)``.
+    """
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        apply_pbc_nbonds,
+        prepare_charmm_pbc,
+    )
+
+    comp = _composition_dict_from_liquid_case(case)
+    composition = ",".join(f"{res}:{count}" for res, count in comp.items())
+    n_mol = int(sum(comp.values()))
+    side, rho = liquid_density_box_side_for_composition(
+        comp,
+        bulk_density_fraction=float(case.get("bulk_density_fraction", 1.0)),
+        target_density_g_cm3=case.get("target_density_g_cm3"),  # type: ignore[arg-type]
+        box_side=case.get("box_side"),  # type: ignore[arg-type]
+    )
+    spacing = liquid_density_spacing(side, n_mol)
+    positions, cell, offsets, monomer_id, atomic_numbers = setup_charmm_composition_cluster(
+        composition,
+        box_side=float(side),
+        spacing=float(spacing),
+    )
+    prepare_charmm_pbc(float(side))
+    cuts = apply_pbc_nbonds(nbxmod=5, cutnb=float(cutoff), cubic_box_side_A=float(side))
+    eff_cutoff = float(cuts.cutnb)
+    return (
+        positions,
+        cell,
+        offsets,
+        monomer_id,
+        atomic_numbers,
+        eff_cutoff,
+        float(side),
+        rho,
+    )
+
+
 def setup_charmm_aco_dimer_cluster(
     *,
     box_side: float = 40.0,
