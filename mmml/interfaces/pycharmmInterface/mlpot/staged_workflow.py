@@ -89,6 +89,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
     write_geometry_baseline_restart,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    cubic_box_length_from_geometry,
     ensure_charmm_crystal_for_cpt,
     setup_charmm_environment,
 )
@@ -1301,6 +1302,14 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             ),
             min_intermonomer_distance_A=float(
                 getattr(args, "min_intermonomer_atom_distance", 0.1) or 0.1
+            ),
+            min_box_side_A=(
+                cubic_box_length_from_geometry(
+                    r,
+                    ml_cutoff=float(getattr(args, "ml_cutoff", 12.0)),
+                )
+                if box_side is not None
+                else None
             ),
         )
         box_side = box_side_after_mc

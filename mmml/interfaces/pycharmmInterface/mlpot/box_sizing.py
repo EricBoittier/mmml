@@ -318,9 +318,9 @@ def add_box_sizing_args(parser: argparse.ArgumentParser) -> None:
     group.add_argument(
         "--mc-density-min-scale",
         type=float,
-        default=0.75,
+        default=0.35,
         metavar="S",
-        help="Minimum allowed final box side relative to the initial side (default: 0.75).",
+        help="Minimum allowed final box side relative to the initial side (default: 0.35).",
     )
     group.add_argument(
         "--mc-density-max-scale",

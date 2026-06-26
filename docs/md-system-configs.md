@@ -146,7 +146,7 @@ sequenceDiagram
 
 Use explicit `box_size` when you already know the target density or are matching a benchmark. For automatic sizing, `box_auto: density` requires either `target_density_g_cm3` or `bulk_density_fraction`. Built-in density entries include `DCM`, `ACO`, `MEOH`, `ETOH`, `TIP3`, and `WAT`; use `target_density_g_cm3` for other residues.
 
-Post-build MC density equalization is enabled by default for new PBC composition builds when density and molecular-weight metadata can be resolved. It adjusts the initial cubic box with whole-molecule MC volume moves after Packmol, PyXtal, or grid construction and before MLpot registration. When `box_size` is set, that value is used as the starting box side rather than as an immutable cell. It skips handoffs and unknown residues without mass metadata. Disable it with `mc_density_equalize: false` or `--no-mc-density-equalize`.
+Post-build MC density equalization is enabled by default for new PBC composition builds when density and molecular-weight metadata can be resolved. It adjusts the initial cubic box with whole-molecule MC volume moves after Packmol, PyXtal, or grid construction and before MLpot registration. When `box_size` is set, that value is used as the starting box side rather than as an immutable cell. The final side is still clamped to the geometry/cutoff minimum used for MIC-safe box sizing; `mc_density_min_scale` is only an additional relative lower bound. It skips handoffs and unknown residues without mass metadata. Disable it with `mc_density_equalize: false` or `--no-mc-density-equalize`.
 
 For small liquid boxes, start looser than the final density, minimize and heat, then tighten with NPT or mini-box equilibration. Useful controls are:
 
@@ -297,7 +297,7 @@ mc_density_steps: 64
 mc_density_step_scale: 0.04
 mc_density_temperature: 0.02
 mc_density_seed: null
-mc_density_min_scale: 0.75
+mc_density_min_scale: 0.35
 mc_density_max_scale: 1.5
 mini_box_equil_ps: 0.0
 mini_box_equil_allow_fixed_box: false
