@@ -705,6 +705,10 @@ def build_decomposed_mlpot_model(
 
     periodic_mm_config = build_periodic_mm_config(args)
     periodic_mode = resolve_mm_nonbond_mode(args) == "periodic_external"
+    do_ml = True
+    include_mm = True if args is None else bool(getattr(args, "include_mm", True))
+    do_mm = include_mm and not periodic_mode
+    do_ml_dimer = True
     if verbose and periodic_mm_config is not None and cell:
         print(
             periodic_mm_status_line(periodic_mm_config, box_side_A=float(cell)),
@@ -720,10 +724,6 @@ def build_decomposed_mlpot_model(
             f"Decomposed MLpot: max_pairs={int(max_pairs)} (PBC cell-list buffer)",
             flush=True,
         )
-    do_ml = True
-    include_mm = True if args is None else bool(getattr(args, "include_mm", True))
-    do_mm = include_mm and not periodic_mode
-    do_ml_dimer = True
     factory = setup_calculator(
         ATOMS_PER_MONOMER=per,
         N_MONOMERS=int(n_monomers),
