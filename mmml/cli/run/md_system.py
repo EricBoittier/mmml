@@ -2533,6 +2533,17 @@ def main() -> int:
         metadata_path = write_profile_git_metadata(
             getattr(args, "output_dir", None),
             argv=sys.argv[1:],
+            extra={
+                "md_system": {
+                    "setup": getattr(args, "setup", None),
+                    "backend": getattr(args, "backend", None),
+                    "jax_md_update_interval": getattr(args, "jax_md_update_interval", None),
+                    "jax_md_skin_distance": getattr(args, "jax_md_skin_distance", None),
+                    "steps_per_recording": getattr(args, "steps_per_recording", None),
+                    "ps": getattr(args, "ps", None),
+                    "dt_fs": getattr(args, "dt_fs", None),
+                }
+            },
         )
         print(f"mmml md-system: wrote profiling git metadata {metadata_path}", flush=True)
     started_at = datetime.now(timezone.utc).isoformat()

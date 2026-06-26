@@ -115,14 +115,18 @@ def write_profile_git_metadata(
     output_dir: str | os.PathLike[str] | None = None,
     *,
     argv: list[str] | None = None,
+    extra: dict[str, object] | None = None,
     filename: str = "profile_git_metadata.json",
 ) -> Path:
     """Write a JSON sidecar with git metadata for profiling output."""
     override = os.environ.get("MMML_PROFILE_GIT_METADATA")
     path = Path(override) if override else Path(output_dir or ".") / filename
     path.parent.mkdir(parents=True, exist_ok=True)
+    metadata = collect_profile_git_metadata(argv=argv)
+    if extra:
+        metadata.update(extra)
     path.write_text(
-        json.dumps(collect_profile_git_metadata(argv=argv), indent=2) + "\n",
+        json.dumps(metadata, indent=2) + "\n",
         encoding="utf-8",
     )
     return path

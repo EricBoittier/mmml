@@ -1158,6 +1158,29 @@ def main(argv: list[str] | None = None) -> int:
             f"(expected_updates={expected_nbr_updates}, requested_interval={effective_update_interval}, "
             f"skin_distance={effective_skin:.3f} A)"
         )
+    if getattr(args, "mlpot_profile", False):
+        import sys
+
+        from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+            write_profile_git_metadata,
+        )
+
+        write_profile_git_metadata(
+            args.output_dir,
+            argv=sys.argv[1:],
+            extra={
+                "jaxmd_neighbor_profile": {
+                    "ensemble": args.ensemble,
+                    "nsteps": int(nsteps),
+                    "steps_per_recording": int(args.steps_per_recording),
+                    "requested_update_interval": int(effective_update_interval),
+                    "effective_update_interval_steps": int(actual_nbr_interval),
+                    "expected_neighbor_updates": int(expected_nbr_updates),
+                    "skin_distance_A": float(effective_skin),
+                    "free_space": bool(free_space),
+                }
+            },
+        )
     update_fn_live = get_update_fn(np.asarray(atoms.get_positions(), dtype=np.float64), cutoff) if get_update_fn else None
     key = random.PRNGKey(args.seed)
     steps_completed, frames, boxes = run_sim(key, total_steps=nsteps)

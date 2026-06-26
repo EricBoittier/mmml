@@ -26,11 +26,16 @@ def test_mlpot_profile_accumulates(monkeypatch):
 
 
 def test_profile_git_metadata_sidecar(tmp_path):
-    path = write_profile_git_metadata(tmp_path, argv=["md-system", "--mlpot-profile"])
+    path = write_profile_git_metadata(
+        tmp_path,
+        argv=["md-system", "--mlpot-profile"],
+        extra={"effective_update_interval_steps": 10},
+    )
     payload = json.loads(path.read_text(encoding="utf-8"))
 
     assert path.name == "profile_git_metadata.json"
     assert payload["argv"] == ["md-system", "--mlpot-profile"]
+    assert payload["effective_update_interval_steps"] == 10
     assert "timestamp_utc" in payload
     assert "repo_root" in payload
     assert "git_commit" in payload or "git_error" in payload
