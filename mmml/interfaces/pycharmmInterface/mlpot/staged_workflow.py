@@ -514,6 +514,12 @@ def _build_stage_dynamics_kw(
     else:
         kw["new"] = True
         kw["start"] = True
+    explicit_interval_ps = getattr(args, "dcd_interval_ps", None)
+    kw["dcd_interval_ps"] = (
+        float(explicit_interval_ps)
+        if explicit_interval_ps is not None
+        else float(save_interval_ps)
+    )
     return kw
 
 

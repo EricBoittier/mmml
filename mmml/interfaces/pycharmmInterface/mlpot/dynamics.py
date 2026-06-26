@@ -2517,21 +2517,63 @@ def _harmonize_overlap_chunk_frequencies(
     chunk_nstep: int,
     *,
     loose_pbc: bool = False,
+    global_step_start: int = 0,
 ) -> None:
     """Align list/image/HB update freqs with this chunk's ``nstep`` (avoids FINCYC retune)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        effective_dcd_interval_ps,
+        nsavc_for_chunk_preserving_interval,
+        resolve_target_dcd_nsavc,
+    )
+
     n = max(1, int(chunk_nstep))
+    target_nsavc = resolve_target_dcd_nsavc(chunk_kw)
+    timestep_ps = float(chunk_kw.get("timestep", 0.0) or 0.0)
+    target_interval_ps = chunk_kw.get("_dcd_interval_ps")
     for key in _OVERLAP_CHUNK_FREQ_KEYS:
         if key not in chunk_kw:
             continue
         if key == "nsavc":
             old = int(chunk_kw[key])
-            new = _harmonize_nsavc_frequency(old, n)
-            if new != old:
-                print(
-                    f"overlap chunk: DCD nsavc {old} -> {new} (nstep={n})",
-                    flush=True,
+            if target_nsavc is not None:
+                new = nsavc_for_chunk_preserving_interval(
+                    target_nsavc,
+                    n,
+                    global_step_start=int(global_step_start),
                 )
-            chunk_kw[key] = new
+                if new is None:
+                    chunk_kw.pop("nsavc", None)
+                    for k in ("nprint", "iprfrq", "isvfrq"):
+                        chunk_kw.pop(k, None)
+                    if target_interval_ps is not None:
+                        print(
+                            f"overlap chunk: skip DCD (target "
+                            f"{float(target_interval_ps):.6g} ps, "
+                            f"global step {int(global_step_start)}–"
+                            f"{int(global_step_start) + n}; "
+                            f"chunk nstep={n} too short for aligned save)",
+                            flush=True,
+                        )
+                    continue
+            else:
+                new = _harmonize_nsavc_frequency(old, n)
+            if new != old:
+                if target_interval_ps is not None and timestep_ps > 0:
+                    old_ps = effective_dcd_interval_ps(nsavc=old, timestep_ps=timestep_ps)
+                    new_ps = effective_dcd_interval_ps(nsavc=new, timestep_ps=timestep_ps)
+                    print(
+                        f"overlap chunk: DCD nsavc {old} -> {new} "
+                        f"({old_ps:.6g} -> {new_ps:.6g} ps; target "
+                        f"{float(target_interval_ps):.6g} ps; nstep={n}; "
+                        f"global step {int(global_step_start)})",
+                        flush=True,
+                    )
+                else:
+                    print(
+                        f"overlap chunk: DCD nsavc {old} -> {new} (nstep={n})",
+                        flush=True,
+                    )
+            chunk_kw["nsavc"] = new
             for k in ("nprint", "iprfrq", "isvfrq"):
                 if k in chunk_kw:
                     chunk_kw[k] = new
@@ -3267,6 +3309,7 @@ def _run_cpt_stability_subchunked(
             sub_kw,
             n,
             loose_pbc=loose_pbc,
+            global_step_start=int(global_step_offset) + steps_done,
         )
 
         sub_io = io
@@ -3307,7 +3350,11 @@ def _run_cpt_stability_subchunked(
                     restart_read=read_path,
                 )
 
-        sub_traj_iokw = extra_iokw if (extra_iokw and steps_done == 0) else {}
+        sub_traj_iokw = (
+            extra_iokw
+            if (extra_iokw and steps_done == 0 and "nsavc" in sub_kw)
+            else {}
+        )
         last_dyn = _run_dynamics_chunk(
             sub_kw,
             sub_io,
@@ -3406,6 +3453,11 @@ def run_dynamics_with_io(
         _ensure_domdec_off_for_mlpot_energy(context=overlap_context)
 
     kw = dict(dynamics_kwargs)
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        install_target_dcd_metadata,
+    )
+
+    install_target_dcd_metadata(kw)
     _ensure_nsavc_below_nstep(kw)
     total_nstep = int(kw.get("nstep", 0))
     if loose_pbc and total_nstep > 0:
@@ -3850,6 +3902,7 @@ def run_dynamics_with_io(
                     chunk_kw,
                     chunk_nstep,
                     loose_pbc=loose_pbc,
+                    global_step_start=steps_before_chunk,
                 )
                 if has_restart_read:
                     _prepare_overlap_chunk_after_restart(
@@ -3863,7 +3916,13 @@ def run_dynamics_with_io(
 
                 chunk_traj_iokw = (
                     trajectory_iokw
-                    if (not split_trajectory and chunk_index == 0) or split_trajectory
+                    if (
+                        "nsavc" in chunk_kw
+                        and (
+                            (not split_trajectory and chunk_index == 0)
+                            or split_trajectory
+                        )
+                    )
                     else {}
                 )
                 cpt_sub_chunk = (
