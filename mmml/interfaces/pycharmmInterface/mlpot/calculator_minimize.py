@@ -369,3 +369,79 @@ def minimize_hybrid_calculator_before_sd(
         )
     mlpot_ctx.sd_watchdog_baseline_grms = float(grms1)
     return float(grms1)
+
+
+def minimize_hybrid_calculator_fire_before_sd(
+    mlpot_ctx: Any,
+    *,
+    max_steps: int = 200,
+    fmax_ev_a: float = 0.05,
+    fire_maxstep: float = 0.2,
+    verbose: bool = True,
+    max_start_grms_kcalmol_A: float | None = None,
+    context_prefix: str = "Pre-SD",
+) -> float:
+    """Relax CHARMM coordinates with ASE FIRE on the hybrid calculator."""
+    import ase
+    from ase.optimize.fire import FIRE
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        invalidate_mlpot_calculator_caches,
+        sync_charmm_lists_after_mini,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        get_charmm_positions_array,
+        sync_charmm_positions,
+    )
+
+    z = getattr(mlpot_ctx, "ml_Z", None)
+    if z is None:
+        raise RuntimeError("mlpot_ctx.ml_Z required for hybrid calculator FIRE")
+
+    _promote_mlpot_jax_for_calculator_mini(mlpot_ctx, verbose=verbose)
+    pos0 = get_charmm_positions_array()
+    grms0 = mlpot_hybrid_grms_from_calculator(mlpot_ctx, positions=pos0)
+    max_start = float(max_start_grms_kcalmol_A) if max_start_grms_kcalmol_A is not None else 50.0
+    if grms0 is not None and np.isfinite(grms0) and float(grms0) > max_start:
+        if verbose:
+            print(
+                f"{context_prefix}: skip calculator FIRE "
+                f"(GRMS {float(grms0):.1f} > {max_start:.1f} kcal/mol/Å)",
+                flush=True,
+            )
+        return float(grms0)
+
+    atoms = ase.Atoms(numbers=np.asarray(z, dtype=int), positions=pos0)
+    atoms.calc = _hybrid_mlpot_ase_calculator_class()(mlpot_ctx)
+    best_frame = _BestMinimizationFrame(atoms)
+    best_frame.record("initial")
+    fire = FIRE(
+        atoms,
+        logfile=None if not verbose else "-",
+        maxstep=float(fire_maxstep),
+    )
+    fire.attach(lambda: best_frame.record("fire"), interval=1)
+    fire.run(fmax=float(fmax_ev_a), steps=int(max_steps))
+    best_frame.record("final")
+    best_frame.restore_best_force()
+
+    sync_charmm_positions(np.asarray(atoms.get_positions(), dtype=np.float64))
+    sync_charmm_lists_after_mini(quiet=True)
+    invalidate_mlpot_calculator_caches(mlpot_ctx)
+    mlpot_ctx.reregister_mlpot(verbose=False)
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms_after_ener_force
+
+    charmm_grms_after_ener_force()
+    grms1 = mlpot_hybrid_grms_from_calculator(mlpot_ctx)
+    if grms1 is None or not np.isfinite(grms1):
+        raise RuntimeError("hybrid GRMS unavailable after calculator FIRE")
+    if verbose:
+        fmax = float(np.abs(atoms.get_forces()).max())
+        grms_txt = f"{grms0:.4f}" if grms0 is not None and np.isfinite(grms0) else "?"
+        print(
+            f"{context_prefix} hybrid calculator FIRE done: "
+            f"GRMS {grms_txt} -> {grms1:.4f} kcal/mol/Å, fmax={fmax:.6f} eV/Å",
+            flush=True,
+        )
+    mlpot_ctx.sd_watchdog_baseline_grms = float(grms1)
+    return float(grms1)

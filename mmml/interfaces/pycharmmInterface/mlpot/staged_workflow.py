@@ -1203,6 +1203,11 @@ def _load_or_build_cluster(
 
 
 def run_staged_workflow(args: argparse.Namespace) -> int:
+    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+        apply_density_prep_resilient_defaults,
+    )
+
+    apply_density_prep_resilient_defaults(args)
     if getattr(args, "mlpot_profile", False):
         import os
         os.environ["MMML_MLPOT_PROFILE"] = "1"
@@ -1982,10 +1987,37 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             minimize_bonded_mm_recovery(ctx, recovery_config)
 
             # Refresh GRMS after recovery attempt
-            refresh_mlpot_energy_and_grms(
+            current_grms = refresh_mlpot_energy_and_grms(
                 ctx,
                 context="Pre-dynamics gate (post-jiggle recovery)" if not args.quiet else "",
             )
+
+        if current_grms > max_grms:
+            from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+                run_density_prep_ladder,
+            )
+
+            comp_summary = getattr(args, "_cluster_composition_summary", None)
+            ladder_grms, box_side, ladder_summary = run_density_prep_ladder(
+                args,
+                mlpot_ctx=ctx,
+                pyCModel=pyCModel,
+                max_grms=max_grms,
+                current_grms=current_grms,
+                n_mol=n_mol,
+                n_atoms=n_atoms,
+                box_side=box_side,
+                charmm_pbc=charmm_pbc,
+                atoms_per_list=atoms_per_list,
+                composition=comp_summary,
+                mini_nstep=mini_nstep,
+                mini_nprint=mini_nprint,
+                fix_resids=fix_resids,
+                show_energy=show_energy,
+                z=z,
+            )
+            current_grms = float(ladder_grms)
+            setattr(args, "_density_prep_ladder_summary", ladder_summary.to_dict())
 
         assert_dynamics_ready(
             max_grms=max_grms,

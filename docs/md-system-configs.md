@@ -158,6 +158,55 @@ For small liquid boxes, start looser than the final density, minimize and heat, 
 - `dynamics_overlap_action: rescue`: repair close contacts during staged dynamics.
 - `bonded_mm_mini: true`: run bonded-only MM cleanup after selected stages.
 
+### Resilient density prep (`density_prep_mode: resilient`)
+
+Dense solvent boxes often stall in minimization when Packmol places molecules too close at the target liquid density. Use **`density_prep_mode: resilient`** to turn on a preventive stack plus an automatic post-mini rescue ladder when hybrid GRMS is still above `max_grms_before_dyn`.
+
+**Preventive stack (before MLpot SD):**
+
+1. **Looser Packmol** — if neither `box_size` nor an explicit density is set, defaults to `bulk_density_fraction: 0.75` so the initial cube is easier to relax.
+2. **MC density equalization** — whole-molecule volume moves toward the resolved target ρ (same as default MC equalization).
+3. **CHARMM MM SD + ABNR** — bumps `charmm_sd_steps` / `charmm_abnr_steps` to at least 1000 when lower.
+4. **Lattice ABNR** — `mini_lattice_abnr_steps: 200` optimizes the cubic cell (and optionally coordinates) under PBC.
+5. **Mini box equil** — `mini_box_equil_ps: 2.0` short CPT NPT before MLpot registration (`mini_box_equil_allow_fixed_box: true` when `box_size` is set).
+
+**Post-mini rescue ladder** (runs when GRMS > `max_grms_before_dyn` after MLpot SD and the existing jiggle recovery):
+
+| Step | Tool | Purpose |
+|------|------|---------|
+| Monomer repack | rigid-body COM redistribution | break bad Packmol contacts, even density |
+| MC density | box resize toward target ρ | correct volume without breaking monomers |
+| Lattice ABNR (box-only, then full) | CHARMM `MINI ABNR LATTice` | relax cell at fixed or coupled coords |
+| Bonded MM recovery | CHARMM bonded terms only | remove internal strain without ML/nonbond |
+| ASE BFGS + FIRE | hybrid MMML calculator | smooth inter-monomer clashes when GRMS is moderate |
+| MLpot SD | second hybrid minimization pass | final GRMS gate before heat |
+
+Control knobs:
+
+- `density_prep_mode`: `off` (default) or `resilient`.
+- `density_prep_ladder`: override ladder on/off (`--no-density-prep-ladder` disables even in resilient mode).
+- `density_prep_ladder_max_rounds`: ladder iterations (default 3).
+- `density_prep_lattice_abnr_steps`: lattice steps inside the ladder (0 = reuse `mini_lattice_abnr_steps`).
+
+Example for a single-species liquid at 75% bulk density, then MC equalization to full DCM ρ:
+
+```yaml
+setup: pbc_nvt
+backend: pycharmm
+composition: "DCM:206"
+box_auto: density
+bulk_density_fraction: 0.75
+target_density_g_cm3: 1.326
+density_prep_mode: resilient
+md_stages: "mini,heat,equi"
+mini_nstep: 500
+max_grms_before_dyn: 50.0
+checkpoint: /path/to/DESdimers_params.json
+output_dir: results/dcm_liquid_prep
+```
+
+JAX-MD legs can add `handoff_quality_gate: true`, `jaxmd_pbc_minimize_steps`, and `jaxmd_mini_box_equil_ps` for the same philosophy after PyCHARMM handoff.
+
 ## Neighbor-list requirements
 
 Condensed phase fails quickly if the neighbor list is too small or refreshed too slowly. Treat neighbor-list sizing as part of the physical setup, not only a performance knob.
@@ -291,6 +340,10 @@ optimize_pyxtal_emt: false
 box_auto: null
 target_density_g_cm3: null
 bulk_density_fraction: null
+density_prep_mode: off
+density_prep_ladder: null
+density_prep_ladder_max_rounds: 3
+density_prep_lattice_abnr_steps: 0
 mc_density_equalize: true
 mc_density_target_g_cm3: null
 mc_density_steps: 64

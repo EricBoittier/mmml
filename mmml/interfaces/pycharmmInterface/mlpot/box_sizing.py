@@ -384,3 +384,41 @@ def add_box_sizing_args(parser: argparse.ArgumentParser) -> None:
             "(default: fixed --box-size skips lattice minimization)."
         ),
     )
+    group.add_argument(
+        "--density-prep-mode",
+        choices=("off", "resilient"),
+        default="off",
+        help=(
+            "Condensed-phase box prep strategy. resilient: start Packmol slightly "
+            "below target density, enable MC equalization, stronger CHARMM/lattice "
+            "mini, and the post-mini density prep ladder when GRMS is high."
+        ),
+    )
+    group.add_argument(
+        "--density-prep-ladder",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "After MLpot mini, run a multi-step density/box rescue ladder "
+            "(repack, MC density, lattice ABNR, bonded MM, ASE BFGS/FIRE, MLpot SD) "
+            "when GRMS exceeds --max-grms-before-dyn. Default on for "
+            "--density-prep-mode resilient."
+        ),
+    )
+    group.add_argument(
+        "--density-prep-ladder-max-rounds",
+        type=int,
+        default=3,
+        metavar="N",
+        help="Maximum density prep ladder rounds (default: 3).",
+    )
+    group.add_argument(
+        "--density-prep-lattice-abnr-steps",
+        type=int,
+        default=0,
+        metavar="N",
+        help=(
+            "Lattice ABNR steps inside the density prep ladder (0=use "
+            "--mini-lattice-abnr-steps or 100)."
+        ),
+    )

@@ -1756,6 +1756,18 @@ def _append_box_sizing_args(cmd: list[str], args: argparse.Namespace) -> None:
         cmd.append("--mini-lattice-abnr-nocoords")
     if getattr(args, "mini_lattice_abnr_allow_fixed_box", False):
         cmd.append("--mini-lattice-abnr-allow-fixed-box")
+    mode = getattr(args, "density_prep_mode", None)
+    if mode is not None and str(mode).strip().lower() != "off":
+        cmd.extend(["--density-prep-mode", str(mode)])
+    ladder_flag = getattr(args, "density_prep_ladder", None)
+    if ladder_flag is not None:
+        _append_boolean_optional_flag(cmd, "--density-prep-ladder", bool(ladder_flag))
+    max_rounds = int(getattr(args, "density_prep_ladder_max_rounds", 3) or 3)
+    if max_rounds != 3:
+        cmd.extend(["--density-prep-ladder-max-rounds", str(max_rounds)])
+    lattice_ladder = int(getattr(args, "density_prep_lattice_abnr_steps", 0) or 0)
+    if lattice_ladder > 0:
+        cmd.extend(["--density-prep-lattice-abnr-steps", str(lattice_ladder)])
 
 
 def _validate_pyxtal_args(args: argparse.Namespace) -> None:
