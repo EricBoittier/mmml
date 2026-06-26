@@ -8,8 +8,12 @@ Use the example as a starting point:
 # Single flat config
 mmml md-system --config mmml/cli/run/md_system.example.yaml
 
+# Dense liquid box prep (resilient density mode)
+mmml md-system --config mmml/cli/run/md_system.dense_liquid_prep.example.yaml
+
 # Campaign with defaults plus named runs
 mmml md-system --config mmml/cli/run/md_system.example.yaml --run-all
+mmml md-system --config mmml/cli/run/md_system.dense_liquid_prep.example.yaml --run-all
 mmml md-system --config mmml/cli/run/md_system.example.yaml --job-id jaxmd_prod
 ```
 
@@ -188,21 +192,537 @@ Control knobs:
 - `density_prep_ladder_max_rounds`: ladder iterations (default 3).
 - `density_prep_lattice_abnr_steps`: lattice steps inside the ladder (0 = reuse `mini_lattice_abnr_steps`).
 
-Example for a single-species liquid at 75% bulk density, then MC equalization to full DCM ρ:
+Copy-paste ready file:
+
+```bash
+mmml md-system --config mmml/cli/run/md_system.dense_liquid_prep.example.yaml
+mmml md-system --config mmml/cli/run/md_system.dense_liquid_prep.example.yaml --run-all
+```
+
+### Config snippets
+
+Each block below is a valid single-run YAML (flat keys) unless noted as a campaign. Replace `checkpoint` and `output_dir` paths. Campaign variants inherit the same keys under `defaults:`.
+
+| Snippet | Use when |
+|---------|----------|
+| Minimal resilient | Default auto box; one flag turns on the stack |
+| Minimal resilient smoke | Fast GRMS gate check (mini + short heat) |
+| Full explicit resilient | Every density-prep knob documented |
+| Fixed `box_size` + resilient | Known cube edge (benchmark / burst L) |
+| Bulk fraction only | Target ρ from solvent table × fraction |
+| Target ρ only | N and L from explicit g/cm³ |
+| Very conservative (50% bulk) | Repeated minimization stalls |
+| Rescue ladder only | Post-mini ladder without preventive bumps |
+| Disable rescue ladder | Preventive resilient only |
+| MC density tuning | Finer MC volume moves |
+| Lattice + mini equil manual | Explicit preventive legs, no resilient mode |
+| Lattice box-only (`nocoords`) | Cell optimize before coord+coupled pass |
+| CHARMM MM pretreat | CGENFF heat before MLpot (dense heat stability) |
+| ASE calculator pre-min | BFGS tuning before MLpot SD |
+| Campaign PyCHARMM → JAX-MD | Full two-leg pipeline |
+| JAX-MD handoff prep only | PBC FIRE after equilibrated PyCHARMM |
+| Large dense box (burst-style) | N≥300, heavy overlap rescue |
+| Mixed solvent | MC off; manual `box_size` |
+| PyXtal crystal start | Symmetry-aware build + resilient mini |
+| Continue from handoff | Production; skip rebuild / ladder |
+
+#### Minimal resilient (auto box, defaults do the rest)
+
+Turn on `density_prep_mode: resilient` only; preventive bumps and the rescue ladder apply automatically.
+
+```yaml
+setup: pbc_nvt
+backend: pycharmm
+composition: "DCM:60"
+box_auto: density
+bulk_density_fraction: 0.75
+target_density_g_cm3: 1.326
+density_prep_mode: resilient
+md_stages: "mini,heat,equi"
+checkpoint: /path/to/DESdimers_params.json
+output_dir: results/dcm60_resilient_minimal
+```
+
+#### Minimal resilient smoke (mini + short heat)
+
+Fast cluster check that GRMS passes the dynamics gate:
+
+```yaml
+setup: pbc_nvt
+backend: pycharmm
+composition: "DCM:10"
+box_size: 28.0
+density_prep_mode: resilient
+md_stages: "mini,heat"
+mini_nstep: 100
+ps_heat: 2.0
+heat_ihtfrq: 100
+dyn_nprint: 500
+skip_energy_show: true
+checkpoint: /path/to/DESdimers_params.json
+output_dir: results/dcm10_resilient_smoke
+seed: 123
+```
+
+#### Full explicit resilient (every density-prep knob)
+
+Use when the defaults are not enough; documents all related keys in one place.
+
+```yaml
+setup: pbc_npt
+backend: pycharmm
+composition: "DCM:206"
+checkpoint: /path/to/DESdimers_params.json
+output_dir: results/dcm206_resilient_full
+seed: 123
+dt_fs: 0.25
+temperature: 300.0
+pressure: 1.0
+spacing: 4.0
+packmol_tolerance: 1.5
+
+# Box build + target density
+box_auto: density
+bulk_density_fraction: 0.75
+target_density_g_cm3: 1.326
+mc_density_equalize: true
+mc_density_target_g_cm3: 1.326
+mc_density_steps: 80
+mc_density_step_scale: 0.04
+mc_density_temperature: 0.02
+mc_density_min_scale: 0.35
+mc_density_max_scale: 1.5
+
+# Resilient prep
+density_prep_mode: resilient
+density_prep_ladder: true
+density_prep_ladder_max_rounds: 3
+density_prep_lattice_abnr_steps: 200
+
+# Preventive mini (before MLpot)
+charmm_pre_minimize: true
+charmm_sd_steps: 1000
+charmm_abnr_steps: 1000
+mini_lattice_abnr_steps: 200
+mini_lattice_abnr_allow_fixed_box: true
+mini_box_equil_ps: 2.0
+mini_box_equil_allow_fixed_box: true
+
+# MLpot mini + GRMS gate
+md_stages: "mini,heat,equi"
+mini_nstep: 500
+bonded_mm_mini: true
+bonded_mm_mini_after: mini,heat
+bonded_mm_mini_steps: 500
+calculator_pre_minimize: true
+pre_min_steps: 200
+pre_min_fmax: 0.05
+max_grms_before_dyn: 50.0
+
+# Staged dynamics
+ps_heat: 5.0
+ps_equi: 10.0
+n_heat_segments: 3
+heat_thermostat: hoover
+no_echeck_heat: true
+dynamics_overlap_action: rescue
+dynamics_overlap_min_distance: 1.5
+dynamics_intra_min_distance: 0.5
+dynamics_overlap_check_interval: 250
+```
+
+#### Fixed `box_size` + resilient (Packmol cube = PBC cell)
+
+When the box edge is known (benchmark, burst matrix). Allow lattice ABNR and mini NPT even with fixed L:
+
+```yaml
+setup: pbc_npt
+backend: pycharmm
+composition: "DCM:206"
+box_size: 28.0
+target_density_g_cm3: 1.326
+density_prep_mode: resilient
+mini_lattice_abnr_allow_fixed_box: true
+mini_box_equil_allow_fixed_box: true
+mc_density_equalize: true
+md_stages: "mini,heat,equi"
+checkpoint: /path/to/DESdimers_params.json
+output_dir: results/dcm206_l28_fixed_box
+```
+
+#### Bulk fraction only (no explicit ρ; uses solvent table)
+
+Single-species composition; target ρ = `bulk_density_fraction × ρ_bulk(DCM)`:
+
+```yaml
+setup: pbc_nvt
+backend: pycharmm
+composition: "DCM:154"
+box_auto: density
+bulk_density_fraction: 0.75
+density_prep_mode: resilient
+md_stages: "mini,heat,equi"
+checkpoint: /path/to/DESdimers_params.json
+output_dir: results/dcm75pct_bulk
+```
+
+Built-in bulk entries: `DCM`, `ACO`, `MEOH`, `ETOH`, `TIP3`, `WAT`.
+
+#### Target ρ only (N from density, no bulk fraction)
+
+Packmol N and box side come from `target_density_g_cm3` and composition:
+
+```yaml
+setup: pbc_nvt
+backend: pycharmm
+composition: "ACO:178"
+box_auto: density
+target_density_g_cm3: 0.784
+density_prep_mode: resilient
+md_stages: "mini,heat,equi"
+checkpoint: /path/to/DESdimers_params.json
+output_dir: results/aco_liquid_rho
+```
+
+#### Very conservative Packmol (50% bulk, MC compresses to target)
+
+For boxes that repeatedly stall in minimization:
+
+```yaml
+setup: pbc_npt
+backend: pycharmm
+composition: "DCM:103"
+box_auto: density
+bulk_density_fraction: 0.5
+target_density_g_cm3: 1.326
+mc_density_equalize: true
+mc_density_steps: 120
+density_prep_mode: resilient
+density_prep_ladder_max_rounds: 5
+mini_nstep: 800
+charmm_sd_steps: 1500
+charmm_abnr_steps: 1500
+md_stages: "mini,heat,equi"
+ps_heat: 10.0
+ps_equi: 20.0
+checkpoint: /path/to/DESdimers_params.json
+output_dir: results/dcm50pct_conservative
+```
+
+#### Rescue ladder only (no resilient preventive bumps)
+
+Enable the post-mini ladder explicitly without changing CHARMM step floors:
+
+```yaml
+setup: pbc_nvt
+backend: pycharmm
+composition: "DCM:60"
+box_size: 32.0
+density_prep_mode: off
+density_prep_ladder: true
+density_prep_ladder_max_rounds: 3
+mini_nstep: 500
+max_grms_before_dyn: 50.0
+md_stages: "mini,heat"
+checkpoint: /path/to/DESdimers_params.json
+output_dir: results/dcm60_ladder_only
+```
+
+#### Disable rescue ladder (preventive resilient only)
+
+```yaml
+setup: pbc_nvt
+backend: pycharmm
+composition: "DCM:60"
+box_auto: density
+bulk_density_fraction: 0.75
+target_density_g_cm3: 1.326
+density_prep_mode: resilient
+density_prep_ladder: false
+md_stages: "mini,heat,equi"
+checkpoint: /path/to/DESdimers_params.json
+output_dir: results/dcm60_no_ladder
+```
+
+#### MC density tuning (tight or loose compression)
 
 ```yaml
 setup: pbc_nvt
 backend: pycharmm
 composition: "DCM:206"
 box_auto: density
+bulk_density_fraction: 0.8
+target_density_g_cm3: 1.326
+mc_density_equalize: true
+mc_density_target_g_cm3: 1.326
+mc_density_steps: 128
+mc_density_step_scale: 0.02
+mc_density_temperature: 0.01
+mc_density_min_scale: 0.5
+mc_density_max_scale: 1.25
+mc_density_seed: 42
+density_prep_mode: resilient
+md_stages: "mini,heat,equi"
+checkpoint: /path/to/DESdimers_params.json
+output_dir: results/dcm_mc_tuned
+```
+
+#### Lattice ABNR + mini box equil (manual, no resilient mode)
+
+Same preventive legs as resilient, but set explicitly:
+
+```yaml
+setup: pbc_npt
+backend: pycharmm
+composition: "DCM:100"
+box_size: 32.0
+target_density_g_cm3: 1.326
+mc_density_equalize: true
+charmm_sd_steps: 1000
+charmm_abnr_steps: 1000
+mini_lattice_abnr_steps: 300
+mini_lattice_abnr_allow_fixed_box: true
+mini_box_equil_ps: 5.0
+mini_box_equil_allow_fixed_box: true
+mini_nstep: 500
+md_stages: "mini,heat,equi"
+checkpoint: /path/to/DESdimers_params.json
+output_dir: results/dcm_lattice_equil_manual
+```
+
+#### Lattice box-only then coords (`mini_lattice_abnr_nocoords`)
+
+First pass optimizes cell only; second pass (inside resilient ladder) runs full lattice ABNR:
+
+```yaml
+setup: pbc_npt
+backend: pycharmm
+composition: "DCM:206"
+box_auto: density
 bulk_density_fraction: 0.75
 target_density_g_cm3: 1.326
 density_prep_mode: resilient
+mini_lattice_abnr_steps: 200
+mini_lattice_abnr_nocoords: true
+mini_lattice_abnr_allow_fixed_box: true
 md_stages: "mini,heat,equi"
-mini_nstep: 500
-max_grms_before_dyn: 50.0
 checkpoint: /path/to/DESdimers_params.json
-output_dir: results/dcm_liquid_prep
+output_dir: results/dcm_lattice_nocoords
+```
+
+#### CHARMM MM pretreat before MLpot (dense-box heat stability)
+
+CGENFF heat/equi/prod in the same CHARMM session before MLpot registration:
+
+```yaml
+setup: pbc_npt
+backend: pycharmm
+composition: "DCM:206"
+box_size: 32.0
+target_density_g_cm3: 1.326
+density_prep_mode: resilient
+charmm_mm_pretreat: true
+charmm_mm_pretreat_ps_heat: 3.0
+charmm_mm_pretreat_ps_equi: 5.0
+charmm_mm_pretreat_ps_prod: 2.0
+heat_thermostat: hoover
+md_stages: "mini,heat,equi"
+ps_heat: 5.0
+ps_equi: 10.0
+checkpoint: /path/to/DESdimers_params.json
+output_dir: results/dcm_pretreat_resilient
+```
+
+#### ASE calculator pre-min (BFGS before MLpot SD)
+
+Already on by default in resilient mode; explicit tuning:
+
+```yaml
+setup: pbc_nvt
+backend: pycharmm
+composition: "DCM:60"
+box_auto: density
+bulk_density_fraction: 0.75
+target_density_g_cm3: 1.326
+density_prep_mode: resilient
+calculator_pre_minimize: true
+pre_min_steps: 400
+pre_min_fmax: 0.03
+bfgs_maxstep: 0.05
+quiet_bfgs: false
+mini_nstep: 500
+md_stages: "mini,heat"
+checkpoint: /path/to/DESdimers_params.json
+output_dir: results/dcm_calculator_premin
+```
+
+#### Campaign: PyCHARMM resilient equil → JAX-MD production
+
+```yaml
+defaults:
+  checkpoint: /path/to/DESdimers_params.json
+  seed: 123
+  dt_fs: 0.25
+  temperature: 300.0
+  mm_switch_on: 6.0
+  mm_switch_width: 4.0
+  ml_switch_width: 1.0
+  box_auto: density
+  bulk_density_fraction: 0.75
+  target_density_g_cm3: 1.326
+  density_prep_mode: resilient
+  mc_density_equalize: true
+  mini_nstep: 500
+  max_grms_before_dyn: 50.0
+  dynamics_overlap_action: rescue
+  no_echeck_heat: true
+  heat_thermostat: hoover
+
+campaign_output: artifacts/dcm_liquid_campaign
+
+runs:
+  pycharmm_equil:
+    backend: pycharmm
+    setup: pbc_npt
+    composition: "DCM:206"
+    md_stages: "mini,heat,equi"
+    ps_heat: 5.0
+    ps_equi: 10.0
+    output_dir: results/dcm_campaign/pycharmm_equil
+
+  jaxmd_prod:
+    backend: jaxmd
+    setup: pbc_nvt
+    depends_on: pycharmm_equil
+    ps: 100
+    output_dir: results/dcm_campaign/jaxmd_prod
+    handoff_write_res: true
+    handoff_quality_gate: true
+    handoff_quality_fmax_eVA: 1.0
+    jaxmd_minimize_steps: 500
+    jaxmd_pbc_minimize_steps: 500
+    jaxmd_mini_box_equil_ps: 2.0
+    extra_args:
+      - "--steps-per-recording"
+      - "800"
+      - "--jax-md-update-interval"
+      - "1"
+      - "--max-pairs"
+      - "500000"
+```
+
+#### JAX-MD handoff prep only (after equilibrated PyCHARMM)
+
+Use when PyCHARMM equil already converged; JAX leg needs PBC FIRE + short NPT:
+
+```yaml
+setup: pbc_nvt
+backend: jaxmd
+depends_on: pycharmm_equil
+ps: 50
+temperature: 300.0
+handoff_write_res: true
+handoff_quality_gate: true
+handoff_quality_fmax_eVA: 1.0
+handoff_quality_action: minimize
+jaxmd_minimize_steps: 500
+jaxmd_pbc_minimize_steps: 1000
+jaxmd_mini_box_equil_ps: 5.0
+output_dir: results/dcm_jaxmd_handoff_prep
+extra_args:
+  - "--jax-md-update-interval"
+  - "1"
+  - "--max-pairs"
+  - "500000"
+```
+
+#### Large dense box (burst-style, overlap rescue heavy)
+
+Aligned with `workflows/pbc_solvent_burst` cleanup defaults:
+
+```yaml
+setup: pbc_npt
+backend: pycharmm
+composition: "DCM:308"
+box_size: 32.0
+target_density_g_cm3: 1.326
+density_prep_mode: resilient
+density_prep_ladder_max_rounds: 5
+spacing: 4.0
+packmol_tolerance: 1.0
+charmm_sd_steps: 1000
+charmm_abnr_steps: 1000
+mini_nstep: 500
+bonded_mm_mini: true
+bonded_mm_mini_after: mini,heat,equi
+bonded_mm_mini_steps: 1000
+dynamics_overlap_action: rescue
+dynamics_overlap_min_distance: 1.5
+dynamics_intra_min_distance: 0.35
+dynamics_overlap_check_interval: 500
+dynamics_overlap_charmm_sd_steps: 400
+dynamics_overlap_charmm_abnr_steps: 800
+no_echeck_heat: true
+heat_thermostat: hoover
+n_heat_segments: 4
+md_stages: "mini,heat,equi"
+ps_heat: 3.0
+ps_equi: 10.0
+checkpoint: /path/to/DESdimers_params.json
+output_dir: results/dcm308_dense_burst
+```
+
+#### Mixed solvent (MC density skipped; set box manually)
+
+MC equalization requires known mass metadata per species; mixed boxes need explicit sizing:
+
+```yaml
+setup: pbc_npt
+backend: pycharmm
+composition: "DCM:40,ACO:20"
+box_size: 36.0
+mc_density_equalize: false
+density_prep_mode: resilient
+density_prep_ladder: true
+mini_lattice_abnr_allow_fixed_box: true
+mini_box_equil_allow_fixed_box: true
+md_stages: "mini,heat,equi"
+checkpoint: /path/to/DESdimers_params.json
+output_dir: results/dcm_aco_mixed
+```
+
+#### PyXtal crystal start (not liquid Packmol; resilient mini still helps)
+
+```yaml
+setup: pbc_nvt
+backend: pycharmm
+composition: "DCM:8"
+pyxtal: true
+pyxtal_spg: 14
+pyxtal_factor: 1.0
+box_auto: geometry
+density_prep_mode: resilient
+density_prep_ladder: true
+md_stages: "mini,heat"
+checkpoint: /path/to/DESdimers_params.json
+output_dir: results/dcm_pyxtal_resilient
+```
+
+Install: `uv sync --extra chem`.
+
+#### Continue from equilibrated handoff (skip rebuild; no MC/ladder on build)
+
+Safest production path once a liquid box is equilibrated:
+
+```yaml
+setup: pbc_nvt
+backend: pycharmm
+depends_on: pycharmm_equil
+md_stages: "prod"
+ps: 20
+density_prep_mode: off
+density_prep_ladder: false
+output_dir: results/dcm_prod_from_handoff
 ```
 
 JAX-MD legs can add `handoff_quality_gate: true`, `jaxmd_pbc_minimize_steps`, and `jaxmd_mini_box_equil_ps` for the same philosophy after PyCHARMM handoff.
