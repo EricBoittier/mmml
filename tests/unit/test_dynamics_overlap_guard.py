@@ -173,6 +173,9 @@ def test_overlap_early_abort_recovery_retries_chunk(tmp_path):
         "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.restore_geometry_from_ladder",
         return_value=baseline,
     ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.probe_dynamics_geometry_violation",
+        return_value=False,
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.attempt_overlap_early_abort_recovery",
         return_value=__import__(
             "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint",
@@ -231,6 +234,9 @@ def test_overlap_early_abort_in_memory_recovery_skips_post_rescue(tmp_path):
     ) as prep_after, mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
         side_effect=lambda path: int(Path(path).read_text().split()[1]),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.probe_dynamics_geometry_violation",
+        return_value=False,
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.attempt_overlap_early_abort_recovery",
         return_value=GeometryRecoveryResult(True, "memory"),
@@ -387,7 +393,7 @@ def test_overlap_early_abort_memory_recovery_skips_overlap_check(tmp_path):
             mlpot_ctx=mock.Mock(),
         )
 
-    finalize.assert_called_once()
+    finalize.assert_not_called()
     assert not any("after early-abort recovery" in c for c in overlap_contexts)
     assert "HEAT" in overlap_contexts
 
@@ -447,6 +453,9 @@ def test_overlap_early_abort_disk_recovery_cpt_retries_in_memory(tmp_path, capsy
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
         side_effect=lambda path: int(Path(path).read_text().split()[1]),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.probe_dynamics_geometry_violation",
+        return_value=False,
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.attempt_overlap_early_abort_recovery",
         return_value=GeometryRecoveryResult(True, "restart"),
