@@ -1030,6 +1030,7 @@ def _maybe_configure_cpt_in_memory_overlap_start(
         mlpot_ctx=mlpot_ctx,
         nstep=nstep,
         nsavc=kw.get("nsavc"),
+        cpt=True,
         restart_read=io.restart_read,
         memory_handoff_default=resolve_overlap_memory_handoff(args),
     )
