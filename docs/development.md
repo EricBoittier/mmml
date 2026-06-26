@@ -10,6 +10,11 @@ pytest
 
 ## Docs workflow
 
+Documentation has its own GitHub Actions workflow (`.github/workflows/docs.yml`):
+
+- `MkDocs HTML` runs `mkdocs build --strict`.
+- `PDF Export` renders `site/mmml-docs.pdf`, including Mermaid diagrams, and uploads it as an artifact.
+
 Build static docs:
 
 ```bash

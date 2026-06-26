@@ -55,6 +55,19 @@ runs:
 JAX-MD / ASE write `handoff_policy.json` in the job output directory with box source,
 velocity policy, cutoffs, and initial MMML energy/forces.
 
+## PyCHARMM runtime guards
+
+Topology, parameter, PSF, and coordinate reads use a relaxed `BOMLEV`/`WRNLEV`
+context only while the read is active, then restore the prior levels before the
+next CHARMM command. This avoids leaving `bomlev 0` pinned after benign read
+warnings, which can later abort MLpot registration or dynamics setup.
+
+Before production dynamics, MMML clears CHARMM `COMP` coordinates and scalar
+components so stale comparison data is never interpreted as velocities when
+`iasvel=0` or restart paths are reused. `clear_comp_for_production()` preserves
+its `quiet` argument: normal calls are visible by default, and staged workflows
+can opt into quiet CHARMM housekeeping when running with reduced log noise.
+
 ## Interpreting initial MMML energy
 
 Positive total MMML energy (eV) is normal — the hybrid calculator is not
