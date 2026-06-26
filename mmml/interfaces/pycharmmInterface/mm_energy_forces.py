@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, List, Optional, Sequence, Tuple
 
+import os
 import numpy as np
 
 import jax
@@ -145,12 +146,13 @@ def format_mm_pair_update_stats_summary(stats: dict) -> str:
     cpu_rebuilds = int(stats.get("cpu_rebuilds", 0))
     gpu_rebuilds = int(stats.get("gpu_rebuilds", 0))
     capacity_grows = int(stats.get("capacity_grows", 0))
+    capacity_changes = int(stats.get("pair_capacity_changes", 0))
     pct = 100.0 * reused / max(1, calls)
     return (
         f"[jaxmd_nbr] pair-list cache: {reused}/{calls} reused ({pct:.1f}%), "
         f"{updates} rebuilds (cpu={cpu_rebuilds}, gpu={gpu_rebuilds}), "
         f"host_syncs={host_syncs}, device_skin_checks={device_skin_checks}, "
-        f"capacity_grows={capacity_grows}, "
+        f"capacity_grows={capacity_grows}, capacity_changes={capacity_changes}, "
         f"reallocs={reallocs}, fallbacks={fallbacks}"
     )
 
@@ -858,6 +860,9 @@ def build_mm_energy_forces_fn(
             "com_filter_calls": 0,
             "capacity_multiplier": float(jax_md_capacity_multiplier),
             "pair_capacity": int(_n_static_pairs),
+            "pair_capacity_initial": int(_n_static_pairs),
+            "pair_capacity_changes": 0,
+            "pair_capacity_history": [int(_n_static_pairs)],
             "update_interval": int(max(1, jax_md_update_interval)),
             "skin_distance": float(max(0.0, jax_md_skin_distance)),
             "cache_reuse_reason": "init",
@@ -868,6 +873,25 @@ def build_mm_energy_forces_fn(
         _last_cartesian_positions_jax = [None]
         _last_box = [None]
         _fallback_max_pairs_cell = [int(_n_static_pairs)]
+
+        def _record_pair_capacity(capacity: int, reason: str) -> None:
+            cap = int(capacity)
+            prev = int(_pair_stats.get("pair_capacity", cap))
+            if cap == prev:
+                return
+            _pair_stats["pair_capacity"] = cap
+            _pair_stats["pair_capacity_changes"] = int(
+                _pair_stats.get("pair_capacity_changes", 0)
+            ) + 1
+            history = list(_pair_stats.get("pair_capacity_history", []))
+            history.append(cap)
+            _pair_stats["pair_capacity_history"] = history[-16:]
+            _pair_stats["last_capacity_change_reason"] = reason
+            if os.environ.get("MMML_MM_NL_STRICT_CAPACITY") == "1":
+                raise RuntimeError(
+                    f"MM pair-list capacity changed from {prev} to {cap} ({reason}); "
+                    "this can trigger JAX recompilation"
+                )
 
         def calculate_mm_pair_energies_dynamic(
             positions: Array,
@@ -1018,7 +1042,8 @@ def build_mm_energy_forces_fn(
                         mm_r_min,
                         pbc_cell=np.asarray(current_pbc_cell) if current_pbc_cell is not None else None,
                     )
-            _fallback_max_pairs_cell[0] = fallback_max_pairs
+            _fallback_max_pairs_cell[0] = int(fallback_max_pairs)
+            _record_pair_capacity(int(fallback_max_pairs), f"fallback_{used}")
             if _nbr_debug:
                 print(f"[nbr] fallback via {used} max_pairs={fallback_max_pairs}")
             _pair_stats["fallbacks"] += 1
@@ -1119,7 +1144,10 @@ def build_mm_energy_forces_fn(
                     except PairListTruncationError as exc:
                         _fallback_max_pairs_cell[0] = int(exc.suggested_max_pairs)
                         _pair_stats["capacity_grows"] += 1
-                        _pair_stats["pair_capacity"] = int(_fallback_max_pairs_cell[0])
+                        _record_pair_capacity(
+                            int(_fallback_max_pairs_cell[0]),
+                            "gpu_pair_truncation_growth",
+                        )
                 if _nbr_debug:
                     print(f"[nbr] rebuild via {used}")
                     _validate_dynamic_pair_contract(
@@ -1159,12 +1187,15 @@ def build_mm_energy_forces_fn(
                 except PairListTruncationError as exc:
                     _fallback_max_pairs_cell[0] = int(exc.suggested_max_pairs)
                     _pair_stats["capacity_grows"] += 1
-                    _pair_stats["pair_capacity"] = int(_fallback_max_pairs_cell[0])
+                    _record_pair_capacity(
+                        int(_fallback_max_pairs_cell[0]),
+                        "cpu_pair_truncation_growth",
+                    )
             if int(capacity) != int(_fallback_max_pairs_cell[0]):
                 if int(capacity) > int(_fallback_max_pairs_cell[0]):
                     _pair_stats["capacity_grows"] += 1
                 _fallback_max_pairs_cell[0] = int(capacity)
-                _pair_stats["pair_capacity"] = int(capacity)
+                _record_pair_capacity(int(capacity), f"{used}_returned_capacity")
             if _nbr_debug:
                 print(f"[nbr] rebuild via {used}: n_valid={n_valid} capacity={capacity}")
             pair_idx_out = jnp.stack([jnp.asarray(cl_i), jnp.asarray(cl_j)], axis=1)
@@ -1232,7 +1263,7 @@ def build_mm_energy_forces_fn(
                         else "gpu_rebuild"
                     )
                     _pair_stats["cache_reuse_reason"] = _pair_stats["last_reuse_reason"]
-                    _pair_stats["pair_capacity"] = int(pair_idx.shape[0])
+                    _record_pair_capacity(int(pair_idx.shape[0]), "gpu_rebuild_shape")
                     return pair_idx, pair_mask
 
             if (
@@ -1309,7 +1340,7 @@ def build_mm_energy_forces_fn(
                 _pair_stats["updates"] += 1
                 _pair_stats["cache_reuse_reason"] = "cpu_rebuild"
                 _pair_stats["last_reuse_reason"] = "cpu_rebuild"
-                _pair_stats["pair_capacity"] = int(pair_idx.shape[0])
+                _record_pair_capacity(int(pair_idx.shape[0]), "cpu_rebuild_shape")
                 if _nbr_debug:
                     n_valid = int(np.sum(np.asarray(jax.device_get(pair_mask))))
                     capacity = int(pair_idx.shape[0])
