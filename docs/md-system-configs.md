@@ -162,9 +162,40 @@ For small liquid boxes, start looser than the final density, minimize and heat, 
 - `dynamics_overlap_action: rescue`: repair close contacts during staged dynamics.
 - `bonded_mm_mini: true`: run bonded-only MM cleanup after selected stages.
 
-### Resilient density prep (`density_prep_mode: resilient`)
+### Resilient density prep (`liquid_prep: true`)
 
-Dense solvent boxes often stall in minimization when Packmol places molecules too close at the target liquid density. Use **`density_prep_mode: resilient`** to turn on a preventive stack plus an automatic post-mini rescue ladder when hybrid GRMS is still above `max_grms_before_dyn`.
+Dense solvent boxes often stall in minimization when Packmol places molecules too close at the target liquid density. Use **`liquid_prep: true`** (CLI: **`--liquid-prep`**) as the one-flag setup for the full preventive stack plus the automatic post-mini rescue ladder when hybrid GRMS is still above `max_grms_before_dyn`.
+
+Equivalent explicit form: `density_prep_mode: resilient`.
+
+**Minimal liquid-prep config:**
+
+```yaml
+setup: pbc_npt
+backend: pycharmm
+composition: "DCM:206"
+box_auto: density
+target_density_g_cm3: 1.326
+liquid_prep: true
+md_stages: "mini,heat,equi"
+checkpoint: /path/to/DESdimers_params.json
+output_dir: results/dcm_liquid_prep
+```
+
+CLI:
+
+```bash
+mmml md-system \
+  --liquid-prep \
+  --composition DCM:206 \
+  --box-auto density \
+  --target-density-g-cm3 1.326 \
+  --backend pycharmm \
+  --setup pbc_npt \
+  --md-stages mini,heat,equi \
+  --checkpoint /path/to/DESdimers_params.json \
+  --output-dir results/dcm_liquid_prep
+```
 
 **Preventive stack (before MLpot SD):**
 
@@ -187,8 +218,9 @@ Dense solvent boxes often stall in minimization when Packmol places molecules to
 
 Control knobs:
 
-- `density_prep_mode`: `off` (default) or `resilient`.
-- `density_prep_ladder`: override ladder on/off (`--no-density-prep-ladder` disables even in resilient mode).
+- `liquid_prep`: **recommended** one-flag shorthand (default `false`).
+- `density_prep_mode`: `off` (default) or `resilient` (explicit alias of `liquid_prep`).
+- `density_prep_ladder`: override ladder on/off (`--no-density-prep-ladder` disables even with `liquid_prep`).
 - `density_prep_ladder_max_rounds`: ladder iterations (default 3).
 - `density_prep_lattice_abnr_steps`: lattice steps inside the ladder (0 = reuse `mini_lattice_abnr_steps`).
 
@@ -228,7 +260,7 @@ Each block below is a valid single-run YAML (flat keys) unless noted as a campai
 
 #### Minimal resilient (auto box, defaults do the rest)
 
-Turn on `density_prep_mode: resilient` only; preventive bumps and the rescue ladder apply automatically.
+Turn on `liquid_prep: true` only; preventive bumps and the rescue ladder apply automatically.
 
 ```yaml
 setup: pbc_nvt
@@ -237,7 +269,7 @@ composition: "DCM:60"
 box_auto: density
 bulk_density_fraction: 0.75
 target_density_g_cm3: 1.326
-density_prep_mode: resilient
+liquid_prep: true
 md_stages: "mini,heat,equi"
 checkpoint: /path/to/DESdimers_params.json
 output_dir: results/dcm60_resilient_minimal
@@ -1213,6 +1245,7 @@ box_auto: null
 target_density_g_cm3: null
 bulk_density_fraction: null
 density_prep_mode: off
+liquid_prep: false
 density_prep_ladder: null
 density_prep_ladder_max_rounds: 3
 density_prep_lattice_abnr_steps: 0

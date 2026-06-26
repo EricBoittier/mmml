@@ -385,6 +385,16 @@ def add_box_sizing_args(parser: argparse.ArgumentParser) -> None:
         ),
     )
     group.add_argument(
+        "--liquid-prep",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Easy dense-liquid setup: same as --density-prep-mode resilient "
+            "(looser Packmol, MC density equalization, stronger CHARMM/lattice mini, "
+            "mini box equil, post-mini rescue ladder when GRMS is high)."
+        ),
+    )
+    group.add_argument(
         "--density-prep-mode",
         choices=("off", "resilient"),
         default="off",
