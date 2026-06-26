@@ -2567,11 +2567,10 @@ def _prepare_post_rescue_overlap_handoff(
     *,
     mlpot_ctx: Optional["MlpotContext"],
 ) -> None:
-    """Continue overlap dynamics in-process after PSF-reload geometry rescue.
+    """Continue overlap dynamics in-process after geometry rescue (no ``READYN``).
 
-    Prefer :func:`_materialize_post_rescue_restart_handoff` for CPT overlap chunks;
-    this path remains for legacy in-memory handoff when restart materialization
-    is unavailable.
+    Required for Hoover CPT: static ``write restart`` lacks barostat piston
+    internals, so ``READYN`` on scratch ``.overlap_*.res`` files fails with EOF.
     """
     _assign_post_rescue_velocities_and_crystal(chunk_kw, mlpot_ctx=mlpot_ctx)
     bath = _post_rescue_bath_target_K(chunk_kw)
@@ -2686,6 +2685,41 @@ def _materialize_post_rescue_restart_handoff(
         restart_read_unit=chunk_io.restart_read_unit,
         restart_write_unit=chunk_io.restart_write_unit,
         trajectory_unit=chunk_io.trajectory_unit,
+    )
+
+
+def _apply_post_rescue_overlap_handoff(
+    chunk_io: CharmmTrajectoryFiles,
+    chunk_kw: dict[str, Any],
+    *,
+    steps_done: int,
+    mlpot_ctx: Optional["MlpotContext"],
+    overlap: Optional["DynamicsOverlapConfig"],
+    overlap_context: str,
+) -> tuple[CharmmTrajectoryFiles, bool]:
+    """Hand off after overlap rescue: in-memory for CPT, ``READYN`` otherwise.
+
+    Returns ``(chunk_io, in_memory_handoff)``.
+    """
+    if bool(chunk_kw.get("cpt")):
+        _prepare_post_rescue_overlap_handoff(chunk_kw, mlpot_ctx=mlpot_ctx)
+        print(
+            f"overlap ({overlap_context}): post-rescue in-memory handoff "
+            f"at global step {max(0, int(steps_done))} (CPT; no READYN on scratch "
+            f"restart — barostat state stays in RAM)",
+            flush=True,
+        )
+        return chunk_io, True
+    return (
+        _materialize_post_rescue_restart_handoff(
+            chunk_io,
+            chunk_kw,
+            steps_done=steps_done,
+            mlpot_ctx=mlpot_ctx,
+            overlap=overlap,
+            overlap_context=overlap_context,
+        ),
+        False,
     )
 
 
@@ -3804,12 +3838,10 @@ def run_dynamics_with_io(
                         use_readyn_handoff = (
                             chunk_io is not None
                             and n_chunks > 1
+                            and not bool(chunk_kw.get("cpt"))
                             and (
                                 rescued_overlap
-                                or (
-                                    recovery.source != "memory"
-                                    and bool(chunk_kw.get("cpt"))
-                                )
+                                or recovery.source != "memory"
                             )
                         )
                         if use_readyn_handoff:
@@ -3824,6 +3856,16 @@ def run_dynamics_with_io(
                             pending_readyn_chunk_io = chunk_io
                             post_rescue_handoff_applied = True
                         else:
+                            if (
+                                bool(chunk_kw.get("cpt"))
+                                and recovery.source != "memory"
+                                and mlpot_ctx is not None
+                            ):
+                                _prepare_post_rescue_overlap_handoff(
+                                    chunk_kw,
+                                    mlpot_ctx=mlpot_ctx,
+                                )
+                                post_rescue_handoff_applied = True
                             early_abort_memory_handoff = True
                         steps_done = steps_before_chunk
                         rerun_chunk = True
@@ -3910,7 +3952,7 @@ def run_dynamics_with_io(
                                 label=f"{overlap_context} at step {steps_done}",
                             )
                         if chunk_index + 1 < n_chunks:
-                            chunk_io = _materialize_post_rescue_restart_handoff(
+                            chunk_io, in_memory = _apply_post_rescue_overlap_handoff(
                                 chunk_io,
                                 chunk_kw,
                                 steps_done=steps_done,
@@ -3918,9 +3960,13 @@ def run_dynamics_with_io(
                                 overlap=overlap,
                                 overlap_context=overlap_context,
                             )
-                            pending_readyn_chunk_io = chunk_io
+                            if in_memory:
+                                post_rescue_in_memory_mode = True
+                            else:
+                                pending_readyn_chunk_io = chunk_io
                             post_rescue_handoff_applied = True
-                            any_post_rescue_restart_handoff = True
+                            if not in_memory:
+                                any_post_rescue_restart_handoff = True
                         else:
                             _refresh_segment_restart_after_overlap_rescue(
                                 chunk_io.restart_write,
