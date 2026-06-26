@@ -7,6 +7,7 @@ Verify `cons_fix` behavior in **two layers** before relying on `mmml md-system -
 ```bash
 pytest tests/unit/test_monomer_constraints.py -q
 pytest tests/unit/test_md_system_pycharmm_cmd.py -q
+pytest tests/unit/test_charmm_barostat_thermostat_forces.py -q
 ```
 
 Checks: resid parsing, `no_fix`, `minimize_with_mlpot` calls SD pass 2 + `cons_fix.setup` when `--fix-resids` is resolved to a selection.
