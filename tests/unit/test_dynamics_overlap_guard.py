@@ -2961,11 +2961,15 @@ def test_harmonize_dynamics_frequency_for_remainder_chunk():
 
     kw2 = {"nsavc": 10}
     _harmonize_overlap_chunk_frequencies(kw2, 41)
-    assert kw2["nsavc"] == 1
+    assert kw2["nsavc"] == 10
 
     kw3 = {"nsavc": 40}
     _harmonize_overlap_chunk_frequencies(kw3, 40)
-    assert kw3["nsavc"] == 20
+    assert "nsavc" not in kw3
+
+    kw3b = {"nsavc": 16, "nprint": 10, "iprfrq": 10, "isvfrq": 10}
+    _harmonize_overlap_chunk_frequencies(kw3b, 250)
+    assert kw3b["nsavc"] == 16
 
     kw4 = {
         "nsavc": 250,
