@@ -494,7 +494,7 @@ def test_measure_mm_bonded_strain_uses_mlpot_detached():
         ) as detached, patch(
             "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_charmm_mm_block",
         ), patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
+            "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms",
             return_value=0.5,
         ), patch(
             "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.charmm_internal_energy_kcalmol",
