@@ -180,8 +180,8 @@ def profile_nl_sync_components(
         n=repeat,
     )
 
-    def _cpu_build():
-        build_mm_pairs_with_backend(
+    def _cpu_build_result():
+        return build_mm_pairs_with_backend(
             pick_static_rebuild_backend(use_jax_md_neighbor_list=False),
             positions=pos_host,
             box=box_np,
@@ -191,10 +191,10 @@ def profile_nl_sync_components(
             total_atoms=pos_host.shape[0],
         )
 
-    cpu_build_ms = _median_ms(_cpu_build, n=repeat)
+    cpu_build_ms = _median_ms(_cpu_build_result, n=repeat)
 
     def _h2d_pairs():
-        cl_i, cl_j, cl_mask, *_ = _cpu_build()
+        cl_i, cl_j, cl_mask, *_ = _cpu_build_result()
         idx = jnp.stack([jnp.asarray(cl_i), jnp.asarray(cl_j)], axis=1)
         mask = jnp.asarray(cl_mask)
         jax.block_until_ready(idx)
