@@ -315,8 +315,9 @@ flat_bottom_selection: all
 flat_bottom_mode: system
 min_com_restraint_distance: null
 min_com_restraint_k: 1.0
-fix_resids: ""
-constrain_resids: ""
+extra_args: []
+fix_resids: ''
+constrain_resids: ''
 no_fix: false
 mini_nstep: 20
 no_pre_minimize: false
@@ -353,7 +354,7 @@ max_grms_before_dyn: 50.0
 test_first: false
 test_first_tol: 0.005
 test_first_step: 0.0001
-test_first_resids: ""
+test_first_resids: ''
 test_first_charmm: false
 test_first_update_nbonds: false
 ml_batch_size: null
@@ -420,8 +421,19 @@ dyn_inbfrq: null
 dyn_imgfrq: null
 pre_nve_charmm_update: null
 lambda_md_mode: free_nve
-couple_residues: 1
-lambda_windows: [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+couple_residues: '1'
+lambda_windows:
+- 0.0
+- 0.1
+- 0.2
+- 0.3
+- 0.4
+- 0.5
+- 0.6
+- 0.7
+- 0.8
+- 0.9
+- 1.0
 pre_min_steps: 50
 pre_min_fmax: 0.1
 min_steps: null
@@ -471,6 +483,8 @@ handoff_velocity_remove_drift: true
 handoff_require_cell: false
 jaxmd_minimize_steps: 200
 jaxmd_pbc_minimize_steps: 200
+jax_md_update_interval: 1
+jax_md_skin_distance: 0.25
 evaluate_npz: null
 evaluate_output: null
 evaluate_frame: 0

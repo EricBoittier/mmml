@@ -108,10 +108,15 @@ def styles() -> dict[str, ParagraphStyle]:
 
 
 def mermaid_render_command() -> list[str] | None:
-    """Return a Mermaid CLI command prefix, using local ``mmdc`` or ``npx``."""
+    """Return a Mermaid CLI command prefix.
+
+    CI installs ``mmdc`` directly. Local ``npx`` fallback is opt-in because
+    spawning package resolution for every diagram can make PDF builds appear
+    hung on machines without a cached Mermaid CLI.
+    """
     if shutil.which("mmdc"):
         return ["mmdc"]
-    if shutil.which("npx"):
+    if os.environ.get("MMML_DOCS_PDF_ALLOW_NPX") == "1" and shutil.which("npx"):
         return ["npx", "-y", MERMAID_CLI_PACKAGE]
     return None
 
