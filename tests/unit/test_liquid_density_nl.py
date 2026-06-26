@@ -32,6 +32,39 @@ def test_liquid_density_box_side_aco_n16() -> None:
     assert np.allclose(cell, np.diag([side2, side2, side2]))
 
 
+def test_higher_density_smaller_box_than_bulk() -> None:
+    from tests.functionality.neighbor_lists._common import (
+        build_liquid_density_synthetic_case,
+        effective_mass_density_g_cm3,
+        liquid_density_synthetic_cases,
+    )
+
+    cases = {c["name"]: c for c in liquid_density_synthetic_cases()}
+    _, _, _, _, _, _, side_bulk, _ = build_liquid_density_synthetic_case(
+        cases["synthetic_aco_liquid_n32"]
+    )
+    _, _, _, _, _, _, side_150, rho_150 = build_liquid_density_synthetic_case(
+        cases["synthetic_aco_liquid_n32_rho150"]
+    )
+    comp = {"ACO": 32}
+    assert side_150 < side_bulk
+    assert effective_mass_density_g_cm3(comp, side_150) > rho_150 * 0.99
+
+
+def test_motion_step_box_scale() -> None:
+    from tests.functionality.neighbor_lists._common import (
+        apply_motion_step,
+        motion_stress_steps,
+    )
+
+    pos = np.array([[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]])
+    cell = 10.0 * np.eye(3)
+    step = next(s for s in motion_stress_steps() if s["name"] == "box_shrink_0.97")
+    new_pos, new_cell = apply_motion_step(pos, cell, step, rng=np.random.default_rng(0))
+    assert abs(float(new_cell[0, 0]) - 9.7) < 1e-9
+    assert abs(float(new_pos[0, 0]) - 0.97) < 1e-9
+
+
 def test_liquid_density_box25_derives_monomer_count() -> None:
     from tests.functionality.neighbor_lists._common import (
         _composition_dict_from_liquid_case,

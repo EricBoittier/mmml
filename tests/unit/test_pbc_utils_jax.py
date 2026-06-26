@@ -14,6 +14,7 @@ from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
     group_ids_from_groups,
     wrap_groups,
     wrap_groups_by_id,
+    wrap_groups_by_id_with_weight_sum,
 )
 
 
@@ -119,3 +120,35 @@ def test_wrap_groups_by_id_jitted_matches_eager() -> None:
     jitted = jax.jit(lambda pos: wrap_groups_by_id(pos, group_id, len(groups), cell, mass=mass))(R)
 
     np.testing.assert_allclose(np.asarray(jitted), np.asarray(eager), atol=1e-6)
+
+
+@pytest.mark.unit
+def test_wrap_groups_by_id_with_weight_sum_matches_reference() -> None:
+    cell = jnp.diag(jnp.array([10.0, 10.0, 10.0], dtype=jnp.float32))
+    groups = [
+        jnp.array([0, 1], dtype=jnp.int32),
+        jnp.array([2, 3], dtype=jnp.int32),
+    ]
+    group_id = group_ids_from_groups(groups, n_atoms=4)
+    mass = jnp.array([1.0, 3.0, 2.0, 2.0], dtype=jnp.float32)
+    group_weight_sum = jax.ops.segment_sum(mass, group_id, num_segments=len(groups))
+    R = jnp.array(
+        [
+            [11.0, 1.0, 1.0],
+            [12.0, 1.0, 1.0],
+            [1.0, -3.0, 1.0],
+            [1.0, -2.0, 1.0],
+        ],
+        dtype=jnp.float32,
+    )
+
+    actual = wrap_groups_by_id_with_weight_sum(
+        R,
+        group_id,
+        group_weight_sum,
+        cell,
+        mass=mass,
+    )
+    expected = _reference_wrap_groups_loop(R, groups, cell, mass=mass)
+
+    np.testing.assert_allclose(np.asarray(actual), np.asarray(expected), atol=1e-6)

@@ -457,6 +457,81 @@ def liquid_density_spacing(box_side: float, n_monomers: int) -> float:
     return float(box_side) / float(n_side) * 0.9
 
 
+def effective_mass_density_g_cm3(composition: dict[str, int], box_side: float) -> float:
+    """Actual mass density (g/cm³) for a composition in a cubic box."""
+    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import total_mass_g_for_composition
+
+    vol_cm3 = float(box_side) ** 3 * 1e-24
+    mass_g = total_mass_g_for_composition(composition)
+    return mass_g / vol_cm3
+
+
+def apply_mic_wrap_positions(positions: np.ndarray, cell: np.ndarray) -> np.ndarray:
+    """Wrap Cartesian positions into the primary unit cell."""
+    from mmml.interfaces.pycharmmInterface.nl_reference import cell_matrix_3x3
+
+    R = np.asarray(positions, dtype=np.float64)
+    cell_mat = cell_matrix_3x3(cell)
+    inv = np.linalg.inv(cell_mat)
+    frac = R @ inv.T
+    frac = frac - np.floor(frac)
+    return frac @ cell_mat
+
+
+def motion_stress_steps() -> list[dict[str, object]]:
+    """Named position/box perturbations for NL motion stress tests."""
+    return [
+        {"name": "baseline", "kind": "identity"},
+        {"name": "jitter_0.10", "kind": "jitter", "amplitude_A": 0.10},
+        {"name": "jitter_0.50", "kind": "jitter", "amplitude_A": 0.50},
+        {"name": "compress_0.92", "kind": "scale_com", "factor": 0.92},
+        {"name": "expand_1.08", "kind": "scale_com", "factor": 1.08},
+        {"name": "shift_x_2.0", "kind": "translate", "vector_A": [2.0, 0.0, 0.0]},
+        {"name": "box_shrink_0.97", "kind": "box_scale", "factor": 0.97},
+        {"name": "box_expand_1.03", "kind": "box_scale", "factor": 1.03},
+    ]
+
+
+def apply_motion_step(
+    positions: np.ndarray,
+    cell: np.ndarray,
+    step: dict[str, object],
+    *,
+    rng: np.random.Generator,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return ``(new_positions, new_cell)`` after a motion-stress step."""
+    kind = str(step["kind"])
+    R = np.asarray(positions, dtype=np.float64).copy()
+    cell_mat = np.asarray(cell, dtype=np.float64).copy()
+    if kind == "identity":
+        return R, cell_mat
+    if kind == "jitter":
+        amp = float(step["amplitude_A"])
+        R = R + amp * rng.standard_normal(R.shape)
+        return R, cell_mat
+    if kind == "scale_com":
+        factor = float(step["factor"])
+        if cell_mat.ndim == 2:
+            center = np.sum(cell_mat, axis=0) / 2.0
+        else:
+            center = np.array([float(cell_mat) / 2.0] * 3, dtype=np.float64)
+        R = center + factor * (R - center)
+        return R, cell_mat
+    if kind == "translate":
+        vec = np.asarray(step["vector_A"], dtype=np.float64)
+        return R + vec, cell_mat
+    if kind == "box_scale":
+        factor = float(step["factor"])
+        if cell_mat.ndim == 2:
+            diag = np.diag(cell_mat).astype(np.float64)
+        else:
+            diag = np.array([float(cell_mat)] * 3, dtype=np.float64)
+        new_diag = diag * factor
+        R = R * factor
+        return R, np.diag(new_diag)
+    raise ValueError(f"unknown motion step kind {kind!r}")
+
+
 def liquid_density_synthetic_cases() -> list[dict[str, object]]:
     """Synthetic toy clusters at experimental bulk liquid densities."""
   # fmt: off
@@ -505,6 +580,41 @@ def liquid_density_synthetic_cases() -> list[dict[str, object]]:
             "box_side": 25.0,
             "bulk_density_fraction": 1.0,
             "max_monomers": 32,
+            "cutoff": 13.0,
+        },
+        {
+            "name": "synthetic_aco_liquid_n32_rho125",
+            "description": "ACO:32 at 1.25× bulk ρ (compressed liquid)",
+            "composition": {"ACO": 32},
+            "bulk_density_fraction": 1.25,
+            "cutoff": 13.0,
+        },
+        {
+            "name": "synthetic_aco_liquid_n32_rho150",
+            "description": "ACO:32 at 1.50× bulk ρ (dense liquid)",
+            "composition": {"ACO": 32},
+            "bulk_density_fraction": 1.5,
+            "cutoff": 13.0,
+        },
+        {
+            "name": "synthetic_dcm_liquid_n32_rho125",
+            "description": "DCM:32 at 1.25× bulk ρ",
+            "composition": {"DCM": 32},
+            "bulk_density_fraction": 1.25,
+            "cutoff": 13.0,
+        },
+        {
+            "name": "synthetic_dcm_liquid_n32_rho150",
+            "description": "DCM:32 at 1.50× bulk ρ",
+            "composition": {"DCM": 32},
+            "bulk_density_fraction": 1.5,
+            "cutoff": 13.0,
+        },
+        {
+            "name": "synthetic_aco_liquid_n48_rho125",
+            "description": "ACO:48 at 1.25× bulk ρ (larger dense cluster)",
+            "composition": {"ACO": 48},
+            "bulk_density_fraction": 1.25,
             "cutoff": 13.0,
         },
     ]
@@ -559,6 +669,27 @@ def charmm_liquid_density_cases() -> list[dict[str, object]]:
             "box_side": 25.0,
             "bulk_density_fraction": 1.0,
             "max_monomers": 32,
+            "cutoff": 13.0,
+        },
+        {
+            "name": "charmm_aco_liquid_n32_rho125",
+            "description": "ACO:32 CGENFF at 1.25× bulk ρ",
+            "composition": "ACO:32",
+            "bulk_density_fraction": 1.25,
+            "cutoff": 13.0,
+        },
+        {
+            "name": "charmm_aco_liquid_n32_rho150",
+            "description": "ACO:32 CGENFF at 1.50× bulk ρ",
+            "composition": "ACO:32",
+            "bulk_density_fraction": 1.5,
+            "cutoff": 13.0,
+        },
+        {
+            "name": "charmm_dcm_liquid_n32_rho150",
+            "description": "DCM:32 CGENFF at 1.50× bulk ρ",
+            "composition": "DCM:32",
+            "bulk_density_fraction": 1.5,
             "cutoff": 13.0,
         },
     ]

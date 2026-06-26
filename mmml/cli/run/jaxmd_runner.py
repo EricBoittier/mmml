@@ -19,7 +19,7 @@ import jax.numpy as jnp
 from mmml.cli.run.summaries import print_flat_bottom_summary, print_forces_summary
 from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
     group_ids_from_groups,
-    wrap_groups_by_id,
+    wrap_groups_by_id_with_weight_sum,
 )
 from mmml.utils.geometry_checks import assert_no_intermonomer_atom_overlap
 from mmml.utils.hdf5_reporter import make_jaxmd_reporter
@@ -718,12 +718,18 @@ def set_up_nhc_sim_routine(
             for m in range(n_monomers)
         ]
         _monomer_group_id = group_ids_from_groups(_monomer_groups, n_atoms=len(atoms))
+        _monomer_mass_sum = jax.ops.segment_sum(
+            Si_mass,
+            _monomer_group_id,
+            num_segments=n_monomers,
+        )
 
+        @jit
         def _wrap_monomers(positions, cell):
-            return wrap_groups_by_id(
+            return wrap_groups_by_id_with_weight_sum(
                 positions,
                 _monomer_group_id,
-                n_monomers,
+                _monomer_mass_sum,
                 cell,
                 mass=Si_mass,
             )
