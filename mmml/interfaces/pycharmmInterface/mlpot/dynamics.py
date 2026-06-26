@@ -2360,6 +2360,15 @@ def _valid_restart_file(path: PathLike | None) -> Path | None:
             flush=True,
         )
         return None
+    if p.suffix.lower() in (".crd", ".pdb", ".dcd", ".xyz"):
+        return None
+    text_start = head.decode("ascii", errors="ignore").lstrip()
+    if not (
+        text_start.upper().startswith("REST")
+        or "!NATOM" in text_start
+        or text_start.startswith("NATOM")
+    ):
+        return None
     return p
 
 
@@ -3531,6 +3540,11 @@ def _integrated_step_from_restart(
             continue
 
         if abs_step < steps_before_chunk:
+            # Memory-handoff scratch files often store a segment-local step (e.g. 100
+            # or 500) while integrated accounting already advanced to ``fb``.  Negative
+            # REST abort markers (e.g. REST 48 -344) must still add ``steps_before_chunk``.
+            if step > 0 and fb >= steps_before_chunk + 1:
+                return fb
             global_step = steps_before_chunk + abs_step
         else:
             global_step = abs_step
@@ -4275,15 +4289,16 @@ def run_dynamics_with_io(
                 ):
                     _prepare_overlap_chunk_after_restart(mlpot_ctx, restart_read=None)
                     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
-                        refresh_mlpot_energy_and_grms,
+                        probe_and_light_resync_if_desync,
                     )
 
-                    refresh_mlpot_energy_and_grms(
+                    probe_and_light_resync_if_desync(
                         mlpot_ctx,
                         context=(
                             f"{overlap_context} chunk {chunk_index + 1}/{n_chunks}"
                         ),
-                        reregister=False,
+                        silent_charmm=True,
+                        verbose=False,
                     )
                 if chunk_io is None or chunk_io.restart_write is None:
                     chunk_kw.pop("iunwri", None)
