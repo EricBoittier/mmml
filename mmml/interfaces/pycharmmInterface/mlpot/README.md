@@ -4,6 +4,8 @@ Helpers for **PhysNet + CHARMM MLpot**, based on the validated scripts in `tests
 
 **Nonbond lists:** how CHARMM and MMML neighbor lists interact, update frequencies, and NVE stability — see [NONBOND_LISTS.md](NONBOND_LISTS.md).
 
+**Long-range electrostatics:** optional ScaFaCoS / jax-pme backends for k-space Coulomb beyond the JAX MM cutoff — see [LONG_RANGE_ELECTROSTATICS.md](LONG_RANGE_ELECTROSTATICS.md) and [ScaFaCoS README](../../scafacosInterface/README.md).
+
 ## Quick start (energy only)
 
 ```python
