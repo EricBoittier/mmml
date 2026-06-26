@@ -975,17 +975,19 @@ def _configure_equi_dynamics_start(
     io: CharmmTrajectoryFiles,
     *,
     restart_from_file: bool,
+    coords_in_memory: bool = False,
     use_pbc: bool,
     quiet: bool,
     temp: float,
     box_side: float | None = None,
     first_segment: bool = True,
 ) -> None:
-    """Fresh CPT barostat when EQUI restarts from HEAT/NVE (``pmass=0`` → NPT).
+    """Fresh CPT barostat when EQUI follows HEAT/NVE (``pmass=0`` → NPT).
 
-    HEAT Hoover NVT uses ``pmass=0``.  ``dyna restart`` without ``start`` leaves
-    barostat pistons uninitialized for NPT EQUI (garbage ``PIXX`` / ``PRESSI`` at
-    step 0).  Mirror HEAT's ``restart+start`` single-dyna pattern.
+    Do **not** use ``dyna restart`` from a Hoover NVT heat checkpoint: those
+    restarts lack CPT piston internals and READYN inherits a stale global step.
+    Load coordinates when needed, clear ``restart_read``, then one ``dyna start``
+  with ``iasvel=1`` (same pattern as :func:`_configure_npt_dynamics_start`).
     """
     if not first_segment:
         return
@@ -998,22 +1000,58 @@ def _configure_equi_dynamics_start(
         return
     if _equi_in_place_restart(io):
         return
-    if not restart_from_file or io.restart_read is None:
+    if not coords_in_memory and (
+        not restart_from_file or io.restart_read is None
+    ):
         return
+
+    restart_path = Path(io.restart_read) if io.restart_read is not None else None
+    if restart_path is not None and not coords_in_memory:
+        from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+            read_restart_coordinates,
+        )
+        from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+
+        pos = read_restart_coordinates(restart_path)
+        if pos is None:
+            raise RuntimeError(
+                f"EQUI CPT start: no finite coordinates in restart {restart_path}"
+            )
+        sync_charmm_positions(pos)
+        from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+            clear_comparison_coordinates,
+        )
+
+        clear_comparison_coordinates()
+        if not quiet:
+            print(
+                f"EQUI: loaded coordinates from {restart_path} "
+                "(offline; skip dyna READYN for NVT→NPT CPT cold start)",
+                flush=True,
+            )
 
     target = float(kw.get("hoover reft", kw.get("treference", temp)))
     if use_pbc and box_side is not None:
         ensure_charmm_crystal_for_cpt(float(box_side), quiet=quiet)
-    kw["restart"] = True
+    io.restart_read = None
+    kw["restart"] = False
     kw["new"] = False
     kw["start"] = True
     kw["iasvel"] = 1
     kw["firstt"] = target
+    kw.pop("iunrea", None)
+    kw["iunrea"] = -1
     if not quiet:
+        src = (
+            "in-memory after prior stage"
+            if coords_in_memory
+            else f"from {restart_path}"
+            if restart_path is not None
+            else "current CHARMM state"
+        )
         print(
-            f"EQUI: dyna restart+start at {target:.1f} K "
-            f"(coords from {io.restart_read}); fresh CPT barostat "
-            "(HEAT pmass=0 → NPT; single dyna, no nstep=0 assign)",
+            f"EQUI: dyna start at {target:.1f} K ({src}); "
+            "fresh CPT barostat (no dyna READYN)",
             flush=True,
         )
 
@@ -2237,8 +2275,22 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     restart = rread is not None and Path(rread).is_file()
                     use_memory = memory_handoff_next or (
                         seg_i == 0 and handoff_leg and stage == "equi"
+                    ) or (
+                        seg_i == 0
+                        and stage == "equi"
+                        and prev_restart_is_current_state
                     )
-                    if use_memory and not memory_handoff_next and restart and _valid_restart_file(rread) is not None:
+                    if (
+                        use_memory
+                        and not memory_handoff_next
+                        and not (
+                            seg_i == 0
+                            and stage == "equi"
+                            and prev_restart_is_current_state
+                        )
+                        and restart
+                        and _valid_restart_file(rread) is not None
+                    ):
                         use_memory = False
 
                     if use_memory:
@@ -2343,6 +2395,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                             kw,
                             seg_io,
                             restart_from_file=restart and seg_io.restart_read is not None,
+                            coords_in_memory=use_memory or prev_restart_is_current_state,
                             use_pbc=charmm_pbc,
                             quiet=bool(args.quiet),
                             temp=temp,
@@ -2565,8 +2618,16 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             restart = rread is not None and Path(rread).is_file()
             use_memory = memory_handoff_next or (
                 handoff_leg and stage in ("equi", "prod")
+            ) or (
+                stage in ("equi", "prod") and prev_restart_is_current_state
             )
-            if use_memory and not memory_handoff_next and restart and _valid_restart_file(rread) is not None:
+            if (
+                use_memory
+                and not memory_handoff_next
+                and not (stage in ("equi", "prod") and prev_restart_is_current_state)
+                and restart
+                and _valid_restart_file(rread) is not None
+            ):
                 use_memory = False
 
             if use_memory:
@@ -2799,6 +2860,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     kw,
                     io,
                     restart_from_file=restart and io.restart_read is not None,
+                    coords_in_memory=use_memory or prev_restart_is_current_state,
                     use_pbc=charmm_pbc,
                     quiet=bool(args.quiet),
                     temp=temp,
