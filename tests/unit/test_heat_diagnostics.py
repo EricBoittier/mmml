@@ -81,6 +81,19 @@ def test_format_heat_diagnostics_includes_sections(capsys):
     assert "pmass=0" in text
 
 
+def test_infer_heat_velocity_init_post_assign_scale_path():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _infer_heat_velocity_init_label
+
+    kw = {
+        "start": False,
+        "restart": False,
+        "iasvel": 1,
+        "ihtfrq": 500,
+    }
+    label = _infer_heat_velocity_init_label(kw, heat_thermostat="scale")
+    assert "post nstep=0 Boltzmann assign" in label
+
+
 def test_build_heat_dynamics_dashboard_sections():
     kw = build_hoover_heat_dynamics(
         timestep_ps=0.00025,
