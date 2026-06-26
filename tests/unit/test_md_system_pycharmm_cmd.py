@@ -256,6 +256,37 @@ def test_build_pycharmm_command_forwards_packmol_cache_and_run_state_flags():
     assert cmd[idx + 1] == "4"
 
 
+def test_build_pycharmm_command_forwards_mc_density_flags():
+    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+
+    cmd = build_pycharmm_command(
+        _pycharmm_args(
+            box_size=None,
+            mc_density_equalize=False,
+            mc_density_target_g_cm3=1.1,
+            mc_density_steps=12,
+            mc_density_step_scale=0.03,
+            mc_density_temperature=0.04,
+            mc_density_seed=99,
+            mc_density_min_scale=0.8,
+            mc_density_max_scale=1.2,
+        )
+    )
+    assert "--no-mc-density-equalize" in cmd
+    assert "--mc-density-target-g-cm3" in cmd
+    assert cmd[cmd.index("--mc-density-target-g-cm3") + 1] == "1.1"
+    assert cmd[cmd.index("--mc-density-steps") + 1] == "12"
+    assert cmd[cmd.index("--mc-density-step-scale") + 1] == "0.03"
+    assert cmd[cmd.index("--mc-density-temperature") + 1] == "0.04"
+    assert cmd[cmd.index("--mc-density-seed") + 1] == "99"
+    assert cmd[cmd.index("--mc-density-min-scale") + 1] == "0.8"
+    assert cmd[cmd.index("--mc-density-max-scale") + 1] == "1.2"
+    parsed = pycharmm_mlpot.parse_args(cmd)
+    assert parsed.mc_density_equalize is False
+    assert parsed.mc_density_target_g_cm3 == 1.1
+    assert parsed.mc_density_steps == 12
+
+
 def test_build_pycharmm_command_forwards_flat_bottom_selection():
     cmd = build_pycharmm_command(
         _pycharmm_args(flat_bottom_radius=15.0, flat_bottom_selection="TYPE C*")

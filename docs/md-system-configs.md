@@ -146,8 +146,12 @@ sequenceDiagram
 
 Use explicit `box_size` when you already know the target density or are matching a benchmark. For automatic sizing, `box_auto: density` requires either `target_density_g_cm3` or `bulk_density_fraction`. Built-in density entries include `DCM`, `ACO`, `MEOH`, `ETOH`, `TIP3`, and `WAT`; use `target_density_g_cm3` for other residues.
 
+Post-build MC density equalization is enabled by default for new PBC composition builds when density and molecular-weight metadata can be resolved. It adjusts the initial cubic box with whole-molecule MC volume moves after Packmol, PyXtal, or grid construction and before MLpot registration. It skips handoffs, fixed `box_size`, and unknown residues without mass metadata. Disable it with `mc_density_equalize: false` or `--no-mc-density-equalize`.
+
 For small liquid boxes, start looser than the final density, minimize and heat, then tighten with NPT or mini-box equilibration. Useful controls are:
 
+- `mc_density_equalize`: default-on post-build MC box-density adjustment for eligible PBC composition builds.
+- `mc_density_target_g_cm3`: explicit target for MC density equalization when not using built-in single-solvent density metadata.
 - `mini_box_equil_ps`: PyCHARMM mini-stage box relaxation.
 - `jaxmd_mini_box_equil_ps`: JAX-MD pre-production box relaxation.
 - `bulk_density_fraction`: quick way to start below full liquid density, for example `0.8`.
@@ -287,6 +291,14 @@ optimize_pyxtal_emt: false
 box_auto: null
 target_density_g_cm3: null
 bulk_density_fraction: null
+mc_density_equalize: true
+mc_density_target_g_cm3: null
+mc_density_steps: 64
+mc_density_step_scale: 0.04
+mc_density_temperature: 0.02
+mc_density_seed: null
+mc_density_min_scale: 0.75
+mc_density_max_scale: 1.5
 mini_box_equil_ps: 0.0
 mini_box_equil_allow_fixed_box: false
 jaxmd_mini_box_equil_ps: 0.0

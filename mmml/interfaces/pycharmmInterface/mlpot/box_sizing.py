@@ -269,6 +269,67 @@ def add_box_sizing_args(parser: argparse.ArgumentParser) -> None:
         ),
     )
     group.add_argument(
+        "--mc-density-equalize",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Run default post-build MC cubic-volume equalization for PBC composition "
+            "builds when a density target can be resolved (default: on)."
+        ),
+    )
+    group.add_argument(
+        "--mc-density-target-g-cm3",
+        type=float,
+        default=None,
+        metavar="RHO",
+        help=(
+            "Target density for MC density equalization. Defaults to "
+            "--target-density-g-cm3, --bulk-density-fraction, or known single-solvent bulk density."
+        ),
+    )
+    group.add_argument(
+        "--mc-density-steps",
+        type=int,
+        default=64,
+        metavar="N",
+        help="MC density equalization proposal count (default: 64).",
+    )
+    group.add_argument(
+        "--mc-density-step-scale",
+        type=float,
+        default=0.04,
+        metavar="LOGSCALE",
+        help="Log box-side proposal noise scale for MC density equalization (default: 0.04).",
+    )
+    group.add_argument(
+        "--mc-density-temperature",
+        type=float,
+        default=0.02,
+        metavar="T",
+        help="Dimensionless Metropolis temperature for density-error acceptance (default: 0.02).",
+    )
+    group.add_argument(
+        "--mc-density-seed",
+        type=int,
+        default=None,
+        metavar="SEED",
+        help="Random seed for MC density equalization (default: --seed).",
+    )
+    group.add_argument(
+        "--mc-density-min-scale",
+        type=float,
+        default=0.75,
+        metavar="S",
+        help="Minimum allowed final box side relative to the initial side (default: 0.75).",
+    )
+    group.add_argument(
+        "--mc-density-max-scale",
+        type=float,
+        default=1.50,
+        metavar="S",
+        help="Maximum allowed final box side relative to the initial side (default: 1.50).",
+    )
+    group.add_argument(
         "--mini-box-equil-ps",
         type=float,
         default=0.0,

@@ -1169,6 +1169,13 @@ def _load_or_build_cluster(
         )
         n_mol = len(atoms_per_list)
         tag = composition_tag(composition, getattr(args, "residue", "MEOH").upper(), n_mol)
+        setattr(args, "_cluster_atoms_per_list", list(atoms_per_list))
+        setattr(args, "_cluster_residue_labels", list(residue_labels))
+        setattr(
+            args,
+            "_cluster_composition_summary",
+            {str(res): int(count) for res, count in composition},
+        )
         if not getattr(args, "quiet", False):
             print(
                 f"Continuing from handoff ({len(z)} atoms); skipped Packmol/cluster build",
@@ -1272,6 +1279,47 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     mlpot_pbc = resolve_mlpot_use_pbc(args)
     loose_pbc = resolve_loose_pbc(charmm_pbc, mlpot_pbc)
     box_side = resolve_pbc_box_side(args, r) if charmm_pbc else None
+    atoms_per_list = getattr(args, "_cluster_atoms_per_list", None)
+    if atoms_per_list is None and int(n_mol) > 0 and int(n_atoms) % int(n_mol) == 0:
+        atoms_per_list = [int(n_atoms // int(n_mol))] * int(n_mol)
+    if atoms_per_list is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+            apply_mc_density_equalization,
+        )
+
+        r, box_side_after_mc, mc_density_summary = apply_mc_density_equalization(
+            args,
+            r - r.mean(axis=0) + 0.5 * float(box_side) if box_side is not None else r,
+            atoms_per_list=atoms_per_list,
+            composition=getattr(args, "_cluster_composition_summary", None),
+            box_side_A=box_side,
+            use_pbc=charmm_pbc,
+            handoff_present=(
+                handoff_in is not None
+                or bool(getattr(args, "skip_cluster_build", False))
+                or getattr(args, "from_psf", None) is not None
+            ),
+            min_intermonomer_distance_A=float(
+                getattr(args, "min_intermonomer_atom_distance", 0.1) or 0.1
+            ),
+        )
+        box_side = box_side_after_mc
+        setattr(args, "_mc_density_summary", mc_density_summary.to_dict())
+        if not getattr(args, "quiet", False):
+            if mc_density_summary.ran:
+                print(
+                    "MC density equalization: "
+                    f"L {mc_density_summary.initial_box_A:.3f} -> "
+                    f"{mc_density_summary.final_box_A:.3f} Å; "
+                    f"rho {mc_density_summary.initial_density_g_cm3:.4f} -> "
+                    f"{mc_density_summary.final_density_g_cm3:.4f} g/cm^3",
+                    flush=True,
+                )
+            elif mc_density_summary.enabled:
+                print(
+                    f"MC density equalization: skipped ({mc_density_summary.reason})",
+                    flush=True,
+                )
     if charmm_pbc and not args.quiet:
         from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
             parse_composition_dict,
