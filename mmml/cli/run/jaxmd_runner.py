@@ -49,14 +49,15 @@ def resolve_jaxmd_steps_per_loop_call(
 ) -> int:
     """MD steps per JIT block before refreshing PBC MM neighbor lists.
 
-    PBC hybrid dynamics must refresh ``pair_idx``/``pair_mask`` every step; holding
-    lists across a multi-step ``fori_loop`` causes force discontinuities and NVE blow-ups.
+    The dynamic MM pair list is passed into the compiled step as data. For PBC
+    hybrid dynamics, ``jax_md_update_interval`` therefore controls both the
+    Python neighbor-list refresh cadence and the JIT block length. The default
+    remains one step for conservative behavior, but explicit larger intervals
+    avoid per-step host synchronization in CPU neighbor-list mode.
     """
-    target = 1 if (use_pbc and has_update_fn) else int(jax_md_update_interval or 100)
+    target = int(jax_md_update_interval or 1) if (use_pbc and has_update_fn) else int(jax_md_update_interval or 100)
     if target <= 0:
         target = 1 if (use_pbc and has_update_fn) else 100
-    if use_pbc and has_update_fn:
-        return 1
     steps_per_loop_call = min(target, int(steps_per_recording))
     for d in range(steps_per_loop_call, 0, -1):
         if int(steps_per_recording) % d == 0:
