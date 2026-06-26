@@ -14,6 +14,8 @@ Documentation has its own GitHub Actions workflow (`.github/workflows/docs.yml`)
 
 - `MkDocs HTML` runs `mkdocs build --strict`.
 - `PDF Export` renders `site/mmml-docs.pdf`, including Mermaid diagrams, and uploads it as an artifact.
+  CI installs `mmdc` from `@mermaid-js/mermaid-cli`; local PDF builds fall back to
+  readable Mermaid source unless `mmdc` is on `PATH` or `MMML_DOCS_PDF_ALLOW_NPX=1` is set.
 
 Build static docs:
 
