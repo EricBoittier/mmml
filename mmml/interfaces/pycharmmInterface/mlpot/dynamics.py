@@ -4412,9 +4412,10 @@ def run_dynamics_with_io(
                     and steps_done >= expected_after - 1
                 ):
                     restart_path = Path(chunk_io.restart_write)
-                    header_step = read_restart_last_step(restart_path)
-                    if header_step is None or header_step < expected_after - 1:
-                        patch_restart_global_step(restart_path, steps_done)
+                    if restart_path.is_file():
+                        header_step = read_restart_last_step(restart_path)
+                        if header_step is None or header_step < expected_after - 1:
+                            patch_restart_global_step(restart_path, steps_done)
                 if final_restart is not None and chunk_io is not None:
                     _overlap_refresh_or_validate_scratch_restart(
                         chunk_io.restart_write,
@@ -4430,6 +4431,8 @@ def run_dynamics_with_io(
                         for p in (chunk_io.restart_write, final_restart)
                         if p is not None
                     }:
+                        if not restart_path.is_file():
+                            continue
                         header_step = read_restart_last_step(restart_path)
                         if header_step is None or header_step < expected_after - 1:
                             patch_restart_global_step(restart_path, steps_done)
@@ -4742,16 +4745,11 @@ def run_dynamics_with_io(
             from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
                 patch_restart_global_step,
                 read_restart_last_step,
-                resolve_integrated_restart_step,
             )
 
             restart_path = Path(io.restart_write)
-            header_step = read_restart_last_step(restart_path)
-            effective_step = resolve_integrated_restart_step(
-                restart_path,
-                expected_nstep=total_nstep,
-            )
-            if effective_step is not None and effective_step >= total_nstep - 1:
+            if restart_path.is_file():
+                header_step = read_restart_last_step(restart_path)
                 if header_step is None or header_step < total_nstep - 1:
                     patch_restart_global_step(restart_path, steps_done)
         if split_trajectory and chunk_dcd_paths:
