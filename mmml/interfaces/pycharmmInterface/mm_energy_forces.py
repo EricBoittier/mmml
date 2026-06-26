@@ -857,6 +857,7 @@ def build_mm_energy_forces_fn(
             "pair_capacity": int(_n_static_pairs),
             "update_interval": int(max(1, jax_md_update_interval)),
             "skin_distance": float(max(0.0, jax_md_skin_distance)),
+            "cache_reuse_reason": "init",
             "last_reuse_reason": "init",
         }
         _last_positions = [None]
@@ -1198,6 +1199,7 @@ def build_mm_energy_forces_fn(
                     _pair_stats["cache_checks"] += 1
                     if _gpu_interval_reuse_allowed(box, interval, skin):
                         _pair_stats["reused"] += 1
+                        _pair_stats["cache_reuse_reason"] = "gpu_interval_box_stable"
                         _pair_stats["last_reuse_reason"] = "gpu_interval_box_stable"
                         return _pair_idx_cell[0], _pair_mask_cell[0]
 
@@ -1217,6 +1219,7 @@ def build_mm_energy_forces_fn(
                         if skin > 0.0
                         else "gpu_rebuild"
                     )
+                    _pair_stats["cache_reuse_reason"] = _pair_stats["last_reuse_reason"]
                     _pair_stats["pair_capacity"] = int(pair_idx.shape[0])
                     return pair_idx, pair_mask
 
@@ -1240,6 +1243,7 @@ def build_mm_energy_forces_fn(
                 have_cache=have_cache,
             ):
                 _pair_stats["reused"] += 1
+                _pair_stats["cache_reuse_reason"] = "cpu_skin_or_interval"
                 _pair_stats["last_reuse_reason"] = "cpu_skin_or_interval"
                 return _pair_idx_cell[0], _pair_mask_cell[0]
 
@@ -1255,6 +1259,7 @@ def build_mm_energy_forces_fn(
                 _last_cartesian_positions[0] = R_cart.copy()
                 _last_box[0] = None if box is None else np.asarray(box, dtype=np.float64).copy()
                 _pair_stats["updates"] += 1
+                _pair_stats["cache_reuse_reason"] = "cpu_rebuild"
                 _pair_stats["last_reuse_reason"] = "cpu_rebuild"
                 _pair_stats["pair_capacity"] = int(pair_idx.shape[0])
                 if _nbr_debug:
