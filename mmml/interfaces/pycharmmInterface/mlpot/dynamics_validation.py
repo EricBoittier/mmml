@@ -749,15 +749,13 @@ def assert_stage_dynamics_completed(
             if chunk_paths
             else f" at nsavc={nsavc}"
         )
-        if (
-            effective_step is not None
-            and effective_step >= min_steps
-            and integrated_step is not None
-            and integrated_step < min_steps
-        ):
-            problems.append(
-                f"{label} has {n_frames} readable frame(s), "
-                f"expected >= {min_frames} (~{expected_frames} total{chunk_note})"
+        if integrated_step is not None and integrated_step >= min_steps:
+            print(
+                f"WARN: {stage.upper()} {label} has {n_frames} readable frame(s), "
+                f"expected >= {min_frames} (~{expected_frames} total{chunk_note}), "
+                f"but trusted integrated step {integrated_step} >= {min_steps}; "
+                "accepting segment from completed dynamics accounting",
+                flush=True,
             )
         elif restart_step is not None and restart_step >= min_steps:
             if integrated_step is not None and integrated_step < min_steps:

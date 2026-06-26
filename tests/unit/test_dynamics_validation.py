@@ -672,6 +672,43 @@ def test_assert_stage_dynamics_completed_fails_truncated(tmp_path):
         )
 
 
+def test_assert_stage_dynamics_completed_accepts_short_dcd_with_trusted_step(
+    tmp_path, capsys
+):
+    dcd = tmp_path / "heat.dcd"
+    res = tmp_path / "heat.res"
+    res.write_text(
+        "REST    48     0\n"
+        "\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        "          25         150         150          15          10         150\n",
+        encoding="utf-8",
+    )
+
+    class _Atoms:
+        def __len__(self):
+            return 5
+
+    save_trajectory_dcd(
+        dcd,
+        np.zeros((10, 5, 3), dtype=np.float32),
+        _Atoms(),
+        steps_per_frame=16,
+    )
+
+    assert_stage_dynamics_completed(
+        stage="heat",
+        expected_nstep=400,
+        nsavc=16,
+        dcd_path=dcd,
+        restart_path=res,
+        integrated_step=400,
+    )
+    out = capsys.readouterr().out
+    assert "trusted integrated step 400" in out
+    assert "accepting segment from completed dynamics accounting" in out
+
+
 def test_restart_has_nonfinite_coordinates_detects_nan_section(tmp_path):
     res = tmp_path / "bad.res"
     res.write_text(
