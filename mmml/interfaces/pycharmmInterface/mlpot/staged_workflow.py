@@ -1995,7 +1995,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                             restart_from_file=False,
                             timestep_ps=timestep_ps,
                             use_pbc=charmm_pbc,
-                            quiet=seg_prep_quiet,
+                            quiet=True,
                             heat_thermostat=heat_thermostat,
                         )
                     elif seg_i == 0:
@@ -2017,7 +2017,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                             and seg_io.restart_read is not None,
                             timestep_ps=timestep_ps,
                             use_pbc=charmm_pbc,
-                            quiet=seg_prep_quiet,
+                            quiet=True,
                             heat_thermostat=heat_thermostat,
                         )
                     elif restart:
@@ -2025,34 +2025,28 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         kw["iasors"] = 0
                         kw["start"] = False
                         kw["restart"] = True
-                    heat_mode = (
-                        "Hoover CPT"
-                        if heat_thermostat == "hoover" and kw.get("cpt")
-                        else (
-                            "scale ihtfrq"
-                            if int(kw.get("ihtfrq", 0) or 0) > 0
-                            else f"heat/{heat_thermostat}"
-                        )
-                    )
-                    print(
-                        f"HEAT segment {seg_i + 1}/{n_heat_segments}: "
-                        f"mode={heat_mode} echeck={kw.get('echeck')} "
-                        f"firstt={kw.get('firstt')} finalt={kw.get('finalt')} "
-                        + ("memory handoff" if use_memory else "READYN restart"),
-                        flush=True,
-                    )
+                    freq_changes: dict[str, tuple[int, int]] = {}
                     if int(kw.get("ihtfrq", 0) or 0) > 0:
                         freq_changes = finalize_heat_dynamics_frequencies(kw)
-                        if freq_changes and not seg_prep_quiet:
-                            parts = ", ".join(
-                                f"{key} {old}->{new}"
-                                for key, (old, new) in sorted(freq_changes.items())
-                            )
-                            print(
-                                f"HEAT segment {seg_i + 1}: harmonized frequencies "
-                                f"({parts}); TEMINC={float(kw.get('TEMINC', 0)):.6g} K",
-                                flush=True,
-                            )
+                    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+                        print_heat_dynamics_diagnostics,
+                    )
+
+                    print_heat_dynamics_diagnostics(
+                        kw,
+                        heat_thermostat=heat_thermostat,
+                        use_pbc=charmm_pbc,
+                        args=args,
+                        segment_index=seg_i,
+                        n_segments=n_heat_segments,
+                        use_memory=use_memory,
+                        restart_read=rread if restart else None,
+                        restart_write=seg_io.restart_write,
+                        stage_ps=seg_ps,
+                        timestep_ps=timestep_ps,
+                        freq_harmonized=freq_changes or None,
+                        quiet=seg_prep_quiet,
+                    )
                     stage_overlap = overlap_config_for_stage(
                         _overlap_for_stage(
                             "heat",
@@ -2634,7 +2628,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     restart_from_file=restart and io.restart_read is not None,
                     timestep_ps=timestep_ps,
                     use_pbc=charmm_pbc,
-                    quiet=bool(args.quiet),
+                    quiet=True,
                     heat_thermostat=heat_thermostat,
                 )
             elif stage == "nve":
@@ -2649,29 +2643,28 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     quiet=bool(args.quiet),
                     temp=nve_t,
                 )
-            if stage == "heat" and not args.quiet:
-                if heat_thermostat == "hoover" and kw.get("cpt"):
-                    print(
-                        f"HEAT Hoover (CPT): {kw.get('firstt')} -> {kw.get('finalt')} K "
-                        f"over {stage_ps} ps | hoover reft={kw.get('hoover reft')} K "
-                        f"tmass={kw.get('tmass')} | pmass=0 | ihtfrq=0",
-                        flush=True,
-                    )
-                elif heat_thermostat == "hoover":
-                    print(
-                        f"HEAT Hoover (vacuum fallback): {kw.get('firstt')} -> "
-                        f"{kw.get('finalt')} K over {stage_ps} ps | CPT Hoover needs "
-                        f"CRYSTal — using ihtfrq={kw.get('ihtfrq')} scale (iasors=0)",
-                        flush=True,
-                    )
-                else:
-                    print(
-                        f"HEAT ramp: {kw.get('firstt')} -> {kw.get('finalt')} K "
-                        f"over {stage_ps} ps | ihtfrq={kw.get('ihtfrq')} "
-                        f"TEMINC={float(kw.get('TEMINC', 0)):.4g} K | "
-                        "iasors=0 (scale)",
-                        flush=True,
-                    )
+            heat_freq_changes: dict[str, tuple[int, int]] = {}
+            if stage == "heat":
+                from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+                    finalize_heat_dynamics_frequencies,
+                    print_heat_dynamics_diagnostics,
+                )
+
+                if int(kw.get("ihtfrq", 0) or 0) > 0:
+                    heat_freq_changes = finalize_heat_dynamics_frequencies(kw)
+                print_heat_dynamics_diagnostics(
+                    kw,
+                    heat_thermostat=heat_thermostat,
+                    use_pbc=charmm_pbc,
+                    args=args,
+                    use_memory=use_memory,
+                    restart_read=io.restart_read if restart else None,
+                    restart_write=io.restart_write,
+                    stage_ps=stage_ps,
+                    timestep_ps=timestep_ps,
+                    freq_harmonized=heat_freq_changes or None,
+                    quiet=bool(args.quiet),
+                )
             stage_overlap = overlap_config_for_stage(
                 _overlap_for_stage(
                     stage,
@@ -2699,22 +2692,6 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     "geometry check after heat completes",
                     flush=True,
                 )
-            if stage == "heat" and int(kw.get("ihtfrq", 0) or 0) > 0:
-                from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
-                    finalize_heat_dynamics_frequencies,
-                )
-
-                freq_changes = finalize_heat_dynamics_frequencies(kw)
-                if freq_changes and not args.quiet:
-                    parts = ", ".join(
-                        f"{key} {old}->{new}"
-                        for key, (old, new) in sorted(freq_changes.items())
-                    )
-                    print(
-                        f"HEAT: harmonized dynamics frequencies for nstep={nstep} "
-                        f"({parts}); TEMINC={float(kw.get('TEMINC', 0)):.6g} K",
-                        flush=True,
-                    )
             stage_overlap = attach_prior_segment_restart(
                 stage_overlap,
                 prev_restart=overlap_prior_restart,

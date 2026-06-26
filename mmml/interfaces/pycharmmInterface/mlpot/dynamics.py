@@ -1350,6 +1350,337 @@ def finalize_heat_dynamics_frequencies(kw: dict[str, Any]) -> dict[str, tuple[in
     return changes
 
 
+def _infer_heat_velocity_init_label(
+    kw: dict[str, Any],
+    *,
+    heat_thermostat: str,
+) -> str:
+    """Human-readable label for how velocities / CPT state are initialized."""
+    hoover_cpt = heat_thermostat == "hoover" and bool(kw.get("cpt"))
+    start = bool(kw.get("start"))
+    restart = bool(kw.get("restart"))
+    iasvel = int(kw.get("iasvel", 0) or 0)
+
+    if start and not restart and iasvel == 1:
+        if hoover_cpt:
+            return (
+                "single dyna (start=True, restart=False, iasvel=1): Boltzmann at "
+                "FIRSTT + Hoover CPT barostat init in one call (no separate nstep=0)"
+            )
+        return (
+            "single dyna (start=True, restart=False, iasvel=1): Boltzmann at "
+            "FIRSTT, then ihtfrq velocity scaling (iasors=0)"
+        )
+    if restart and start and iasvel == 1 and hoover_cpt:
+        return (
+            "single dyna (restart+start, iasvel=1): READYN coordinates + Boltzmann "
+            "+ CPT barostat init (no separate nstep=0)"
+        )
+    if restart and not start:
+        return (
+            "dyna restart (start=False, iasvel=0): continue global step and "
+            "thermostat/barostat state from READYN"
+        )
+    if not restart and not start and iasvel == 0:
+        if int(kw.get("ihtfrq", 0) or 0) > 0:
+            return (
+                "post nstep=0 Boltzmann assign (scale path only): velocities "
+                "pre-assigned; dyna integrates with ihtfrq scaling"
+            )
+        return (
+            "in-process continuation (iasvel=0): keep in-memory velocities "
+            "(overlap chunk / CPT sub-chunk / segment handoff)"
+        )
+    return f"custom flags (start={start}, restart={restart}, iasvel={iasvel})"
+
+
+def _classify_heat_thermostat_mode(
+    kw: dict[str, Any],
+    *,
+    heat_thermostat: str,
+    use_pbc: bool,
+) -> str:
+    if heat_thermostat == "hoover" and use_pbc and bool(kw.get("cpt")):
+        return "Hoover CPT NVT (constant volume: pmass=0, pint pconst)"
+    if heat_thermostat == "hoover" and not use_pbc:
+        return (
+            "Hoover requested but vacuum/no PBC → scale fallback "
+            "(ihtfrq/TEMINC, iasors=0; CPT requires CRYSTal)"
+        )
+    if int(kw.get("ihtfrq", 0) or 0) > 0:
+        return "velocity scaling heat (ihtfrq + TEMINC ramp, iasors=0)"
+    if heat_thermostat == "hoover":
+        return "Hoover (no CPT keywords in dyna dict)"
+    return f"heat thermostat={heat_thermostat!r} (no ihtfrq ramp active)"
+
+
+def describe_heat_dynamics_setup(
+    kw: dict[str, Any],
+    *,
+    heat_thermostat: str,
+    use_pbc: bool = True,
+    args: Any | None = None,
+    segment_index: int | None = None,
+    n_segments: int | None = None,
+    use_memory: bool = False,
+    restart_read: PathLike | None = None,
+    restart_write: PathLike | None = None,
+    stage_ps: float | None = None,
+    timestep_ps: float | None = None,
+    freq_harmonized: dict[str, tuple[int, int]] | None = None,
+) -> dict[str, Any]:
+    """Structured snapshot of resolved HEAT ``dyna`` keywords for debugging."""
+    nstep = int(kw.get("nstep", 0) or 0)
+    ts = float(timestep_ps if timestep_ps is not None else kw.get("timestep", 0.00025))
+    duration_ps = stage_ps if stage_ps is not None else nstep * ts
+
+    thermostat_requested = heat_thermostat
+    thermostat_forced = False
+    force_reason: str | None = None
+    if args is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+            _requested_heat_thermostat,
+            heat_thermostat_requires_hoover_after_pretreat,
+            resolve_heat_thermostat,
+        )
+
+        thermostat_requested = _requested_heat_thermostat(args)
+        effective = resolve_heat_thermostat(args)
+        heat_thermostat = effective
+        if thermostat_requested != effective:
+            thermostat_forced = True
+            if heat_thermostat_requires_hoover_after_pretreat(args):
+                force_reason = "CHARMM MM pretreat + PBC heat (scale/ihtfrq conflicts with Hoover)"
+
+    ramp_updates = 0
+    ihtfrq = int(kw.get("ihtfrq", 0) or 0)
+    if ihtfrq > 0 and nstep > 0:
+        ramp_updates = max(1, nstep // ihtfrq)
+
+    info: dict[str, Any] = {
+        "segment": (
+            f"{segment_index + 1}/{n_segments}"
+            if segment_index is not None and n_segments is not None
+            else None
+        ),
+        "thermostat_requested": thermostat_requested,
+        "thermostat_effective": heat_thermostat,
+        "thermostat_forced": thermostat_forced,
+        "thermostat_force_reason": force_reason,
+        "mode": _classify_heat_thermostat_mode(
+            kw, heat_thermostat=heat_thermostat, use_pbc=use_pbc
+        ),
+        "velocity_init": _infer_heat_velocity_init_label(
+            kw, heat_thermostat=heat_thermostat
+        ),
+        "use_pbc": bool(use_pbc),
+        "use_memory_handoff": bool(use_memory),
+        "integration": {
+            "nstep": nstep,
+            "timestep_ps": ts,
+            "duration_ps": duration_ps,
+            "nsavc": kw.get("nsavc"),
+            "dcd_interval_ps": kw.get("dcd_interval_ps"),
+            "echeck": kw.get("echeck"),
+            "inbfrq": kw.get("inbfrq"),
+            "imgfrq": kw.get("imgfrq"),
+            "ixtfrq": kw.get("ixtfrq"),
+        },
+        "temperature": {
+            "firstt_K": kw.get("firstt"),
+            "finalt_K": kw.get("finalt"),
+            "tbath_K": kw.get("tbath"),
+            "tstruct_K": kw.get("tstruct"),
+            "hoover_reft_K": kw.get("hoover reft"),
+            "treference_K": kw.get("treference"),
+            "ihtfrq": ihtfrq,
+            "TEMINC_K": kw.get("TEMINC"),
+            "ieqfrq": kw.get("ieqfrq"),
+            "ramp_rescale_events": ramp_updates if ihtfrq > 0 else 0,
+        },
+        "dyna_flags": {
+            "start": bool(kw.get("start")),
+            "restart": bool(kw.get("restart")),
+            "new": bool(kw.get("new")),
+            "iasvel": kw.get("iasvel"),
+            "iasors": kw.get("iasors"),
+            "iasors_meaning": (
+                "Gaussian reassignment each ihtfrq (legacy)"
+                if int(kw.get("iasors", 0) or 0) == 1
+                else "velocity scaling at ihtfrq (preferred for ML heat)"
+            ),
+            "iscale": kw.get("iscale"),
+            "iscvel": kw.get("iscvel"),
+            "ichecw": kw.get("ichecw"),
+            "iunrea": kw.get("iunrea"),
+        },
+        "cpt": (
+            {
+                "cpt": bool(kw.get("cpt")),
+                "pmass": kw.get("pmass"),
+                "tmass": kw.get("tmass"),
+                "pgamma": kw.get("pgamma"),
+                "pint": kw.get("pint"),
+                "pref": kw.get("pref"),
+                "leap": bool(kw.get("leap")),
+            }
+            if kw.get("cpt")
+            else None
+        ),
+        "restart_io": {
+            "restart_read": str(restart_read) if restart_read is not None else None,
+            "restart_write": str(restart_write) if restart_write is not None else None,
+        },
+        "freq_harmonized": freq_harmonized or {},
+    }
+    if args is not None:
+        info["cli"] = {
+            "heat_firstt": getattr(args, "heat_firstt", None),
+            "heat_finalt": getattr(args, "heat_finalt", None),
+            "heat_ihtfrq": getattr(args, "heat_ihtfrq", None),
+            "no_echeck_heat": bool(getattr(args, "no_echeck_heat", False)),
+            "no_echeck": bool(getattr(args, "no_echeck", False)),
+            "heat_comp_damp": bool(getattr(args, "heat_comp_damp", False)),
+            "n_heat_segments": int(getattr(args, "n_heat_segments", 1) or 1),
+        }
+    return info
+
+
+def format_heat_dynamics_diagnostics(info: dict[str, Any]) -> str:
+    """Render :func:`describe_heat_dynamics_setup` as a multi-line debug block."""
+    lines: list[str] = []
+    title = "HEAT dynamics diagnostics"
+    if info.get("segment"):
+        title += f" (segment {info['segment']})"
+    lines.append(f"=== {title} ===")
+
+    req = info["thermostat_requested"]
+    eff = info["thermostat_effective"]
+    lines.append("Thermostat policy:")
+    lines.append(f"  CLI --heat-thermostat: {req!r} → effective: {eff!r}")
+    if info.get("thermostat_forced"):
+        lines.append(
+            f"  FORCED to {eff!r}: {info.get('thermostat_force_reason') or 'policy override'}"
+        )
+    lines.append(f"  Mode: {info['mode']}")
+    lines.append(f"  PBC: {info['use_pbc']} | memory handoff: {info['use_memory_handoff']}")
+
+    integ = info["integration"]
+    lines.append("Integration:")
+    lines.append(
+        f"  nstep={integ['nstep']}  timestep={integ['timestep_ps']:.6g} ps  "
+        f"duration≈{float(integ['duration_ps']):.6g} ps"
+    )
+    lines.append(
+        f"  nsavc={integ['nsavc']}  dcd_interval_ps={integ['dcd_interval_ps']}  "
+        f"echeck={integ['echeck']}"
+    )
+    lines.append(
+        f"  inbfrq={integ['inbfrq']}  imgfrq={integ['imgfrq']}  ixtfrq={integ['ixtfrq']}"
+    )
+
+    temp = info["temperature"]
+    lines.append("Temperature / bath:")
+    lines.append(
+        f"  firstt={temp['firstt_K']} K  finalt={temp['finalt_K']} K  "
+        f"tbath={temp['tbath_K']} K"
+    )
+    if temp.get("hoover_reft_K") is not None:
+        lines.append(f"  hoover reft={temp['hoover_reft_K']} K")
+    if int(temp.get("ihtfrq") or 0) > 0:
+        lines.append(
+            f"  ihtfrq={temp['ihtfrq']}  TEMINC={temp['TEMINC_K']} K/step  "
+            f"~{temp['ramp_rescale_events']} rescale(s) this segment"
+        )
+    else:
+        lines.append("  ihtfrq=0 (no velocity-scaling ramp; Hoover or fixed bath)")
+    lines.append(f"  ieqfrq={temp['ieqfrq']}")
+
+    flags = info["dyna_flags"]
+    lines.append("CHARMM dyna flags:")
+    lines.append(
+        f"  start={flags['start']}  restart={flags['restart']}  new={flags['new']}"
+    )
+    lines.append(
+        f"  iasvel={flags['iasvel']}  iasors={flags['iasors']} "
+        f"({flags['iasors_meaning']})"
+    )
+    lines.append(f"  iunrea={flags['iunrea']}")
+
+    lines.append("Velocity / CPT initialization:")
+    lines.append(f"  {info['velocity_init']}")
+
+    cpt = info.get("cpt")
+    if cpt is not None:
+        lines.append("CPT barostat:")
+        lines.append(
+            f"  pmass={cpt['pmass']}  tmass={cpt['tmass']}  pgamma={cpt['pgamma']}  "
+            f"pint={cpt['pint']!r}  pref={cpt['pref']}"
+        )
+        lines.append(f"  leap={cpt['leap']}")
+
+    io_info = info["restart_io"]
+    lines.append("Restart I/O:")
+    lines.append(f"  restart_read: {io_info['restart_read'] or '(none / in-memory)'}")
+    lines.append(f"  restart_write: {io_info['restart_write'] or '(none)'}")
+
+    harmonized = info.get("freq_harmonized") or {}
+    if harmonized:
+        parts = ", ".join(f"{k} {a}->{b}" for k, (a, b) in sorted(harmonized.items()))
+        lines.append(f"Frequency harmonization (vs nstep): {parts}")
+
+    cli = info.get("cli")
+    if cli is not None:
+        lines.append("CLI heat options:")
+        lines.append(
+            f"  --heat-firstt={cli['heat_firstt']}  --heat-finalt={cli['heat_finalt']}  "
+            f"--heat-ihtfrq={cli['heat_ihtfrq']}"
+        )
+        lines.append(
+            f"  no_echeck_heat={cli['no_echeck_heat']}  heat_comp_damp={cli['heat_comp_damp']}  "
+            f"n_heat_segments={cli['n_heat_segments']}"
+        )
+
+    lines.append("=" * (len(title) + 8))
+    return "\n".join(lines)
+
+
+def print_heat_dynamics_diagnostics(
+    kw: dict[str, Any],
+    *,
+    heat_thermostat: str,
+    use_pbc: bool = True,
+    args: Any | None = None,
+    segment_index: int | None = None,
+    n_segments: int | None = None,
+    use_memory: bool = False,
+    restart_read: PathLike | None = None,
+    restart_write: PathLike | None = None,
+    stage_ps: float | None = None,
+    timestep_ps: float | None = None,
+    freq_harmonized: dict[str, tuple[int, int]] | None = None,
+    quiet: bool = False,
+) -> None:
+    """Print a detail-rich HEAT setup summary immediately before ``dyna``."""
+    if quiet:
+        return
+    info = describe_heat_dynamics_setup(
+        kw,
+        heat_thermostat=heat_thermostat,
+        use_pbc=use_pbc,
+        args=args,
+        segment_index=segment_index,
+        n_segments=n_segments,
+        use_memory=use_memory,
+        restart_read=restart_read,
+        restart_write=restart_write,
+        stage_ps=stage_ps,
+        timestep_ps=timestep_ps,
+        freq_harmonized=freq_harmonized,
+    )
+    print(format_heat_dynamics_diagnostics(info), flush=True)
+
+
 def build_heat_dynamics(
     *,
     timestep_ps: float = 0.00025,
@@ -1946,6 +2277,13 @@ def _release_charmm_dynamics_api_buffers() -> None:
             fn()
 
 
+def _strip_non_charmm_dynamics_keywords(kw: dict[str, Any]) -> None:
+    """Remove MMML-only metadata before ``DynamicsScript`` (not CHARMM ``dyna`` keys)."""
+    for key in list(kw):
+        if key.startswith("_") or key == "dcd_interval_ps":
+            kw.pop(key, None)
+
+
 def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     """Instantiate and run ``pycharmm.DynamicsScript``."""
     from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
@@ -1953,13 +2291,15 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     )
 
     import pycharmm
+    kw = dict(dynamics_kwargs)
+    _strip_non_charmm_dynamics_keywords(kw)
     # PyCHARMM omits ``start`` from the script when start=False, so CHARMM may keep
     # START active after a prior Boltzmann assign. With iasvel=0 that reads COMP
     # coordinates as velocities — zero COMP defensively.
-    if not dynamics_kwargs.get("start") and int(dynamics_kwargs.get("iasvel", 1)) == 0:
+    if not kw.get("start") and int(kw.get("iasvel", 1)) == 0:
         clear_comparison_coordinates()
     _release_charmm_dynamics_api_buffers()
-    dyn = pycharmm.DynamicsScript(**dynamics_kwargs)
+    dyn = pycharmm.DynamicsScript(**kw)
     dyn.run()
     _release_charmm_dynamics_api_buffers()
     return dyn
@@ -3222,7 +3562,7 @@ def _run_dynamics_chunk(
     try:
         from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
 
-        with charmm_relaxed_bomlev(level=-3):
+        with charmm_relaxed_bomlev(level=-2):
             return run_dynamics(kw)
     finally:
         for f in open_files:

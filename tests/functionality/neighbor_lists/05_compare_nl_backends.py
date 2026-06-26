@@ -4,14 +4,15 @@
 Runs each backend on the same PBC geometry and reports pair counts plus symmetric
 diffs against the reference oracle (Vesin when installed, else brute-force MIC).
 
-PyCHARMM requires ``--charmm-geometry`` (CGENFF + CHARMM_HOME). Other backends
-use the synthetic two-dimer toy cluster by default.
+Without ``--composition``, uses a synthetic two-dimer toy cluster (no CHARMM).
+With ``--composition`` (md-system style, e.g. ``ACO:2`` or ``DCM:1,ACO:1``),
+builds a CGENFF cluster in PyCHARMM so all backends including PyCHARMM can run.
 
 Examples
 --------
   uv run python tests/functionality/neighbor_lists/05_compare_nl_backends.py
   uv run python tests/functionality/neighbor_lists/05_compare_nl_backends.py \\
-      --charmm-geometry --backends vesin,jax_md,ase,pycharmm
+      --composition DCM:2 --backends vesin,jax_md,ase,pycharmm
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ from _common import (
     print_fail,
     print_header,
     print_pass,
-    setup_charmm_aco_dimer_cluster,
+    setup_charmm_composition_cluster,
     two_dimer_cluster,
 )
 from mmml.interfaces.pycharmmInterface.jax_md_neighbor_list import (
@@ -166,15 +167,17 @@ def _pycharmm_pairs(
     return pairs
 
 
-def _setup_charmm_geometry(
+def _setup_composition_geometry(
+    composition: str,
     *,
     cutoff: float,
     box_side: float,
-    com_separation: float,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float]:
-    positions, cell, offsets, monomer_id = setup_charmm_aco_dimer_cluster(
+    spacing: float,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, float]:
+    positions, cell, offsets, monomer_id, atomic_numbers = setup_charmm_composition_cluster(
+        composition,
         box_side=box_side,
-        com_separation=com_separation,
+        spacing=spacing,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         apply_pbc_nbonds,
@@ -185,7 +188,7 @@ def _setup_charmm_geometry(
     prepare_charmm_pbc(box_a)
     cuts = apply_pbc_nbonds(nbxmod=5, cutnb=float(cutoff), cubic_box_side_A=box_a)
     effective_cutoff = float(cuts.cutnb)
-    return positions, cell, offsets, monomer_id, effective_cutoff
+    return positions, cell, offsets, monomer_id, atomic_numbers, effective_cutoff
 
 
 def _parse_backends(raw: str) -> list[str]:
@@ -206,6 +209,7 @@ def _collect_backend(
     monomer_id: np.ndarray,
     monomer_offsets: np.ndarray,
     charmm_geometry: bool,
+    atomic_numbers: np.ndarray | None,
 ) -> tuple[str, set[tuple[int, int]] | None, str | None]:
     try:
         if name == "vesin":
@@ -219,7 +223,17 @@ def _collect_backend(
                 return name, None, "jax-md unavailable"
             return name, _jax_md_pairs(positions, cell, cutoff, monomer_offsets), None
         if name == "ase":
-            return name, _ase_pairs(positions, cell, cutoff, monomer_id), None
+            return (
+                name,
+                _ase_pairs(
+                    positions,
+                    cell,
+                    cutoff,
+                    monomer_id,
+                    atomic_numbers=atomic_numbers,
+                ),
+                None,
+            )
         if name == "cell_list":
             return name, _cell_list_pairs(positions, cell, cutoff, monomer_offsets), None
         if name == "pycharmm":
@@ -227,7 +241,7 @@ def _collect_backend(
                 return (
                     name,
                     None,
-                    "requires --charmm-geometry (PyCHARMM PSF + PBC nbonds)",
+                    "requires --composition (PyCHARMM PSF + PBC nbonds)",
                 )
             from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
 
@@ -242,12 +256,32 @@ def _collect_backend(
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cutoff", type=float, default=13.0, help="MIC pair cutoff (Å)")
-    parser.add_argument("--com-separation", type=float, default=8.0)
-    parser.add_argument("--box-side", type=float, default=40.0)
+    parser.add_argument(
+        "--composition",
+        type=str,
+        default=None,
+        help=(
+            "CGENFF cluster composition (md-system style): comma-separated RES:N, "
+            "e.g. ACO:2, DCM:2, or ACO:1,DCM:1. Builds PyCHARMM PSF + PBC for all backends."
+        ),
+    )
     parser.add_argument(
         "--charmm-geometry",
         action="store_true",
-        help="Build ACO dimer PSF in PyCHARMM and use those coordinates for all backends",
+        help="Deprecated alias for --composition ACO:2",
+    )
+    parser.add_argument(
+        "--spacing",
+        type=float,
+        default=8.0,
+        help="Minimum monomer COM spacing on placement grid (Å); used with --composition",
+    )
+    parser.add_argument("--box-side", type=float, default=40.0)
+    parser.add_argument(
+        "--com-separation",
+        type=float,
+        default=None,
+        help="Deprecated alias for --spacing (synthetic geometry only)",
     )
     parser.add_argument(
         "--backends",
@@ -265,20 +299,34 @@ def main() -> int:
     print_header("Neighbor-list backend comparison")
     backends = _parse_backends(args.backends)
     cutoff = float(args.cutoff)
+    composition = args.composition
+    if composition is None and args.charmm_geometry:
+        composition = "ACO:2"
 
-    if args.charmm_geometry:
-        positions, cell, offsets, monomer_id, cutoff = _setup_charmm_geometry(
-            cutoff=cutoff,
-            box_side=float(args.box_side),
-            com_separation=float(args.com_separation),
-        )
-        geom_label = "charmm_aco_dimer"
+    atomic_numbers: np.ndarray | None = None
+    if composition:
+        try:
+            positions, cell, offsets, monomer_id, atomic_numbers, cutoff = (
+                _setup_composition_geometry(
+                    composition,
+                    cutoff=cutoff,
+                    box_side=float(args.box_side),
+                    spacing=float(args.spacing),
+                )
+            )
+        except Exception as exc:
+            print_fail(f"composition cluster setup: {exc}")
+            return 1
+        geom_label = f"charmm:{composition}"
+        charmm_geometry = True
     else:
+        com_sep = float(args.com_separation if args.com_separation is not None else args.spacing)
         positions, cell, offsets, monomer_id = two_dimer_cluster(
             box_side=float(args.box_side),
-            com_separation=float(args.com_separation),
+            com_separation=com_sep,
         )
         geom_label = "synthetic_two_dimer"
+        charmm_geometry = False
 
     ref, ref_src = reference_mic_pairs(
         positions,
@@ -302,7 +350,8 @@ def main() -> int:
             cutoff=cutoff,
             monomer_id=monomer_id,
             monomer_offsets=offsets,
-            charmm_geometry=bool(args.charmm_geometry),
+            charmm_geometry=charmm_geometry,
+            atomic_numbers=atomic_numbers,
         )
         if pairs is None:
             skipped[label] = skip_reason or "skipped"
