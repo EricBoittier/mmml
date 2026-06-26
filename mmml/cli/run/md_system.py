@@ -1028,8 +1028,32 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="W",
         help=(
             "pycharmm: scale CGENFF BOND/ANGL/DIHE on ML atoms during MLpot BLOCK "
-            "(0=off, 0.1=10%% internal). ELEC/VDW stay off."
+            "(0=off, 0.1=10%% internal). ELEC/VDW stay off in jax_mic mode; "
+            "periodic_external keeps CHARMM VDW on."
         ),
+    )
+    parser.add_argument(
+        "--mm-nonbond-mode",
+        type=str,
+        choices=("jax_mic", "periodic_external"),
+        default="jax_mic",
+        help=(
+            "pycharmm MLpot MM nonbonds: jax_mic (default) or periodic_external "
+            "(ScaFaCoS Coulomb + CHARMM IMAGE VDW; requires pbc_* and libfcs)."
+        ),
+    )
+    parser.add_argument(
+        "--lr-solver",
+        type=str,
+        choices=("auto", "mic", "scafacos", "jax_pme"),
+        default=None,
+        help="Long-range Coulomb solver when --mm-nonbond-mode=periodic_external.",
+    )
+    parser.add_argument(
+        "--scafacos-method",
+        type=str,
+        default=None,
+        help="ScaFaCoS method (default p2nfft) for periodic_external.",
     )
     parser.add_argument(
         "--residue",
@@ -2134,6 +2158,11 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     scale = float(getattr(args, "mlpot_mm_internal_scale", 0.0) or 0.0)
     if scale > 0.0:
         cmd.extend(["--mlpot-mm-internal-scale", str(scale)])
+    cmd.extend(
+        ["--mm-nonbond-mode", str(getattr(args, "mm_nonbond_mode", "jax_mic"))]
+    )
+    _append_optional(cmd, "--lr-solver", getattr(args, "lr_solver", None))
+    _append_optional(cmd, "--scafacos-method", getattr(args, "scafacos_method", None))
     _append_optional(
         cmd,
         "--min-com-restraint-distance",
