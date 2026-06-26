@@ -167,6 +167,7 @@ def _sync_pbc_after_box_change(
     args: argparse.Namespace | None = None,
     quiet: bool = False,
 ) -> float | None:
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import light_resync_mlpot_state
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         prepare_charmm_pbc,
         sync_workflow_pbc_box_side_after_mm_pretreat,
@@ -179,6 +180,34 @@ def _sync_pbc_after_box_change(
     sync_charmm_positions(positions)
     if not charmm_pbc or box_side is None:
         return box_side
+
+    if mlpot_ctx is not None:
+        # Never call prepare_charmm_pbc with MLpot registered — crystal/IMAGE
+        # rebuild + mlpot_update can segfault in libcharmm (see staged_workflow
+        # pretreat handoff and sync_mlpot_pbc_cell_from_charmm docstrings).
+        mlpot_ctx.cubic_box_side_A = float(box_side)
+        mlpot_ctx.charmm_cubic_box_side_A = float(box_side)
+        sync_mlpot_pbc_cell_from_charmm(
+            mlpot_ctx.pyCModel,
+            fallback_side_A=float(box_side),
+            restart_path=pretreat_restart,
+            verbose=not quiet,
+        )
+        light_resync_mlpot_state(
+            mlpot_ctx,
+            context="Density prep PBC sync" if not quiet else "",
+            silent_charmm=True,
+            verbose=not quiet,
+            restart_path=pretreat_restart,
+        )
+        synced = sync_workflow_pbc_box_side_after_mm_pretreat(
+            float(box_side),
+            pretreat_restart=pretreat_restart,
+            args=args,
+            quiet=quiet,
+        )
+        return float(synced) if synced is not None else float(box_side)
+
     prepare_charmm_pbc(float(box_side))
     synced = sync_workflow_pbc_box_side_after_mm_pretreat(
         float(box_side),
@@ -186,17 +215,7 @@ def _sync_pbc_after_box_change(
         args=args,
         quiet=quiet,
     )
-    if synced is not None:
-        box_side = float(synced)
-        mlpot_ctx.cubic_box_side_A = box_side
-        mlpot_ctx.charmm_cubic_box_side_A = box_side
-        sync_mlpot_pbc_cell_from_charmm(
-            mlpot_ctx.pyCModel,
-            fallback_side_A=box_side,
-            restart_path=None,
-            verbose=not quiet,
-        )
-    return box_side
+    return float(synced) if synced is not None else float(box_side)
 
 
 def run_density_prep_ladder(
