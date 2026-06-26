@@ -20,6 +20,13 @@ defaults:
   mm_switch_on: 6.0
   mm_switch_width: 4.0
   ml_switch_width: 1.0
+  mlpot_mm_internal_scale: 0.0
+  mm_nonbond_mode: jax_mic
+  # To disable JAX real-space MM (use ScaFaCoS Coulomb + CHARMM VDW instead):
+  # mm_nonbond_mode: periodic_external
+  # lr_solver: scafacos
+  # periodic_charmm_vdw: true
+  # ML + ScaFaCoS Coulomb only (no LJ): periodic_charmm_vdw: false
 
   # --- Density / box sizing ---
   box_auto: density
