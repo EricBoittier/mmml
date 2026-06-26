@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pytest
 
+pytest_plugins = ["tests.functionality.pycharmmETC.conftest"]
+
 _TESTS_ROOT = Path(__file__).resolve().parent
 
 # Paths (relative to tests/) that require a live PyCHARMM build.
