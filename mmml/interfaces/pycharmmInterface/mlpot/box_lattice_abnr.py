@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
+from typing import Union
 
 from mmml.interfaces.pycharmmInterface.mlpot.setup import (
     get_charmm_positions_array,
     sync_charmm_positions,
 )
+
+PathLike = Union[str, Path]
 
 
 def should_run_mini_lattice_abnr(
@@ -37,11 +41,17 @@ def run_charmm_lattice_abnr(
     nocoords: bool = False,
     verbose: bool = True,
     nbxmod: int = 5,
+    fallback_side_A: float | None = None,
+    restart_path: PathLike | None = None,
 ) -> float | None:
     """Run CHARMM ``MINI ABNR LATTice`` to optimize the unit cell (and optionally coords).
 
     PyCHARMM's :func:`pycharmm.minimize.run_abnr` C binding does not pass the SD
     ``lattice`` flag, so this uses a CHARMM script command instead.
+
+    After MM pretreat, ``pbound_get_size`` often reads zero in Python while IMAGE
+    lists remain valid in Fortran. Pass ``fallback_side_A`` / ``restart_path`` so
+    post-ABNR box resolution does not fail when live pbound is inactive.
     """
     if int(nstep) <= 0:
         return None
@@ -51,8 +61,19 @@ def run_charmm_lattice_abnr(
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_quiet_output
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         apply_pbc_nbonds,
+        charmm_crystal_is_active,
         resolve_charmm_cubic_box_side_A,
+        sync_charmm_crystal_after_mm_pretreat,
     )
+    if (
+        fallback_side_A is not None
+        and float(fallback_side_A) > 0.0
+        and not charmm_crystal_is_active()
+    ):
+        sync_charmm_crystal_after_mm_pretreat(
+            float(fallback_side_A),
+            quiet=not verbose,
+        )
     kwargs: dict[str, object] = {
         "lattice": True,
         "nstep": int(nstep),
@@ -69,7 +90,13 @@ def run_charmm_lattice_abnr(
         )
     with charmm_quiet_output():
         pycharmm.script.CommandScript("mini abnr", **kwargs).run()
-    side, source = resolve_charmm_cubic_box_side_A(fallback_side_A=None)
+    restart_for_resolve = restart_path
+    if restart_for_resolve is not None and charmm_crystal_is_active():
+        restart_for_resolve = None
+    side, source = resolve_charmm_cubic_box_side_A(
+        fallback_side_A=fallback_side_A,
+        restart_path=restart_for_resolve,
+    )
     if side is not None and float(side) > 0.0:
         apply_pbc_nbonds(nbxmod=int(nbxmod), cubic_box_side_A=float(side))
         if verbose:
@@ -86,6 +113,7 @@ def run_mini_lattice_abnr(
     *,
     box_side: float | None,
     use_pbc: bool,
+    pretreat_restart: PathLike | None = None,
 ) -> float | None:
     """Lattice ABNR leg between coordinate CHARMM MM mini and MLpot registration."""
     if not use_pbc:
@@ -107,6 +135,8 @@ def run_mini_lattice_abnr(
         tolgrd=tolgrd,
         nocoords=nocoords,
         verbose=not bool(args.quiet),
+        fallback_side_A=box_side,
+        restart_path=pretreat_restart,
     )
     sync_charmm_positions(get_charmm_positions_array())
     if new_side is not None:
