@@ -47,7 +47,19 @@ def test_default_skin_interval_one_reuses_small_step():
     )
 
 
-def test_resolve_steps_per_loop_call_is_one_for_pbc_with_update_fn():
+def test_resolve_steps_per_loop_call_defaults_to_one_for_pbc_with_update_fn():
+    assert (
+        resolve_jaxmd_steps_per_loop_call(
+            steps_per_recording=800,
+            use_pbc=True,
+            has_update_fn=True,
+            jax_md_update_interval=None,
+        )
+        == 1
+    )
+
+
+def test_resolve_steps_per_loop_call_honors_pbc_update_interval():
     assert (
         resolve_jaxmd_steps_per_loop_call(
             steps_per_recording=800,
@@ -55,7 +67,19 @@ def test_resolve_steps_per_loop_call_is_one_for_pbc_with_update_fn():
             has_update_fn=True,
             jax_md_update_interval=10,
         )
-        == 1
+        == 10
+    )
+
+
+def test_resolve_steps_per_loop_call_uses_divisor_for_recording_blocks():
+    assert (
+        resolve_jaxmd_steps_per_loop_call(
+            steps_per_recording=800,
+            use_pbc=True,
+            has_update_fn=True,
+            jax_md_update_interval=30,
+        )
+        == 25
     )
 
 
