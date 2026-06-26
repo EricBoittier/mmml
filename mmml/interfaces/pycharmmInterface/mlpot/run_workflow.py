@@ -130,11 +130,43 @@ def _charmm_pre_minimize_before_mlpot(
     return r_mm
 
 
+def _pretreat_npt_cpt_builder_options(
+    args: argparse.Namespace,
+    *,
+    pressure_atm: float,
+) -> dict[str, Any]:
+    """CPT builder kwargs with pretreat reference pressure."""
+    from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+        _npt_cpt_builder_options,
+    )
+
+    opts = dict(_npt_cpt_builder_options(args))
+    opts["pref"] = float(pressure_atm)
+    return opts
+
+
 def _resolve_charmm_mm_pretreat_heat_nstep(args: argparse.Namespace, *, timestep_ps: float) -> int:
-    ps_heat = getattr(args, "charmm_mm_pretreat_ps_heat", None)
-    if ps_heat is not None and float(ps_heat) > 0.0:
-        return max(1, dynamics_nstep_from_ps(float(ps_heat), float(getattr(args, "dt_fs", 0.25))))
-    return max(1, int(getattr(args, "charmm_mm_pretreat_heat_nstep", 2000)))
+    """Backward-compatible wrapper; prefer :func:`resolve_charmm_mm_pretreat_heat_nstep`."""
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        CharmmMmPretreatSettings,
+        resolve_charmm_mm_pretreat_heat_nstep,
+    )
+
+    settings = CharmmMmPretreatSettings(
+        dt_fs=float(timestep_ps) * 1000.0,
+        timestep_ps=float(timestep_ps),
+        temperature_K=float(getattr(args, "temperature", 300.0)),
+        pressure_atm=float(getattr(args, "npt_pressure", getattr(args, "pressure", 1.0))),
+        ps_heat=(
+            float(getattr(args, "charmm_mm_pretreat_ps_heat"))
+            if getattr(args, "charmm_mm_pretreat_ps_heat", None) is not None
+            and float(getattr(args, "charmm_mm_pretreat_ps_heat")) > 0.0
+            else None
+        ),
+        ps_equi=float(getattr(args, "charmm_mm_pretreat_ps_equi", 0.0) or 0.0),
+        ps_prod=float(getattr(args, "charmm_mm_pretreat_ps_prod", 0.0) or 0.0),
+    )
+    return resolve_charmm_mm_pretreat_heat_nstep(args, settings=settings)
 
 
 def _pretreat_use_fixed_box_nvt(args: argparse.Namespace, *, use_pbc: bool) -> bool:
@@ -160,6 +192,7 @@ def _run_charmm_mm_pretreat_cpt_stage(
     timestep_ps: float,
     duration_ps: float,
     temp: float,
+    pressure_atm: float,
     echeck: float,
     use_pbc: bool,
     box_side: float | None,
@@ -191,9 +224,14 @@ def _run_charmm_mm_pretreat_cpt_stage(
         nstep=nstep,
     )
     save_interval_ps = timestep_ps * max(1, dcd_nsavc)
-    dyn_print = resolve_dynamics_print_kwargs(args, nstep=nstep, nsavc=dcd_nsavc)
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        resolve_pretreat_dynamics_print_kwargs,
+    )
+
+    dyn_print = resolve_pretreat_dynamics_print_kwargs(nstep=nstep)
     stage_echeck = max(echeck, 500.0) if echeck > 0 else echeck
     use_cpt = use_pbc and not _pretreat_use_fixed_box_nvt(args, use_pbc=use_pbc)
+    cpt_opts = _pretreat_npt_cpt_builder_options(args, pressure_atm=pressure_atm)
 
     if stage == "equi":
         if use_cpt:
@@ -205,7 +243,7 @@ def _run_charmm_mm_pretreat_cpt_stage(
                 restart=False,
                 echeck=stage_echeck,
                 include_firstt=include_firstt,
-                **_npt_cpt_builder_options(args),
+                **cpt_opts,
             )
         else:
             kw = build_nvt_equilibration_dynamics(
@@ -226,7 +264,7 @@ def _run_charmm_mm_pretreat_cpt_stage(
                 temp=temp,
                 restart=False,
                 echeck=stage_echeck,
-                **_npt_cpt_builder_options(args),
+                **cpt_opts,
             )
         else:
             kw = build_nvt_production_dynamics(
@@ -255,12 +293,6 @@ def _run_charmm_mm_pretreat_cpt_stage(
             Path(io.trajectory),
             rescue_old=bool(getattr(args, "rescue_old_dcd", False)),
         )
-    if not args.quiet:
-        print(
-            f"CHARMM MM pretreat {stage}: {duration_ps:.2f} ps "
-            f"({nstep} steps @ {timestep_ps} ps) | memory handoff",
-            flush=True,
-        )
     _seed_restart_for_memory_handoff(io, kw, stage=stage)
     _configure_npt_dynamics_start(
         kw,
@@ -269,7 +301,7 @@ def _run_charmm_mm_pretreat_cpt_stage(
         restart_from_file=False,
         timestep_ps=timestep_ps,
         use_pbc=use_pbc,
-        quiet=bool(args.quiet),
+        quiet=True,
         temp=temp,
         box_side=box_side,
     )
@@ -291,11 +323,6 @@ def _run_charmm_mm_pretreat_cpt_stage(
             allow_incomplete=bool(getattr(args, "allow_incomplete_dynamics", False)),
         )
     sync_charmm_positions(get_charmm_positions_array())
-    if not args.quiet:
-        print(
-            f"CHARMM MM pretreat {stage} done -> {paths[res_key]}",
-            flush=True,
-        )
 
 
 def run_charmm_mm_pretreat_before_mlpot(
@@ -320,8 +347,18 @@ def run_charmm_mm_pretreat_before_mlpot(
 
     When ``skip_minimize`` is true (handoff continuations), skip CGENFF SD/ABNR and
     run heat/equi/prod on coordinates already in CHARMM memory.
+
+    Pretreat uses ``--charmm-mm-pretreat-dt-fs`` (default 2 fs), optional pretreat
+    temperature/pressure overrides, and runs with CHARMM console output suppressed;
+    see :func:`print_charmm_mm_pretreat_handoff_panel` for the end-of-pretreat summary.
     """
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_quiet_output
     from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        resolve_charmm_mm_pretreat_heat_nstep,
+        resolve_charmm_mm_pretreat_settings,
+        resolve_pretreat_dynamics_print_kwargs,
+    )
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         assert_stage_dynamics_completed,
     )
@@ -332,9 +369,14 @@ def run_charmm_mm_pretreat_before_mlpot(
         restore_charmm_state_from_restart,
     )
 
-    n_heat = _resolve_charmm_mm_pretreat_heat_nstep(args, timestep_ps=timestep_ps)
-    ps_equi = float(getattr(args, "charmm_mm_pretreat_ps_equi", 0.0) or 0.0)
-    ps_prod = float(getattr(args, "charmm_mm_pretreat_ps_prod", 0.0) or 0.0)
+    pretreat = resolve_charmm_mm_pretreat_settings(args)
+    timestep_ps = pretreat.timestep_ps
+    temp = pretreat.temperature_K
+    pressure_atm = pretreat.pressure_atm
+    ps_equi = pretreat.ps_equi
+    ps_prod = pretreat.ps_prod
+
+    n_heat = resolve_charmm_mm_pretreat_heat_nstep(args, settings=pretreat)
     pretreat_resume = resume_charmm_mm_pretreat_if_available(
         paths,
         args,
@@ -342,248 +384,180 @@ def run_charmm_mm_pretreat_before_mlpot(
     )
     if pretreat_resume.skip_entire_pretreat and pretreat_resume.restart_read is not None:
         restore_charmm_state_from_restart(pretreat_resume.restart_read)
-        if not args.quiet:
-            print(
-                "CHARMM MM pretreat: skip completed legs "
-                f"(prod restart {pretreat_resume.restart_read.name})",
-                flush=True,
-            )
         return get_charmm_positions_array()
-    n_sd = int(
-        getattr(args, "charmm_mm_pretreat_mini_sd", None)
-        if getattr(args, "charmm_mm_pretreat_mini_sd", None) is not None
-        else getattr(args, "charmm_sd_steps", 50)
-    )
-    n_abnr = int(
-        getattr(args, "charmm_mm_pretreat_mini_abnr", None)
-        if getattr(args, "charmm_mm_pretreat_mini_abnr", None) is not None
-        else getattr(args, "charmm_abnr_steps", 100)
-    )
-    if not args.quiet:
-        mini_label = "skip mini" if skip_minimize else f"SD={n_sd} ABNR={n_abnr}"
-        print(
-            f"\nCHARMM MM pretreat (no MLpot): {mini_label}, heat nstep={n_heat}"
-            + (f", equi={ps_equi:.2f} ps" if ps_equi > 0.0 else "")
-            + (f", prod={ps_prod:.2f} ps" if ps_prod > 0.0 else ""),
-            flush=True,
+
+    with charmm_quiet_output():
+        n_sd = int(
+            getattr(args, "charmm_mm_pretreat_mini_sd", None)
+            if getattr(args, "charmm_mm_pretreat_mini_sd", None) is not None
+            else getattr(args, "charmm_sd_steps", 50)
+        )
+        n_abnr = int(
+            getattr(args, "charmm_mm_pretreat_mini_abnr", None)
+            if getattr(args, "charmm_mm_pretreat_mini_abnr", None) is not None
+            else getattr(args, "charmm_abnr_steps", 100)
         )
 
-    apply_charmm_mm_block()
-    if not use_pbc:
-        setup_default_nbonds()
+        apply_charmm_mm_block()
+        if not use_pbc:
+            setup_default_nbonds()
 
-    if pretreat_resume.restart_read is not None and not (
-        pretreat_resume.heat_integrated_step > 0 and not pretreat_resume.skip_heat
-    ):
-        restore_charmm_state_from_restart(pretreat_resume.restart_read)
-        if not args.quiet:
-            print(
-                f"CHARMM MM pretreat: resumed from {pretreat_resume.restart_read.name}",
-                flush=True,
+        if pretreat_resume.restart_read is not None and not (
+            pretreat_resume.heat_integrated_step > 0 and not pretreat_resume.skip_heat
+        ):
+            restore_charmm_state_from_restart(pretreat_resume.restart_read)
+
+        save = bool(getattr(args, "save", True))
+        pretreat_dir = paths["charmm_mm_heat_res"].parent
+        pretreat_dir.mkdir(parents=True, exist_ok=True)
+        heat_dcd_nsavc = resolve_dcd_nsavc(dcd_nsavc=args.dcd_nsavc, nstep=n_heat)
+        skip_minimize = bool(skip_minimize or pretreat_resume.skip_minimize)
+        if not skip_minimize:
+            minimize_charmm_mm_only(
+                CharmmMmMinimizeConfig(
+                    nstep_sd=n_sd,
+                    nstep_abnr=n_abnr,
+                    nprint=max(1, int(mini_nprint)),
+                    tolenr=float(getattr(args, "charmm_tolenr", 1e-3)),
+                    tolgrd=float(getattr(args, "charmm_tolgrd", 1e-3)),
+                    verbose=False,
+                    show_energy=False,
+                    reference_positions=reference_positions,
+                    dcd_path=paths.get("mini_charmm_dcd") if save else None,
+                    dcd_nsavc=resolve_dcd_nsavc(dcd_nsavc=args.dcd_nsavc, nstep=max(n_sd, 1))
+                    if save
+                    else 0,
+                    use_pbc=use_pbc,
+                )
             )
 
-    save = bool(getattr(args, "save", True))
-    pretreat_dir = paths["charmm_mm_heat_res"].parent
-    pretreat_dir.mkdir(parents=True, exist_ok=True)
-    heat_dcd_nsavc = resolve_dcd_nsavc(dcd_nsavc=args.dcd_nsavc, nstep=n_heat)
-    skip_minimize = bool(skip_minimize or pretreat_resume.skip_minimize)
-    if not skip_minimize:
-        minimize_charmm_mm_only(
-            CharmmMmMinimizeConfig(
-                nstep_sd=n_sd,
-                nstep_abnr=n_abnr,
-                nprint=mini_nprint,
-                tolenr=float(getattr(args, "charmm_tolenr", 1e-3)),
-                tolgrd=float(getattr(args, "charmm_tolgrd", 1e-3)),
-                verbose=not args.quiet,
-                show_energy=resolve_show_energy(args),
-                reference_positions=reference_positions,
-                dcd_path=paths.get("mini_charmm_dcd") if save else None,
-                dcd_nsavc=resolve_dcd_nsavc(dcd_nsavc=args.dcd_nsavc, nstep=max(n_sd, 1))
-                if save
-                else 0,
-                use_pbc=use_pbc,
+        if not pretreat_resume.skip_heat:
+            heat_firstt, heat_finalt = resolve_heat_firstt_finalt(args, default_temp=temp)
+            heat_integrated = max(0, int(pretreat_resume.heat_integrated_step))
+            n_heat_run = max(1, n_heat - heat_integrated) if heat_integrated > 0 else n_heat
+            save_interval_ps = timestep_ps * max(
+                1,
+                resolve_dcd_nsavc(
+                    dcd_nsavc=args.dcd_nsavc,
+                    dcd_interval_ps=getattr(args, "dcd_interval_ps", None),
+                    timestep_ps=timestep_ps,
+                    nstep=n_heat_run,
+                ),
             )
-        )
-        if not args.quiet:
-            print(
-                f"CHARMM MM pretreat post-min GRMS: {charmm_grms():.4f} kcal/mol/Å",
-                flush=True,
-            )
-    elif not args.quiet:
-        print(
-            "CHARMM MM pretreat: skip CGENFF mini (handoff coords in memory)",
-            flush=True,
-        )
-
-    if not pretreat_resume.skip_heat:
-        heat_firstt, heat_finalt = resolve_heat_firstt_finalt(args, default_temp=temp)
-        heat_integrated = max(0, int(pretreat_resume.heat_integrated_step))
-        n_heat_run = max(1, n_heat - heat_integrated) if heat_integrated > 0 else n_heat
-        save_interval_ps = timestep_ps * max(
-            1,
-            resolve_dcd_nsavc(
-                dcd_nsavc=args.dcd_nsavc,
-                dcd_interval_ps=getattr(args, "dcd_interval_ps", None),
+            kw = build_heat_dynamics(
                 timestep_ps=timestep_ps,
-                nstep=n_heat_run,
-            ),
-        )
-        kw = build_heat_dynamics(
-            timestep_ps=timestep_ps,
-            duration_ps=n_heat_run * timestep_ps,
-            save_interval_ps=save_interval_ps,
-            temp=temp,
-            firstt=heat_firstt,
-            finalt=heat_finalt,
-            echeck=echeck,
-            use_pbc=use_pbc,
-            ihtfrq=resolve_heat_ihtfrq(args, nstep=n_heat_run),
-        )
-        dyn_print = resolve_dynamics_print_kwargs(args, nstep=n_heat_run, nsavc=dcd_nsavc)
-        kw["nstep"] = n_heat_run
-        kw["nprint"] = dyn_print["nprint"]
-        kw["iprfrq"] = dyn_print["iprfrq"]
-        kw["isvfrq"] = dyn_print["isvfrq"]
-        kw["iasors"] = 0
-        kw["iasvel"] = 1
-        apply_heat_ramp_frequencies(
-            kw, nstep=n_heat_run, ihtfrq=resolve_heat_ihtfrq(args, nstep=n_heat_run)
-        )
-
-        io = CharmmTrajectoryFiles(
-            restart_read=paths["charmm_mm_heat_res"] if heat_integrated > 0 else None,
-            restart_write=paths["charmm_mm_heat_res"],
-            trajectory=paths["charmm_mm_heat_dcd"] if save else None,
-        )
-        from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
-            _configure_heat_dynamics_start,
-            _reset_stage_trajectory,
-        )
-
-        if heat_integrated == 0:
-            assign_velocities_at_temperature(
-                float(heat_firstt),
-                timestep_ps=timestep_ps,
-                restart_path=None,
+                duration_ps=n_heat_run * timestep_ps,
+                save_interval_ps=save_interval_ps,
+                temp=temp,
+                firstt=heat_firstt,
+                finalt=heat_finalt,
+                echeck=echeck,
                 use_pbc=use_pbc,
+                ihtfrq=resolve_heat_ihtfrq(args, nstep=n_heat_run),
             )
-            kw["restart"] = False
-            kw["new"] = False
-            kw["start"] = False
-        else:
-            _configure_heat_dynamics_start(
+            dyn_print = resolve_pretreat_dynamics_print_kwargs(nstep=n_heat_run)
+            kw["nstep"] = n_heat_run
+            kw["nprint"] = dyn_print["nprint"]
+            kw["iprfrq"] = dyn_print["iprfrq"]
+            kw["isvfrq"] = dyn_print["isvfrq"]
+            kw["iasors"] = 0
+            kw["iasvel"] = 1
+            apply_heat_ramp_frequencies(
+                kw, nstep=n_heat_run, ihtfrq=resolve_heat_ihtfrq(args, nstep=n_heat_run)
+            )
+
+            io = CharmmTrajectoryFiles(
+                restart_read=paths["charmm_mm_heat_res"] if heat_integrated > 0 else None,
+                restart_write=paths["charmm_mm_heat_res"],
+                trajectory=paths["charmm_mm_heat_dcd"] if save else None,
+            )
+            from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+                _configure_heat_dynamics_start,
+                _reset_stage_trajectory,
+            )
+
+            if heat_integrated == 0:
+                assign_velocities_at_temperature(
+                    float(heat_firstt),
+                    timestep_ps=timestep_ps,
+                    restart_path=None,
+                    use_pbc=use_pbc,
+                )
+                kw["restart"] = False
+                kw["new"] = False
+                kw["start"] = False
+            else:
+                _configure_heat_dynamics_start(
+                    kw,
+                    io,
+                    coords_in_memory=False,
+                    restart_from_file=True,
+                    timestep_ps=timestep_ps,
+                    use_pbc=use_pbc,
+                    quiet=True,
+                    heat_thermostat="scale",
+                )
+
+            if save and io.trajectory is not None and heat_integrated == 0:
+                _reset_stage_trajectory(
+                    Path(io.trajectory),
+                    rescue_old=bool(getattr(args, "rescue_old_dcd", False)),
+                )
+            run_dynamics_with_io(
                 kw,
                 io,
-                coords_in_memory=False,
-                restart_from_file=True,
+                overlap=None,
+                overlap_context="CHARMM_MM_PRETREAT_HEAT",
+                mlpot_ctx=None,
+                rng_base=getattr(args, "seed", None),
+            )
+            if save:
+                assert_stage_dynamics_completed(
+                    stage="charmm_mm_heat",
+                    expected_nstep=n_heat,
+                    nsavc=heat_dcd_nsavc,
+                    dcd_path=paths.get("charmm_mm_heat_dcd"),
+                    restart_path=paths.get("charmm_mm_heat_res"),
+                    allow_incomplete=bool(getattr(args, "allow_incomplete_dynamics", False)),
+                )
+            sync_charmm_positions(get_charmm_positions_array())
+
+        box_side = resolve_pbc_box_side(args, get_charmm_positions_array()) if use_pbc else None
+        use_fixed_nvt = _pretreat_use_fixed_box_nvt(args, use_pbc=use_pbc)
+        if ps_equi > 0.0 and not pretreat_resume.skip_equi:
+            _run_charmm_mm_pretreat_cpt_stage(
+                "equi",
+                args,
+                paths=paths,
+                res_key="charmm_mm_equi_res",
+                dcd_key="charmm_mm_equi_dcd",
                 timestep_ps=timestep_ps,
+                duration_ps=ps_equi,
+                temp=temp,
+                pressure_atm=pressure_atm,
+                echeck=echeck,
                 use_pbc=use_pbc,
-                quiet=bool(args.quiet),
-                heat_thermostat="scale",
+                box_side=box_side,
+                include_firstt=False,
+            )
+        if ps_prod > 0.0:
+            prod_box_side = box_side if (use_fixed_nvt or ps_equi <= 0.0) else None
+            _run_charmm_mm_pretreat_cpt_stage(
+                "prod",
+                args,
+                paths=paths,
+                res_key="charmm_mm_prod_res",
+                dcd_key="charmm_mm_prod_dcd",
+                timestep_ps=timestep_ps,
+                duration_ps=ps_prod,
+                temp=temp,
+                pressure_atm=pressure_atm,
+                echeck=echeck,
+                use_pbc=use_pbc,
+                box_side=prod_box_side,
+                include_firstt=False,
             )
 
-        if save and io.trajectory is not None and heat_integrated == 0:
-            _reset_stage_trajectory(
-                Path(io.trajectory),
-                rescue_old=bool(getattr(args, "rescue_old_dcd", False)),
-            )
-        if not args.quiet:
-            if heat_integrated > 0:
-                print(
-                    f"CHARMM MM pretreat heat: resume step {heat_integrated}/{n_heat}, "
-                    f"{n_heat_run} steps remaining | "
-                    f"{heat_firstt:.1f} -> {heat_finalt:.1f} K @ {timestep_ps} ps",
-                    flush=True,
-                )
-            else:
-                print(
-                    f"CHARMM MM pretreat heat: {heat_firstt:.1f} -> {heat_finalt:.1f} K, "
-                    f"{n_heat_run} steps @ {timestep_ps} ps | ihtfrq={kw.get('ihtfrq')}",
-                    flush=True,
-                )
-        run_dynamics_with_io(
-            kw,
-            io,
-            overlap=None,
-            overlap_context="CHARMM_MM_PRETREAT_HEAT",
-            mlpot_ctx=None,
-            rng_base=getattr(args, "seed", None),
-        )
-        if save:
-            assert_stage_dynamics_completed(
-                stage="charmm_mm_heat",
-                expected_nstep=n_heat,
-                nsavc=heat_dcd_nsavc,
-                dcd_path=paths.get("charmm_mm_heat_dcd"),
-                restart_path=paths.get("charmm_mm_heat_res"),
-                allow_incomplete=bool(getattr(args, "allow_incomplete_dynamics", False)),
-            )
-        sync_charmm_positions(get_charmm_positions_array())
-        if not args.quiet:
-            print(
-                f"CHARMM MM pretreat heat done -> {paths['charmm_mm_heat_res']}",
-                flush=True,
-            )
-    elif not args.quiet:
-        print("CHARMM MM pretreat: skip heat (restart on disk)", flush=True)
-
-    box_side = resolve_pbc_box_side(args, get_charmm_positions_array()) if use_pbc else None
-    use_fixed_nvt = _pretreat_use_fixed_box_nvt(args, use_pbc=use_pbc)
-    if use_pbc and not args.quiet and (ps_equi > 0.0 or ps_prod > 0.0):
-        if use_fixed_nvt:
-            print(
-                f"CHARMM MM pretreat equi/prod: fixed box L={box_side:.3f} Å "
-                "(Hoover NVT; box size matches campaign --box-size)",
-                flush=True,
-            )
-        else:
-            print(
-                "CHARMM MM pretreat equi/prod: CPT NPT (box may drift; prod preserves equi box)",
-                flush=True,
-            )
-    if ps_equi > 0.0 and not pretreat_resume.skip_equi:
-        _run_charmm_mm_pretreat_cpt_stage(
-            "equi",
-            args,
-            paths=paths,
-            res_key="charmm_mm_equi_res",
-            dcd_key="charmm_mm_equi_dcd",
-            timestep_ps=timestep_ps,
-            duration_ps=ps_equi,
-            temp=temp,
-            echeck=echeck,
-            use_pbc=use_pbc,
-            box_side=box_side,
-            include_firstt=False,
-        )
-    elif ps_equi > 0.0 and not args.quiet:
-        print("CHARMM MM pretreat: skip equi (restart on disk)", flush=True)
-    if ps_prod > 0.0:
-        # After NPT equi the live box differs from --box-size; do not reset crystal to config L.
-        prod_box_side = box_side if (use_fixed_nvt or ps_equi <= 0.0) else None
-        _run_charmm_mm_pretreat_cpt_stage(
-            "prod",
-            args,
-            paths=paths,
-            res_key="charmm_mm_prod_res",
-            dcd_key="charmm_mm_prod_dcd",
-            timestep_ps=timestep_ps,
-            duration_ps=ps_prod,
-            temp=temp,
-            echeck=echeck,
-            use_pbc=use_pbc,
-            box_side=prod_box_side,
-            include_firstt=False,
-        )
-
-    if not args.quiet and (ps_equi > 0.0 or ps_prod > 0.0):
-        print("CHARMM MM pretreat complete (CGENFF mini + heat/equi/prod)", flush=True)
-    elif not args.quiet:
-        print(
-            f"CHARMM MM pretreat done -> {paths['charmm_mm_heat_res']}",
-            flush=True,
-        )
     return get_charmm_positions_array()
 
 
@@ -1248,6 +1222,9 @@ def build_charmm_mm_pretreat_handoff_sections(
     workflow_box_side_A: float | None = None,
     use_pbc: bool = False,
     paths: dict[str, Path] | None = None,
+    pretreat_settings: Any | None = None,
+    composition: dict[str, int] | None = None,
+    pretreat_heat_nstep: int | None = None,
 ) -> list[tuple[str, dict[str, Any]]]:
     """Summarize CHARMM MM pretreat state before MLpot registration."""
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import validate_cluster_geometry
@@ -1395,10 +1372,37 @@ def build_charmm_mm_pretreat_handoff_sections(
             if candidate is not None and Path(candidate).is_file():
                 artifacts[label] = Path(candidate).name
 
+    thermo: dict[str, Any] = {}
+    if pretreat_settings is not None:
+        thermo["dt_fs"] = f"{float(pretreat_settings.dt_fs):.3f}"
+        thermo["timestep_ps"] = f"{float(pretreat_settings.timestep_ps):.6f}"
+        thermo["temperature_K"] = f"{float(pretreat_settings.temperature_K):.2f}"
+        thermo["pressure_atm"] = f"{float(pretreat_settings.pressure_atm):.4f}"
+        if pretreat_settings.ps_heat is not None:
+            thermo["heat_ps"] = f"{float(pretreat_settings.ps_heat):.3f}"
+        elif pretreat_heat_nstep is not None:
+            thermo["heat_nstep"] = int(pretreat_heat_nstep)
+        if float(pretreat_settings.ps_equi) > 0.0:
+            thermo["equi_ps"] = f"{float(pretreat_settings.ps_equi):.3f}"
+        if float(pretreat_settings.ps_prod) > 0.0:
+            thermo["prod_ps"] = f"{float(pretreat_settings.ps_prod):.3f}"
+        box_for_rho = workflow_box_side_A
+        if box_for_rho is not None and float(box_for_rho) > 0.0:
+            thermo["box_L_Å"] = f"{float(box_for_rho):.3f}"
+            if composition:
+                from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+                    density_g_cm3_for_box,
+                )
+
+                rho = density_g_cm3_for_box(composition, float(box_for_rho))
+                thermo["density_g/cm³"] = f"{rho:.4f}"
+
     sections: list[tuple[str, dict[str, Any]]] = [
         ("Geometry", geom),
         ("CHARMM MM state", mm_state),
     ]
+    if thermo:
+        sections.append(("Pretreat thermodynamics", thermo))
     if pbc:
         sections.append(("PBC → MLpot handoff", pbc))
     if artifacts:
@@ -1419,9 +1423,16 @@ def print_charmm_mm_pretreat_handoff_panel(
     workflow_box_side_A: float | None = None,
     use_pbc: bool = False,
     paths: dict[str, Path] | None = None,
+    pretreat_settings: Any | None = None,
+    composition: dict[str, int] | None = None,
+    pretreat_heat_nstep: int | None = None,
     quiet: bool = False,
 ) -> None:
-    """Rich dashboard after CHARMM MM pretreat, before MLpot registration."""
+    """Rich dashboard after CHARMM MM pretreat, before MLpot registration.
+
+    Callers should pass ``quiet=False`` so pretreat thermodynamics are always
+    shown even when the global ``--quiet`` flag is set.
+    """
     from mmml.utils.rich_report import emit_dashboard
 
     sections = build_charmm_mm_pretreat_handoff_sections(
@@ -1432,6 +1443,9 @@ def print_charmm_mm_pretreat_handoff_panel(
         workflow_box_side_A=workflow_box_side_A,
         use_pbc=use_pbc,
         paths=paths,
+        pretreat_settings=pretreat_settings,
+        composition=composition,
+        pretreat_heat_nstep=pretreat_heat_nstep,
     )
     emit_dashboard(
         "CHARMM MM pretreat → MLpot handoff",

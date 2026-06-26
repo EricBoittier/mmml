@@ -471,6 +471,108 @@ def resolve_charmm_mm_pretreat_for_staged(
     return True
 
 
+DEFAULT_CHARMM_MM_PRETREAT_DT_FS = 2.0
+
+
+@dataclass(frozen=True)
+class CharmmMmPretreatSettings:
+    """Resolved CHARMM MM pretreat integrator and bath targets."""
+
+    dt_fs: float
+    timestep_ps: float
+    temperature_K: float
+    pressure_atm: float
+    ps_heat: float | None
+    ps_equi: float
+    ps_prod: float
+
+
+def resolve_charmm_mm_pretreat_settings(args: Any) -> CharmmMmPretreatSettings:
+    """Pretreat timestep/T/P (defaults: 2 fs, ``--temperature``, ``--npt-pressure``)."""
+    dt_fs = float(
+        getattr(args, "charmm_mm_pretreat_dt_fs", DEFAULT_CHARMM_MM_PRETREAT_DT_FS)
+        or DEFAULT_CHARMM_MM_PRETREAT_DT_FS
+    )
+    if dt_fs <= 0.0:
+        raise ValueError(f"charmm_mm_pretreat_dt_fs must be > 0, got {dt_fs}")
+    timestep_ps = timestep_ps_from_dt_fs(dt_fs)
+
+    temp_raw = getattr(args, "charmm_mm_pretreat_temperature", None)
+    if temp_raw is None:
+        temperature_K = float(getattr(args, "temperature", getattr(args, "temp", 300.0)))
+    else:
+        temperature_K = float(temp_raw)
+
+    pressure_raw = getattr(args, "charmm_mm_pretreat_pressure", None)
+    if pressure_raw is None:
+        pressure_atm = float(getattr(args, "npt_pressure", getattr(args, "pressure", 1.0)))
+    else:
+        pressure_atm = float(pressure_raw)
+
+    ps_heat_raw = getattr(args, "charmm_mm_pretreat_ps_heat", None)
+    ps_heat = float(ps_heat_raw) if ps_heat_raw is not None and float(ps_heat_raw) > 0.0 else None
+    ps_equi = float(getattr(args, "charmm_mm_pretreat_ps_equi", 0.0) or 0.0)
+    ps_prod = float(getattr(args, "charmm_mm_pretreat_ps_prod", 0.0) or 0.0)
+
+    return CharmmMmPretreatSettings(
+        dt_fs=dt_fs,
+        timestep_ps=timestep_ps,
+        temperature_K=temperature_K,
+        pressure_atm=pressure_atm,
+        ps_heat=ps_heat,
+        ps_equi=ps_equi,
+        ps_prod=ps_prod,
+    )
+
+
+def resolve_charmm_mm_pretreat_heat_nstep(
+    args: Any,
+    *,
+    settings: CharmmMmPretreatSettings | None = None,
+) -> int:
+    """Integration steps for pretreat CHARMM heat."""
+    pretreat = settings or resolve_charmm_mm_pretreat_settings(args)
+    if pretreat.ps_heat is not None:
+        return dynamics_nstep_from_ps(pretreat.ps_heat, pretreat.dt_fs)
+    return max(1, int(getattr(args, "charmm_mm_pretreat_heat_nstep", 2000)))
+
+
+def resolve_pretreat_dynamics_print_kwargs(*, nstep: int) -> dict[str, int]:
+    """Suppress CHARMM dynamics status lines during pretreat (single summary at end)."""
+    n = max(1, int(nstep))
+    return {"nprint": n, "iprfrq": n, "isvfrq": n}
+
+
+def add_charmm_mm_pretreat_physics_args(group: Any) -> None:
+    """Pretreat integrator and bath flags (shared by staged CLI and md-system)."""
+    group.add_argument(
+        "--charmm-mm-pretreat-dt-fs",
+        type=float,
+        default=DEFAULT_CHARMM_MM_PRETREAT_DT_FS,
+        metavar="FS",
+        help=(
+            "Pretreat CHARMM dynamics timestep in fs (default: 2.0). "
+            "Independent of MLpot --dt-fs."
+        ),
+    )
+    group.add_argument(
+        "--charmm-mm-pretreat-temperature",
+        type=float,
+        default=None,
+        metavar="K",
+        help="Pretreat CHARMM heat/equi/prod temperature (default: --temperature).",
+    )
+    group.add_argument(
+        "--charmm-mm-pretreat-pressure",
+        type=float,
+        default=None,
+        metavar="ATM",
+        help=(
+            "Pretreat CHARMM NPT reference pressure (default: --npt-pressure or --pressure)."
+        ),
+    )
+
+
 def heat_thermostat_requires_hoover_after_pretreat(args: argparse.Namespace) -> bool:
     """True when MLpot heat must use Hoover to avoid two-nose CHARMM conflicts."""
     if not resolve_charmm_mm_pretreat_for_staged(
@@ -2633,6 +2735,7 @@ def add_staged_md_args(parser: argparse.ArgumentParser) -> None:
         metavar="N",
         help="Pretreat CHARMM ABNR steps (default: --charmm-abnr-steps)",
     )
+    add_charmm_mm_pretreat_physics_args(pretreat)
     add_bonded_mm_mini_args(parser)
     add_calculator_pre_minimize_args(parser)
     group.add_argument(
