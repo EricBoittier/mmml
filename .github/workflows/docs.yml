@@ -1,0 +1,61 @@
+name: Docs
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  html:
+    name: MkDocs HTML
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install docs dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ".[dev]"
+      - name: Build docs
+        run: mkdocs build --strict
+
+  pdf:
+    name: PDF Export
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - name: Install PDF dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ".[dev]" reportlab
+          npm install --global @mermaid-js/mermaid-cli
+      - name: Configure Mermaid renderer
+        run: |
+          cat > mermaid-puppeteer-config.json <<'EOF'
+          {
+            "args": ["--no-sandbox", "--disable-setuid-sandbox"]
+          }
+          EOF
+      - name: Build PDF docs
+        env:
+          MMML_MERMAID_PUPPETEER_CONFIG: mermaid-puppeteer-config.json
+        run: python scripts/build_docs_pdf.py
+      - name: Upload PDF artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mmml-docs-pdf
+          path: site/mmml-docs.pdf

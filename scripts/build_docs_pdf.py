@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import html
 import io
+import os
 import re
 import shutil
 import subprocess
@@ -128,6 +129,12 @@ def mermaid_to_image_flowable(source: str, style_map: dict[str, ParagraphStyle])
         input_path = Path(tmp_dir) / "diagram.mmd"
         output_path = Path(tmp_dir) / "diagram.png"
         input_path.write_text(source, encoding="utf-8")
+        puppeteer_config = os.environ.get("MMML_MERMAID_PUPPETEER_CONFIG")
+        puppeteer_args = (
+            ["--puppeteerConfigFile", puppeteer_config]
+            if puppeteer_config
+            else []
+        )
         try:
             subprocess.run(
                 [
@@ -140,6 +147,7 @@ def mermaid_to_image_flowable(source: str, style_map: dict[str, ParagraphStyle])
                     "white",
                     "--scale",
                     "2",
+                    *puppeteer_args,
                 ],
                 check=True,
                 stdout=subprocess.PIPE,
