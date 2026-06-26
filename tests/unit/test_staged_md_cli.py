@@ -858,6 +858,47 @@ def test_configure_equi_dynamics_start_from_heat_restart_file(tmp_path):
     assert io.restart_read == heat
 
 
+def test_configure_equi_dynamics_start_survives_overlap_chunk_prep(tmp_path):
+    """Overlap chunk 0 must not clear restart+start after EQUI CPT barostat config."""
+    heat = tmp_path / "heat_dcm_50.res"
+    _write_restartable_res(heat, jhstrt=144)
+    equi = tmp_path / "equi_dcm_50.res"
+    io = CharmmTrajectoryFiles(restart_read=heat, restart_write=equi)
+    kw = {
+        "cpt": True,
+        "hoover reft": 20.0,
+        "pmass": 93,
+        "tmass": 930,
+        "restart": True,
+        "start": False,
+        "iasvel": 0,
+    }
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _apply_overlap_chunk_dynamics_kw,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+        _configure_equi_dynamics_start,
+    )
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.staged_workflow.ensure_charmm_crystal_for_cpt"
+    ):
+        _configure_equi_dynamics_start(
+            kw,
+            io,
+            restart_from_file=True,
+            use_pbc=True,
+            quiet=True,
+            temp=20.0,
+            box_side=40.0,
+        )
+    _apply_overlap_chunk_dynamics_kw(kw, chunk_index=0, has_restart_read=True)
+    assert kw["restart"] is True
+    assert kw["start"] is True
+    assert kw["iasvel"] == 1
+    assert kw["firstt"] == 20.0
+
+
 def test_configure_equi_dynamics_start_skips_in_place_resume(tmp_path):
     res = tmp_path / "equi_dcm_50.res"
     _write_restartable_res(res, jhstrt=200)
