@@ -3076,6 +3076,36 @@ def test_run_dynamics_chunk_keeps_iunrea_minus_one_for_dynamics():
     assert captured[0]["iunrea"] == -1
 
 
+def test_run_dynamics_chunk_uses_bomlev_minus_two():
+    from contextlib import contextmanager
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        CharmmTrajectoryFiles,
+        _run_dynamics_chunk,
+    )
+
+    levels: list[int] = []
+
+    @contextmanager
+    def track_bomlev(*, level: int = -2):
+        levels.append(int(level))
+        yield
+
+    io = CharmmTrajectoryFiles(restart_write=__import__("pathlib").Path("/tmp/out.res"))
+    with mock.patch.object(io, "open_for_run", return_value=([], {})), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.run_dynamics",
+        return_value=None,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        side_effect=track_bomlev,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_charmm_dynamics_rng",
+    ):
+        _run_dynamics_chunk({"nstep": 50, "restart": False}, io)
+
+    assert levels == [-2]
+
+
 def test_ensure_nsavc_below_nstep_clamps_full_run():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _ensure_nsavc_below_nstep
 
