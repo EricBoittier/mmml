@@ -15,6 +15,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     final_npt_segment_restart,
     npt_restart_chain,
 )
+from mmml.interfaces.pycharmmInterface.mlpot.pressure_tensor import NptPressureTensor
 
 
 def _script_string(**kwargs) -> str:
@@ -144,6 +145,19 @@ def test_pgamma_zero_disables_barostat_coupling_when_requested():
 def test_custom_npt_pressure():
     kw = build_cpt_equilibration_dynamics(pref=2.5, pmass=10, tmass=100)
     assert kw["pint pconst pref"] == 2.5
+
+
+def test_anisotropic_npt_pressure_tensor():
+    tensor = NptPressureTensor(2.0, 1.0, 1.0, 0.1, 0.0, -0.2)
+    kw = build_cpt_equilibration_dynamics(
+        pref=1.0,
+        pressure_tensor=tensor,
+        pmass=10,
+        tmass=100,
+    )
+    assert kw["PRXX"] == 2.0
+    assert kw["PRXY"] == 0.1
+    assert "pint pconst pref" not in kw
 
 
 def test_equi_later_segment_omits_firstt():

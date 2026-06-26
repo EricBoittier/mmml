@@ -183,18 +183,76 @@ def _artifact_paths(out_dir: Path, tag: str) -> dict[str, Path]:
         "nve_dcd": out_dir / f"nve_{tag}.dcd",
         "equi_res": out_dir / f"equi_{tag}.res",
         "equi_dcd": out_dir / f"equi_{tag}.dcd",
+        "equi_pressure_ptn": out_dir / f"equi_{tag}_pressure_tensor.dat",
         "prod_res": out_dir / f"prod_{tag}.res",
         "prod_dcd": out_dir / f"prod_{tag}.dcd",
+        "prod_pressure_ptn": out_dir / f"prod_{tag}_pressure_tensor.dat",
         "vmd_psf": out_dir / f"cluster_for_vmd_{tag}.psf",
     }
 
 
 def _npt_cpt_options(args: argparse.Namespace) -> dict[str, Any]:
-    return {
-        "thermostat": getattr(args, "npt_thermostat", "hoover"),
-        "pref": float(getattr(args, "npt_pressure", 1.0)),
-        "pgamma": float(getattr(args, "npt_pgamma", 5.0)),
-    }
+    from mmml.interfaces.pycharmmInterface.mlpot.pressure_tensor import (
+        resolve_npt_cpt_pressure_options,
+    )
+
+    return resolve_npt_cpt_pressure_options(args)
+
+
+def _npt_cpt_builder_options(args: argparse.Namespace) -> dict[str, Any]:
+    from mmml.interfaces.pycharmmInterface.mlpot.pressure_tensor import (
+        npt_cpt_builder_options,
+    )
+
+    return npt_cpt_builder_options(args)
+
+
+def _stage_pressure_tensor_log_path(
+    stage: MdStage,
+    paths: dict[str, Path],
+) -> Path | None:
+    key = f"{stage}_pressure_ptn"
+    path = paths.get(key)
+    return Path(path) if path is not None else None
+
+
+def _prepare_npt_pressure_checks(
+    *,
+    stage: MdStage,
+    kw: dict[str, Any],
+    io: CharmmTrajectoryFiles,
+    paths: dict[str, Path],
+    args: argparse.Namespace,
+    temp: float,
+    charmm_pbc: bool,
+    mlpot_ctx: Any,
+    first_segment: bool = True,
+) -> None:
+    """Instantaneous virial tensor + optional ``IUPTEN`` log before equi/prod."""
+    from mmml.interfaces.pycharmmInterface.mlpot.pressure_tensor import (
+        maybe_configure_stage_pressure_tensor_io,
+        maybe_report_instantaneous_pressure_tensor,
+    )
+
+    if stage not in ("equi", "prod"):
+        return
+    use_cpt = bool(charmm_pbc and kw.get("cpt"))
+    if not first_segment:
+        return
+    maybe_report_instantaneous_pressure_tensor(
+        stage=stage,
+        temp=temp,
+        args=args,
+        use_cpt=use_cpt,
+        mlpot_ctx=mlpot_ctx,
+    )
+    npt_opts = _npt_cpt_options(args)
+    maybe_configure_stage_pressure_tensor_io(
+        io,
+        kw,
+        log_path=_stage_pressure_tensor_log_path(stage, paths),
+        pressure_log_interval=int(npt_opts.get("pressure_log_interval", 0)),
+    )
 
 
 def _equi_restart_name(tag: str, n_equi_segments: int) -> str:
@@ -380,7 +438,7 @@ def _build_stage_dynamics_kw(
                 restart=effective_restart,
                 echeck=max(echeck, 500.0) if echeck > 0 else echeck,
                 include_firstt=include_firstt,
-                **_npt_cpt_options(args),
+                **_npt_cpt_builder_options(args),
             )
         else:
             kw = build_nvt_equilibration_dynamics(
@@ -401,7 +459,7 @@ def _build_stage_dynamics_kw(
                 temp=temp,
                 restart=effective_restart,
                 echeck=max(echeck, 500.0) if echeck > 0 else echeck,
-                **_npt_cpt_options(args),
+                **_npt_cpt_builder_options(args),
             )
         else:
             kw = build_nvt_production_dynamics(
@@ -2193,6 +2251,17 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         context=f"equi segment {seg_i + 1}/{n_equi_segments}",
                         quiet=bool(args.quiet),
                     )
+                    _prepare_npt_pressure_checks(
+                        stage="equi",
+                        kw=kw,
+                        io=seg_io,
+                        paths=paths,
+                        args=args,
+                        temp=temp,
+                        charmm_pbc=charmm_pbc,
+                        mlpot_ctx=ctx,
+                        first_segment=(seg_i == 0),
+                    )
                     stage_overlap = _overlap_for_stage(
                         "equi",
                         overlap_cfg,
@@ -2351,6 +2420,17 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         ctx,
                         context=f"prod segment {seg_i + 1}/{n_prod_segments}",
                         quiet=bool(args.quiet),
+                    )
+                    _prepare_npt_pressure_checks(
+                        stage="prod",
+                        kw=kw,
+                        io=seg_io,
+                        paths=paths,
+                        args=args,
+                        temp=temp,
+                        charmm_pbc=charmm_pbc,
+                        mlpot_ctx=ctx,
+                        first_segment=(seg_i == 0),
                     )
                     stage_overlap = _overlap_for_stage(
                         "prod",
@@ -2532,6 +2612,17 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 context=stage.upper(),
                 quiet=bool(args.quiet),
             )
+            if stage in ("equi", "prod"):
+                _prepare_npt_pressure_checks(
+                    stage=stage,
+                    kw=kw,
+                    io=io,
+                    paths=paths,
+                    args=args,
+                    temp=temp,
+                    charmm_pbc=charmm_pbc,
+                    mlpot_ctx=ctx,
+                )
             apply_comp_velocity_policy(stage, kw, args)
             from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
                 apply_dyn_imgfrq_from_args,

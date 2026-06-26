@@ -179,7 +179,7 @@ def _run_charmm_mm_pretreat_cpt_stage(
         _configure_npt_dynamics_start,
         _reset_stage_trajectory,
         _seed_restart_for_memory_handoff,
-        _npt_cpt_options,
+        _npt_cpt_builder_options,
     )
 
     nstep = max(1, ps_to_nsteps(timestep_ps, duration_ps))
@@ -205,7 +205,7 @@ def _run_charmm_mm_pretreat_cpt_stage(
                 restart=False,
                 echeck=stage_echeck,
                 include_firstt=include_firstt,
-                **_npt_cpt_options(args),
+                **_npt_cpt_builder_options(args),
             )
         else:
             kw = build_nvt_equilibration_dynamics(
@@ -226,7 +226,7 @@ def _run_charmm_mm_pretreat_cpt_stage(
                 temp=temp,
                 restart=False,
                 echeck=stage_echeck,
-                **_npt_cpt_options(args),
+                **_npt_cpt_builder_options(args),
             )
         else:
             kw = build_nvt_production_dynamics(

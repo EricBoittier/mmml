@@ -2473,6 +2473,33 @@ def add_staged_md_args(parser: argparse.ArgumentParser) -> None:
         ),
     )
     group.add_argument(
+        "--npt-pressure-tensor",
+        type=str,
+        default=None,
+        help=(
+            "Anisotropic NPT reference pressure tensor as "
+            "xx,yy,zz,xy,xz,yz in atm (e.g. 2,1,1,0,0,0). "
+            "Omit for isotropic --npt-pressure."
+        ),
+    )
+    group.add_argument(
+        "--npt-pressure-log-interval",
+        type=int,
+        default=0,
+        help=(
+            "Write CPT piston pressure tensor every N dynamics steps to "
+            "equi/prod *_pressure_tensor.dat via CHARMM IUPTEN (0=off)."
+        ),
+    )
+    group.add_argument(
+        "--skip-npt-pressure-report",
+        action="store_true",
+        help=(
+            "Skip CHARMM 'pressure instantaneous' virial report before "
+            "equi and prod stages."
+        ),
+    )
+    group.add_argument(
         "--n-heat-segments",
         type=int,
         default=1,

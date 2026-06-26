@@ -42,9 +42,11 @@ class CharmmTrajectoryFiles:
     restart_read: Optional[Path] = None
     restart_write: Optional[Path] = None
     trajectory: Optional[Path] = None
+    pressure_tensor_log: Optional[Path] = None
     restart_read_unit: int = 3
     restart_write_unit: int = 2
     trajectory_unit: int = 1
+    pressure_tensor_log_unit: int = 29
 
     def open_for_run(self) -> tuple[list[Any], dict[str, int]]:
         """Open CharmmFile handles; returns ``(open_files, dynamics_unit_kwargs)``."""
@@ -81,6 +83,17 @@ class CharmmTrajectoryFiles:
             )
             open_files.append(f)
             kw["iuncrd"] = self.trajectory_unit
+        if self.pressure_tensor_log is not None:
+            p = Path(self.pressure_tensor_log)
+            p.parent.mkdir(parents=True, exist_ok=True)
+            f = pycharmm.CharmmFile(
+                file_name=str(p),
+                file_unit=self.pressure_tensor_log_unit,
+                formatted=True,
+                read_only=False,
+            )
+            open_files.append(f)
+            kw["iupten"] = self.pressure_tensor_log_unit
         return open_files, kw
 
     def open_trajectory_for_run(
@@ -1579,21 +1592,26 @@ def _apply_npt_cpt_kwargs(
     firstt: float | None = None,
     hoover_reft: float | None = None,
     tcoupling: float = 5.0,
+    pressure_tensor: Any | None = None,
 ) -> None:
     """Attach CPT barostat + temperature control keywords to a dynamics dict."""
+    from mmml.interfaces.pycharmmInterface.mlpot.pressure_tensor import (
+        apply_npt_pressure_reference,
+    )
+
     if pmass is None or tmass is None:
         pmass, tmass = compute_cpt_piston_masses()
     kw.update(
         {
             "leap": True,
             "cpt": True,
-            "pint pconst pref": pref,
             "pgamma": pgamma,
             "pmass": pmass,
             "ihtfrq": 0,
             "ieqfrq": 0,
         }
     )
+    apply_npt_pressure_reference(kw, pref=pref, pressure_tensor=pressure_tensor)
     if thermostat == "hoover":
         kw["hoover reft"] = float(hoover_reft if hoover_reft is not None else temp)
         kw["tmass"] = tmass
@@ -1736,6 +1754,7 @@ def build_cpt_equilibration_dynamics(
     tmass: int | None = None,
     pgamma: float = 5,
     include_firstt: bool = True,
+    pressure_tensor: Any | None = None,
 ) -> dict[str, Any]:
     """NPT equilibration (CPT + Hoover by default); matches example mini-MD scripts."""
     nstep = ps_to_nsteps(timestep_ps, duration_ps)
@@ -1763,6 +1782,7 @@ def build_cpt_equilibration_dynamics(
         tmass=tmass,
         pgamma=pgamma,
         firstt=temp if include_firstt else None,
+        pressure_tensor=pressure_tensor,
     )
     return kw
 
@@ -1780,6 +1800,7 @@ def build_cpt_production_dynamics(
     pmass: int | None = None,
     tmass: int | None = None,
     pgamma: float = 5,
+    pressure_tensor: Any | None = None,
 ) -> dict[str, Any]:
     """NPT production (CPT + Hoover by default; same barostat recipe as equilibration)."""
     nstep = ps_to_nsteps(timestep_ps, duration_ps)
@@ -1806,6 +1827,7 @@ def build_cpt_production_dynamics(
         pmass=pmass,
         tmass=tmass,
         pgamma=pgamma,
+        pressure_tensor=pressure_tensor,
     )
     return kw
 

@@ -1831,6 +1831,14 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         str(args.n_prod_segments),
         ]
     )
+    _append_optional(
+        cmd, "--npt-pressure-tensor", getattr(args, "npt_pressure_tensor", None)
+    )
+    npt_log = int(getattr(args, "npt_pressure_log_interval", 0) or 0)
+    if npt_log > 0:
+        cmd.extend(["--npt-pressure-log-interval", str(npt_log)])
+    if getattr(args, "skip_npt_pressure_report", False):
+        cmd.append("--skip-npt-pressure-report")
     if args.composition:
         cmd.extend(["--composition", str(args.composition)])
         cmd.extend(["--n-molecules", str(_composition_molecule_count(args.composition))])
