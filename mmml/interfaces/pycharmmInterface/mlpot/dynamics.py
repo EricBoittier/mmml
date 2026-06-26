@@ -1179,10 +1179,17 @@ def apply_hoover_cpt_heat_ramp_overlap_chunk(
     chunk_kw["finalt"] = float(ramp_spec["finalt"])
     chunk_kw["tbath"] = float(ramp_spec["finalt"])
     chunk_kw["hoover reft"] = target
-    # Velocities are assigned once before overlap chunk 0 (staged_workflow) or
-    # carried via READYN / in-memory handoff on later chunks; never reassign here.
-    chunk_kw["iasvel"] = 0
-    chunk_kw["start"] = False
+    # Preserve single-dyna cold start on chunk 0 (``_configure_heat_dynamics_start``:
+    # ``start=True``, ``iasvel=1``).  Post-Boltzmann and later chunks keep
+    # ``iasvel=0`` / READYN or in-memory handoff velocities.
+    preserve_cold_start = (
+        chunk_index == 0
+        and not bool(chunk_kw.get("restart"))
+        and bool(chunk_kw.get("start"))
+    )
+    if not preserve_cold_start:
+        chunk_kw["iasvel"] = 0
+        chunk_kw["start"] = False
 
 
 def heat_ramp_spec_from_kw(kw: dict[str, Any]) -> dict[str, float | int] | None:
