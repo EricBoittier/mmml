@@ -2889,63 +2889,26 @@ def _harmonize_overlap_chunk_frequencies(
     global_step_start: int = 0,
 ) -> None:
     """Align list/image/HB update freqs with this chunk's ``nstep`` (avoids FINCYC retune)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
-        effective_dcd_interval_ps,
-        nsavc_for_chunk_preserving_interval,
-        resolve_target_dcd_nsavc,
-    )
 
     n = max(1, int(chunk_nstep))
-    target_nsavc = resolve_target_dcd_nsavc(chunk_kw)
-    timestep_ps = float(chunk_kw.get("timestep", 0.0) or 0.0)
-    target_interval_ps = chunk_kw.get("_dcd_interval_ps")
     for key in _OVERLAP_CHUNK_FREQ_KEYS:
         if key not in chunk_kw:
             continue
         if key == "nsavc":
             old = int(chunk_kw[key])
-            if target_nsavc is not None:
-                new = nsavc_for_chunk_preserving_interval(
-                    target_nsavc,
-                    n,
-                    global_step_start=int(global_step_start),
+            if old >= n:
+                chunk_kw.pop("nsavc", None)
+                for k in ("nprint", "iprfrq", "isvfrq"):
+                    chunk_kw.pop(k, None)
+                print(
+                    f"overlap chunk: skip DCD (nsavc={old} >= nstep={n}; "
+                    f"global step {int(global_step_start)}–{int(global_step_start) + n})",
+                    flush=True,
                 )
-                if new is None:
-                    chunk_kw.pop("nsavc", None)
-                    for k in ("nprint", "iprfrq", "isvfrq"):
-                        chunk_kw.pop(k, None)
-                    if target_interval_ps is not None:
-                        print(
-                            f"overlap chunk: skip DCD (target "
-                            f"{float(target_interval_ps):.6g} ps, "
-                            f"global step {int(global_step_start)}–"
-                            f"{int(global_step_start) + n}; "
-                            f"chunk nstep={n} too short for aligned save)",
-                            flush=True,
-                        )
-                    continue
             else:
-                new = _harmonize_nsavc_frequency(old, n)
-            if new != old:
-                if target_interval_ps is not None and timestep_ps > 0:
-                    old_ps = effective_dcd_interval_ps(nsavc=old, timestep_ps=timestep_ps)
-                    new_ps = effective_dcd_interval_ps(nsavc=new, timestep_ps=timestep_ps)
-                    print(
-                        f"overlap chunk: DCD nsavc {old} -> {new} "
-                        f"({old_ps:.6g} -> {new_ps:.6g} ps; target "
-                        f"{float(target_interval_ps):.6g} ps; nstep={n}; "
-                        f"global step {int(global_step_start)})",
-                        flush=True,
-                    )
-                else:
-                    print(
-                        f"overlap chunk: DCD nsavc {old} -> {new} (nstep={n})",
-                        flush=True,
-                    )
-            chunk_kw["nsavc"] = new
-            for k in ("nprint", "iprfrq", "isvfrq"):
-                if k in chunk_kw:
-                    chunk_kw[k] = new
+                for k in ("nprint", "iprfrq", "isvfrq"):
+                    if k in chunk_kw:
+                        chunk_kw[k] = old
         else:
             chunk_kw[key] = _harmonize_dynamics_frequency(int(chunk_kw[key]), n)
     if loose_pbc:

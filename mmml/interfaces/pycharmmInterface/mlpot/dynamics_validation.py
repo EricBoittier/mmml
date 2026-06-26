@@ -215,10 +215,13 @@ def expected_overlap_chunk_dcd_frame_count(
             n_i = chunk_nstep if i < completed - 1 else max(
                 1, total - chunk_nstep * (completed - 1)
             )
-            frames += max(1, n_i // harmonize_nsavc_frequency(sav_i, n_i))
+            if sav_i < n_i:
+                frames += max(1, n_i // sav_i)
         return frames
 
-    sav = harmonize_nsavc_frequency(int(nsavc), chunk_nstep)
+    sav = max(1, int(nsavc))
+    if sav >= chunk_nstep:
+        return 0
     per_restart = max(1, chunk_nstep // sav)
     if cold_start_first_chunk and completed > 1:
         per_cold = expected_dcd_frame_count(nstep=chunk_nstep, nsavc=sav)
