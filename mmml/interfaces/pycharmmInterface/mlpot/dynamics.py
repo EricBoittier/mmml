@@ -1416,6 +1416,11 @@ def _infer_heat_velocity_init_label(
             "dyna restart (start=False, iasvel=0): continue global step and "
             "thermostat/barostat state from READYN"
         )
+    if not restart and not start and int(kw.get("ihtfrq", 0) or 0) > 0 and iasvel == 1:
+        return (
+            "post nstep=0 Boltzmann assign (scale path only): velocities "
+            "pre-assigned; dyna integrates with ihtfrq scaling"
+        )
     if not restart and not start and iasvel == 0:
         if int(kw.get("ihtfrq", 0) or 0) > 0:
             return (
