@@ -34,9 +34,6 @@ jobs:
           python -c "import mmml; print('pkg import ok')"
       - name: Run tests
         run: pytest -v --color=yes tests/
-      - name: Build docs
-        run: |
-          mkdocs build --strict
 
   charmm:
     runs-on: ubuntu-latest
