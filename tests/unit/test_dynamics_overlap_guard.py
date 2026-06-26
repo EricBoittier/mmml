@@ -2479,6 +2479,31 @@ def test_effective_overlap_check_interval_cpt_ignores_large_nsavc():
     assert effective_overlap_check_interval(500000, 500, nsavc=10000, cpt=True) == 500
 
 
+def test_apply_cpt_in_memory_continuation_kw():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _apply_cpt_in_memory_continuation_kw,
+    )
+
+    kw: dict = {
+        "restart": True,
+        "new": True,
+        "start": True,
+        "iasvel": 1,
+        "firstt": 6.0,
+        "iunrea": 3,
+        "finalt": 30.0,
+        "ihtfrq": 50,
+    }
+    _apply_cpt_in_memory_continuation_kw(kw)
+    assert kw["restart"] is False
+    assert kw["start"] is False
+    assert kw["iasvel"] == 0
+    assert kw["iunrea"] == -1
+    assert "firstt" not in kw
+    assert "finalt" not in kw
+    assert kw["ihtfrq"] == 0
+
+
 def test_run_dynamics_with_io_cpt_overlap_subchunks():
     cfg = DynamicsOverlapConfig(
         action="error",
@@ -2497,9 +2522,11 @@ def test_run_dynamics_with_io_cpt_overlap_subchunks():
         dtype=float,
     )
     calls: list[int] = []
+    restart_flags: list[bool] = []
 
     def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
         calls.append(int(kw["nstep"]))
+        restart_flags.append(bool(kw.get("restart")))
         return mock.Mock()
 
     with mock.patch(
@@ -2523,6 +2550,7 @@ def test_run_dynamics_with_io_cpt_overlap_subchunks():
 
     # 2 overlap chunks of 500, each split into 2 CPT sub-chunks of 250
     assert calls == [250, 250, 250, 250]
+    assert restart_flags == [False, False, False, False]
     assert sum(calls) == 1000
 
 
