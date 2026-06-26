@@ -96,12 +96,12 @@ def test_mc_density_equalization_preserves_intramonomer_geometry():
     assert np.linalg.norm(new_pos[3] - new_pos[2]) == pytest.approx(1.0)
 
 
-def test_mc_density_equalization_skips_fixed_box_by_default():
+def test_mc_density_equalization_uses_explicit_box_as_initial_side():
     from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
         apply_mc_density_equalization,
     )
 
-    args = _args(box_size=12.0)
+    args = _args(box_size=12.0, mc_density_target_g_cm3=1.326)
     pos = np.array([[5.0, 6.0, 6.0], [7.0, 6.0, 6.0]], dtype=float)
     new_pos, new_L, summary = apply_mc_density_equalization(
         args,
@@ -112,10 +112,11 @@ def test_mc_density_equalization_skips_fixed_box_by_default():
         use_pbc=True,
     )
 
-    assert not summary.ran
-    assert summary.reason == "fixed_box"
-    assert new_L == 12.0
-    np.testing.assert_allclose(new_pos, pos)
+    assert summary.ran
+    assert summary.initial_box_A == 12.0
+    assert new_L is not None
+    assert new_L < 12.0
+    assert new_pos.shape == pos.shape
 
 
 def test_mc_density_equalization_skips_unknown_mixed_density_without_target():
