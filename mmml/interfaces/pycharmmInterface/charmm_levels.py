@@ -70,7 +70,6 @@ def charmm_relaxed_bomlev(level: int = -2):
     Do not leave ``bomlev 0`` after parameter loads — benign read warnings would
     abort the job on the next CHARMM command (e.g. MLpot registration).
     """
-    import pycharmm
     import pycharmm.settings as settings
 
     old_bl = settings.set_bomb_level(int(level))
