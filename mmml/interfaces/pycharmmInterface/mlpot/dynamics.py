@@ -27,6 +27,17 @@ import numpy as np
 PathLike = Union[str, Path]
 
 
+def _emit_overlap_log(
+    detail: str,
+    *,
+    context: str | None = None,
+    quiet: bool = False,
+) -> None:
+    from mmml.utils.rich_report import emit_overlap_log
+
+    emit_overlap_log(detail, context=context, quiet=quiet)
+
+
 def _maybe_show_energy(show: bool) -> None:
     if not show:
         return
@@ -1669,6 +1680,129 @@ def format_heat_dynamics_diagnostics(info: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def build_heat_dynamics_dashboard_sections(
+    info: dict[str, Any],
+) -> list[tuple[str, dict[str, Any]]]:
+    """Rich dashboard sections for :func:`describe_heat_dynamics_setup`."""
+    sections: list[tuple[str, dict[str, Any]]] = []
+
+    therm: dict[str, Any] = {
+        "CLI --heat-thermostat": f"{info['thermostat_requested']!r} → {info['thermostat_effective']!r}",
+        "mode": info["mode"],
+        "PBC": info["use_pbc"],
+        "memory handoff": info["use_memory_handoff"],
+    }
+    if info.get("thermostat_forced"):
+        therm["forced"] = info.get("thermostat_force_reason") or "policy override"
+    sections.append(("Thermostat policy", therm))
+
+    integ = info["integration"]
+    sections.append(
+        (
+            "Integration",
+            {
+                "nstep": integ["nstep"],
+                "timestep (ps)": f"{integ['timestep_ps']:.6g}",
+                "duration (ps)": f"{float(integ['duration_ps']):.6g}",
+                "nsavc": integ["nsavc"],
+                "dcd interval (ps)": f"{integ['dcd_interval_ps']:.6g}",
+                "echeck": integ["echeck"],
+                "inbfrq": integ["inbfrq"],
+                "imgfrq": integ["imgfrq"],
+                "ixtfrq": integ["ixtfrq"],
+            },
+        )
+    )
+
+    temp = info["temperature"]
+    temp_map: dict[str, Any] = {
+        "firstt (K)": temp["firstt_K"],
+        "finalt (K)": temp["finalt_K"],
+        "tbath (K)": temp["tbath_K"],
+        "ieqfrq": temp["ieqfrq"],
+    }
+    if temp.get("hoover_reft_K") is not None:
+        temp_map["hoover reft (K)"] = temp["hoover_reft_K"]
+    if int(temp.get("ihtfrq") or 0) > 0:
+        temp_map["ihtfrq"] = temp["ihtfrq"]
+        temp_map["TEMINC (K/step)"] = temp["TEMINC_K"]
+        temp_map["~rescales"] = temp["ramp_rescale_events"]
+    else:
+        temp_map["ihtfrq"] = "0 (no velocity-scaling ramp)"
+    sections.append(("Temperature / bath", temp_map))
+
+    flags = info["dyna_flags"]
+    sections.append(
+        (
+            "CHARMM dyna flags",
+            {
+                "start": flags["start"],
+                "restart": flags["restart"],
+                "new": flags["new"],
+                "iasvel": flags["iasvel"],
+                "iasors": f"{flags['iasors']} ({flags['iasors_meaning']})",
+                "iunrea": flags["iunrea"],
+            },
+        )
+    )
+
+    sections.append(("Velocity / CPT init", {"policy": info["velocity_init"]}))
+
+    cpt = info.get("cpt")
+    if cpt is not None:
+        sections.append(
+            (
+                "CPT barostat",
+                {
+                    "pmass": cpt["pmass"],
+                    "tmass": cpt["tmass"],
+                    "pgamma": cpt["pgamma"],
+                    "pint": cpt["pint"],
+                    "pref": cpt["pref"],
+                    "leap": cpt["leap"],
+                },
+            )
+        )
+
+    io_info = info["restart_io"]
+    sections.append(
+        (
+            "Restart I/O",
+            {
+                "read": io_info["restart_read"] or "(none / in-memory)",
+                "write": io_info["restart_write"] or "(none)",
+            },
+        )
+    )
+
+    harmonized = info.get("freq_harmonized") or {}
+    if harmonized:
+        sections.append(
+            (
+                "Frequency harmonization",
+                {k: f"{a} → {b}" for k, (a, b) in sorted(harmonized.items())},
+            )
+        )
+
+    cli = info.get("cli")
+    if cli is not None:
+        sections.append(
+            (
+                "CLI heat options",
+                {
+                    "--heat-firstt": cli["heat_firstt"],
+                    "--heat-finalt": cli["heat_finalt"],
+                    "--heat-ihtfrq": cli["heat_ihtfrq"],
+                    "no_echeck_heat": cli["no_echeck_heat"],
+                    "heat_comp_damp": cli["heat_comp_damp"],
+                    "n_heat_segments": cli["n_heat_segments"],
+                },
+            )
+        )
+
+    return sections
+
+
 def print_heat_dynamics_diagnostics(
     kw: dict[str, Any],
     *,
@@ -1702,7 +1836,17 @@ def print_heat_dynamics_diagnostics(
         timestep_ps=timestep_ps,
         freq_harmonized=freq_harmonized,
     )
-    print(format_heat_dynamics_diagnostics(info), flush=True)
+    from mmml.utils.rich_report import emit_dashboard
+
+    title = "HEAT dynamics diagnostics"
+    if info.get("segment"):
+        title += f" (segment {info['segment']})"
+    emit_dashboard(
+        title,
+        build_heat_dynamics_dashboard_sections(info),
+        border_style="cyan",
+        quiet=quiet,
+    )
 
 
 def build_heat_dynamics(
@@ -2935,10 +3079,9 @@ def _harmonize_overlap_chunk_frequencies(
                 chunk_kw.pop("nsavc", None)
                 for k in ("nprint", "iprfrq", "isvfrq"):
                     chunk_kw.pop(k, None)
-                print(
-                    f"overlap chunk: skip DCD (nsavc={old} >= nstep={n}; "
+                _emit_overlap_log(
+                    f"chunk: skip DCD (nsavc={old} >= nstep={n}; "
                     f"global step {int(global_step_start)}–{int(global_step_start) + n})",
-                    flush=True,
                 )
             else:
                 for k in ("nprint", "iprfrq", "isvfrq"):
@@ -3978,10 +4121,9 @@ def run_dynamics_with_io(
                 f"nsavc={traj_nsavc} requires chunk nstep >= {min_for_nsavc}; "
                 + reason
             )
-        print(
-            f"overlap ({overlap_context}): check interval "
-            f"{requested_interval} -> {interval} steps {reason}",
-            flush=True,
+        _emit_overlap_log(
+            f"check interval {requested_interval} -> {interval} steps {reason}",
+            context=overlap_context,
         )
     _cleanup_overlap_restart_slots(io)
     check_dynamics_overlap(
@@ -4002,12 +4144,12 @@ def run_dynamics_with_io(
         and "heat" in str(overlap_context).lower()
         and hoover_cpt_heat_ramp_spec_from_kw(kw) is not None
     ):
-        print(
-            f"overlap ({overlap_context}): warning: {n_chunks} Hoover CPT heat restart "
-            f"chunks (interval={interval}, total={total_nstep} steps). Prefer "
+        _emit_overlap_log(
+            f"warning: {n_chunks} Hoover CPT heat restart chunks "
+            f"(interval={interval}, total={total_nstep} steps). Prefer "
             f"--dynamics-overlap-check-interval >= {total_nstep} or fewer "
             f"--n-heat-segments to reduce scratch READYN handoffs.",
-            flush=True,
+            context=overlap_context,
         )
     heat_ramp_spec = heat_ramp_spec_from_kw(kw)
     hoover_heat_ramp_spec = hoover_cpt_heat_ramp_spec_from_kw(kw)
@@ -4035,10 +4177,10 @@ def run_dynamics_with_io(
         and n_chunks > 1
         and split_trajectory
     ):
-        print(
-            f"overlap ({overlap_context}): writing {n_chunks} per-chunk DCD(s) "
+        _emit_overlap_log(
+            f"writing {n_chunks} per-chunk DCD(s) "
             f"({Path(io.trajectory).stem}.chunk.*{Path(io.trajectory).suffix})",
-            flush=True,
+            context=overlap_context,
         )
     elif (
         io is not None
@@ -4046,10 +4188,10 @@ def run_dynamics_with_io(
         and n_chunks > 1
         and not split_trajectory
     ):
-        print(
-            f"overlap ({overlap_context}): writing one DCD ({io.trajectory.name}) "
+        _emit_overlap_log(
+            f"writing one DCD ({io.trajectory.name}) "
             f"across {n_chunks} chunks (nsavc=1 chunk explosion guard)",
-            flush=True,
+            context=overlap_context,
         )
     try:
         if io is not None and n_chunks > 1 and io.trajectory is not None and not split_trajectory:

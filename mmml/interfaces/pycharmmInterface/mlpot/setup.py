@@ -246,7 +246,13 @@ def assert_mlpot_user_active(
             f"MLpot USER term is zero/missing before {context}; refusing to run dynamics"
         )
     if not quiet:
-        print(f"MLpot USER active before {context}: USER={user:.6f} kcal/mol", flush=True)
+        from mmml.utils.rich_report import emit_tagged
+
+        emit_tagged(
+            "MLpot",
+            f"USER active before {context}: {user:.6f} kcal/mol",
+            tag_style="bold green",
+        )
     return float(user)
 
 
@@ -456,13 +462,14 @@ def apply_charmm_verbosity(
     """
     import pycharmm.settings as settings
 
-    pycharmm = _import_pycharmm()
     old = {
         "prnlev": int(settings.set_verbosity(int(prnlev))),
         "warnlev": int(settings.set_warn_level(int(warnlev))),
         "bomlev": int(settings.set_bomb_level(int(bomlev))),
     }
-    pycharmm.lingo.charmm_script(
+    from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
+
+    run_charmm_script_quiet(
         f"PRNLev {int(prnlev)}\nWRNLev {int(warnlev)}\nbomlev {int(bomlev)}"
     )
     return old

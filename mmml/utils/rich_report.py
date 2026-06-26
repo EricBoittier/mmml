@@ -77,6 +77,24 @@ def emit_tagged(
         _emit_plain(plain, stderr=stderr)
 
 
+def emit_overlap_log(
+    detail: str,
+    *,
+    context: str | None = None,
+    quiet: bool = False,
+) -> None:
+    """Rich-tagged overlap / dynamics-guard note."""
+    if context:
+        emit_tagged(
+            f"overlap ({context})",
+            detail,
+            tag_style="bold yellow",
+            quiet=quiet,
+        )
+    else:
+        emit_tagged("overlap", detail, tag_style="bold yellow", quiet=quiet)
+
+
 def emit_panel(
     title: str,
     body: str,
