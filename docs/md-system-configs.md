@@ -727,6 +727,301 @@ output_dir: results/dcm_prod_from_handoff
 
 JAX-MD legs can add `handoff_quality_gate: true`, `jaxmd_pbc_minimize_steps`, and `jaxmd_mini_box_equil_ps` for the same philosophy after PyCHARMM handoff.
 
+## Cutoffs, MM toggles, and long-range electrostatics
+
+Hybrid ML/MM potentials use three COM-distance knobs (Å) plus optional long-range backends. Put cutoffs in campaign `defaults` so PyCHARMM and JAX-MD legs stay aligned.
+
+| Key | Meaning | Default |
+|-----|---------|---------|
+| `mm_switch_on` | COM distance where ML→0 and MM→1 (handoff center) | 8.0 |
+| `mm_switch_width` | MM outer tail width past `mm_switch_on` (JAX pair list extends to `mm_switch_on + mm_switch_width`) | 5.0 |
+| `ml_switch_width` | Width of ML taper below `mm_switch_on` | 1.5 |
+| `mlpot_mm_internal_scale` | Scale CGENFF BOND/ANGL/DIHE on ML atoms during MLpot BLOCK (0=off) | 0.0 |
+| `mm_nonbond_mode` | `jax_mic` (JAX real-space MM) or `periodic_external` (ScaFaCoS + CHARMM) | `jax_mic` |
+| `lr_solver` | Long-range Coulomb when `periodic_external`: `auto`, `mic`, `scafacos`, `jax_pme` | env / `auto` |
+| `periodic_charmm_vdw` | With `periodic_external`: keep CHARMM IMAGE LJ (default true) | true |
+
+Legacy YAML aliases still work: `ml_cutoff` → `ml_switch_width`, `mm_cutoff` → `mm_switch_width`.
+
+```mermaid
+flowchart LR
+  subgraph jax_mic ["mm_nonbond_mode: jax_mic (default)"]
+    ML["PhysNet ML dimers"]
+    JAXMM["JAX switched LJ + MIC Coulomb\n≤ mm_switch_on + mm_switch_width"]
+    ML --> HYB1["hybrid USER energy"]
+    JAXMM --> HYB1
+  end
+
+  subgraph periodic ["mm_nonbond_mode: periodic_external"]
+    ML2["PhysNet ML dimers"]
+    SCF["ScaFaCoS Coulomb\n(full PBC)"]
+    CHVDW["CHARMM IMAGE VDW\n(optional)"]
+    ML2 --> HYB2["hybrid USER energy"]
+    SCF --> HYB2
+    CHVDW --> HYB2
+  end
+```
+
+### How to turn off MM in the calculator
+
+There are several “MM off” levels — pick the one that matches your goal:
+
+| Goal | Config approach |
+|------|-----------------|
+| **No JAX real-space LJ/Coulomb** (PyCHARMM) | `mm_nonbond_mode: periodic_external` — sets `doMM=False` in the decomposed calculator; long-range Coulomb via ScaFaCoS instead of truncated JAX pairs |
+| **No CHARMM LJ either** (ML + ScaFaCoS Coulomb only) | `periodic_external` + `periodic_charmm_vdw: false` |
+| **No scaled CGENFF internals on ML atoms** | `mlpot_mm_internal_scale: 0.0` (default) — CHARMM ELEC/VDW on ML atoms are already zeroed by MLpot BLOCK during dynamics |
+| **ML-only smoke (ASE/JAX-MD scripts, not md-system PyCHARMM)** | Build calculator with `doMM=False` — see `examples/md_cpu/02_ml_energy_ase.py`, `05_free_nve_ase_smoke.py` |
+| **Skip ML dimers, MM only** | `extra_args: ["--skip-ml-dimers"]` on backends that forward run_sim flags (diagnostics / fitting) |
+
+PyCHARMM dynamics already runs MLpot USER with CHARMM nonbond terms blocked on ML atoms; the remaining “MM” in the hybrid calculator is the **JAX switched tail** (`jax_mic`) or **external periodic MM** (`periodic_external`).
+
+### Cutoff and long-range config snippets
+
+#### Default extended handoff (repo default 8 / 5 / 1.5)
+
+```yaml
+mm_switch_on: 8.0
+mm_switch_width: 5.0
+ml_switch_width: 1.5
+mlpot_mm_internal_scale: 0.0
+mm_nonbond_mode: jax_mic
+```
+
+#### Tighter handoff (more ML, shorter MM tail) — small clusters / debugging
+
+```yaml
+mm_switch_on: 6.0
+mm_switch_width: 4.0
+ml_switch_width: 1.0
+mm_nonbond_mode: jax_mic
+```
+
+#### Medium PBC liquid (campaign defaults)
+
+```yaml
+defaults:
+  mm_switch_on: 6.0
+  mm_switch_width: 4.0
+  ml_switch_width: 1.0
+  mlpot_mm_internal_scale: 0.0
+  mm_nonbond_mode: jax_mic
+```
+
+#### Resilient density prep + explicit cutoffs
+
+```yaml
+setup: pbc_npt
+backend: pycharmm
+composition: "DCM:206"
+box_auto: density
+bulk_density_fraction: 0.75
+target_density_g_cm3: 1.326
+density_prep_mode: resilient
+md_stages: "mini,heat,equi"
+mm_switch_on: 8.0
+mm_switch_width: 5.0
+ml_switch_width: 1.5
+checkpoint: /path/to/DESdimers_params.json
+output_dir: results/dcm_resilient_cutoffs
+```
+
+#### Disable JAX MM: periodic external + ScaFaCoS (full PBC Coulomb)
+
+Requires `SCAFACOS_LIB`, PBC setup, and cubic box. JAX real-space MM pairs are **off** (`doMM=False`).
+
+```yaml
+setup: pbc_nvt
+backend: pycharmm
+composition: "DCM:60"
+box_size: 45.0
+mm_nonbond_mode: periodic_external
+lr_solver: scafacos
+scafacos_method: p2nfft
+periodic_charmm_vdw: true
+mm_switch_on: 8.0
+mm_switch_width: 5.0
+ml_switch_width: 1.5
+md_stages: "mini,heat,equi"
+checkpoint: /path/to/DESdimers_params.json
+output_dir: results/dcm_periodic_external
+```
+
+Environment:
+
+```bash
+export SCAFACOS_LIB=/path/to/libfcs.so
+# optional: export MMML_LR_SOLVER=scafacos
+```
+
+#### ML + ScaFaCoS Coulomb only (no CHARMM VDW, no JAX MM)
+
+```yaml
+setup: pbc_nvt
+backend: pycharmm
+composition: "DCM:60"
+box_size: 45.0
+mm_nonbond_mode: periodic_external
+lr_solver: scafacos
+periodic_charmm_vdw: false
+md_stages: "mini,heat,equi"
+checkpoint: /path/to/DESdimers_params.json
+output_dir: results/dcm_ml_scafacos_only
+```
+
+Nonbond physics: **PhysNet ML + long-range Coulomb**. No separate LJ unless the ML model provides it.
+
+#### Legacy MM switching (no complementary handoff)
+
+MM starts at `mm_switch_on` instead of filling the ML taper; inner MM cutoff defaults to `0.9 × mm_switch_on`. Pass via `extra_args` until exposed as a top-level YAML key:
+
+```yaml
+setup: pbc_nvt
+backend: pycharmm
+composition: "DCM:20"
+box_size: 38.0
+mm_switch_on: 8.0
+mm_switch_width: 5.0
+ml_switch_width: 1.5
+extra_args:
+  - "--no-complementary-handoff"
+checkpoint: /path/to/DESdimers_params.json
+output_dir: results/dcm_legacy_handoff
+```
+
+#### Explicit MM inner cutoff (`mm_r_min`)
+
+Exclude JAX MM pairs when dimer COM separation is below this value (Å). Default with complementary handoff: `0.9 × (mm_switch_on - ml_switch_width)`.
+
+```yaml
+setup: pbc_nvt
+backend: pycharmm
+composition: "DCM:60"
+box_size: 32.0
+mm_switch_on: 8.0
+mm_switch_width: 5.0
+ml_switch_width: 1.5
+extra_args:
+  - "--mm-r-min"
+  - "6.5"
+checkpoint: /path/to/DESdimers_params.json
+output_dir: results/dcm_mm_r_min
+```
+
+#### Allow scaled CGENFF bonded terms on ML atoms during MLpot
+
+Useful for stiff internal strain; ELEC/VDW stay off in `jax_mic` mode.
+
+```yaml
+setup: pbc_nvt
+backend: pycharmm
+composition: "DCM:20"
+box_size: 38.0
+mlpot_mm_internal_scale: 0.1
+mm_switch_on: 8.0
+mm_switch_width: 5.0
+ml_switch_width: 1.5
+md_stages: "mini,heat"
+checkpoint: /path/to/DESdimers_params.json
+output_dir: results/dcm_scaled_internals
+```
+
+#### Campaign: matched cutoffs across PyCHARMM equil and JAX-MD prod
+
+```yaml
+defaults:
+  checkpoint: /path/to/DESdimers_params.json
+  mm_switch_on: 6.0
+  mm_switch_width: 4.0
+  ml_switch_width: 1.0
+  mlpot_mm_internal_scale: 0.0
+  mm_nonbond_mode: jax_mic
+
+campaign_output: artifacts/dcm_cutoff_matched
+
+runs:
+  pycharmm_equil:
+    backend: pycharmm
+    setup: pbc_npt
+    composition: "DCM:60"
+    box_size: 32.0
+    density_prep_mode: resilient
+    md_stages: "mini,heat,equi"
+    output_dir: results/dcm_cutoff_matched/pycharmm_equil
+
+  jaxmd_prod:
+    backend: jaxmd
+    setup: pbc_nvt
+    depends_on: pycharmm_equil
+    ps: 50
+    handoff_quality_gate: true
+    output_dir: results/dcm_cutoff_matched/jaxmd_prod
+    extra_args:
+      - "--jax-md-update-interval"
+      - "1"
+      - "--max-pairs"
+      - "500000"
+```
+
+#### JAX-MD: MIC-only long range (default `lr_solver: mic`)
+
+Truncated real-space Coulomb inside the JAX pair loop; no ScaFaCoS. Same cutoff keys as PyCHARMM.
+
+```yaml
+setup: pbc_nvt
+backend: jaxmd
+depends_on: pycharmm_equil
+ps: 20
+mm_switch_on: 8.0
+mm_switch_width: 5.0
+ml_switch_width: 1.5
+jax_md_update_interval: 1
+jax_md_skin_distance: 0.25
+handoff_quality_gate: true
+output_dir: results/jaxmd_mic_lr
+extra_args:
+  - "--max-pairs"
+  - "500000"
+```
+
+#### Dense liquid + periodic external + resilient prep
+
+Combine density prep with full PBC electrostatics (large boxes only):
+
+```yaml
+setup: pbc_npt
+backend: pycharmm
+composition: "DCM:206"
+box_auto: density
+bulk_density_fraction: 0.75
+target_density_g_cm3: 1.326
+density_prep_mode: resilient
+mm_nonbond_mode: periodic_external
+lr_solver: scafacos
+periodic_charmm_vdw: true
+mm_switch_on: 8.0
+mm_switch_width: 5.0
+ml_switch_width: 1.5
+md_stages: "mini,heat,equi"
+checkpoint: /path/to/DESdimers_params.json
+output_dir: results/dcm_resilient_periodic_ext
+```
+
+#### Cutoff grid search (offline)
+
+Use the optimize-cutoffs workflow with a reference NPZ; not a dynamics config, but documents the grid keys:
+
+```yaml
+optimize_cutoffs: true
+reference_npz: /path/to/reference_forces.npz
+ml_switch_width_grid: "1.5,2.0,2.5,3.0"
+mm_switch_on_grid: "4.0,5.0,6.0,7.0,8.0"
+mm_switch_width_grid: "0.5,1.0,1.5,2.0,5.0"
+optimize_output: results/cutoff_scan
+```
+
+See [Long-range electrostatics](mlpot-long-range-electrostatics.md) and [NONBOND_LISTS.md](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/mlpot/NONBOND_LISTS.md) for backend details.
+
 ## Neighbor-list requirements
 
 Condensed phase fails quickly if the neighbor list is too small or refreshed too slowly. Treat neighbor-list sizing as part of the physical setup, not only a performance knob.
@@ -1035,6 +1330,10 @@ ml_switch_width: 1.5
 mm_switch_on: 8.0
 mm_switch_width: 5.0
 mlpot_mm_internal_scale: 0.0
+mm_nonbond_mode: jax_mic
+lr_solver: null
+scafacos_method: null
+periodic_charmm_vdw: true
 residue: MEOH
 skip_jit_warmup: false
 resume: false
