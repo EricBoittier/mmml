@@ -96,6 +96,34 @@ def test_apply_heat_ramp_overlap_chunk_continues_ramp():
     assert chunk_kw["start"] is False
 
 
+def test_hoover_cpt_heat_ramp_overlap_chunk_preserves_boltzmann_cold_start():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _apply_overlap_chunk_dynamics_kw,
+        apply_hoover_cpt_heat_ramp_overlap_chunk,
+    )
+
+    chunk_kw = {
+        "start": True,
+        "iasvel": 1,
+        "cpt": True,
+        "hoover reft": 6.0,
+        "firstt": 6.0,
+        "finalt": 30.0,
+        "tbath": 30.0,
+    }
+    _apply_overlap_chunk_dynamics_kw(chunk_kw, chunk_index=0, has_restart_read=False)
+    apply_hoover_cpt_heat_ramp_overlap_chunk(
+        chunk_kw,
+        chunk_index=0,
+        steps_done=0,
+        ramp_spec={"firstt": 6.0, "finalt": 30.0},
+        total_nstep=5000,
+        n_chunks=10,
+    )
+    assert chunk_kw["iasvel"] == 1
+    assert chunk_kw["start"] is True
+
+
 def test_hoover_cpt_heat_ramp_overlap_chunk_keeps_iasvel_zero_after_boltzmann():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _apply_overlap_chunk_dynamics_kw,

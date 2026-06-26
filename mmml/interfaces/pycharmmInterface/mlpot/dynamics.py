@@ -1179,10 +1179,15 @@ def apply_hoover_cpt_heat_ramp_overlap_chunk(
     chunk_kw["finalt"] = float(ramp_spec["finalt"])
     chunk_kw["tbath"] = float(ramp_spec["finalt"])
     chunk_kw["hoover reft"] = target
-    # Velocities are assigned once before overlap chunk 0 (staged_workflow) or
-    # carried via READYN / in-memory handoff on later chunks; never reassign here.
-    chunk_kw["iasvel"] = 0
-    chunk_kw["start"] = False
+    # Staged HEAT sets ``start=True`` / ``iasvel=1`` on overlap chunk 0 for Boltzmann
+    # at FIRSTT inside the first ``dyna``. Clearing that here leaves T=0 with cleared
+    # COMP and CHARMM reuses comparison coordinates as velocities (catastrophic heating).
+    if chunk_index == 0 and bool(chunk_kw.get("start")):
+        chunk_kw["iasvel"] = 1
+    else:
+        # Velocities already assigned or carried via READYN / in-memory handoff.
+        chunk_kw["iasvel"] = 0
+        chunk_kw["start"] = False
 
 
 def heat_ramp_spec_from_kw(kw: dict[str, Any]) -> dict[str, float | int] | None:
