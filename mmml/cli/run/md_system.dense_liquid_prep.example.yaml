@@ -21,8 +21,9 @@ defaults:
   mm_switch_width: 4.0
   ml_switch_width: 1.0
   mlpot_mm_internal_scale: 0.0
+  include_mm: true
   mm_nonbond_mode: jax_mic
-  # To disable JAX real-space MM (use ScaFaCoS Coulomb + CHARMM VDW instead):
+  # ML-only (no MM LJ/Coulomb pairs): include_mm: false
   # mm_nonbond_mode: periodic_external
   # lr_solver: scafacos
   # periodic_charmm_vdw: true

@@ -738,6 +738,7 @@ Hybrid ML/MM potentials use three COM-distance knobs (Å) plus optional long-ran
 | `ml_switch_width` | Width of ML taper below `mm_switch_on` | 1.5 |
 | `mlpot_mm_internal_scale` | Scale CGENFF BOND/ANGL/DIHE on ML atoms during MLpot BLOCK (0=off) | 0.0 |
 | `mm_nonbond_mode` | `jax_mic` (JAX real-space MM) or `periodic_external` (ScaFaCoS + CHARMM) | `jax_mic` |
+| `include_mm` | JAX switched MM pairs (LJ + MIC Coulomb) in hybrid calculator | `true` |
 | `lr_solver` | Long-range Coulomb when `periodic_external`: `auto`, `mic`, `scafacos`, `jax_pme` | env / `auto` |
 | `periodic_charmm_vdw` | With `periodic_external`: keep CHARMM IMAGE LJ (default true) | true |
 
@@ -768,13 +769,69 @@ There are several “MM off” levels — pick the one that matches your goal:
 
 | Goal | Config approach |
 |------|-----------------|
-| **No JAX real-space LJ/Coulomb** (PyCHARMM) | `mm_nonbond_mode: periodic_external` — sets `doMM=False` in the decomposed calculator; long-range Coulomb via ScaFaCoS instead of truncated JAX pairs |
-| **No CHARMM LJ either** (ML + ScaFaCoS Coulomb only) | `periodic_external` + `periodic_charmm_vdw: false` |
-| **No scaled CGENFF internals on ML atoms** | `mlpot_mm_internal_scale: 0.0` (default) — CHARMM ELEC/VDW on ML atoms are already zeroed by MLpot BLOCK during dynamics |
-| **ML-only smoke (ASE/JAX-MD scripts, not md-system PyCHARMM)** | Build calculator with `doMM=False` — see `examples/md_cpu/02_ml_energy_ase.py`, `05_free_nve_ase_smoke.py` |
-| **Skip ML dimers, MM only** | `extra_args: ["--skip-ml-dimers"]` on backends that forward run_sim flags (diagnostics / fitting) |
+| **ML only — no MM LJ or Coulomb pairs** | `include_mm: false` — PhysNet monomer/dimer terms only (`doMM=False`); no JAX switched LJ, no MIC Coulomb, no MM pair list |
+| **No JAX real-space LJ/Coulomb, but add long-range Coulomb** | `mm_nonbond_mode: periodic_external` + `lr_solver: scafacos` — replaces JAX MM with ScaFaCoS (+ optional CHARMM VDW) |
+| **ML + ScaFaCoS Coulomb only** (no LJ anywhere) | `periodic_external` + `periodic_charmm_vdw: false` |
+| **No scaled CGENFF internals on ML atoms** | `mlpot_mm_internal_scale: 0.0` (default) |
+| **Skip ML dimers, keep MM** | `extra_args: ["--skip-ml-dimers"]` |
 
-PyCHARMM dynamics already runs MLpot USER with CHARMM nonbond terms blocked on ML atoms; the remaining “MM” in the hybrid calculator is the **JAX switched tail** (`jax_mic`) or **external periodic MM** (`periodic_external`).
+**ML-only (`include_mm: false`)** is what you want when the hybrid potential should be **just the ML model** — no inter-monomer Lennard-Jones and no truncated electrostatics from the MM force field. Cutoff keys (`mm_switch_on`, etc.) still configure the ML handoff taper but do not build MM pair lists.
+
+PyCHARMM dynamics with MLpot USER already blocks CHARMM ELEC/VDW on ML atoms; with `include_mm: false` the Python callback also skips the JAX MM tail, so the USER energy is **ML-only**.
+
+#### ML-only (no MM pairs, ML potential on)
+
+```yaml
+setup: pbc_nvt
+backend: pycharmm
+composition: "DCM:20"
+box_size: 38.0
+include_mm: false
+md_stages: "mini,heat,equi"
+checkpoint: /path/to/DESdimers_params.json
+output_dir: results/dcm20_ml_only
+```
+
+Campaign defaults:
+
+```yaml
+defaults:
+  include_mm: false
+  checkpoint: /path/to/DESdimers_params.json
+
+runs:
+  pycharmm_equil:
+    backend: pycharmm
+    setup: pbc_nvt
+    composition: "DCM:60"
+    box_size: 32.0
+    density_prep_mode: resilient
+    md_stages: "mini,heat,equi"
+    output_dir: results/dcm60_ml_only/pycharmm_equil
+
+  jaxmd_prod:
+    backend: jaxmd
+    setup: pbc_nvt
+    depends_on: pycharmm_equil
+    ps: 20
+    include_mm: false
+    output_dir: results/dcm60_ml_only/jaxmd_prod
+```
+
+JAX-MD / ASE with the same flag (no `max_pairs` needed for MM when ML-only):
+
+```yaml
+setup: pbc_nvt
+backend: jaxmd
+depends_on: pycharmm_equil
+ps: 10
+include_mm: false
+output_dir: results/jaxmd_ml_only
+```
+
+CLI equivalent: `--no-include-mm`.
+
+**Not the same as** `periodic_external` — that turns off JAX MM pairs but **adds** ScaFaCoS/CHARMM nonbond physics instead of leaving pure ML.
 
 ### Cutoff and long-range config snippets
 
@@ -1330,8 +1387,8 @@ ml_switch_width: 1.5
 mm_switch_on: 8.0
 mm_switch_width: 5.0
 mlpot_mm_internal_scale: 0.0
+include_mm: true
 mm_nonbond_mode: jax_mic
-lr_solver: null
 scafacos_method: null
 periodic_charmm_vdw: true
 residue: MEOH
