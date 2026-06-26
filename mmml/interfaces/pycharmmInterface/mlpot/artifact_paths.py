@@ -176,6 +176,8 @@ def staged_artifact_paths(out_dir: PathLike, tag: str) -> dict[str, Path]:
         "charmm_mm_equi_dcd": pretreat_dcd(pretreat_dir, "equi"),
         "charmm_mm_prod_res": pretreat_restart(pretreat_dir, "prod"),
         "charmm_mm_prod_dcd": pretreat_dcd(pretreat_dir, "prod"),
+        "mini_box_equil_res": pretreat_restart(pretreat_dir, "mini_box_equil"),
+        "mini_box_equil_dcd": pretreat_dcd(pretreat_dir, "mini_box_equil"),
         "geometry_baseline_res": geometry_baseline_res(out),
         "heat_res": stage_restart(out, "heat"),
         "heat_dcd": stage_dcd(out, "heat"),

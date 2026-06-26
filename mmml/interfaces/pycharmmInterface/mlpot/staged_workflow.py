@@ -1227,14 +1227,29 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     loose_pbc = resolve_loose_pbc(charmm_pbc, mlpot_pbc)
     box_side = resolve_pbc_box_side(args, r) if charmm_pbc else None
     if charmm_pbc and not args.quiet:
+        from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+            parse_composition_dict,
+            resolve_initial_pbc_box_side,
+        )
+
+        comp = parse_composition_dict(getattr(args, "composition", None))
+        _side, box_source = resolve_initial_pbc_box_side(
+            args,
+            r,
+            composition=comp,
+            n_molecules=n_mol,
+        )
         if charmm_pbc and not mlpot_pbc:
             print(
                 f"CHARMM loose PBC: cubic L={box_side:.3f} Å "
-                "(ML open boundary; no MIC)",
+                f"(source={box_source}; ML open boundary; no MIC)",
                 flush=True,
             )
         else:
-            print(f"PBC cubic box: {box_side:.3f} Å", flush=True)
+            print(
+                f"PBC cubic box: {box_side:.3f} Å (source={box_source})",
+                flush=True,
+            )
 
     dt_fs = float(getattr(args, "dt_fs", 0.25))
     timestep_ps = timestep_ps_from_dt_fs(dt_fs)
@@ -1443,6 +1458,40 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 },
                 grms_kcalmol_A=charmm_grms(),
             )
+
+    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import should_run_mini_box_equil
+
+    if should_run_mini_box_equil(
+        args,
+        charmm_pbc=charmm_pbc,
+        pretreat_mm=pretreat_mm,
+        stages=list(stages),
+    ):
+        from mmml.interfaces.pycharmmInterface.mlpot.box_equil import (
+            run_mini_box_equilibration,
+        )
+        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+            sync_workflow_pbc_box_side_after_mm_pretreat,
+        )
+
+        run_mini_box_equilibration(
+            args,
+            paths=paths,
+            timestep_ps=timestep_ps,
+            temp=temp,
+            echeck=echeck,
+            duration_ps=float(getattr(args, "mini_box_equil_ps", 0.0) or 0.0),
+            use_pbc=charmm_pbc,
+            box_side=box_side,
+        )
+        if charmm_pbc and box_side is not None:
+            box_side = sync_workflow_pbc_box_side_after_mm_pretreat(
+                box_side,
+                pretreat_restart=paths["mini_box_equil_res"],
+                args=args,
+                quiet=bool(args.quiet),
+            )
+        r = get_charmm_positions_array()
 
     if not mlpot_pbc:
         # Install MMFP once after Packmol / CHARMM pretreat / pre-MLpot mini so
