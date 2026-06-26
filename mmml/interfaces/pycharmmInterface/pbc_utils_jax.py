@@ -61,6 +61,54 @@ def wrap_positions(R: Array, cell: Array) -> Array:
     return cart_coords(S_wrapped, cell)
 
 
+def group_ids_from_groups(groups: list[Array], n_atoms: int) -> Array:
+    """Build an atom-indexed group id array from a list of atom-index groups."""
+    group_id = jnp.full((int(n_atoms),), -1, dtype=jnp.int32)
+    for i, g in enumerate(groups):
+        group_id = group_id.at[jnp.asarray(g, dtype=jnp.int32)].set(i)
+    return group_id
+
+
+def wrap_groups_by_id(
+    R: Array,
+    group_id: Array,
+    n_groups: int,
+    cell: Array,
+    mass: Optional[Array] = None,
+) -> Array:
+    """Vectorized molecular wrapping using precomputed atom-to-group ids.
+
+    ``group_id`` maps each atom index to a group in ``[0, n_groups)``. This avoids
+    per-group gathers and scatters in hot JAX-MD loops.
+    """
+    R = jnp.asarray(R)
+    group_id = jnp.asarray(group_id, dtype=jnp.int32)
+    n_groups = int(n_groups)
+    valid = group_id >= 0
+    safe_group_id = jnp.where(valid, group_id, 0)
+
+    if mass is not None:
+        weights = jnp.asarray(mass, dtype=R.dtype)
+    else:
+        weights = jnp.ones((R.shape[0],), dtype=R.dtype)
+
+    weights = jnp.where(valid, weights, jnp.zeros((), dtype=R.dtype))
+    weighted_pos = R * weights[:, None]
+    group_pos_sum = jnp.zeros((n_groups, 3), dtype=R.dtype).at[safe_group_id].add(weighted_pos)
+    group_weight_sum = jnp.zeros((n_groups,), dtype=R.dtype).at[safe_group_id].add(weights)
+    safe_weight_sum = jnp.where(
+        group_weight_sum > 0,
+        group_weight_sum,
+        jnp.ones((), dtype=R.dtype),
+    )
+    com = group_pos_sum / safe_weight_sum[:, None]
+    S_com = frac_coords(com, cell)
+    lattice_shift = -jnp.floor(S_com)
+    cart_shift = cart_coords(lattice_shift, cell)
+    atom_shift = jnp.where(valid[:, None], cart_shift[safe_group_id], 0)
+    return R + atom_shift
+
+
 def wrap_groups(
     R: Array, groups: list[Array], cell: Array, mass: Optional[Array] = None
 ) -> Array:
@@ -72,18 +120,8 @@ def wrap_groups(
     Numerically stable: the shift is ``cart_coords(-floor(S_com))``, which is
     exactly zero for in-box molecules (floor==0) and an exact lattice vector
     otherwise."""
-    R_out = R
-    for g in groups:
-        if mass is not None:
-            m_g = mass[g]
-            com = jnp.sum(R[g] * m_g[:, None], axis=0, dtype=R.dtype) / jnp.sum(m_g)
-        else:
-            com = jnp.sum(R[g], axis=0, dtype=R.dtype) / g.shape[0]
-        S_com = frac_coords(com[None, :], cell)[0]
-        lattice_shift = -jnp.floor(S_com)
-        cart_shift = cart_coords(lattice_shift[None, :], cell)[0]
-        R_out = R_out.at[g].add(cart_shift)
-    return R_out
+    group_id = group_ids_from_groups(groups, n_atoms=R.shape[0])
+    return wrap_groups_by_id(R, group_id, len(groups), cell, mass=mass)
 
 
 def mic_displacement(Ri: Array, Rj: Array, cell: Array) -> Array:

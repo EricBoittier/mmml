@@ -17,7 +17,10 @@ from rich.table import Table
 import jax.numpy as jnp
 
 from mmml.cli.run.summaries import print_flat_bottom_summary, print_forces_summary
-from mmml.interfaces.pycharmmInterface.pbc_utils_jax import wrap_groups
+from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
+    group_ids_from_groups,
+    wrap_groups_by_id,
+)
 from mmml.utils.geometry_checks import assert_no_intermonomer_atom_overlap
 from mmml.utils.hdf5_reporter import make_jaxmd_reporter
 from mmml.utils.jax_gpu_warmup import block_jax_values, ensure_xla_gpu_warmed
@@ -714,9 +717,20 @@ def set_up_nhc_sim_routine(
             jnp.arange(int(monomer_offsets[m]), int(monomer_offsets[m + 1]))
             for m in range(n_monomers)
         ]
+        _monomer_group_id = group_ids_from_groups(_monomer_groups, n_atoms=len(atoms))
+
+        def _wrap_monomers(positions, cell):
+            return wrap_groups_by_id(
+                positions,
+                _monomer_group_id,
+                n_monomers,
+                cell,
+                mass=Si_mass,
+            )
+
         overlap_min_distance = float(getattr(args, "min_intermonomer_atom_distance", 0.1))
         overlap_action = str(getattr(args, "dynamics_overlap_action", "warn")).lower()
-        # Optional slow path: JAX wrap_groups every frame at HDF5/export time (better viz).
+        # Optional path: molecular wrapping every frame at HDF5/export time (better viz).
         traj_export_molecular_wrap = bool(getattr(args, "traj_export_molecular_wrap", False))
         overlap_warning_count = 0
         overlap_min_seen = float("inf")
@@ -898,9 +912,7 @@ def set_up_nhc_sim_routine(
         min_pdb_path.parent.mkdir(parents=True, exist_ok=True)
         if use_pbc:
             _cell_for_pdb = jnp.asarray(atoms.get_cell()[:], dtype=jnp.float32)
-            pos_wrapped = wrap_groups(
-                jnp.asarray(minimized_pos), _monomer_groups, _cell_for_pdb, mass=Si_mass
-            )
+            pos_wrapped = _wrap_monomers(jnp.asarray(minimized_pos), _cell_for_pdb)
             atoms.set_positions(np.asarray(jax.device_get(pos_wrapped)))
         ase_io.write(str(min_pdb_path), atoms)
 
@@ -919,13 +931,8 @@ def set_up_nhc_sim_routine(
             # Molecular shift: wrap by monomer after each step so monomers stay intact.
             # space.periodic wraps atoms individually → monomers break across boundaries.
             _cell_jax = jnp.asarray(atoms.get_cell()[:], dtype=jnp.float32)
-            _monomer_groups = [
-                jnp.arange(int(monomer_offsets[m]), int(monomer_offsets[m + 1]))
-                for m in range(n_monomers)
-            ]
-
             def shift_molecular(R, dR, **kwargs):
-                return wrap_groups(R + dR, _monomer_groups, _cell_jax, mass=Si_mass)
+                return _wrap_monomers(R + dR, _cell_jax)
 
             pbc_unwrapped_init_fn, pbc_unwrapped_step_fn = jax_md.minimize.fire_descent(
                 wrapped_force_fn, shift_molecular, dt_start=0.001, dt_max=0.001
@@ -936,9 +943,7 @@ def set_up_nhc_sim_routine(
                 pbc_start_pos = pbc_map_fn(minimized_pos)
             else:
                 # MIC-only: wrap by monomer into cell
-                pbc_start_pos = wrap_groups(
-                    jnp.asarray(minimized_pos), _monomer_groups, _cell_jax, mass=Si_mass
-                )
+                pbc_start_pos = _wrap_monomers(jnp.asarray(minimized_pos), _cell_jax)
             # Recompute neighbor list for wrapped start positions (Fix A)
             if update_fn is not None:
                 pbc_pair_idx, pbc_pair_mask = update_fn(
@@ -1038,13 +1043,7 @@ def set_up_nhc_sim_routine(
             # NPT: positions in fractional coords; wrap md_pos into cell first, then convert to fractional
             box_curr = box_npt
             _cell_jax = jnp.asarray(atoms.get_cell()[:], dtype=jnp.float32)
-            _monomer_groups = [
-                jnp.arange(int(monomer_offsets[m]), int(monomer_offsets[m + 1]))
-                for m in range(n_monomers)
-            ]
-            md_pos_wrapped = wrap_groups(
-                jnp.asarray(md_pos), _monomer_groups, _cell_jax, mass=Si_mass
-            )
+            md_pos_wrapped = _wrap_monomers(jnp.asarray(md_pos), _cell_jax)
             md_pos_frac = as_jaxmd_dtype(md_pos_wrapped / float(args.cell))  # cubic: frac = R / L
             # Neighbor list with fractional_coordinates expects frac pos and box [L,L,L]
             box_nl = np.array([float(args.cell)] * 3, dtype=np.float64)
@@ -1263,16 +1262,6 @@ def set_up_nhc_sim_routine(
         )
 
         # ========================================================================
-        # PBC WRAPPING SETUP
-        # ========================================================================
-        if use_pbc:
-            _cell_jax = jnp.asarray(atoms.get_cell()[:], dtype=jnp.float32)
-            _monomer_groups = [
-                jnp.arange(int(monomer_offsets[m]), int(monomer_offsets[m + 1]))
-                for m in range(n_monomers)
-            ]
-
-        # ========================================================================
         # MAIN SIMULATION LOOP
         # ========================================================================
         jaxmd_loop_start = time.perf_counter()
@@ -1342,9 +1331,7 @@ def set_up_nhc_sim_routine(
                         state = sim(state, neighbor=current_neighbors, pressure=npt_pressure)
                     elif use_pbc and update_fn is not None:
                         # Wrap coordinates first so neighbor list binning (cell list) is correct!
-                        wrapped_pos = wrap_groups(
-                            state.position, _monomer_groups, _cell_jax, mass=Si_mass
-                        )
+                        wrapped_pos = _wrap_monomers(state.position, _cell_jax)
                         state = state.set(position=as_jaxmd_dtype(wrapped_pos))
                         if getattr(args, "debug", False) and (i < 3 or i % 50 == 0) and steps_done == 0:
                             print(f"[nbr] NVT/NVE record {i} (step {steps_done}): updating neighbor list")
@@ -1365,7 +1352,7 @@ def set_up_nhc_sim_routine(
                         wrapped_frac = frac_pos - jnp.floor(frac_pos)
                         state = state.set(position=as_jaxmd_dtype(wrapped_frac))
                         pos_for_overlap = space.transform(box_curr, state.position)
-                        pos_for_overlap = wrap_groups(pos_for_overlap, _monomer_groups, box_curr, mass=Si_mass)
+                        pos_for_overlap = _wrap_monomers(pos_for_overlap, box_curr)
                         rescued = _check_overlap(pos_for_overlap, box_curr, f"JAX-MD dynamics record {i + 1}")
                         if rescued is not None:
                             b_np = np.asarray(jax.device_get(box_curr), dtype=float)
@@ -1404,9 +1391,7 @@ def set_up_nhc_sim_routine(
                                 ))
                                 break
                     else:
-                        wrapped_pos = wrap_groups(
-                            state.position, _monomer_groups, _cell_jax, mass=Si_mass
-                        )
+                        wrapped_pos = _wrap_monomers(state.position, _cell_jax)
                         state = state.set(position=as_jaxmd_dtype(wrapped_pos))
                         rescued = _check_overlap(state.position, _cell_jax, f"JAX-MD dynamics record {i + 1}")
                         if rescued is not None:
@@ -1461,11 +1446,11 @@ def set_up_nhc_sim_routine(
                     if is_npt:
                         box_curr = simulate.npt_box(state)
                         pos_real = space.transform(box_curr, state.position)
-                        pos_real = wrap_groups(pos_real, _monomer_groups, box_curr, mass=Si_mass)
+                        pos_real = _wrap_monomers(pos_real, box_curr)
                     else:
                         pos_real = state.position
                         if use_pbc:
-                            pos_real = wrap_groups(pos_real, _monomer_groups, _cell_jax, mass=Si_mass)
+                            pos_real = _wrap_monomers(pos_real, _cell_jax)
                     atoms_template.set_positions(np.asarray(jax.device_get(pos_real)))
                     show_frame(atoms_template, steps, "jaxmd")
 
@@ -1566,9 +1551,7 @@ def set_up_nhc_sim_routine(
                         box_curr = simulate.npt_box(state)
                         pos_for_h5 = space.transform(box_curr, state.position)
                         if traj_export_molecular_wrap:
-                            pos_for_h5 = wrap_groups(
-                                pos_for_h5, _monomer_groups, box_curr, mass=Si_mass
-                            )
+                            pos_for_h5 = _wrap_monomers(pos_for_h5, box_curr)
                     report_kw = dict(
                         potential_energy=e_pot,
                         kinetic_energy=e_kin,
@@ -1656,15 +1639,13 @@ def set_up_nhc_sim_routine(
                 box_i = nhc_boxes[idx]
                 R = space.transform(box_i, R)
                 if traj_export_molecular_wrap:
-                    R = wrap_groups(R, _monomer_groups, box_i, mass=Si_mass)
+                    R = _wrap_monomers(R, box_i)
                 nhc_boxes_out.append(np.asarray(jax.device_get(box_i)))
             elif use_pbc:
                 if pbc_map_fn is not None:
                     R = pbc_map_fn(R)
                 if traj_export_molecular_wrap:
-                    R = wrap_groups(
-                        jnp.asarray(R), _monomer_groups, _cell_jax, mass=Si_mass
-                    )
+                    R = _wrap_monomers(jnp.asarray(R), _cell_jax)
             nhc_positions_out.append(np.asarray(jax.device_get(R)))
         if nhc_positions_out:
             positions_out = np.stack(nhc_positions_out)
