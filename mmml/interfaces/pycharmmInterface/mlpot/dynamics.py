@@ -1186,6 +1186,23 @@ def hoover_cpt_heat_ramp_spec_from_kw(
     return {"firstt": t0, "finalt": t1}
 
 
+def _cpt_npt_fresh_barostat_from_restart_kw(chunk_kw: dict[str, Any]) -> bool:
+    """True when overlap must keep ``restart+start+iasvel=1`` for CPT barostat init.
+
+    HEAT Hoover NVT uses ``pmass=0``; EQUI/PROD NPT uses ``pmass>0``.  A plain
+    ``dyna restart`` without ``start`` leaves barostat pistons uninitialized
+    (garbage ``PIXX`` / ``PRESSI`` at step 0).  ``staged_workflow`` sets
+    ``restart+start`` via :func:`staged_workflow._configure_equi_dynamics_start`;
+    overlap chunk prep must not clear those flags on chunk 0.
+    """
+    if not bool(chunk_kw.get("cpt")):
+        return False
+    pmass = chunk_kw.get("pmass")
+    if pmass is None or int(pmass) <= 0:
+        return False
+    return bool(chunk_kw.get("start")) and int(chunk_kw.get("iasvel", 0) or 0) == 1
+
+
 def _hoover_cpt_overlap_chunk_needs_cold_start(
     chunk_kw: dict[str, Any],
     *,
@@ -3339,8 +3356,13 @@ def _apply_overlap_chunk_dynamics_kw(
     """Set ``restart`` / ``new`` / ``start`` for one overlap chunk (in-place)."""
     if has_restart_read:
         chunk_kw["new"] = False
-        chunk_kw["start"] = False
         chunk_kw["restart"] = True
+        if (
+            int(chunk_index) == 0
+            and _cpt_npt_fresh_barostat_from_restart_kw(chunk_kw)
+        ):
+            return
+        chunk_kw["start"] = False
         chunk_kw["iasvel"] = 0
         if chunk_index > 0:
             chunk_kw.pop("firstt", None)
