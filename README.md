@@ -16,6 +16,7 @@ MMML combines CHARMM/OpenMM workflows with JAX-based neural models for electrost
 The documentation includes:
 - Installation instructions
 - Quick start guides
+- `mmml md-system` YAML config and campaign guide for condensed-phase workflows
 - API reference
 - Tutorials and examples
 - Troubleshooting guides
@@ -52,6 +53,10 @@ docker-compose exec mmml-cpu bash
 ```
 
 ## Quick Example
+
+For config-driven condensed-phase MD campaigns, start with
+[`mmml/cli/run/md_system.example.yaml`](mmml/cli/run/md_system.example.yaml) and the
+[`md-system` YAML config guide](https://mmml.readthedocs.io/en/latest/md-system-configs/).
 
 ```python
 import numpy as np

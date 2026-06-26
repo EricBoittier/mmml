@@ -36,6 +36,7 @@ nav:
   - Getting Started: getting-started.md
   - Package Architecture: package-architecture.md
   - DCMNet Calculators: dcmnet_calculators.md
+  - md-system YAML configs: md-system-configs.md
   - MLpot Settings: mlpot-settings.md
   - Medium PBC (500–2000 monomers): mlpot-medium-pbc.md
   - Cross-backend MD handoff: handoff.md
