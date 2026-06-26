@@ -3,6 +3,18 @@
 Used by ``tests/functionality/neighbor_lists/`` scripts and ``nl_backend.py``.
 Vesin (https://luthaf.fr/vesin/latest/index.html) is the preferred cross-path
 reference when installed (``pip install vesin`` or ``uv sync --extra nl-validation``).
+
+Dynamic MM neighbor-list contract:
+
+* Positions passed to rebuild/reference helpers are Cartesian Å coordinates.
+  Callers using fractional simulation coordinates must convert them with the
+  current cell before entering this layer.
+* Cells are scalar, ``(3,)`` orthorhombic lengths, or ``(3, 3)`` matrices in Å.
+* Rebuild helpers emit half-list atom pairs with ``i < j`` after MM monomer and
+  optional ``mm_r_min`` COM filters.
+* Padded arrays use ``int32`` pair indices and boolean masks; valid entries are
+  ``mask == True`` and padding entries are ignored regardless of index values.
+* Pair order is not part of the API contract. Tests compare pair sets.
 """
 
 from __future__ import annotations
@@ -241,7 +253,7 @@ def vesin_raw_half_list(
     *,
     points_module=None,
 ):
-    """Run Vesin half-list; return ``(i, j, dist)`` on the input device."""
+    """Run Vesin half-list on Cartesian Å positions; return ``(i, j, dist)``."""
     if not _HAVE_VESIN:
         raise ImportError("vesin is not installed")
     xp = points_module or _array_module(positions)
@@ -275,7 +287,11 @@ def filter_vesin_half_list_vectorized(
     mm_r_min: float | None = None,
     monomer_offsets: Sequence[int] | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Vectorized MM filters on Vesin ``i,j,dist`` (NumPy or CuPy)."""
+    """Vectorized MM filters on Vesin ``i,j,dist`` (NumPy or CuPy).
+
+    Returns unpadded half-list indices. Pair order follows Vesin/device order and
+    should not be treated as stable.
+    """
     xp = _array_module(i)
     i_arr = xp.asarray(i, dtype=xp.int32)
     j_arr = xp.asarray(j, dtype=xp.int32)
@@ -314,7 +330,11 @@ def pad_pair_arrays(
     *,
     max_pairs: int,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, int]:
-    """Pad filtered pair arrays to fixed capacity (NumPy or CuPy)."""
+    """Pad filtered pair arrays to fixed capacity (NumPy or CuPy).
+
+    The returned mask is boolean. Entries where ``mask`` is false are padding and
+    must be ignored by downstream energy code.
+    """
     xp = _array_module(pair_i)
     n_valid = int(pair_i.shape[0])
     if n_valid > max_pairs:

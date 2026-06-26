@@ -3,6 +3,13 @@
 ``mm_nl_backend`` selects the builder for static PBC lists and jax-md overflow
 fallback.  JAX-MD incremental updates remain in ``jax_md_neighbor_list.py``;
 rebuild paths delegate here for consistency.
+
+Backend contract: rebuild inputs are Cartesian Å coordinates plus a scalar,
+``(3,)``, or ``(3, 3)`` Å cell. Outputs are padded half-list arrays:
+``pair_i``/``pair_j`` are ``int32``, ``mask`` is boolean, and only mask-true
+entries are valid. Capacity is fixed by ``max_pairs`` for shape stability; if a
+backend must grow capacity, callers should persist the returned capacity for
+future rebuilds. Pair order is not guaranteed.
 """
 
 from __future__ import annotations
@@ -87,7 +94,7 @@ class NeighborListBackend(Protocol):
         total_atoms: int | None = None,
         debug: bool = False,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, int, int]:
-        """Return (pair_i, pair_j, mask, n_valid, capacity)."""
+        """Return ``(pair_i, pair_j, mask, n_valid, capacity)`` per module contract."""
 
 
 def _pad_pairs(
