@@ -2726,11 +2726,10 @@ def _apply_post_rescue_overlap_handoff(
     Returns ``(chunk_io, in_memory_handoff)``.
     """
     if bool(chunk_kw.get("cpt")):
-        _prepare_post_rescue_overlap_handoff(chunk_kw, mlpot_ctx=mlpot_ctx)
         print(
             f"overlap ({overlap_context}): post-rescue in-memory handoff "
-            f"at global step {max(0, int(steps_done))} (CPT; no READYN on scratch "
-            f"restart — barostat state stays in RAM)",
+            f"scheduled at global step {max(0, int(steps_done))} for next overlap "
+            f"chunk (CPT; no READYN on scratch restart — barostat state stays in RAM)",
             flush=True,
         )
         return chunk_io, True
@@ -3452,6 +3451,10 @@ def run_dynamics_with_io(
             segment_aborted = False
             early_abort_memory_handoff = False
             early_abort_restart_handoff = False
+            # One-chunk scope: rescue at end of chunk N arms memory handoff for N+1 only.
+            post_rescue_memory_this_chunk = post_rescue_in_memory_mode
+            post_rescue_in_memory_mode = False
+            post_rescue_handoff_applied = False
             overlap_restart_read_for_chunk: Path | None = None
             if io is not None and n_chunks > 1:
                 planned_read, _ = _overlap_chunk_restart_paths(
@@ -3481,7 +3484,7 @@ def run_dynamics_with_io(
                         split_trajectory=split_trajectory,
                         mlpot_ctx=mlpot_ctx,
                         use_memory_handoff=(
-                            post_rescue_in_memory_mode
+                            post_rescue_memory_this_chunk
                             or early_abort_memory_handoff
                             or _overlap_chunk_uses_memory_handoff(
                                 mlpot_ctx,
@@ -3526,7 +3529,7 @@ def run_dynamics_with_io(
                 mem_handoff = (
                     not using_readyn_chunk_io
                     and (
-                        post_rescue_in_memory_mode
+                        post_rescue_memory_this_chunk
                         or early_abort_memory_handoff
                         or _overlap_chunk_uses_memory_handoff(
                             mlpot_ctx,
@@ -3652,13 +3655,12 @@ def run_dynamics_with_io(
                         total_nstep=total_nstep,
                         n_chunks=n_chunks,
                     )
-                if post_rescue_in_memory_mode and not post_rescue_handoff_applied:
+                if post_rescue_memory_this_chunk and not post_rescue_handoff_applied:
                     _prepare_post_rescue_overlap_handoff(
                         chunk_kw,
                         mlpot_ctx=mlpot_ctx,
                     )
                     post_rescue_handoff_applied = True
-                    post_rescue_in_memory_mode = False
                 elif early_abort_memory_handoff and mlpot_ctx is not None:
                     _prepare_overlap_chunk_after_restart(mlpot_ctx, restart_read=None)
                 elif (
@@ -3795,7 +3797,7 @@ def run_dynamics_with_io(
                         n_chunks=n_chunks,
                         overlap_context=overlap_context,
                         mlpot_ctx=mlpot_ctx,
-                        memory_handoff=overlap_memory_handoff or post_rescue_in_memory_mode,
+                        memory_handoff=overlap_memory_handoff or post_rescue_memory_this_chunk,
                     )
                 if steps_done < steps_before_chunk + chunk_nstep - 1:
                     print(
@@ -4029,7 +4031,7 @@ def run_dynamics_with_io(
                         n_chunks=n_chunks,
                         overlap_context=overlap_context,
                         mlpot_ctx=mlpot_ctx,
-                        memory_handoff=overlap_memory_handoff or post_rescue_in_memory_mode,
+                        memory_handoff=overlap_memory_handoff or post_rescue_memory_this_chunk,
                     )
                 if (
                     not segment_aborted

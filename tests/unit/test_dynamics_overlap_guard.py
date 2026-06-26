@@ -1390,6 +1390,73 @@ def test_overlap_post_rescue_handoff_uses_readyn_restart(tmp_path, capsys):
     post_rescue.assert_not_called()
 
 
+def test_post_rescue_in_memory_handoff_limited_to_next_chunk(tmp_path, monkeypatch):
+    """CPT post-rescue memory I/O applies only to the chunk immediately after rescue."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+
+    monkeypatch.setenv("MMML_NO_OVERLAP_MEMORY_HANDOFF", "1")
+
+    final_res = tmp_path / "heat_cpt.res"
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        min_distance_A=0.5,
+        check_interval=500,
+        n_monomers=2,
+        use_pbc=True,
+        memory_handoff=False,
+    )
+    restart_reads: list[Path | None] = []
+
+    def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
+        restart_reads.append(
+            Path(_io.restart_read) if _io is not None and _io.restart_read else None
+        )
+        if _io is not None and _io.restart_write is not None:
+            step = 500 * len(restart_reads)
+            Path(_io.restart_write).write_text(f"REST {step} 0\n", encoding="utf-8")
+        return mock.Mock()
+
+    def track_overlap(_cfg, *, context, step, mlpot_ctx=None):
+        return (5.0, int(step) == 500)
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        side_effect=fake_chunk,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._cpt_stability_chunk_nstep",
+        return_value=None,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+        side_effect=track_overlap,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.finalize_overlap_rescue_for_dynamics",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_post_rescue_overlap_handoff",
+    ) as post_rescue_prepare, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
+        side_effect=lambda p: Path(p).resolve(),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
+        side_effect=lambda path: int(Path(path).read_text().split()[1]),
+    ):
+        run_dynamics_with_io(
+            {"nstep": 1500, "cpt": True, "hoover reft": 12.0},
+            CharmmTrajectoryFiles(restart_write=final_res),
+            overlap=cfg,
+            overlap_context="HEAT",
+            mlpot_ctx=mock.Mock(),
+        )
+
+    assert len(restart_reads) == 3
+    assert restart_reads[1] is None
+    assert restart_reads[2] is not None
+    post_rescue_prepare.assert_called_once()
+
+
 def test_overlap_post_rescue_single_chunk_patches_without_extra_dyna(tmp_path, capsys):
     """Segment-boundary rescue with one overlap chunk must not require another dyna leg."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
