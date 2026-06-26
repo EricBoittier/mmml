@@ -1128,6 +1128,39 @@ def _run_extent_guard(
         )
 
 
+def probe_dynamics_geometry_violation(
+    config: DynamicsOverlapConfig,
+    *,
+    context: str,
+    step: int | None = None,
+) -> bool:
+    """Return True when extent or intra/inter-monomer geometry checks would fail.
+
+    Read-only probe (no bonded-MM or MLpot rescue). Used after echeck/CHARMM
+  aborts to decide whether full geometry cleanup is required before retry.
+    """
+    if not config.enabled and not config.intra_enabled and not config.extent_enabled:
+        return False
+
+    label = context if step is None else f"{context} at step {step}"
+    if config.extent_enabled:
+        try:
+            _extent_check(config, context=label)
+        except RuntimeError:
+            return True
+    if config.enabled:
+        try:
+            _overlap_check(config, context=label)
+        except RuntimeError:
+            return True
+    if config.intra_enabled:
+        try:
+            _intramonomer_check(config, context=label)
+        except RuntimeError:
+            return True
+    return False
+
+
 def check_dynamics_overlap(
     config: DynamicsOverlapConfig,
     *,

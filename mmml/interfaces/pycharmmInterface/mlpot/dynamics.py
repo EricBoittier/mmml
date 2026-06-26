@@ -4024,8 +4024,7 @@ def run_dynamics_with_io(
                 if steps_done < steps_before_chunk + chunk_nstep - 1:
                     print(
                         f"overlap ({overlap_context}): integrated {steps_done}/{total_nstep} "
-                        "steps (echeck or CHARMM abort likely); skipping mid-stage "
-                        "overlap geometry check",
+                        "steps (echeck or CHARMM abort likely)",
                         flush=True,
                     )
                     from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
@@ -4053,7 +4052,20 @@ def run_dynamics_with_io(
                         early_abort_memory_handoff = False
                         early_abort_restart_handoff = False
                         rescued_overlap = False
-                        if mlpot_ctx is not None and overlap is not None:
+                        geometry_violation = False
+                        if overlap is not None:
+                            from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+                                probe_dynamics_geometry_violation,
+                            )
+
+                            geometry_violation = probe_dynamics_geometry_violation(
+                                overlap,
+                                context=(
+                                    f"{overlap_context} after early-abort recovery"
+                                ),
+                                step=steps_before_chunk,
+                            )
+                        if geometry_violation and mlpot_ctx is not None and overlap is not None:
                             from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
                                 finalize_overlap_rescue_for_dynamics,
                             )
@@ -4078,10 +4090,6 @@ def run_dynamics_with_io(
                                     f"(step {steps_before_chunk})"
                                 ),
                             )
-                            # In-memory echeck aborts often sit just under the overlap
-                            # distance threshold; bonded rescue here rewinds PSF state
-                            # unnecessarily.  Only run the full overlap guard when
-                            # coordinates were reloaded from disk/run_state.
                             if recovery.source != "memory":
                                 _, rescued_overlap = check_dynamics_overlap(
                                     overlap,
@@ -4091,14 +4099,13 @@ def run_dynamics_with_io(
                                     step=steps_before_chunk,
                                     mlpot_ctx=mlpot_ctx,
                                 )
+                        elif mlpot_ctx is not None:
+                            mlpot_ctx.reregister_mlpot(verbose=False)
                         use_readyn_handoff = (
                             chunk_io is not None
                             and n_chunks > 1
                             and not bool(chunk_kw.get("cpt"))
-                            and (
-                                rescued_overlap
-                                or recovery.source != "memory"
-                            )
+                            and rescued_overlap
                         )
                         if use_readyn_handoff:
                             chunk_io = _materialize_post_rescue_restart_handoff(
@@ -4125,9 +4132,14 @@ def run_dynamics_with_io(
                             early_abort_memory_handoff = True
                         steps_done = steps_before_chunk
                         rerun_chunk = True
+                        retry_reason = (
+                            "geometry recovery"
+                            if geometry_violation or rescued_overlap
+                            else "state reload"
+                        )
                         print(
                             f"overlap ({overlap_context}): retrying chunk "
-                            f"{chunk_index + 1}/{n_chunks} after geometry recovery "
+                            f"{chunk_index + 1}/{n_chunks} after {retry_reason} "
                             f"(attempt {chunk_retry_count}/{_MAX_EARLY_ABORT_CHUNK_RETRIES})",
                             flush=True,
                         )
