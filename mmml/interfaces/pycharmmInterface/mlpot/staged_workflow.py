@@ -1228,6 +1228,14 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
 
     out_dir = Path(args.output_dir).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
+    if getattr(args, "mlpot_profile", False):
+        from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+            write_profile_git_metadata,
+        )
+
+        metadata_path = write_profile_git_metadata(out_dir)
+        if not getattr(args, "quiet", False):
+            print(f"MLpot profile: wrote git metadata {metadata_path}", flush=True)
     n_atoms = len(z)
     paths = _artifact_paths(out_dir, tag)
     save_artifacts = bool(getattr(args, "save", True))
