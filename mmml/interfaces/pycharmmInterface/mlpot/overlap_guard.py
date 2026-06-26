@@ -497,6 +497,13 @@ def attach_prior_segment_restart(
         geometry_baseline_restart=tagged.geometry_baseline_restart,
     )
     if prior is None:
+        from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+            build_geometry_recovery_candidates,
+            first_valid_restart_path,
+        )
+
+        prior = first_valid_restart_path(build_geometry_recovery_candidates(tagged))
+    if prior is None:
         prior = infer_prior_restart_from_write_path(restart_write)
     if prior is None:
         return tagged
@@ -1025,18 +1032,28 @@ def _handle_extent_rescue(
     exc: RuntimeError,
     mlpot_ctx: "MlpotContext",
 ) -> float:
+    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+        build_geometry_recovery_candidates,
+    )
+
+    candidates = build_geometry_recovery_candidates(config)
     prior = config.prior_segment_restart
-    if prior is None or not Path(prior).is_file():
+    if prior is not None:
+        prior_path = Path(prior)
+        if not any(c.resolve() == prior_path.resolve() for c in candidates):
+            candidates.insert(0, prior_path)
+    if not candidates:
         raise RuntimeError(
             f"{exc}; extent recovery requires a prior segment restart file "
-            f"(got {prior!r})"
+            f"(got {prior!r}) or a geometry baseline / checkpoint ladder"
         ) from exc
+    recovery_path = candidates[0]
     sd_steps = config.intra_rescue_sd_steps
     if sd_steps is None:
         sd_steps = config.rescue.nstep_sd
     print(
-        f"{exc}\nAttempting fly-off recovery from prior restart "
-        f"{Path(prior).name} (bonded-MM SD={sd_steps})...",
+        f"{exc}\nAttempting fly-off recovery from "
+        f"{recovery_path.name} (bonded-MM SD={sd_steps})...",
         flush=True,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
@@ -1047,17 +1064,17 @@ def _handle_extent_rescue(
         run_extent_recovery_from_prior_restart(
             mlpot_ctx,
             config,
-            prior_restart=prior,
+            prior_restart=recovery_path,
         )
     except Exception as rescue_exc:
         raise RuntimeError(
-            f"{exc}; fly-off recovery from {Path(prior).name} failed: {rescue_exc}"
+            f"{exc}; fly-off recovery from {recovery_path.name} failed: {rescue_exc}"
         ) from rescue_exc
     try:
         return _extent_check(config, context=f"{label} after fly-off recovery")
     except RuntimeError as still_bad:
         raise RuntimeError(
-            f"{still_bad}; fly-off recovery from {Path(prior).name} "
+            f"{still_bad}; fly-off recovery from {recovery_path.name} "
             f"(SD={sd_steps}) did not restore monomer extent "
             f"<= {config.max_monomer_extent_A:.2f} A — inspect the prior restart "
             f"or reduce the timestep / heating rate"
