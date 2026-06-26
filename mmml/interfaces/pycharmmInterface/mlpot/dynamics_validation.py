@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import re
 import struct
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Literal, Sequence
 
 import numpy as np
 
@@ -178,25 +180,52 @@ def expected_overlap_chunk_dcd_frame_count(
     nsavc: int,
     n_chunks: int,
     cold_start_first_chunk: bool = False,
+    integrated_step: int | None = None,
+    n_completed_chunks: int | None = None,
+    per_chunk_nsavc: Sequence[int] | None = None,
 ) -> int:
     """Expected readable frames across per-chunk overlap DCDs.
 
     Overlap segments restart between chunks; CHARMM usually omits a duplicate
     origin frame on continuation chunks, so expect ``nstep // nsavc`` per chunk
     rather than ``1 + nstep // nsavc`` for every chunk.
+
+    When ``integrated_step`` is set (partial stage), frame expectations use the
+    integrated step count, not the full ``total_nstep``.
     """
     n_chunks = max(1, int(n_chunks))
     total = max(1, int(total_nstep))
+    if integrated_step is not None:
+        integrated = max(0, min(int(integrated_step), total))
+        if integrated <= 0:
+            return 0
+        sav = max(1, int(nsavc))
+        return expected_dcd_frame_count(nstep=integrated, nsavc=sav)
+
     chunk_nstep = max(1, total // n_chunks)
-    # Overlap chunks call harmonize_nsavc_frequency (see dynamics._harmonize_overlap_chunk_frequencies).
+    completed = n_completed_chunks if n_completed_chunks is not None else n_chunks
+    completed = max(0, min(int(completed), n_chunks))
+    if completed == 0:
+        return 0
+
+    if per_chunk_nsavc is not None and len(per_chunk_nsavc) >= completed:
+        frames = 0
+        for i in range(completed):
+            sav_i = max(1, int(per_chunk_nsavc[i]))
+            n_i = chunk_nstep if i < completed - 1 else max(
+                1, total - chunk_nstep * (completed - 1)
+            )
+            frames += max(1, n_i // harmonize_nsavc_frequency(sav_i, n_i))
+        return frames
+
     sav = harmonize_nsavc_frequency(int(nsavc), chunk_nstep)
     per_restart = max(1, chunk_nstep // sav)
-    if cold_start_first_chunk and n_chunks > 1:
+    if cold_start_first_chunk and completed > 1:
         per_cold = expected_dcd_frame_count(nstep=chunk_nstep, nsavc=sav)
-        return per_cold + per_restart * (n_chunks - 1)
-    if cold_start_first_chunk:
+        return per_cold + per_restart * (completed - 1)
+    if cold_start_first_chunk and completed == 1:
         return expected_dcd_frame_count(nstep=chunk_nstep, nsavc=sav)
-    return per_restart * n_chunks
+    return per_restart * completed
 
 
 def _parse_fortran_d_float(token: str) -> float:
@@ -545,6 +574,71 @@ def patch_restart_global_step(path: Path, global_step: int) -> bool:
     return True
 
 
+@dataclass(frozen=True)
+class ChunkOutcome:
+    """Trusted chunk integration outcome for overlap abort decisions."""
+
+    kind: Literal["ok", "charmm_aborted", "geometry_violation"]
+    integrated_step: int
+    charmm_aborted: bool
+    geometry_violation: bool
+    header_misread: bool = False
+
+
+def classify_chunk_outcome(
+    *,
+    steps_before_chunk: int,
+    chunk_nstep: int,
+    reported_steps: int,
+    chunk_state_corrupt: bool,
+    restart_path: Path | None,
+    overlap_context: str = "dynamics",
+    chunk_index: int = 0,
+    n_chunks: int = 1,
+) -> ChunkOutcome:
+    """Classify overlap chunk result using corroborated CHARMM abort signals.
+
+    Restart-header shortfall alone is **not** treated as ``charmm_aborted``; stale
+    ``JHSTRT``/``NSTEP`` on scratch ``.a/.b.res`` files caused false recovery.
+    """
+    expected_after = int(steps_before_chunk) + int(chunk_nstep)
+    reported = max(0, int(reported_steps))
+    header_step: int | None = None
+    if restart_path is not None:
+        header_step = read_restart_last_step(Path(restart_path))
+
+    charmm_aborted = bool(chunk_state_corrupt)
+    if header_step is not None and header_step < 0:
+        charmm_aborted = True
+
+    header_misread = False
+    shortfall = reported < expected_after - 1
+
+    if charmm_aborted and shortfall:
+        integrated = reported
+    elif shortfall:
+        print(
+            f"overlap ({overlap_context}): chunk {chunk_index + 1}/{n_chunks} "
+            f"restart header reports step {reported} < {expected_after - 1} "
+            f"without CHARMM abort signal; trusting completed chunk accounting",
+            flush=True,
+        )
+        integrated = expected_after
+        header_misread = True
+    elif reported >= expected_after - 1:
+        integrated = max(reported, expected_after)
+    else:
+        integrated = reported
+
+    return ChunkOutcome(
+        kind="charmm_aborted" if charmm_aborted else "ok",
+        integrated_step=integrated,
+        charmm_aborted=charmm_aborted,
+        geometry_violation=False,
+        header_misread=header_misread,
+    )
+
+
 def assert_stage_dynamics_completed(
     *,
     stage: str,
@@ -556,6 +650,8 @@ def assert_stage_dynamics_completed(
     min_frame_fraction: float = 0.90,
     allow_incomplete: bool = False,
     segment_note: str | None = None,
+    integrated_step: int | None = None,
+    salvaged_partial: bool = False,
 ) -> None:
     """Fail if dynamics stopped early or the stage DCD is nearly empty.
 
@@ -566,17 +662,33 @@ def assert_stage_dynamics_completed(
     if allow_incomplete:
         return
 
+    if salvaged_partial and integrated_step is not None:
+        raise RuntimeError(
+            f"{stage.upper()} dynamics incomplete: salvaged partial segment at step "
+            f"{integrated_step}/{expected_nstep} — equi/prod blocked unless "
+            "--allow-incomplete-dynamics"
+        )
+
     expected_nstep = max(1, int(expected_nstep))
     nsavc = max(1, int(nsavc))
     chunk_paths = overlap_chunk_dcd_paths(dcd_path) if dcd_path is not None else []
+    step_for_frames = integrated_step if integrated_step is not None else expected_nstep
     if chunk_paths:
         expected_frames = expected_overlap_chunk_dcd_frame_count(
             total_nstep=expected_nstep,
             nsavc=nsavc,
             n_chunks=len(chunk_paths),
+            integrated_step=step_for_frames if step_for_frames < expected_nstep else None,
+            n_completed_chunks=(
+                max(1, (int(step_for_frames) * len(chunk_paths)) // expected_nstep)
+                if step_for_frames < expected_nstep
+                else None
+            ),
         )
     else:
-        expected_frames = expected_dcd_frame_count(nstep=expected_nstep, nsavc=nsavc)
+        expected_frames = expected_dcd_frame_count(
+            nstep=step_for_frames, nsavc=nsavc
+        )
     min_frames = max(1, int(expected_frames * min_frame_fraction))
     if expected_frames >= 2:
         min_frames = max(2, min_frames)
@@ -602,7 +714,15 @@ def assert_stage_dynamics_completed(
     n_frames = min(header_frames, readable_frames) if header_frames else readable_frames
 
     problems: list[str] = []
-    if restart_step is not None and restart_step < min_steps:
+    effective_step = integrated_step
+    if effective_step is None and restart_path is not None:
+        effective_step = restart_step
+    if effective_step is not None and effective_step < min_steps:
+        problems.append(
+            f"integrated step {effective_step} < {min_steps} "
+            f"(expected ~{expected_nstep}; likely echeck or CHARMM abort)"
+        )
+    elif restart_step is not None and restart_step < min_steps and integrated_step is None:
         problems.append(
             f"restart step {restart_step} < {min_steps} "
             f"(expected ~{expected_nstep}; likely echeck or CHARMM abort)"
@@ -629,14 +749,30 @@ def assert_stage_dynamics_completed(
             if chunk_paths
             else f" at nsavc={nsavc}"
         )
-        if restart_step is not None and restart_step >= min_steps:
-            print(
-                f"WARN: {stage.upper()} {label} has {n_frames} readable frame(s), "
-                f"expected >= {min_frames} (~{expected_frames} total{chunk_note}), "
-                f"but restart step {restart_step} >= {min_steps}; accepting segment "
-                "from checkpoint (common after overlap/extent rescue in-memory refresh)",
-                flush=True,
+        if (
+            effective_step is not None
+            and effective_step >= min_steps
+            and integrated_step is not None
+            and integrated_step < min_steps
+        ):
+            problems.append(
+                f"{label} has {n_frames} readable frame(s), "
+                f"expected >= {min_frames} (~{expected_frames} total{chunk_note})"
             )
+        elif restart_step is not None and restart_step >= min_steps:
+            if integrated_step is not None and integrated_step < min_steps:
+                problems.append(
+                    f"{label} has {n_frames} readable frame(s) but integrated step "
+                    f"{integrated_step} < {min_steps}"
+                )
+            else:
+                print(
+                    f"WARN: {stage.upper()} {label} has {n_frames} readable frame(s), "
+                    f"expected >= {min_frames} (~{expected_frames} total{chunk_note}), "
+                    f"but restart step {restart_step} >= {min_steps}; accepting segment "
+                    "from checkpoint (common after overlap/extent rescue in-memory refresh)",
+                    flush=True,
+                )
         else:
             problems.append(
                 f"{label} has {n_frames} readable frame(s), "
@@ -650,6 +786,7 @@ def assert_stage_dynamics_completed(
         print(
             f"{stage_label} complete: "
             f"restart_step={restart_step if restart_step is not None else '?'}, "
+            f"integrated_step={integrated_step if integrated_step is not None else effective_step if effective_step is not None else '?'}, "
             f"dcd_frames={n_frames} readable"
             + (
                 f" (header {header_frames})"
