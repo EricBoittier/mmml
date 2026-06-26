@@ -2291,13 +2291,16 @@ def _overlap_chunk_uses_memory_handoff(
     chunk_index: int,
     n_chunks: int,
     overlap: Optional["DynamicsOverlapConfig"] = None,
+    cpt: bool = False,
 ) -> bool:
     """Continue overlap segments in-process when MLpot is active.
 
-    Scratch ``READYN`` between chunks restores stale CPT barostat internals and
-    desynchronizes MLpot; keep coordinates, velocities, and barostat in RAM for
-    all chunks when ``overlap.memory_handoff`` is set (not only chunk 0).
+  Hoover CPT needs ``READYN`` between overlap chunks so global step/time and
+    barostat piston state advance correctly; in-memory handoff resets ``dyna`` to
+    step 0 and reuses comparison coordinates as velocities.
     """
+    if cpt:
+        return False
     if mlpot_ctx is None or n_chunks <= 1:
         return False
     if overlap is not None and overlap.memory_handoff:
@@ -2514,21 +2517,63 @@ def _harmonize_overlap_chunk_frequencies(
     chunk_nstep: int,
     *,
     loose_pbc: bool = False,
+    global_step_start: int = 0,
 ) -> None:
     """Align list/image/HB update freqs with this chunk's ``nstep`` (avoids FINCYC retune)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        effective_dcd_interval_ps,
+        nsavc_for_chunk_preserving_interval,
+        resolve_target_dcd_nsavc,
+    )
+
     n = max(1, int(chunk_nstep))
+    target_nsavc = resolve_target_dcd_nsavc(chunk_kw)
+    timestep_ps = float(chunk_kw.get("timestep", 0.0) or 0.0)
+    target_interval_ps = chunk_kw.get("_dcd_interval_ps")
     for key in _OVERLAP_CHUNK_FREQ_KEYS:
         if key not in chunk_kw:
             continue
         if key == "nsavc":
             old = int(chunk_kw[key])
-            new = _harmonize_nsavc_frequency(old, n)
-            if new != old:
-                print(
-                    f"overlap chunk: DCD nsavc {old} -> {new} (nstep={n})",
-                    flush=True,
+            if target_nsavc is not None:
+                new = nsavc_for_chunk_preserving_interval(
+                    target_nsavc,
+                    n,
+                    global_step_start=int(global_step_start),
                 )
-            chunk_kw[key] = new
+                if new is None:
+                    chunk_kw.pop("nsavc", None)
+                    for k in ("nprint", "iprfrq", "isvfrq"):
+                        chunk_kw.pop(k, None)
+                    if target_interval_ps is not None:
+                        print(
+                            f"overlap chunk: skip DCD (target "
+                            f"{float(target_interval_ps):.6g} ps, "
+                            f"global step {int(global_step_start)}–"
+                            f"{int(global_step_start) + n}; "
+                            f"chunk nstep={n} too short for aligned save)",
+                            flush=True,
+                        )
+                    continue
+            else:
+                new = _harmonize_nsavc_frequency(old, n)
+            if new != old:
+                if target_interval_ps is not None and timestep_ps > 0:
+                    old_ps = effective_dcd_interval_ps(nsavc=old, timestep_ps=timestep_ps)
+                    new_ps = effective_dcd_interval_ps(nsavc=new, timestep_ps=timestep_ps)
+                    print(
+                        f"overlap chunk: DCD nsavc {old} -> {new} "
+                        f"({old_ps:.6g} -> {new_ps:.6g} ps; target "
+                        f"{float(target_interval_ps):.6g} ps; nstep={n}; "
+                        f"global step {int(global_step_start)})",
+                        flush=True,
+                    )
+                else:
+                    print(
+                        f"overlap chunk: DCD nsavc {old} -> {new} (nstep={n})",
+                        flush=True,
+                    )
+            chunk_kw["nsavc"] = new
             for k in ("nprint", "iprfrq", "isvfrq"):
                 if k in chunk_kw:
                     chunk_kw[k] = new
@@ -2850,11 +2895,20 @@ def _prepare_overlap_chunk_after_restart(
         pycharmm.lingo.charmm_script("UPDATE")
 
 
+def _cpt_subchunk_restart_slot_paths(base: Path) -> tuple[Path, Path]:
+    """Alternating scratch restarts for CPT stability sub-chunks within one segment."""
+    parent = base.parent
+    stem = base.stem
+    return (
+        parent / f"{stem}.cptsc_a.res",
+        parent / f"{stem}.cptsc_b.res",
+    )
+
+
 def _apply_cpt_in_memory_continuation_kw(kw: dict[str, Any]) -> None:
     """In-process ``dyna`` continuation for CPT sub-chunks (no ``READYN``).
 
-    ``restart=True`` with ``iunrea=-1`` segfaults in Fortran ``readyn``; overlap
-    memory handoff and CPT stability sub-chunks must keep coordinates in RAM.
+    Legacy path when ``MMML_CPT_IN_MEMORY_SUBCHUNK=1``; resets global step/time.
     """
     kw["restart"] = False
     kw["new"] = False
@@ -2866,6 +2920,55 @@ def _apply_cpt_in_memory_continuation_kw(kw: dict[str, Any]) -> None:
     _strip_stale_heat_ramp_keywords(kw)
     if int(kw.get("ihtfrq", 0) or 0) != 0:
         kw["ihtfrq"] = 0
+
+
+def _apply_cpt_restart_continuation_kw(kw: dict[str, Any]) -> None:
+    """``READYN`` continuation for CPT sub-chunks (preserves barostat + global step)."""
+    kw["restart"] = True
+    kw["new"] = False
+    kw["start"] = False
+    kw["iasvel"] = 0
+    kw.pop("firstt", None)
+    _strip_stale_heat_ramp_keywords(kw)
+    if int(kw.get("ihtfrq", 0) or 0) != 0:
+        kw["ihtfrq"] = 0
+
+
+def _materialize_cpt_subchunk_restart_handoff(
+    write_path: Path,
+    *,
+    global_step: int,
+    overlap_context: str,
+    mlpot_ctx: Optional["MlpotContext"] = None,
+    chunk_kw: dict[str, Any] | None = None,
+) -> Path:
+    """Write a validated READYN restart from in-memory state after a CPT sub-chunk."""
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        rewrite_dynamics_restart_validated,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        patch_restart_global_step,
+    )
+
+    if chunk_kw is not None and bool(chunk_kw.get("cpt")):
+        _assign_post_rescue_velocities_and_crystal(
+            chunk_kw,
+            mlpot_ctx=mlpot_ctx,
+        )
+
+    if not rewrite_dynamics_restart_validated(write_path):
+        raise RuntimeError(
+            f"{overlap_context}: CPT sub-chunk restart handoff failed writing "
+            f"{write_path.name} from in-memory CHARMM state"
+        )
+    patch_restart_global_step(write_path, global_step)
+    valid = _valid_restart_file(write_path)
+    if valid is None:
+        raise RuntimeError(
+            f"{overlap_context}: CPT sub-chunk restart handoff wrote "
+            f"{write_path.name} but it does not validate as READYN"
+        )
+    return valid
 
 
 def _strip_stale_heat_ramp_keywords(kw: dict[str, Any]) -> None:
@@ -2963,8 +3066,10 @@ def _apply_overlap_chunk_dynamics_kw(
 def _cleanup_overlap_restart_slots(io: Optional[CharmmTrajectoryFiles]) -> None:
     if io is None or io.restart_write is None:
         return
-    slot_a, slot_b = _overlap_restart_slot_paths(Path(io.restart_write))
-    for path in (slot_a, slot_b):
+    final = Path(io.restart_write)
+    slot_a, slot_b = _overlap_restart_slot_paths(final)
+    cpt_a, cpt_b = _cpt_subchunk_restart_slot_paths(final)
+    for path in (slot_a, slot_b, cpt_a, cpt_b):
         try:
             path.unlink(missing_ok=True)
         except OSError:
@@ -3152,45 +3257,119 @@ def _run_cpt_stability_subchunked(
     rng_salt_base: int = 0,
     loose_pbc: bool = False,
     log_banner: bool = True,
+    global_step_offset: int = 0,
+    mlpot_ctx: Optional["MlpotContext"] = None,
 ) -> Any:
     """Integrate CPT dynamics in short ``dyn.run()`` segments with state checks."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         validate_charmm_dynamics_state_after_chunk,
     )
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import _truthy_env
 
     total = int(total_nstep if total_nstep is not None else kw.get("nstep", 0))
     steps_done = 0
     last_dyn = None
-    n_chunks = (total + chunk_nstep - 1) // chunk_nstep
-    if log_banner and n_chunks > 1:
+    n_subchunks = (total + chunk_nstep - 1) // chunk_nstep
+    use_in_memory = _truthy_env("MMML_CPT_IN_MEMORY_SUBCHUNK")
+    final_write = (
+        Path(io.restart_write)
+        if io is not None and io.restart_write is not None
+        else None
+    )
+    use_restart_handoff = not use_in_memory and final_write is not None
+    slot_a, slot_b = (
+        _cpt_subchunk_restart_slot_paths(final_write)
+        if final_write is not None
+        else (None, None)
+    )
+    prev_write: Path | None = None
+    if log_banner and n_subchunks > 1:
+        mode = (
+            "in-memory"
+            if not use_restart_handoff
+            else "READYN restart"
+        )
         print(
             f"{overlap_context}: CPT stability chunking — {total} steps in "
-            f"{n_chunks} segment(s) of ≤{chunk_nstep} "
-            "(avoids NaN barostat / image-update segfaults)",
+            f"{n_subchunks} segment(s) of ≤{chunk_nstep} "
+            f"({mode}; avoids NaN barostat / image-update segfaults)",
             flush=True,
         )
     while steps_done < total:
         n = min(chunk_nstep, total - steps_done)
         sub_kw = dict(kw)
         sub_kw["nstep"] = n
-        if steps_done > 0:
-            _apply_cpt_in_memory_continuation_kw(sub_kw)
+        is_continuation = steps_done > 0
+        if is_continuation:
+            if use_restart_handoff:
+                _apply_cpt_restart_continuation_kw(sub_kw)
+            else:
+                _apply_cpt_in_memory_continuation_kw(sub_kw)
         _harmonize_overlap_chunk_frequencies(
             sub_kw,
             n,
             loose_pbc=loose_pbc,
+            global_step_start=int(global_step_offset) + steps_done,
+        )
+
+        sub_io = io
+        write_path: Path | None = None
+        if (
+            use_restart_handoff
+            and n_subchunks > 1
+            and slot_a is not None
+            and slot_b is not None
+        ):
+            if is_continuation:
+                read_path = prev_write
+            else:
+                read_path = io.restart_read if io is not None else None
+            if steps_done + n >= total:
+                write_path = final_write
+            elif not is_continuation:
+                write_path = slot_a
+            else:
+                write_path = slot_b if prev_write == slot_a else slot_a
+            sub_io = CharmmTrajectoryFiles(
+                restart_read=Path(read_path) if read_path is not None else None,
+                restart_write=write_path,
+                trajectory=io.trajectory if io is not None else None,
+                pressure_tensor_log=(
+                    io.pressure_tensor_log if io is not None else None
+                ),
+                restart_read_unit=io.restart_read_unit if io is not None else 3,
+                restart_write_unit=io.restart_write_unit if io is not None else 2,
+                trajectory_unit=io.trajectory_unit if io is not None else 1,
+                pressure_tensor_log_unit=(
+                    io.pressure_tensor_log_unit if io is not None else 29
+                ),
+            )
+            if is_continuation and mlpot_ctx is not None and read_path is not None:
+                _prepare_overlap_chunk_after_restart(
+                    mlpot_ctx,
+                    restart_read=read_path,
+                )
+
+        sub_traj_iokw = (
+            extra_iokw
+            if (extra_iokw and steps_done == 0 and "nsavc" in sub_kw)
+            else {}
         )
         last_dyn = _run_dynamics_chunk(
             sub_kw,
-            io,
-            extra_iokw=extra_iokw,
+            sub_io,
+            extra_iokw=sub_traj_iokw,
             rng_base=rng_base,
             rng_salt=rng_salt_base + steps_done,
         )
         restart_path = (
-            Path(io.restart_write)
-            if io is not None and io.restart_write is not None
-            else None
+            write_path
+            if write_path is not None
+            else (
+                Path(io.restart_write)
+                if io is not None and io.restart_write is not None
+                else None
+            )
         )
         if _dynamics_chunk_state_corrupt(
             overlap_context=f"{overlap_context} CPT sub-chunk ending step {steps_done + n}",
@@ -3199,6 +3378,20 @@ def _run_cpt_stability_subchunked(
             validate_charmm_dynamics_state_after_chunk(
                 context=f"{overlap_context} at step {steps_done + n}",
             )
+        global_step = max(0, int(global_step_offset) + steps_done + n)
+        if (
+            use_restart_handoff
+            and write_path is not None
+            and n_subchunks > 1
+        ):
+            _materialize_cpt_subchunk_restart_handoff(
+                write_path,
+                global_step=global_step,
+                overlap_context=overlap_context,
+                mlpot_ctx=mlpot_ctx,
+                chunk_kw=sub_kw,
+            )
+            prev_write = write_path
         steps_done += n
     return last_dyn
 
@@ -3260,6 +3453,11 @@ def run_dynamics_with_io(
         _ensure_domdec_off_for_mlpot_energy(context=overlap_context)
 
     kw = dict(dynamics_kwargs)
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        install_target_dcd_metadata,
+    )
+
+    install_target_dcd_metadata(kw)
     _ensure_nsavc_below_nstep(kw)
     total_nstep = int(kw.get("nstep", 0))
     if loose_pbc and total_nstep > 0:
@@ -3277,6 +3475,7 @@ def run_dynamics_with_io(
         and mlpot_ctx is not None
         and total_nstep > 0
         and not overlap.memory_handoff
+        and not bool(kw.get("cpt"))
     ):
         from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import _truthy_env
 
@@ -3289,6 +3488,20 @@ def run_dynamics_with_io(
                     f"overlap ({overlap_context}): MLpot in-memory chunk handoff",
                     flush=True,
                 )
+    elif (
+        guard_active
+        and overlap is not None
+        and mlpot_ctx is not None
+        and total_nstep > 0
+        and bool(kw.get("cpt"))
+        and overlap.memory_handoff
+        and total_nstep > int(overlap.check_interval)
+    ):
+        print(
+            f"overlap ({overlap_context}): CPT uses scratch restart handoff "
+            f"(ignoring dynamics_overlap_memory_handoff)",
+            flush=True,
+        )
     if guard_active and overlap is not None:
         from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
             attach_prior_segment_restart,
@@ -3491,6 +3704,7 @@ def run_dynamics_with_io(
                                 chunk_index=chunk_index,
                                 n_chunks=n_chunks,
                                 overlap=overlap,
+                                cpt=bool(chunk_kw.get("cpt")),
                             )
                         ),
                     )
@@ -3536,6 +3750,7 @@ def run_dynamics_with_io(
                             chunk_index=chunk_index,
                             n_chunks=n_chunks,
                             overlap=overlap,
+                            cpt=bool(chunk_kw.get("cpt")),
                         )
                     )
                 )
@@ -3687,6 +3902,7 @@ def run_dynamics_with_io(
                     chunk_kw,
                     chunk_nstep,
                     loose_pbc=loose_pbc,
+                    global_step_start=steps_before_chunk,
                 )
                 if has_restart_read:
                     _prepare_overlap_chunk_after_restart(
@@ -3700,7 +3916,13 @@ def run_dynamics_with_io(
 
                 chunk_traj_iokw = (
                     trajectory_iokw
-                    if (not split_trajectory and chunk_index == 0) or split_trajectory
+                    if (
+                        "nsavc" in chunk_kw
+                        and (
+                            (not split_trajectory and chunk_index == 0)
+                            or split_trajectory
+                        )
+                    )
                     else {}
                 )
                 cpt_sub_chunk = (
@@ -3728,6 +3950,8 @@ def run_dynamics_with_io(
                         ),
                         loose_pbc=loose_pbc,
                         log_banner=False,
+                        global_step_offset=steps_before_chunk,
+                        mlpot_ctx=mlpot_ctx,
                     )
                 else:
                     last_dyn = _run_dynamics_chunk(

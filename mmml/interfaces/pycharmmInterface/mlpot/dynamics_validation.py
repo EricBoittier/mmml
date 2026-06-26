@@ -80,6 +80,97 @@ def harmonize_nsavc_frequency(value: int, chunk_nstep: int) -> int:
     return 1
 
 
+def resolve_target_dcd_nsavc(kw: dict) -> int | None:
+    """Stage-level DCD save interval in integration steps (before per-chunk harmonization)."""
+    if kw.get("_target_dcd_nsavc") is not None:
+        return max(1, int(kw["_target_dcd_nsavc"]))
+    interval_ps = kw.get("dcd_interval_ps")
+    if interval_ps is None:
+        interval_ps = kw.get("_dcd_interval_ps")
+    timestep = kw.get("timestep")
+    if interval_ps is not None and timestep is not None and float(timestep) > 0:
+        return max(1, int(round(float(interval_ps) / float(timestep))))
+    return None
+
+
+def install_target_dcd_metadata(kw: dict) -> None:
+    """Record user-intended DCD cadence so overlap/CPT chunks can normalize against it."""
+    if kw.get("_target_dcd_nsavc") is not None:
+        target = max(1, int(kw["_target_dcd_nsavc"]))
+    else:
+        interval_ps = kw.get("dcd_interval_ps")
+        timestep = kw.get("timestep")
+        if interval_ps is not None and timestep is not None and float(timestep) > 0:
+            target = max(1, int(round(float(interval_ps) / float(timestep))))
+        elif "nsavc" in kw:
+            target = max(1, int(kw["nsavc"]))
+        else:
+            target = None
+    if target is not None:
+        kw["_target_dcd_nsavc"] = int(target)
+    interval_ps = kw.get("dcd_interval_ps")
+    if interval_ps is None:
+        interval_ps = kw.get("_dcd_interval_ps")
+    timestep = kw.get("timestep")
+    if interval_ps is None and target is not None and timestep is not None:
+        kw["_dcd_interval_ps"] = float(timestep) * int(target)
+    elif interval_ps is not None:
+        kw["_dcd_interval_ps"] = float(interval_ps)
+
+
+def effective_dcd_interval_ps(*, nsavc: int, timestep_ps: float) -> float:
+    """Physical time between DCD frames for a given ``nsavc``."""
+    return max(0.0, float(timestep_ps)) * max(1, int(nsavc))
+
+
+def nsavc_for_chunk_preserving_interval(
+    target_nsavc: int,
+    chunk_nstep: int,
+    global_step_start: int = 0,
+) -> int | None:
+    """Per-chunk ``nsavc`` aligned to a global target cadence (IR / spectroscopy).
+
+    CHARMM requires ``nsavc < nstep``. When a short overlap or CPT sub-chunk
+    cannot honor the target interval without spurious frames, returns ``None`` so
+    the caller can skip trajectory I/O for that segment.
+    """
+    target = max(1, int(target_nsavc))
+    n = max(1, int(chunk_nstep))
+    start = max(0, int(global_step_start))
+    cap = max(1, n - 1)
+
+    if target <= cap and n % target == 0:
+        return target
+
+    end = start + n
+    aligned = [
+        g
+        for g in range(target, end + target, target)
+        if start < g <= end
+    ]
+
+    if len(aligned) == 1:
+        rel = aligned[0] - start
+        if rel > cap:
+            return None
+        if n % rel == 0:
+            return rel
+        harmonized = harmonize_nsavc_frequency(rel, n)
+        if harmonized == rel or (n // harmonized == 1 and start + harmonized == aligned[0]):
+            return harmonized
+        return None
+
+    if not aligned:
+        return None
+
+    if target <= cap:
+        harmonized = harmonize_nsavc_frequency(target, n)
+        if harmonized == target or abs(harmonized - target) <= max(1, target // 10):
+            return harmonized
+
+    return harmonize_nsavc_frequency(min(target, cap), n)
+
+
 def expected_overlap_chunk_dcd_frame_count(
     *,
     total_nstep: int,
