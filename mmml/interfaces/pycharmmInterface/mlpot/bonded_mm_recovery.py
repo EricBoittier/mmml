@@ -395,34 +395,43 @@ def run_extent_recovery_from_prior_restart(
     ctx: MlpotContext,
     config: Any,
     *,
-    prior_restart: PathLike,
+    prior_restart: PathLike | None = None,
+    candidates: list[Path] | None = None,
 ) -> None:
-    """Restore the prior segment checkpoint, then run bonded + MLpot recovery."""
+    """Restore a fly-off checkpoint, then run bonded + MLpot recovery."""
     from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
-        build_geometry_recovery_candidates,
+        build_extent_recovery_candidates,
         restore_geometry_from_ladder,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
-    path = Path(prior_restart).expanduser().resolve()
-    candidates: list[Path] = [path]
-    for cand in build_geometry_recovery_candidates(config):
+    ladder = list(candidates) if candidates is not None else []
+    if prior_restart is not None:
+        path = Path(prior_restart).expanduser().resolve()
+        if path.resolve() not in {c.resolve() for c in ladder}:
+            ladder.insert(0, path)
+    for cand in build_extent_recovery_candidates(config):
         resolved = Path(cand).expanduser().resolve()
-        if resolved not in {c.resolve() for c in candidates}:
-            candidates.append(resolved)
-    try:
-        restore_geometry_from_ladder(candidates, label="Fly-off recovery")
-    except RuntimeError as exc:
+        if resolved not in {c.resolve() for c in ladder}:
+            ladder.append(resolved)
+    if not ladder:
         raise RuntimeError(
-            f"fly-off recovery: could not restore geometry from "
-            f"{path.name} or checkpoint ladder ({exc})"
+            "fly-off recovery: no geometry checkpoint candidates configured"
+        )
+    try:
+        restored = restore_geometry_from_ladder(ladder, label="Fly-off recovery")
+    except RuntimeError as exc:
+        names = ", ".join(p.name for p in ladder) or "(none)"
+        raise RuntimeError(
+            f"fly-off recovery: could not restore geometry from checkpoint ladder "
+            f"({names}): {exc}"
         ) from exc
     bonded_cfg = _bonded_cfg_from_overlap_config(config)
     pos = get_charmm_positions_array()
     if pos is None or not np.all(np.isfinite(pos)):
         raise RuntimeError(
             f"fly-off recovery: CHARMM coordinates are not finite after restore "
-            f"from {path.name}"
+            f"from {restored.name}"
         )
     _run_all_ml_extent_recovery(ctx, config, bonded_cfg, positions=pos)
 

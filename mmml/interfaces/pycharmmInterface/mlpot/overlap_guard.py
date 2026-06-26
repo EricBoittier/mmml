@@ -1033,21 +1033,17 @@ def _handle_extent_rescue(
     mlpot_ctx: "MlpotContext",
 ) -> float:
     from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
-        build_geometry_recovery_candidates,
+        build_extent_recovery_candidates,
+        resolve_extent_recovery_source,
     )
 
-    candidates = build_geometry_recovery_candidates(config)
-    prior = config.prior_segment_restart
-    if prior is not None:
-        prior_path = Path(prior)
-        if not any(c.resolve() == prior_path.resolve() for c in candidates):
-            candidates.insert(0, prior_path)
+    candidates = build_extent_recovery_candidates(config)
     if not candidates:
         raise RuntimeError(
-            f"{exc}; extent recovery requires a prior segment restart file "
-            f"(got {prior!r}) or a geometry baseline / checkpoint ladder"
+            f"{exc}; extent recovery requires a geometry baseline / checkpoint ladder "
+            f"(prior_segment_restart={config.prior_segment_restart!r})"
         ) from exc
-    recovery_path = candidates[0]
+    recovery_path = resolve_extent_recovery_source(candidates) or candidates[0]
     sd_steps = config.intra_rescue_sd_steps
     if sd_steps is None:
         sd_steps = config.rescue.nstep_sd
@@ -1064,7 +1060,7 @@ def _handle_extent_rescue(
         run_extent_recovery_from_prior_restart(
             mlpot_ctx,
             config,
-            prior_restart=recovery_path,
+            candidates=candidates,
         )
     except Exception as rescue_exc:
         raise RuntimeError(

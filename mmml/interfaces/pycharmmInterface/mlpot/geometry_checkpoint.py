@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -103,6 +104,18 @@ def is_handoff_seed_restart_path(path: Path | str) -> bool:
     return name.startswith("continue_seed") and name.endswith(".res")
 
 
+def is_heat_segment_restart_path(path: Path | str) -> bool:
+    """True for multi-segment heat checkpoints (``heat.N.res``), not finals or scratch."""
+    if is_overlap_scratch_restart_path(path):
+        return False
+    name = Path(path).name.lower()
+    if name == "heat.res":
+        return False
+    if re.fullmatch(r"heat\.\d+\.res", name):
+        return True
+    return bool(re.fullmatch(r"heat_.+\.\d+\.res", name))
+
+
 def build_geometry_recovery_candidates(overlap: Any) -> list[Path]:
     """Ordered restart ladder for overlap recovery (baseline before segment tails).
 
@@ -135,6 +148,61 @@ def build_geometry_recovery_candidates(overlap: Any) -> list[Path]:
     for cand in overlap.geometry_fallback_restarts:
         add(cand)
     return ordered
+
+
+def build_extent_recovery_candidates(overlap: Any) -> list[Path]:
+    """Recovery ladder for monomer fly-off: baseline/mini CRD, not heat segment tails.
+
+    Heat segment checkpoints (``heat.N.res``) may still be valid CHARMM restarts after
+    a dynamics blow-up; they must not rank above ``baseline.res`` or bonded-mini CRDs.
+    """
+    seen: set[str] = set()
+    ordered: list[Path] = []
+
+    def add(path: Path | str | None) -> None:
+        if path is None:
+            return
+        p = Path(path)
+        if is_overlap_scratch_restart_path(p):
+            return
+        if is_pretreat_mm_restart_path(p):
+            return
+        if is_handoff_seed_restart_path(p):
+            return
+        if is_heat_segment_restart_path(p):
+            return
+        key = str(p.expanduser())
+        if key in seen:
+            return
+        seen.add(key)
+        ordered.append(p)
+
+    if overlap.geometry_baseline_restart is not None:
+        add(overlap.geometry_baseline_restart)
+
+    for cand in overlap.geometry_fallback_restarts:
+        p = Path(cand)
+        if is_geometry_recovery_crd_path(p):
+            add(p)
+
+    prior = getattr(overlap, "prior_segment_restart", None)
+    if prior is not None and not is_heat_segment_restart_path(prior):
+        add(prior)
+
+    for cand in overlap.geometry_fallback_restarts:
+        p = Path(cand)
+        if is_geometry_recovery_crd_path(p):
+            continue
+        add(cand)
+
+    return ordered
+
+
+def resolve_extent_recovery_source(
+    candidates: list[Path] | tuple[Path, ...],
+) -> Path | None:
+    """First usable fly-off source for logging (restart preferred over CRD)."""
+    return first_valid_restart_path(candidates) or first_valid_geometry_crd_path(candidates)
 
 
 def build_early_abort_recovery_candidates(
