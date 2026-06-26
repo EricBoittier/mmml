@@ -1543,15 +1543,23 @@ def test_run_extent_recovery_passes_restart_coords_to_all_ml_path(tmp_path):
         rescue=OverlapRescueConfig(nstep_sd=10, verbose=False),
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_restart",
+        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.restore_geometry_from_ladder",
+        return_value=restart,
     ) as restore, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.build_geometry_recovery_candidates",
+        return_value=[],
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        return_value=expected,
+    ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_all_ml_extent_recovery",
     ) as extent_path, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_bonded_mm_recovery",
     ) as light:
         run_extent_recovery_from_prior_restart(ctx, cfg, prior_restart=restart)
 
-    restore.assert_called_once_with(restart)
+    restore.assert_called_once()
+    assert restore.call_args[0][0][0] == restart.resolve()
     extent_path.assert_called_once()
     assert np.allclose(extent_path.call_args.kwargs["positions"], expected)
     light.assert_not_called()

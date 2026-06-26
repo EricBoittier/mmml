@@ -468,7 +468,10 @@ def attach_prior_segment_restart(
         return overlap
     existing = overlap.prior_segment_restart
     if existing is not None and Path(existing).is_file():
-        return overlap
+        from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
+
+        if _valid_restart_file(existing) is not None:
+            return overlap
     from dataclasses import replace
 
     seg_i = segment_index if segment_index is not None else overlap.segment_index
