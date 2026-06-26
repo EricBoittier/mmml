@@ -212,11 +212,15 @@ def test_prepare_mlpot_hybrid_state_aborts_when_grms_stays_high():
             mock.Mock(hybrid=472.0, charmm=1.15, ratio=410.0, kind="geometry_stress"),
             mock.Mock(hybrid=470.0, charmm=1.1, ratio=427.0, kind="geometry_stress"),
             mock.Mock(hybrid=470.0, charmm=1.1, ratio=427.0, kind="geometry_stress"),
+            mock.Mock(hybrid=470.0, charmm=1.1, ratio=427.0, kind="geometry_stress"),
         ],
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.minimize_hybrid_calculator_before_sd",
         return_value=470.0,
     ) as calc_mini, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.minimize_hybrid_calculator_fire_before_sd",
+        return_value=470.0,
+    ) as calc_fire, mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_bonded_mm_recovery",
     ) as bonded:
         with pytest.raises(RuntimeError, match="refusing MLpot SD"):
@@ -229,8 +233,50 @@ def test_prepare_mlpot_hybrid_state_aborts_when_grms_stays_high():
                 allow_high_grms=False,
             )
 
-    calc_mini.assert_not_called()
+    calc_mini.assert_called_once()
+    calc_fire.assert_called_once()
     bonded.assert_called_once()
+
+
+def test_prepare_mlpot_hybrid_state_runs_forced_calculator_after_bonded_recovery():
+    """When bonded-MM lowers GRMS but not below limit, force BFGS then FIRE."""
+    ctx = mock.Mock()
+    ctx.sd_watchdog_baseline_grms = None
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.assert_mlpot_user_active",
+        return_value=-1000.0,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.measure_hybrid_charmm_grms",
+        side_effect=[
+            mock.Mock(hybrid=293.8, charmm=1.33, ratio=220.0, kind="geometry_stress"),
+            mock.Mock(hybrid=222.3, charmm=1.33, ratio=167.0, kind="geometry_stress"),
+            mock.Mock(hybrid=180.0, charmm=1.2, ratio=150.0, kind="geometry_stress"),
+            mock.Mock(hybrid=180.0, charmm=1.2, ratio=150.0, kind="geometry_stress"),
+        ],
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.minimize_hybrid_calculator_before_sd",
+        return_value=180.0,
+    ) as calc_mini, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.minimize_hybrid_calculator_fire_before_sd",
+    ) as calc_fire, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_bonded_mm_recovery",
+    ) as bonded:
+        hybrid, user = prepare_mlpot_hybrid_state_for_sd(
+            ctx,
+            grms_limit=206.0,
+            energy_limit=None,
+            bonded_recovery_nstep=500,
+            verbose=False,
+        )
+
+    bonded.assert_called_once()
+    calc_mini.assert_called_once()
+    calc_fire.assert_not_called()
+    assert hybrid == pytest.approx(180.0)
+    assert user == pytest.approx(-1000.0)
 
 
 def test_prepare_mlpot_hybrid_state_resync_before_bonded_recovery():
@@ -268,13 +314,13 @@ def test_prepare_mlpot_hybrid_state_resync_before_bonded_recovery():
         )
 
     resync.assert_called_once()
-    calc_mini.assert_called_once()
+    calc_mini.assert_not_called()
     bonded.assert_called_once()
     assert hybrid == pytest.approx(3.0)
     assert user == pytest.approx(-100.0)
 
 
-def test_prepare_mlpot_hybrid_state_calculator_mini_can_avoid_bonded_recovery():
+def test_prepare_mlpot_hybrid_state_post_recovery_calculator_mini_when_still_hot():
     ctx = mock.Mock()
     ctx.sd_watchdog_baseline_grms = None
 
@@ -287,6 +333,7 @@ def test_prepare_mlpot_hybrid_state_calculator_mini_can_avoid_bonded_recovery():
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.measure_hybrid_charmm_grms",
         side_effect=[
             mock.Mock(hybrid=120.0, charmm=1.2, ratio=100.0, kind="geometry_stress"),
+            mock.Mock(hybrid=80.0, charmm=1.2, ratio=66.0, kind="geometry_stress"),
             mock.Mock(hybrid=3.0, charmm=2.0, ratio=1.5, kind="ok"),
             mock.Mock(hybrid=3.0, charmm=2.0, ratio=1.5, kind="ok"),
         ],

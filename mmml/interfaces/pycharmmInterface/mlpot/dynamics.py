@@ -662,6 +662,9 @@ class MinimizeWithMlpotConfig:
     calculator_minimize_fmax_ev_a: float = 0.05
     calculator_bfgs_maxstep: float = 0.05
     quiet_bfgs: bool = False
+    calculator_fire_steps: int = 200
+    calculator_fire_fmax_ev_a: float | None = None
+    calculator_fire_maxstep: float = 0.2
     # Watchdog compares chunk GRMS to this baseline (post calculator mini if run).
     sd_watchdog_initial_grms: float | None = None
 
@@ -5131,6 +5134,9 @@ def minimize_with_mlpot(
                 calculator_minimize_fmax_ev_a=config.calculator_minimize_fmax_ev_a,
                 calculator_bfgs_maxstep=config.calculator_bfgs_maxstep,
                 quiet_bfgs=config.quiet_bfgs,
+                calculator_fire_steps=config.calculator_fire_steps,
+                calculator_fire_fmax_ev_a=config.calculator_fire_fmax_ev_a,
+                calculator_fire_maxstep=config.calculator_fire_maxstep,
             )
             baseline_raw = getattr(config.mlpot_ctx, "sd_watchdog_baseline_grms", None)
             baseline: float | None = None
