@@ -268,6 +268,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--mm-switch-on", type=float, default=DEFAULT_MM_SWITCH_ON)
     p.add_argument(
+        "--include-mm",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Include JAX MM LJ/Coulomb pairs; --no-include-mm = ML (PhysNet) only.",
+    )
+    p.add_argument(
         "--mm-switch-width",
         "--mm-cutoff",
         dest="mm_switch_width",
@@ -667,7 +673,7 @@ def main(argv: list[str] | None = None) -> int:
         mm_switch_on=mm_on,
         mm_switch_width=mm_w,
         doML=True,
-        doMM=True,
+        doMM=bool(getattr(args, "include_mm", True)),
         doML_dimer=True,
         debug=False,
         model_restart_path=base_ckpt_dir,
@@ -698,7 +704,7 @@ def main(argv: list[str] | None = None) -> int:
         n_monomers=n_molecules,
         cutoff_params=cutoff,
         doML=True,
-        doMM=True,
+        doMM=bool(getattr(args, "include_mm", True)),
         doML_dimer=True,
         backprop=False,
         debug=False,
@@ -1111,7 +1117,7 @@ def main(argv: list[str] | None = None) -> int:
         timestep=args.dt_fs,
         ensemble=args.ensemble,
         cell=None if free_space else float(L),
-        include_mm=True,
+        include_mm=bool(getattr(args, "include_mm", True)),
         skip_ml_dimers=False,
         debug=False,
         steps_per_recording=max(1, args.steps_per_recording),

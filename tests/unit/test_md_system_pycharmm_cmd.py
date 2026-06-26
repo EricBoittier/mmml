@@ -115,6 +115,11 @@ def _pycharmm_args(**overrides) -> argparse.Namespace:
     return argparse.Namespace(**base)
 
 
+def test_build_pycharmm_command_forwards_include_mm_false():
+    cmd = build_pycharmm_command(_pycharmm_args(include_mm=False))
+    assert "--no-include-mm" in cmd
+
+
 def test_build_pycharmm_command_omits_residue_when_composition_set():
     cmd = build_pycharmm_command(_pycharmm_args())
     assert "--composition" in cmd

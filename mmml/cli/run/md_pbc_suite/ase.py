@@ -777,6 +777,7 @@ def _factory_mmml(
     max_pairs: int,
     do_ml: bool = True,
     do_ml_dimer: bool = True,
+    do_mm: bool = True,
     timings: dict[str, float] | None = None,
     flat_bottom_radius: float | None = None,
     flat_bottom_force_const: float = 1.0,
@@ -807,7 +808,7 @@ def _factory_mmml(
         mm_switch_on=mm_sw,
         mm_switch_width=mm_cut,
         doML=do_ml,
-        doMM=True,
+        doMM=do_mm,
         doML_dimer=do_ml_dimer,
         debug=False,
         model_restart_path=base_ckpt_dir,
@@ -846,7 +847,7 @@ def _factory_mmml(
         n_monomers=n_mol,
         cutoff_params=cutoff,
         doML=do_ml,
-        doMM=True,
+        doMM=do_mm,
         doML_dimer=do_ml_dimer,
         backprop=False,
         debug=False,
@@ -1365,6 +1366,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--ml-cutoff", type=float, default=0.1)
     parser.add_argument("--mm-switch-on", type=float, default=DEFAULT_MM_SWITCH_ON)
+    parser.add_argument(
+        "--include-mm",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Include JAX MM LJ/Coulomb pairs; --no-include-mm = ML (PhysNet) only.",
+    )
     parser.add_argument("--mm-cutoff", type=float, default=DEFAULT_MM_SWITCH_WIDTH)
     parser.add_argument("--pre-min-fmax", type=float, default=0.1)
     parser.add_argument("--pre-min-steps", type=int, default=50)
@@ -1933,6 +1940,7 @@ def main(argv: list[str] | None = None) -> int:
             max_pairs=args.max_pairs,
             do_ml=use_ml_terms,
             do_ml_dimer=use_ml_dimer_terms,
+            do_mm=bool(getattr(args, "include_mm", True)),
             timings=run_timings,
             flat_bottom_radius=args.flat_bottom_radius,
             flat_bottom_force_const=args.flat_bottom_k,

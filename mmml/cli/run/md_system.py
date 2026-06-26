@@ -1065,6 +1065,16 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--include-mm",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Include switched JAX MM pairs (LJ + MIC Coulomb) in the hybrid calculator. "
+            "--no-include-mm evaluates PhysNet ML only (doMM=False); cutoff keys are "
+            "ignored for MM pair lists."
+        ),
+    )
+    parser.add_argument(
         "--residue",
         type=str,
         default="MEOH",
@@ -1599,6 +1609,9 @@ def _append_suite_mmml_handoff_args(cmd: list[str], args: argparse.Namespace) ->
         cmd,
         "--charmm-pre-minimize",
         bool(getattr(args, "charmm_pre_minimize", True)),
+    )
+    _append_boolean_optional_flag(
+        cmd, "--include-mm", bool(getattr(args, "include_mm", True))
     )
     cmd.extend(["--pre-min-fmax", str(getattr(args, "pre_min_fmax", 0.1))])
     cmd.extend(["--pre-min-steps", str(getattr(args, "pre_min_steps", 50))])
@@ -2188,6 +2201,9 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd,
         "--periodic-charmm-vdw",
         bool(getattr(args, "periodic_charmm_vdw", True)),
+    )
+    _append_boolean_optional_flag(
+        cmd, "--include-mm", bool(getattr(args, "include_mm", True))
     )
     _append_optional(
         cmd,

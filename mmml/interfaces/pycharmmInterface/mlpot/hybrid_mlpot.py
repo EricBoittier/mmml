@@ -710,13 +710,19 @@ def build_decomposed_mlpot_model(
             periodic_mm_status_line(periodic_mm_config, box_side_A=float(cell)),
             flush=True,
         )
+    if verbose and not do_mm and not periodic_mode:
+        print(
+            "Decomposed MLpot: include_mm=False — ML potential only (no JAX MM LJ/Coulomb pairs)",
+            flush=True,
+        )
     if verbose and max_pairs is not None:
         print(
             f"Decomposed MLpot: max_pairs={int(max_pairs)} (PBC cell-list buffer)",
             flush=True,
         )
     do_ml = True
-    do_mm = not periodic_mode
+    include_mm = True if args is None else bool(getattr(args, "include_mm", True))
+    do_mm = include_mm and not periodic_mode
     do_ml_dimer = True
     factory = setup_calculator(
         ATOMS_PER_MONOMER=per,
