@@ -37,6 +37,8 @@ do not.
 | 7 | `07_liquid_density_nl.py` | optional | bulk liquid ρ (ACO/DCM) parity at realistic N/L |
 | 8 | `08_benchmark_nl_backends.py` | optional | median wall-time per NL backend (cold build + jax-md update) |
 | 9 | `09_nl_motion_stress.py` | optional | jitter/compress/box-resize parity + jax-md realloc trajectory |
+| 10 | `10_vesin_cupy_parity.py` | optional | CPU vs vectorized vs GPU Vesin parity (CUDA node) |
+| 11 | `11_gpu_nl_sync_profile.py` | optional | D2H / CPU build / H2D / GPU DLPack timing breakdown |
 
 Synthetic cases omit PyCHARMM (no PSF). When `pycharmm` is in `--backends`, matching
 `charmm_*` CGENFF analog cases run automatically (e.g. `charmm_high_cutoff_fraction`

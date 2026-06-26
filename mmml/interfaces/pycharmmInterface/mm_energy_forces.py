@@ -427,10 +427,11 @@ def build_mm_energy_forces_fn(
             mm_r_min >= mm_switch_on will break the handoff.
 
     Returns:
-        When use_jax_md_neighbor_list and jax_md available: (mm_fn, update_fn) where
-        mm_fn(positions, pair_idx, pair_mask) -> (energy, forces) and
-        update_fn(positions, box=None) -> (pair_idx, pair_mask).
-        Otherwise: mm_fn(positions) -> (energy, forces) (single callable).
+        When PBC dynamic neighbor lists are enabled (Vesin rebuild by default, or
+        ``mm_nl_backend=jax_md`` for jax-md incremental): ``(mm_fn, update_fn)`` where
+        ``mm_fn(positions, pair_idx, pair_mask) -> (energy, forces)`` and
+        ``update_fn(positions, box=None) -> (pair_idx, pair_mask)``.
+        Otherwise: ``mm_fn(positions) -> (energy, forces)`` (single callable).
     """
     ml_jnp_dtype = resolve_ml_compute_dtype(ml_compute_dtype)
     if ml_cutoff_distance is not None:
@@ -499,16 +500,21 @@ def build_mm_energy_forces_fn(
     _dp = _dimer_permutations(n_monomers)
     # Smooth MIC avoids discontinuities at cell boundaries during minimization
     _use_smooth_mic = use_smooth_mic if use_smooth_mic is not None else (pbc_cell is not None)
+    _resolved_nl_backend = resolve_mm_nl_backend(mm_nl_backend)
     _use_jax_md_nbrs = (
         pbc_cell is not None
         and use_jax_md_neighbor_list
         and have_jax_md()
+        and _resolved_nl_backend == "jax_md"
     )
-    _use_cell_list = (
+    _use_rebuild_nbrs = (
         pbc_cell is not None
         and not _use_jax_md_nbrs
         and (_cell_list_pairs is not None or have_vesin())
     )
+    _use_dynamic_nbrs = _use_jax_md_nbrs or _use_rebuild_nbrs
+    _pair_idx_cell = [None]
+    _pair_mask_cell = [None]
 
     def _create_jax_md_bundle(capacity_multiplier: float):
         return create_jax_md_neighbor_list(
@@ -529,15 +535,14 @@ def build_mm_energy_forces_fn(
             _filter_fn_cell = [_filter_fn]
             _current_capacity_multiplier = [float(jax_md_capacity_multiplier)]
             _nbrs = [None]  # mutable cell for neighbor list state
-            _pair_idx_cell = [None]
-            _pair_mask_cell = [None]
         else:
             _use_jax_md_nbrs = False
-            _use_cell_list = pbc_cell is not None and (
+            _use_rebuild_nbrs = pbc_cell is not None and (
                 _cell_list_pairs is not None or have_vesin()
             )
+            _use_dynamic_nbrs = _use_jax_md_nbrs or _use_rebuild_nbrs
 
-    if _use_cell_list:
+    if _use_rebuild_nbrs:
         _mm_switch_width_dist = mm_switch_on + mm_switch_width
         _offsets_np = np.array([int(monomer_offsets[k]) for k in range(len(monomer_offsets))])
         _static_backend = pick_static_rebuild_backend(
@@ -566,30 +571,19 @@ def build_mm_energy_forces_fn(
             )
         pair_idx_atom_atom = jnp.stack([_cl_i, _cl_j], axis=1)
         _cl_mask_jnp = jnp.asarray(_cl_mask, dtype=ml_jnp_dtype)
+        _pair_idx_cell[0] = pair_idx_atom_atom
+        _pair_mask_cell[0] = _cl_mask_jnp
 
         _monomer_id_np = np.empty(total_atoms, dtype=np.int32)
         for mi in range(n_monomers):
             _monomer_id_np[_offsets_np[mi]:_offsets_np[mi + 1]] = mi
         _monomer_id_jnp = jnp.array(_monomer_id_np)
-        _lam_a = jnp.take(lambda_monomer, _monomer_id_jnp[_cl_i])
-        _lam_b = jnp.take(lambda_monomer, _monomer_id_jnp[_cl_j])
-        pair_lambda_mm = _lam_a * _lam_b * _cl_mask_jnp
-
-        _dimer_lookup = {}
+        _dimer_lookup_arr = np.full((n_monomers, n_monomers), -1, dtype=np.int32)
         for di, (mi, mj) in enumerate(_dp):
-            _dimer_lookup[(mi, mj)] = di
-            _dimer_lookup[(mj, mi)] = di
-        _pair_dimer_idx = np.full(_max_pairs, -1, dtype=np.int32)
-        _n_pairs_per_dimer_count = np.zeros(len(_dp), dtype=np.int32)
-        for k in range(_n_valid):
-            ai, aj = int(_cl_i[k]), int(_cl_j[k])
-            di_key = (int(_monomer_id_np[ai]), int(_monomer_id_np[aj]))
-            di_idx = _dimer_lookup.get(di_key, -1)
-            _pair_dimer_idx[k] = di_idx
-            if di_idx >= 0:
-                _n_pairs_per_dimer_count[di_idx] += 1
-        n_pairs_per_dimer_arr = _n_pairs_per_dimer_count
-        pair_dimer_idx = jnp.array(_pair_dimer_idx)
+            _dimer_lookup_arr[mi, mj] = _dimer_lookup_arr[mj, mi] = di
+        _dimer_lookup_arr = jnp.array(_dimer_lookup_arr)
+        pair_dimer_idx = None
+        n_pairs_per_dimer_arr = np.zeros(len(_dp), dtype=np.int32)
     elif _use_jax_md_nbrs:
         _mm_switch_width_dist = mm_switch_on + mm_switch_width
         _offsets_np = np.array([int(monomer_offsets[k]) for k in range(len(monomer_offsets))])
@@ -681,7 +675,7 @@ def build_mm_energy_forces_fn(
     q_per_system = jnp.array(charges)
 
     _n_static_pairs = int(pair_idx_atom_atom.shape[0])
-    if not _use_jax_md_nbrs and (_n_static_pairs == 0 or int(q_per_system.shape[0]) == 0):
+    if not _use_dynamic_nbrs and (_n_static_pairs == 0 or int(q_per_system.shape[0]) == 0):
 
         @jax.jit
         def calculate_mm_energy_and_forces(positions: Array) -> Tuple[Array, Array]:
@@ -691,7 +685,7 @@ def build_mm_energy_forces_fn(
 
         return calculate_mm_energy_and_forces
 
-    if not _use_jax_md_nbrs:
+    if not _use_dynamic_nbrs:
         q_a = jnp.take(q_per_system, pair_idx_atom_atom[:, 0])
         q_b = jnp.take(q_per_system, pair_idx_atom_atom[:, 1])
         rm_a = jnp.take(rmins_per_system, pair_idx_atom_atom[:, 0])
@@ -808,7 +802,7 @@ def build_mm_energy_forces_fn(
         forces = jnp.where(jnp.isfinite(forces), forces, 0.0)
         return switched_energy, forces
 
-    if _use_jax_md_nbrs:
+    if _use_dynamic_nbrs:
         # Dynamic path: compute pair quantities from pair_idx, pair_mask
         _pbc_cell_jnp = jnp.asarray(pbc_cell)
         _lambda_monomer_jnp = jnp.asarray(lambda_monomer)
@@ -986,8 +980,102 @@ def build_mm_energy_forces_fn(
                 jnp.asarray(cl_mask, dtype=ml_jnp_dtype),
             )
 
+        def _cartesian_for_nl_build(
+            positions_in: np.ndarray,
+            box_in: Optional[np.ndarray],
+        ) -> np.ndarray:
+            R_np = np.asarray(positions_in, dtype=np.float64)
+            if not fractional_coordinates:
+                return R_np
+            if box_in is not None:
+                box_np = np.asarray(box_in, dtype=np.float64)
+                cell_3x3 = np.diag(box_np) if box_np.ndim == 1 else box_np
+                return np.asarray(R_np @ cell_3x3, dtype=np.float64)
+            cell_np = np.asarray(pbc_cell, dtype=np.float64)
+            if cell_np.ndim == 0:
+                cell_3x3 = np.diag([float(cell_np)] * 3)
+            elif cell_np.shape == (3,):
+                cell_3x3 = np.diag(cell_np)
+            else:
+                cell_3x3 = cell_np
+            return np.asarray(R_np @ cell_3x3, dtype=np.float64)
+
+        def _pbc_cell_for_nl_build(box_in: Optional[np.ndarray]) -> np.ndarray:
+            if box_in is not None:
+                box_np = np.asarray(box_in, dtype=np.float64)
+                return np.diag(box_np) if box_np.ndim == 1 else box_np
+            return np.asarray(pbc_cell, dtype=np.float64)
+
+        def _rebuild_pairs_with_static_backend(
+            positions_in: np.ndarray,
+            box_in: Optional[np.ndarray],
+            _nbr_debug: bool,
+            *,
+            positions_jax=None,
+        ) -> Tuple[Array, Array]:
+            from mmml.interfaces.pycharmmInterface.nl_gpu import (
+                gpu_nl_path_available,
+                rebuild_vesin_pairs_gpu,
+            )
+
+            if (
+                gpu_nl_path_available()
+                and positions_jax is not None
+                and hasattr(positions_jax, "__dlpack_device__")
+            ):
+                pbc_for_build = _pbc_cell_for_nl_build(box_in)
+                pair_idx, pair_mask, used = rebuild_vesin_pairs_gpu(
+                    positions_jax,
+                    pbc_for_build,
+                    cutoff=mm_switch_on + mm_switch_width,
+                    monomer_offsets=_offsets_np,
+                    mm_r_min=mm_r_min,
+                    max_pairs=_fallback_max_pairs_cell[0],
+                    cell_list_safety_factor=cell_list_safety_factor,
+                    cell_list_density_estimate=cell_list_density_estimate,
+                    total_atoms=total_atoms,
+                    debug=_nbr_debug,
+                )
+                if _nbr_debug:
+                    print(f"[nbr] rebuild via {used}")
+                return pair_idx, pair_mask
+
+            R_build = _cartesian_for_nl_build(positions_in, box_in)
+            pbc_for_build = _pbc_cell_for_nl_build(box_in)
+            backend_req = pick_static_rebuild_backend(
+                mm_nl_backend,
+                use_jax_md_neighbor_list=False,
+            )
+            if backend_req == "jax_md":
+                backend_req = "vesin" if have_vesin() else "cell_list"
+            cl_i, cl_j, cl_mask, n_valid, capacity, used = build_mm_pairs_with_backend(
+                backend_req,
+                positions=R_build,
+                box=pbc_for_build,
+                cutoff=mm_switch_on + mm_switch_width,
+                monomer_offsets=_offsets_np,
+                atoms_per_monomer_list=atoms_per_monomer_list,
+                mm_r_min=mm_r_min,
+                max_pairs=_fallback_max_pairs_cell[0],
+                cell_list_safety_factor=cell_list_safety_factor,
+                cell_list_density_estimate=cell_list_density_estimate,
+                total_atoms=total_atoms,
+                debug=_nbr_debug,
+            )
+            if _nbr_debug:
+                print(f"[nbr] rebuild via {used}: n_valid={n_valid} capacity={capacity}")
+            return (
+                jnp.stack([jnp.asarray(cl_i), jnp.asarray(cl_j)], axis=1),
+                jnp.asarray(cl_mask, dtype=ml_jnp_dtype),
+            )
+
         def update_mm_pairs(positions: np.ndarray, box: Optional[np.ndarray] = None) -> Tuple[Array, Array]:
-            R_cart = np.asarray(positions, dtype=np.float64)
+            positions_jax = positions if hasattr(positions, "__dlpack_device__") else None
+            R_cart = (
+                np.asarray(jax.device_get(positions), dtype=np.float64)
+                if positions_jax is not None
+                else np.asarray(positions, dtype=np.float64)
+            )
             _nbr_debug = debug
             _pair_stats["calls"] += 1
 
@@ -1012,6 +1100,27 @@ def build_mm_energy_forces_fn(
             ):
                 _pair_stats["reused"] += 1
                 return _pair_idx_cell[0], _pair_mask_cell[0]
+
+            if _use_rebuild_nbrs:
+                pair_idx, pair_mask = _rebuild_pairs_with_static_backend(
+                    R_cart,
+                    box,
+                    _nbr_debug,
+                    positions_jax=positions_jax,
+                )
+                _pair_idx_cell[0] = pair_idx
+                _pair_mask_cell[0] = pair_mask
+                _last_cartesian_positions[0] = R_cart.copy()
+                _last_box[0] = None if box is None else np.asarray(box, dtype=np.float64).copy()
+                _pair_stats["updates"] += 1
+                if _nbr_debug:
+                    n_valid = int(np.sum(np.asarray(jax.device_get(pair_mask))))
+                    capacity = int(pair_idx.shape[0])
+                    print(
+                        f"[nbr] vesin rebuild: n_valid={n_valid}, capacity={capacity}, "
+                        f"frac_coords={fractional_coordinates}"
+                    )
+                return pair_idx, pair_mask
 
             R = R_cart
             if fractional_coordinates and box is None:

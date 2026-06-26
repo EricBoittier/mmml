@@ -162,6 +162,7 @@ viz = [
 
 # Molecular dynamics and analysis
 md = [
+    "vesin>=0.5.0",
     "mdanalysis",
     "mda-xdrlib",
     "mmtf-python",
