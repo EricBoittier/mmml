@@ -1766,6 +1766,32 @@ def main(argv: list[str] | None = None) -> int:
     for msg in box_warnings:
         _tlog(f"Handoff box: {msg}", timing_log)
     r_pbc = r0 - r0.mean(axis=0) + 0.5 * L
+    from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+        apply_mc_density_equalization,
+    )
+
+    r_pbc, L_after_mc, mc_density_summary = apply_mc_density_equalization(
+        args,
+        r_pbc,
+        atoms_per_list=atoms_per_list,
+        composition=composition_summary,
+        box_side_A=L,
+        use_pbc=True,
+        handoff_present=handoff_in is not None,
+        min_intermonomer_distance_A=float(args.min_intermonomer_atom_distance),
+    )
+    if L_after_mc is not None:
+        L = float(L_after_mc)
+    if mc_density_summary.ran:
+        _tlog(
+            "mc_density_equalize: "
+            f"L {mc_density_summary.initial_box_A:.3f} -> {mc_density_summary.final_box_A:.3f} Å; "
+            f"rho {mc_density_summary.initial_density_g_cm3:.4f} -> "
+            f"{mc_density_summary.final_density_g_cm3:.4f} g/cm^3",
+            timing_log,
+        )
+    elif mc_density_summary.enabled:
+        _tlog(f"mc_density_equalize: skipped ({mc_density_summary.reason})", timing_log)
 
     nsteps = int(round(args.ps * 1000.0 / args.dt_fs))
     if nsteps < 1:
@@ -1784,6 +1810,7 @@ def main(argv: list[str] | None = None) -> int:
             "placement_seed": int(args.seed),
         },
         "box_A": L,
+        "mc_density_equalization": mc_density_summary.to_dict(),
         "md": {
             "ps": args.ps,
             "dt_fs": args.dt_fs,

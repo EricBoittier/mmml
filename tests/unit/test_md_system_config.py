@@ -43,6 +43,34 @@ def test_cli_overrides_yaml(tmp_path: Path) -> None:
     assert args.seed == 99
 
 
+def test_mc_density_yaml_keys(tmp_path: Path) -> None:
+    cfg = tmp_path / "md.yaml"
+    cfg.write_text(
+        """
+setup: pbc_nve
+backend: pycharmm
+composition: DCM:8
+mc-density-equalize: false
+mc-density-target-g-cm3: 1.1
+mc-density-steps: 12
+mc-density-step-scale: 0.03
+mc-density-temperature: 0.04
+mc-density-seed: 99
+mc-density-min-scale: 0.8
+mc-density-max-scale: 1.2
+""".strip()
+    )
+    args = parse_md_system_args(["--config", str(cfg)])
+    assert args.mc_density_equalize is False
+    assert args.mc_density_target_g_cm3 == pytest.approx(1.1)
+    assert args.mc_density_steps == 12
+    assert args.mc_density_step_scale == pytest.approx(0.03)
+    assert args.mc_density_temperature == pytest.approx(0.04)
+    assert args.mc_density_seed == 99
+    assert args.mc_density_min_scale == pytest.approx(0.8)
+    assert args.mc_density_max_scale == pytest.approx(1.2)
+
+
 def test_campaign_yaml_ignored_for_flat_parse(tmp_path: Path) -> None:
     cfg = tmp_path / "campaign.yaml"
     cfg.write_text(

@@ -1688,6 +1688,26 @@ def _append_box_sizing_args(cmd: list[str], args: argparse.Namespace) -> None:
         cmd.extend(["--box-auto", str(args.box_auto)])
     _append_optional(cmd, "--target-density-g-cm3", getattr(args, "target_density_g_cm3", None))
     _append_optional(cmd, "--bulk-density-fraction", getattr(args, "bulk_density_fraction", None))
+    _append_boolean_optional_flag(
+        cmd, "--mc-density-equalize", bool(getattr(args, "mc_density_equalize", True))
+    )
+    _append_optional(cmd, "--mc-density-target-g-cm3", getattr(args, "mc_density_target_g_cm3", None))
+    mc_steps = int(getattr(args, "mc_density_steps", 64) or 0)
+    if mc_steps != 64:
+        cmd.extend(["--mc-density-steps", str(mc_steps)])
+    mc_step_scale = float(getattr(args, "mc_density_step_scale", 0.04) or 0.0)
+    if mc_step_scale != 0.04:
+        cmd.extend(["--mc-density-step-scale", str(mc_step_scale)])
+    mc_temp = float(getattr(args, "mc_density_temperature", 0.02) or 0.0)
+    if mc_temp != 0.02:
+        cmd.extend(["--mc-density-temperature", str(mc_temp)])
+    _append_optional(cmd, "--mc-density-seed", getattr(args, "mc_density_seed", None))
+    mc_min_scale = float(getattr(args, "mc_density_min_scale", 0.75) or 0.0)
+    if mc_min_scale != 0.75:
+        cmd.extend(["--mc-density-min-scale", str(mc_min_scale)])
+    mc_max_scale = float(getattr(args, "mc_density_max_scale", 1.50) or 0.0)
+    if mc_max_scale != 1.50:
+        cmd.extend(["--mc-density-max-scale", str(mc_max_scale)])
     ps = float(getattr(args, "mini_box_equil_ps", 0.0) or 0.0)
     if ps > 0.0:
         cmd.extend(["--mini-box-equil-ps", str(ps)])

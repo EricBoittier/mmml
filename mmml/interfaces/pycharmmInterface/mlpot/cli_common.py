@@ -1078,7 +1078,7 @@ def build_cluster_from_args_with_tag(
             supercell_reps = None
             if getattr(args, "pyxtal_supercell", None):
                 supercell_reps = parse_supercell_reps(str(args.pyxtal_supercell))
-            z, r, _atoms_per, _names = _build_cluster_from_composition_pyxtal(
+            z, r, atoms_per_list, residue_labels = _build_cluster_from_composition_pyxtal(
                 composition=composition,
                 space_group=int(getattr(args, "pyxtal_spg", 14)),
                 dimension=int(getattr(args, "pyxtal_dim", 3)),
@@ -1127,7 +1127,7 @@ def build_cluster_from_args_with_tag(
                     packmol_radius=getattr(args, "packmol_radius", None),
                     flat_bottom_radius=getattr(args, "flat_bottom_radius", None),
                 )
-            z, r, _atoms_per, _names = _build_cluster_from_composition_packmol(
+            z, r, atoms_per_list, residue_labels = _build_cluster_from_composition_packmol(
                 composition=composition,
                 placement=placement,
                 center=center,
@@ -1160,11 +1160,12 @@ def build_cluster_from_args_with_tag(
                     f"Packmol cube: center={center} side={cube_side:.1f} Å tol={tolerance:.1f} Å"
                 )
         else:
-            z, r, _atoms_per, _names = _build_cluster_from_composition(
+            z, r, atoms_per_list, residue_labels = _build_cluster_from_composition(
                 composition=composition,
                 spacing=spacing,
             )
         n_mol = sum(count for _, count in composition)
+        composition_summary = {str(res): int(count) for res, count in composition}
         tag = composition_tag(composition, args.residue.upper(), n_mol)
     else:
         residue = args.residue.upper()
@@ -1173,7 +1174,14 @@ def build_cluster_from_args_with_tag(
             z, r = build_acetone_cluster(n_mol, spacing)
         else:
             z, r = build_ase_cluster(residue, n_mol, spacing)
+        atoms_per = int(len(z) // n_mol)
+        atoms_per_list = [atoms_per] * int(n_mol)
+        residue_labels = [residue] * int(n_mol)
+        composition_summary = {residue: int(n_mol)}
         tag = composition_tag(None, residue, n_mol)
+    setattr(args, "_cluster_atoms_per_list", list(atoms_per_list))
+    setattr(args, "_cluster_residue_labels", list(residue_labels))
+    setattr(args, "_cluster_composition_summary", dict(composition_summary))
     sync_charmm_positions(r)
     validate_cluster_geometry(r, n_molecules=n_mol)
     return z, r, n_mol, tag
