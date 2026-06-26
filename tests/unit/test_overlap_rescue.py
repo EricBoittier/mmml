@@ -51,9 +51,9 @@ def test_minimize_overlap_rescue_uses_vdw_block_and_restores_nbonds():
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
         return_value=(pycharmm, MagicMock(), MagicMock(), minimize),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms",
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
         return_value=2.0,
-    ), patch(
+    ) as grms_fn, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=MagicMock(),
     ):
@@ -64,10 +64,5 @@ def test_minimize_overlap_rescue_uses_vdw_block_and_restores_nbonds():
     restore_nb.assert_called_once_with(ctx)
     minimize.run_sd.assert_called_once()
     minimize.run_abnr.assert_called_once()
-    ener_calls = [
-        c.args[0]
-        for c in pycharmm.lingo.charmm_script.call_args_list
-        if c.args
-    ]
-    assert ener_calls == ["ENER"]
+    assert grms_fn.call_count == 2
     assert grms == 2.0

@@ -368,7 +368,7 @@ def test_minimize_bonded_recovery_uses_bonded_only_block():
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
     ) as imp, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms",
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
         return_value=1.0,
     ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
@@ -409,7 +409,7 @@ def test_minimize_bonded_recovery_runs_sd_and_reports_angl():
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
     ) as imp, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms",
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
         return_value=1.0,
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics.charmm_internal_energy_kcalmol",
@@ -448,7 +448,7 @@ def test_minimize_bonded_recovery_unset_and_reregister():
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
     ) as imp, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms",
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
         return_value=1.0,
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
@@ -494,7 +494,7 @@ def test_measure_mm_bonded_strain_uses_mlpot_detached():
         ) as detached, patch(
             "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_charmm_mm_block",
         ), patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms",
+            "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
             return_value=0.5,
         ), patch(
             "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.charmm_internal_energy_kcalmol",

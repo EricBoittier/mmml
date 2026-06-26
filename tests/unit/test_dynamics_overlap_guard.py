@@ -50,6 +50,11 @@ def _mock_bond_exclusion_pairs_unless_targeted(request):
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.validate_charmm_dynamics_state_after_chunk",
     ), segment_patch:
         yield
 
@@ -293,6 +298,9 @@ def test_overlap_early_abort_multi_chunk_cpt_materializes_readyn(tmp_path, capsy
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._cpt_stability_chunk_nstep",
+        return_value=None,
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
         return_value=(5.0, False),
     ), mock.patch(
@@ -363,6 +371,9 @@ def test_overlap_early_abort_memory_recovery_skips_overlap_check(tmp_path):
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._cpt_stability_chunk_nstep",
+        return_value=None,
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
         side_effect=track_overlap_check,
@@ -442,6 +453,9 @@ def test_overlap_early_abort_disk_recovery_cpt_retries_with_readyn(tmp_path, cap
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._cpt_stability_chunk_nstep",
+        return_value=None,
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
         return_value=(5.0, False),
@@ -2999,8 +3013,9 @@ def test_mlpot_memory_handoff_skips_readyn_on_all_chunks(tmp_path):
             mlpot_ctx=mock.Mock(),
         )
 
-    assert len(calls) == 2
-    assert all(c.get("restart") is False for c in calls)
+    # 2 overlap chunks of 500, each split into 2 CPT sub-chunks of 250
+    assert len(calls) == 4
+    assert sum(int(c["nstep"]) for c in calls) == 1000
     assert all(c.get("iunrea") == -1 for c in calls)
 
 
