@@ -2349,7 +2349,7 @@ def test_overlap_chunk_continues_velocity_scaling_heat_ramp(tmp_path, monkeypatc
     assert len(calls) == 4
     assert calls[0]["firstt"] == 0.0
     assert calls[1]["restart"] is True
-    assert calls[1]["iasvel"] == 0
+    assert calls[1]["iasvel"] == 1
     assert calls[1]["firstt"] == pytest.approx(0.6)
     assert calls[2]["firstt"] == pytest.approx(1.2)
     assert calls[3]["firstt"] == pytest.approx(1.8)

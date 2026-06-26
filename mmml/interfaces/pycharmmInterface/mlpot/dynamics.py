@@ -1284,7 +1284,14 @@ def apply_heat_ramp_overlap_chunk(
     steps_done: int,
     ramp_spec: dict[str, float | int],
 ) -> None:
-    """Continue a velocity-scaling heat ramp on overlap chunk ``chunk_index`` > 0."""
+    """Continue a velocity-scaling heat ramp on overlap chunk ``chunk_index`` > 0.
+
+    PyCHARMM omits ``start`` when ``start=False``, so CHARMM may keep START active
+    from chunk 0.  With lingering START, ``iasvel=0`` reads comparison **coordinates**
+    as velocities (``COMP_AND_HEATING.md``) — zero COMP → T≈0 and ``ihtfrq`` scaling
+    from ``**********`` old temperature.  Use ``iasvel=1`` so lingering START falls back
+    to Boltzmann at the chunk ``firstt`` target instead of COMP.
+    """
     if chunk_index <= 0:
         return
     chunk_kw["firstt"] = heat_ramp_bath_target_K(
@@ -1297,7 +1304,7 @@ def apply_heat_ramp_overlap_chunk(
     chunk_kw["finalt"] = float(ramp_spec["finalt"])
     chunk_kw["TEMINC"] = float(ramp_spec["teminc"])
     chunk_kw["ihtfrq"] = int(ramp_spec["ihtfrq"])
-    chunk_kw["iasvel"] = 0
+    chunk_kw["iasvel"] = 1
     chunk_kw["iasors"] = 0
     chunk_kw["start"] = False
 

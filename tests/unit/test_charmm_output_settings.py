@@ -92,7 +92,7 @@ def test_apply_heat_ramp_overlap_chunk_continues_ramp():
     assert chunk_kw["finalt"] == 240.0
     assert chunk_kw["TEMINC"] == 0.12
     assert chunk_kw["iasors"] == 0
-    assert chunk_kw["iasvel"] == 0
+    assert chunk_kw["iasvel"] == 1
     assert chunk_kw["start"] is False
 
 
