@@ -697,11 +697,15 @@ def build_decomposed_mlpot_model(
             f"Decomposed MLpot: MIC PBC cubic cell={float(cell):.3f} Å",
             flush=True,
         )
-    if verbose and periodic_mm_config is not None and cell:
-        from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm import (
-            periodic_mm_status_line,
-        )
+    from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm import (
+        build_periodic_mm_config,
+        periodic_mm_status_line,
+        resolve_mm_nonbond_mode,
+    )
 
+    periodic_mm_config = build_periodic_mm_config(args)
+    periodic_mode = resolve_mm_nonbond_mode(args) == "periodic_external"
+    if verbose and periodic_mm_config is not None and cell:
         print(
             periodic_mm_status_line(periodic_mm_config, box_side_A=float(cell)),
             flush=True,
@@ -712,13 +716,6 @@ def build_decomposed_mlpot_model(
             flush=True,
         )
     do_ml = True
-    from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm import (
-        build_periodic_mm_config,
-        resolve_mm_nonbond_mode,
-    )
-
-    periodic_mm_config = build_periodic_mm_config(args)
-    periodic_mode = resolve_mm_nonbond_mode(args) == "periodic_external"
     do_mm = not periodic_mode
     do_ml_dimer = True
     factory = setup_calculator(
