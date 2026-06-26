@@ -102,13 +102,17 @@ sequenceDiagram
     participant Dyna as dyna heat segment
 
     Mini->>Assign: coords in memory
-    Assign->>Assign: nstep=0, iasvel=1, firstt=0, ihtfrq=0
-    Note over Assign: Boltzmann at 0 K (near-zero v)
-    Assign->>Dyna: start=false, restart=false
-    loop every ihtfrq=100
+    Assign->>Assign: nstep=0, iasvel=1, firstt=FIRSTT, ihtfrq=0
+    Note over Assign: Boltzmann at FIRSTT
+    Assign->>Dyna: start=false, restart=false, iasvel=1
+    loop every ihtfrq
         Dyna->>Dyna: iasors=0 scale v toward FIRSTT+n*TEMINC
     end
 ```
+
+Hoover CPT after mini still uses **one** ``dyna`` with ``start=True`` (barostat init).
+Scale heat after mini uses the assign + ``start=False`` path above so overlap chunk 0
+(``preserve_ihtfrq_heat_ramp``) does not clear ``start`` without a prior assign.
 
 Implications:
 
