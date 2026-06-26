@@ -40,9 +40,12 @@ def run_charmm_lattice_abnr(
 ) -> float | None:
     """Run CHARMM ``MINI ABNR LATTice`` to optimize the unit cell (and optionally coords).
 
-  PyCHARMM's :func:`pycharmm.minimize.run_abnr` C binding does not pass the SD
-  ``lattice`` flag, so this uses a CHARMM script command instead.
+    PyCHARMM's :func:`pycharmm.minimize.run_abnr` C binding does not pass the SD
+    ``lattice`` flag, so this uses a CHARMM script command instead.
     """
+    if int(nstep) <= 0:
+        return None
+
     import pycharmm.script
 
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_quiet_output
@@ -50,9 +53,6 @@ def run_charmm_lattice_abnr(
         apply_pbc_nbonds,
         resolve_charmm_cubic_box_side_A,
     )
-
-    if int(nstep) <= 0:
-        return None
     kwargs: dict[str, object] = {
         "lattice": True,
         "nstep": int(nstep),
