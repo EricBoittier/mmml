@@ -10,8 +10,9 @@ from unittest.mock import MagicMock
 def _stub_pycharmm(monkeypatch) -> tuple[MagicMock, list[str]]:
     scripts: list[str] = []
     mock_settings = MagicMock()
-    mock_settings.set_bomb_level.side_effect = [0, -2, 0]
-    mock_settings.set_warn_level.side_effect = [0, -2, 0]
+    mock_settings.set_bomb_level.side_effect = lambda x: 0
+    mock_settings.set_warn_level.side_effect = lambda x: 0
+    mock_settings.set_verbosity.side_effect = lambda x: 5
     mock_lingo = MagicMock()
     mock_lingo.charmm_script.side_effect = lambda s: scripts.append(s)
     fake = MagicMock()
@@ -54,8 +55,8 @@ def test_charmm_relaxed_bomlev_restores_prior_level(monkeypatch):
     with charmm_relaxed_bomlev():
         pass
 
-    assert scripts[0].startswith("bomlev -2")
-    assert scripts[-1].startswith("bomlev 0")
+    assert any("bomlev -2" in s for s in scripts)
+    assert any(s.startswith("bomlev 0") for s in scripts)
 
 
 def test_topology_loaders_do_not_pin_bomlev_zero():

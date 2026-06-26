@@ -768,7 +768,9 @@ def _reset_stage_restart(
         return
     path = Path(restart_path)
     if path.name in (BASELINE_RES,) or path.name.startswith("geometry_baseline_"):
-        print(f"Keeping geometry baseline restart: {path}", flush=True)
+        from mmml.utils.rich_report import emit_tagged
+
+        emit_tagged("restart", f"Keeping geometry baseline restart: {path}", tag_style="dim")
         return
     preserve_main = (
         restart_read is not None
@@ -777,9 +779,13 @@ def _reset_stage_restart(
     )
     if path.is_file() and not preserve_main:
         path.unlink(missing_ok=True)
-        print(f"Removed prior restart: {path}", flush=True)
+        from mmml.utils.rich_report import emit_tagged
+
+        emit_tagged("restart", f"Removed prior restart: {path}", tag_style="dim")
     elif preserve_main:
-        print(f"Keeping in-place restart for resume: {path}", flush=True)
+        from mmml.utils.rich_report import emit_tagged
+
+        emit_tagged("restart", f"Keeping in-place restart for resume: {path}", tag_style="dim")
     parent = path.parent
     for slot in overlap_restart_slot_paths(path):
         slot.unlink(missing_ok=True)
@@ -2063,8 +2069,11 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                             restart = False
                             rread = None
                     if not seg_prep_quiet:
-                        print(
-                            f"\nHEAT segment {seg_i + 1}/{n_heat_segments}: "
+                        from mmml.utils.rich_report import emit_tagged
+
+                        emit_tagged(
+                            "HEAT",
+                            f"segment {seg_i + 1}/{n_heat_segments}: "
                             f"{nstep} steps @ {timestep_ps} ps "
                             f"({heat_firstt:.1f}→{heat_finalt:.1f} K ramp, "
                             f"segment bath "
@@ -2072,7 +2081,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                             f"→"
                             f"{heat_firstt + (heat_finalt - heat_firstt) * ((seg_i + 1) / n_heat_segments):.1f} K)"
                             + (" | memory handoff" if use_memory else ""),
-                            flush=True,
+                            tag_style="bold magenta",
                         )
                     restart_path = Path(rread) if restart and rread else None
                     kw = _build_stage_dynamics_kw(
@@ -2893,10 +2902,12 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 and int(stage_overlap.check_interval) >= nstep
                 and not args.quiet
             ):
-                print(
-                    f"overlap (HEAT): one integration segment ({nstep} steps); "
+                from mmml.utils.rich_report import emit_overlap_log
+
+                emit_overlap_log(
+                    f"one integration segment ({nstep} steps); "
                     "geometry check after heat completes",
-                    flush=True,
+                    context="HEAT",
                 )
             stage_overlap = attach_prior_segment_restart(
                 stage_overlap,

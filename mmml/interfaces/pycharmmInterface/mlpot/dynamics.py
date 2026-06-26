@@ -1697,6 +1697,7 @@ def build_heat_dynamics_dashboard_sections(
     sections.append(("Thermostat policy", therm))
 
     integ = info["integration"]
+    dcd_iv = integ.get("dcd_interval_ps")
     sections.append(
         (
             "Integration",
@@ -1705,7 +1706,7 @@ def build_heat_dynamics_dashboard_sections(
                 "timestep (ps)": f"{integ['timestep_ps']:.6g}",
                 "duration (ps)": f"{float(integ['duration_ps']):.6g}",
                 "nsavc": integ["nsavc"],
-                "dcd interval (ps)": f"{integ['dcd_interval_ps']:.6g}",
+                "dcd interval (ps)": f"{dcd_iv:.6g}" if dcd_iv is not None else "—",
                 "echeck": integ["echeck"],
                 "inbfrq": integ["inbfrq"],
                 "imgfrq": integ["imgfrq"],

@@ -79,3 +79,33 @@ def test_format_heat_diagnostics_includes_sections(capsys):
     assert "Velocity / CPT initialization:" in text
     assert "CPT barostat:" in text
     assert "pmass=0" in text
+
+
+def test_build_heat_dynamics_dashboard_sections():
+    kw = build_hoover_heat_dynamics(
+        timestep_ps=0.00025,
+        duration_ps=0.0375,
+        save_interval_ps=0.004,
+        temp=300.0,
+        firstt=12.0,
+        finalt=300.0,
+        use_pbc=True,
+        tmass=930,
+    )
+    kw.update(start=True, restart=False, iasvel=1, ihtfrq=0)
+    info = describe_heat_dynamics_setup(
+        kw,
+        heat_thermostat="hoover",
+        use_pbc=True,
+        segment_index=0,
+        n_segments=4,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        build_heat_dynamics_dashboard_sections,
+    )
+
+    sections = build_heat_dynamics_dashboard_sections(info)
+    titles = [t for t, _ in sections]
+    assert "Thermostat policy" in titles
+    assert "Integration" in titles
+    assert any("Hoover CPT NVT" in str(m) for _, m in sections)
