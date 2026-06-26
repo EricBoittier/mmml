@@ -10,8 +10,8 @@ from typing import TYPE_CHECKING, Any, Literal, Optional, Union
 NptThermostat = Literal["hoover", "berendsen"]
 HeatThermostat = Literal["scale", "hoover"]
 
-# NPT Hoover CPT: max steps per ``dyn.run()`` when overlap guard is off. Long single
-# segments can NaN the barostat/crystal and segfault in Fortran ``upimag`` on UPDECI.
+# NPT/CPT Hoover: max steps per ``dyn.run()`` (overlap guard off, or per overlap sub-chunk).
+# Long single segments can NaN the barostat/crystal and segfault in Fortran ``upimag``.
 DEFAULT_CPT_DYNAMICS_CHUNK_NSTEP = 250
 
 if TYPE_CHECKING:
@@ -2786,6 +2786,24 @@ def _prepare_overlap_chunk_after_restart(
         pycharmm.lingo.charmm_script("UPDATE")
 
 
+def _apply_cpt_in_memory_continuation_kw(kw: dict[str, Any]) -> None:
+    """In-process ``dyna`` continuation for CPT sub-chunks (no ``READYN``).
+
+    ``restart=True`` with ``iunrea=-1`` segfaults in Fortran ``readyn``; overlap
+    memory handoff and CPT stability sub-chunks must keep coordinates in RAM.
+    """
+    kw["restart"] = False
+    kw["new"] = False
+    kw["start"] = False
+    kw["iasvel"] = 0
+    kw.pop("firstt", None)
+    kw.pop("iunrea", None)
+    kw["iunrea"] = -1
+    _strip_stale_heat_ramp_keywords(kw)
+    if int(kw.get("ihtfrq", 0) or 0) != 0:
+        kw["ihtfrq"] = 0
+
+
 def _strip_stale_heat_ramp_keywords(kw: dict[str, Any]) -> None:
     """Remove HEAT ramp keywords that confuse Hoover CPT on later overlap chunks."""
     for key in ("finalt", "TEMINC", "teminc"):
@@ -3084,14 +3102,7 @@ def _run_cpt_stability_subchunked(
         sub_kw = dict(kw)
         sub_kw["nstep"] = n
         if steps_done > 0:
-            sub_kw["restart"] = True
-            sub_kw["new"] = False
-            sub_kw["start"] = False
-            sub_kw["iasvel"] = 0
-            sub_kw.pop("firstt", None)
-            _strip_stale_heat_ramp_keywords(sub_kw)
-            if int(sub_kw.get("ihtfrq", 0) or 0) != 0:
-                sub_kw["ihtfrq"] = 0
+            _apply_cpt_in_memory_continuation_kw(sub_kw)
         _harmonize_overlap_chunk_frequencies(
             sub_kw,
             n,
