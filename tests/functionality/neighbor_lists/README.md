@@ -35,6 +35,16 @@ do not.
 | 5 | `05_compare_nl_backends.py` | optional | Vesin / jax-md / ASE / cell-list / PyCHARMM matrix |
 | 6 | `06_extreme_pbc_nl.py` | optional | tight PBC boxes, face wraps, orthorhombic cells |
 
+Synthetic cases omit PyCHARMM (no PSF). When `pycharmm` is in `--backends`, matching
+`charmm_*` CGENFF analog cases run automatically (e.g. `charmm_high_cutoff_fraction`
+→ `ACO:3` in an 18 Å cube with 15 Å cutoff).
+
+```bash
+uv run python tests/functionality/neighbor_lists/06_extreme_pbc_nl.py --with-charmm
+uv run python tests/functionality/neighbor_lists/06_extreme_pbc_nl.py \\
+    --case charmm_high_cutoff_fraction --backends vesin,jax_md,ase,pycharmm
+```
+
 ## Quick run
 
 ```bash

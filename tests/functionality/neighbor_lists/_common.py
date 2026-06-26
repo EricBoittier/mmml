@@ -266,6 +266,87 @@ def extreme_pbc_cases() -> list[dict[str, object]]:
   # fmt: on
 
 
+def charmm_extreme_pbc_cases() -> list[dict[str, object]]:
+    """CHARMM/CGENFF analogs of extreme PBC cases (requires PyCHARMM PSF + PBC nbonds)."""
+  # fmt: off
+    return [
+        {
+            "name": "charmm_opposite_corners",
+            "synthetic_analog": "opposite_corners",
+            "description": "ACO:2 wide spacing in a 20 Å cube (corner-like separation)",
+            "composition": "ACO:2",
+            "box_side": 20.0,
+            "spacing": 12.0,
+            "cutoff": 13.0,
+        },
+        {
+            "name": "charmm_tight_box_many_images",
+            "synthetic_analog": "tight_box_many_images",
+            "description": "ACO:2 in a 15 Å cube (L≈cutoff+ε)",
+            "composition": "ACO:2",
+            "box_side": 15.0,
+            "spacing": 5.0,
+            "cutoff": 13.0,
+        },
+        {
+            "name": "charmm_cutoff_near_half_box",
+            "synthetic_analog": "cutoff_near_half_box",
+            "description": "ACO:2 with spacing near L/2 in a 26 Å cube",
+            "composition": "ACO:2",
+            "box_side": 26.0,
+            "spacing": 12.5,
+            "cutoff": 13.0,
+        },
+        {
+            "name": "charmm_four_dimers_dense",
+            "synthetic_analog": "four_dimers_dense",
+            "description": "ACO:4 on a tight grid in a 22 Å cube",
+            "composition": "ACO:4",
+            "box_side": 22.0,
+            "spacing": 6.0,
+            "cutoff": 13.0,
+        },
+        {
+            "name": "charmm_minimal_com_spacing",
+            "synthetic_analog": "minimal_com_spacing",
+            "description": "ACO:2 with very close placement spacing",
+            "composition": "ACO:2",
+            "box_side": 30.0,
+            "spacing": 3.0,
+            "cutoff": 13.0,
+        },
+        {
+            "name": "charmm_edge_face_contact",
+            "synthetic_analog": "edge_face_contact",
+            "description": "ACO:2 in a 24 Å cube with tight spacing (face-adjacent MIC)",
+            "composition": "ACO:2",
+            "box_side": 24.0,
+            "spacing": 4.0,
+            "cutoff": 13.0,
+        },
+        {
+            "name": "charmm_high_cutoff_fraction",
+            "synthetic_analog": "high_cutoff_fraction",
+            "description": "ACO:3 in an 18 Å cube with 15 Å cutoff (dense pair shell)",
+            "composition": "ACO:3",
+            "box_side": 18.0,
+            "spacing": 4.0,
+            "cutoff": 15.0,
+        },
+    ]
+  # fmt: on
+
+
+def have_charmm_nl() -> bool:
+    """Return True when PyCHARMM + CGENFF are available for NL scripts."""
+    try:
+        from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
+
+        return CGENFF_PRM is not None
+    except Exception:
+        return False
+
+
 def build_extreme_pbc_case(
     case: dict[str, object],
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float, str]:
