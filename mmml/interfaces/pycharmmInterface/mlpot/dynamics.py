@@ -643,6 +643,34 @@ class MlpotSdChunkResult:
     rolled_back_chunk: int = 0
 
 
+@dataclass(frozen=True)
+class OverlapDynamicsResult:
+    """Outcome of :func:`run_dynamics_with_io` (overlap or single-segment)."""
+
+    last_dyn: Any
+    integrated_step: int
+    completed_full: bool
+    salvaged_partial: bool = False
+    abort_reason: str | None = None
+
+
+def _overlap_dynamics_result(
+    last_dyn: Any,
+    *,
+    integrated_step: int,
+    completed_full: bool = True,
+    salvaged_partial: bool = False,
+    abort_reason: str | None = None,
+) -> OverlapDynamicsResult:
+    return OverlapDynamicsResult(
+        last_dyn=last_dyn,
+        integrated_step=max(0, int(integrated_step)),
+        completed_full=bool(completed_full),
+        salvaged_partial=bool(salvaged_partial),
+        abort_reason=abort_reason,
+    )
+
+
 def _import_pycharmm_modules():
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
@@ -2124,6 +2152,7 @@ def _salvage_overlap_segment_progress(
     overlap_context: str,
     mlpot_ctx: Optional["MlpotContext"],
     overlap_restart_read: PathLike | None = None,
+    total_nstep: int | None = None,
 ) -> int | None:
     """Rewind to the last good overlap handoff instead of failing the stage."""
     from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
@@ -2174,9 +2203,11 @@ def _salvage_overlap_segment_progress(
         return None
     if mlpot_ctx is not None:
         _prepare_overlap_chunk_after_restart(mlpot_ctx, restart_read=read_path)
+    total_txt = f"/{int(total_nstep)}" if total_nstep is not None else ""
     print(
-        f"overlap ({overlap_context}): salvaged segment at global step {step} "
-        f"from {read_path.name} (partial stage completion; remaining chunk skipped)",
+        f"WARN: overlap ({overlap_context}): salvaged at global step {step}{total_txt} "
+        f"from {read_path.name} (partial stage; remaining chunks skipped; equi/prod "
+        "blocked unless --allow-incomplete-dynamics)",
         flush=True,
     )
     return step
@@ -3433,7 +3464,7 @@ def run_dynamics_with_io(
     overlap_run_state_dir: Path | None = None,
     overlap_run_state_every_chunks: int = 0,
     segment_restart_read: Path | str | None = None,
-) -> Any:
+) -> OverlapDynamicsResult:
     """Run dynamics and open/close CharmmFile units from ``io``.
 
     When ``overlap`` is enabled, integration runs in chunks of
@@ -3528,7 +3559,11 @@ def run_dynamics_with_io(
                 rng_base=rng_base,
                 chunk_nstep=cpt_chunk,
             )
-            return last_dyn
+            return _overlap_dynamics_result(
+                last_dyn,
+                integrated_step=total_nstep,
+                completed_full=True,
+            )
         last_dyn = _run_dynamics_chunk(
             kw,
             io,
@@ -3557,7 +3592,11 @@ def run_dynamics_with_io(
         ):
             validate_charmm_dynamics_state_after_chunk(context=overlap_context)
         maybe_record_forces(int(kw.get("nstep", 0)), ml_forces=None)
-        return last_dyn
+        return _overlap_dynamics_result(
+            last_dyn,
+            integrated_step=int(kw.get("nstep", 0)),
+            completed_full=True,
+        )
 
     requested_interval = max(1, int(overlap.check_interval))
     traj_nsavc = int(kw["nsavc"]) if "nsavc" in kw else None
@@ -3620,6 +3659,8 @@ def run_dynamics_with_io(
     last_dyn: Any = None
     steps_done = 0
     completed = False
+    salvaged_partial = False
+    abort_reason: str | None = None
     trajectory_files: list[Any] = []
     trajectory_iokw: dict[str, int] = {}
     chunk_dcd_paths: list[Path] = []

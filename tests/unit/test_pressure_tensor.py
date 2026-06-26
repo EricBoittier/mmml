@@ -146,7 +146,11 @@ def test_report_instantaneous_pressure_tensor_calls_charmm():
             quiet=True,
             mlpot_ctx=ctx,
         )
-    refresh.assert_called_once()
+    refresh.assert_called_once_with(
+        ctx,
+        context="EQUI instantaneous pressure",
+        silent_charmm=True,
+    )
     mock_lingo.charmm_script.assert_called_once()
     assert "pressure instantaneous" in mock_lingo.charmm_script.call_args[0][0].lower()
     assert "280" in mock_lingo.charmm_script.call_args[0][0]

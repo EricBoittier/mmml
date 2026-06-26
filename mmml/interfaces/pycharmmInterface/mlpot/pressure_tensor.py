@@ -184,7 +184,7 @@ def report_instantaneous_pressure_tensor(
         refresh_mlpot_energy_and_grms(
             mlpot_ctx,
             context=f"{context} instantaneous pressure",
-            quiet=quiet,
+            silent_charmm=quiet,
         )
     else:
         from mmml.interfaces.pycharmmInterface.mlpot.dynamics import safe_energy_show
