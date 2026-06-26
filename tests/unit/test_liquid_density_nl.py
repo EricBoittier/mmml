@@ -17,7 +17,7 @@ def test_liquid_density_box_side_aco_n16() -> None:
         bulk_density_fraction=1.0,
     )
     assert rho == 0.784
-    assert 18.0 < side < 24.0
+    assert 11.0 < side < 14.0
 
     case = {c["name"]: c for c in liquid_density_synthetic_cases()}["synthetic_aco_liquid_n16"]
     pos, cell, offsets, monomer_id, cutoff, _desc, side2, rho2 = (

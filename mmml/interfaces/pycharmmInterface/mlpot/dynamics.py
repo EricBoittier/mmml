@@ -4425,6 +4425,14 @@ def run_dynamics_with_io(
                         mlpot_ctx=mlpot_ctx,
                         memory_handoff=overlap_memory_handoff or post_rescue_memory_this_chunk,
                     )
+                    for restart_path in {
+                        Path(p)
+                        for p in (chunk_io.restart_write, final_restart)
+                        if p is not None
+                    }:
+                        header_step = read_restart_last_step(restart_path)
+                        if header_step is None or header_step < expected_after - 1:
+                            patch_restart_global_step(restart_path, steps_done)
                 if chunk_outcome.charmm_aborted:
                     print(
                         f"overlap ({overlap_context}): CHARMM abort at step "
