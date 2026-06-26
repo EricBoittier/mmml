@@ -1546,7 +1546,7 @@ def test_run_extent_recovery_passes_restart_coords_to_all_ml_path(tmp_path):
         "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.restore_geometry_from_ladder",
         return_value=restart,
     ) as restore, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.build_geometry_recovery_candidates",
+        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.build_extent_recovery_candidates",
         return_value=[],
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",

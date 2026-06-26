@@ -12,12 +12,14 @@ from tests.unit.conftest import write_minimal_restart
 
 from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
     attempt_overlap_early_abort_recovery,
+    build_extent_recovery_candidates,
     build_geometry_recovery_candidates,
     discover_resume_restart,
     first_valid_geometry_crd_path,
     first_valid_restart_path,
     is_geometry_recovery_crd_path,
     is_handoff_seed_restart_path,
+    is_heat_segment_restart_path,
     is_overlap_scratch_restart_path,
     pretreat_stage_complete,
     resolve_geometry_checkpoint_ladder,
@@ -254,6 +256,64 @@ def test_is_overlap_scratch_restart_path():
     assert is_overlap_scratch_restart_path("/tmp/heat.overlap_b.res")
     assert not is_overlap_scratch_restart_path("heat.0.res")
     assert not is_overlap_scratch_restart_path("baseline.res")
+
+
+def test_is_heat_segment_restart_path():
+    assert is_heat_segment_restart_path("heat.0.res")
+    assert is_heat_segment_restart_path("heat.12.res")
+    assert is_heat_segment_restart_path("heat_dcm_155.0.res")
+    assert not is_heat_segment_restart_path("heat.res")
+    assert not is_heat_segment_restart_path("heat.a.res")
+    assert not is_heat_segment_restart_path("baseline.res")
+    assert not is_heat_segment_restart_path("equi.res")
+
+
+def test_build_extent_recovery_candidates_skips_heat_segment_tails(tmp_path):
+    baseline = tmp_path / "baseline.res"
+    crd = tmp_path / "03_bonded_mm_after_mini_dcm.crd"
+    heat_seg = tmp_path / "heat.0.res"
+    equi = tmp_path / "equi.res"
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        n_monomers=2,
+        geometry_baseline_restart=baseline,
+        prior_segment_restart=heat_seg,
+        geometry_fallback_restarts=(crd, heat_seg, equi),
+    )
+    ladder = build_extent_recovery_candidates(cfg)
+    assert ladder == [baseline, crd, equi]
+    assert heat_seg not in ladder
+
+
+def test_restore_geometry_from_ladder_extent_prefers_crd_over_heat_segment(
+    tmp_path,
+):
+    baseline = tmp_path / "baseline.res"
+    baseline.write_text(
+        "NOTE!! THIS FILE  C A N N O T  BE USED TO RESTART A RUN!!!\n",
+        encoding="utf-8",
+    )
+    crd = tmp_path / "03_bonded_mm_after_mini.crd"
+    crd.write_text("crd coords\n", encoding="utf-8")
+    heat = tmp_path / "heat.0.res"
+    write_minimal_restart(heat)
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        n_monomers=2,
+        geometry_baseline_restart=baseline,
+        prior_segment_restart=heat,
+        geometry_fallback_restarts=(crd, heat),
+    )
+    candidates = build_extent_recovery_candidates(cfg)
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_crd"
+    ) as restore_crd:
+        path = restore_geometry_from_ladder(
+            candidates,
+            label="Fly-off recovery",
+        )
+    assert path == crd.resolve()
+    restore_crd.assert_called_once_with(crd.resolve())
 
 
 def test_build_geometry_recovery_candidates_prefers_baseline_over_scratch_prior(tmp_path):
