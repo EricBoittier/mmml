@@ -1056,6 +1056,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="ScaFaCoS method (default p2nfft) for periodic_external.",
     )
     parser.add_argument(
+        "--periodic-charmm-vdw",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "With periodic_external: CHARMM IMAGE VDW on (default). "
+            "--no-periodic-charmm-vdw disables CHARMM LJ (ScaFaCoS Coulomb only)."
+        ),
+    )
+    parser.add_argument(
         "--residue",
         type=str,
         default="MEOH",
@@ -2163,6 +2172,11 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     )
     _append_optional(cmd, "--lr-solver", getattr(args, "lr_solver", None))
     _append_optional(cmd, "--scafacos-method", getattr(args, "scafacos_method", None))
+    _append_boolean_optional_flag(
+        cmd,
+        "--periodic-charmm-vdw",
+        bool(getattr(args, "periodic_charmm_vdw", True)),
+    )
     _append_optional(
         cmd,
         "--min-com-restraint-distance",

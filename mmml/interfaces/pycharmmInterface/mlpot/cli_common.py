@@ -2767,6 +2767,15 @@ def add_staged_md_args(parser: argparse.ArgumentParser) -> None:
         default=None,
         help="ScaFaCoS fcs_init method when --mm-nonbond-mode=periodic_external (default: p2nfft).",
     )
+    group.add_argument(
+        "--periodic-charmm-vdw",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "With periodic_external: keep CHARMM IMAGE VDW on (default). "
+            "Use --no-periodic-charmm-vdw for ScaFaCoS Coulomb only (no CHARMM LJ)."
+        ),
+    )
 
 
 def resolve_dyn_inbfrq(args: argparse.Namespace) -> int | None:

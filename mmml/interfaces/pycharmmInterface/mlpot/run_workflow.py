@@ -722,6 +722,11 @@ def _register_mlpot_context(
             if args is not None
             else "jax_mic"
         ),
+        periodic_charmm_vdw=(
+            bool(getattr(args, "periodic_charmm_vdw", True))
+            if args is not None
+            else True
+        ),
         cubic_box_side_A=ml_cell,
         verbose=bool(getattr(args, "verbose", False)) if args is not None else False,
     )
