@@ -1032,6 +1032,16 @@ def use_packmol_placement(args: argparse.Namespace) -> bool:
     return resolve_packmol_use(
         composition=getattr(args, "composition", None),
         packmol=getattr(args, "packmol", None),
+        pyxtal=getattr(args, "pyxtal", None),
+    )
+
+
+def use_pyxtal_placement(args: argparse.Namespace) -> bool:
+    from mmml.interfaces.pyxtal_placement import resolve_pyxtal_use
+
+    return resolve_pyxtal_use(
+        composition=getattr(args, "composition", None),
+        pyxtal=getattr(args, "pyxtal", None),
     )
 
 
@@ -1047,6 +1057,7 @@ def build_cluster_from_args_with_tag(
     from mmml.cli.run.md_pbc_suite.ase import (
         _build_cluster_from_composition,
         _build_cluster_from_composition_packmol,
+        _build_cluster_from_composition_pyxtal,
         _parse_composition,
         packmol_sphere_center_from_args,
     )
@@ -1060,7 +1071,41 @@ def build_cluster_from_args_with_tag(
     spacing = float(args.spacing)
     if getattr(args, "composition", None):
         composition = _parse_composition(args.composition)
-        if use_packmol_placement(args):
+        if use_pyxtal_placement(args):
+            import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+            from mmml.interfaces.pyxtal_placement import parse_supercell_reps
+
+            supercell_reps = None
+            if getattr(args, "pyxtal_supercell", None):
+                supercell_reps = parse_supercell_reps(str(args.pyxtal_supercell))
+            z, r, _atoms_per, _names = _build_cluster_from_composition_pyxtal(
+                composition=composition,
+                space_group=int(getattr(args, "pyxtal_spg", 14)),
+                dimension=int(getattr(args, "pyxtal_dim", 3)),
+                factor=float(getattr(args, "pyxtal_factor", 1.0)),
+                unit_stoichiometry=getattr(args, "pyxtal_stoichiometry", None),
+                supercell_reps=supercell_reps,
+                seed=int(getattr(args, "seed", 123)),
+                max_attempts=int(getattr(args, "pyxtal_attempts", 20)),
+                charmm_sd_steps=int(getattr(args, "charmm_sd_steps", 50)),
+                charmm_abnr_steps=int(getattr(args, "charmm_abnr_steps", 100)),
+                charmm_tolenr=float(getattr(args, "charmm_tolenr", 1e-3)),
+                charmm_tolgrd=float(getattr(args, "charmm_tolgrd", 1e-3)),
+                scratch_dir=(
+                    Path(args.output_dir) / "pyxtal_cluster"
+                    if getattr(args, "output_dir", None) is not None
+                    else None
+                ),
+                verbose=not getattr(args, "quiet", False),
+                optimize_ase=bool(getattr(args, "optimize_pyxtal", False)),
+                optimize_ase_emt=bool(getattr(args, "optimize_pyxtal_emt", False)),
+                trim_to_composition=bool(getattr(args, "pyxtal_trim", True)),
+            )
+            print(
+                f"PyXtal crystal: spg={int(getattr(args, 'pyxtal_spg', 14))} "
+                f"dim={int(getattr(args, 'pyxtal_dim', 3))}"
+            )
+        elif use_packmol_placement(args):
             import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
             placement = resolve_packmol_placement_mode(
                 packmol_placement=getattr(args, "packmol_placement", None),
