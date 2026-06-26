@@ -2525,6 +2525,16 @@ def run_backend(backend: str, argv: list[str], args: argparse.Namespace) -> int:
 
 def main() -> int:
     args = parse_md_system_args()
+    if getattr(args, "mlpot_profile", False):
+        from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+            write_profile_git_metadata,
+        )
+
+        metadata_path = write_profile_git_metadata(
+            getattr(args, "output_dir", None),
+            argv=sys.argv[1:],
+        )
+        print(f"mmml md-system: wrote profiling git metadata {metadata_path}", flush=True)
     started_at = datetime.now(timezone.utc).isoformat()
     backend: str | None = None
     argv: list[str] | None = None
