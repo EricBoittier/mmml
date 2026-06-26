@@ -53,6 +53,7 @@ atoms = result.atoms  # ase.Atoms with cell + PBC
 | Step | Tool |
 |------|------|
 | Symmetry-aware crystal generation | PyXtal (`build-crystal` or API) |
+| **Crystal MD initial placement** | `mmml md-system --pyxtal --composition RES:N` (see below) |
 | Quick gas-phase / unit-cell test opt | ASE + EMT (`--optimize --emt`) |
 | Production relaxation | ASE + MMML hybrid calculator (`calculator_minimize.py` patterns) |
 | CHARMM topology + MD | `mmml make-res` per species, then `md-system` with NPZ/PDB handoff |
@@ -60,10 +61,36 @@ atoms = result.atoms  # ase.Atoms with cell + PBC
 
 Existing research code in `mmml/generate/dimers.py` also uses PyXtal for symmetry-scanned dimers; the new `pyxtal_placement` module is the supported path for crystal → ASE export.
 
+## `md-system` placement (`--pyxtal`)
+
+Build a periodic crystal cluster directly in staged MD workflows (PyCHARMM or ASE backend):
+
+```bash
+# Install optional dependency first
+uv sync --extra chem
+
+# Symmetry-aware crystal for a homogeneous composition (adjust supercell to match RES:N)
+mmml md-system \
+  --backend pycharmm \
+  --setup pbc_nvt \
+  --composition MEOH:8 \
+  --pyxtal --no-packmol \
+  --pyxtal-spg 14 \
+  --pyxtal-stoichiometry 2 \
+  --pyxtal-supercell 2,2,1 \
+  --box-size 25 \
+  --checkpoint /path/to/ckpt \
+  --output-dir artifacts/meoh_pyxtal
+```
+
+Placement priority when `--composition` is set: **handoff** > **PyXtal** (`--pyxtal`) > **Packmol** (default) > **grid** (`--no-packmol` without `--pyxtal`).
+
+Tune `--pyxtal-stoichiometry` and `--pyxtal-supercell` so the PyXtal build contains at least as many molecules as `--composition`; excess molecules are trimmed by default (`--pyxtal-trim`, on).
+
 ## Tests
 
 ```bash
-pytest tests/unit/test_pyxtal_placement.py -q
+pytest tests/unit/test_pyxtal_placement.py tests/unit/test_pyxtal_psf_order.py -q
 ```
 
 Live PyXtal smoke (requires `mmml[chem]`):

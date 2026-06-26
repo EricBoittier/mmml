@@ -557,3 +557,182 @@ def build_packmol_composition_cluster(
         if verbose:
             print(f"[cluster] Packmol cache saved: {entry}", flush=True)
     return z, shifted, atoms_per_list, ordered_residue_names
+
+
+def build_pyxtal_composition_cluster(
+    *,
+    composition: list[tuple[str, int]],
+    space_group: int = 14,
+    dimension: int = 3,
+    factor: float = 1.0,
+    unit_stoichiometry: list[int] | None = None,
+    supercell_reps: tuple[int, int, int] | None = None,
+    seed: int | None = None,
+    max_attempts: int = 20,
+    charmm_sd_steps: int = 50,
+    charmm_abnr_steps: int = 100,
+    charmm_tolenr: float = 1e-3,
+    charmm_tolgrd: float = 1e-3,
+    scratch_dir: str | Path | None = None,
+    verbose: bool = True,
+    optimize_ase: bool = False,
+    optimize_ase_emt: bool = False,
+    trim_to_composition: bool = True,
+) -> tuple[np.ndarray, np.ndarray, list[int], list[str]]:
+    """CHARMM-minimize monomers, PyXtal crystal build, PSF map, then cluster MM relax."""
+    from mmml.cli.run.md_pbc_suite.ase import _build_cluster_psf_from_composition
+    from mmml.interfaces.aseInterface.pyxtal_optimize import optimize_ase_atoms
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        CharmmMmMinimizeConfig,
+        minimize_charmm_mm_only,
+    )
+    from mmml.interfaces.pyxtal_placement import (
+        MolecularCrystalBuildRequest,
+        ase_supercell,
+        assign_ase_cluster_to_psf_order,
+        build_molecular_crystal_random,
+        have_pyxtal,
+        require_pyxtal,
+        resolve_pyxtal_unit_stoichiometry,
+        unique_residue_species,
+    )
+    from mmml.interfaces.pycharmmInterface import packmol_placement
+
+    if not have_pyxtal():
+        require_pyxtal()
+
+    scratch_root = Path(scratch_dir) if scratch_dir is not None else Path("pdb/pyxtal_cluster")
+    reps = supercell_reps if supercell_reps is not None else (1, 1, 1)
+
+    if verbose:
+        print(
+            "[cluster] 1/4 CHARMM MM minimize isolated monomer(s) (before PyXtal)",
+            flush=True,
+        )
+
+    residue_geometries: dict[str, tuple[np.ndarray, list[str], np.ndarray]] = {}
+    for residue, _count in composition:
+        key = residue.upper()
+        if key not in residue_geometries:
+            residue_geometries[key] = build_minimized_monomer_for_packmol(
+                key,
+                nstep_sd=int(charmm_sd_steps),
+                nstep_abnr=int(charmm_abnr_steps),
+                tolenr=float(charmm_tolenr),
+                tolgrd=float(charmm_tolgrd),
+                verbose=verbose,
+            )
+
+    if verbose:
+        print("[cluster] 2/4 Write monomer PDBs for PyXtal", flush=True)
+
+    monomer_dir = scratch_root / "monomers"
+    species = unique_residue_species(composition)
+    molecule_paths: list[str] = []
+    for residue in species:
+        coords, atom_names, monomer_z = residue_geometries[residue]
+        pdb_path = monomer_dir / f"{residue.lower()}.pdb"
+        packmol_placement.write_monomer_pdb_for_packmol(
+            pdb_path,
+            coords,
+            monomer_z,
+            atom_names=atom_names,
+            resname=residue,
+        )
+        molecule_paths.append(str(pdb_path.resolve()))
+
+    stoich = resolve_pyxtal_unit_stoichiometry(composition, unit_stoichiometry)
+    if verbose:
+        print(
+            f"[cluster] 3/4 PyXtal from_random (spg={int(space_group)}, "
+            f"Z={stoich}, supercell={reps[0]}×{reps[1]}×{reps[2]})",
+            flush=True,
+        )
+
+    request = MolecularCrystalBuildRequest(
+        molecules=molecule_paths,
+        stoichiometry=stoich,
+        dimension=int(dimension),
+        space_group=int(space_group),
+        factor=float(factor),
+        seed=seed,
+        max_attempts=int(max_attempts),
+    )
+    result = build_molecular_crystal_random(request)
+    atoms = result.atoms
+    if reps != (1, 1, 1):
+        atoms = ase_supercell(atoms, reps)
+        if verbose:
+            print(
+                f"PyXtal supercell {reps[0]}×{reps[1]}×{reps[2]} → natoms={len(atoms)}",
+                flush=True,
+            )
+
+    if optimize_ase:
+        if not optimize_ase_emt and atoms.calc is None:
+            raise ValueError(
+                "--optimize-pyxtal requires --optimize-pyxtal-emt or a pre-attached atoms.calc"
+            )
+        if verbose:
+            print("[cluster] Optional ASE pre-relax of PyXtal structure", flush=True)
+        opt = optimize_ase_atoms(
+            atoms,
+            use_emt=bool(optimize_ase_emt),
+            fix_cell=True,
+            logfile=None if not verbose else "-",
+        )
+        atoms = opt.atoms
+
+    if verbose:
+        print("[cluster] 4/4 Build cluster PSF and map PyXtal coords", flush=True)
+
+    z, atom_names, atoms_per_list, ordered_residue_names = _build_cluster_psf_from_composition(
+        composition,
+        residue_geometries=residue_geometries,
+    )
+    mapping_pdb = scratch_root / "pyxtal-psf-map.pdb"
+    shifted = assign_ase_cluster_to_psf_order(
+        atoms,
+        psf_atom_names=atom_names,
+        atoms_per_list=atoms_per_list,
+        ordered_residue_names=ordered_residue_names,
+        residue_geometries=residue_geometries,
+        pdb_path=mapping_pdb,
+        trim_to_composition=bool(trim_to_composition),
+    )
+    coor.set_positions(pd.DataFrame(shifted, columns=["x", "y", "z"]))
+
+    if int(charmm_sd_steps) > 0 or int(charmm_abnr_steps) > 0:
+        if verbose:
+            print(
+                f"PyXtal cluster: CHARMM MM minimize "
+                f"SD={charmm_sd_steps} ABNR={charmm_abnr_steps}",
+                flush=True,
+            )
+        minimize_charmm_mm_only(
+            CharmmMmMinimizeConfig(
+                nstep_sd=int(charmm_sd_steps),
+                nstep_abnr=int(charmm_abnr_steps),
+                tolenr=float(charmm_tolenr),
+                tolgrd=float(charmm_tolgrd),
+                verbose=verbose,
+            )
+        )
+        shifted = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
+        if verbose:
+            from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+
+            pycharmm.lingo.charmm_script("ENER")
+            print(
+                f"PyXtal cluster post-MM GRMS: {charmm_grms():.4f} kcal/mol/Å",
+                flush=True,
+            )
+
+    span = np.ptp(shifted, axis=0)
+    print(
+        f"PyXtal cluster: {len(atom_names)} atoms, "
+        f"span Å x={span[0]:.1f} y={span[1]:.1f} z={span[2]:.1f} "
+        f"(spg={result.space_group}, attempts={result.attempts})",
+        flush=True,
+    )
+    return z, shifted, atoms_per_list, ordered_residue_names

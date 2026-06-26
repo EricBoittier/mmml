@@ -210,6 +210,30 @@ def test_build_pycharmm_command_cube_packmol_argv_parses_in_pycharmm_backend():
     assert parsed.packmol_placement == "cube"
 
 
+def test_build_pycharmm_command_forwards_pyxtal_flags():
+    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+
+    cmd = build_pycharmm_command(
+        _pycharmm_args(
+            pyxtal=True,
+            packmol=False,
+            pyxtal_spg=4,
+            pyxtal_dim=3,
+            pyxtal_supercell="2,2,1",
+            pyxtal_stoichiometry=[2],
+        )
+    )
+    assert "--pyxtal" in cmd
+    assert "--packmol-placement" not in cmd
+    idx = cmd.index("--pyxtal-spg")
+    assert cmd[idx + 1] == "4"
+    idx = cmd.index("--pyxtal-supercell")
+    assert cmd[idx + 1] == "2,2,1"
+    parsed = pycharmm_mlpot.parse_args(cmd)
+    assert parsed.pyxtal is True
+    assert parsed.pyxtal_spg == 4
+
+
 def test_build_pycharmm_command_forwards_packmol_cache_and_run_state_flags():
     cmd = build_pycharmm_command(
         _pycharmm_args(
