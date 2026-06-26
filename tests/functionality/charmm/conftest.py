@@ -6,8 +6,6 @@ from pathlib import Path
 
 import pytest
 
-pytest_plugins = ["tests.functionality.pycharmmETC.conftest"]
-
 
 @pytest.fixture
 def tip3_charmm_ff(pycharmm_workdir: Path):
