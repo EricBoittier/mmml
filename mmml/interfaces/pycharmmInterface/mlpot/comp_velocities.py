@@ -80,18 +80,7 @@ def zero_comparison_scalars(sele: str = "all", *, quiet: bool = False) -> None:
     """Zero COMP scalar components via ``scalar xcomp/ycomp/zcomp/wcomp set 0``."""
     for comp in _COMP_COMPONENTS:
         run_charmm_script(f"scalar {comp} set 0 select {sele} end", quiet=quiet)
-# open read unit 21 card name equi_dcm_10.res
 
-# ! Check coordinates from restart
-# read coor dynr curr unit 21
-
-# ! Then reopen, because restart reads can consume the stream
-# close unit 21
-# open read unit 21 card name equi_dcm_10.res
-
-# ! Check whether velocities are readable
-# read coor dynr vel unit 21 comp
-# Then inspect COMP coordinates. The VEL values are stored as a coordinate-like set in AKMA velocity units, not as scalar vx/vy/vz fields.
 
 def clear_comparison_coordinates() -> None:
     """Zero the comparison **coordinate** set (``coor set comp``), not just scalars."""
@@ -242,8 +231,9 @@ def prepare_comp_for_heat(
 def clear_comp_for_production(*, quiet: bool = False) -> None:
     """Clear comparison coords + scalars before dynamics (no COMP-velocity path)."""
     clear_comparison_coordinates()
-    zero_comparison_scalars("all", quiet=quiet)
-    run_charmm_script("scalar wcomp set 0 select all end", quiet=quiet)
+    # Always run housekeeping CHARMM at PRNLev 0 (no SELRPN/scalar echo).
+    zero_comparison_scalars("all", quiet=True)
+    run_charmm_script("scalar wcomp set 0 select all end", quiet=True)
 
 
 _COMP_CLEARED_STAGES = frozenset({"nve", "equi", "prod"})
@@ -269,22 +259,33 @@ def apply_comp_velocity_policy(
             damp_kw = resolve_heat_comp_damp_kwargs(args)
             n = prepare_comp_for_heat(**damp_kw)
             if not silent:
+                from mmml.utils.rich_report import emit_tagged
+
                 target = "H" if damp_kw.get("hydrogen_only", True) else "all"
-                print(
-                    f"HEAT COMP (experimental): copied scaled forces into COMP "
-                    f"for {n} {target} atoms — does NOT change dyna iasvel/iasors; "
-                    "see COMP_AND_HEATING.md",
-                    flush=True,
+                emit_tagged(
+                    "HEAT COMP",
+                    f"(experimental) copied scaled forces into COMP for {n} {target} "
+                    "atoms — does NOT change dyna iasvel/iasors; see COMP_AND_HEATING.md",
+                    tag_style="bold yellow",
                 )
         else:
             clear_comp_for_production(quiet=silent)
             if not silent:
-                print(
-                    "HEAT COMP: cleared (default; no --heat-comp-damp); "
+                from mmml.utils.rich_report import emit_tagged
+
+                emit_tagged(
+                    "HEAT COMP",
+                    "cleared (default; no --heat-comp-damp); "
                     "never use iasvel=0 + start for COMP velocities",
-                    flush=True,
+                    tag_style="dim",
                 )
     elif stage in _COMP_CLEARED_STAGES:
         clear_comp_for_production(quiet=silent)
         if not silent:
-            print(f"{stage.upper()}: COMP cleared (no force-damp)", flush=True)
+            from mmml.utils.rich_report import emit_tagged
+
+            emit_tagged(
+                stage.upper(),
+                "COMP cleared (no force-damp)",
+                tag_style="dim",
+            )
