@@ -1567,6 +1567,12 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
 
             pretreat_restart_path = find_latest_pretreat_mm_restart(paths)
         r = get_charmm_positions_array()
+        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+            resolve_charmm_mm_pretreat_heat_nstep,
+            resolve_charmm_mm_pretreat_settings,
+        )
+
+        pretreat_settings = resolve_charmm_mm_pretreat_settings(args)
         print_charmm_mm_pretreat_handoff_panel(
             r,
             n_monomers=n_mol,
@@ -1575,7 +1581,12 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             workflow_box_side_A=box_side if charmm_pbc else None,
             use_pbc=charmm_pbc,
             paths=paths,
-            quiet=bool(args.quiet),
+            pretreat_settings=pretreat_settings,
+            composition=getattr(args, "_cluster_composition_summary", None),
+            pretreat_heat_nstep=resolve_charmm_mm_pretreat_heat_nstep(
+                args, settings=pretreat_settings
+            ),
+            quiet=False,
         )
     elif "mini" in stages and not getattr(args, "skip_cluster_build", False):
         save_mini = bool(getattr(args, "save", True))

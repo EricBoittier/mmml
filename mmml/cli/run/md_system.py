@@ -696,6 +696,11 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="N",
         help="pycharmm: pretreat CHARMM ABNR steps (default: --charmm-abnr-steps)",
     )
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        add_charmm_mm_pretreat_physics_args,
+    )
+
+    add_charmm_mm_pretreat_physics_args(parser)
     parser.add_argument(
         "--ps-nve",
         type=float,
@@ -2252,6 +2257,37 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd,
         "--charmm-mm-pretreat-mini-abnr",
         getattr(args, "charmm_mm_pretreat_mini_abnr", None),
+    )
+    cmd.extend(
+        [
+            "--charmm-mm-pretreat-dt-fs",
+            str(getattr(args, "charmm_mm_pretreat_dt_fs", 2.0)),
+        ]
+    )
+    _append_optional(
+        cmd,
+        "--charmm-mm-pretreat-temperature",
+        getattr(args, "charmm_mm_pretreat_temperature", None),
+    )
+    _append_optional(
+        cmd,
+        "--charmm-mm-pretreat-pressure",
+        getattr(args, "charmm_mm_pretreat_pressure", None),
+    )
+    _append_optional(
+        cmd,
+        "--charmm-mm-pretreat-inbfrq",
+        getattr(args, "charmm_mm_pretreat_inbfrq", None),
+    )
+    _append_optional(
+        cmd,
+        "--charmm-mm-pretreat-imgfrq",
+        getattr(args, "charmm_mm_pretreat_imgfrq", None),
+    )
+    _append_optional(
+        cmd,
+        "--charmm-mm-pretreat-ixtfrq",
+        getattr(args, "charmm_mm_pretreat_ixtfrq", None),
     )
     if getattr(args, "ml_batch_size", None) is not None:
         cmd.extend(["--ml-batch-size", str(args.ml_batch_size)])

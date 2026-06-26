@@ -214,6 +214,7 @@ def test_pretreat_resume_continues_partial_heat(tmp_path):
         charmm_mm_pretreat_ps_prod=2.0,
         charmm_mm_pretreat_ps_heat=2.0,
         charmm_mm_pretreat_heat_nstep=10000,
+        charmm_mm_pretreat_dt_fs=0.2,
         dcd_nsavc=100,
     )
     with mock.patch(

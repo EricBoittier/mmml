@@ -29,6 +29,11 @@ def run_mini_box_equilibration(
         return
     if not use_pbc:
         raise ValueError("mini box equilibration requires PBC")
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        resolve_charmm_mm_pretreat_settings,
+    )
+
+    pretreat = resolve_charmm_mm_pretreat_settings(args)
     if not args.quiet:
         print(
             f"\nMini box equilibration: CPT NPT for {float(duration_ps):.2f} ps "
@@ -45,9 +50,10 @@ def run_mini_box_equilibration(
         },
         res_key="charmm_mm_equi_res",
         dcd_key="charmm_mm_equi_dcd",
-        timestep_ps=timestep_ps,
+        timestep_ps=pretreat.timestep_ps,
         duration_ps=float(duration_ps),
-        temp=temp,
+        temp=pretreat.temperature_K,
+        pressure_atm=pretreat.pressure_atm,
         echeck=echeck,
         use_pbc=True,
         box_side=box_side,
