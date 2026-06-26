@@ -2776,6 +2776,15 @@ def add_staged_md_args(parser: argparse.ArgumentParser) -> None:
             "Use --no-periodic-charmm-vdw for ScaFaCoS Coulomb only (no CHARMM LJ)."
         ),
     )
+    group.add_argument(
+        "--include-mm",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Include JAX switched MM LJ+Coulomb pairs in the hybrid MLpot calculator "
+            "(default: on). Use --no-include-mm for ML-only (PhysNet terms only)."
+        ),
+    )
 
 
 def resolve_dyn_inbfrq(args: argparse.Namespace) -> int | None:

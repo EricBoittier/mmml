@@ -2205,9 +2205,8 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         "--periodic-charmm-vdw",
         bool(getattr(args, "periodic_charmm_vdw", True)),
     )
-    _append_boolean_optional_flag(
-        cmd, "--include-mm", bool(getattr(args, "include_mm", True))
-    )
+    if not bool(getattr(args, "include_mm", True)):
+        cmd.append("--no-include-mm")
     _append_optional(
         cmd,
         "--min-com-restraint-distance",

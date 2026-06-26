@@ -120,6 +120,21 @@ def test_build_pycharmm_command_forwards_include_mm_false():
     assert "--no-include-mm" in cmd
 
 
+def test_build_pycharmm_command_omits_include_mm_when_default_true():
+    cmd = build_pycharmm_command(_pycharmm_args())
+    assert "--include-mm" not in cmd
+    assert "--no-include-mm" not in cmd
+
+
+def test_build_pycharmm_command_no_include_mm_parses_in_pycharmm_backend():
+    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+
+    cmd = build_pycharmm_command(_pycharmm_args(include_mm=False))
+    assert "--no-include-mm" in cmd
+    parsed = pycharmm_mlpot.parse_args(cmd)
+    assert parsed.include_mm is False
+
+
 def test_build_pycharmm_command_omits_residue_when_composition_set():
     cmd = build_pycharmm_command(_pycharmm_args())
     assert "--composition" in cmd
