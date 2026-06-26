@@ -10,8 +10,10 @@ import pytest
 
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
     assert_stage_dynamics_completed,
+    classify_chunk_outcome,
     count_dcd_frames,
     expected_dcd_frame_count,
+    expected_overlap_chunk_dcd_frame_count,
     read_restart_coordinates,
     read_restart_last_step,
     read_restart_natom,
@@ -91,6 +93,103 @@ def test_expected_overlap_chunk_dcd_frame_count_heat_segment_case():
         )
         == 10
     )
+
+
+def test_expected_overlap_chunk_dcd_frame_count_partial_integrated_step():
+    full = expected_overlap_chunk_dcd_frame_count(
+        total_nstep=16000, nsavc=500, n_chunks=25
+    )
+    partial = expected_overlap_chunk_dcd_frame_count(
+        total_nstep=16000,
+        nsavc=500,
+        n_chunks=25,
+        integrated_step=640,
+    )
+    assert partial < full
+    assert partial == expected_dcd_frame_count(nstep=640, nsavc=500)
+
+
+def test_classify_chunk_outcome_ok_when_header_matches(tmp_path):
+    res = tmp_path / "heat.res"
+    res.write_text(
+        "REST    48     0\n"
+        "\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        "          25         640         640         320          10         640\n",
+        encoding="utf-8",
+    )
+    outcome = classify_chunk_outcome(
+        steps_before_chunk=0,
+        chunk_nstep=640,
+        reported_steps=640,
+        chunk_state_corrupt=False,
+        restart_path=res,
+    )
+    assert outcome.kind == "ok"
+    assert not outcome.charmm_aborted
+    assert outcome.integrated_step == 640
+
+
+def test_classify_chunk_outcome_clamps_misread_without_abort(tmp_path, capsys):
+    res = tmp_path / "heat.res"
+    res.write_text(
+        "REST    48     0\n"
+        "\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        "          25          40          40         320          10          40\n",
+        encoding="utf-8",
+    )
+    outcome = classify_chunk_outcome(
+        steps_before_chunk=0,
+        chunk_nstep=640,
+        reported_steps=40,
+        chunk_state_corrupt=False,
+        restart_path=res,
+        overlap_context="HEAT",
+    )
+    assert outcome.kind == "ok"
+    assert not outcome.charmm_aborted
+    assert outcome.integrated_step == 640
+    assert outcome.header_misread
+    assert "without CHARMM abort signal" in capsys.readouterr().out
+
+
+def test_classify_chunk_outcome_negative_rest_is_charmm_abort(tmp_path):
+    res = tmp_path / "heat.res"
+    res.write_text("REST    48    -1\n", encoding="utf-8")
+    outcome = classify_chunk_outcome(
+        steps_before_chunk=640,
+        chunk_nstep=640,
+        reported_steps=680,
+        chunk_state_corrupt=False,
+        restart_path=res,
+    )
+    assert outcome.charmm_aborted
+    assert outcome.kind == "charmm_aborted"
+
+
+def test_assert_stage_dynamics_completed_fails_salvaged_partial():
+    with pytest.raises(RuntimeError, match="salvaged partial segment"):
+        assert_stage_dynamics_completed(
+            stage="heat",
+            expected_nstep=16000,
+            nsavc=500,
+            dcd_path=None,
+            integrated_step=640,
+            salvaged_partial=True,
+        )
+
+
+def test_assert_stage_dynamics_completed_fails_short_integrated_step(tmp_path):
+    with pytest.raises(RuntimeError, match="integrated step 640"):
+        assert_stage_dynamics_completed(
+            stage="heat",
+            expected_nstep=16000,
+            nsavc=500,
+            dcd_path=None,
+            integrated_step=640,
+            salvaged_partial=False,
+        )
 
 
 def test_assert_stage_dynamics_completed_accepts_overlap_chunk_dcds(tmp_path):
