@@ -17,7 +17,7 @@ from _common import (
 )
 
 
-def _build_update_fn(skip_charmm: bool):
+def _build_update_fn(skip_charmm: bool, mm_nl_backend: str = "auto"):
     if skip_charmm:
         return None
 
@@ -44,19 +44,25 @@ def _build_update_fn(skip_charmm: bool):
         mm_switch_on=12.0,
         mm_switch_width=1.0,
         pbc_cell=float(cell[0, 0]),
-        use_jax_md_neighbor_list=True,
         jax_md_skin_distance=0.0,
         jax_md_update_interval=3,
         defer_xla_gpu_warmup=True,
+        mm_nl_backend=mm_nl_backend,
     )
     if not isinstance(result, tuple) or len(result) != 2:
-        raise RuntimeError("expected (mm_fn, update_mm_pairs) from jax-md path")
+        raise RuntimeError(f"expected (mm_fn, update_mm_pairs) from dynamic NL path ({mm_nl_backend})")
     _mm_fn, update_fn = result
     return update_fn, positions, cell
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--mm-nl-backend",
+        default="auto",
+        choices=("auto", "vesin", "jax_md", "cell_list"),
+        help="MM neighbor-list backend (default: auto → Vesin when installed)",
+    )
     parser.add_argument(
         "--skip-charmm",
         action="store_true",
@@ -70,7 +76,7 @@ def main() -> int:
         return 0
 
     try:
-        built = _build_update_fn(skip_charmm=False)
+        built = _build_update_fn(skip_charmm=False, mm_nl_backend=args.mm_nl_backend)
     except Exception as exc:
         print_fail(f"build_mm_energy_forces_fn: {exc}")
         print("Hint: run with --skip-charmm or set up PyCHARMM + CGENFF")

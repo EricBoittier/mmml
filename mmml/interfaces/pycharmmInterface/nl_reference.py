@@ -224,6 +224,113 @@ def vesin_mic_pairs(
     )
 
 
+def _array_module(arr):
+    """Return ``numpy`` or ``cupy`` module backing ``arr``."""
+    type_name = type(arr).__module__
+    if type_name.startswith("cupy"):
+        import cupy as cp
+
+        return cp
+    return np
+
+
+def vesin_raw_half_list(
+    positions,
+    cell: np.ndarray,
+    cutoff: float,
+    *,
+    points_module=None,
+):
+    """Run Vesin half-list; return ``(i, j, dist)`` on the input device."""
+    if not _HAVE_VESIN:
+        raise ImportError("vesin is not installed")
+    xp = points_module or _array_module(positions)
+    R = xp.asarray(positions, dtype=xp.float64)
+    cell_mat = cell_matrix_3x3(np.asarray(cell, dtype=np.float64))
+    if xp is not np:
+        cell_mat = xp.asarray(cell_mat)
+    calculator = VesinNeighborList(cutoff=float(cutoff), full_list=False)
+    i, j, _shifts, dist = calculator.compute(
+        points=R,
+        box=cell_mat,
+        periodic=True,
+        quantities="ijSd",
+    )
+    return (
+        xp.asarray(i, dtype=xp.int32),
+        xp.asarray(j, dtype=xp.int32),
+        xp.asarray(dist, dtype=xp.float64),
+    )
+
+
+def filter_vesin_half_list_vectorized(
+    i,
+    j,
+    dist,
+    cutoff: float,
+    monomer_id,
+    positions,
+    cell: np.ndarray | None,
+    *,
+    mm_r_min: float | None = None,
+    monomer_offsets: Sequence[int] | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Vectorized MM filters on Vesin ``i,j,dist`` (NumPy or CuPy)."""
+    xp = _array_module(i)
+    i_arr = xp.asarray(i, dtype=xp.int32)
+    j_arr = xp.asarray(j, dtype=xp.int32)
+    dist_arr = xp.asarray(dist, dtype=xp.float64)
+    mid = xp.asarray(monomer_id, dtype=xp.int32)
+    keep = (dist_arr < float(cutoff)) & (mid[i_arr] != mid[j_arr]) & (i_arr < j_arr)
+
+    if mm_r_min is not None and monomer_offsets is not None:
+        R = xp.asarray(positions, dtype=xp.float64)
+        offsets = np.asarray(monomer_offsets, dtype=np.int32)
+        n_monomers = len(offsets) - 1
+        coms = xp.zeros((n_monomers, 3), dtype=xp.float64)
+        for k in range(n_monomers):
+            start, end = int(offsets[k]), int(offsets[k + 1])
+            coms[k] = R[start:end].mean(axis=0)
+        cell_mat = cell_matrix_3x3(cell) if cell is not None else None
+        inv_cell = None
+        if cell_mat is not None:
+            inv_cell = xp.asarray(np.linalg.inv(cell_mat))
+        mi = mid[i_arr]
+        mj = mid[j_arr]
+        dr = coms[mj] - coms[mi]
+        if inv_cell is not None:
+            frac_dr = dr @ inv_cell.T
+            frac_dr = frac_dr - xp.round(frac_dr)
+            dr = frac_dr @ xp.asarray(cell_mat)
+        com_dist = xp.linalg.norm(dr, axis=1)
+        keep = keep & (com_dist >= float(mm_r_min))
+
+    return i_arr[keep], j_arr[keep]
+
+
+def pad_pair_arrays(
+    pair_i,
+    pair_j,
+    *,
+    max_pairs: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, int]:
+    """Pad filtered pair arrays to fixed capacity (NumPy or CuPy)."""
+    xp = _array_module(pair_i)
+    n_valid = int(pair_i.shape[0])
+    if n_valid > max_pairs:
+        from mmml.interfaces.pycharmmInterface.cell_list import PairListTruncationError
+
+        raise PairListTruncationError(n_valid, max_pairs)
+    cap = int(max_pairs)
+    out_i = xp.zeros(cap, dtype=xp.int32)
+    out_j = xp.zeros(cap, dtype=xp.int32)
+    mask = xp.zeros(cap, dtype=bool)
+    out_i[:n_valid] = pair_i
+    out_j[:n_valid] = pair_j
+    mask[:n_valid] = True
+    return out_i, out_j, mask, n_valid
+
+
 def reference_mic_pairs(
     positions: np.ndarray,
     cell: np.ndarray,

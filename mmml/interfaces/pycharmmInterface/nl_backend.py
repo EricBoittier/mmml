@@ -54,13 +54,13 @@ def pick_static_rebuild_backend(
     *,
     use_jax_md_neighbor_list: bool = True,
 ) -> MmNlBackendName:
-    """Choose backend for static lists and jax-md overflow fallback."""
+    """Choose backend for static lists, rebuild updates, and jax-md overflow fallback."""
     name = resolve_mm_nl_backend(requested)
     if name == "auto":
-        if use_jax_md_neighbor_list and have_jax_md():
-            return "jax_md"
         if have_vesin():
             return "vesin"
+        if use_jax_md_neighbor_list and have_jax_md():
+            return "jax_md"
         return "cell_list"
     if name == "jax_md" and not (use_jax_md_neighbor_list and have_jax_md()):
         if have_vesin():

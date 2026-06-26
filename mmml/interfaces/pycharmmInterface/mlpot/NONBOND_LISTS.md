@@ -180,33 +180,60 @@ When `pbc_cell` is `None`, [`build_mm_energy_forces_fn`](../mm_energy_forces.py)
 
 Pair **contributions** taper via `s_MM(r)` and complementary ML/MM handoff ([`cutoffs.py`](../cutoffs.py)); atoms and monomers are never removed from the system. See [CHARMM_SETTINGS.md § ML/MM pair list vs `mm_r_min`](CHARMM_SETTINGS.md).
 
-### PBC: jax-md neighbor lists
+### PBC: dynamic neighbor lists (`update_mm_pairs`)
 
-When `pbc_cell` is set and jax-md is available, neighbor lists culling is performed:
+When `pbc_cell` is set, MM uses **dynamic** pair lists with `update_mm_pairs` (skin/interval
+cache). Default rebuild backend is **Vesin** when installed (`mm_nl_backend=auto`); opt into
+jax-md incremental with `mm_nl_backend=jax_md`.
 
 - **Outer list radius**: `mm_switch_on + mm_switch_width` (default 13 Å).
-- **Internal rebuild trigger**: `dr_threshold=0.5` Å ([`jax_md_neighbor_list.py`](../jax_md_neighbor_list.py)).
 - **Optional caching** in `update_mm_pairs`:
   - `jax_md_update_interval` (default 1): skip rebuild check every N calls.
   - `jax_md_skin_distance` (default 0): reuse list until max atom displacement ≤ skin.
   - **NPT box sync**: when `skin == 0`, interval-only reuse also requires stable box (`box_delta ≤ 1e-8`); box resize forces rebuild even between interval steps.
 
+**jax-md incremental** (`mm_nl_backend=jax_md`): internal rebuild trigger `dr_threshold=0.5` Å
+([`jax_md_neighbor_list.py`](../jax_md_neighbor_list.py)); overflow falls back to Vesin/cell-list.
+
 ### PBC: unified rebuild backends (`nl_backend.py`)
 
-Static PBC lists (no jax-md) and jax-md **overflow fallback** share rebuild logic via
+Static PBC lists and jax-md **overflow fallback** share rebuild logic via
 [`nl_backend.py`](../nl_backend.py) and [`nl_reference.py`](../nl_reference.py).
 
 | `mm_nl_backend` / `MMML_MM_NL_BACKEND` | Primary rebuild | Fallback |
 |----------------------------------------|-----------------|----------|
-| `auto` (default) | jax-md incremental when available | Vesin if installed, else cell-list |
+| `auto` (default) | Vesin rebuild + skin cache when installed | cell-list |
 | `vesin` | [Vesin](https://luthaf.fr/vesin/latest/index.html) half-list + MM filters | cell-list |
 | `cell_list` | NumPy cell-list | — |
-| `jax_md` | jax-md incremental | Vesin → cell-list on overflow |
+| `jax_md` | jax-md incremental (opt-in) | Vesin → cell-list on overflow |
 
-Vesin is the preferred **cross-path reference oracle** for validation (optional dep:
-`uv sync --extra nl-validation`). Brute-force MIC is used when Vesin is not installed.
+Vesin is bundled in the `md` extra (`vesin>=0.5.0`) and is the preferred **cross-path
+reference oracle** for validation (`uv sync --extra nl-validation` also works).
+Brute-force MIC is used when Vesin is not installed.
 
 Pass `mm_nl_backend=` to `build_mm_energy_forces_fn` or set env `MMML_MM_NL_BACKEND`.
+
+### GPU: Vesin + CuPy + DLPack (`nl_gpu.py`)
+
+Vesin **0.5+** accepts CuPy arrays and runs the CUDA backend when inputs are on GPU.
+MMML exposes an optional GPU rebuild path for **JAX-held positions** (primarily
+`jaxmd_runner.py`), gated by `MMML_MM_NL_DEVICE=gpu` (default `cpu`).
+
+Requirements: `uv sync --extra gpu` (CuPy + JAX CUDA), `vesin>=0.5.0`, CUDA GPU.
+
+| Path | When it helps | When it does not |
+|------|---------------|------------------|
+| CPU Vesin + skin (default) | PyCHARMM hybrid MD; coords already on host | — |
+| GPU Vesin + DLPack | `jaxmd_runner` PBC: avoids H2D for `pair_idx`/`pair_mask` on rebuild | PyCHARMM callback (coords on host) |
+| jax-md incremental | Device-resident NL state when explicitly selected | Host `np.asarray(positions)` sync each step unless `MMML_MM_NL_DEVICE=gpu` |
+
+`jaxmd_runner` passes GPU positions through to `update_mm_pairs` when
+`MMML_MM_NL_DEVICE=gpu` ([`_nl_update_positions`](../cli/run/jaxmd_runner.py)).
+Skin/displacement cache checks still use host Cartesian coords today.
+
+Tune CUDA pair capacity with `VESIN_CUDA_MAX_PAIRS_PER_POINT` (default 256).
+
+Validation scripts: `10_vesin_cupy_parity.py`, `11_gpu_nl_sync_profile.py` (run on GPU node).
 
 The cadence and method of updating these lists depend on the **simulation runner/backend**:
 
@@ -263,7 +290,7 @@ sequenceDiagram
 | Post-mini sync | `ENER` + `UPDATE` ([`sync_charmm_lists_after_mini`](dynamics.py)) | Runs once | N/A | **Required** before NVE; skip with `--no-pre-nve-charmm-update` at risk |
 | Vacuum NVE default | **50** | Every 50 steps | Every step | CHARMM lists stale between rebuilds |
 | Vacuum NVE heuristic | **-1** | On displacement | Every step | Better for moving clusters |
-| PBC dynamics | **-1**, `imgfrq=-1` | On NB/image rebuild | jax-md with skin | Image + jax-md tuning |
+| PBC dynamics | **-1**, `imgfrq=-1` | On NB/image rebuild | Vesin rebuild + skin (or `jax_md` opt-in) | Image + NL skin tuning |
 
 MLpot SD also forces `imgfrq=0` when `inbfrq=0` (CHARMM constraint: "INBFRQ is zero when IMGFRQ is not") — see [`_prepare_mlpot_sd_list_frequencies`](dynamics.py).
 
@@ -360,7 +387,8 @@ Python bindings: [`pycharmm/energy_mlpot.py`](../../../../pycharmm/energy_mlpot.
 | [`mlpot/dynamics.py`](dynamics.py) | `inbfrq=0` SD kwargs, `sync_charmm_lists_after_mini`, `--dyn-inbfrq` |
 | [`mm_energy_forces.py`](../mm_energy_forces.py) | `build_mm_energy_forces_fn`, `update_mm_pairs`, `neighbor_pair_cache_should_reuse` |
 | [`nl_backend.py`](../nl_backend.py) | Vesin / cell-list rebuild backends |
-| [`nl_reference.py`](../nl_reference.py) | Brute / Vesin reference oracles, pair-set compare |
+| [`nl_gpu.py`](../nl_gpu.py) | Optional CuPy + DLPack GPU rebuild (`MMML_MM_NL_DEVICE`) |
+| [`nl_reference.py`](../nl_reference.py) | Brute / Vesin reference oracles, vectorized MM filters |
 | [`jax_md_neighbor_list.py`](../jax_md_neighbor_list.py) | PBC jax-md neighbor list builder |
 | [`mmml_calculator.py`](../mmml_calculator.py) | `setup_calculator` factory; jax-md tuning kwargs |
 | [`cutoffs.py`](../cutoffs.py) | ML/MM complementary handoff parameters |

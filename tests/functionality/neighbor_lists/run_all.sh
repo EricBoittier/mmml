@@ -18,6 +18,8 @@ echo "=== NL benchmark (liquid-density smoke) ==="
 uv run python "$DIR/08_benchmark_nl_backends.py" \
   --case synthetic_aco_liquid_n32 --backends vesin,jax_md,ase,cell_list \
   --repeat 5 --warmup 1 "$@" || true
+uv run python "$DIR/10_vesin_cupy_parity.py" "$@" || true
+uv run python "$DIR/11_gpu_nl_sync_profile.py" "$@" || true
 uv run python "$DIR/04_update_mm_pairs_integration.py" --skip-charmm "$@"
 
 echo "=== ALL NL SCRIPTS PASSED (04 skipped CHARMM unless run manually) ==="
