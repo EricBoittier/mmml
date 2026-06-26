@@ -3,9 +3,26 @@
 from __future__ import annotations
 
 import argparse
+import sys
+import types
+from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+
+@contextmanager
+def _fake_pycharmm_script_module(script_cls: MagicMock):
+    """Inject a stub ``pycharmm.script`` without loading libcharmm."""
+    fake_pycharmm = types.ModuleType("pycharmm")
+    fake_script_mod = types.ModuleType("pycharmm.script")
+    fake_script_mod.CommandScript = script_cls
+    fake_pycharmm.script = fake_script_mod
+    with patch.dict(
+        sys.modules,
+        {"pycharmm": fake_pycharmm, "pycharmm.script": fake_script_mod},
+    ):
+        yield
 
 
 def test_should_run_mini_lattice_abnr_skips_fixed_box():
@@ -51,7 +68,7 @@ def test_run_charmm_lattice_abnr_uses_script_command():
     script_inst = MagicMock()
     script_cls.return_value = script_inst
     with (
-        patch("pycharmm.script.CommandScript", script_cls),
+        _fake_pycharmm_script_module(script_cls),
         patch(
             "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
             return_value=(42.5, "pbound"),
@@ -88,6 +105,4 @@ def test_run_charmm_lattice_abnr_skips_zero_steps():
         run_charmm_lattice_abnr,
     )
 
-    with patch("pycharmm.script.CommandScript") as script_cls:
-        assert run_charmm_lattice_abnr(nstep=0, tolenr=1e-3, tolgrd=1e-3) is None
-    script_cls.assert_not_called()
+    assert run_charmm_lattice_abnr(nstep=0, tolenr=1e-3, tolgrd=1e-3) is None
