@@ -74,8 +74,8 @@ def test_packmol_radius_scaling(cfg: dict) -> None:
 
 def test_paths_for_size_dcm3(cfg: dict) -> None:
     p = paths_for_size(cfg, 3)
-    assert p["nve_dcd"].name == "nve_dcm_3.dcd"
-    assert p["mini_crd"].name == "mini_full_mlpot_dcm_3.crd"
+    assert p["nve_dcd"].name == "nve.dcd"
+    assert p["mini_crd"].name == "mini.crd"
 
 
 def test_build_md_system_argv_per_step_flags(cfg: dict, tmp_path: Path) -> None:
@@ -104,8 +104,8 @@ def test_build_md_system_argv_per_step_flags(cfg: dict, tmp_path: Path) -> None:
 
 def test_paths_for_size(cfg: dict) -> None:
     p = paths_for_size(cfg, 9)
-    assert p["nve_dcd"].name == "nve_dcm_9.dcd"
-    assert p["mini_crd"].name == "mini_full_mlpot_dcm_9.crd"
+    assert p["nve_dcd"].name == "nve.dcd"
+    assert p["mini_crd"].name == "mini.crd"
 
 
 def test_snakefile_avoids_reserved_conda_keyword() -> None:

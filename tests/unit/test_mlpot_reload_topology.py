@@ -17,7 +17,17 @@ from mmml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
 )
 
 
-def test_resolve_topology_prefers_cluster_for_vmd_over_mini(tmp_path: Path):
+def test_resolve_topology_prefers_model_over_mini(tmp_path: Path):
+    mini = tmp_path / "mini.psf"
+    vmd = tmp_path / "model.psf"
+    mini.write_text("mini", encoding="ascii")
+    vmd.write_text("vmd", encoding="ascii")
+
+    resolved = resolve_topology_psf_for_mlpot_reload(mini, tag="dcm_90")
+    assert resolved == vmd.resolve()
+
+
+def test_resolve_topology_prefers_cluster_for_vmd_legacy(tmp_path: Path):
     mini = tmp_path / "mini_full_mlpot_dcm_90.psf"
     vmd = tmp_path / "cluster_for_vmd_dcm_90.psf"
     mini.write_text("mini", encoding="ascii")
@@ -36,7 +46,7 @@ def test_resolve_topology_keeps_non_mini_psf(tmp_path: Path):
 def test_resolve_topology_raises_when_vmd_missing(tmp_path: Path):
     mini = tmp_path / "mini_full_mlpot_dcm_90.psf"
     mini.write_text("mini", encoding="ascii")
-    with pytest.raises(FileNotFoundError, match="cluster_for_vmd"):
+    with pytest.raises(FileNotFoundError, match="model.psf"):
         resolve_topology_psf_for_mlpot_reload(mini)
 
 

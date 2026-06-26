@@ -1190,13 +1190,12 @@ def load_handoff(
   raise ValueError(f"Unsupported handoff format: {fmt}")
 
 
-_RESTART_STAGE_PREFIXES: tuple[str, ...] = (
-    "prod_",
-    "equi_",
-    "nve_",
-    "heat_",
-    "charmm_mm_heat_",
-    "mini_",
+_RESTART_STAGE_NAMES: tuple[str, ...] = (
+    "prod",
+    "equi",
+    "nve",
+    "heat",
+    "baseline",
 )
 
 
@@ -1212,7 +1211,7 @@ def find_latest_charmm_restart_in_dir(out_dir: Path) -> Path | None:
             name = path.name.lower()
             if name.startswith("continue_seed"):
                 continue
-            if "overlap" in name:
+            if ".overlap" in name or name.endswith(".a.res") or name.endswith(".b.res"):
                 overlap_backups.append(path)
             else:
                 candidates.append(path)
@@ -1228,9 +1227,10 @@ def find_latest_charmm_restart_in_dir(out_dir: Path) -> Path | None:
             stage_rank = 0
         else:
             stage_rank = -1
-            for idx, prefix in enumerate(_RESTART_STAGE_PREFIXES):
-                if prefix in name:
-                    stage_rank = len(_RESTART_STAGE_PREFIXES) - idx
+            for idx, stage_name in enumerate(_RESTART_STAGE_NAMES):
+                base = stage_name + "."
+                if name == f"{stage_name}.res" or name.startswith(base):
+                    stage_rank = len(_RESTART_STAGE_NAMES) - idx
                     break
         seg = -1
         match = re.search(r"\.(\d+)\.res$", name)

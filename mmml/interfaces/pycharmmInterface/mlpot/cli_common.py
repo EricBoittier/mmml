@@ -1230,20 +1230,21 @@ def write_vmd_load_script(
     trajectory: Path | Sequence[Path] | None = None,
     n_atoms: int,
 ) -> Path:
-    out_dir = out_dir.resolve()
-    topology_psf = topology_psf.resolve()
+    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import VMD_TCL
+
+    topology_psf = Path(topology_psf)
     lines = [
-        "# VMD: topology with full PSF connectivity (MLpot uses BLOCK, not bond deletion).",
+        "# VMD: run from the job output directory (basename paths for sshfs / compute nodes).",
         f"# Atoms: {n_atoms} — must match trajectory frame count.",
-        f"mol new {{{topology_psf}}}",
+        f"mol new {{{topology_psf.name}}}",
     ]
     trajectories = _normalize_trajectory_paths(trajectory)
     for traj in trajectories:
-        lines.append(f"mol addfile {{{traj}}} waitfor all")
+        lines.append(f"mol addfile {{{Path(traj).name}}} waitfor all")
     if trajectories:
         lines.append("animate goto 0")
     lines.append("display update")
-    tcl_path = out_dir / f"load_{tag}_in_vmd.tcl"
+    tcl_path = Path(out_dir) / VMD_TCL
     tcl_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return tcl_path
 
