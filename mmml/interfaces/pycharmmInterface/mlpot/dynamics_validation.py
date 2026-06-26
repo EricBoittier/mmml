@@ -38,9 +38,10 @@ def count_readable_dcd_frames(path: Path) -> int:
 
 
 def overlap_chunk_dcd_paths(dcd_path: Path) -> list[Path]:
-    """Sorted ``{stem}.chunk.*.dcd`` siblings for an overlap stage trajectory."""
-    p = Path(dcd_path)
-    return sorted(p.parent.glob(f"{p.stem}.chunk.*{p.suffix}"))
+    """Sorted per-chunk DCD siblings for an overlap stage trajectory."""
+    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import overlap_chunk_dcd_paths as _paths
+
+    return _paths(dcd_path)
 
 
 def count_overlap_chunk_dcd_frames(dcd_path: Path) -> tuple[int, int]:

@@ -103,10 +103,10 @@ def test_assert_stage_dynamics_completed_accepts_overlap_chunk_dcds(tmp_path):
             return 5
 
     atoms = _Atoms()
-    dcd = tmp_path / "equi_dcm_200.dcd"
+    dcd = tmp_path / "equi.dcd"
     for i in range(10):
         save_trajectory_dcd(
-            tmp_path / f"equi_dcm_200.chunk.{i:04d}.dcd",
+            tmp_path / f"equi.{i:04d}.dcd",
             np.zeros((2, 5, 3), dtype=np.float32),
             atoms,
             steps_per_frame=200,

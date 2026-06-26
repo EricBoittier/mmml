@@ -299,9 +299,9 @@ def test_handoff_to_npz_dict_serializes_metadata() -> None:
 def test_find_latest_charmm_restart_prefers_equi_segment(tmp_path: Path) -> None:
     from mmml.cli.run.md_handoff import find_latest_charmm_restart_in_dir
 
-    (tmp_path / "heat_DCM20.res").write_text("heat", encoding="utf-8")
-    equi0 = tmp_path / "equi_DCM20.0.res"
-    equi1 = tmp_path / "equi_DCM20.1.res"
+    (tmp_path / "heat.res").write_text("heat", encoding="utf-8")
+    equi0 = tmp_path / "equi.0.res"
+    equi1 = tmp_path / "equi.1.res"
     equi0.write_text("equi0", encoding="utf-8")
     equi1.write_text("equi1", encoding="utf-8")
     chosen = find_latest_charmm_restart_in_dir(tmp_path)

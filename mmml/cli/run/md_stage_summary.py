@@ -77,6 +77,7 @@ def pycharmm_trajectory_tag(args: Any) -> str:
 
 
 def pycharmm_stage_dcd_frames(output_dir: Path, stage: str, tag: str) -> int:
+    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import stage_dcd
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         count_overlap_chunk_dcd_frames,
         count_readable_dcd_frames,
@@ -84,14 +85,13 @@ def pycharmm_stage_dcd_frames(output_dir: Path, stage: str, tag: str) -> int:
     )
 
     out = Path(output_dir)
-    for name in (f"{stage}_{tag}.dcd", f"charmm_mm_{stage}_{tag}.dcd"):
-        path = out / name
+    for path in (stage_dcd(out, stage), out / "pretreat" / f"{stage}.dcd"):
         if path.is_file():
             if overlap_chunk_dcd_paths(path):
                 _header, readable = count_overlap_chunk_dcd_frames(path)
                 return int(readable)
             return int(count_readable_dcd_frames(path))
-    chunk_paths = sorted(out.glob(f"{stage}_{tag}.chunk.*.dcd"))
+    chunk_paths = overlap_chunk_dcd_paths(stage_dcd(out, stage))
     if chunk_paths:
         return int(sum(count_readable_dcd_frames(p) for p in chunk_paths))
     return 0

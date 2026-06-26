@@ -7,11 +7,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import alternate_overlap_scratch
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
 
 def geometry_baseline_path(out_dir: Path, tag: str) -> Path:
-    return Path(out_dir) / f"geometry_baseline_{tag}.res"
+    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import geometry_baseline_res
+
+    return geometry_baseline_res(out_dir)
 
 
 def resolve_geometry_checkpoint_ladder(
@@ -32,8 +35,10 @@ def resolve_geometry_checkpoint_ladder(
 
     heat_paths: list[Path] = []
     if n_heat_segments > 1:
+        from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import stage_segment_restart
+
         for seg_i in range(n_heat_segments - 1, -1, -1):
-            heat_paths.append(out_dir / f"heat_{tag}.{seg_i}.res")
+            heat_paths.append(stage_segment_restart(out_dir, "heat", seg_i))
     else:
         heat_res = paths.get("heat_res")
         if heat_res is not None:
@@ -76,14 +81,20 @@ def resolve_geometry_checkpoint_ladder(
 
 def is_overlap_scratch_restart_path(path: Path | str) -> bool:
     """True for alternating overlap chunk scratch files (not stage segment restarts)."""
-    name = Path(path).name
-    return name.endswith(".overlap_a.res") or name.endswith(".overlap_b.res")
+    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
+        is_overlap_scratch_restart_path as _is_scratch,
+    )
+
+    return _is_scratch(path)
 
 
 def is_pretreat_mm_restart_path(path: Path | str) -> bool:
     """True for CHARMM MM pretreat leg checkpoints (pre-MLpot topology/forces)."""
-    name = Path(path).name
-    return name.startswith("charmm_mm_") and name.endswith(".res")
+    p = Path(path)
+    name = p.name
+    if name.startswith("charmm_mm_") and name.endswith(".res"):
+        return True
+    return p.parent.name == "pretreat" and name.endswith(".res")
 
 
 def is_handoff_seed_restart_path(path: Path | str) -> bool:
@@ -163,11 +174,9 @@ def build_early_abort_recovery_candidates(
         read = Path(overlap_restart_read)
         add(read, allow_scratch=True)
         if is_overlap_scratch_restart_path(read):
-            name = read.name
-            if ".overlap_a." in name:
-                add(read.with_name(name.replace(".overlap_a.", ".overlap_b.")), allow_scratch=True)
-            elif ".overlap_b." in name:
-                add(read.with_name(name.replace(".overlap_b.", ".overlap_a.")), allow_scratch=True)
+            alt = alternate_overlap_scratch(read)
+            if alt is not None:
+                add(alt, allow_scratch=True)
 
     if segment_restart_read is not None:
         add(segment_restart_read)
@@ -407,13 +416,19 @@ def discover_resume_restart(
 ) -> Path | None:
     """Best on-disk restart for Snakemake / staged-workflow retry."""
     if paths is None:
+        from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
+            geometry_baseline_res,
+            pretreat_restart,
+            stage_restart,
+        )
+
         pretreat_dir = out_dir / "pretreat"
         paths = {
-            "heat_res": out_dir / f"heat_{tag}.res",
-            "charmm_mm_prod_res": pretreat_dir / f"charmm_mm_prod_{tag}.res",
-            "charmm_mm_equi_res": pretreat_dir / f"charmm_mm_equi_{tag}.res",
-            "charmm_mm_heat_res": pretreat_dir / f"charmm_mm_heat_{tag}.res",
-            "geometry_baseline_res": geometry_baseline_path(out_dir, tag),
+            "heat_res": stage_restart(out_dir, "heat"),
+            "charmm_mm_prod_res": pretreat_restart(pretreat_dir, "prod"),
+            "charmm_mm_equi_res": pretreat_restart(pretreat_dir, "equi"),
+            "charmm_mm_heat_res": pretreat_restart(pretreat_dir, "heat"),
+            "geometry_baseline_res": geometry_baseline_res(out_dir),
         }
 
     ladder = resolve_geometry_checkpoint_ladder(

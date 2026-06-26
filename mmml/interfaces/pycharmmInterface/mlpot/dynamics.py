@@ -1973,12 +1973,9 @@ def _valid_restart_file(path: PathLike | None) -> Path | None:
 
 def _overlap_restart_slot_paths(final_restart: Path) -> tuple[Path, Path]:
     """Alternating scratch restarts so read and write are never the same file."""
-    parent = final_restart.parent
-    stem = final_restart.stem
-    return (
-        parent / f"{stem}.overlap_a.res",
-        parent / f"{stem}.overlap_b.res",
-    )
+    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import overlap_restart_slot_paths
+
+    return overlap_restart_slot_paths(final_restart)
 
 
 def _is_overlap_scratch_restart(
@@ -2253,8 +2250,9 @@ def _ensure_valid_overlap_scratch_restart(
 
 def _overlap_chunk_trajectory_path(trajectory: Path, chunk_index: int) -> Path:
     """Per-chunk DCD path for overlap-segmented dynamics."""
-    p = Path(trajectory)
-    return p.with_name(f"{p.stem}.chunk.{chunk_index:04d}{p.suffix}")
+    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import overlap_chunk_trajectory_path
+
+    return overlap_chunk_trajectory_path(trajectory, chunk_index)
 
 
 def _overlap_chunk_restart_paths(

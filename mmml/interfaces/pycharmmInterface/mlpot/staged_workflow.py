@@ -133,62 +133,9 @@ def _stage_ps(args: argparse.Namespace, stage: MdStage) -> float:
 
 
 def _artifact_paths(out_dir: Path, tag: str) -> dict[str, Path]:
-    from mmml.interfaces.pycharmmInterface.mlpot.minimize_artifacts import (
-        BONDED_MM_AFTER_HEAT,
-        BONDED_MM_AFTER_MINI,
-        CHARMM_MM_PRE,
-        MLPOT_MMML,
-        legacy_charmm_mm_dcd,
-        legacy_mlpot_mini_paths,
-        snapshot_file_paths,
-    )
+    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import staged_artifact_paths
 
-    pretreat_dir = out_dir / "pretreat"
-    legacy = legacy_mlpot_mini_paths(out_dir, tag)
-    mm = snapshot_file_paths(pretreat_dir, CHARMM_MM_PRE, tag)
-    mmml = snapshot_file_paths(out_dir, MLPOT_MMML, tag)
-    bonded_mini = snapshot_file_paths(out_dir, BONDED_MM_AFTER_MINI, tag)
-    bonded_heat = snapshot_file_paths(out_dir, BONDED_MM_AFTER_HEAT, tag)
-    return {
-        **legacy,
-        "mini_crd": legacy["mini_crd"],
-        "mini_psf": legacy["mini_psf"],
-        "mini_pdb": legacy["mini_pdb"],
-        "mini_charmm_dcd": legacy_charmm_mm_dcd(pretreat_dir, tag),
-        "mini_dcd": legacy["mini_dcd"],
-        "charmm_mm_crd": mm["crd"],
-        "charmm_mm_pdb": mm["pdb"],
-        "charmm_mm_psf": mm["psf"],
-        "charmm_mm_energy_json": mm["energy_json"],
-        "mlpot_mmml_crd": mmml["crd"],
-        "mlpot_mmml_pdb": mmml["pdb"],
-        "mlpot_mmml_psf": mmml["psf"],
-        "mlpot_mmml_dcd": mmml["dcd"],
-        "mlpot_mmml_xyz": mmml["xyz"],
-        "mlpot_mmml_energy_json": mmml["energy_json"],
-        "bonded_mm_after_mini_crd": bonded_mini["crd"],
-        "bonded_mm_after_mini_pdb": bonded_mini["pdb"],
-        "bonded_mm_after_heat_crd": bonded_heat["crd"],
-        "bonded_mm_after_heat_pdb": bonded_heat["pdb"],
-        "charmm_mm_heat_res": pretreat_dir / f"charmm_mm_heat_{tag}.res",
-        "charmm_mm_heat_dcd": pretreat_dir / f"charmm_mm_heat_{tag}.dcd",
-        "charmm_mm_equi_res": pretreat_dir / f"charmm_mm_equi_{tag}.res",
-        "charmm_mm_equi_dcd": pretreat_dir / f"charmm_mm_equi_{tag}.dcd",
-        "charmm_mm_prod_res": pretreat_dir / f"charmm_mm_prod_{tag}.res",
-        "charmm_mm_prod_dcd": pretreat_dir / f"charmm_mm_prod_{tag}.dcd",
-        "geometry_baseline_res": out_dir / f"geometry_baseline_{tag}.res",
-        "heat_res": out_dir / f"heat_{tag}.res",
-        "heat_dcd": out_dir / f"heat_{tag}.dcd",
-        "nve_res": out_dir / f"nve_{tag}.res",
-        "nve_dcd": out_dir / f"nve_{tag}.dcd",
-        "equi_res": out_dir / f"equi_{tag}.res",
-        "equi_dcd": out_dir / f"equi_{tag}.dcd",
-        "equi_pressure_ptn": out_dir / f"equi_{tag}_pressure_tensor.dat",
-        "prod_res": out_dir / f"prod_{tag}.res",
-        "prod_dcd": out_dir / f"prod_{tag}.dcd",
-        "prod_pressure_ptn": out_dir / f"prod_{tag}_pressure_tensor.dat",
-        "vmd_psf": out_dir / f"cluster_for_vmd_{tag}.psf",
-    }
+    return staged_artifact_paths(out_dir, tag)
 
 
 def _npt_cpt_options(args: argparse.Namespace) -> dict[str, Any]:
@@ -257,13 +204,15 @@ def _prepare_npt_pressure_checks(
 
 def _equi_restart_name(tag: str, n_equi_segments: int) -> str:
     if n_equi_segments > 1:
-        return f"equi_{tag}.{n_equi_segments - 1}.res"
-    return f"equi_{tag}.res"
+        return f"equi.{n_equi_segments - 1}.res"
+    return "equi.res"
 
 
 def _heat_restart_path(paths: dict[str, Path], tag: str, n_heat_segments: int) -> Path:
+    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import stage_segment_restart
+
     if n_heat_segments > 1:
-        return paths["heat_res"].parent / f"heat_{tag}.{n_heat_segments - 1}.res"
+        return stage_segment_restart(paths["heat_res"].parent, "heat", n_heat_segments - 1)
     return paths["heat_res"]
 
 
@@ -808,10 +757,16 @@ def _reset_stage_restart(
     restart_read: Path | None = None,
 ) -> None:
     """Remove prior stage restart/scratch files before a fresh dynamics run."""
+    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
+        BASELINE_RES,
+        overlap_chunk_dcd_glob_pattern,
+        overlap_restart_slot_paths,
+    )
+
     if restart_path is None:
         return
     path = Path(restart_path)
-    if path.name.startswith("geometry_baseline_") and path.suffix == ".res":
+    if path.name in (BASELINE_RES,) or path.name.startswith("geometry_baseline_"):
         print(f"Keeping geometry baseline restart: {path}", flush=True)
         return
     preserve_main = (
@@ -825,12 +780,13 @@ def _reset_stage_restart(
     elif preserve_main:
         print(f"Keeping in-place restart for resume: {path}", flush=True)
     parent = path.parent
-    stem = path.stem
-    for slot in (f"{stem}.overlap_a.res", f"{stem}.overlap_b.res"):
-        Path(parent / slot).unlink(missing_ok=True)
+    for slot in overlap_restart_slot_paths(path):
+        slot.unlink(missing_ok=True)
     if trajectory_path is not None:
         traj_stem = Path(trajectory_path).stem
-        for chunk_dcd in parent.glob(f"{traj_stem}.chunk.*.dcd"):
+        for chunk_dcd in parent.glob(overlap_chunk_dcd_glob_pattern(traj_stem)):
+            if chunk_dcd == Path(trajectory_path):
+                continue
             chunk_dcd.unlink(missing_ok=True)
 
 
@@ -1382,7 +1338,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         args, "skip_cluster_build", False
     ):
         vmd_files = save_cluster_topology_for_vmd(
-            out_dir, r, stem=f"cluster_for_vmd_{tag}", title="pre-MLpot cluster"
+            out_dir, r, stem="model", title="pre-MLpot cluster"
         )
         vmd_topo_psf = vmd_files["psf"]
         if mini_registry is not None:
@@ -1873,7 +1829,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 seg_chain = npt_restart_chain(
                     out_dir,
                     n_segments=n_heat_segments,
-                    prefix=f"heat_{tag}",
+                    prefix="heat",
                     initial_restart=initial,
                 )
                 for seg_i, seg_io in enumerate(seg_chain):
@@ -2111,7 +2067,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         segment_index=seg_i,
                         prev_restart=overlap_prior_restart,
                         out_dir=out_dir,
-                        restart_prefix=f"heat_{tag}",
+                        restart_prefix="heat",
                         restart_write=seg_io.restart_write,
                     )
                     run_dynamics_with_io(
@@ -2180,7 +2136,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 seg_chain = npt_restart_chain(
                     out_dir,
                     n_segments=n_equi_segments,
-                    prefix=f"equi_{tag}",
+                    prefix="equi",
                     initial_restart=initial,
                 )
                 for seg_i, seg_io in enumerate(seg_chain):
@@ -2282,7 +2238,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         segment_index=seg_i,
                         prev_restart=overlap_prior_restart,
                         out_dir=out_dir,
-                        restart_prefix=f"equi_{tag}",
+                        restart_prefix="equi",
                         restart_write=seg_io.restart_write,
                     )
                     cpt_seed = _maybe_configure_cpt_in_memory_overlap_start(
@@ -2351,7 +2307,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 seg_chain = production_restart_chain(
                     out_dir,
                     n_segments=n_prod_segments,
-                    prefix=f"prod_{tag}",
+                    prefix="prod",
                     equi_restart=equi_restart_for_prod,
                 )
                 for seg_i, seg_io in enumerate(seg_chain):
@@ -2452,7 +2408,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         segment_index=seg_i,
                         prev_restart=overlap_prior_restart,
                         out_dir=out_dir,
-                        restart_prefix=f"prod_{tag}",
+                        restart_prefix="prod",
                         restart_write=seg_io.restart_write,
                     )
                     cpt_seed = _maybe_configure_cpt_in_memory_overlap_start(

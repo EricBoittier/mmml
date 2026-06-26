@@ -50,7 +50,7 @@ def test_geometry_ladder_prefers_baseline_over_pretreat_prod(tmp_path):
 
 def test_discover_resume_restart_prefers_heat_segment(tmp_path):
     tag = "dcm_10"
-    heat_seg = tmp_path / f"heat_{tag}.1.res"
+    heat_seg = tmp_path / "heat.1.res"
     heat_seg.write_text("heat seg\n", encoding="utf-8")
     baseline = tmp_path / f"geometry_baseline_{tag}.res"
     baseline.write_text("baseline\n", encoding="utf-8")
@@ -160,7 +160,7 @@ def test_pretreat_resume_skips_completed_legs(tmp_path):
 def test_write_geometry_baseline_restart(tmp_path):
     out = tmp_path / "out"
     out.mkdir()
-    expected = out / "geometry_baseline_dcm_10.res"
+    expected = out / "baseline.res"
     with (
         mock.patch(
             "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.rewrite_dynamics_restart_validated",
@@ -191,7 +191,7 @@ def test_write_geometry_baseline_restart_unlinks_invalid_file(tmp_path):
     ):
         path = write_geometry_baseline_restart(out, "dcm_10")
     assert path is None
-    assert not (out / "geometry_baseline_dcm_10.res").exists()
+    assert not (out / "baseline.res").exists()
 
 
 def test_pretreat_resume_continues_partial_heat(tmp_path):
@@ -247,10 +247,11 @@ def test_pretreat_stage_complete_uses_integrated_step(tmp_path):
 
 
 def test_is_overlap_scratch_restart_path():
-    assert is_overlap_scratch_restart_path("heat_dcm_90.0.overlap_a.res")
+    assert is_overlap_scratch_restart_path("heat.0.overlap_a.res")
+    assert is_overlap_scratch_restart_path("/tmp/heat.a.res")
     assert is_overlap_scratch_restart_path("/tmp/heat.overlap_b.res")
-    assert not is_overlap_scratch_restart_path("heat_dcm_90.0.res")
-    assert not is_overlap_scratch_restart_path("geometry_baseline_dcm_90.res")
+    assert not is_overlap_scratch_restart_path("heat.0.res")
+    assert not is_overlap_scratch_restart_path("baseline.res")
 
 
 def test_build_geometry_recovery_candidates_prefers_baseline_over_scratch_prior(tmp_path):

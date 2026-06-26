@@ -485,30 +485,27 @@ def resolve_topology_psf_for_mlpot_reload(
 ) -> Path:
     """Return a PSF safe for ``read.psf_card`` before MLpot re-registration.
 
-    ``mini_full_mlpot_*.psf`` is written after MLpot and embeds large ML–ML
-    exclusion lists; CHARMM then aborts with "Maximum number of nonbond
-    exclusions exceeded". Prefer ``cluster_for_vmd_<tag>.psf`` (saved pre-MLpot).
+    ``mini.psf`` / ``mini_full_mlpot_*.psf`` embed large ML–ML exclusion lists;
+    CHARMM then aborts with "Maximum number of nonbond exclusions exceeded".
+    Prefer ``model.psf`` (saved pre-MLpot).
     """
+    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
+        resolve_topology_psf_candidates,
+    )
+
     psf = Path(psf_path).expanduser().resolve()
-    if "mini_full_mlpot_" not in psf.name:
+    mini_like = psf.name == "mini.psf" or "mini_full_mlpot_" in psf.name
+    if not mini_like:
         return psf
 
-    tags: list[str] = []
-    if tag:
-        tags.append(str(tag))
-    derived = psf.name.replace("mini_full_mlpot_", "").replace(".psf", "")
-    if derived and derived not in tags:
-        tags.append(derived)
-
-    for t in tags:
-        vmd = psf.parent / f"cluster_for_vmd_{t}.psf"
-        if vmd.is_file():
-            return vmd.resolve()
+    for candidate in resolve_topology_psf_candidates(psf, tag=tag):
+        if candidate.is_file():
+            return candidate.resolve()
 
     raise FileNotFoundError(
         f"Cannot reload topology from {psf.name}: it contains MLpot nonbond "
         f"exclusions that exceed CHARMM PSF read limits. Provide "
-        f"{psf.parent / f'cluster_for_vmd_{derived or tag or '<tag>'}.psf'} "
+        f"{psf.parent / 'model.psf'} "
         f"(from the initial build, pre-MLpot) via --from-psf and keep using the "
         f"mini CRD for coordinates."
     )
@@ -518,12 +515,12 @@ def save_cluster_topology_for_vmd(
     out_dir: PathLike,
     positions: np.ndarray,
     *,
-    stem: str = "cluster_for_vmd",
+    stem: str = "model",
     title: str = "cluster",
 ) -> dict[str, Path]:
     """Save PSF + PDB for VMD (connectivity preserved; MLpot uses BLOCK, not PSF deletes).
 
-    Load in VMD with: ``vmd cluster_for_vmd.psf cluster_for_vmd.pdb`` (or a trajectory).
+    Load in VMD with: ``vmd model.psf model.pdb`` (or a trajectory).
     Also writes a composition fingerprint sidecar for safe inplace recovery.
     """
     import pycharmm.psf as psf
@@ -729,13 +726,21 @@ def load_cluster_from_artifacts(
                 n_from_comp,
             )
         if tag_guess:
-            psf = psf or out / f"mini_full_mlpot_{tag_guess}.psf"
-            crd = crd or out / f"mini_full_mlpot_{tag_guess}.crd"
+            from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import mini_paths
+
+            mini = mini_paths(out)
+            psf = psf or mini["mini_psf"]
+            crd = crd or mini["mini_crd"]
         elif psf is None and crd is None:
-            psf_candidates = sorted(out.glob("mini_full_mlpot_*.psf"))
-            if len(psf_candidates) == 1:
-                psf = psf_candidates[0]
-                crd = out / psf.name.replace(".psf", ".crd")
+            mini_psf = out / "mini.psf"
+            if mini_psf.is_file():
+                psf = mini_psf
+                crd = out / "mini.crd"
+            else:
+                psf_candidates = sorted(out.glob("mini_full_mlpot_*.psf"))
+                if len(psf_candidates) == 1:
+                    psf = psf_candidates[0]
+                    crd = out / psf.name.replace(".psf", ".crd")
     if psf is None or crd is None:
         raise ValueError(
             "skip-cluster-build requires --from-psf and --from-crd "
@@ -753,7 +758,10 @@ def load_cluster_from_artifacts(
 
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
 
-    tag_guess = str(getattr(args, "tag", None) or psf_path.stem.replace("mini_full_mlpot_", ""))
+    tag_guess = str(
+        getattr(args, "tag", None)
+        or (psf_path.stem.replace("mini_full_mlpot_", "") if "mini_full" in psf_path.name else "")
+    )
     topology_psf = resolve_topology_psf_for_mlpot_reload(psf_path, tag=tag_guess)
     if topology_psf != psf_path and not getattr(args, "quiet", False):
         print(

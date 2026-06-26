@@ -400,7 +400,7 @@ def test_overlap_early_abort_disk_recovery_cpt_retries_in_memory(tmp_path, capsy
     )
 
     final_res = tmp_path / "heat_dcm_20.res"
-    slot_a = tmp_path / "heat_dcm_20.overlap_a.res"
+    slot_a = tmp_path / "heat_dcm_20.a.res"
     slot_a.write_text(
         "REST    48     0\n"
         "\n"
@@ -672,7 +672,7 @@ def test_refresh_overlap_prior_segment_restart_rewrites_scratch(tmp_path):
         refresh_overlap_prior_segment_restart,
     )
 
-    scratch = tmp_path / "heat_dcm_10.0.overlap_a.res"
+    scratch = tmp_path / "heat.0.a.res"
     valid = scratch.resolve()
     base = DynamicsOverlapConfig(
         action="rescue",
@@ -1326,7 +1326,7 @@ def test_overlap_post_rescue_handoff_uses_readyn_restart(tmp_path, capsys):
         return (5.0, int(step) == 500)
 
     def fake_materialize(chunk_io, chunk_kw, **kwargs):
-        slot_a = tmp_path / "heat.overlap_a.res"
+        slot_a = tmp_path / "heat.a.res"
         slot_a.write_text(
             "REST    48     0\n"
             "\n"
@@ -1884,7 +1884,7 @@ def test_overlap_chunk_io_skips_nonrestartable_scratch_restart(tmp_path):
     c1 = _overlap_chunk_io(io, chunk_index=1, n_chunks=3)
 
     assert c1.restart_read is None
-    assert c1.restart_write == equi.with_name("equi_dcm_90.overlap_b.res")
+    assert c1.restart_write == equi.with_name("equi_dcm_90.b.res")
 
 
 def test_overlap_chunk_io_skips_negative_restart_header(tmp_path):
@@ -1904,7 +1904,7 @@ def test_overlap_chunk_io_skips_negative_restart_header(tmp_path):
     c1 = _overlap_chunk_io(io, chunk_index=1, n_chunks=3)
 
     assert c1.restart_read is None
-    assert c1.restart_write == equi.with_name("equi_dcm_10.overlap_b.res")
+    assert c1.restart_write == equi.with_name("equi_dcm_10.b.res")
 
 
 def test_overlap_aborts_before_charmm_when_scratch_restart_is_invalid(tmp_path):
@@ -3010,7 +3010,7 @@ def test_prepare_overlap_chunk_skips_upinb_when_mlpot_active(tmp_path: Path):
     )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
-    scratch = tmp_path / "heat.overlap_a.res"
+    scratch = tmp_path / "heat.a.res"
     scratch.write_text("REST\n")
     ctx = mock.Mock(spec=MlpotContext)
     ctx.pyCModel = mock.Mock()

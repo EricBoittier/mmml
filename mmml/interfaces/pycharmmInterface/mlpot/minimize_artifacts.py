@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -30,29 +29,29 @@ class MinimizeSnapshotSpec:
     label: str
     kind: MinimizeKind
 
-    def stem(self, tag: str) -> str:
-        return f"{self.seq:02d}_{self.slug}_{tag}"
+    def stem(self, tag: str = "") -> str:
+        return f"{self.seq:02d}_{self.slug}"
 
 
 # Staged workflow checkpoints (fixed sequence).
 PACKMOL_CLUSTER = MinimizeSnapshotSpec(
-    0, "packmol_cluster", "Packmol sphere placement (pre-minimize)", "packmol"
+    0, "pack", "Packmol sphere placement (pre-minimize)", "packmol"
 )
 CHARMM_MM_PRE = MinimizeSnapshotSpec(
-    1, "charmm_mm", "CHARMM CGENFF SD/ABNR before MLpot (MM only)", "MM"
+    1, "mm", "CHARMM CGENFF SD/ABNR before MLpot (MM only)", "MM"
 )
 MLPOT_MMML = MinimizeSnapshotSpec(
-    2, "mlpot_mmml", "MLpot PhysNet steepest descent (USER / MMML)", "MMML"
+    2, "mini", "MLpot PhysNet steepest descent (USER / MMML)", "MMML"
 )
 BONDED_MM_AFTER_MINI = MinimizeSnapshotSpec(
     3,
-    "bonded_mm_after_mini",
+    "bmm",
     "Bonded-only CHARMM SD after MLpot mini (strain recovery)",
     "bonded_MM",
 )
 BONDED_MM_AFTER_HEAT = MinimizeSnapshotSpec(
     4,
-    "bonded_mm_after_heat",
+    "bmm_heat",
     "Bonded-only CHARMM SD after heat (strain recovery)",
     "bonded_MM",
 )
@@ -73,32 +72,20 @@ def snapshot_file_paths(out_dir: PathLike, spec: MinimizeSnapshotSpec, tag: str)
     }
 
 
-def legacy_mlpot_mini_paths(out_dir: PathLike, tag: str) -> dict[str, Path]:
-    """Historical filenames (``mini_full_mlpot_*``) kept for scripts and docs."""
-    out = Path(out_dir).expanduser().resolve()
-    stem = f"mini_full_mlpot_{tag}"
-    return {
-        "mini_crd": out / f"{stem}.crd",
-        "mini_psf": out / f"{stem}.psf",
-        "mini_pdb": out / f"{stem}.pdb",
-        "mini_dcd": out / f"{stem}.dcd",
-        "mini_xyz": out / f"{stem}.xyz",
-        "mini_energy_json": out / f"{stem}_energy.json",
-    }
+def legacy_mlpot_mini_paths(out_dir: PathLike, tag: str = "") -> dict[str, Path]:
+    """Short mini-stage mirror paths (``mini.*``)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import mini_paths
+
+    return mini_paths(out_dir)
 
 
 def legacy_charmm_mm_dcd(out_dir: PathLike, tag: str) -> Path:
-    return Path(out_dir).expanduser().resolve() / f"mini_charmm_mm_{tag}.dcd"
-
-
-def _slugify_context(context: str) -> str:
-    s = re.sub(r"[^\w]+", "_", context.strip().lower())
-    return s.strip("_")[:72] or "rescue"
+    return snapshot_file_paths(out_dir, CHARMM_MM_PRE, tag)["dcd"]
 
 
 def rescue_snapshot_spec(context: str, *, seq: int) -> MinimizeSnapshotSpec:
     """Dynamic snapshot for overlap / intra rescue during dynamics."""
-    slug = f"rescue_{_slugify_context(context)}"
+    slug = f"rescue_{seq:02d}"
     return MinimizeSnapshotSpec(
         seq,
         slug,
@@ -108,7 +95,7 @@ def rescue_snapshot_spec(context: str, *, seq: int) -> MinimizeSnapshotSpec:
 
 
 class MinimizeArtifactRegistry:
-    """Append numbered minimize snapshots and write ``minimize_snapshots_{tag}.json``."""
+    """Append numbered minimize snapshots and write ``snapshots.json``."""
 
     def __init__(self, out_dir: PathLike, tag: str) -> None:
         self.out_dir = Path(out_dir).expanduser().resolve()
@@ -120,7 +107,9 @@ class MinimizeArtifactRegistry:
 
     @property
     def manifest_path(self) -> Path:
-        return self.out_dir / f"minimize_snapshots_{self.tag}.json"
+        from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import SNAPSHOTS_JSON
+
+        return self.out_dir / SNAPSHOTS_JSON
 
     def allocate_rescue_spec(self, context: str) -> MinimizeSnapshotSpec:
         spec = rescue_snapshot_spec(context, seq=self._next_dynamic_seq)
@@ -171,7 +160,7 @@ def mirror_legacy_mlpot_files(
     written: dict[str, Path],
     legacy: dict[str, Path],
 ) -> dict[str, Path]:
-    """Copy numbered MMML outputs to legacy ``mini_full_mlpot_*`` names."""
+    """Copy numbered MMML outputs to short ``mini.*`` mirror names."""
     mapping = {
         "pdb": "mini_pdb",
         "crd": "mini_crd",
