@@ -387,7 +387,7 @@ def set_up_nhc_sim_routine(
             pair_idx, pair_mask = update_fn(R_frac, box=box_nl)
         else:
             # NVT/NVE: fixed box, pass box for neighbor list consistency
-            pair_idx, pair_mask = update_fn(_nl_update_positions(R), box=box_nl)
+            pair_idx, pair_mask = update_fn(R, box=box_nl)
     c = Console()
     # Silent compile + GPU sync before timed run (avoids XLA cuda_timer delay-kernel warnings).
     ensure_xla_gpu_warmed(force=True)
@@ -1076,7 +1076,7 @@ def set_up_nhc_sim_routine(
             md_pos_frac = as_jaxmd_dtype(md_pos_wrapped / float(args.cell))  # cubic: frac = R / L
             # Neighbor list with fractional_coordinates expects frac pos and box [L,L,L]
             box_nl = np.array([float(args.cell)] * 3, dtype=np.float64)
-            pair_idx, pair_mask = update_fn(_nl_update_positions(md_pos_frac), box=box_nl)
+            pair_idx, pair_mask = update_fn(md_pos_frac, box=box_nl)
             state = init_fn(
                 key, md_pos_frac, box=box_curr,
                 neighbor=(pair_idx, pair_mask), kT=kT, mass=Si_mass
@@ -1354,7 +1354,7 @@ def set_up_nhc_sim_routine(
                         if getattr(args, "debug", False) and (i < 3 or i % 50 == 0) and steps_done == 0:
                             print(f"[nbr] NPT record {i}: updating neighbor list, box L={float(box_nl[0]):.4f}")
                         npt_pair_idx, npt_pair_mask = update_fn(
-                            _nl_update_positions(state.position), box=box_nl
+                            state.position, box=box_nl
                         )
                         current_neighbors = (npt_pair_idx, npt_pair_mask)
                         state = sim(state, neighbor=current_neighbors, pressure=npt_pressure)
@@ -1364,7 +1364,7 @@ def set_up_nhc_sim_routine(
                         state = state.set(position=as_jaxmd_dtype(wrapped_pos))
                         if getattr(args, "debug", False) and (i < 3 or i % 50 == 0) and steps_done == 0:
                             print(f"[nbr] NVT/NVE record {i} (step {steps_done}): updating neighbor list")
-                        nvt_neighbors = update_fn(_nl_update_positions(state.position), box=pbc_box_nl)
+                        nvt_neighbors = update_fn(state.position, box=pbc_box_nl)
                         _pbc_state["pair_idx"] = nvt_neighbors[0]
                         _pbc_state["pair_mask"] = nvt_neighbors[1]
                         current_neighbors = nvt_neighbors
@@ -1398,7 +1398,7 @@ def set_up_nhc_sim_routine(
                                 elif box_nl.size >= 3:
                                     box_nl = np.asarray(box_nl, dtype=np.float64).reshape(-1)[:3]
                                 npt_neighbors = update_fn(
-                                    _nl_update_positions(new_frac), box=box_nl
+                                    new_frac, box=box_nl
                                 )
                             npt_pair_idx, npt_pair_mask = npt_neighbors
                             current_neighbors = npt_neighbors
@@ -1427,7 +1427,7 @@ def set_up_nhc_sim_routine(
                             state = _state_after_overlap_rescue(rescued)
                             if update_fn is not None:
                                 pp_i, pp_m = update_fn(
-                                    _nl_update_positions(state.position), box=pbc_box_nl
+                                    state.position, box=pbc_box_nl
                                 )
                                 _pbc_state["pair_idx"] = pp_i
                                 _pbc_state["pair_mask"] = pp_m
