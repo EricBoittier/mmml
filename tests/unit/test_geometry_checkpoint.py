@@ -8,6 +8,8 @@ from unittest import mock
 
 import pytest
 
+from tests.unit.conftest import write_minimal_restart
+
 from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
     attempt_overlap_early_abort_recovery,
     build_geometry_recovery_candidates,
@@ -37,8 +39,8 @@ def test_geometry_ladder_prefers_baseline_over_pretreat_prod(tmp_path):
         "charmm_mm_heat_res": pretreat / f"charmm_mm_heat_{tag}.res",
         "geometry_baseline_res": tmp_path / f"geometry_baseline_{tag}.res",
     }
-    paths["geometry_baseline_res"].write_text("baseline\n", encoding="utf-8")
-    paths["charmm_mm_prod_res"].write_text("prod\n", encoding="utf-8")
+    write_minimal_restart(paths["geometry_baseline_res"])
+    write_minimal_restart(paths["charmm_mm_prod_res"])
 
     ladder = resolve_geometry_checkpoint_ladder(paths, tag, n_heat_segments=1)
     assert ladder.index(paths["geometry_baseline_res"]) < ladder.index(
@@ -51,9 +53,9 @@ def test_geometry_ladder_prefers_baseline_over_pretreat_prod(tmp_path):
 def test_discover_resume_restart_prefers_heat_segment(tmp_path):
     tag = "dcm_10"
     heat_seg = tmp_path / "heat.1.res"
-    heat_seg.write_text("heat seg\n", encoding="utf-8")
+    write_minimal_restart(heat_seg)
     baseline = tmp_path / f"geometry_baseline_{tag}.res"
-    baseline.write_text("baseline\n", encoding="utf-8")
+    write_minimal_restart(baseline)
     paths = {
         "heat_res": tmp_path / f"heat_{tag}.res",
         "geometry_baseline_res": baseline,
@@ -67,9 +69,9 @@ def test_discover_resume_restart_prefers_baseline_over_pretreat(tmp_path):
     pretreat = tmp_path / "pretreat"
     pretreat.mkdir()
     prod = pretreat / f"charmm_mm_prod_{tag}.res"
-    prod.write_text("prod\n", encoding="utf-8")
+    write_minimal_restart(prod)
     baseline = tmp_path / f"geometry_baseline_{tag}.res"
-    baseline.write_text("baseline\n", encoding="utf-8")
+    write_minimal_restart(baseline)
     paths = {
         "heat_res": tmp_path / f"heat_{tag}.res",
         "charmm_mm_prod_res": prod,
@@ -84,7 +86,7 @@ def test_handoff_seed_excluded_from_recovery_ladder(tmp_path):
     handoff.parent.mkdir()
     handoff.write_text("seed\n", encoding="utf-8")
     baseline = tmp_path / "geometry_baseline_dcm.res"
-    baseline.write_text("baseline\n", encoding="utf-8")
+    write_minimal_restart(baseline)
     overlap = DynamicsOverlapConfig(
         geometry_baseline_restart=baseline,
         geometry_fallback_restarts=(handoff,),
@@ -99,7 +101,7 @@ def test_pretreat_resume_skips_completed_heat(tmp_path):
     pretreat = tmp_path / "pretreat"
     pretreat.mkdir()
     heat = pretreat / f"charmm_mm_heat_{tag}.res"
-    heat.write_text("heat\n", encoding="utf-8")
+    write_minimal_restart(heat)
     paths = {
         "charmm_mm_prod_res": pretreat / f"charmm_mm_prod_{tag}.res",
         "charmm_mm_equi_res": pretreat / f"charmm_mm_equi_{tag}.res",
@@ -131,7 +133,7 @@ def test_pretreat_resume_skips_completed_legs(tmp_path):
     pretreat = tmp_path / "pretreat"
     pretreat.mkdir()
     prod = pretreat / f"charmm_mm_prod_{tag}.res"
-    prod.write_text("prod\n", encoding="utf-8")
+    write_minimal_restart(prod)
     paths = {
         "charmm_mm_prod_res": prod,
         "charmm_mm_equi_res": pretreat / f"charmm_mm_equi_{tag}.res",
@@ -199,7 +201,7 @@ def test_pretreat_resume_continues_partial_heat(tmp_path):
     pretreat = tmp_path / "pretreat"
     pretreat.mkdir()
     heat = pretreat / f"charmm_mm_heat_{tag}.res"
-    heat.write_text("heat partial\n", encoding="utf-8")
+    write_minimal_restart(heat)
     paths = {
         "charmm_mm_prod_res": pretreat / f"charmm_mm_prod_{tag}.res",
         "charmm_mm_equi_res": pretreat / f"charmm_mm_equi_{tag}.res",
@@ -372,11 +374,11 @@ def test_build_early_abort_recovery_candidates_prefers_overlap_read(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import DynamicsOverlapConfig
 
     baseline = tmp_path / "geometry_baseline_dcm_10.res"
-    baseline.write_text("baseline\n", encoding="utf-8")
+    write_minimal_restart(baseline)
     heat = tmp_path / "heat_dcm_10.res"
-    heat.write_text("heat\n", encoding="utf-8")
+    write_minimal_restart(heat)
     scratch = tmp_path / "equi_dcm_10.overlap_a.res"
-    scratch.write_text("scratch\n", encoding="utf-8")
+    write_minimal_restart(scratch)
     cfg = DynamicsOverlapConfig(
         action="rescue",
         n_monomers=2,
@@ -400,9 +402,9 @@ def test_build_early_abort_recovery_candidates_includes_segment_restart(tmp_path
     from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import DynamicsOverlapConfig
 
     equi = tmp_path / "equi_dcm_10.res"
-    equi.write_text("equi\n", encoding="utf-8")
+    write_minimal_restart(equi)
     baseline = tmp_path / "geometry_baseline_dcm_10.res"
-    baseline.write_text("baseline\n", encoding="utf-8")
+    write_minimal_restart(baseline)
     cfg = DynamicsOverlapConfig(
         action="rescue",
         n_monomers=2,
@@ -420,9 +422,9 @@ def test_build_early_abort_recovery_candidates_includes_segment_restart(tmp_path
 def test_attempt_overlap_early_abort_recovery_uses_baseline_without_overlap_read(tmp_path):
     """Without overlap_restart_read, scratch prior_segment is still excluded."""
     baseline = tmp_path / "geometry_baseline_dcm_155.res"
-    baseline.write_text("baseline\n", encoding="utf-8")
+    write_minimal_restart(baseline)
     scratch = tmp_path / "heat_dcm_155.0.overlap_a.res"
-    scratch.write_text("scratch\n", encoding="utf-8")
+    write_minimal_restart(scratch)
     cfg = DynamicsOverlapConfig(
         action="rescue",
         n_monomers=2,

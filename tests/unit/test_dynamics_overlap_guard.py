@@ -11,6 +11,8 @@ from unittest import mock
 import numpy as np
 import pytest
 
+from tests.unit.conftest import write_minimal_restart
+
 from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
     DynamicsOverlapConfig,
     OverlapRescueConfig,
@@ -50,6 +52,8 @@ def _mock_bond_exclusion_pairs_unless_targeted(request):
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.probe_and_light_resync_if_desync",
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
         return_value=False,
@@ -93,7 +97,7 @@ def test_attach_prior_uses_geometry_fallback_ladder(tmp_path):
     )
 
     baseline = tmp_path / "geometry_baseline_dcm_90.res"
-    baseline.write_text("baseline\n", encoding="utf-8")
+    write_minimal_restart(baseline)
     base = DynamicsOverlapConfig(
         action="rescue",
         n_monomers=2,
@@ -117,7 +121,7 @@ def test_extent_rescue_succeeds_with_baseline_on_segment_zero(tmp_path):
     )
 
     baseline = tmp_path / "geometry_baseline_dcm_90.res"
-    baseline.write_text("baseline\n", encoding="utf-8")
+    write_minimal_restart(baseline)
     cfg = attach_prior_segment_restart(
         DynamicsOverlapConfig(
             action="rescue",
@@ -140,7 +144,7 @@ def test_overlap_early_abort_recovery_retries_chunk(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
     baseline = tmp_path / "geometry_baseline.res"
-    baseline.write_text("baseline\n", encoding="utf-8")
+    write_minimal_restart(baseline)
     cfg = DynamicsOverlapConfig(
         action="rescue",
         min_distance_A=0.5,
@@ -725,8 +729,8 @@ def test_infer_prior_restart_from_write_path(tmp_path):
 
     prior = tmp_path / "heat_dcm_90.5.res"
     current = tmp_path / "heat_dcm_90.6.res"
-    prior.write_text("prior\n")
-    current.write_text("current\n")
+    write_minimal_restart(prior)
+    write_minimal_restart(current)
     assert infer_prior_restart_from_write_path(current) == prior.resolve()
     cfg = attach_prior_segment_restart(
         DynamicsOverlapConfig(action="rescue", n_monomers=2),
@@ -756,7 +760,7 @@ def test_attach_prior_requires_on_disk_checkpoint(tmp_path):
     assert cfg.segment_restart_prefix == "heat_dcm_90"
 
     prior = tmp_path / "heat_dcm_90.0.res"
-    prior.write_text("prior restart\n")
+    write_minimal_restart(prior)
     cfg2 = attach_prior_segment_restart(
         base,
         segment_index=1,
@@ -819,7 +823,12 @@ def test_attach_prior_keeps_staged_prior_when_rerun_attach_fails(tmp_path):
     )
 
     prior = tmp_path / "heat_dcm_90.0.res"
-    prior.write_text("prior\n")
+    prior.write_text(
+        "REST     0     1\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        "         2           0           0           0           0           0           0\n",
+        encoding="utf-8",
+    )
     staged = attach_prior_segment_restart(
         DynamicsOverlapConfig(action="rescue", n_monomers=2),
         segment_index=1,
@@ -837,6 +846,36 @@ def test_attach_prior_keeps_staged_prior_when_rerun_attach_fails(tmp_path):
     )
     assert again is not None
     assert again.prior_segment_restart == prior.resolve()
+
+
+def test_attach_prior_replaces_invalid_crd_prior(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        attach_prior_segment_restart,
+    )
+
+    crd = tmp_path / "03_bmm.crd"
+    crd.write_text("title\n  2\n", encoding="utf-8")
+    valid = tmp_path / "heat_dcm_90.0.res"
+    valid.write_text(
+        "REST     0     1\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        "         2           0           0           0           0           0           0\n",
+        encoding="utf-8",
+    )
+    staged = attach_prior_segment_restart(
+        DynamicsOverlapConfig(
+            action="rescue",
+            n_monomers=2,
+            prior_segment_restart=crd,
+        ),
+        segment_index=1,
+        prev_restart=valid,
+        out_dir=tmp_path,
+        restart_prefix="heat_dcm_90",
+        restart_write=tmp_path / "heat_dcm_90.1.res",
+    )
+    assert staged is not None
+    assert staged.prior_segment_restart == valid.resolve()
 
 
 def test_ensure_segment_restart_checkpoint_returns_existing(tmp_path):
@@ -979,7 +1018,7 @@ def test_check_overlap_raises_on_close_contact():
 
 def test_check_extent_rescue_restores_prior_restart(tmp_path):
     prior = tmp_path / "prior.res"
-    prior.write_text("prior restart\n")
+    write_minimal_restart(prior)
     cfg = DynamicsOverlapConfig(
         action="rescue",
         min_distance_A=0.0,
@@ -2349,7 +2388,7 @@ def test_overlap_chunk_continues_velocity_scaling_heat_ramp(tmp_path, monkeypatc
     assert len(calls) == 4
     assert calls[0]["firstt"] == 0.0
     assert calls[1]["restart"] is True
-    assert calls[1]["iasvel"] == 0
+    assert calls[1]["iasvel"] == 1
     assert calls[1]["firstt"] == pytest.approx(0.6)
     assert calls[2]["firstt"] == pytest.approx(1.2)
     assert calls[3]["firstt"] == pytest.approx(1.8)

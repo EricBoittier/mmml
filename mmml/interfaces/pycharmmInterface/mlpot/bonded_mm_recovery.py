@@ -397,18 +397,32 @@ def run_extent_recovery_from_prior_restart(
     *,
     prior_restart: PathLike,
 ) -> None:
-    """Restore the prior segment restart, then run bonded + MLpot recovery."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
-        read_restart_coordinates,
+    """Restore the prior segment checkpoint, then run bonded + MLpot recovery."""
+    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+        build_geometry_recovery_candidates,
+        restore_geometry_from_ladder,
     )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
     path = Path(prior_restart).expanduser().resolve()
-    restore_charmm_state_from_restart(path)
-    bonded_cfg = _bonded_cfg_from_overlap_config(config)
-    pos = read_restart_coordinates(path)
-    if pos is None:
+    candidates: list[Path] = [path]
+    for cand in build_geometry_recovery_candidates(config):
+        resolved = Path(cand).expanduser().resolve()
+        if resolved not in {c.resolve() for c in candidates}:
+            candidates.append(resolved)
+    try:
+        restore_geometry_from_ladder(candidates, label="Fly-off recovery")
+    except RuntimeError as exc:
         raise RuntimeError(
-            f"fly-off recovery: parsed no finite coordinates from {path.name}"
+            f"fly-off recovery: could not restore geometry from "
+            f"{path.name} or checkpoint ladder ({exc})"
+        ) from exc
+    bonded_cfg = _bonded_cfg_from_overlap_config(config)
+    pos = get_charmm_positions_array()
+    if pos is None or not np.all(np.isfinite(pos)):
+        raise RuntimeError(
+            f"fly-off recovery: CHARMM coordinates are not finite after restore "
+            f"from {path.name}"
         )
     _run_all_ml_extent_recovery(ctx, config, bonded_cfg, positions=pos)
 
