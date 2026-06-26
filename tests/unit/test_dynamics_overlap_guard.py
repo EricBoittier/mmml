@@ -942,7 +942,7 @@ def test_extent_rescue_fails_clearly_without_prior():
         "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=bad_pos,
     ):
-        with pytest.raises(RuntimeError, match="prior segment restart file"):
+        with pytest.raises(RuntimeError, match="geometry baseline / checkpoint ladder"):
             check_dynamics_overlap(
                 cfg, context="heat segment 2/10", step=1000, mlpot_ctx=ctx
             )
@@ -999,7 +999,7 @@ def test_extent_rescue_uses_geometry_baseline_when_prior_unset(tmp_path):
         )
     assert rescued is True
     extent_recovery.assert_called_once()
-    assert extent_recovery.call_args.kwargs["prior_restart"] == baseline.resolve()
+    assert extent_recovery.call_args.kwargs["candidates"][0] == baseline.resolve()
 
 
 def test_resolve_intra_min_distance_zero_disables_intra_only():
