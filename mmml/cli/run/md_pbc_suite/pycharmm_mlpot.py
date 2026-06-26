@@ -59,6 +59,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     from mmml.interfaces.pyxtal_placement import add_pyxtal_cluster_args
 
     add_pyxtal_cluster_args(parser)
+    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import add_box_sizing_args
+
+    add_box_sizing_args(parser)
     add_run_state_checkpoint_args(parser)
     add_handoff_cutoff_args(parser)
     add_charmm_output_args(parser)
