@@ -2681,13 +2681,15 @@ def _overlap_chunk_uses_memory_handoff(
 ) -> bool:
     """Continue overlap segments in-process when MLpot is active.
 
-  Hoover CPT needs ``READYN`` between overlap chunks so global step/time and
-    barostat piston state advance correctly; in-memory handoff resets ``dyna`` to
-    step 0 and reuses comparison coordinates as velocities.
+    Hoover CPT barostat piston state is **not** restored by plain
+    ``write restart`` / ``READYN`` on scratch ``.overlap_*.res`` files.
+    Default is in-memory handoff (same as CPT stability sub-chunks); set
+    ``MMML_CPT_READYN_SUBCHUNK=1`` to opt into scratch READYN between overlap
+    chunks (legacy / debugging only).
     """
-    if cpt:
-        return False
     if mlpot_ctx is None or n_chunks <= 1:
+        return False
+    if cpt and not _cpt_subchunk_use_in_memory_handoff():
         return False
     if overlap is not None and overlap.memory_handoff:
         return True
@@ -3849,7 +3851,6 @@ def run_dynamics_with_io(
         and mlpot_ctx is not None
         and total_nstep > 0
         and not overlap.memory_handoff
-        and not bool(kw.get("cpt"))
     ):
         from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import _truthy_env
 
@@ -3858,24 +3859,16 @@ def run_dynamics_with_io(
 
             overlap = replace(overlap, memory_handoff=True)
             if total_nstep > int(overlap.check_interval):
+                cpt_note = (
+                    " (Hoover CPT barostat kept in RAM between chunks)"
+                    if bool(kw.get("cpt"))
+                    else ""
+                )
                 print(
-                    f"overlap ({overlap_context}): MLpot in-memory chunk handoff",
+                    f"overlap ({overlap_context}): MLpot in-memory chunk handoff"
+                    f"{cpt_note}",
                     flush=True,
                 )
-    elif (
-        guard_active
-        and overlap is not None
-        and mlpot_ctx is not None
-        and total_nstep > 0
-        and bool(kw.get("cpt"))
-        and overlap.memory_handoff
-        and total_nstep > int(overlap.check_interval)
-    ):
-        print(
-            f"overlap ({overlap_context}): CPT uses scratch restart handoff "
-            f"(ignoring dynamics_overlap_memory_handoff)",
-            flush=True,
-        )
     if guard_active and overlap is not None:
         from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
             attach_prior_segment_restart,
@@ -4222,6 +4215,12 @@ def run_dynamics_with_io(
                     chunk_index=chunk_index,
                     has_restart_read=has_restart_read,
                 )
+                if (
+                    mem_handoff
+                    and bool(chunk_kw.get("cpt"))
+                    and chunk_index > 0
+                ):
+                    _apply_cpt_in_memory_continuation_kw(chunk_kw)
                 if early_abort_memory_handoff:
                     chunk_kw["restart"] = False
                     chunk_kw["new"] = False
