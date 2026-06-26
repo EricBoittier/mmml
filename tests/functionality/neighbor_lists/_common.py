@@ -66,6 +66,52 @@ def npt_box_sequence(base_side: float = 40.0) -> list[np.ndarray]:
     ]
 
 
+def setup_charmm_composition_cluster(
+    composition: str,
+    *,
+    box_side: float = 40.0,
+    spacing: float = 8.0,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Build a CGENFF cluster from ``RES:COUNT`` composition (md-system style).
+
+    Returns ``(positions, cell_3x3, monomer_offsets, monomer_id, atomic_numbers)``.
+    Monomers are placed on a spacing grid, then centered in a cubic PBC box.
+    Requires PyCHARMM + CGENFF.
+    """
+    import pandas as pd
+
+    from mmml.cli.run.md_pbc_suite.ase import (
+        _build_cluster_from_composition,
+        _parse_composition,
+    )
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+        CGENFF_PRM,
+        coor,
+    )
+    from mmml.interfaces.pycharmmInterface.nl_reference import monomer_id_from_offsets
+
+    if CGENFF_PRM is None:
+        raise RuntimeError("PyCHARMM/CGENFF not available")
+
+    comp = _parse_composition(composition)
+    z, positions, atoms_per_list, _residue_labels = _build_cluster_from_composition(
+        composition=comp,
+        spacing=float(spacing),
+    )
+    positions = np.asarray(positions, dtype=np.float64)
+    positions = positions - positions.mean(axis=0) + np.array(
+        [box_side / 2, box_side / 2, box_side / 2], dtype=np.float64
+    )
+    coor.set_positions(pd.DataFrame(positions, columns=["x", "y", "z"]))
+
+    n_monomers = len(atoms_per_list)
+    offsets = np.zeros(n_monomers + 1, dtype=np.int32)
+    offsets[1:] = np.cumsum(np.asarray(atoms_per_list, dtype=np.int32))
+    monomer_id = monomer_id_from_offsets(offsets, positions.shape[0])
+    cell = float(box_side) * np.eye(3, dtype=np.float64)
+    return positions, cell, offsets, monomer_id, np.asarray(z, dtype=int)
+
+
 def setup_charmm_aco_dimer_cluster(
     *,
     box_side: float = 40.0,
@@ -76,65 +122,9 @@ def setup_charmm_aco_dimer_cluster(
     Returns the same tuple as :func:`two_dimer_cluster` but with a loaded PSF
     (20 atoms, 10 per monomer) and geometry centered in a cubic box.
     """
-    import pandas as pd
-    import pycharmm
-    import pycharmm.generate as gen
-    import pycharmm.ic as ic
-
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
-        CGENFF_PRM,
-        CGENFF_RTF,
-        coor,
-        pycharmm_quiet,
-        read,
-        reset_block,
-        settings,
+    positions, cell, offsets, monomer_id, _z = setup_charmm_composition_cluster(
+        "ACO:2",
+        box_side=box_side,
+        spacing=com_separation,
     )
-
-    if CGENFF_PRM is None or CGENFF_RTF is None:
-        raise RuntimeError("PyCHARMM/CGENFF not available")
-
-    atoms_per_monomer = 10
-    n_monomers = 2
-    n_atoms = atoms_per_monomer * n_monomers
-
-    pycharmm.lingo.charmm_script("DELETE ATOM SELE ALL END")
-    pycharmm_quiet()
-    reset_block()
-    read.rtf(CGENFF_RTF)
-    bl = settings.set_bomb_level(-2)
-    wl = settings.set_warn_level(-2)
-    read.prm(CGENFF_PRM)
-    settings.set_bomb_level(bl)
-    settings.set_warn_level(wl)
-    pycharmm.lingo.charmm_script("bomlev 0")
-    read.sequence_string("ACO ACO")
-    gen.new_segment(seg_name="DIMR", setup_ic=True)
-    ic.prm_fill(replace_all=True)
-    ic.build()
-
-    import pycharmm.psf as psf
-
-    if int(psf.get_natom()) != n_atoms:
-        raise RuntimeError(
-            f"expected {n_atoms} PSF atoms for ACO dimer, got {psf.get_natom()}"
-        )
-
-    r = coor.get_positions().to_numpy(dtype=float)
-    r0 = r[:atoms_per_monomer].copy()
-    r1 = r[atoms_per_monomer:].copy()
-    r0 -= r0.mean(axis=0)
-    r1 -= r1.mean(axis=0)
-    r1 += np.array([com_separation, 0.0, 0.0], dtype=np.float64)
-    positions = np.vstack([r0, r1])
-    positions = positions - positions.mean(axis=0) + np.array(
-        [box_side / 2, box_side / 2, box_side / 2], dtype=np.float64
-    )
-    coor.set_positions(pd.DataFrame(positions, columns=["x", "y", "z"]))
-
-    offsets = np.array([0, atoms_per_monomer, n_atoms], dtype=np.int32)
-    monomer_id = np.empty(n_atoms, dtype=np.int32)
-    for mi in range(n_monomers):
-        monomer_id[offsets[mi] : offsets[mi + 1]] = mi
-    cell = float(box_side) * np.eye(3, dtype=np.float64)
     return positions, cell, offsets, monomer_id

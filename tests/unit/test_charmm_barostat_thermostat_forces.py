@@ -198,6 +198,34 @@ def test_run_dynamics_passes_cpt_keywords_to_dynamics_script():
     fake_dyn.run.assert_called_once()
 
 
+def test_run_dynamics_strips_mmml_dcd_metadata_keywords():
+    fake_dyn = mock.MagicMock()
+    fake_pycharmm = mock.MagicMock()
+    fake_pycharmm.DynamicsScript.return_value = fake_dyn
+    kw = {
+        "nstep": 10,
+        "nsavc": 5,
+        "dcd_interval_ps": 0.004,
+        "_target_dcd_nsavc": 16,
+        "_dcd_interval_ps": 0.004,
+        "start": True,
+        "iasvel": 1,
+    }
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
+    ), mock.patch.dict(
+        __import__("sys").modules,
+        {"pycharmm": fake_pycharmm},
+        clear=False,
+    ):
+        run_dynamics(kw)
+    passed = fake_pycharmm.DynamicsScript.call_args.kwargs
+    assert "dcd_interval_ps" not in passed
+    assert "_target_dcd_nsavc" not in passed
+    assert "_dcd_interval_ps" not in passed
+    assert passed["nstep"] == 10
+
+
 def test_run_dynamics_clears_comp_when_iasvel_zero_without_start():
     fake_dyn = mock.MagicMock()
     fake_pycharmm = mock.MagicMock()
