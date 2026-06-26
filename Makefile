@@ -1,4 +1,4 @@
-.PHONY: help install install-gpu install-dev install-all clean test docker-build docker-run micromamba-create micromamba-create-gpu micromamba-create-gpu-cuda13 micromamba-create-full micromamba-update micromamba-remove docker-clean lfs-summary lfs-audit lfs-setup-symlinks
+.PHONY: help install install-gpu install-dev install-all clean test docker-build docker-run micromamba-create micromamba-create-gpu micromamba-create-gpu-cuda13 micromamba-create-full micromamba-update micromamba-remove docker-clean lfs-summary lfs-audit lfs-setup-symlinks docs-build docs-strict docs-pdf docs-serve
 
 help:
 	@echo "MMML - Makefile Commands"
@@ -34,6 +34,12 @@ help:
 	@echo "  make test-coverage     - Run tests with coverage report"
 	@echo "  make deadcode          - Report dead/unused code (Ruff + Vulture)"
 	@echo "  make deadcode-fix      - Auto-fix safe unused-code issues with Ruff"
+	@echo ""
+	@echo "Documentation:"
+	@echo "  make docs-build        - Build MkDocs HTML site"
+	@echo "  make docs-strict       - Build MkDocs HTML site with strict checks"
+	@echo "  make docs-pdf          - Build PDF docs at site/mmml-docs.pdf"
+	@echo "  make docs-serve        - Serve docs locally with MkDocs"
 	@echo ""
 	@echo "Training (PhysNetJAX):"
 	@echo "  make physnet-train         TRAIN=train.npz [VALID=valid.npz] [NATOMS=60] [BATCH=32] [EPOCHS=100] [LR=0.001] [NAME=run] [CHARGES=false]"
@@ -186,10 +192,16 @@ deadcode-fix:
 # ==============================================================================
 
 docs-build:
-	cd docs && make html
+	uv run mkdocs build
+
+docs-strict:
+	uv run mkdocs build --strict
+
+docs-pdf:
+	uv run --extra dev --with reportlab python scripts/build_docs_pdf.py
 
 docs-serve:
-	cd docs/_build/html && python -m http.server 8000
+	uv run mkdocs serve
 
 # ==============================================================================
 # Cleanup
