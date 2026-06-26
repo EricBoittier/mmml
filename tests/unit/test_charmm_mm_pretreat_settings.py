@@ -95,16 +95,45 @@ def test_build_pretreat_handoff_includes_thermodynamics_section():
         imgfrq=400,
         ixtfrq=8000,
     )
-    sections = build_charmm_mm_pretreat_handoff_sections(
-        pos,
-        n_monomers=2,
-        tag="dcm_2",
-        use_pbc=True,
-        workflow_box_side_A=28.0,
-        pretreat_settings=pretreat,
-        composition={"DCM": 2},
-        pretreat_heat_nstep=5000,
-    )
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(
+            "mmml.interfaces.pycharmmInterface.mlpot.run_workflow.charmm_grms",
+            lambda: 0.42,
+        )
+        mp.setattr(
+            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_box_sides_A",
+            lambda: (28.0, 28.0, 28.0),
+        )
+        mp.setattr(
+            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
+            lambda **_: True,
+        )
+        mp.setattr(
+            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
+            lambda **_: (28.0, "pbound"),
+        )
+        mp.setattr(
+            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
+            lambda **kw: (float(kw.get("fallback_side_A") or 0.0), "pbound"),
+        )
+        mp.setattr(
+            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_mlpot_mic_box_side_A",
+            lambda **kw: (float(kw.get("fallback_side_A") or 0.0), "pbound"),
+        )
+        mp.setattr(
+            "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+            lambda: pos.copy(),
+        )
+        sections = build_charmm_mm_pretreat_handoff_sections(
+            pos,
+            n_monomers=2,
+            tag="dcm_2",
+            use_pbc=True,
+            workflow_box_side_A=28.0,
+            pretreat_settings=pretreat,
+            composition={"DCM": 2},
+            pretreat_heat_nstep=5000,
+        )
     thermo = dict(next(s for title, s in sections if title == "Pretreat thermodynamics"))
     assert thermo["dt_fs"] == "2.000"
     assert thermo["temperature_K"] == "300.00"

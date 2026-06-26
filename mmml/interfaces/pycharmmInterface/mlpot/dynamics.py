@@ -201,17 +201,25 @@ def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
         dcd_file = open_minimize_dcd(config.dcd_path, unit=config.dcd_unit)
         dcd_kw = {"iuncrd": config.dcd_unit, "nsavc": max(1, int(config.dcd_nsavc))}
 
+    base_inb = int(config.inbfrq if config.inbfrq is not None else 50)
+    inbfrq = _prepare_charmm_mm_minimize_list_frequencies(
+        pycharmm,
+        use_pbc=bool(config.use_pbc),
+        nstep=int(config.nstep_sd),
+        inbfrq=base_inb,
+    )
+    ihbfrq = int(
+        config.ihbfrq
+        if config.ihbfrq is not None
+        else (inbfrq if bool(config.use_pbc) else 0)
+    )
     sd_kw = {
         "nstep": max(1, int(config.nstep_sd)),
         "nprint": max(1, int(config.nprint)),
         "tolenr": float(config.tolenr),
         "tolgrd": float(config.tolgrd),
-        "inbfrq": int(config.inbfrq if config.inbfrq is not None else 50),
-        "ihbfrq": int(
-            config.ihbfrq
-            if config.ihbfrq is not None
-            else (50 if bool(config.use_pbc) else 0)
-        ),
+        "inbfrq": inbfrq,
+        "ihbfrq": ihbfrq,
         **dcd_kw,
     }
     try:
@@ -229,11 +237,19 @@ def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
                 print(f"CHARMM MM ABNR: nstep={config.nstep_abnr}", flush=True)
             from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_quiet_output
 
+            abnr_inb = _prepare_charmm_mm_minimize_list_frequencies(
+                pycharmm,
+                use_pbc=bool(config.use_pbc),
+                nstep=int(config.nstep_abnr),
+                inbfrq=base_inb,
+            )
             with charmm_quiet_output():
                 minimize.run_abnr(
                     nstep=int(config.nstep_abnr),
                     tolenr=float(config.tolenr),
                     tolgrd=float(config.tolgrd),
+                    inbfrq=abnr_inb,
+                    ihbfrq=abnr_inb if config.use_pbc else 0,
                     **dcd_kw,
                 )
         pycharmm.lingo.charmm_script("ENER")
@@ -4949,6 +4965,29 @@ def open_minimize_dcd(path: PathLike, *, unit: int = 51) -> Any:
         formatted=False,
         read_only=False,
     )
+
+
+def _prepare_charmm_mm_minimize_list_frequencies(
+    pycharmm: Any,
+    *,
+    use_pbc: bool,
+    nstep: int,
+    inbfrq: int = 50,
+) -> int:
+    """Align NB/image list freqs before CGENFF SD (CHARMM FINCYC constraints).
+
+    ``minimize.run_sd`` updates ``inbfrq`` via ``MinOpts`` but not ``imgfrq``. A
+    leftover ``imgfrq=-1`` (CHARMM default) with ``inbfrq=50`` triggers BOMLev -2:
+    "IMGFRQ is not a multiple of INBFRQ".
+    """
+    inb = _harmonize_dynamics_frequency(int(inbfrq), max(1, int(nstep)))
+    if use_pbc:
+        pycharmm.nbonds.set_inbfrq(inb)
+        pycharmm.nbonds.set_imgfrq(inb)
+    else:
+        pycharmm.nbonds.set_inbfrq(inb)
+        pycharmm.nbonds.set_imgfrq(0)
+    return inb
 
 
 def _prepare_mlpot_sd_list_frequencies(pycharmm: Any, *, sd_kw: dict[str, Any]) -> None:
