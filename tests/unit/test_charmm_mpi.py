@@ -142,6 +142,34 @@ def test_charmm_mpirun_path_prefers_built_openmpi_over_distro(monkeypatch, tmp_p
     charmm_mpi.charmm_mpirun_path.cache_clear()
 
 
+def test_charmm_mpirun_path_prefers_ldd_over_distro_openmpi_root(monkeypatch, tmp_path):
+    """``OPENMPI_ROOT=/usr`` must not beat ``libmpi`` from ``ldd libcharmm.so``."""
+    lib = tmp_path / "libcharmm.so"
+    lib.write_bytes(b"stub")
+    built = tmp_path / "opt" / "openmpi-5" / "build"
+    built_bin = built / "bin"
+    built_bin.mkdir(parents=True)
+    built_lib = built / "lib"
+    built_lib.mkdir(parents=True)
+    mpirun = built_bin / "mpirun"
+    mpirun.write_text("#!/bin/sh\n")
+    mpirun.chmod(0o755)
+    built_mpi = built_lib / "libmpi.so.40"
+    built_mpi.symlink_to("/dev/null")
+
+    monkeypatch.setenv("CHARMM_LIB_DIR", str(tmp_path))
+    monkeypatch.setenv("OPENMPI_ROOT", "/usr")
+    charmm_mpi.charmm_mpirun_path.cache_clear()
+    ldd_out = f"libmpi.so.40 => {built_mpi}\n"
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.subprocess.run",
+        return_value=mock.Mock(returncode=0, stdout=ldd_out),
+    ):
+        found = charmm_mpi.charmm_mpirun_path()
+    assert found == mpirun.resolve()
+    charmm_mpi.charmm_mpirun_path.cache_clear()
+
+
 def test_charmm_mpirun_path_from_openmpi_root(monkeypatch, tmp_path):
     lib = tmp_path / "libcharmm.so"
     lib.write_bytes(b"stub")

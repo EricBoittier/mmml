@@ -235,8 +235,11 @@ def _openmpi_root_mpirun() -> Path | None:
 def charmm_mpirun_path() -> Path | None:
     """``mpirun`` from the same OpenMPI install as ``libcharmm.so``.
 
-    Resolution order: ``MMML_MPIRUN``, ``OPENMPI_ROOT/bin/mpirun``, then
-    ``libmpi.so`` directory from ``ldd libcharmm.so`` → ``../bin/mpirun``.
+    Resolution order: ``MMML_MPIRUN``, then ``libmpi.so`` from ``ldd libcharmm.so``
+    → ``../bin/mpirun``, then ``OPENMPI_ROOT/bin/mpirun`` as fallback.
+
+    ``ldd`` is preferred over ``OPENMPI_ROOT`` so a distro ``OPENMPI_ROOT=/usr`` does
+    not mask a custom OpenMPI prefix linked into ``libcharmm.so``.
     When auto-discovery fails, set ``MMML_MPIRUN`` to the launcher that matches
     the ``libmpi`` line from ``ldd`` (do not assume a distro layout).
     """
@@ -246,16 +249,16 @@ def charmm_mpirun_path() -> Path | None:
         if candidate.is_file():
             return candidate.resolve()
 
-    from_openmpi_root = _openmpi_root_mpirun()
-    if from_openmpi_root is not None:
-        return from_openmpi_root
-
     lib = _charmm_lib_path()
     if lib is not None:
         for libmpi in _libmpi_paths_from_ldd(_run_ldd(lib)):
             found = _mpirun_for_libmpi(libmpi)
             if found is not None:
                 return found
+
+    from_openmpi_root = _openmpi_root_mpirun()
+    if from_openmpi_root is not None:
+        return from_openmpi_root
 
     return None
 
