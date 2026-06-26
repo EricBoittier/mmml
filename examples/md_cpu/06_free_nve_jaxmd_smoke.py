@@ -56,10 +56,10 @@ def main() -> int:
     pair_mask = jnp.ones(pair_idx.shape[0], dtype=jnp.float32)
     cutoff_params = CutoffParameters()
 
-    def energy_fn(pos):
-        out = spherical_fn(
+    def eval_fn(pos):
+        return spherical_fn(
             atomic_numbers=jnp.array(z),
-            positions=jnp.array(pos),
+            positions=jnp.asarray(pos, dtype=jnp.float32),
             n_monomers=n_monomers,
             cutoff_params=cutoff_params,
             doML=True,
@@ -69,15 +69,25 @@ def main() -> int:
             mm_pair_idx=pair_idx,
             mm_pair_mask=pair_mask,
         )
-        return out.energy.reshape(-1)[0]
 
+    @jax.jit
+    def force_fn(pos):
+        return jnp.asarray(eval_fn(pos).forces, dtype=jnp.float32)
+
+    def energy_at(pos):
+        return float(eval_fn(pos).energy.reshape(-1)[0])
+
+    unit = units.metal_unit_system()
     displacement, shift = space.free()
-    dt = float(args.dt_fs) * units.fs
-    init_fn, apply_fn = simulate.nve(energy_fn, shift, dt)
+    dt = float(args.dt_fs) * 0.001  # fs → ps (metal units)
+    temperature_k = 300.0
+    kT = temperature_k * unit["temperature"]
+    init_fn, apply_fn = simulate.nve(force_fn, shift, dt)
     key = jax.random.PRNGKey(0)
     mass = jnp.ones((n_atoms,))
-    state = init_fn(key, jnp.array(r, dtype=jnp.float32), mass=mass)
-    e0 = float(energy_fn(state.position))
+    pos0 = jnp.array(r, dtype=jnp.float32)
+    state = init_fn(key, pos0, kT, mass=mass)
+    e0 = energy_at(state.position)
 
     @jax.jit
     def step(state):
@@ -86,7 +96,7 @@ def main() -> int:
     state = state
     for _ in range(int(args.n_steps)):
         state = step(state)
-    e1 = float(energy_fn(state.position))
+    e1 = energy_at(state.position)
 
     print(f"E0={e0:.6f} kcal/mol  E1={e1:.6f} kcal/mol  steps={args.n_steps}")
     if not np.isfinite(e1):
