@@ -26,6 +26,12 @@ def test_resolve_heat_ihtfrq_defaults_to_dyn_nprint():
     assert resolve_heat_ihtfrq(args, nstep=2000) == 500
 
 
+def test_resolve_heat_ihtfrq_short_stage_ensures_multiple_rescales():
+    args = argparse.Namespace(heat_ihtfrq=0, dyn_nprint=500, quiet=False)
+    assert resolve_heat_ihtfrq(args, nstep=200) == 25
+    assert 200 // resolve_heat_ihtfrq(args, nstep=200) >= 8
+
+
 def test_resolve_heat_ihtfrq_explicit_override():
     args = argparse.Namespace(heat_ihtfrq=40, dyn_nprint=500, quiet=False)
     assert resolve_heat_ihtfrq(args, nstep=2000) == 40
@@ -34,6 +40,34 @@ def test_resolve_heat_ihtfrq_explicit_override():
 def test_resolve_heat_ihtfrq_quiet_uses_full_stage():
     args = argparse.Namespace(heat_ihtfrq=0, dyn_nprint=500, quiet=True)
     assert resolve_heat_ihtfrq(args, nstep=123) == 123
+
+
+def test_build_stage_heat_echeck_scales_for_large_cluster():
+    args = argparse.Namespace(
+        heat_ihtfrq=0,
+        dyn_nprint=500,
+        quiet=False,
+        heat_thermostat="scale",
+        no_echeck=False,
+        no_echeck_heat=False,
+    )
+    dyn_print = resolve_dynamics_print_kwargs(args, nstep=200)
+    kw = _build_stage_dynamics_kw(
+        "heat",
+        args=args,
+        timestep_ps=0.0005,
+        nstep=200,
+        save_interval_ps=0.004,
+        temp=300.0,
+        echeck=5000.0,
+        dyn_print=dyn_print,
+        restart=False,
+        use_pbc=True,
+        n_atoms=500,
+        n_monomers=50,
+    )
+    assert kw["echeck"] == 10000.0
+    assert kw["ihtfrq"] == 25
 
 
 def test_build_stage_heat_ihtfrq_matches_dyn_nprint():
