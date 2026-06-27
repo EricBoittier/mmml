@@ -321,6 +321,8 @@ def _build_stage_dynamics_kw(
     use_pbc: bool = True,
     npt_include_firstt: bool = True,
     memory_handoff: bool = False,
+    n_atoms: int | None = None,
+    n_monomers: int | None = None,
 ) -> dict[str, Any]:
     duration_ps = nstep * timestep_ps
     effective_restart = restart and not memory_handoff
@@ -330,7 +332,14 @@ def _build_stage_dynamics_kw(
         if getattr(args, "no_echeck_heat", False) or getattr(args, "no_echeck", False):
             heat_echeck = -1.0
         else:
-            heat_echeck = max(echeck, 5000.0) if echeck > 0 else echeck
+            from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+                recommend_heat_echeck_kcal,
+            )
+
+            heat_floor = 5000.0
+            if n_atoms is not None and n_monomers is not None:
+                heat_floor = recommend_heat_echeck_kcal(n_monomers, n_atoms)
+            heat_echeck = max(echeck, heat_floor) if echeck > 0 else echeck
         if resolve_heat_thermostat(args) == "hoover":
             from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
                 build_hoover_heat_dynamics,
@@ -2273,6 +2282,8 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         restart=restart,
                         use_pbc=charmm_pbc,
                         memory_handoff=use_memory,
+                        n_atoms=n_atoms,
+                        n_monomers=n_mol,
                     )
                     kw["nsavc"] = dcd_nsavc
                     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
@@ -2930,6 +2941,8 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 restart=restart,
                 use_pbc=charmm_pbc,
                 memory_handoff=use_memory,
+                n_atoms=n_atoms if stage == "heat" else None,
+                n_monomers=n_mol if stage == "heat" else None,
             )
             kw["nsavc"] = dcd_nsavc
             if stage == "heat" and overlap_prior_restart is None and _should_seed_heat_prior_restart(

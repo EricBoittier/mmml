@@ -742,6 +742,10 @@ def resolve_heat_ihtfrq(args: argparse.Namespace, *, nstep: int) -> int:
 
     CHARMM prints GAUSSIAN / COM / velocity-assignment blocks on each rescale,
     which dominates console output when ``ihtfrq`` is small (legacy default 10).
+
+    Short heat segments (e.g. 200-step smoke tests) must not default to
+    ``ihtfrq == nstep`` (only one rescale at the end → NVE-like drift and
+    ECHECK aborts on all-ML clusters).
     """
     nstep = max(1, int(nstep))
     explicit = int(getattr(args, "heat_ihtfrq", 0) or 0)
@@ -749,7 +753,11 @@ def resolve_heat_ihtfrq(args: argparse.Namespace, *, nstep: int) -> int:
         return min(explicit, nstep)
     if getattr(args, "quiet", False):
         return nstep
-    return min(max(1, int(getattr(args, "dyn_nprint", 500))), nstep)
+    ihtfrq = min(max(1, int(getattr(args, "dyn_nprint", 500))), nstep)
+    min_rescales = max(4, int(getattr(args, "heat_min_rescales", 8) or 8))
+    if nstep // ihtfrq < 2:
+        ihtfrq = max(1, nstep // min_rescales)
+    return ihtfrq
 
 
 def resolve_dynamics_print_kwargs(
@@ -2819,6 +2827,11 @@ def recommend_echeck_kcal(n_monomers: int, n_atoms: int) -> float:
     from_mol = float(n_mol) * 50.0
     from_atoms = float(n_at) * 10.0
     return max(500.0, from_mol, from_atoms)
+
+
+def recommend_heat_echeck_kcal(n_monomers: int, n_atoms: int) -> float:
+    """Looser ECHECK floor for MLpot heat (MLpot UPDATE spikes, no SHAKE)."""
+    return max(5000.0, 2.0 * recommend_echeck_kcal(n_monomers, n_atoms))
 
 
 def resolve_echeck_for_cluster(
