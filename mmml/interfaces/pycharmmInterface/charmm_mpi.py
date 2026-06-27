@@ -323,29 +323,33 @@ def openmpi_opal_library_path() -> Path | None:
     return None
 
 
+def _dir_has_mca_plugins(directory: Path) -> bool:
+    """True when ``directory`` contains at least one ``mca_*.so`` DSO plugin."""
+    return any(directory.glob("mca_*.so"))
+
+
 def openmpi_mca_component_dir() -> Path | None:
-    """Directory for OpenMPI MCA plugin search under the matched prefix."""
+    """Directory with OpenMPI MCA DSO plugins (``mca_*.so``) under the matched prefix.
+
+    Incomplete in-tree ``build/`` trees often have ``lib/openmpi/`` with only
+    ``libompi_dbg_msgq.so`` — not MCA plugins. Pointing ``mca_base_component_path``
+    there makes OpenMPI scan non-MCA libraries and fail (e.g. ``bad prefix``).
+    Static builds with no ``mca_*.so`` should leave this unset and rely on
+    explicit ``--mca shmem mmap`` plus ``LD_PRELOAD`` of matched ``libopen-pal``.
+    """
     override = (os.environ.get("MMML_MPI_MCA_COMPONENT_DIR") or "").strip()
     if override:
         path = Path(override).expanduser()
-        return path if path.is_dir() else None
+        if path.is_dir() and _dir_has_mca_plugins(path):
+            return path
+        return None
     prefix = openmpi_install_prefix()
     if prefix is None:
         return None
-    empty_openmpi: Path | None = None
     for sub in ("lib/openmpi", "lib64/openmpi", "lib", "lib64"):
         candidate = prefix / sub
-        if not candidate.is_dir():
-            continue
-        if any(candidate.glob("mca_*.so")):
+        if candidate.is_dir() and _dir_has_mca_plugins(candidate):
             return candidate
-        if sub.endswith("openmpi") and empty_openmpi is None:
-            empty_openmpi = candidate
-    if empty_openmpi is not None:
-        return empty_openmpi
-    opal = openmpi_opal_library_path()
-    if opal is not None:
-        return opal.parent
     return None
 
 
