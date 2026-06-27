@@ -46,6 +46,7 @@ from mmml.models.physnetjax.physnetjax.utils.pretty_printer import (
 )
 
 PROFILE = False
+PROFILE_EPOCH_TIMING = False
 if PROFILE:
     import jax.profiler
 
@@ -131,6 +132,7 @@ def train_model(
     rot_augment: bool = False,
     rot_perturbation: float = 1.0,
     save_every_epoch: bool = True,
+    profile_epoch_timing: bool | None = None,
 ):
     """
     Train a PhysNetJax model with comprehensive logging and checkpointing.
@@ -225,6 +227,18 @@ def train_model(
     - Progress monitoring with rich console output
     """
     _ = log_tb  # Deprecated argument retained for backward compatibility.
+    if profile_epoch_timing is None:
+        import os
+
+        profile_epoch_timing = PROFILE_EPOCH_TIMING or bool(
+            os.environ.get("MMML_PHYSNET_PROFILE_EPOCH_TIMING")
+        )
+    from mmml.models.physnetjax.physnetjax.training.epoch_timing import (
+        EpochTiming,
+        EpochTimingSummary,
+    )
+
+    timing_summary = EpochTimingSummary()
     data_keys = tuple(data_keys)
     validate_atomic_numbers(
         train_data=train_data,
@@ -256,7 +270,33 @@ def train_model(
         print("Using default (fat) batching method")
         import sys
         sys.stdout.flush()  # Flush for SLURM logging
-        from mmml.models.physnetjax.physnetjax.data.batches import _prepare_batches
+        from mmml.models.physnetjax.physnetjax.data.batches import (
+            _pair_indices,
+            _prepare_batches,
+        )
+
+        fat_pair_cache = _pair_indices(num_atoms, batch_size)
+
+        def _prepare_batches_default(
+            shuffle_key,
+            *,
+            data,
+            batch_size,
+            num_atoms,
+            data_keys,
+            rot_augment,
+            rot_perturbation,
+        ):
+            return _prepare_batches(
+                shuffle_key,
+                data=data,
+                batch_size=batch_size,
+                num_atoms=num_atoms,
+                data_keys=data_keys,
+                rot_augment=rot_augment,
+                rot_perturbation=rot_perturbation,
+                pair_cache=fat_pair_cache,
+            )
 
     # Force terminal output for SLURM environments
     import sys
@@ -323,7 +363,6 @@ def train_model(
 
     # Batches for the validation set need to be prepared only once.
     key, valid_shuffle_key = jax.random.split(key)
-    key, train_shuffle_key = jax.random.split(key)
     kwargs = {
         "key": valid_shuffle_key,
         "data": valid_data,
@@ -337,13 +376,15 @@ def train_model(
         kwargs.update(batch_args_dict)
         valid_batches = _prepare_batches(kwargs)
     else:
-        valid_batches = _prepare_batches(key,
-                                         data=valid_data,
-                                         batch_size=batch_size,
-                                         num_atoms=num_atoms,
-                                         data_keys=data_keys,
-                                         rot_augment=rot_augment,
-                                         rot_perturbation=rot_perturbation)
+        valid_batches = _prepare_batches_default(
+            valid_shuffle_key,
+            data=valid_data,
+            batch_size=batch_size,
+            num_atoms=num_atoms,
+            data_keys=data_keys,
+            rot_augment=rot_augment,
+            rot_perturbation=rot_perturbation,
+        )
 
     print_shapes(valid_batches[0], name="Validation Batch[0]")
 
@@ -414,10 +455,14 @@ def train_model(
     with live_context as live:
         # Train for 'num_epochs' epochs.
         for epoch in range(step, num_epochs + 1):
-            # Prepare batches.
+            epoch_timing = EpochTiming()
+            epoch_t0 = time.perf_counter()
 
+            key, epoch_shuffle_key = jax.random.split(key)
+
+            batch_t0 = time.perf_counter()
             kwargs = {
-                "key": train_shuffle_key,
+                "key": epoch_shuffle_key,
                 "data": train_data,
                 "batch_size": batch_size,
                 "num_atoms": num_atoms,
@@ -433,18 +478,21 @@ def train_model(
             ):
                 kwargs.update(batch_args_dict)
 
-
             if batch_method == "advanced":
                 train_batches = _prepare_batches(kwargs)
             else:
-                train_batches = _prepare_batches(key,
-                                                 data=train_data,
-                                                 batch_size=batch_size,
-                                                 num_atoms=num_atoms,
-                                                 data_keys=data_keys,
-                                                 rot_augment=rot_augment,
-                                                 rot_perturbation=rot_perturbation)
-            # Loop over train batches.
+                train_batches = _prepare_batches_default(
+                    epoch_shuffle_key,
+                    data=train_data,
+                    batch_size=batch_size,
+                    num_atoms=num_atoms,
+                    data_keys=data_keys,
+                    rot_augment=rot_augment,
+                    rot_perturbation=rot_perturbation,
+                )
+            epoch_timing.batch_prep_s = time.perf_counter() - batch_t0
+
+            train_t0 = time.perf_counter()
             train_loss = 0.0
             train_energy_mae = 0.0
             train_forces_mae = 0.0
@@ -477,13 +525,15 @@ def train_model(
                 )
                 # Block until JAX operations complete to avoid async context issues
                 # This prevents RuntimeError: cannot enter context in IPython/Jupyter
-                jax.block_until_ready(loss)
-                jax.block_until_ready(params)
                 train_loss += (loss - train_loss) / (i + 1)
                 train_energy_mae += (energy_mae - train_energy_mae) / (i + 1)
                 train_forces_mae += (forces_mae - train_forces_mae) / (i + 1)
                 train_dipoles_mae += (dipole_mae - train_dipoles_mae) / (i + 1)
-            # Evaluate on validation set.
+            jax.block_until_ready(loss)
+            jax.block_until_ready(params)
+            epoch_timing.train_s = time.perf_counter() - train_t0
+
+            valid_t0 = time.perf_counter()
             valid_loss = 0.0
             valid_energy_mae = 0.0
             valid_forces_mae = 0.0
@@ -500,15 +550,13 @@ def train_model(
                     charges=do_charges,
                     params=ema_params,
                 )
-                # Block until JAX operations complete to avoid async context issues
-                jax.block_until_ready(loss)
-                jax.block_until_ready(energy_mae)
-                jax.block_until_ready(forces_mae)
-                jax.block_until_ready(dipole_mae)
+                # Per-batch sync removed; one sync per validation epoch is enough.
                 valid_loss += (loss - valid_loss) / (i + 1)
                 valid_energy_mae += (energy_mae - valid_energy_mae) / (i + 1)
                 valid_forces_mae += (forces_mae - valid_forces_mae) / (i + 1)
                 valid_dipoles_mae += (dipole_mae - valid_dipoles_mae) / (i + 1)
+            jax.block_until_ready(valid_loss)
+            epoch_timing.valid_s = time.perf_counter() - valid_t0
 
             _, transform_state = transform.update(
                 updates=params, state=transform_state, value=valid_loss
@@ -559,6 +607,7 @@ def train_model(
             best_ = improved and best
 
             if should_save:
+                ckpt_t0 = time.perf_counter()
                 model_attributes = model.return_attributes()
                 ckpt = {
                     "model": state,
@@ -577,6 +626,23 @@ def train_model(
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore", RuntimeWarning)
                     orbax_checkpointer.save(ckp, ckpt, save_args=save_args)
+
+                    orbax_checkpointer.save(ckp, ckpt, save_args=save_args)
+                epoch_timing.checkpoint_s = time.perf_counter() - ckpt_t0
+
+            epoch_timing.other_s = max(
+                0.0,
+                time.perf_counter() - epoch_t0 - epoch_timing.total_s,
+            )
+            timing_summary.record(epoch_timing)
+            if profile_epoch_timing and console is not None and epoch % print_freq == 0:
+                console.print(
+                    f"Epoch {epoch} timing (s): "
+                    f"batch_prep={epoch_timing.batch_prep_s:.3f}, "
+                    f"train={epoch_timing.train_s:.3f}, "
+                    f"valid={epoch_timing.valid_s:.3f}, "
+                    f"ckpt={epoch_timing.checkpoint_s:.3f}"
+                )
 
             if best_ or (epoch % print_freq == 0) and console is not None:
                 combined = epoch_printer.update(
@@ -614,6 +680,9 @@ def train_model(
                         f"(best {objective}={best_loss:.6f})"
                     )
                 break
+
+    if profile_epoch_timing and console is not None and timing_summary.epochs > 0:
+        console.print(timing_summary.format_means())
 
     # Return final model parameters and best objective value.
     return ema_params, best_loss
