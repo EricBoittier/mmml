@@ -189,3 +189,21 @@ def test_liquid_box_cli_parser_requires_composition():
     )
     assert ns.composition == "DCM:10"
     assert ns.profile == "standard"
+
+
+def test_composition_tag_from_liquid_box_args_without_residue():
+    """liquid-box uses --composition only; cluster tag must not require --residue."""
+    from mmml.cli.run.liquid_box import build_parser
+    from mmml.cli.run.md_pbc_suite.ase import _parse_composition
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import composition_tag
+
+    parser = build_parser()
+    args = parser.parse_args(
+        ["--composition", "DCM:206", "--output-dir", "/tmp/x", "--profile", "dense"]
+    )
+    composition = _parse_composition(args.composition)
+    n_mol = sum(count for _, count in composition)
+    residue = getattr(args, "residue", composition[0][0]).upper()
+    tag = composition_tag(composition, residue, n_mol)
+    assert tag == "dcm_206"
+    assert not hasattr(args, "residue")

@@ -1363,7 +1363,11 @@ def build_cluster_from_args_with_tag(
             )
         n_mol = sum(count for _, count in composition)
         composition_summary = {str(res): int(count) for res, count in composition}
-        tag = composition_tag(composition, args.residue.upper(), n_mol)
+        tag = composition_tag(
+            composition,
+            getattr(args, "residue", composition[0][0]).upper(),
+            n_mol,
+        )
     else:
         residue = args.residue.upper()
         n_mol = int(args.n_molecules)
