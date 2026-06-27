@@ -21,6 +21,8 @@ _MPI_LDD_KEYWORDS = (
 
 _pmix_preloaded = False
 _opal_preloaded = False
+_charmm_mpi_bootstrapped = False
+_mpi4py_charmm_configured = False
 _IS_DARWIN = platform.system() == "Darwin"
 
 
@@ -705,8 +707,41 @@ def _pin_charmm_openmp_for_serial_mlpot() -> None:
     os.environ.setdefault("NUMEXPR_NUM_THREADS", "1")
 
 
+def configure_mpi4py_charmm_owned_init() -> None:
+    """Prevent mpi4py ``MPI_Init`` when CHARMM Fortran owns MPI (idempotent)."""
+    global _mpi4py_charmm_configured
+    if _mpi4py_charmm_configured:
+        return
+    if _truthy("MMML_MPI_PY_INIT"):
+        return
+    if not charmm_lib_links_mpi():
+        return
+    try:
+        import mpi4py
+
+        mpi4py.rc(initialize=False, finalize=False)
+        _mpi4py_charmm_configured = True
+    except Exception:
+        return
+
+
+def ensure_charmm_mpi_initialized() -> None:
+    """Load PyCHARMM once so Fortran ``MPI_Init`` runs before mpi4py collectives."""
+    global _charmm_mpi_bootstrapped
+    if _charmm_mpi_bootstrapped:
+        return
+    if not charmm_lib_links_mpi():
+        return
+    configure_mpi4py_charmm_owned_init()
+    if not charmm_lib_available():
+        return
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+
+    _charmm_mpi_bootstrapped = True
+
+
 def prepare_serial_charmm_mpi_env() -> None:
-    """Env/LD setup only — do **not** call ``MPI_Init`` (CHARMM owns that)."""
+    """Env/LD setup only — do **not** call ``MPI_Init`` from mpi4py (CHARMM owns that)."""
     from mmml.interfaces.pycharmmInterface.jax_compile_threads import (
         sanitize_xla_flags_env,
     )
@@ -715,6 +750,7 @@ def prepare_serial_charmm_mpi_env() -> None:
     prepare_charmm_mpi_runtime()
     if charmm_lib_links_mpi():
         os.environ.setdefault("MMML_NO_JAX_COMPILE_THREADS", "1")
+        configure_mpi4py_charmm_owned_init()
     _pin_charmm_openmp_for_serial_mlpot()
     if _under_mpirun():
         from mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
