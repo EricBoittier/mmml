@@ -735,8 +735,9 @@ def ensure_charmm_mpi_initialized() -> None:
     configure_mpi4py_charmm_owned_init()
     if not charmm_lib_available():
         return
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import mmml.interfaces.pycharmmInterface.import_pycharmm as import_pycharmm
 
+    import_pycharmm.init_vacuum_charmm_state_mpi()
     _charmm_mpi_bootstrapped = True
 
 

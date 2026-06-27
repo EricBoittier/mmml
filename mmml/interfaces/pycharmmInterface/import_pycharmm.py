@@ -61,6 +61,7 @@ CGENFF_PRM = str(CGENFF_PRM)
 from mmml.interfaces.pycharmmInterface.charmm_mpi import (  # noqa: E402
     charmm_lib_available,
     prepare_serial_charmm_mpi_env,
+    _under_mpirun,
 )
 
 PYCHARMM_AVAILABLE = charmm_lib_available()
@@ -403,8 +404,36 @@ def _init_vacuum_charmm_state() -> None:
     crystal_free_charmm()
 
 
-_init_vacuum_charmm_state()
+_vacuum_charmm_synced = False
+
+
+def init_vacuum_charmm_state_mpi() -> None:
+    """Run ``crystal free`` once; under ``mpirun`` barrier so all ranks enter together.
+
+    Module-import ``crystal free`` on one rank while others are still importing
+    Python modules deadlocks MPI-linked CHARMM (rank 0 prints, rank 1 never arrives).
+    """
+    global _vacuum_charmm_synced
+    if _vacuum_charmm_synced:
+        return
+    if not PYCHARMM_AVAILABLE:
+        return
+    if _under_mpirun():
+        try:
+            from mpi4py import MPI
+
+            if MPI.Is_initialized():
+                MPI.COMM_WORLD.Barrier()
+        except Exception:
+            pass
+    _init_vacuum_charmm_state()
+    _vacuum_charmm_synced = True
+
+
 _init_charmm_default_levels()
+
+if PYCHARMM_AVAILABLE and not _under_mpirun():
+    init_vacuum_charmm_state_mpi()
 
 
 def ase_from_pycharmm_state():

@@ -246,19 +246,11 @@ def test_configure_mpi4py_charmm_owned_init(monkeypatch):
     assert mpi4py.rc.finalize is False
 
 
-def test_ensure_charmm_mpi_initialized_idempotent(monkeypatch):
-    import builtins
+def test_ensure_charmm_mpi_initialized_idempotent():
+    import sys
 
     charmm_mpi._charmm_mpi_bootstrapped = False
-    calls = {"n": 0}
-    real_import = builtins.__import__
-
-    def tracked_import(name, globals=None, locals=None, fromlist=(), level=0):
-        if name == "mmml.interfaces.pycharmmInterface.import_pycharmm":
-            calls["n"] += 1
-            return mock.MagicMock()
-        return real_import(name, globals, locals, fromlist, level)
-
+    fake_ip = mock.MagicMock()
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
         return_value=True,
@@ -267,11 +259,25 @@ def test_ensure_charmm_mpi_initialized_idempotent(monkeypatch):
         return_value=True,
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.configure_mpi4py_charmm_owned_init",
-    ), mock.patch("builtins.__import__", side_effect=tracked_import):
+    ), mock.patch.dict(
+        sys.modules,
+        {"mmml.interfaces.pycharmmInterface.import_pycharmm": fake_ip},
+    ):
         charmm_mpi.ensure_charmm_mpi_initialized()
         charmm_mpi.ensure_charmm_mpi_initialized()
-    assert calls["n"] == 1
+    assert fake_ip.init_vacuum_charmm_state_mpi.call_count == 1
     assert charmm_mpi._charmm_mpi_bootstrapped is True
+
+
+def test_init_vacuum_charmm_deferred_under_mpirun():
+    path = (
+        Path(__file__).resolve().parents[2]
+        / "mmml/interfaces/pycharmmInterface/import_pycharmm.py"
+    )
+    source = path.read_text(encoding="utf-8")
+    assert "def init_vacuum_charmm_state_mpi() -> None:" in source
+    assert "if PYCHARMM_AVAILABLE and not _under_mpirun():" in source
+    assert "MPI.COMM_WORLD.Barrier()" in source
 
 
 def test_maybe_rerun_md_system_skips_when_disabled(monkeypatch):
