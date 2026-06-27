@@ -159,7 +159,7 @@ def resolve_grms_thresholds_from_stats(
         hybrid_total is not None
         and np.isfinite(hybrid_total)
         and float(hybrid_total) > charmm_bonded_ok_max
-        and float(hybrid_total) > 5.0 * max(float(charmm_total), 1.0e-3)
+        and float(hybrid_total) > 5.0 * max(float(stats.charmm_total), 1.0e-3)
     ):
         # ML geometry stress: cap intervention near the live hybrid total so
         # density-prep / calculator mini run before dynamics (per-monomer tails
