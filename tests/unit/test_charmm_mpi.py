@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from unittest import mock
 
 import pytest
@@ -274,9 +275,18 @@ def test_maybe_rerun_md_system_invokes_mpirun(monkeypatch, tmp_path):
     mock_run.assert_called_once()
     cmd = mock_run.call_args.args[0]
     assert str(mpirun.resolve()) == cmd[0]
-    assert cmd[1:6] == ["-np", "1", "--mca", "orte_abort_print_stack", "1"]
-    assert cmd[7:9] == ["-m", "mmml.cli.__main__"]
-    assert cmd[9:] == ["md-system", "--backend", "pycharmm"]
+    assert cmd[1:9] == [
+        "-np",
+        "1",
+        "--mca",
+        "pmix",
+        "^ext3x",
+        "--mca",
+        "orte_abort_print_stack",
+        "1",
+    ]
+    assert cmd[10:12] == ["-m", "mmml.cli.__main__"]
+    assert cmd[12:] == ["md-system", "--backend", "pycharmm"]
     env = mock_run.call_args.kwargs.get("env")
     assert env is not None
     assert str(mpirun.parent) in env["PATH"].split(os.pathsep)
@@ -308,15 +318,28 @@ def test_maybe_rerun_md_system_prepends_subcommand(monkeypatch, tmp_path):
         )
     assert code == 0
     cmd = mock_run.call_args.args[0]
-    assert cmd[1:6] == ["-np", "1", "--mca", "orte_abort_print_stack", "1"]
-    assert cmd[7:9] == ["-m", "mmml.cli.__main__"]
-    assert cmd[9:] == ["md-system", "--config", "dcm_test.yaml", "--run-all"]
+    assert cmd[1:9] == [
+        "-np",
+        "1",
+        "--mca",
+        "pmix",
+        "^ext3x",
+        "--mca",
+        "orte_abort_print_stack",
+        "1",
+    ]
+    assert cmd[10:12] == ["-m", "mmml.cli.__main__"]
+    assert cmd[12:] == ["md-system", "--config", "dcm_test.yaml", "--run-all"]
 
 
 def test_mpi_mpirun_extra_args_abort_stack_by_default(monkeypatch):
     monkeypatch.delenv("MMML_NO_MPI_ABORT_STACK", raising=False)
     monkeypatch.delenv("MMML_MPI_VERBOSE", raising=False)
+    monkeypatch.delenv("MMML_NO_MPI_MCA_PREFIX", raising=False)
     assert charmm_mpi.mpi_mpirun_extra_args() == [
+        "--mca",
+        "pmix",
+        "^ext3x",
         "--mca",
         "orte_abort_print_stack",
         "1",
@@ -325,10 +348,26 @@ def test_mpi_mpirun_extra_args_abort_stack_by_default(monkeypatch):
 
 def test_mpi_mpirun_extra_args_verbose(monkeypatch):
     monkeypatch.delenv("MMML_NO_MPI_ABORT_STACK", raising=False)
+    monkeypatch.delenv("MMML_NO_MPI_MCA_PREFIX", raising=False)
     monkeypatch.setenv("MMML_MPI_VERBOSE", "1")
     args = charmm_mpi.mpi_mpirun_extra_args()
-    assert args[:3] == ["--mca", "orte_abort_print_stack", "1"]
+    assert args[:3] == ["--mca", "pmix", "^ext3x"]
+    assert "orte_abort_print_stack" in args
     assert "plm_base_verbose" in args
+
+
+def test_mpi_openmpi_install_env_defaults(monkeypatch):
+    monkeypatch.delenv("MMML_NO_MPI_MCA_PREFIX", raising=False)
+    monkeypatch.delenv("OPAL_PREFIX", raising=False)
+    monkeypatch.delenv("OMPI_MCA_pmix", raising=False)
+    prefix = Path("/opt/openmpi-5.0.5/build")
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.openmpi_install_prefix",
+        return_value=prefix,
+    ), mock.patch.object(Path, "is_dir", return_value=True):
+        charmm_mpi.mpi_openmpi_install_env_defaults()
+    assert os.environ["OPAL_PREFIX"] == str(prefix)
+    assert os.environ["OMPI_MCA_pmix"] == "^ext3x"
 
 
 def test_mpi_diagnostic_env_defaults(monkeypatch):

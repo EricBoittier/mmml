@@ -294,6 +294,39 @@ def mpi_path_export() -> str:
     return f"export PATH={bindir}${{PATH:+:$PATH}}"
 
 
+@lru_cache(maxsize=1)
+def openmpi_install_prefix() -> Path | None:
+    """OpenMPI install root for the ``mpirun`` matched to ``libcharmm.so``."""
+    mpirun = charmm_mpirun_path()
+    if mpirun is None:
+        return None
+    prefix = mpirun.parent.parent
+    if (prefix / "lib").is_dir() or (prefix / "lib64").is_dir():
+        return prefix
+    return None
+
+
+def mpi_openmpi_install_env_defaults() -> None:
+    """Prefer CHARMM-linked OpenMPI MCA and block distro ``pmix/ext3x`` plugins.
+
+    On shared GPU nodes, ``orted`` can load ``/usr/lib/.../mca_pmix_ext3x.so`` from
+    the system OpenMPI 3 stack and fail with ``undefined symbol: pmix_value_load``
+    when the launcher is OpenMPI 5 + PMIx 5 from ``/opt/gcc-...``.
+    """
+    if _truthy("MMML_NO_MPI_MCA_PREFIX"):
+        return
+    prefix = openmpi_install_prefix()
+    if prefix is None:
+        return
+    os.environ.setdefault("OPAL_PREFIX", str(prefix))
+    os.environ.setdefault("OMPI_MCA_pmix", "^ext3x")
+    for sub in ("lib/openmpi", "lib"):
+        mca_dir = prefix / sub
+        if mca_dir.is_dir():
+            os.environ.setdefault("OMPI_MCA_component_path", str(mca_dir))
+            break
+
+
 def _scrub_deprecated_openmpi_mca_env() -> None:
     """OpenMPI 5+: ``mpi_cuda_support`` is deprecated in favor of ``opal_cuda_support``."""
     os.environ.pop("OMPI_MCA_mpi_cuda_support", None)
@@ -310,9 +343,12 @@ def mpi_diagnostic_env_defaults() -> None:
 
 def mpi_mpirun_extra_args() -> list[str]:
     """Extra ``mpirun`` argv tokens for crash diagnostics."""
+    args: list[str] = []
+    if not _truthy("MMML_NO_MPI_MCA_PREFIX"):
+        args.extend(["--mca", "pmix", "^ext3x"])
     if _truthy("MMML_NO_MPI_ABORT_STACK"):
-        return []
-    args = ["--mca", "orte_abort_print_stack", "1"]
+        return args
+    args.extend(["--mca", "orte_abort_print_stack", "1"])
     if _truthy("MMML_MPI_VERBOSE"):
         args.extend(
             [
@@ -358,6 +394,7 @@ def explain_mpi_crash(exit_code: int, *, argv0: str = "mmml md-system") -> None:
 def mpi_shell_setup_lines() -> list[str]:
     """Shell ``export`` lines for LD_LIBRARY_PATH, PATH, and OpenMPI MCA vars."""
     mpi_diagnostic_env_defaults()
+    mpi_openmpi_install_env_defaults()
     lines = [
         "unset OMPI_MCA_mpi_cuda_support",
         "export OMPI_MCA_opal_cuda_support=0",
@@ -369,6 +406,15 @@ def mpi_shell_setup_lines() -> list[str]:
                 "export OMPI_MCA_orte_base_help_aggregate=0",
             ]
         )
+    prefix = openmpi_install_prefix()
+    if prefix is not None and not _truthy("MMML_NO_MPI_MCA_PREFIX"):
+        lines.append(f"export OPAL_PREFIX={prefix}")
+        lines.append("export OMPI_MCA_pmix='^ext3x'")
+        for sub in ("lib/openmpi", "lib"):
+            mca_dir = prefix / sub
+            if mca_dir.is_dir():
+                lines.append(f"export OMPI_MCA_component_path={mca_dir}")
+                break
     ld = mpi_library_path_export()
     if ld:
         lines.append(ld)
@@ -480,6 +526,7 @@ def scrub_stale_openmpi_env(*, force: bool = False) -> int:
 
 
 def _apply_cuda_mpi_env_defaults() -> None:
+    mpi_openmpi_install_env_defaults()
     os.environ.setdefault("OMPI_MCA_btl_vader_single_copy_mechanism", "none")
     os.environ.setdefault("OMPI_MCA_opal_cuda_support", "0")
     _scrub_deprecated_openmpi_mca_env()

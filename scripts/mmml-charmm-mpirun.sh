@@ -112,9 +112,15 @@ fi
 mmml_mpi_finish() {
   local rc=$1
   local label=$2
-  "$PY" - <<PY || true
+  MMML_MPI_EXIT_CODE="$rc" MMML_MPI_CRASH_ARGV0="$label" "$PY" - <<'PY' || true
+import os
+
 from mmml.interfaces.pycharmmInterface.charmm_mpi import explain_mpi_crash
-explain_mpi_crash(${rc}, argv0=${label@Q})
+
+explain_mpi_crash(
+    int(os.environ.get("MMML_MPI_EXIT_CODE", "0")),
+    argv0=os.environ.get("MMML_MPI_CRASH_ARGV0", "mmml"),
+)
 PY
   exit "$rc"
 }
