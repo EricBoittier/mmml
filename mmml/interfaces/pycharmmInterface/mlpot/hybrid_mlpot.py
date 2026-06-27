@@ -597,12 +597,18 @@ class DecomposedMlpotModel:
         self._finalize_jax_factory(gpu=True)
         calc = self._registered_calculator
         if calc is not None:
-            calc.spherical_fn = self._spherical_fn
-            calc._get_update_fn = self._get_update_fn
-            calc._spherical_forward_fn = None
-            calc._forward_cache_key = None
+            real = getattr(calc, "_real", calc)
+            if isinstance(real, DecomposedMlpotCalculator):
+                real.spherical_fn = self._spherical_fn
+                real._get_update_fn = self._get_update_fn
+                real._spherical_forward_fn = None
+                real._forward_cache_key = None
 
-    def get_pycharmm_calculator(self, ml_atom_indices=None, ml_atomic_numbers=None, **kwargs):
+    def _build_registered_calculator(
+        self,
+        *,
+        ml_atomic_numbers: np.ndarray | None = None,
+    ) -> DecomposedMlpotCalculator:
         self._finalize_jax_factory()
         if ml_atomic_numbers is not None:
             z = np.asarray(ml_atomic_numbers, dtype=int)
@@ -624,6 +630,16 @@ class DecomposedMlpotModel:
         calc._parent_model = self
         self._registered_calculator = calc
         return calc
+
+    def get_pycharmm_calculator(self, ml_atom_indices=None, ml_atomic_numbers=None, **kwargs):
+        if self._spherical_fn is None and self._pending_factory is not None:
+            deferred = _DeferredDecomposedMlpotCalculator(
+                self,
+                ml_atomic_numbers=ml_atomic_numbers,
+            )
+            self._registered_calculator = deferred
+            return deferred
+        return self._build_registered_calculator(ml_atomic_numbers=ml_atomic_numbers)
 
 
 def build_decomposed_mlpot_model(

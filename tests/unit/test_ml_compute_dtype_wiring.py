@@ -17,6 +17,7 @@ from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
 from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
     DecomposedMlpotCalculator,
     DecomposedMlpotModel,
+    _DeferredDecomposedMlpotCalculator,
     build_decomposed_mlpot_model,
 )
 
@@ -79,6 +80,23 @@ def test_decomposed_mlpot_model_forwards_dtype_to_calculator():
     )
     calc = model.get_pycharmm_calculator()
     assert calc._ml_compute_dtype == "float64"
+
+
+def test_deferred_pycharmm_calculator_skips_jax_until_first_ener():
+    z = np.zeros(8, dtype=int)
+    model = DecomposedMlpotModel(
+        None,
+        CutoffParameters(),
+        2,
+        z,
+        pending_factory=MagicMock(),
+        pending_factory_z=z,
+        defer_jax_until_after_sd=True,
+    )
+    with patch.object(model, "_finalize_jax_factory") as mock_finalize:
+        calc = model.get_pycharmm_calculator()
+    mock_finalize.assert_not_called()
+    assert isinstance(calc, _DeferredDecomposedMlpotCalculator)
 
 
 def test_decomposed_calculator_casts_positions_with_configured_dtype():
