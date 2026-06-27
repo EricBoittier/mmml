@@ -94,9 +94,10 @@ def test_deferred_pycharmm_calculator_skips_jax_until_first_ener():
         defer_jax_until_after_sd=True,
     )
     with patch.object(model, "_finalize_jax_factory") as mock_finalize:
-        calc = model.get_pycharmm_calculator()
+        calc = model.get_pycharmm_calculator(ml_atomic_numbers=z)
     mock_finalize.assert_not_called()
     assert isinstance(calc, _DeferredDecomposedMlpotCalculator)
+    np.testing.assert_array_equal(calc.ml_atomic_numbers, z)
 
 
 def test_decomposed_calculator_casts_positions_with_configured_dtype():

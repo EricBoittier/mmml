@@ -458,8 +458,23 @@ class _DeferredDecomposedMlpotCalculator:
         ml_atomic_numbers: np.ndarray | None = None,
     ) -> None:
         self._model = model
-        self._ml_atomic_numbers = ml_atomic_numbers
+        self._ml_atomic_numbers = (
+            None if ml_atomic_numbers is None else np.asarray(ml_atomic_numbers, dtype=int)
+        )
         self._real: DecomposedMlpotCalculator | None = None
+
+    @property
+    def ml_atomic_numbers(self) -> np.ndarray:
+        """CHARMM MLpot registration Z (before first ``ENER`` materializes the real calc)."""
+        if self._ml_atomic_numbers is not None:
+            return np.asarray(self._ml_atomic_numbers, dtype=int)
+        return np.asarray(self._model._atomic_numbers, dtype=int)
+
+    @property
+    def atomic_numbers(self) -> np.ndarray:
+        return np.asarray(
+            physnet_ml_atomic_numbers(self.ml_atomic_numbers), dtype=np.int32
+        )
 
     def _ensure_real(self) -> DecomposedMlpotCalculator:
         if self._real is not None:
