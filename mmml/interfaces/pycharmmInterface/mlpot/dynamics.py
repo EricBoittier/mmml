@@ -2540,11 +2540,6 @@ def _strip_non_charmm_dynamics_keywords(kw: dict[str, Any]) -> None:
 
 def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     """Instantiate and run ``pycharmm.DynamicsScript``."""
-    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
-        clear_comparison_coordinates,
-    )
-
-    import pycharmm
     kw = dict(dynamics_kwargs)
     _strip_non_charmm_dynamics_keywords(kw)
     nstep = int(kw.get("nstep", 0) or 0)
@@ -2553,6 +2548,12 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
             f"run_dynamics: nstep must be >= 1 (got {nstep}); "
             "use start=True, iasvel=1 on the main dyna call for velocity assignment"
         )
+
+    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+        clear_comparison_coordinates,
+    )
+
+    import pycharmm
     # PyCHARMM omits ``start`` from the script when start=False, so CHARMM may keep
     # START active after a prior Boltzmann assign. With iasvel=0 that reads COMP
     # coordinates as velocities — zero COMP defensively.
