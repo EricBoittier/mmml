@@ -151,6 +151,7 @@ def push_apart_overlapped_monomers(
     margin: float = 0.2,
     cell: Any | None = None,
     symmetric: bool = True,
+    move_only: frozenset[int] | set[int] | None = None,
 ) -> np.ndarray:
     """Rigidly translate monomer(s) along the MIC vector of the closest contact."""
     pos = np.asarray(positions, dtype=float).copy()
@@ -171,6 +172,20 @@ def push_apart_overlapped_monomers(
     mi, mj = int(violation.monomer_i), int(violation.monomer_j)
     si, ei = int(offsets[mi]), int(offsets[mi + 1])
     sj, ej = int(offsets[mj]), int(offsets[mj + 1])
+    movable = None if move_only is None else frozenset(int(i) for i in move_only)
+    if movable is not None:
+        i_move = mi in movable
+        j_move = mj in movable
+        if not i_move and not j_move:
+            return pos
+        if i_move and j_move:
+            pos[si:ei] -= unit * (gap * 0.5)
+            pos[sj:ej] += unit * (gap * 0.5)
+        elif i_move:
+            pos[si:ei] -= unit * gap
+        else:
+            pos[sj:ej] += unit * gap
+        return pos
     if symmetric:
         pos[si:ei] -= unit * (gap * 0.5)
         pos[sj:ej] += unit * (gap * 0.5)
@@ -414,6 +429,86 @@ def repack_monomers_clear_overlap(
             cell=cell,
         )
     return new_pos
+
+
+def repack_selected_monomers_clear_overlap(
+    positions: np.ndarray,
+    monomer_offsets: np.ndarray,
+    selected_indices: list[int] | tuple[int, ...],
+    *,
+    min_distance: float,
+    spacing: float | None = None,
+    margin: float = 0.2,
+    seed: int | None = None,
+    cell: Any | None = None,
+) -> np.ndarray:
+    """Patch only selected monomers: rigid internal geometry, new COM placement.
+
+    Fixed monomers keep their coordinates. Selected monomers are rebuilt from
+    COM-centered internal templates and pushed apart from neighbors until
+    ``min_distance`` is met (only selected monomers move).
+    """
+    pos = np.asarray(positions, dtype=float).copy()
+    offsets = np.asarray(monomer_offsets, dtype=int)
+    n_monomers = int(len(offsets) - 1)
+    selected = sorted({int(i) for i in selected_indices})
+    if not selected or len(selected) >= n_monomers:
+        return repack_monomers_clear_overlap(
+            pos,
+            offsets,
+            min_distance=min_distance,
+            spacing=spacing,
+            margin=margin,
+            seed=seed,
+            cell=cell,
+        )
+
+    templates, _radii = _monomer_internal_templates(pos, offsets)
+    cell_mat = _cell_matrix(cell)
+    threshold = float(min_distance)
+    extra = float(max(0.0, margin))
+    move_only = frozenset(selected)
+
+    for mi in selected:
+        s, e = int(offsets[mi]), int(offsets[mi + 1])
+        com = pos[s:e].mean(axis=0)
+        pos[s:e] = templates[mi] + com
+
+    max_passes = max(1, n_monomers * 4)
+    for _ in range(max_passes):
+        best_dist, violation = find_worst_intermonomer_overlap(pos, offsets, cell=cell)
+        if violation is None or best_dist >= threshold:
+            break
+        if (
+            violation.monomer_i not in move_only
+            and violation.monomer_j not in move_only
+        ):
+            break
+        pos = push_apart_overlapped_monomers(
+            pos,
+            offsets,
+            violation,
+            min_distance=threshold,
+            margin=extra,
+            cell=cell,
+            move_only=move_only,
+        )
+
+    best_dist, _ = find_worst_intermonomer_overlap(pos, offsets, cell=cell)
+    if best_dist < threshold:
+        return repack_monomers_clear_overlap(
+            pos,
+            offsets,
+            min_distance=min_distance,
+            spacing=spacing,
+            margin=margin,
+            seed=seed,
+            cell=cell,
+        )
+
+    if cell_mat is not None:
+        pos = wrap_monomers_primary_cell(pos, offsets, cell_mat)
+    return pos
 
 
 def assert_no_intermonomer_atom_overlap(

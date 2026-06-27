@@ -19,6 +19,7 @@ assert_no_intermonomer_atom_overlap = _geom.assert_no_intermonomer_atom_overlap
 find_worst_intermonomer_overlap = _geom.find_worst_intermonomer_overlap
 separate_intermonomer_overlaps = _geom.separate_intermonomer_overlaps
 repack_monomers_clear_overlap = _geom.repack_monomers_clear_overlap
+repack_selected_monomers_clear_overlap = _geom.repack_selected_monomers_clear_overlap
 
 
 def test_find_worst_intermonomer_overlap_reports_closest_pair():
@@ -106,6 +107,61 @@ def test_repack_monomers_clear_overlap_entangled_pair():
         out, offsets, min_distance=1.5, context="repack"
     )
     assert dmin >= 1.5
+
+
+def test_repack_selected_monomers_preserves_fixed_monomer_coords():
+    pos = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [10.0, 0.0, 0.0],
+            [11.0, 0.0, 0.0],
+            [0.4, 0.0, 0.0],
+            [1.4, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    offsets = np.array([0, 2, 4, 6], dtype=int)
+    fixed_before = pos[2:4].copy()
+    out = repack_selected_monomers_clear_overlap(
+        pos,
+        offsets,
+        [0, 2],
+        min_distance=1.5,
+        margin=0.0,
+        seed=1,
+    )
+    assert np.allclose(out[2:4], fixed_before)
+    dmin = assert_no_intermonomer_atom_overlap(
+        out, offsets, min_distance=1.5, context="selective_repack"
+    )
+    assert dmin >= 1.5
+
+
+def test_push_apart_move_only_translates_selected_monomer():
+    pos = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.4, 0.0, 0.0],
+            [2.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    offsets = np.array([0, 2, 4], dtype=int)
+    _, violation = find_worst_intermonomer_overlap(pos, offsets)
+    assert violation is not None
+    fixed = pos[2:4].copy()
+    out = _geom.push_apart_overlapped_monomers(
+        pos,
+        offsets,
+        violation,
+        min_distance=1.5,
+        margin=0.0,
+        move_only=frozenset({1}),
+    )
+    assert np.allclose(out[0:2], pos[0:2])
+    assert not np.allclose(out[2:4], fixed)
 
 
 def test_repack_monomers_clear_overlap_pbc_dense():
