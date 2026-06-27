@@ -53,19 +53,22 @@ USE_NFS_BUILD=0
 DEBUG=0
 SYNC_PATCHES=1
 NO_DOMDEC=0
+SKIP_PACKMOL=0
 CHARMM_BUILD_TYPE="${CHARMM_BUILD_TYPE:-Release}"
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") [--clean] [--use-nfs-build] [--debug] [--no-sync-patches] [--no-domdec]
+Usage: $(basename "$0") [--clean] [--use-nfs-build] [--debug] [--no-sync-patches] [--no-domdec] [--skip-packmol]
 
   --clean             Remove the cmake build directory and reconfigure from scratch.
   --use-nfs-build     Build in setup/charmm/build/cmake (default: \$HOME/.cache/mmml-charmm-build/<platform>).
   --debug             RelWithDebInfo + -g -fbacktrace (readable gdb/addr2line on segfaults).
   --no-sync-patches   Skip copying setup/api/api_func.F90 into the CHARMM tree.
   --no-domdec         CMake -Ddomdec=OFF (no DOMDEC send_coord_to_recip path; MPI MLpot SD).
+  --skip-packmol      Skip rebuilding mmml/generate/packmol/packmol for this platform.
 
 Build profile (default): MPI + DOMDEC + COLFFT + KEY_LIBRARY (as_library=ON), domdec_gpu=OFF.
+Also builds Packmol (mmml/generate/packmol/packmol) unless --skip-packmol.
 MLpot workflows run with DOMDEC compiled in but disabled at runtime (domdec off, mpirun -np 1).
 Use --no-domdec when MLpot SD still segfaults in send_coord_to_recip after JAX warmup.
 
@@ -84,6 +87,7 @@ while [[ $# -gt 0 ]]; do
     --debug) DEBUG=1; CHARMM_BUILD_TYPE=RelWithDebInfo; shift ;;
     --no-sync-patches) SYNC_PATCHES=0; shift ;;
     --no-domdec) NO_DOMDEC=1; shift ;;
+    --skip-packmol) SKIP_PACKMOL=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -299,6 +303,11 @@ fi
 
 cp -f "$BUILT" "$LIB_OUT"
 echo "Installed $LIB_OUT (from $BUILT)"
+if [[ "$SKIP_PACKMOL" != 1 ]]; then
+  PACKMOL_ARGS=()
+  [[ "$CLEAN" == 1 ]] && PACKMOL_ARGS+=(--clean)
+  bash "$ROOT/scripts/rebuild_packmol.sh" "${PACKMOL_ARGS[@]}"
+fi
 if [[ "$DEBUG" == 1 ]]; then
   if command -v readelf >/dev/null 2>&1 && readelf -S "$LIB_OUT" 2>/dev/null | grep -q '\.debug'; then
     echo "Debug symbols: present in $LIB_OUT"
@@ -312,6 +321,7 @@ cat <<EOF
 Verify:
   uv run python -c "from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import mlpot_limits_message; print(mlpot_limits_message())"
 Expect: max_Nml=50000, max_Npr=3998000, source=api_func.F90 ($LIB_BASENAME is up to date)
+  uv run python -c "from mmml.interfaces.pycharmmInterface.packmol_placement import packmol_executable; print(packmol_executable())"
 If you see max_Nml=100: set CHARMM_HOME/CHARMM_LIB_DIR in CHARMMSETUP or export them, then rebuild again.
 
 Segfault diagnosis:
