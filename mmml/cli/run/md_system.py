@@ -1426,7 +1426,9 @@ def parse_md_system_args(argv: list[str] | None = None) -> argparse.Namespace:
         merged: dict[str, Any] = {}
         defaults_block = cfg.get("defaults")
         if isinstance(defaults_block, dict):
-            merged.update(defaults_block)
+            from mmml.cli.run.md_campaign import strip_campaign_metadata_keys
+
+            merged.update(strip_campaign_metadata_keys(defaults_block))
         for key, value in cfg.items():
             if key in {"defaults", "runs", "jobs", "include"}:
                 continue
