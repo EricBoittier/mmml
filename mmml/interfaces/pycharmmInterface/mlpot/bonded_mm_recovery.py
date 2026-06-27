@@ -1260,6 +1260,7 @@ def maybe_run_bonded_mm_mini_after_stage(
     restart_path: PathLike | None = None,
     topology_psf: PathLike | None = None,
     mini_registry: Any = None,
+    cleanup_registry: Any = None,
     snapshot_spec: Any = None,
     snapshot_paths: dict[str, Path] | None = None,
 ) -> bool:
@@ -1282,9 +1283,11 @@ def maybe_run_bonded_mm_mini_after_stage(
             )
         return False
 
+    artifact_registry = cleanup_registry or mini_registry
+
     def _record_bonded_snapshot() -> None:
         if (
-            mini_registry is None
+            artifact_registry is None
             or snapshot_spec is None
             or snapshot_paths is None
             or not bool(getattr(args, "save", True))
@@ -1298,7 +1301,7 @@ def maybe_run_bonded_mm_mini_after_stage(
             crd_path=snapshot_paths.get("crd"),
             title=snapshot_spec.label,
         )
-        mini_registry.record(
+        artifact_registry.record(
             snapshot_spec,
             written,
             grms_kcalmol_A=float(charmm_grms()),
