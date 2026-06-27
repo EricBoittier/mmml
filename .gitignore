@@ -248,3 +248,7 @@ node_modules/
 *.dcd
 *.pov-state
 *.pov-state.gz
+*.parquet
+
+# Large unreferenced model-experiment artifacts (not used by the package; host externally)
+mmml/models/EF/data/
