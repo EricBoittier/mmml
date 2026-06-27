@@ -9,6 +9,7 @@ Fast unit tests (mocked) run in the **build** CI job. Live PyCHARMM tests run in
 | `test_mpi_bootstrap.py` | build | no |
 | `test_rank0_trajectory_io.py` | build | no |
 | `test_tier3_domdec.py` | build | no |
+| `test_spatial_mpi_yaml_campaign.py` | build | no |
 | `test_mpi_live_energy.py` | charmm | yes |
 
 ## Related unit tests (outside this directory)

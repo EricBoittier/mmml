@@ -32,9 +32,12 @@ MMML_MPI_NP="${MMML_MPI_NP:-1}"
 MPIRUN="$REPO_ROOT/scripts/mmml-charmm-mpirun.sh"
 
 # --- Tier 2 (optional): spatial ML across ranks ---------------------------
-# export MMML_MPI_NP=4
+# export MMML_MPI_NP=2
 # export MMML_MLPOT_SPATIAL_MPI=1
-# SPATIAL_FLAGS=(--ml-spatial-mpi --ml-gpu-count 1 --ml-batch-size 128)
+# SPATIAL_FLAGS=(--ml-spatial-mpi --ml-gpu-count 1 --ml-batch-size 64)
+# Or use the example YAML:
+# "$MPIRUN" md-system --config mmml/cli/run/md_system.spatial_mpi.example.yaml \
+#   --checkpoint "${MMML_CKPT:-/path/to/DESdimers_params.json}"
 
 SPATIAL_FLAGS=()
 

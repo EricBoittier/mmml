@@ -207,7 +207,7 @@ Use `mmml.interfaces.pycharmmInterface.mpi_rank_io` helpers.
 | Tier 2 validate module | `spatial_mpi_validate.py` | `validate_tier2_spatial_mpi_env()` |
 | Hybrid callback under `mpirun` (mocked JAX) | `tests/functionality/mlpot/06_spatial_mpi_tier2_smoke.py` | same script on cluster |
 | CHARMM `energy.show()` with MLpot registered | — | `06_spatial_mpi_tier2_smoke.py --charmm-ener` |
-| Full `md-system --ml-spatial-mpi` mini | — | **not yet in CI** |
+| Full `md-system --ml-spatial-mpi` mini | `07_md_system_spatial_mpi_mini.py --dry-run` (CI) | `07_...py --run` on GPU node |
 | Live PhysNet GPU forward + allreduce | — | **not yet in CI** |
 
 **Honest status:** Phase 2 spatial decomposition logic is unit-tested and the MLpot callback path is integration-tested with **mocked JAX** and **mocked or env-based MPI**. We have **not** run end-to-end `md-system --ml-spatial-mpi` with live JAX GPU + MPI-linked CHARMM in this sandbox. Treat Tier 2 as **code-complete, cluster-validated by you**.
@@ -216,11 +216,15 @@ Pre-flight on a GPU node:
 
 ```bash
 mmml mpi-check --tier2 --strict
+python tests/functionality/mlpot/07_md_system_spatial_mpi_mini.py --dry-run
+
+MMML_MPI_NP=2 MMML_MLPOT_SPATIAL_MPI=1 ./scripts/mmml-charmm-mpirun.sh md-system \
+  --config mmml/cli/run/md_system.spatial_mpi.example.yaml \
+  --checkpoint /path/to/DESdimers_params.json
+
+# or callback-only smoke first:
 MMML_MPI_NP=2 MMML_MLPOT_SPATIAL_MPI=1 ./scripts/mmml-charmm-mpirun.sh python \
   tests/functionality/mlpot/06_spatial_mpi_tier2_smoke.py
-# optional second step with real CHARMM registration:
-MMML_MPI_NP=2 MMML_MLPOT_SPATIAL_MPI=1 ./scripts/mmml-charmm-mpirun.sh python \
-  tests/functionality/mlpot/06_spatial_mpi_tier2_smoke.py --charmm-ener --residue ACO --n-molecules 4
 ```
 
 ### Pass criteria (user-run)
@@ -293,8 +297,8 @@ DLPack (`__dlpack__` / `from_dlpack`) gives **zero-copy GPU array interchange** 
 - [x] Mocked MLpot callback integration tests (`test_mlpot_spatial_mpi_integration.py`)
 - [x] Tier 2 smoke script (`06_spatial_mpi_tier2_smoke.py`)
 - [x] CHARMM MPI test suite (`tests/charmm_mpi/`) in CI
-- [ ] Full `md-system --ml-spatial-mpi` mini on cluster (user validation)
-- [ ] Spatial MPI enabled in example YAML campaigns (follow-up)
+- [x] Example YAML `md_system.spatial_mpi.example.yaml` + dry-run smoke `07_md_system_spatial_mpi_mini.py`
+- [ ] Full `md-system --ml-spatial-mpi` mini on cluster (user `--run` validation)
 
 ### Phase 3 (blocked)
 

@@ -103,6 +103,8 @@ Campaign-only keys are ignored when building the backend command:
 
 Top-level CLI flags win over YAML only for selected campaign-wide runtime controls, including `ml_batch_size`, `ml_gpu_count`, `ml_max_active_dimers`, `skip_jit_warmup`, `handoff_pre_minimize`, and `ml_spatial_mpi`.
 
+Tier 2 spatial MPI example YAML: `mmml/cli/run/md_system.spatial_mpi.example.yaml` (set `ml_spatial_mpi: true`, `ml_gpu_count: 1`, launch with `MMML_MPI_NP>=2` and `mmml-charmm-mpirun.sh`). Dry-run: `python tests/functionality/mlpot/07_md_system_spatial_mpi_mini.py --dry-run`.
+
 ## Recommended campaign structure
 
 For condensed phase, keep the template staged and explicit:
