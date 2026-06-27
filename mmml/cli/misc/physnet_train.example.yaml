@@ -32,3 +32,13 @@ num_iterations: 2
 n_res: 2
 cutoff: 8.0
 use_energy_bias: true
+
+# Optional: scale reported energy/force MAE only (does not rewrite NPZ data).
+# Omit for identity (MAE in NPZ units). Use EV_TO_KCAL_MOL (~23.06) for kcal/mol.
+# conversion:
+#   energy: 23.060549
+#   forces: 23.060549
+#
+# Dipole arrays (D / Dxyz) must be e·Å before training. PySCF exports Debye;
+# convert with fix-and-split (--dipole-in debye --dipole-out e-angstrom) or
+# multiply by DEBYE_TO_EANGSTROM (0.208194). --conversion does not convert dipoles.

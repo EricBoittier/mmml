@@ -334,7 +334,17 @@ See mmml/cli/misc/physnet_train.example.yaml for a template.
         "--conversion",
         type=str,
         default=None,
-        help="JSON string or file path for conversion factors dictionary",
+        help=(
+            "Display-only MAE scaling for energy/forces (JSON string or .json/"
+            ".yaml path). Multiplies reported train/valid energy and force MAE "
+            "after each epoch; does NOT transform NPZ arrays or affect the loss. "
+            "Default when omitted: {\"energy\": 1, \"forces\": 1} (MAE in same "
+            "units as the NPZ). Example for kcal/mol display when data are eV: "
+            "'{\"energy\": 23.060549, \"forces\": 23.060549}'. Dipole units "
+            "are not handled here — convert D/Dxyz before training (e.g. "
+            "mmml fix-and-split --dipole-in debye --dipole-out e-angstrom). "
+            "See docs/UNITS_SUMMARY.md § physnet-train --conversion."
+        ),
     )
     parser.add_argument(
         "--init-params",

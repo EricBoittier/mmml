@@ -58,15 +58,23 @@ CLI flags (`mmml fix-and-split --help`, group “Unit conversion”):
 - `--force-in` / `--force-out` (`hartree-bohr`, `ev-angstrom`, `same`)
 - `--dipole-in` / `--dipole-out` (`debye`, `e-angstrom`, `same`)
 - `--grid-coords-in` / `--grid-coords-out` (`auto`, `bohr`, `angstrom`, `index`, `same`)
-- `--preserve-units`: no conversion on R, E, F, Dxyz, or grid coordinates
+- `--preserve-units`: no conversion on R, E, F, Dxyz/D, or grid coordinates (overrides all explicit `*-out` flags; use per-field `*-out same` for selective conversion)
 
 Typical defaults (when not using `--preserve-units`):
 - **R**: Angstrom
 - **E**: eV
 - **F**: eV/Å
-- **Dxyz**: e·Å (from Debye if input is PySCF)
+- **Dxyz** / **D**: e·Å (from Debye if input is PySCF)
 - **esp**: Hartree/e (unchanged)
 - **vdw_surface**: Angstrom (from Bohr/index if from PySCF)
+
+To keep Hartree/Hartree/Bohr energies and forces but convert dipoles only, omit `--preserve-units` and set other outputs to `same`:
+
+```bash
+mmml fix-and-split --efd data.npz -o ./splits \
+  --coords-out same --energy-out same --force-out same \
+  --dipole-in debye --dipole-out e-angstrom
+```
 
 ```mermaid
 flowchart TB
@@ -89,6 +97,39 @@ flowchart TB
 - **D**: e·Å (dipole target)
 - **esp**: Hartree/e
 - **vdw_surface**: Angstrom
+
+### physnet-train (`mmml physnet-train --conversion`)
+
+The `--conversion` flag is **not** a general unit converter for training data. It only scales the **printed** train/valid energy and force MAE at the end of each epoch. Loss, gradients, checkpoints, and stored objectives use the raw NPZ values unchanged.
+
+| Key | Applied to | Default (CLI) | Typical use |
+|-----|------------|---------------|-------------|
+| `energy` | reported energy MAE | `1` | multiply by `EV_TO_KCAL_MOL` (23.060549) to show kcal/mol when NPZ `E` is eV |
+| `forces` | reported force MAE | `1` | same as `energy` when NPZ `F` is eV/Å |
+| `dipole` | *(not used in training loop)* | — | reserved for ASE/calculator inference (`helper_mlp.py`); dipole MAE is always in NPZ units |
+
+**Format:** JSON object string or path to a `.json` / `.yaml` file (same parser as `--batch-args-dict`):
+
+```bash
+# Show energy/force MAE in kcal/mol while training on eV data
+mmml physnet-train --config train.yaml \
+  --conversion '{"energy": 23.060549, "forces": 23.060549}'
+```
+
+```yaml
+# train.yaml
+conversion:
+  energy: 23.060549
+  forces: 23.060549
+```
+
+**Dipole unit conversion (common pitfall):** If dipole MAE is ~0.3 and you expect e·Å magnitudes, the NPZ is likely still in **Debye** (PySCF default). The model trains on whatever is in `D` / `Dxyz`; `--conversion` will not fix this.
+
+| From | To | Factor | How |
+|------|-----|--------|-----|
+| Debye | e·Å | `DEBYE_TO_EANGSTROM = 0.208194` | `mmml fix-and-split --dipole-in debye --dipole-out e-angstrom` (recommended) |
+
+After conversion, a 0.3 D dipole becomes ~0.062 e·Å. Re-check `units_manifest.json` or NPZ `_mmml_units` before training.
 
 ## Coulomb / ESP Formulas
 
@@ -158,13 +199,13 @@ flowchart TB
 
 ## Pipeline stage table
 
-| Stage | Coordinates | Energy | Forces | Unit record |
-|-------|-------------|--------|--------|-------------|
-| PySCF export | Å or Bohr | Hartree | Hartree/Bohr | `_mmml_units` in NPZ |
-| `fix_and_split` default | Å | eV | eV/Å | `units_manifest.json` v2 + split metadata |
-| PhysNet / DCMNet training | Å | eV | eV/Å | `training_units` in checkpoint |
-| Hybrid inference | Å | eV | eV/Å | `evaluate.json` `"units"` block |
-| PyCHARMM MLpot C API only | Å | kcal/mol | kcal/mol/Å | converted at FFI boundary |
+| Stage | Coordinates | Energy | Forces | Dipole | Unit record |
+|-------|-------------|--------|--------|--------|-------------|
+| PySCF export | Å or Bohr | Hartree | Hartree/Bohr | Debye | `_mmml_units` in NPZ |
+| `fix_and_split` default | Å | eV | eV/Å | e·Å | `units_manifest.json` v2 + split metadata |
+| PhysNet / DCMNet training | Å | eV | eV/Å | e·Å | `training_units` in checkpoint |
+| Hybrid inference | Å | eV | eV/Å | e·Å (Debye at ASE API) | `evaluate.json` `"units"` block |
+| PyCHARMM MLpot C API only | Å | kcal/mol | kcal/mol/Å | — | converted at FFI boundary |
 
 ## Verification checklist
 

@@ -21,6 +21,11 @@ ATOM_ENERGIES_HARTREE = get_atomic_reference_array(
     unit="hartree",
 )
 
+# Embedded NPZ metadata (0-d or non-sample arrays) — skip in training loaders.
+NPZ_METADATA_KEYS = frozenset(
+    {"_mmml_units", "metadata", "units_manifest", "units_manifest_json"}
+)
+
 
 def prepare_multiple_datasets(
     key,
@@ -138,6 +143,10 @@ def prepare_multiple_datasets(
         dataN = np.concatenate([dataset["N"] for dataset in datasets])[not_failed]
         data.append(dataN.reshape(shape[0], 1))
         keys.append("N")
+    if "Q" in datasets[0].keys():
+        dataQ = np.concatenate([dataset["Q"] for dataset in datasets])[not_failed]
+        data.append(np.asarray(dataQ, dtype=np.float64).reshape(shape[0], 1))
+        keys.append("Q")
     if "mono" in datasets[0].keys():
         dataMono = np.concatenate([dataset["mono"] for dataset in datasets])[not_failed]
         data.append(dataMono.reshape(shape[0], natoms))
@@ -219,19 +228,16 @@ def prepare_multiple_datasets(
         keys.append("quadrupole")
 
     for k in datasets[0].keys():
-        if k not in keys:
-            print(
-                k,
-                len(datasets[0][k].shape),
-                datasets[0][k].shape,
-                datasets[0][k].shape[0],
-            )
-            _ = np.concatenate([dataset[k] for dataset in datasets])
-            # [not_failed]
-            # if
-            print(k, _.shape)
-            data.append(_)
-            keys.append(k)
+        if k in keys or k in NPZ_METADATA_KEYS:
+            continue
+        sample_arr = datasets[0][k]
+        if not isinstance(sample_arr, np.ndarray) or sample_arr.ndim == 0:
+            continue
+        _ = np.concatenate([dataset[k] for dataset in datasets])
+        if _.ndim == 0 or (_.ndim >= 1 and _.shape[0] != shape[0]):
+            continue
+        data.append(_)
+        keys.append(k)
 
     if esp_mask:
         if verbose:

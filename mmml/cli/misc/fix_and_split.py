@@ -1276,6 +1276,24 @@ def fix_and_split_data(
     """
     manifest_notes: List[str] = []
     if preserve_units:
+        overridden: List[str] = []
+        if coords_out != "same":
+            overridden.append(f"--coords-out {coords_out}")
+        if energy_out != "same":
+            overridden.append(f"--energy-out {energy_out}")
+        if force_out != "same":
+            overridden.append(f"--force-out {force_out}")
+        if dipole_out != "same":
+            overridden.append(f"--dipole-out {dipole_out}")
+        if grid_coords_out != "same":
+            overridden.append(f"--grid-coords-out {grid_coords_out}")
+        if overridden and verbose:
+            print(
+                "\n⚠️  --preserve-units overrides explicit unit outputs: "
+                + ", ".join(overridden)
+                + ". Drop --preserve-units and use *-out same per field instead "
+                "(e.g. --energy-out same --force-out same --dipole-out e-angstrom)."
+            )
         coords_out = "same"
         energy_out = "same"
         force_out = "same"
@@ -1499,18 +1517,21 @@ def fix_and_split_data(
             print("✓ Forces unchanged (per unit flags)")
 
     # =========================================================================
-    # Dipoles
+    # Dipoles (Dxyz and/or PhysNet-style D)
     # =========================================================================
     D_out: Optional[np.ndarray] = None
-    if "Dxyz" in efd_data:
-        D_out = convert_dipole_array(efd_data["Dxyz"], dipole_in, dipole_out)
+    _dipole_src_key = "Dxyz" if "Dxyz" in efd_data else ("D" if "D" in efd_data else None)
+    if _dipole_src_key is not None:
+        D_converted = convert_dipole_array(efd_data[_dipole_src_key], dipole_in, dipole_out)
+        if _dipole_src_key == "Dxyz":
+            D_out = D_converted
         if verbose:
-            d_norms_before = np.linalg.norm(efd_data["Dxyz"].reshape(-1, 3), axis=1)
-            d_norms_after = np.linalg.norm(D_out.reshape(-1, 3), axis=1)
+            d_norms_before = np.linalg.norm(efd_data[_dipole_src_key].reshape(-1, 3), axis=1)
+            d_norms_after = np.linalg.norm(D_converted.reshape(-1, 3), axis=1)
             print(f"\n{'#'*70}")
             print(
-                f"# Step 4b: Dipoles (Dxyz): {_unit_label_dipole(dipole_in)} → "
-                f"{_unit_label_dipole(dipole_out)}"
+                f"# Step 4b: Dipoles ({_dipole_src_key}): "
+                f"{_unit_label_dipole(dipole_in)} → {_unit_label_dipole(dipole_out)}"
             )
             print(f"{'#'*70}")
             print(f"  Input:  mean |D|={d_norms_before.mean():.4f}, max={d_norms_before.max():.4f}")
@@ -1833,8 +1854,8 @@ def fix_and_split_data(
         energy_out=effective_energy_out,
         force_in=force_in,
         force_out=effective_force_out,
-        dipole_in=dipole_in if "Dxyz" in efd_data else None,
-        dipole_out=effective_dipole_out if "Dxyz" in efd_data else None,
+        dipole_in=dipole_in if ("Dxyz" in efd_data or "D" in efd_data) else None,
+        dipole_out=effective_dipole_out if ("Dxyz" in efd_data or "D" in efd_data) else None,
         grid_coords_in=grid_coords_in if has_grid else None,
         grid_coords_out=effective_grid_coords_out if has_grid else None,
         esp_values="hartree/e",
@@ -2291,7 +2312,11 @@ Examples:
     units_group.add_argument(
         "--preserve-units",
         action="store_true",
-        help="Do not convert R, E, F, Dxyz, or grid coordinates (sets all *-out to same)",
+        help=(
+            "Force all *-out flags to same (no R/E/F/D/grid conversions). "
+            "Overrides explicit --dipole-out, --energy-out, etc. "
+            "For selective conversion, omit this flag and set *-out same per field."
+        ),
     )
     
     parser.add_argument(

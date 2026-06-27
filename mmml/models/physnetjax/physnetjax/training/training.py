@@ -175,7 +175,8 @@ def train_model(
     restart : bool | str, optional
         Whether to restart from checkpoint, by default False
     conversion : dict, optional
-        Unit conversion factors, by default CONVERSION
+        Display-only multipliers for reported energy/force MAE (not applied to
+        NPZ data or loss). Keys ``energy`` and ``forces``; default identity.
     print_freq : int, optional
         Frequency of progress printing, by default 1
     name : str, optional
