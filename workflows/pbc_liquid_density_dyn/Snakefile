@@ -35,7 +35,48 @@ from campaign_lib import (  # noqa: E402
 _MATRIX = list(iter_matrix_cells(dict(config)))
 _CFG = dict(config)
 _CELL_TAGS = [cell_run_tag(c, _CFG) for c in _MATRIX]
-_TIER_ENABLED = slurm_tier_enabled(_CFG)
+_SCHEDULER = str(config.get("scheduler", "gpu")).strip().lower()
+_CPU_SCHEDULER = _SCHEDULER == "cpu"
+_TIER_ENABLED = slurm_tier_enabled(_CFG) and not _CPU_SCHEDULER
+
+
+def _sched_gpu(wildcards) -> int:
+    return 0 if _CPU_SCHEDULER else 1
+
+
+def _sched_gpu_fast(wildcards) -> int:
+    if _CPU_SCHEDULER:
+        return 0
+    if not _TIER_ENABLED:
+        return 1
+    return 0 if _burst_tier(wildcards) == "slow" else 1
+
+
+def _sched_gpu_slow(wildcards) -> int:
+    if _CPU_SCHEDULER:
+        return 0
+    if not _TIER_ENABLED:
+        return 0
+    return 1 if _burst_tier(wildcards) == "slow" else 0
+
+
+def _slurm_extra(wildcards) -> str:
+    mail = str(config.get("slurm_mail_user", ""))
+    parts = []
+    if mail:
+        parts.append(f"--mail-user={mail} --mail-type=END,FAIL")
+    if _CPU_SCHEDULER:
+        nodes = [str(x).strip() for x in (config.get("slurm_cpu_nodes") or []) if str(x).strip()]
+        if nodes:
+            parts.append(f"--nodelist={','.join(nodes)}")
+        return " ".join(parts)
+    if _TIER_ENABLED:
+        nodelist = slurm_nodelist_for_tier(_CFG, _burst_tier(wildcards))
+    else:
+        nodelist = slurm_nodelist_for_tier(_CFG, "fast")
+    if nodelist:
+        parts.append(f"--nodelist={nodelist}")
+    return " ".join(parts)
 
 
 def _artifact_dir(wildcards) -> str:
@@ -45,32 +86,6 @@ def _artifact_dir(wildcards) -> str:
 def _burst_tier(wildcards) -> str:
     cell = cell_from_tag(_CFG, wildcards.tag)
     return cell_slurm_tier(cell, _CFG)
-
-
-def _sched_gpu_fast(wildcards) -> int:
-    if not _TIER_ENABLED:
-        return 1
-    return 0 if _burst_tier(wildcards) == "slow" else 1
-
-
-def _sched_gpu_slow(wildcards) -> int:
-    if not _TIER_ENABLED:
-        return 0
-    return 1 if _burst_tier(wildcards) == "slow" else 0
-
-
-def _slurm_extra(wildcards) -> str:
-    mail = str(config.get("slurm_mail_user", ""))
-    if _TIER_ENABLED:
-        nodelist = slurm_nodelist_for_tier(_CFG, _burst_tier(wildcards))
-    else:
-        nodelist = slurm_nodelist_for_tier(_CFG, "fast")
-    parts = []
-    if mail:
-        parts.append(f"--mail-user={mail} --mail-type=END,FAIL")
-    if nodelist:
-        parts.append(f"--nodelist={nodelist}")
-    return " ".join(parts)
 
 
 rule all:
@@ -91,7 +106,7 @@ rule run_liquid_density_dyn:
         out_dir=_artifact_dir,
         workflow_dir=workflow.basedir,
     resources:
-        gpu=1,
+        gpu=_sched_gpu,
         gpu_fast=_sched_gpu_fast,
         gpu_slow=_sched_gpu_slow,
         charmm_slot=1,

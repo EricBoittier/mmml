@@ -4,6 +4,11 @@ WORKFLOW_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_ROOT="$(cd "$WORKFLOW_ROOT/../.." && pwd)"
 cd "$REPO_ROOT"
 
+CFG="${MMML_WORKFLOW_CONFIG:-config.yaml}"
+if [[ "${1:-}" == "--config" ]]; then
+  CFG="${2:?--config requires path}"
+fi
+
 # shellcheck source=../../../scripts/resolve_mmml_env.sh
 source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
 mmml_resolve_env "$REPO_ROOT"
@@ -22,17 +27,22 @@ from campaign_lib import (
     matrix_box_sizes,
     matrix_job_count,
     matrix_temperatures,
+    mlpot_device_name,
     resolve_checkpoint,
+    scheduler_mode,
     slurm_launch_jobs,
     slurm_resources_cli,
     total_pycharmm_equi_ps,
     total_pycharmm_prod_ps,
 )
 from cleanup_strategy import resolve_cleanup_strategy
-cfg = load_config(Path('${WORKFLOW_ROOT}/config.yaml'))
+cfg_path = Path('${WORKFLOW_ROOT}') / '${CFG}'
+cfg = load_config(cfg_path)
 ckpt = resolve_checkpoint(str(cfg['checkpoint']))
 strategy = resolve_cleanup_strategy(cfg)
 print('Preflight OK — pbc_liquid_density_dyn')
+print('config:', cfg_path)
+print('scheduler:', scheduler_mode(cfg), 'mlpot_device:', mlpot_device_name(cfg))
 print('checkpoint:', ckpt)
 print('cleanup_strategy:', strategy.name)
 print('matrix jobs:', matrix_job_count(cfg))
@@ -47,6 +57,7 @@ print('pycharmm equi total ps:', total_pycharmm_equi_ps(cfg))
 print('pycharmm prod total ps:', total_pycharmm_prod_ps(cfg))
 print('warmup_mlpot_jax:', cfg.get('warmup_mlpot_jax', True))
 print('mpirun_wrapper:', cfg.get('mpirun_wrapper'))
+print('slurm partition:', cfg.get('slurm_partition'))
 print('slurm launch -j:', slurm_launch_jobs(cfg))
 print('slurm resources:', slurm_resources_cli(cfg))
 "

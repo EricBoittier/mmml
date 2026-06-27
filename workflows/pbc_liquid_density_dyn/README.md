@@ -86,6 +86,40 @@ nohup bash scripts/snakemake_slurm.sh > snakemake_slurm.log 2>&1 &
 bash scripts/status.sh
 ```
 
+### pc-bach CPU cluster (`long` partition)
+
+Module stack (example):
+
+```bash
+module load gcc/gcc-12.2.0-cmake-3.25.1-openmpi-4.1.4
+module load charmm/c47a2-gcc-12.2.0-openmpi-4.1.4
+export MMML_CKPT=/path/to/DESdimers_params.json
+export CHARMM_HOME=... CHARMM_LIB_DIR=...
+```
+
+Uses `profiles/slurm-cpu` (no `--gres=gpu`) and `config.pc-bach.cpu.yaml` (`scheduler: cpu`, `MMML_MLPOT_DEVICE=cpu`):
+
+```bash
+cd workflows/pbc_liquid_density_dyn
+bash scripts/preflight.sh --config config.pc-bach.cpu.yaml
+bash scripts/snakemake_slurm_cpu.sh
+
+# Or explicitly:
+MMML_SNAKEMAKE_PROFILE=profiles/slurm-cpu \
+MMML_WORKFLOW_CONFIG=config.pc-bach.cpu.yaml \
+  bash scripts/snakemake_slurm.sh
+```
+
+Single cell on `long`:
+
+```bash
+MMML_WORKFLOW_CONFIG=config.pc-bach.cpu.yaml \
+  srun --partition=long --cpus-per-task=8 --mem=32G \
+  bash scripts/job_shell.sh dcm_10_t300_l28
+```
+
+Default concurrency: 17 jobs (`slurm_max_concurrent` = idle nodes on `long`). No `slurm_cpu_nodes` nodelist — Slurm picks any node in the partition.
+
 ## Resume
 
 Re-run Snakemake or `job_shell.sh TAG` — `mmml md-system --run-all --resume` skips completed legs. Prep ladder state lives under `prep_ladder/`; campaign summary under `campaign_summary.json`.

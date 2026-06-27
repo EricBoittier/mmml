@@ -499,7 +499,22 @@ def slurm_tier_gpu_pool(cfg: dict[str, Any], tier: str) -> int:
     return max(1, len(slurm_gpu_nodes_slow(cfg)) * 2)
 
 
+def scheduler_mode(cfg: dict[str, Any]) -> str:
+    """``gpu`` (default) or ``cpu`` (Slurm CPU partition, no GPU resources)."""
+    return str(cfg.get("scheduler", "gpu")).strip().lower()
+
+
+def mlpot_device_name(cfg: dict[str, Any]) -> str:
+    dev = str(cfg.get("mlpot_device", "") or "").strip().lower()
+    if dev in ("cpu", "gpu"):
+        return dev
+    return "cpu" if scheduler_mode(cfg) == "cpu" else "gpu"
+
+
 def slurm_tier_resource_pools(cfg: dict[str, Any]) -> dict[str, int]:
+    if scheduler_mode(cfg) == "cpu":
+        n = slurm_max_concurrent(cfg)
+        return {"charmm_slot": n}
     if not slurm_tier_enabled(cfg):
         n = slurm_max_concurrent(cfg)
         return {"gpu_fast": n, "gpu_slow": 0, "charmm_slot": n}
@@ -510,6 +525,8 @@ def slurm_tier_resource_pools(cfg: dict[str, Any]) -> dict[str, int]:
 
 def slurm_launch_jobs(cfg: dict[str, Any]) -> int:
     pools = slurm_tier_resource_pools(cfg)
+    if scheduler_mode(cfg) == "cpu":
+        return int(pools["charmm_slot"])
     return int(pools["gpu_fast"]) + int(pools["gpu_slow"])
 
 

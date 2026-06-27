@@ -100,3 +100,29 @@ def test_run_tag_includes_tl_when_sweep(cfg: dict) -> None:
     cfg2 = {**cfg, "temperatures": [280.0, 300.0]}
     tags = {cell_run_tag(c, cfg2) for c in iter_matrix_cells(cfg2)}
     assert any("_t280_" in t for t in tags)
+
+
+def test_cpu_scheduler_resources() -> None:
+    cfg = {
+        "scheduler": "cpu",
+        "slurm_max_concurrent": 12,
+        "bulk_density_fractions": [0.9, 1.0],
+        "solvents": ["DCM", "ACO"],
+        "temperatures": [300.0],
+        "box_sizes": [28.0, 32.0],
+    }
+    from campaign_lib import matrix_job_count, slurm_launch_jobs, slurm_resources_cli
+
+    cap = matrix_job_count(cfg)
+    assert cap >= 4
+    expected = min(12, cap)
+    assert slurm_launch_jobs(cfg) == expected
+    assert slurm_resources_cli(cfg) == f"charmm_slot={expected}"
+
+
+def test_mlpot_device_cpu_when_scheduler_cpu(cfg: dict) -> None:
+    from campaign_lib import mlpot_device_name, scheduler_mode
+
+    cpu_cfg = {**cfg, "scheduler": "cpu"}
+    assert scheduler_mode(cpu_cfg) == "cpu"
+    assert mlpot_device_name(cpu_cfg) == "cpu"

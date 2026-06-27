@@ -1,0 +1,20 @@
+# Snakemake Slurm profile for CPU-only clusters (e.g. pc-bach ``long`` partition).
+# Use with: MMML_SNAKEMAKE_PROFILE=profiles/slurm-cpu bash scripts/snakemake_slurm.sh
+#           or: bash scripts/snakemake_slurm_cpu.sh
+executor: slurm
+jobs: 17
+latency-wait: 120
+retries: 1
+envvars:
+  - MMML_CKPT
+  - MMML_MLPOT_DEVICE
+  - JAX_PLATFORMS
+  - MMML_WORKFLOW_CONFIG
+default-resources:
+  - charmm_slot=1
+  - runtime=4320
+  - nodes=1
+  - slurm_partition=long
+  - mem_mb_per_cpu=4000
+  - cpus_per_task=8
+  - tasks=1
