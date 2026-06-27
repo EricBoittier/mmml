@@ -55,6 +55,11 @@ def _mpi_info() -> tuple[int, int]:
     return mpi_rank_size()
 
 
+def _log(msg: str) -> None:
+    rank, size = _mpi_info()
+    print(f"[tier2-smoke rank {rank}/{size}] {msg}", flush=True)
+
+
 def _tier2_validate() -> int:
     from mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_validate import (
         render_tier2_report,
@@ -70,8 +75,11 @@ def _tier2_validate() -> int:
 
 def _hybrid_callback_smoke(box_side: float) -> int:
     """Exercise DecomposedMlpotCalculator spatial path without CHARMM ENER."""
+    _log("hybrid callback: start")
+    _log("hybrid callback: importing jax.numpy")
     import jax.numpy as jnp
 
+    _log("hybrid callback: importing DecomposedMlpotCalculator (may take 1-2 min first run)")
     from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
     from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotCalculator
     from mmml.interfaces.pycharmmInterface.mlpot.medium_pbc_validation import (
@@ -80,6 +88,7 @@ def _hybrid_callback_smoke(box_side: float) -> int:
     from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     rank, size = mpi_rank_size()
+    _log("hybrid callback: building lattice cluster")
     n_monomers = 8
     atoms_per = 10
     pos = lattice_positions_cubic_pbc(
@@ -93,6 +102,7 @@ def _hybrid_callback_smoke(box_side: float) -> int:
         n_monomers,
         z,
         cell=box_side,
+        do_mm=False,
         spatial_mpi=True,
     )
     n = len(z)
@@ -119,6 +129,7 @@ def _hybrid_callback_smoke(box_side: float) -> int:
     x, y, zc = pos[:, 0], pos[:, 1], pos[:, 2]
     dx = dy = dz = np.zeros(n, dtype=np.float64)
 
+    _log("hybrid callback: running calculate_charmm (mocked ML forward)")
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_mlpot_mic_box_side_A",
         return_value=(box_side, "smoke"),
@@ -128,11 +139,16 @@ def _hybrid_callback_smoke(box_side: float) -> int:
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ), mock.patch(
+        "mmml.utils.jax_gpu_warmup.sync_jax_gpu_before_charmm",
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.as_ml_array",
         side_effect=lambda arr, dtype=None: jnp.asarray(arr),
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.resolve_ml_compute_dtype",
         return_value=jnp.float32,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.jax.device_get",
+        side_effect=lambda x: np.asarray(x),
     ):
         energy = calc.calculate_charmm(
             n,
@@ -156,6 +172,7 @@ def _hybrid_callback_smoke(box_side: float) -> int:
             None,
         )
 
+    _log(f"hybrid callback: energy={float(energy):.6f}")
     if size > 1:
         expected_e = sum(float(r + 10) for r in range(size))
         if abs(float(energy) - expected_e) > 1e-6:
@@ -244,6 +261,9 @@ def main() -> int:
         print(f"FAIL: {msg}", file=sys.stderr)
         print(rebuild_mpi4py_shell_hint(), file=sys.stderr)
         return 1
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import ensure_charmm_mpi_initialized
+
+    ensure_charmm_mpi_initialized()
     args = _parse_args()
     rank, size = _mpi_info()
     if rank == 0:
