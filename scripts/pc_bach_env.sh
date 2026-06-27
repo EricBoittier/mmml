@@ -18,6 +18,11 @@ export OPENMPI_ROOT="${OPENMPI_ROOT:-/opt/gcc-12.2.0/openmpi-4.1.4/build}"
 export PATH="$OPENMPI_ROOT/bin:${PATH}"
 export LD_LIBRARY_PATH="$OPENMPI_ROOT/lib:${LD_LIBRARY_PATH:-}"
 
+# gcc/openmpi modules on pc-bach may export MPI_CXX=.../mpixx (typo); use real wrappers.
+export MPI_CC="${OPENMPI_ROOT}/bin/mpicc"
+export MPI_CXX="${OPENMPI_ROOT}/bin/mpicxx"
+export MPI_FC="${OPENMPI_ROOT}/bin/mpifort"
+
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 export MMML_MLPOT_DEVICE="${MMML_MLPOT_DEVICE:-cpu}"
 export JAX_PLATFORMS="${JAX_PLATFORMS:-cpu}"
