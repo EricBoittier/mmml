@@ -33,6 +33,32 @@ def test_resolve_pre_mlpot_explicit_override():
     assert resolve_pre_mlpot_overlap_min_distance(args) == 0.8
 
 
+def test_resolve_mc_min_uses_prep_floor_under_liquid_prep():
+    from mmml.utils.intermonomer_geometry import (
+        DEFAULT_PRE_MLPOT_OVERLAP_MIN_A,
+        resolve_mc_min_intermonomer_distance_A,
+    )
+
+    args = argparse.Namespace(
+        liquid_prep=True,
+        density_prep_mode=None,
+        pre_mlpot_overlap_min_distance=None,
+        min_intermonomer_atom_distance=0.1,
+    )
+    assert resolve_mc_min_intermonomer_distance_A(args) == DEFAULT_PRE_MLPOT_OVERLAP_MIN_A
+
+
+def test_resolve_mc_min_keeps_packmol_floor_without_liquid_prep():
+    from mmml.utils.intermonomer_geometry import resolve_mc_min_intermonomer_distance_A
+
+    args = argparse.Namespace(
+        liquid_prep=False,
+        density_prep_mode=None,
+        min_intermonomer_atom_distance=0.1,
+    )
+    assert resolve_mc_min_intermonomer_distance_A(args) == pytest.approx(0.1)
+
+
 def test_contact_summary_marks_tight_prep_contact_for_dcm_like_pair():
     from mmml.utils.intermonomer_geometry import IntermonomerContactSummary
 

@@ -489,10 +489,10 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
     steps_applied.append("write_model_crd")
 
     prep_floor = resolve_pre_mlpot_overlap_min_distance(args)
-    worst = gate_summary.get("worst_intermonomer_A") if gate_summary else None
+    worst: float | None = None
     passed = True
     cert_message = ""
-    if worst is None and atoms_per_list is not None:
+    if atoms_per_list is not None:
         worst, passed, cert_message = certify_intermonomer_geometry(
             r,
             list(atoms_per_list),
@@ -502,8 +502,9 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
         )
     elif gate_summary is not None:
         passed = not bool(gate_summary.get("aborted"))
-        worst = gate_summary.get("worst_intermonomer_A")
-        cert_message = gate_summary.get("reason", "")
+        worst_raw = gate_summary.get("worst_intermonomer_A")
+        worst = float(worst_raw) if worst_raw is not None else None
+        cert_message = str(gate_summary.get("reason", ""))
 
     density = estimate_density_g_cm3(
         composition=comp,

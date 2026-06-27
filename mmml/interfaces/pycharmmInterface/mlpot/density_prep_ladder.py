@@ -472,7 +472,7 @@ def run_density_prep_ladder(
         )
 
     max_rounds = max(1, int(getattr(args, "density_prep_ladder_max_rounds", 3) or 3))
-    min_overlap = float(getattr(args, "min_intermonomer_atom_distance", 0.1) or 0.1)
+    min_overlap = resolve_pre_mlpot_overlap_min_distance(args)
     spacing = getattr(args, "spacing", None)
     seed = getattr(args, "seed", None)
     lattice_steps = int(getattr(args, "density_prep_lattice_abnr_steps", 0) or 0)
