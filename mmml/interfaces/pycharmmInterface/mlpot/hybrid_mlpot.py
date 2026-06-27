@@ -448,6 +448,31 @@ class DecomposedMlpotCalculator:
         return e_kcal
 
 
+class _DeferredDecomposedMlpotCalculator:
+    """Defer JAX factory build until the first CHARMM ``ENER`` (after MLpot registration)."""
+
+    def __init__(
+        self,
+        model: "DecomposedMlpotModel",
+        *,
+        ml_atomic_numbers: np.ndarray | None = None,
+    ) -> None:
+        self._model = model
+        self._ml_atomic_numbers = ml_atomic_numbers
+        self._real: DecomposedMlpotCalculator | None = None
+
+    def _ensure_real(self) -> DecomposedMlpotCalculator:
+        if self._real is not None:
+            return self._real
+        self._real = self._model._build_registered_calculator(
+            ml_atomic_numbers=self._ml_atomic_numbers,
+        )
+        return self._real
+
+    def calculate_charmm(self, *args, **kwargs) -> float:
+        return self._ensure_real().calculate_charmm(*args, **kwargs)
+
+
 class DecomposedMlpotModel:
     def __init__(
         self,
