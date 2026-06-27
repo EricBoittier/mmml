@@ -711,6 +711,7 @@ def _overlap_for_stage(
     args: argparse.Namespace | None = None,
     topology_psf: Path | None = None,
     mini_registry: MinimizeArtifactRegistry | None = None,
+    cleanup_registry: MinimizeArtifactRegistry | None = None,
 ) -> DynamicsOverlapConfig | None:
     """Return overlap guard config for dynamics stages (including heat).
 
@@ -719,12 +720,13 @@ def _overlap_for_stage(
     velocity-scaling ramps (``ihtfrq``) do not survive overlap restart chunks.
     """
     if ctx is not None and args is not None:
+        rescue_registry = cleanup_registry or mini_registry
         return augment_overlap_config_for_rescue(
             overlap_cfg,
             ctx=ctx,
             args=args,
             topology_psf=topology_psf,
-            artifact_registry=mini_registry,
+            artifact_registry=rescue_registry,
         )
     return overlap_cfg
 
@@ -1306,6 +1308,15 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     mini_registry: MinimizeArtifactRegistry | None = (
         MinimizeArtifactRegistry(out_dir, tag) if save_artifacts else None
     )
+    from mmml.interfaces.pycharmmInterface.mlpot.recovery_progress import (
+        resolve_cleanup_dir,
+        resolve_prep_ladder_dir,
+    )
+
+    cleanup_dir = resolve_cleanup_dir(args)
+    cleanup_registry: MinimizeArtifactRegistry | None = None
+    if save_artifacts and cleanup_dir is not None:
+        cleanup_registry = MinimizeArtifactRegistry(cleanup_dir, tag)
     legacy_mlpot = legacy_mlpot_mini_paths(out_dir, tag) if save_artifacts else None
 
     charmm_pbc = resolve_charmm_use_pbc(args)
@@ -1916,6 +1927,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             args=args,
             topology_psf=recovery_topology_psf,
             mini_registry=mini_registry,
+            cleanup_registry=cleanup_registry,
         )
         overlap_rescued = False
         if stage_overlap_pre is not None and (
@@ -2438,6 +2450,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                             args=args,
                             topology_psf=recovery_topology_psf,
                             mini_registry=mini_registry,
+                            cleanup_registry=cleanup_registry,
                         ),
                         stage="heat",
                         nstep=nstep,
@@ -2490,6 +2503,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                             restart_path=seg_io.restart_write,
                             topology_psf=recovery_topology_psf,
                             mini_registry=mini_registry,
+                            cleanup_registry=cleanup_registry,
                             snapshot_spec=(
                                 BONDED_MM_AFTER_HEAT
                                 if seg_i == n_heat_segments - 1
@@ -2628,6 +2642,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         args=args,
                         topology_psf=recovery_topology_psf,
                         mini_registry=mini_registry,
+                        cleanup_registry=cleanup_registry,
                     )
                     overlap_prior_restart = _overlap_extent_prior_restart(paths, prev_restart)
                     stage_overlap = attach_prior_segment_restart(
@@ -2801,6 +2816,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         args=args,
                         topology_psf=recovery_topology_psf,
                         mini_registry=mini_registry,
+                        cleanup_registry=cleanup_registry,
                     )
                     overlap_prior_restart = _overlap_extent_prior_restart(paths, prev_restart)
                     stage_overlap = attach_prior_segment_restart(
@@ -3081,6 +3097,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     args=args,
                     topology_psf=recovery_topology_psf,
                     mini_registry=mini_registry,
+                    cleanup_registry=cleanup_registry,
                 ),
                 stage=stage,
                 nstep=nstep,
@@ -3212,6 +3229,11 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     if forces_path is not None and not args.quiet:
         print(f"Force checkpoint saved: {forces_path}", flush=True)
     print(f"\nStaged workflow OK ({','.join(stages)}) -> {out_dir}")
+    if cleanup_dir is not None and cleanup_dir.is_dir():
+        print(f"  cleanup checkpoints: {cleanup_dir}/")
+    prep_ladder_dir = resolve_prep_ladder_dir(args)
+    if prep_ladder_dir is not None and prep_ladder_dir.is_dir():
+        print(f"  prep ladder checkpoints: {prep_ladder_dir}/")
     trajectory_outputs = _trajectory_outputs(paths["mini_charmm_dcd"])
     trajectory_outputs.extend(_trajectory_outputs(paths["mini_dcd"]))
     if last_traj is not None and last_traj not in trajectory_outputs:

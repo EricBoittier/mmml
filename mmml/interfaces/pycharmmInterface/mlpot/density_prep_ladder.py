@@ -490,6 +490,13 @@ def run_density_prep_ladder(
 
     journal = PrepLadderJournal(quiet=quiet)
     journal.begin(initial_grms=grms, max_grms=float(max_grms), max_rounds=max_rounds)
+    from mmml.interfaces.pycharmmInterface.mlpot.recovery_progress import (
+        RecoveryProgressStore,
+    )
+
+    progress = RecoveryProgressStore.for_prep_ladder(args, quiet=quiet)
+    if progress is not None:
+        progress.record_step("initial", grms_kcalmol_A=grms, box_side_A=box_side)
 
     def _step_metrics(step_grms: float) -> PrepMetrics:
         diag = measure_hybrid_charmm_grms(mlpot_ctx)
@@ -503,6 +510,17 @@ def run_density_prep_ladder(
     def _refresh_after_step(step_label: str) -> float:
         step_grms = refresh_mlpot_energy_and_grms(mlpot_ctx, context="")
         journal.record_step(step_label, _step_metrics(step_grms))
+        if progress is not None:
+            from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+                get_charmm_positions_array,
+            )
+
+            progress.record_step(
+                step_label,
+                grms_kcalmol_A=float(step_grms),
+                box_side_A=box_side,
+                positions=get_charmm_positions_array(),
+            )
         return float(step_grms)
 
     for round_idx in range(max_rounds):
@@ -722,6 +740,8 @@ def run_density_prep_ladder(
     result.final_grms = float(grms)
     result.reason = "grms_ok" if grms <= max_grms else "grms_still_high"
     journal.finish(float(grms), reason=result.reason)
+    if progress is not None:
+        progress.finish(result.to_dict())
     return float(grms), box_side, result
 
 
@@ -822,6 +842,27 @@ def run_pre_mlpot_geometry_gate(
     )
     pos = np.asarray(positions, dtype=np.float64)
     side = box_side
+    from mmml.interfaces.pycharmmInterface.mlpot.recovery_progress import (
+        RecoveryProgressStore,
+    )
+
+    progress = RecoveryProgressStore.for_prep_ladder(
+        args,
+        title="Pre-MLpot geometry gate",
+        quiet=quiet,
+    )
+
+    def _record_gate_step(label: str, *, note: str = "") -> None:
+        if progress is None:
+            return
+        from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+
+        progress.record_step(
+            label,
+            box_side_A=side,
+            positions=get_charmm_positions_array(),
+            note=note,
+        )
 
     try:
         worst = assert_pre_mlpot_intermonomer_geometry(
@@ -840,6 +881,7 @@ def run_pre_mlpot_geometry_gate(
             f"{exc}\nPre-MLpot geometry gate: rebuild the box (Packmol/MC) or "
             f"increase spacing before MLpot registration."
         ) from exc
+    _record_gate_step("initial", note=f"worst inter-monomer {result.worst_intermonomer_A:.3f} Å")
 
     step_label = "pre_mlpot:monomer_repack"
     try:
@@ -861,6 +903,7 @@ def run_pre_mlpot_geometry_gate(
         )
         pos = new_pos
         result.steps_applied.append(step_label)
+        _record_gate_step(step_label)
     except Exception as exc:
         if not quiet:
             print(f"Pre-MLpot gate: skip {step_label} ({exc})", flush=True)
@@ -902,6 +945,7 @@ def run_pre_mlpot_geometry_gate(
                 )
                 pos = new_pos
                 result.steps_applied.append(step_label)
+                _record_gate_step(step_label)
             except Exception as exc:
                 if not quiet:
                     print(f"Pre-MLpot gate: skip {step_label} ({exc})", flush=True)
@@ -925,6 +969,7 @@ def run_pre_mlpot_geometry_gate(
                 if new_side is not None:
                     side = float(new_side)
                 result.steps_applied.append(step_label)
+                _record_gate_step(step_label)
             except Exception as exc:
                 if not quiet:
                     print(f"Pre-MLpot gate: skip {step_label} ({exc})", flush=True)
@@ -971,6 +1016,14 @@ def run_pre_mlpot_geometry_gate(
             f"{summary.format_log_line()}",
             flush=True,
         )
+        if progress is not None:
+            progress.finish(
+                {
+                    **result.to_dict(),
+                    "worst_intermonomer_A": float(result.worst_intermonomer_A or 0.0),
+                    "contact_summary": summary.format_log_line(),
+                }
+            )
     return pos, side, result
 
 
@@ -1007,6 +1060,15 @@ def run_geometry_packing_recovery(
     spacing = getattr(args, "spacing", None)
     seed = getattr(args, "seed", None)
     journal = PrepLadderJournal(title=context_prefix, quiet=quiet)
+    from mmml.interfaces.pycharmmInterface.mlpot.recovery_progress import (
+        RecoveryProgressStore,
+    )
+
+    progress = RecoveryProgressStore.for_cleanup(
+        args,
+        title=str(context_prefix),
+        quiet=quiet,
+    )
 
     def _metrics(step_grms: float) -> PrepMetrics:
         diag = measure_hybrid_charmm_grms(mlpot_ctx)
@@ -1022,6 +1084,23 @@ def run_geometry_packing_recovery(
     initial_grms = float(grms)
     journal.begin(initial_grms=grms, max_grms=float(grms_limit or grms), max_rounds=1)
     journal.record_step("initial", _metrics(grms))
+    if progress is not None:
+        progress.record_step(
+            "initial",
+            grms_kcalmol_A=float(grms),
+            box_side_A=box_side,
+            positions=pos_initial,
+        )
+
+    def _record_cleanup_step(label: str, step_grms: float) -> None:
+        if progress is None:
+            return
+        progress.record_step(
+            label,
+            grms_kcalmol_A=float(step_grms),
+            box_side_A=box_side,
+            positions=get_charmm_positions_array(),
+        )
 
     step_label = f"{context_prefix}:monomer_repack"
     try:
@@ -1063,6 +1142,7 @@ def run_geometry_packing_recovery(
         else:
             grms = grms_after
             journal.record_step(step_label, _metrics(grms))
+            _record_cleanup_step(step_label, grms)
     except Exception as exc:
         journal.skip_step(step_label, str(exc))
 
@@ -1108,6 +1188,7 @@ def run_geometry_packing_recovery(
             else:
                 grms = grms_after
                 journal.record_step(step_label, _metrics(grms))
+                _record_cleanup_step(step_label, grms)
         except Exception as exc:
             journal.skip_step(step_label, str(exc))
 
@@ -1155,6 +1236,7 @@ def run_geometry_packing_recovery(
             )
             refreshed = refresh_mlpot_energy_and_grms(mlpot_ctx, context="")
             journal.record_step(f"{context_prefix} (post-BFGS)", _metrics(refreshed))
+            _record_cleanup_step(f"{context_prefix} (post-BFGS)", refreshed)
             return refreshed
 
         def _run_fire() -> float:
@@ -1166,6 +1248,7 @@ def run_geometry_packing_recovery(
             )
             refreshed = refresh_mlpot_energy_and_grms(mlpot_ctx, context="")
             journal.record_step(f"{context_prefix} (post-FIRE)", _metrics(refreshed))
+            _record_cleanup_step(f"{context_prefix} (post-FIRE)", refreshed)
             return refreshed
 
         if verbose and bfgs_first:
@@ -1196,4 +1279,12 @@ def run_geometry_packing_recovery(
         grms = _rollback_charmm_geometry(pos_initial, mlpot_ctx, quiet=quiet)
 
     journal.finish(float(grms), reason="packing_done")
+    if progress is not None:
+        progress.finish(
+            {
+                "initial_grms": float(initial_grms),
+                "final_grms": float(grms),
+                "context_prefix": str(context_prefix),
+            }
+        )
     return float(grms)

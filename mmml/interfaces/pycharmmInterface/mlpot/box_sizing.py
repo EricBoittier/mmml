@@ -480,5 +480,9 @@ def add_box_sizing_args(parser: argparse.ArgumentParser) -> None:
         ),
     )
     from mmml.interfaces.pycharmmInterface.mlpot.cleanup_mode import add_cleanup_args
+    from mmml.interfaces.pycharmmInterface.mlpot.recovery_progress import (
+        add_recovery_artifact_args,
+    )
 
+    add_recovery_artifact_args(parser)
     add_cleanup_args(parser)
