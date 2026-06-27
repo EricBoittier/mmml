@@ -302,10 +302,22 @@ def _calculator_atomic_numbers(ctx: MlpotContext) -> np.ndarray | None:
     calc = getattr(ctx.mlpot, "calculator", None)
     if calc is None:
         return None
-    for attr in ("ml_atomic_numbers", "atomic_numbers"):
-        raw = getattr(calc, attr, None)
-        if raw is not None:
-            return np.asarray(raw, dtype=int)
+
+    def _z_from_calc(target: Any) -> np.ndarray | None:
+        for attr in ("ml_atomic_numbers", "atomic_numbers"):
+            raw = getattr(target, attr, None)
+            if raw is not None:
+                return np.asarray(raw, dtype=int)
+        return None
+
+    z = _z_from_calc(calc)
+    if z is not None:
+        return z
+    real = getattr(calc, "_real", None)
+    if real is not None:
+        z = _z_from_calc(real)
+        if z is not None:
+            return z
     return None
 
 
