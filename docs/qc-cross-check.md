@@ -99,7 +99,8 @@ cross_check_out/
 | Input | ORCA `*.extinp.tmp` | MMML NPZ/XYZ structures |
 | Output | `*.engrad` callback to ORCA | NPZ + comparison report |
 
-See also [tests/functionality/orca_external/README.md](../tests/functionality/orca_external/README.md) for ExtOpt smoke workflow.
+See also the ExtOpt smoke workflow in the repository at
+`tests/functionality/orca_external/README.md` (ORCA 6 + `mmml orca-server` / `orca-client`).
 
 ## Tests
 

@@ -128,9 +128,9 @@ def test_decomposed_mlpot_defers_jax_factory_until_get_calculator():
         "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.unpack_factory_result",
         return_value=(None, MagicMock(), MagicMock()),
     ) as mock_unpack, patch(
-        "mmml.utils.jax_gpu_warmup.ensure_xla_gpu_warmed",
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.ensure_xla_gpu_warmed",
     ) as mock_xla_warm, patch(
-        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.mlpot_jax_device_context",
         return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()),
     ):
         model = build_decomposed_mlpot_model(
@@ -163,12 +163,12 @@ def test_decomposed_mlpot_sd_defer_uses_cpu_until_promote():
         "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.unpack_factory_result",
         return_value=(None, MagicMock(), MagicMock()),
     ) as mock_unpack, patch(
-        "mmml.utils.jax_gpu_warmup.ensure_xla_gpu_warmed",
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.ensure_xla_gpu_warmed",
     ) as mock_xla_warm, patch(
-        "mmml.interfaces.pycharmmInterface.jax_device_policy.jax_cpu_until_mlpot_registered",
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.jax_cpu_until_mlpot_registered",
         return_value=cpu_ctx,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.mlpot_jax_device_context",
         return_value=gpu_ctx,
     ):
         model = build_decomposed_mlpot_model(

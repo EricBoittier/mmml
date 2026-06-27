@@ -21,6 +21,11 @@ from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol, setup_
 from mmml.interfaces.pycharmmInterface.mlpot.mlpot_batch_policy import resolve_ml_batch_size
 from mmml.interfaces.pycharmmInterface.mlpot.setup import physnet_ml_atomic_numbers
 from mmml.interfaces.pycharmmInterface.mlpot.mlpot_gpu_policy import resolve_ml_gpu_count
+from mmml.interfaces.pycharmmInterface.jax_device_policy import (
+    jax_cpu_until_mlpot_registered,
+    mlpot_jax_device_context,
+)
+from mmml.utils.jax_gpu_warmup import ensure_xla_gpu_warmed
 
 __all__ = ["resolve_ml_batch_size", "DecomposedMlpotCalculator", "DecomposedMlpotModel", "build_decomposed_mlpot_model", "warmup_decomposed_mlpot"]
 
@@ -508,6 +513,7 @@ class DecomposedMlpotModel:
         spatial_mpi: bool = False,
         atoms_per_monomer: Sequence[int] | None = None,
         defer_jax_until_after_sd: bool = False,
+        defer_jax_until_mlpot_registered: bool = False,
         periodic_mm_config: Any | None = None,
     ) -> None:
         self._spherical_fn = spherical_fn
@@ -521,6 +527,7 @@ class DecomposedMlpotModel:
         self._ml_compute_dtype = ml_compute_dtype
         self._spatial_mpi = bool(spatial_mpi)
         self._defer_jax_until_after_sd = bool(defer_jax_until_after_sd)
+        self._defer_jax_until_mlpot_registered = bool(defer_jax_until_mlpot_registered)
         self._jax_on_gpu = spherical_fn is not None
         self._registered_calculator: DecomposedMlpotCalculator | None = None
         if atoms_per_monomer is None:
@@ -549,17 +556,12 @@ class DecomposedMlpotModel:
         from mmml.interfaces.pycharmmInterface.jax_compile_threads import (
             jax_compile_threads_context,
         )
-        from mmml.utils.jax_gpu_warmup import ensure_xla_gpu_warmed
 
         with jax_compile_threads_context():
             if not cpu_only:
                 ensure_xla_gpu_warmed()
             z = self._pending_factory_z
             r0 = np.zeros((len(z), 3), dtype=np.float64)
-            from mmml.interfaces.pycharmmInterface.jax_device_policy import (
-                jax_cpu_until_mlpot_registered,
-                mlpot_jax_device_context,
-            )
 
             device_ctx = (
                 jax_cpu_until_mlpot_registered if cpu_only else mlpot_jax_device_context
@@ -648,6 +650,13 @@ class DecomposedMlpotModel:
 
     def get_pycharmm_calculator(self, ml_atom_indices=None, ml_atomic_numbers=None, **kwargs):
         if self._spherical_fn is None and self._pending_factory is not None:
+            if self._defer_jax_until_mlpot_registered:
+                if self._defer_jax_until_after_sd:
+                    self._finalize_jax_factory(gpu=False)
+                else:
+                    return self._build_registered_calculator(
+                        ml_atomic_numbers=ml_atomic_numbers
+                    )
             deferred = _DeferredDecomposedMlpotCalculator(
                 self,
                 ml_atomic_numbers=ml_atomic_numbers,
@@ -830,6 +839,7 @@ def build_decomposed_mlpot_model(
             spatial_mpi=spatial_mpi,
             atoms_per_monomer=per,
             defer_jax_until_after_sd=defer_jax_until_after_sd,
+            defer_jax_until_mlpot_registered=True,
             periodic_mm_config=periodic_mm_config,
         )
     r0 = np.zeros((len(z), 3), dtype=np.float64)
