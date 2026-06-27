@@ -2289,7 +2289,7 @@ def prepare_mlpot_hybrid_state_for_sd(
             print(
                 f"{context_prefix}: geometry_stress / GRMS {hybrid_grms:.1f} > "
                 f"intervention {float(intervention_grms):.1f}; "
-                "running repack → MC → FIRE → BFGS (skipping bonded-MM first)",
+                "running repack → MC → guarded BFGS/FIRE (skipping bonded-MM first)",
                 flush=True,
             )
         box_side_arg: float | None

@@ -545,6 +545,7 @@ def run_density_prep_ladder(
 
         if bool(getattr(args, "calculator_pre_minimize", True)):
             from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+                HybridCalculatorFireConfig,
                 HybridCalculatorMinimizeConfig,
                 minimize_hybrid_calculator_before_sd,
                 minimize_hybrid_calculator_fire_before_sd,
@@ -554,32 +555,32 @@ def run_density_prep_ladder(
             calc_fmax = float(getattr(args, "pre_min_fmax", 0.05) or 0.05)
             fire_steps = int(getattr(args, "fire_min_steps", 200) or 200)
             fire_fmax = float(getattr(args, "rescue_fire_fmax", calc_fmax) or calc_fmax)
+            fire_config = HybridCalculatorFireConfig(
+                max_steps=fire_steps,
+                fmax_ev_a=fire_fmax,
+                fire_maxstep=float(getattr(args, "fire_min_maxstep", 0.2) or 0.2),
+                verbose=not quiet,
+                max_start_grms_kcalmol_A=float(max_grms),
+            )
+            bfgs_config = HybridCalculatorMinimizeConfig(
+                max_steps=calc_steps,
+                fmax_ev_a=calc_fmax,
+                bfgs_maxstep=float(getattr(args, "bfgs_maxstep", 0.05) or 0.05),
+                verbose=not quiet,
+                quiet_bfgs=bool(getattr(args, "quiet_bfgs", False)),
+                max_start_grms_kcalmol_A=float(max_grms),
+            )
 
             for tag, runner, kwargs in (
                 (
                     "calculator_bfgs",
                     minimize_hybrid_calculator_before_sd,
-                    dict(
-                        config=HybridCalculatorMinimizeConfig(
-                            max_steps=calc_steps,
-                            fmax_ev_a=calc_fmax,
-                            bfgs_maxstep=float(getattr(args, "bfgs_maxstep", 0.05) or 0.05),
-                            verbose=not quiet,
-                            quiet_bfgs=bool(getattr(args, "quiet_bfgs", False)),
-                            max_start_grms_kcalmol_A=float(max_grms),
-                        ),
-                    ),
+                    dict(config=bfgs_config),
                 ),
                 (
                     "calculator_fire",
                     minimize_hybrid_calculator_fire_before_sd,
-                    dict(
-                        max_steps=fire_steps,
-                        fmax_ev_a=fire_fmax,
-                        fire_maxstep=float(getattr(args, "fire_min_maxstep", 0.2) or 0.2),
-                        verbose=not quiet,
-                        max_start_grms_kcalmol_A=float(max_grms),
-                    ),
+                    dict(config=fire_config),
                 ),
             ):
                 step_label = f"round{round_idx + 1}:{tag}"
@@ -920,6 +921,7 @@ def run_geometry_packing_recovery(
 
     if calculator_minimize:
         from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+            HybridCalculatorFireConfig,
             HybridCalculatorMinimizeConfig,
             minimize_hybrid_calculator_before_sd,
             minimize_hybrid_calculator_fire_before_sd,
@@ -931,45 +933,64 @@ def run_geometry_packing_recovery(
             else float(calculator_minimize_fmax_ev_a)
         )
         start_cap = float(grms_limit) if grms_limit is not None else float("inf")
+        fire_bfgs_crossover = float(
+            getattr(args, "geometry_packing_fire_bfgs_crossover_grms", 30.0) or 30.0
+        )
+        bfgs_first = bool(np.isfinite(grms) and float(grms) > fire_bfgs_crossover)
+        fire_config = HybridCalculatorFireConfig(
+            max_steps=int(calculator_fire_steps),
+            fmax_ev_a=fire_fmax,
+            fire_maxstep=float(calculator_fire_maxstep),
+            verbose=verbose,
+            max_start_grms_kcalmol_A=start_cap,
+        )
+        bfgs_config = HybridCalculatorMinimizeConfig(
+            max_steps=int(calculator_minimize_steps),
+            fmax_ev_a=float(calculator_minimize_fmax_ev_a),
+            bfgs_maxstep=float(calculator_bfgs_maxstep),
+            verbose=verbose,
+            quiet_bfgs=quiet_bfgs,
+            max_start_grms_kcalmol_A=start_cap,
+            max_initial_fmax_ev_a=1000.0,
+        )
 
-        try:
-            grms = minimize_hybrid_calculator_fire_before_sd(
-                mlpot_ctx,
-                max_steps=int(calculator_fire_steps),
-                fmax_ev_a=fire_fmax,
-                fire_maxstep=float(calculator_fire_maxstep),
-                verbose=verbose,
-                max_start_grms_kcalmol_A=start_cap,
-                context_prefix=f"{context_prefix} (FIRE)",
-            )
-            grms = refresh_mlpot_energy_and_grms(
-                mlpot_ctx,
-                context=f"{context_prefix} (post-FIRE)" if verbose else "",
-            )
-        except Exception as exc:
-            if verbose:
-                print(f"{context_prefix}: FIRE skipped ({exc})", flush=True)
-
-        try:
+        def _run_bfgs() -> float:
+            nonlocal grms
             grms = minimize_hybrid_calculator_before_sd(
                 mlpot_ctx,
-                HybridCalculatorMinimizeConfig(
-                    max_steps=int(calculator_minimize_steps),
-                    fmax_ev_a=float(calculator_minimize_fmax_ev_a),
-                    bfgs_maxstep=float(calculator_bfgs_maxstep),
-                    verbose=verbose,
-                    quiet_bfgs=quiet_bfgs,
-                    max_start_grms_kcalmol_A=start_cap,
-                    max_initial_fmax_ev_a=1000.0,
-                ),
+                bfgs_config,
                 context_prefix=f"{context_prefix} (BFGS)",
             )
-            grms = refresh_mlpot_energy_and_grms(
+            return refresh_mlpot_energy_and_grms(
                 mlpot_ctx,
                 context=f"{context_prefix} (post-BFGS)" if verbose else "",
             )
-        except Exception as exc:
-            if verbose:
-                print(f"{context_prefix}: BFGS skipped ({exc})", flush=True)
+
+        def _run_fire() -> float:
+            nonlocal grms
+            grms = minimize_hybrid_calculator_fire_before_sd(
+                mlpot_ctx,
+                config=fire_config,
+                context_prefix=f"{context_prefix} (FIRE)",
+            )
+            return refresh_mlpot_energy_and_grms(
+                mlpot_ctx,
+                context=f"{context_prefix} (post-FIRE)" if verbose else "",
+            )
+
+        if verbose and bfgs_first:
+            print(
+                f"{context_prefix}: GRMS {grms:.1f} > {fire_bfgs_crossover:.1f}; "
+                "running guarded BFGS before FIRE",
+                flush=True,
+            )
+
+        runners = (_run_bfgs, _run_fire) if bfgs_first else (_run_fire, _run_bfgs)
+        for runner in runners:
+            try:
+                runner()
+            except Exception as exc:
+                if verbose:
+                    print(f"{context_prefix}: calculator mini skipped ({exc})", flush=True)
 
     return float(grms)

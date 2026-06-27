@@ -37,6 +37,26 @@ class HybridCalculatorMinimizeConfig:
     stall_improvement_ratio: float = 0.99
 
 
+@dataclass
+class HybridCalculatorFireConfig:
+    """ASE FIRE on the full hybrid calculator (synced to CHARMM coords)."""
+
+    max_steps: int = 200
+    fmax_ev_a: float = 0.05
+    fire_maxstep: float = 0.2
+    verbose: bool = True
+    fmax_spike_factor: float = 4.0
+    fmax_spike_floor_ev_a: float = 15.0
+    fmax_absolute_ceiling_ev_a: float = 500.0
+    fmax_running_spike_factor: float = 1.5
+    max_initial_fmax_ev_a: float = 100.0
+    max_start_grms_kcalmol_A: float | None = None
+    energy_spike_ev: float = 50.0
+    energy_absolute_ceiling_ev: float = 1.0e4
+    stall_patience_steps: int = 15
+    stall_improvement_ratio: float = 0.99
+
+
 def hybrid_calculator_mini_eligible(
     hybrid_grms: float,
     *,
@@ -84,6 +104,66 @@ def should_abort_bfgs_fmax(
     ):
         return True
     return current_fmax_ev_a > float(spike_limit_ev_a)
+
+
+def should_abort_fire_step(
+    *,
+    current_fmax_ev_a: float,
+    current_energy_ev: float,
+    spike_limit_ev_a: float,
+    best_fmax_ev_a: float,
+    best_energy_ev: float,
+    initial_energy_ev: float,
+    absolute_fmax_ceiling_ev_a: float,
+    running_spike_factor: float,
+    energy_spike_ev: float,
+    energy_absolute_ceiling_ev: float,
+) -> bool:
+    """Return True when the current FIRE step should be rolled back and stopped."""
+    if should_abort_bfgs_fmax(
+        current_fmax_ev_a,
+        spike_limit_ev_a=spike_limit_ev_a,
+        best_fmax_ev_a=best_fmax_ev_a,
+        absolute_ceiling_ev_a=absolute_fmax_ceiling_ev_a,
+        running_spike_factor=running_spike_factor,
+    ):
+        return True
+    if not np.isfinite(current_energy_ev):
+        return True
+    if current_energy_ev > float(energy_absolute_ceiling_ev):
+        return True
+    if (
+        np.isfinite(initial_energy_ev)
+        and current_energy_ev > float(initial_energy_ev) + float(energy_spike_ev)
+    ):
+        return True
+    if (
+        np.isfinite(best_energy_ev)
+        and current_energy_ev > float(best_energy_ev) + float(energy_spike_ev)
+    ):
+        return True
+    return False
+
+
+def resolve_adaptive_fire_maxstep(
+    *,
+    configured_maxstep: float,
+    initial_fmax_ev_a: float,
+    initial_grms_kcalmol_A: float | None,
+    grms_soft_cap_kcalmol_A: float = 30.0,
+) -> float:
+    """Shrink FIRE max displacement when starting from a rough hybrid landscape."""
+    maxstep = float(configured_maxstep)
+    if np.isfinite(initial_fmax_ev_a) and initial_fmax_ev_a > 0.0:
+        maxstep = min(maxstep, max(0.01, 0.5 / float(initial_fmax_ev_a)))
+    if (
+        initial_grms_kcalmol_A is not None
+        and np.isfinite(initial_grms_kcalmol_A)
+        and float(initial_grms_kcalmol_A) > float(grms_soft_cap_kcalmol_A)
+    ):
+        scale = float(grms_soft_cap_kcalmol_A) / float(initial_grms_kcalmol_A)
+        maxstep = min(maxstep, max(0.01, maxstep * scale))
+    return float(max(0.01, maxstep))
 
 
 _ASE_OPTIMIZER_STEP_RE = re.compile(
@@ -153,19 +233,30 @@ class _BestMinimizationFrame:
         self.best_force_positions: np.ndarray | None = None
         self.best_force_fmax = float("inf")
         self.best_force_label = ""
+        self.best_energy_positions: np.ndarray | None = None
+        self.best_energy_ev = float("inf")
+        self.best_energy_label = ""
 
     def record(self, label: str) -> None:
         try:
             fmax = float(np.abs(self.atoms.get_forces()).max())
         except Exception:
-            return
-        if not np.isfinite(fmax):
+            fmax = float("inf")
+        try:
+            energy = float(self.atoms.get_potential_energy())
+        except Exception:
+            energy = float("inf")
+        if not np.isfinite(fmax) and not np.isfinite(energy):
             return
         positions = np.asarray(self.atoms.get_positions(), dtype=np.float64).copy()
-        if fmax < self.best_force_fmax:
+        if np.isfinite(fmax) and fmax < self.best_force_fmax:
             self.best_force_positions = positions
             self.best_force_fmax = fmax
             self.best_force_label = label
+        if np.isfinite(energy) and energy < self.best_energy_ev:
+            self.best_energy_positions = positions
+            self.best_energy_ev = energy
+            self.best_energy_label = label
 
     def restore_best_force(self) -> float:
         if self.best_force_positions is not None:
@@ -173,6 +264,19 @@ class _BestMinimizationFrame:
         if np.isfinite(self.best_force_fmax):
             return float(self.best_force_fmax)
         return float(np.abs(self.atoms.get_forces()).max())
+
+    def restore_best_energy(self) -> float:
+        if self.best_energy_positions is not None:
+            self.atoms.set_positions(self.best_energy_positions)
+        if np.isfinite(self.best_energy_ev):
+            return float(self.best_energy_ev)
+        return float(self.atoms.get_potential_energy())
+
+    def restore_best(self, *, prefer_energy: bool = False) -> None:
+        if prefer_energy and self.best_energy_positions is not None:
+            self.restore_best_energy()
+            return
+        self.restore_best_force()
 
 
 def _hybrid_mlpot_ase_calculator_class():
@@ -322,6 +426,120 @@ def _run_hybrid_calculator_bfgs(
     return opt, best_frame, stopped_on_spike
 
 
+def _run_hybrid_calculator_fire(
+    atoms: Any,
+    config: HybridCalculatorFireConfig,
+    *,
+    context_prefix: str,
+    initial_fmax_ev_a: float,
+    initial_energy_ev: float,
+    initial_grms_kcalmol_A: float | None,
+) -> tuple[Any, _BestMinimizationFrame, bool]:
+    """Run guarded ASE FIRE; returns (optimizer, best_frame, stopped_on_spike)."""
+    from ase.optimize.fire import FIRE
+
+    best_frame = _BestMinimizationFrame(atoms)
+    best_frame.record("initial")
+    spike_limit = spike_fmax_limit_ev_a(
+        initial_fmax_ev_a,
+        factor=config.fmax_spike_factor,
+        floor_ev_a=config.fmax_spike_floor_ev_a,
+    )
+    fire_maxstep = resolve_adaptive_fire_maxstep(
+        configured_maxstep=config.fire_maxstep,
+        initial_fmax_ev_a=initial_fmax_ev_a,
+        initial_grms_kcalmol_A=initial_grms_kcalmol_A,
+    )
+    stopped_on_spike = False
+    steps_since_improvement = 0
+    prev_best_fmax = float("inf")
+
+    def _record_step() -> None:
+        nonlocal steps_since_improvement, prev_best_fmax
+        best_frame.record(f"step_{opt.get_number_of_steps()}")
+        if best_frame.best_force_fmax < prev_best_fmax * float(config.stall_improvement_ratio):
+            steps_since_improvement = 0
+            prev_best_fmax = float(best_frame.best_force_fmax)
+        else:
+            steps_since_improvement += 1
+
+    def _check_guards() -> None:
+        nonlocal stopped_on_spike
+        if stopped_on_spike:
+            return
+        try:
+            fmax = float(np.abs(atoms.get_forces()).max())
+            energy = float(atoms.get_potential_energy())
+        except Exception:
+            stopped_on_spike = True
+            if config.verbose:
+                print(
+                    f"{context_prefix} hybrid calculator FIRE: "
+                    "non-finite energy/forces; stopping",
+                    flush=True,
+                )
+            return
+        if should_abort_fire_step(
+            current_fmax_ev_a=fmax,
+            current_energy_ev=energy,
+            spike_limit_ev_a=spike_limit,
+            best_fmax_ev_a=best_frame.best_force_fmax,
+            best_energy_ev=best_frame.best_energy_ev,
+            initial_energy_ev=initial_energy_ev,
+            absolute_fmax_ceiling_ev_a=config.fmax_absolute_ceiling_ev_a,
+            running_spike_factor=config.fmax_running_spike_factor,
+            energy_spike_ev=config.energy_spike_ev,
+            energy_absolute_ceiling_ev=config.energy_absolute_ceiling_ev,
+        ):
+            stopped_on_spike = True
+            if config.verbose:
+                fmax_txt = f"{fmax:.4f}" if np.isfinite(fmax) else "non-finite"
+                energy_txt = f"{energy:.4f}" if np.isfinite(energy) else "non-finite"
+                print(
+                    f"{context_prefix} hybrid calculator FIRE: "
+                    f"guard triggered (fmax={fmax_txt} eV/Å, E={energy_txt} eV); stopping",
+                    flush=True,
+                )
+            return
+        if (
+            steps_since_improvement >= int(config.stall_patience_steps)
+            and opt.get_number_of_steps() >= int(config.stall_patience_steps)
+            and best_frame.best_force_fmax > float(config.fmax_ev_a) * 10.0
+        ):
+            stopped_on_spike = True
+            if config.verbose:
+                print(
+                    f"{context_prefix} hybrid calculator FIRE: "
+                    f"stalled at fmax={best_frame.best_force_fmax:.4f} eV/Å "
+                    f"for {steps_since_improvement} steps; stopping",
+                    flush=True,
+                )
+
+    if config.verbose and fire_maxstep < float(config.fire_maxstep) - 1e-9:
+        print(
+            f"{context_prefix} hybrid calculator FIRE: "
+            f"adaptive maxstep {fire_maxstep:.4f} Å "
+            f"(configured {float(config.fire_maxstep):.4f})",
+            flush=True,
+        )
+
+    opt = FIRE(
+        atoms,
+        logfile=None if not config.verbose else ase_optimizer_dual_unit_logfile(),
+        maxstep=float(fire_maxstep),
+    )
+    opt.attach(_record_step, interval=1)
+    opt.attach(_check_guards, interval=1)
+    for converged in opt.irun(
+        fmax=float(config.fmax_ev_a),
+        steps=int(config.max_steps),
+    ):
+        if stopped_on_spike or converged:
+            break
+    best_frame.record("final")
+    return opt, best_frame, stopped_on_spike
+
+
 def minimize_hybrid_calculator_before_sd(
     mlpot_ctx: Any,
     config: HybridCalculatorMinimizeConfig,
@@ -442,6 +660,7 @@ def minimize_hybrid_calculator_before_sd(
 
 def minimize_hybrid_calculator_fire_before_sd(
     mlpot_ctx: Any,
+    config: HybridCalculatorFireConfig | None = None,
     *,
     max_steps: int = 200,
     fmax_ev_a: float = 0.05,
@@ -450,9 +669,8 @@ def minimize_hybrid_calculator_fire_before_sd(
     max_start_grms_kcalmol_A: float | None = None,
     context_prefix: str = "Pre-SD",
 ) -> float:
-    """Relax CHARMM coordinates with ASE FIRE on the hybrid calculator."""
+    """Relax CHARMM coordinates with guarded ASE FIRE on the hybrid calculator."""
     import ase
-    from ase.optimize.fire import FIRE
 
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         invalidate_mlpot_calculator_caches,
@@ -463,36 +681,80 @@ def minimize_hybrid_calculator_fire_before_sd(
         sync_charmm_positions,
     )
 
+    if config is None:
+        config = HybridCalculatorFireConfig(
+            max_steps=int(max_steps),
+            fmax_ev_a=float(fmax_ev_a),
+            fire_maxstep=float(fire_maxstep),
+            verbose=bool(verbose),
+            max_start_grms_kcalmol_A=max_start_grms_kcalmol_A,
+        )
+
     z = getattr(mlpot_ctx, "ml_Z", None)
     if z is None:
         raise RuntimeError("mlpot_ctx.ml_Z required for hybrid calculator FIRE")
 
-    _promote_mlpot_jax_for_calculator_mini(mlpot_ctx, verbose=verbose)
+    _promote_mlpot_jax_for_calculator_mini(mlpot_ctx, verbose=config.verbose)
     pos0 = get_charmm_positions_array()
     grms0 = mlpot_hybrid_grms_from_calculator(mlpot_ctx, positions=pos0)
-    max_start = float(max_start_grms_kcalmol_A) if max_start_grms_kcalmol_A is not None else 50.0
-    if grms0 is not None and np.isfinite(grms0) and float(grms0) > max_start:
-        if verbose:
+    max_start = config.max_start_grms_kcalmol_A
+    if max_start is None:
+        max_start = 50.0
+    if grms0 is not None and np.isfinite(grms0) and float(grms0) > float(max_start):
+        if config.verbose:
             print(
                 f"{context_prefix}: skip calculator FIRE "
-                f"(GRMS {float(grms0):.1f} > {max_start:.1f} kcal/mol/Å)",
+                f"(GRMS {float(grms0):.1f} > {float(max_start):.1f} kcal/mol/Å)",
                 flush=True,
             )
         return float(grms0)
 
     atoms = ase.Atoms(numbers=np.asarray(z, dtype=int), positions=pos0)
     atoms.calc = _hybrid_mlpot_ase_calculator_class()(mlpot_ctx)
-    best_frame = _BestMinimizationFrame(atoms)
-    best_frame.record("initial")
-    fire = FIRE(
+    initial_fmax = float(np.abs(atoms.get_forces()).max())
+    initial_energy = float(atoms.get_potential_energy())
+    if initial_fmax > float(config.max_initial_fmax_ev_a):
+        if config.verbose:
+            print(
+                f"{context_prefix}: skip calculator FIRE "
+                f"(initial fmax {initial_fmax:.1f} > "
+                f"{float(config.max_initial_fmax_ev_a):.1f} eV/Å)",
+                flush=True,
+            )
+        if grms0 is None or not np.isfinite(grms0):
+            raise RuntimeError("hybrid GRMS unavailable before calculator FIRE")
+        return float(grms0)
+
+    if config.verbose:
+        grms_txt = f"{grms0:.4f}" if grms0 is not None and np.isfinite(grms0) else "?"
+        print(
+            f"{context_prefix} hybrid calculator FIRE: start GRMS={grms_txt} "
+            f"kcal/mol/Å (max {config.max_steps} steps, fmax={config.fmax_ev_a} eV/Å)",
+            flush=True,
+        )
+
+    opt, best_frame, stopped_on_spike = _run_hybrid_calculator_fire(
         atoms,
-        logfile=None if not verbose else ase_optimizer_dual_unit_logfile(),
-        maxstep=float(fire_maxstep),
+        config,
+        context_prefix=context_prefix,
+        initial_fmax_ev_a=initial_fmax,
+        initial_energy_ev=initial_energy,
+        initial_grms_kcalmol_A=grms0,
     )
-    fire.attach(lambda: best_frame.record("fire"), interval=1)
-    fire.run(fmax=float(fmax_ev_a), steps=int(max_steps))
-    best_frame.record("final")
-    best_frame.restore_best_force()
+    best_frame.restore_best(prefer_energy=stopped_on_spike)
+    if config.verbose and (
+        stopped_on_spike
+        or (
+            best_frame.best_force_label
+            and best_frame.best_force_label not in ("initial", "final")
+        )
+    ):
+        print(
+            f"{context_prefix} hybrid calculator FIRE: restored best frame "
+            f"({best_frame.best_force_label}, fmax={best_frame.best_force_fmax:.6f} eV/Å, "
+            f"E={best_frame.best_energy_ev:.6f} eV)",
+            flush=True,
+        )
 
     sync_charmm_positions(np.asarray(atoms.get_positions(), dtype=np.float64))
     sync_charmm_lists_after_mini(quiet=True)
@@ -504,18 +766,20 @@ def minimize_hybrid_calculator_fire_before_sd(
     grms1 = mlpot_hybrid_grms_from_calculator(mlpot_ctx)
     if grms1 is None or not np.isfinite(grms1):
         raise RuntimeError("hybrid GRMS unavailable after calculator FIRE")
-    if verbose:
+    if config.verbose:
         fmax = float(np.abs(atoms.get_forces()).max())
         grms_txt = f"{grms0:.4f}" if grms0 is not None and np.isfinite(grms0) else "?"
+        spike_note = " (spike abort)" if stopped_on_spike else ""
         try:
             e_final = float(atoms.get_potential_energy())
             energy_txt = format_energy_ev_kcal(e_final)
         except Exception:
             energy_txt = "?"
         print(
-            f"{context_prefix} hybrid calculator FIRE done: "
+            f"{context_prefix} hybrid calculator FIRE done{spike_note}: "
             f"GRMS {grms_txt} -> {grms1:.4f} kcal/mol/Å, "
-            f"E={energy_txt}, fmax={fmax:.6f} eV/Å",
+            f"E={energy_txt}, fmax={fmax:.6f} eV/Å, "
+            f"steps={opt.get_number_of_steps()}",
             flush=True,
         )
     mlpot_ctx.sd_watchdog_baseline_grms = float(grms1)
