@@ -12,12 +12,25 @@ Related:
 
 ## Problem statement
 
-GPU-cluster `libcharmm.so` builds are **MPI-linked**. Serial `python -m mmml md-system` can segfault in Fortran `upinb` or MLpot `send_coord_to_recip` unless:
+GPU-cluster `libcharmm.so` builds are **MPI-linked**. Serial `python -m mmml md-system` **may** segfault in Fortran `upinb` or MLpot `send_coord_to_recip` on some stacks (historically DCM clusters with `OMP_NUM_THREADS>1` and JAX/CUDA before MLpot SD). Mitigations:
 
-1. The process launches under the **same OpenMPI** as `libcharmm.so`
-2. JAX GPU warmup is **deferred** until after MLpot SD on MPI builds
-3. DOMDEC is **off** during MLpot (stability stopgap)
-4. `OMP_NUM_THREADS=1` during CHARMM neighbor-list updates
+1. Launch under the **same OpenMPI** as `libcharmm.so` (`./scripts/mmml-charmm-mpirun.sh`)
+2. Defer JAX GPU warmup until after MLpot SD on MPI builds (launcher default)
+3. Keep DOMDEC **off** during MLpot (stability stopgap)
+4. Pin `OMP_NUM_THREADS=1` during CHARMM neighbor-list updates
+
+**Node validation:** the serial-vs-mpirun probe (`08_serial_vs_mpirun_md_system.py`) passed on **gpu09** (June 2026): serial `python md-system` and `MMML_MPI_NP=1` mpirun both completed the ACO:2 hybrid mini with matching outcomes. The blanket segfault claim is **environment-dependent** — re-run the probe after OpenMPI / module / `libcharmm.so` changes or on a new node.
+
+```bash
+export MMML_CKPT=/path/to/checkpoint.json
+python tests/functionality/mlpot/08_serial_vs_mpirun_md_system.py --run-both \
+  --checkpoint "$MMML_CKPT" \
+  --output-dir artifacts/serial_vs_mpirun_$(date +%Y%m%d_%H%M%S)
+```
+
+Writes `serial_vs_mpirun.json` with exit codes, elapsed time, and env snapshot (`MMML_MLPOT_DEVICE`, `OMP_NUM_THREADS`, etc.). Config: `mmml/cli/run/md_system.serial_mpi_probe.yaml`.
+
+**Production / Slurm / `np>1`:** still use `mmml-charmm-mpirun.sh` even when the probe passes — correct MPI bootstrap, OMP pin, GPU-per-rank, and deferred JAX.
 
 The workshop [3SimpleMPIExample](https://github.com/BrooksResearchGroup-UM/pyCHARMM-Workshop/tree/main/3SimpleMPIExample) shows a **different** pattern: embarrassingly parallel φ/ψ minimizations with `mpi4py` — no coupled MLpot callbacks. MMML needs both:
 
@@ -61,6 +74,7 @@ flowchart LR
 | Item | Path | Status |
 |------|------|--------|
 | MPI environment check CLI | `mmml mpi-check` | Implemented |
+| Serial vs mpirun md-system probe | `tests/functionality/mlpot/08_serial_vs_mpirun_md_system.py` | Implemented |
 | Workshop φ/ψ smoke script | `tests/functionality/charmm/mpi_alad_phi_psi.py` | Implemented |
 | Launcher script | `scripts/mmml-charmm-mpirun.sh` | Existing |
 | This design doc | `docs/pycharmm-mpi.md` | This file |
@@ -97,6 +111,22 @@ MMML_MPI_NP=4 ./scripts/mmml-charmm-mpirun.sh python \
 ```
 
 **Pass:** rank 0 writes `phi_psi_energies.json`; energies match serial run within `1e-4` kcal/mol per grid point.
+
+### Serial vs mpirun md-system probe (user-run on GPU CHARMM node)
+
+Compares true serial `python md-system` (`MMML_NO_MPI_RERUN=1`) against `MMML_MPI_NP=1` via `mmml-charmm-mpirun.sh` on the same minimal hybrid workflow (ACO:2, MLpot registration + SD mini).
+
+```bash
+python tests/functionality/mlpot/08_serial_vs_mpirun_md_system.py --dry-run   # anywhere
+
+export MMML_CKPT=/path/to/checkpoint.json
+python tests/functionality/mlpot/08_serial_vs_mpirun_md_system.py --run-both \
+  --checkpoint "$MMML_CKPT"
+```
+
+**Pass (gpu09, June 2026):** both exit 0; energies/trajectory outputs match within normal FP noise. **Interpretation:** serial Tier-1 `md-system` is OK on that node; keep mpirun for production and `np>1`.
+
+**Fail modes:** serial SIGSEGV (exit 139) + mpirun OK → use launcher; both fail → checkpoint/GPU/CHARMM setup.
 
 ---
 
@@ -246,7 +276,7 @@ MMML_MPI_NP=2 MMML_MLPOT_SPATIAL_MPI=1 ./scripts/mmml-charmm-mpirun.sh mpi-check
 
 | Issue | Symptom | Mitigation |
 |-------|---------|------------|
-| Serial `python` with MPI-linked `libcharmm.so` | Segfault in `upinb` / `send_coord_to_recip` | `./scripts/mmml-charmm-mpirun.sh` or `maybe_rerun_mmml_under_mpirun` |
+| Serial `python` with MPI-linked `libcharmm.so` | May segfault in `upinb` / `send_coord_to_recip` (stack-dependent) | `./scripts/mmml-charmm-mpirun.sh`; run `08_serial_vs_mpirun` on new nodes |
 | JAX GPU warmup before MLpot SD | MPI pool corruption / hang | `defer_jax_warmup` (default on MPI builds via launcher) |
 | `OMP_NUM_THREADS > 1` with MPI CHARMM | NL races / crashes | `MMML_CHARMM_OMP_THREADS=1` (launcher pins) |
 | `np>1` + `--ml-gpu-count > 1` | GPU oversubscription / OOM | `--ml-gpu-count 1` + `MMML_MPI_PIN_GPU_PER_RANK=1` |

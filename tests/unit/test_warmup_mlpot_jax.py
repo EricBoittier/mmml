@@ -155,3 +155,25 @@ def test_serial_vs_mpirun_dry_run_without_checkpoint():
     assert proc.returncode == 0, proc.stderr
     assert "Serial (MMML_NO_MPI_RERUN=1" in proc.stdout
     assert "MMML_MPI_NP=1" in proc.stdout
+
+
+def test_serial_vs_mpirun_environment_snapshot(monkeypatch):
+    import importlib.util
+    import sys
+
+    mod_path = (
+        Path(__file__).resolve().parents[1]
+        / "functionality/mlpot/08_serial_vs_mpirun_md_system.py"
+    )
+    spec = importlib.util.spec_from_file_location("serial_probe_env", mod_path)
+    mod = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    sys.modules["serial_probe_env"] = mod
+    spec.loader.exec_module(mod)
+
+    monkeypatch.delenv("MMML_MLPOT_DEVICE", raising=False)
+    monkeypatch.setenv("OMP_NUM_THREADS", "4")
+    snap = mod._environment_snapshot(overrides={"OMP_NUM_THREADS": "1", "MMML_MPI_NP": "1"})
+    assert snap["OMP_NUM_THREADS"] == "1"
+    assert snap["MMML_MPI_NP"] == "1"
+    assert "MMML_MLPOT_DEVICE" in snap

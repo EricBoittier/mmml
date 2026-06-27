@@ -6,6 +6,7 @@
 #
 # Serial path uses MMML_NO_MPI_RERUN=1 (no auto mpirun re-exec).
 # MPI path uses MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh
+# Re-run on new nodes; gpu09 passed June 2026 (see docs/pycharmm-mpi.md).
 
 setup: pbc_npt
 backend: pycharmm
