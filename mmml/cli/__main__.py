@@ -33,6 +33,7 @@ Available commands:
   build-crystal  Build symmetry-aware crystals with PyXtal (+ optional ASE opt)
   run         MM/ML simulation (ASE + JAX-MD with hybrid calculator)
   md-system   Run mixed-composition MD setups (free/pbc NVE/NVT + pbc NPT + lambda TI)
+  liquid-box  Build and certify periodic liquid boxes (MM only, no MLpot)
   lambda-mbar MBAR post-processing for lambda-dynamics runs
   run-pycharmm  Pure CHARMM heating and equilibration (no ML)
   pycharmm-two-residue-sample  Restrained sampling for a two-residue CHARMM system
@@ -72,6 +73,7 @@ Examples:
   mmml build-crystal -m benzene.xyz --spg 14 --z 2 -o crystal.extxyz
   mmml build-crystal -m h2o.xyz --spg 36 --z 4 --optimize --emt -o h2o.cif
   mmml md-system --setup pbc_npt --composition MEOH:5,TIP3:5 --temperature 300 --pressure 1.0
+  mmml liquid-box --composition DCM:206 --target-density-g-cm3 1.326 --profile dense -o boxes/dcm206
   mmml md-system --setup free_nvt --backend jaxmd --composition ACO:30 --packmol-radius 22 --flat-bottom-radius 20 --temperature 250
   mmml md-system --setup free_nve --backend pycharmm --residue ACO --n-molecules 4 --flat-bottom-radius 20 --ps 0.5
   mmml md-system --setup pycharmm_minimize --composition ACO:2 --mini-nstep 30
@@ -154,6 +156,11 @@ Shell tab completion (bash/zsh/fish):
         from .run import md_system
         sys.argv = ['mmml md-system'] + args.args
         return md_system.main()
+
+    elif args.command == 'liquid-box':
+        from .run import liquid_box
+        sys.argv = ['mmml liquid-box'] + args.args
+        return liquid_box.main()
 
     elif args.command == 'lambda-mbar':
         from .run import lambda_mbar
