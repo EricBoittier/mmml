@@ -142,69 +142,10 @@ from mmml.data.units import (
 from mmml.utils.model_checkpoint import load_model_checkpoint
 
 
-def _load_physnet_checkpoint(path: Path) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
-    """Load PhysNet parameters and config from orbax or JSON checkpoint.
-    Returns (params, config). config is None if not available."""
-    path = Path(path).resolve()
-    if not path.exists():
-        raise FileNotFoundError(f"PhysNet checkpoint not found: {path}")
-
-    # JSON: params.json or .json file
-    if path.suffix == ".json" or (path.is_dir() and (path / "params.json").exists()):
-        json_path = path if path.suffix == ".json" else path / "params.json"
-        ckpt = load_model_checkpoint(json_path, use_orbax=False, load_config=True)
-        params = ckpt["params"]
-        config = ckpt.get("config") if isinstance(ckpt.get("config"), dict) else None
-        return params, config
-
-    # Orbax: find epoch dir and restore
-    epoch_dir = path
-    if path.is_dir():
-        epoch_dirs = sorted(path.glob("epoch-*/"), key=lambda d: int(d.name.split("-")[-1]) if d.name.startswith("epoch-") else -1)
-        epoch_dirs = [d for d in epoch_dirs if "tmp" not in d.name]
-        if epoch_dirs:
-            epoch_dir = epoch_dirs[-1]
-    try:
-        import orbax.checkpoint as ocp
-        checkpointer = ocp.PyTreeCheckpointer()
-        restored = checkpointer.restore(str(epoch_dir))
-        # Prefer ema_params for inference
-        if isinstance(restored, dict) and "ema_params" in restored:
-            params = restored["ema_params"]
-        elif isinstance(restored, dict) and "params" in restored:
-            params = restored["params"]
-        else:
-            params = restored
-        config = None
-        if isinstance(restored, dict) and "model_attributes" in restored:
-            config = dict(restored["model_attributes"])
-        return params, config
-    except Exception as e:
-        raise RuntimeError(f"Failed to load PhysNet checkpoint from {path}: {e}") from e
-
-
-def _print_bundled_physnet_models(category: Optional[str] = None) -> None:
-    """Print bundled PhysNet transfer-learning choices."""
-    models = list_hf_physnet_models(category)
-    title = f"Bundled PhysNet transfer models"
-    if category:
-        title += f" ({category})"
-    print(f"\n{title}:")
-    for entry in models:
-        config = entry.get("config", {})
-        objectives = entry.get("metadata", {}).get("objectives", {})
-        categories = ", ".join(entry.get("categories", []))
-        print(
-            f"  {entry['id']}: {entry.get('label', entry['file'])}\n"
-            f"    file={entry['file']}\n"
-            f"    categories={categories}\n"
-            f"    charges={config.get('charges')}, electrostatics={config.get('include_electrostatics', False)}, "
-            f"features={config.get('features')}, basis={config.get('num_basis_functions')}, "
-            f"iterations={config.get('num_iterations')}, max_degree={config.get('max_degree')}\n"
-            f"    valid_forces_mae={objectives.get('valid_forces_mae')}, "
-            f"valid_energy_mae={objectives.get('valid_energy_mae')}, "
-            f"valid_dipole_mae={objectives.get('valid_dipole_mae')}"
-        )
+from mmml.models.physnetjax.checkpoint_utils import (
+    load_physnet_checkpoint as _load_physnet_checkpoint,
+    print_bundled_physnet_models as _print_bundled_physnet_models,
+)
 
 
 EPS = 1e-8
