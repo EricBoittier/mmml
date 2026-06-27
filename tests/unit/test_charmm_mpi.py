@@ -247,10 +247,7 @@ def test_configure_mpi4py_charmm_owned_init(monkeypatch):
 
 
 def test_ensure_charmm_mpi_initialized_idempotent():
-    import sys
-
     charmm_mpi._charmm_mpi_bootstrapped = False
-    fake_ip = mock.MagicMock()
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
         return_value=True,
@@ -259,13 +256,12 @@ def test_ensure_charmm_mpi_initialized_idempotent():
         return_value=True,
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.configure_mpi4py_charmm_owned_init",
-    ), mock.patch.dict(
-        sys.modules,
-        {"mmml.interfaces.pycharmmInterface.import_pycharmm": fake_ip},
-    ):
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.import_pycharmm.init_vacuum_charmm_state_mpi",
+    ) as mock_init:
         charmm_mpi.ensure_charmm_mpi_initialized()
         charmm_mpi.ensure_charmm_mpi_initialized()
-    assert fake_ip.init_vacuum_charmm_state_mpi.call_count == 1
+    assert mock_init.call_count == 1
     assert charmm_mpi._charmm_mpi_bootstrapped is True
 
 

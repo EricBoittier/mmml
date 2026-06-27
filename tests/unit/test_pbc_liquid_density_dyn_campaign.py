@@ -2,30 +2,49 @@
 
 from __future__ import annotations
 
+import importlib.util
 import sys
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 import yaml
 
 WORKFLOW = Path(__file__).resolve().parents[2] / "workflows" / "pbc_liquid_density_dyn"
 SCRIPTS = WORKFLOW / "scripts"
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
+_MODULE_NAME = "pbc_liquid_density_dyn_campaign_lib"
 
-from campaign_lib import (  # noqa: E402
-    RunCell,
-    build_campaign,
-    build_md_system_campaign_argv,
-    campaign_job_order,
-    cell_bulk_density_fraction,
-    cell_from_cli,
-    cell_run_tag,
-    iter_matrix_cells,
-    load_config,
-    matrix_job_count,
-    warmup_mlpot_argv,
-)
+
+def _load_campaign_lib() -> ModuleType:
+    """Load this workflow's campaign_lib without clashing with pbc_solvent_burst."""
+    cached = sys.modules.get(_MODULE_NAME)
+    if cached is not None:
+        return cached
+    path = SCRIPTS / "campaign_lib.py"
+    spec = importlib.util.spec_from_file_location(_MODULE_NAME, path)
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[_MODULE_NAME] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+cl = _load_campaign_lib()
+RunCell = cl.RunCell
+build_campaign = cl.build_campaign
+build_md_system_campaign_argv = cl.build_md_system_campaign_argv
+campaign_job_order = cl.campaign_job_order
+cell_bulk_density_fraction = cl.cell_bulk_density_fraction
+cell_from_cli = cl.cell_from_cli
+cell_run_tag = cl.cell_run_tag
+iter_matrix_cells = cl.iter_matrix_cells
+load_config = cl.load_config
+matrix_job_count = cl.matrix_job_count
+warmup_mlpot_argv = cl.warmup_mlpot_argv
+mlpot_device_name = cl.mlpot_device_name
+scheduler_mode = cl.scheduler_mode
+slurm_launch_jobs = cl.slurm_launch_jobs
+slurm_resources_cli = cl.slurm_resources_cli
 
 
 @pytest.fixture
@@ -111,8 +130,6 @@ def test_cpu_scheduler_resources() -> None:
         "temperatures": [300.0],
         "box_sizes": [28.0, 32.0],
     }
-    from campaign_lib import matrix_job_count, slurm_launch_jobs, slurm_resources_cli
-
     cap = matrix_job_count(cfg)
     assert cap >= 4
     expected = min(12, cap)
@@ -121,8 +138,6 @@ def test_cpu_scheduler_resources() -> None:
 
 
 def test_mlpot_device_cpu_when_scheduler_cpu(cfg: dict) -> None:
-    from campaign_lib import mlpot_device_name, scheduler_mode
-
     cpu_cfg = {**cfg, "scheduler": "cpu"}
     assert scheduler_mode(cpu_cfg) == "cpu"
     assert mlpot_device_name(cpu_cfg) == "cpu"
