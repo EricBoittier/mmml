@@ -215,16 +215,24 @@ Use `mmml.interfaces.pycharmmInterface.mpi_rank_io` helpers.
 Pre-flight on a GPU node:
 
 ```bash
-mmml mpi-check --tier2 --strict
+# Serial pre-flight (expected warnings OK)
+mmml mpi-check --tier2 --prelaunch --strict
+
+# Dry-run argv/YAML (no CHARMM)
 python tests/functionality/mlpot/07_md_system_spatial_mpi_mini.py --dry-run
 
-MMML_MPI_NP=2 MMML_MLPOT_SPATIAL_MPI=1 ./scripts/mmml-charmm-mpirun.sh md-system \
-  --config mmml/cli/run/md_system.spatial_mpi.example.yaml \
-  --checkpoint /path/to/DESdimers_params.json
-
-# or callback-only smoke first:
+# Callback smoke under mpirun
 MMML_MPI_NP=2 MMML_MLPOT_SPATIAL_MPI=1 ./scripts/mmml-charmm-mpirun.sh python \
   tests/functionality/mlpot/06_spatial_mpi_tier2_smoke.py
+
+# Full mini (set checkpoint path)
+export MMML_CKPT=/path/to/DESdimers_params.json
+MMML_MPI_NP=2 MMML_MLPOT_SPATIAL_MPI=1 ./scripts/mmml-charmm-mpirun.sh md-system \
+  --config mmml/cli/run/md_system.spatial_mpi.example.yaml \
+  --checkpoint "$MMML_CKPT"
+
+# Strict check under launch (after exporting spatial env)
+MMML_MPI_NP=2 MMML_MLPOT_SPATIAL_MPI=1 ./scripts/mmml-charmm-mpirun.sh mpi-check --tier2 --strict
 ```
 
 ### Pass criteria (user-run)
