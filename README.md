@@ -7,6 +7,13 @@
 
 MMML combines CHARMM/OpenMM workflows with JAX-based neural models for electrostatics and force prediction.
 
+## Auto-prediction CLI
+```bash
+uv sync --extra all-cpu --extra cli 
+eval "$(register-python-argcomplete mmml)"
+```
+
+
 ## 📚 Documentation
 
 **For complete documentation, tutorials, and guides, please visit:**

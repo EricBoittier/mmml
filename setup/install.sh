@@ -11,6 +11,12 @@ if [ ! -d "charmm" ]; then
     	tar -xf charmm.tar.xz
 fi
 
+# Partial extracts may lack CMakeLists.txt (needed by scripts/rebuild_charmm_mlpot.sh).
+if [ ! -f "charmm/CMakeLists.txt" ]; then
+	echo "Restoring charmm/CMakeLists.txt from charmm.tar.xz"
+	tar -xf charmm.tar.xz charmm/CMakeLists.txt charmm/tool/cmake
+fi
+
 # Set environment variables
 chmhome="export CHARMM_HOME=$PWD/charmm"
 chmlib="export CHARMM_LIB_DIR=$PWD/charmm"
