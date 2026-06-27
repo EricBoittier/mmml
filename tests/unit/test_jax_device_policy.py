@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest import mock
 
+import pytest
+
 
 def test_mlpot_defaults_to_gpu_for_mpi_charmm(monkeypatch):
     monkeypatch.delenv("MMML_MLPOT_DEVICE", raising=False)
@@ -28,6 +30,23 @@ def test_mlpot_cpu_override(monkeypatch):
         from mmml.interfaces.pycharmmInterface import jax_device_policy
 
         assert jax_device_policy.mlpot_jax_device_name() == "cpu"
+
+
+def test_mlpot_jax_device_context_falls_back_to_cpu_when_no_gpu(monkeypatch):
+    monkeypatch.setenv("MMML_MLPOT_DEVICE", "gpu")
+    jax = pytest.importorskip("jax")
+    cpu_dev = jax.devices("cpu")[0]
+
+    def devices_side_effect(name=None):
+        if name == "gpu":
+            raise RuntimeError("no gpu")
+        return [cpu_dev]
+
+    with mock.patch("jax.devices", side_effect=devices_side_effect):
+        from mmml.interfaces.pycharmmInterface import jax_device_policy
+
+        with jax_device_policy.mlpot_jax_device_context() as dev:
+            assert dev == cpu_dev
 
 
 def test_mlpot_jax_compilation_cache_default(monkeypatch, tmp_path):

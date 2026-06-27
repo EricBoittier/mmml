@@ -295,6 +295,13 @@ class DecomposedMlpotCalculator:
             return _DUMMY_MM_PAIR_IDX, _DUMMY_MM_PAIR_MASK, False
         return jnp.asarray(mm_pair_idx), jnp.asarray(mm_pair_mask), True
 
+    def _mlpot_eval_device_context(self):
+        """CPU while MPI defer keeps the JAX factory off-GPU; else configured device."""
+        parent = getattr(self, "_parent_model", None)
+        if parent is not None and not getattr(parent, "_jax_on_gpu", True):
+            return jax_cpu_until_mlpot_registered()
+        return mlpot_jax_device_context()
+
     def calculate_charmm(
         self,
         Natom: int,
@@ -333,7 +340,6 @@ class DecomposedMlpotCalculator:
             self._cell = side
             box = jnp.asarray(cubic_box_matrix_from_side(side))
         self._current_box = box
-        from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_context
         from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
             get_mlpot_profile_stats,
             mlpot_profiling_enabled,
@@ -361,7 +367,7 @@ class DecomposedMlpotCalculator:
             and bool(self._cell)
         )
         if run_ml:
-            with mlpot_jax_device_context():
+            with self._mlpot_eval_device_context():
                 mm_pair_idx, mm_pair_mask, use_mm_pairs = self._resolve_mm_pairs(pos, box)
                 positions_jax = as_ml_array(
                     pos,

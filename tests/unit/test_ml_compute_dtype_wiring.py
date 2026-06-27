@@ -137,6 +137,54 @@ def test_decomposed_calculator_casts_positions_with_configured_dtype():
     assert np.asarray(dz, dtype=np.float64).dtype == np.float64
 
 
+def test_calculate_charmm_uses_cpu_context_while_jax_deferred():
+    z = np.zeros(8, dtype=int)
+    model = DecomposedMlpotModel(
+        MagicMock(),
+        CutoffParameters(),
+        2,
+        z,
+        defer_jax_until_after_sd=True,
+    )
+    model._jax_on_gpu = False
+    calc = DecomposedMlpotCalculator(
+        MagicMock(),
+        CutoffParameters(),
+        2,
+        z,
+        do_mm=False,
+    )
+    calc._parent_model = model
+    mock_energy = jnp.array(0.0, dtype=jnp.float32)
+    mock_forces = jnp.zeros((8, 3), dtype=jnp.float32)
+    calc._get_spherical_forward_fn = MagicMock(return_value=MagicMock(return_value=(mock_energy, mock_forces)))
+    cpu_ctx = MagicMock(__enter__=MagicMock(), __exit__=MagicMock())
+    gpu_ctx = MagicMock(__enter__=MagicMock(), __exit__=MagicMock())
+    n = 8
+    x = np.ones(n, dtype=np.float64)
+    y = np.zeros(n, dtype=np.float64)
+    zc = np.zeros(n, dtype=np.float64)
+    dx = np.zeros(n, dtype=np.float64)
+    dy = np.zeros(n, dtype=np.float64)
+    dz = np.zeros(n, dtype=np.float64)
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.jax_cpu_until_mlpot_registered",
+        return_value=cpu_ctx,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.mlpot_jax_device_context",
+        return_value=gpu_ctx,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+    ):
+        calc.calculate_charmm(
+            n, 0, 0, None, x, y, zc, dx, dy, dz, 0, 0, None, None, None, None, None, None, None
+        )
+
+    cpu_ctx.__enter__.assert_called_once()
+    gpu_ctx.__enter__.assert_not_called()
+
+
 def test_pycharmm_mlpot_parse_args_accepts_ml_compute_dtype():
     args = parse_pycharmm_mlpot_args(
         [

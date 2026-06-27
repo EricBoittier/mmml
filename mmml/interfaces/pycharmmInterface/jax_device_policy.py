@@ -107,8 +107,14 @@ def mlpot_jax_device_context() -> Iterator[Any]:
     import jax
 
     name = mlpot_jax_device_name()
-    devices = jax.devices(name)
-    if not devices:
+    if name == "gpu":
+        try:
+            devices = jax.devices("gpu")
+        except RuntimeError:
+            devices = []
+        if not devices:
+            devices = jax.devices("cpu")
+    else:
         devices = jax.devices("cpu")
     with jax.default_device(devices[0]):
         yield devices[0]
