@@ -17,6 +17,44 @@ import numpy as np
 
 DensityPrepMode = Literal["off", "resilient"]
 
+_DEFAULT_GEOMETRY_PREP_REGRESS_RATIO = 1.25
+_DEFAULT_GEOMETRY_PREP_REGRESS_MIN_DELTA = 50.0
+
+
+def _geometry_prep_regressed(
+    grms_before: float,
+    grms_after: float,
+    *,
+    ratio: float = _DEFAULT_GEOMETRY_PREP_REGRESS_RATIO,
+    min_delta: float = _DEFAULT_GEOMETRY_PREP_REGRESS_MIN_DELTA,
+) -> bool:
+    """True when a prep step materially worsened hybrid GRMS."""
+    if not np.isfinite(grms_before) or not np.isfinite(grms_after):
+        return False
+    before = float(grms_before)
+    after = float(grms_after)
+    return after > max(before * float(ratio), before + float(min_delta))
+
+
+def _rollback_charmm_geometry(
+    positions: np.ndarray,
+    mlpot_ctx: Any,
+    *,
+    quiet: bool = True,
+) -> float:
+    """Restore CHARMM coordinates and refresh hybrid GRMS after a failed prep step."""
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import refresh_mlpot_energy_and_grms
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+
+    sync_charmm_positions(np.asarray(positions, dtype=np.float64))
+    return float(
+        refresh_mlpot_energy_and_grms(
+            mlpot_ctx,
+            context="",
+            verbose=not quiet,
+        )
+    )
+
 
 def resolve_density_prep_mode(args: argparse.Namespace) -> DensityPrepMode:
     raw = getattr(args, "density_prep_mode", None)
@@ -300,6 +338,16 @@ def _sync_pbc_after_box_change(
         # pretreat handoff and sync_mlpot_pbc_cell_from_charmm docstrings).
         mlpot_ctx.cubic_box_side_A = float(box_side)
         mlpot_ctx.charmm_cubic_box_side_A = float(box_side)
+        try:
+            from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+                charmm_crystal_is_active,
+                sync_charmm_crystal_after_mm_pretreat,
+            )
+
+            if not charmm_crystal_is_active():
+                sync_charmm_crystal_after_mm_pretreat(float(box_side), quiet=quiet)
+        except Exception:
+            pass
         sync_mlpot_pbc_cell_from_charmm(
             mlpot_ctx.pyCModel,
             fallback_side_A=float(box_side),
@@ -915,12 +963,16 @@ def run_geometry_packing_recovery(
         )
 
     grms = refresh_mlpot_energy_and_grms(mlpot_ctx, context="")
+    pos_initial = np.asarray(get_charmm_positions_array(), dtype=np.float64).copy()
+    initial_grms = float(grms)
     journal.begin(initial_grms=grms, max_grms=float(grms_limit or grms), max_rounds=1)
     journal.record_step("initial", _metrics(grms))
 
     step_label = f"{context_prefix}:monomer_repack"
     try:
-        pos = get_charmm_positions_array()
+        pos_before = np.asarray(get_charmm_positions_array(), dtype=np.float64).copy()
+        grms_before = float(grms)
+        pos = pos_before
         new_pos = _step_monomer_repack(
             pos,
             atoms_per_list=list(atoms_per_list),
@@ -938,15 +990,31 @@ def run_geometry_packing_recovery(
             quiet=quiet,
             report_resync=False,
         )
-        grms = refresh_mlpot_energy_and_grms(mlpot_ctx, context="")
-        journal.record_step(step_label, _metrics(grms))
+        grms_after = float(refresh_mlpot_energy_and_grms(mlpot_ctx, context=""))
+        if _geometry_prep_regressed(grms_before, grms_after):
+            if verbose:
+                print(
+                    f"{context_prefix}: rollback monomer_repack "
+                    f"(GRMS {grms_before:.1f} -> {grms_after:.1f} kcal/mol/Å)",
+                    flush=True,
+                )
+            grms = _rollback_charmm_geometry(pos_before, mlpot_ctx, quiet=quiet)
+            journal.skip_step(
+                step_label,
+                f"GRMS regressed {grms_before:.1f} -> {grms_after:.1f} kcal/mol/Å",
+            )
+        else:
+            grms = grms_after
+            journal.record_step(step_label, _metrics(grms))
     except Exception as exc:
         journal.skip_step(step_label, str(exc))
 
     if charmm_pbc and composition is not None:
         step_label = f"{context_prefix}:mc_density"
         try:
-            pos = get_charmm_positions_array()
+            pos_before = np.asarray(get_charmm_positions_array(), dtype=np.float64).copy()
+            grms_before = float(grms)
+            pos = pos_before
             new_pos, new_side = _step_mc_density(
                 args,
                 pos,
@@ -967,8 +1035,22 @@ def run_geometry_packing_recovery(
                 quiet=quiet,
                 report_resync=False,
             )
-            grms = refresh_mlpot_energy_and_grms(mlpot_ctx, context="")
-            journal.record_step(step_label, _metrics(grms))
+            grms_after = float(refresh_mlpot_energy_and_grms(mlpot_ctx, context=""))
+            if _geometry_prep_regressed(grms_before, grms_after):
+                if verbose:
+                    print(
+                        f"{context_prefix}: rollback mc_density "
+                        f"(GRMS {grms_before:.1f} -> {grms_after:.1f} kcal/mol/Å)",
+                        flush=True,
+                    )
+                grms = _rollback_charmm_geometry(pos_before, mlpot_ctx, quiet=quiet)
+                journal.skip_step(
+                    step_label,
+                    f"GRMS regressed {grms_before:.1f} -> {grms_after:.1f} kcal/mol/Å",
+                )
+            else:
+                grms = grms_after
+                journal.record_step(step_label, _metrics(grms))
         except Exception as exc:
             journal.skip_step(step_label, str(exc))
 
@@ -1046,6 +1128,15 @@ def run_geometry_packing_recovery(
                 grms = runner()
             except Exception as exc:
                 journal.skip_step(f"{context_prefix} calculator mini", str(exc))
+
+    if _geometry_prep_regressed(initial_grms, float(grms), ratio=1.05, min_delta=10.0):
+        if verbose:
+            print(
+                f"{context_prefix}: rollback to pre-packing geometry "
+                f"(final GRMS {float(grms):.1f} > initial {initial_grms:.1f} kcal/mol/Å)",
+                flush=True,
+            )
+        grms = _rollback_charmm_geometry(pos_initial, mlpot_ctx, quiet=quiet)
 
     journal.finish(float(grms), reason="packing_done")
     return float(grms)

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 
 import numpy as np
+import pytest
 
 
 def _args(**overrides) -> argparse.Namespace:
@@ -146,9 +147,24 @@ def test_sync_pbc_after_box_change_skips_prepare_charmm_pbc_with_mlpot(monkeypat
     def _fake_sync_pos(_pos) -> None:
         calls.append("sync_pos")
 
+    def _fake_crystal_active() -> bool:
+        return False
+
+    def _fake_sync_crystal(_side: float, *, quiet: bool = False) -> bool:
+        calls.append("sync_crystal")
+        return True
+
     monkeypatch.setattr(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.prepare_charmm_pbc",
         _fake_prepare,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
+        _fake_crystal_active,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.sync_charmm_crystal_after_mm_pretreat",
+        _fake_sync_crystal,
     )
     monkeypatch.setattr(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.light_resync_mlpot_state",
@@ -176,8 +192,90 @@ def test_sync_pbc_after_box_change_skips_prepare_charmm_pbc_with_mlpot(monkeypat
     )
     assert side == 30.0
     assert "prepare_charmm_pbc" not in calls
+    assert "sync_crystal" in calls
     assert "light_resync" in calls
     assert "sync_mic" in calls
+
+
+def test_geometry_prep_regressed_detects_large_spike():
+    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+        _geometry_prep_regressed,
+    )
+
+    assert _geometry_prep_regressed(574.0, 5917.0)
+    assert not _geometry_prep_regressed(574.0, 600.0)
+    assert _geometry_prep_regressed(10.0, 70.0)
+
+
+def test_run_geometry_packing_recovery_rolls_back_repack_grms_regression(monkeypatch):
+    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+        run_geometry_packing_recovery,
+    )
+
+    args = _args(quiet=True)
+    pos = np.arange(24, dtype=float).reshape(8, 3)
+    sync_log: list[np.ndarray] = []
+    refresh_values = iter([574.0, 5917.0, 574.0, 574.0])
+
+    class _Diag:
+        hybrid = 1.0
+        charmm = 1.0
+        kind = "geometry_stress"
+
+    class _Ctx:
+        use_pbc = True
+        cubic_box_side_A = 29.0
+        charmm_cubic_box_side_A = 29.0
+        pyCModel = object()
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        lambda: pos.copy(),
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._step_monomer_repack",
+        lambda *_a, **_kw: pos + 5.0,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._sync_pbc_after_box_change",
+        lambda **_kw: 29.0,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        lambda arr: sync_log.append(np.asarray(arr, dtype=float).copy()),
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        lambda *_a, **_kw: float(next(refresh_values)),
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.measure_hybrid_charmm_grms",
+        lambda *_a, **_kw: _Diag(),
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.minimize_hybrid_calculator_before_sd",
+        lambda *_a, **_kw: 574.0,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.minimize_hybrid_calculator_fire_before_sd",
+        lambda *_a, **_kw: 574.0,
+    )
+
+    final_grms = run_geometry_packing_recovery(
+        _Ctx(),
+        args=args,
+        atoms_per_list=[4, 4],
+        composition={"DCM": 2},
+        box_side=29.0,
+        charmm_pbc=True,
+        context_prefix="Pre-SD packing",
+        calculator_minimize=False,
+        verbose=False,
+        grms_limit=574.0,
+    )
+    assert final_grms == pytest.approx(574.0)
+    assert len(sync_log) >= 1
+    assert np.allclose(sync_log[-1], pos)
 
 
 def test_build_pycharmm_command_forwards_liquid_prep():
