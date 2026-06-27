@@ -330,6 +330,24 @@ def test_maybe_rerun_md_system_prepends_subcommand(monkeypatch, tmp_path):
     assert cmd[12:] == ["md-system", "--config", "dcm_test.yaml", "--run-all"]
 
 
+def test_mpi_mpirun_extra_args_includes_detected_shmem(tmp_path, monkeypatch):
+    monkeypatch.delenv("MMML_NO_MPI_ABORT_STACK", raising=False)
+    monkeypatch.delenv("MMML_NO_MPI_MCA_PREFIX", raising=False)
+    mca = tmp_path / "lib" / "openmpi"
+    mca.mkdir(parents=True)
+    (mca / "mca_shmem_mmap.so").write_bytes(b"")
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.openmpi_install_prefix",
+        return_value=tmp_path,
+    ):
+        args = charmm_mpi.mpi_mpirun_extra_args()
+    assert args[:3] == ["--mca", "pmix", "^ext3x"]
+    assert ["--mca", "mca_base_component_path", str(mca)] in [
+        args[i : i + 3] for i in range(len(args) - 2)
+    ]
+    assert ["--mca", "shmem", "mmap"] in [args[i : i + 3] for i in range(len(args) - 2)]
+
+
 def test_mpi_mpirun_extra_args_abort_stack_by_default(monkeypatch):
     monkeypatch.delenv("MMML_NO_MPI_ABORT_STACK", raising=False)
     monkeypatch.delenv("MMML_MPI_VERBOSE", raising=False)
@@ -354,20 +372,25 @@ def test_mpi_mpirun_extra_args_verbose(monkeypatch):
     assert "plm_base_verbose" in args
 
 
-def test_mpi_openmpi_install_env_defaults(monkeypatch):
+def test_mpi_openmpi_install_env_defaults(monkeypatch, tmp_path):
     monkeypatch.delenv("MMML_NO_MPI_MCA_PREFIX", raising=False)
     monkeypatch.delenv("OPAL_PREFIX", raising=False)
     monkeypatch.delenv("OMPI_MCA_pmix", raising=False)
+    monkeypatch.delenv("OMPI_MCA_shmem", raising=False)
+    monkeypatch.delenv("OMPI_MCA_component_path", raising=False)
     monkeypatch.delenv("MMML_OPAL_PREFIX", raising=False)
-    prefix = Path("/opt/openmpi-5.0.5/build")
+    mca = tmp_path / "lib" / "openmpi"
+    mca.mkdir(parents=True)
+    (mca / "mca_shmem_mmap.so").write_bytes(b"")
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.openmpi_install_prefix",
-        return_value=prefix,
+        return_value=tmp_path,
     ):
         charmm_mpi.mpi_openmpi_install_env_defaults()
     assert "OPAL_PREFIX" not in os.environ
     assert os.environ["OMPI_MCA_pmix"] == "^ext3x"
-    assert "OMPI_MCA_shmem" not in os.environ
+    assert os.environ["OMPI_MCA_shmem"] == "mmap"
+    assert os.environ["OMPI_MCA_component_path"] == str(mca)
 
 
 def test_mpi_openmpi_install_env_defaults_opal_prefix_when_complete(monkeypatch):

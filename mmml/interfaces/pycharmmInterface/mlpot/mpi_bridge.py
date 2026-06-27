@@ -46,16 +46,30 @@ def _rank_size_from_launcher_env() -> Tuple[int, int]:
     return int(rank_raw), max(1, int(size_raw))
 
 
+def _mpi4py_is_initialized() -> bool:
+    try:
+        from mpi4py import MPI
+
+        return bool(MPI.Is_initialized())
+    except Exception:
+        return False
+
+
 def mpi_rank_size(comm: Any = None) -> Tuple[int, int]:
     """Return ``(rank, size)`` using mpi4py or OpenMPI env vars.
 
     CHARMM-linked builds call ``MPI_Init`` from Fortran; mpi4py's ``COMM_WORLD``
     can remain a singleton (size 1) even when ``mpirun -np N`` launched N ranks.
     When launcher env reports ``size > 1`` but mpi4py does not, trust the env.
+
+    Avoid touching ``COMM_WORLD`` before ``MPI_Init`` (CHARMM or mpi4py) so
+    mixed OpenMPI installs do not fail ``opal_shmem_base_select`` during import.
     """
     if comm is not None:
         return int(comm.Get_rank()), int(comm.Get_size())
     env_rank, env_size = _rank_size_from_launcher_env()
+    if not _mpi4py_is_initialized() and env_size > 1:
+        return env_rank, env_size
     try:
         from mpi4py import MPI
 

@@ -20,6 +20,7 @@ _MPI_LDD_KEYWORDS = (
 )
 
 _pmix_preloaded = False
+_opal_preloaded = False
 _IS_DARWIN = platform.system() == "Darwin"
 
 
@@ -306,21 +307,67 @@ def openmpi_install_prefix() -> Path | None:
     return None
 
 
+def openmpi_mca_component_dir() -> Path | None:
+    """Directory under the matched OpenMPI prefix containing ``mca_*.so`` plugins."""
+    override = (os.environ.get("MMML_MPI_MCA_COMPONENT_DIR") or "").strip()
+    if override:
+        path = Path(override).expanduser()
+        return path if path.is_dir() else None
+    prefix = openmpi_install_prefix()
+    if prefix is None:
+        return None
+    for sub in ("lib/openmpi", "lib64/openmpi", "lib", "lib64"):
+        candidate = prefix / sub
+        if candidate.is_dir() and any(candidate.glob("mca_*.so")):
+            return candidate
+    return None
+
+
+def openmpi_shmem_mca_component() -> str | None:
+    """Best shmem MCA component present in the matched OpenMPI prefix."""
+    override = (os.environ.get("MMML_MCA_SHMEM") or "").strip()
+    if override:
+        return override
+    prefix = openmpi_install_prefix()
+    if prefix is None:
+        return None
+    search: list[Path] = []
+    mca_dir = openmpi_mca_component_dir()
+    if mca_dir is not None:
+        search.append(mca_dir)
+    for sub in ("lib/openmpi", "lib64/openmpi", "lib", "lib64"):
+        candidate = prefix / sub
+        if candidate.is_dir() and candidate not in search:
+            search.append(candidate)
+    for name in ("mmap", "sysv", "posix"):
+        for directory in search:
+            if (directory / f"mca_shmem_{name}.so").is_file():
+                return name
+    return None
+
+
 def mpi_openmpi_install_env_defaults() -> None:
-    """Block distro ``pmix/ext3x`` MCA; avoid breaking in-tree OpenMPI shmem.
+    """Block distro MCA plugins; prefer CHARMM-linked OpenMPI shmem/pmix.
 
-    On shared GPU nodes, ``orted`` can load ``/usr/lib/.../mca_pmix_ext3x.so`` from
-    the system OpenMPI 3 stack and fail with ``undefined symbol: pmix_value_load``
-    when the launcher is OpenMPI 5 + PMIx 5 from ``/opt/gcc-...``.
+    On shared GPU nodes, distro OpenMPI 3 plugins under ``/usr/lib/.../openmpi3``
+    can load against the wrong ``libopen-pal`` and fail ``opal_shmem_base_select``
+    or ``pmix_value_load`` when ``mpirun`` is OpenMPI 5 from ``/opt/gcc-...``.
 
-    Do **not** set ``OMPI_MCA_component_path``, ``OPAL_PREFIX``, or ``OMPI_MCA_shmem``
-    for incomplete in-tree builds — forced shmem/OPAL paths break MCA load on
-    ``/opt/gcc-.../build`` trees missing ``share/openmpi``.
-    Set ``MMML_OPAL_PREFIX`` only for a full OpenMPI install prefix.
+    Point MCA search at the matched prefix plugin dir and pick an existing shmem
+    component (``mmap``/``sysv``/``posix``). Do not set ``OPAL_PREFIX`` for
+    incomplete in-tree ``build/`` trees missing ``share/openmpi``.
     """
     if _truthy("MMML_NO_MPI_MCA_PREFIX"):
         return
     os.environ.setdefault("OMPI_MCA_pmix", "^ext3x")
+    mca_dir = openmpi_mca_component_dir()
+    if mca_dir is not None:
+        path = str(mca_dir)
+        os.environ.setdefault("OMPI_MCA_component_path", path)
+        os.environ.setdefault("OMPI_MCA_mca_base_component_path", path)
+    shmem = openmpi_shmem_mca_component()
+    if shmem is not None:
+        os.environ.setdefault("OMPI_MCA_shmem", shmem)
     override = (os.environ.get("MMML_OPAL_PREFIX") or "").strip()
     if override:
         os.environ.setdefault("OPAL_PREFIX", override)
@@ -349,6 +396,12 @@ def mpi_mpirun_extra_args() -> list[str]:
     args: list[str] = []
     if not _truthy("MMML_NO_MPI_MCA_PREFIX"):
         args.extend(["--mca", "pmix", "^ext3x"])
+        mca_dir = openmpi_mca_component_dir()
+        if mca_dir is not None:
+            args.extend(["--mca", "mca_base_component_path", str(mca_dir)])
+        shmem = openmpi_shmem_mca_component()
+        if shmem is not None:
+            args.extend(["--mca", "shmem", shmem])
     if _truthy("MMML_NO_MPI_ABORT_STACK"):
         return args
     args.extend(["--mca", "orte_abort_print_stack", "1"])
@@ -411,6 +464,13 @@ def mpi_shell_setup_lines() -> list[str]:
         )
     if not _truthy("MMML_NO_MPI_MCA_PREFIX"):
         lines.append("export OMPI_MCA_pmix='^ext3x'")
+        mca_dir = openmpi_mca_component_dir()
+        if mca_dir is not None:
+            lines.append(f"export OMPI_MCA_component_path={mca_dir}")
+            lines.append(f"export OMPI_MCA_mca_base_component_path={mca_dir}")
+        shmem = openmpi_shmem_mca_component()
+        if shmem is not None:
+            lines.append(f"export OMPI_MCA_shmem={shmem}")
         opal = (os.environ.get("MMML_OPAL_PREFIX") or "").strip()
         if not opal:
             prefix = openmpi_install_prefix()
@@ -466,6 +526,31 @@ def _preload_pmix_global() -> None:
         )
 
 
+def _preload_openmpi_opal_global() -> None:
+    """Preload matched ``libopen-pal`` so distro MCA DSOs resolve OPAL symbols."""
+    global _opal_preloaded
+    if _opal_preloaded or _truthy("MMML_NO_MPI_LD_PATH") or _truthy("MMML_NO_MPI_OPAL_PRELOAD"):
+        return
+    prefix = openmpi_install_prefix()
+    if prefix is None:
+        return
+    for sub in ("lib", "lib64"):
+        lib_dir = prefix / sub
+        if not lib_dir.is_dir():
+            continue
+        for pattern in ("libopen-pal.so", "libopen-pal.so*"):
+            matches = sorted(lib_dir.glob(pattern))
+            for shared in matches:
+                if not shared.is_file():
+                    continue
+                try:
+                    ctypes.CDLL(str(shared.resolve()), mode=ctypes.RTLD_GLOBAL)
+                    _opal_preloaded = True
+                    return
+                except OSError:
+                    continue
+
+
 def prepare_charmm_mpi_runtime() -> None:
     """Apply MPI/PMIx library path and preload before ``import pycharmm``."""
     _apply_cuda_mpi_env_defaults()
@@ -473,6 +558,7 @@ def prepare_charmm_mpi_runtime() -> None:
     if not charmm_lib_links_mpi():
         return
     ensure_charmm_mpi_library_path()
+    _preload_openmpi_opal_global()
     _preload_pmix_global()
 
 
