@@ -372,6 +372,22 @@ def test_mpi_mpirun_extra_args_verbose(monkeypatch):
     assert "plm_base_verbose" in args
 
 
+def test_mpi_openmpi_static_shmem_fallback(monkeypatch, tmp_path):
+    monkeypatch.delenv("MMML_NO_MPI_MCA_PREFIX", raising=False)
+    monkeypatch.delenv("OMPI_MCA_shmem", raising=False)
+    monkeypatch.delenv("MMML_MCA_SHMEM", raising=False)
+    lib = tmp_path / "lib"
+    lib.mkdir()
+    (lib / "libopen-pal.so").write_bytes(b"")
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.openmpi_install_prefix",
+        return_value=tmp_path,
+    ):
+        charmm_mpi.mpi_openmpi_install_env_defaults()
+    assert os.environ["OMPI_MCA_shmem"] == "mmap"
+    assert os.environ["OMPI_MCA_mca_base_component_path"] == str(lib)
+
+
 def test_mpi_openmpi_install_env_defaults(monkeypatch, tmp_path):
     monkeypatch.delenv("MMML_NO_MPI_MCA_PREFIX", raising=False)
     monkeypatch.delenv("OPAL_PREFIX", raising=False)
