@@ -67,6 +67,12 @@ def test_heat_free_space_disables_image_update_frequencies():
     assert kw["ilbfrq"] == 0
 
 
+def test_heat_pbc_disables_crystal_transform_updates():
+    kw = build_heat_dynamics(temp=300.0, use_pbc=True)
+
+    assert int(kw["ixtfrq"]) > int(kw["nstep"])
+
+
 def test_hoover_heat_vacuum_falls_back_to_ihtfrq_scaling():
     kw = build_hoover_heat_dynamics(
         temp=240.0,

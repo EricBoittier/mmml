@@ -1200,6 +1200,32 @@ def _ensure_ntrfrq_above_nstep(kw: dict[str, Any], nstep: int) -> None:
         kw["ntrfrq"] = n + 1
 
 
+def _ensure_ixtfrq_above_nstep(kw: dict[str, Any], nstep: int) -> None:
+    """Skip crystal transform updates (``ixtfrq``) within this integration segment.
+
+    Fixed-box NVT (scale heat, Hoover with ``pmass=0``) does not resize the cell;
+    ``UPDECI`` at ``ixtfrq`` can segfault in ``mlpot_update`` on MPI-linked MLpot PBC.
+    """
+    if "ixtfrq" not in kw:
+        return
+    n = max(1, int(nstep))
+    val = int(kw["ixtfrq"])
+    if val > 0 and val <= n:
+        kw["ixtfrq"] = n + 1
+
+
+def _maybe_disable_ixtfrq_for_fixed_volume_chunk(
+    chunk_kw: dict[str, Any],
+    chunk_nstep: int,
+) -> None:
+    """Disable ``ixtfrq`` within a dynamics chunk unless this segment is NPT barostat."""
+    pmass = chunk_kw.get("pmass")
+    is_npt = bool(chunk_kw.get("cpt")) and pmass is not None and int(pmass) > 0
+    if is_npt:
+        return
+    _ensure_ixtfrq_above_nstep(chunk_kw, chunk_nstep)
+
+
 def apply_loose_pbc_dyn_freq_kwargs(kw: dict[str, Any], *, nstep: int) -> None:
     """Set crystal/image list rebuild freqs above ``nstep`` so they never fire.
 
@@ -2026,6 +2052,8 @@ def build_heat_dynamics(
         }
     )
     apply_heat_ramp_frequencies(kw, nstep=nstep, ihtfrq=ihtfrq)
+    if use_pbc:
+        _ensure_ixtfrq_above_nstep(kw, nstep)
     return kw
 
 
@@ -2113,7 +2141,7 @@ def build_hoover_heat_dynamics(
     # Constant-volume Hoover NVT (pmass=0): skip crystal resize updates. They are
     # unnecessary for fixed-box heating and can segfault in libcharmm after MLpot
     # PBC image/NB rebuilds on MPI-linked builds (aco/dcm clusters @ ~6k steps).
-    kw["ixtfrq"] = int(nstep) + 1
+    _ensure_ixtfrq_above_nstep(kw, nstep)
     return kw
 
 
@@ -3216,6 +3244,7 @@ def _harmonize_overlap_chunk_frequencies(
         apply_loose_pbc_dyn_freq_kwargs(chunk_kw, nstep=n)
     else:
         _ensure_ntrfrq_above_nstep(chunk_kw, n)
+        _maybe_disable_ixtfrq_for_fixed_volume_chunk(chunk_kw, n)
 
 
 def _mlpot_ctx_cubic_box_side_A(mlpot_ctx: Optional["MlpotContext"]) -> float | None:

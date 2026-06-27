@@ -3232,6 +3232,33 @@ def test_harmonize_overlap_chunk_non_loose_pbc_lifts_ntrfrq():
     assert kw["ntrfrq"] == 1251
 
 
+def test_harmonize_overlap_chunk_fixed_volume_lifts_ixtfrq():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _harmonize_overlap_chunk_frequencies,
+    )
+
+    kw = {"ixtfrq": 1000, "nstep": 1600, "iprfrq": 1600, "isvfrq": 1600}
+    _harmonize_overlap_chunk_frequencies(kw, 1600, loose_pbc=False)
+    assert kw["ixtfrq"] == 1601
+
+
+def test_harmonize_overlap_chunk_npt_keeps_ixtfrq():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _harmonize_overlap_chunk_frequencies,
+    )
+
+    kw = {
+        "ixtfrq": 1000,
+        "nstep": 1600,
+        "cpt": True,
+        "pmass": 16,
+        "iprfrq": 1600,
+        "isvfrq": 1600,
+    }
+    _harmonize_overlap_chunk_frequencies(kw, 1600, loose_pbc=False)
+    assert kw["ixtfrq"] == 1000
+
+
 def test_harmonize_overlap_chunk_loose_pbc_disables_image_freqs():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _harmonize_overlap_chunk_frequencies,
