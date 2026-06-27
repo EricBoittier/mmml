@@ -872,18 +872,65 @@ def process_calcs(args):
     return calcs, extra
 
 
-def compute_mp2(mol_str: str, basis: str = "def2-SVP", spin: int = 0, charge: int = 0,
-                energy: bool = True, gradient: bool = False, log_file: str = "pyscf.log") -> dict:
-    """
-    Run DF-MP2 calculation via gpu4pyscf (post-HF, not DFT).
-
-    Returns dict with R, Z, N, energy, gradient (if requested), etc.
-    """
+def _mp2_energy_for_atoms(
+    atoms,
+    *,
+    basis: str,
+    spin: int,
+    charge: int,
+    log_file: str = "pyscf.log",
+    verbose: int = 0,
+) -> tuple[float, float, float]:
+    """Return (e_mp2, e_hf, e_corr) in Hartree for a PySCF atom list."""
     import pyscf
     from gpu4pyscf.scf import RHF
     from gpu4pyscf.mp import dfmp2
 
-    mol = pyscf.M(atom=mol_str, basis=basis, spin=spin, charge=charge, output=log_file, verbose=6)
+    mol = pyscf.M(
+        atom=atoms,
+        basis=basis,
+        spin=spin,
+        charge=charge,
+        unit="Angstrom",
+        output=log_file,
+        verbose=verbose,
+    )
+    mf = RHF(mol).density_fit()
+    e_hf = float(mf.kernel())
+    pt = dfmp2.DFMP2(mf)
+    e_corr, _ = pt.kernel()
+    return e_hf + float(e_corr), e_hf, float(e_corr)
+
+
+def compute_mp2(
+    mol_str: str,
+    basis: str = "def2-SVP",
+    spin: int = 0,
+    charge: int = 0,
+    energy: bool = True,
+    gradient: bool = False,
+    gradient_fd: bool = False,
+    fd_step_ang: float = 1e-3,
+    log_file: str = "pyscf.log",
+) -> dict:
+    """
+    Run DF-MP2 calculation via gpu4pyscf (post-HF, not DFT).
+
+    When ``gradient_fd`` is True (or analytic gradient raises
+    ``NotImplementedError``), nuclear gradients are obtained by central
+    finite differences of the MP2 energy (Issue #13).
+
+    Returns dict with R, Z, N, energy, gradient (if requested), etc.
+    """
+    import sys
+
+    import pyscf
+    from gpu4pyscf.scf import RHF
+    from gpu4pyscf.mp import dfmp2
+
+    mol = pyscf.M(
+        atom=mol_str, basis=basis, spin=spin, charge=charge, output=log_file, verbose=6
+    )
     mf = RHF(mol).density_fit()
     e_hf = mf.kernel()
 
@@ -902,9 +949,55 @@ def compute_mp2(mol_str: str, basis: str = "def2-SVP", spin: int = 0, charge: in
     }
 
     if gradient:
-        g = pt.nuc_grad_method()
-        g_mp2 = g.kernel()
-        output["gradient"] = g_mp2.get() if hasattr(g_mp2, "get") else np.asarray(g_mp2)
+        if gradient_fd:
+            from mmml.interfaces.pyscf4gpuInterface.finite_difference import (
+                central_difference_gradient,
+            )
+
+            r0 = output["R"]
+            z = output["Z"]
+
+            def energy_fn(r_ang: np.ndarray) -> float:
+                atoms = _RZ_to_atom(r_ang, z)
+                e_tot, _, _ = _mp2_energy_for_atoms(
+                    atoms,
+                    basis=basis,
+                    spin=spin,
+                    charge=charge,
+                    log_file=log_file,
+                    verbose=0,
+                )
+                return e_tot
+
+            output["gradient"] = central_difference_gradient(
+                energy_fn, r0, step_ang=fd_step_ang
+            )
+            output["gradient_method"] = np.array("finite_difference")
+        else:
+            try:
+                g = pt.nuc_grad_method()
+                g_mp2 = g.kernel()
+                output["gradient"] = (
+                    g_mp2.get() if hasattr(g_mp2, "get") else np.asarray(g_mp2)
+                )
+                output["gradient_method"] = np.array("analytic")
+            except NotImplementedError:
+                print(
+                    "[WARN] MP2 analytic gradients unavailable; "
+                    "falling back to finite differences.",
+                    file=sys.stderr,
+                )
+                return compute_mp2(
+                    mol_str=mol_str,
+                    basis=basis,
+                    spin=spin,
+                    charge=charge,
+                    energy=energy,
+                    gradient=True,
+                    gradient_fd=True,
+                    fd_step_ang=fd_step_ang,
+                    log_file=log_file,
+                )
 
     return output
 

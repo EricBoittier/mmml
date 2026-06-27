@@ -34,6 +34,7 @@ MMML_COMMANDS: tuple[str, ...] = (
     "physnet-train",
     "physnet-md",
     "physnet-evaluate",
+    "compare-npz",
     "ef-train",
     "ef-evaluate",
     "ef-md",

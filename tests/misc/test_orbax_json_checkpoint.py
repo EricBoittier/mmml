@@ -164,6 +164,14 @@ def test_normalize_flax_params_strips_config_sibling():
     assert "embedding" in out["params"]
 
 
+def test_normalize_flax_params_training_list_wrapper():
+    bare = _create_synthetic_params()
+    wrapped = [{"params": bare}, 42.0]
+    out = normalize_flax_params_for_apply(wrapped, backend="numpy")
+    assert set(out.keys()) == {"params"}
+    assert "embedding" in out["params"]
+
+
 def test_assert_flax_variables_rejects_bare_module_tree():
     bare = _create_synthetic_params()
     with pytest.raises(ValueError, match="missing top-level 'params'"):
