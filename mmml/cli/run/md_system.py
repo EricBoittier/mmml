@@ -1386,6 +1386,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     add_handoff_cutoff_grid_args(parser)
     parser.add_argument(
+        "--no-run-advice",
+        action="store_true",
+        help=(
+            "Do not print or write next-run guidance (next_run.yaml / next_run.sh) "
+            "when a job finishes or fails."
+        ),
+    )
+    parser.add_argument(
         "--no-stage-summary",
         action="store_true",
         help="Do not write stage_summary.json (campaigns).",
@@ -1533,7 +1541,7 @@ def _maybe_save_job_run_manifest(
     started_at: str,
     finished_at: str,
     exit_code: int,
-) -> Path | None:
+) -> dict[str, Any] | None:
     job_name = resolve_job_name(args)
     if job_name is None:
         return None
@@ -1552,7 +1560,7 @@ def _maybe_save_job_run_manifest(
         output_dir=args.output_dir,
     )
     print(f"mmml md-system: wrote job manifest {path}", flush=True)
-    return path
+    return manifest
 
 
 def _append_optional(cmd: list[str], flag: str, value) -> None:
@@ -2797,7 +2805,7 @@ def main() -> int:
         exit_code = run_backend(backend, argv, args)
         return exit_code
     finally:
-        _maybe_save_job_run_manifest(
+        manifest = _maybe_save_job_run_manifest(
             args,
             backend=backend,
             argv=argv,
@@ -2805,6 +2813,15 @@ def main() -> int:
             finished_at=datetime.now(timezone.utc).isoformat(),
             exit_code=exit_code,
         )
+        if manifest is not None and args.output_dir is not None:
+            from mmml.cli.run.md_run_advice import maybe_emit_run_advice
+
+            maybe_emit_run_advice(
+                args,
+                manifest=manifest,
+                exit_code=exit_code,
+                repo_root=_repo_root(),
+            )
 
 
 if __name__ == "__main__":

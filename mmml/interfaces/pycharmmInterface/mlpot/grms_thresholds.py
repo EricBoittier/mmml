@@ -154,6 +154,26 @@ def resolve_grms_thresholds_from_stats(
             3.0 * charmm_p90,
         )
 
+    hybrid_total = stats.hybrid_total
+    if (
+        hybrid_total is not None
+        and np.isfinite(hybrid_total)
+        and float(hybrid_total) > charmm_bonded_ok_max
+        and float(hybrid_total) > 5.0 * max(float(charmm_total), 1.0e-3)
+    ):
+        # ML geometry stress: cap intervention near the live hybrid total so
+        # density-prep / calculator mini run before dynamics (per-monomer tails
+        # from registration can otherwise set intervention in the thousands).
+        stress_cap = max(25.0, 0.85 * float(hybrid_total))
+        intervention = min(intervention, stress_cap)
+    elif (
+        hybrid_total is not None
+        and hybrid_max is not None
+        and np.isfinite(hybrid_total)
+        and float(hybrid_max) > 3.0 * float(hybrid_total)
+    ):
+        intervention = min(intervention, max(25.0, 0.85 * float(hybrid_total)))
+
     legacy_from_mol = float(n_mol) * 0.75
     legacy_from_atoms = float(n_at) * 0.2
     max_dyn = max(

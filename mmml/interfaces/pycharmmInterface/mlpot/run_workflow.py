@@ -20,6 +20,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_checkpoint,
     resolve_constrain_resids,
     resolve_dcd_nsavc,
+    resolve_dcd_nsavc_for_args,
     resolve_dynamics_print_kwargs,
     resolve_heat_ihtfrq,
     resolve_heat_firstt_finalt,
@@ -47,7 +48,6 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     CharmmTrajectoryFiles,
     MinimizeWithMlpotConfig,
     apply_heat_ramp_frequencies,
-    assign_velocities_at_temperature,
     build_heat_dynamics,
     build_nve_dynamics,
     minimize_charmm_mm_only,
@@ -161,6 +161,8 @@ def _pretreat_use_fixed_box_nvt(args: argparse.Namespace, *, use_pbc: bool) -> b
     """Pretreat equi/prod at explicit ``--box-size`` use Hoover NVT, not CPT NPT."""
     if not use_pbc:
         return False
+    if bool(getattr(args, "mini_box_equil_fixed_nvt", False)):
+        return True
     raw = getattr(args, "box_size", None)
     if raw is None:
         return False
@@ -205,21 +207,32 @@ def _run_charmm_mm_pretreat_cpt_stage(
 
     nstep = max(1, ps_to_nsteps(timestep_ps, duration_ps))
     save = bool(getattr(args, "save", True))
-    dcd_nsavc = resolve_dcd_nsavc(
-        dcd_nsavc=args.dcd_nsavc,
-        dcd_interval_ps=getattr(args, "dcd_interval_ps", None),
-        timestep_ps=timestep_ps,
+    dcd_nsavc = resolve_dcd_nsavc_for_args(
+        args,
         nstep=nstep,
+        timestep_ps=timestep_ps,
     )
     save_interval_ps = timestep_ps * max(1, dcd_nsavc)
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
         apply_pretreat_dyn_freq_kwargs,
+        resolve_charmm_mm_pretreat_cpt_echeck,
         resolve_pretreat_dynamics_print_kwargs,
     )
 
     dyn_print = resolve_pretreat_dynamics_print_kwargs(nstep=nstep)
-    stage_echeck = max(echeck, 500.0) if echeck > 0 else echeck
+    stage_echeck = resolve_charmm_mm_pretreat_cpt_echeck(args, echeck=echeck)
+    if stage_echeck <= 0 and not getattr(args, "quiet", False):
+        print(
+            f"CHARMM MM pretreat {stage}: ECHECK disabled (NPT box prep)",
+            flush=True,
+        )
     use_cpt = use_pbc and not _pretreat_use_fixed_box_nvt(args, use_pbc=use_pbc)
+    if not getattr(args, "quiet", False):
+        print(
+            f"CHARMM MM pretreat {stage}: "
+            f"{'CPT NPT' if use_cpt else 'Hoover NVT (fixed box)'}",
+            flush=True,
+        )
     cpt_opts = _pretreat_npt_cpt_builder_options(args, pressure_atm=pressure_atm)
 
     if stage == "equi":
@@ -235,14 +248,13 @@ def _run_charmm_mm_pretreat_cpt_stage(
                 **cpt_opts,
             )
         else:
-            kw = build_nvt_equilibration_dynamics(
+            kw = build_nvt_production_dynamics(
                 timestep_ps=timestep_ps,
                 duration_ps=duration_ps,
                 save_interval_ps=save_interval_ps,
                 temp=temp,
                 restart=False,
                 echeck=stage_echeck,
-                include_firstt=include_firstt,
             )
     else:
         if use_cpt:
@@ -300,6 +312,14 @@ def _run_charmm_mm_pretreat_cpt_stage(
         temp=temp,
         box_side=box_side,
     )
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import apply_charmm_dynamics_echeck_kw
+
+    apply_charmm_dynamics_echeck_kw(kw, stage_echeck)
+    if not getattr(args, "quiet", False):
+        print(
+            f"CHARMM MM pretreat {stage}: dynamics echeck={kw['echeck']}",
+            flush=True,
+        )
     run_dynamics_with_io(
         kw,
         io,
@@ -484,15 +504,16 @@ def run_charmm_mm_pretreat_before_mlpot(
             )
 
             if heat_integrated == 0:
-                assign_velocities_at_temperature(
-                    float(heat_firstt),
+                _configure_heat_dynamics_start(
+                    kw,
+                    io,
+                    coords_in_memory=True,
+                    restart_from_file=False,
                     timestep_ps=timestep_ps,
-                    restart_path=None,
                     use_pbc=use_pbc,
+                    quiet=True,
+                    heat_thermostat="scale",
                 )
-                kw["restart"] = False
-                kw["new"] = False
-                kw["start"] = False
             else:
                 _configure_heat_dynamics_start(
                     kw,

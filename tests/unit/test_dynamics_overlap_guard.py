@@ -2299,21 +2299,20 @@ def test_overlap_aborts_before_charmm_when_scratch_restart_is_invalid(tmp_path):
     assert len(calls) == 1
 
 
-def test_assign_velocities_at_temperature_uses_nstep_zero():
-    from unittest.mock import patch
+def test_run_dynamics_rejects_nstep_zero():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics
 
+    with pytest.raises(ValueError, match="nstep must be >= 1"):
+        run_dynamics({"nstep": 0, "timestep": 0.00025})
+
+
+def test_assign_velocities_at_temperature_raises():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         assign_velocities_at_temperature,
     )
 
-    with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.run_dynamics"
-    ) as run_dyn:
+    with pytest.raises(RuntimeError, match="nstep=0 Boltzmann assign"):
         assign_velocities_at_temperature(48.0, use_pbc=False)
-    kw = run_dyn.call_args.args[0]
-    assert int(kw["nstep"]) == 0
-    assert int(kw["iasvel"]) == 1
-    assert float(kw["firstt"]) == 48.0
 
 
 def test_overlap_config_for_stage_heat_uses_mid_segment_checks_by_default():
@@ -3120,6 +3119,27 @@ def test_harmonize_dynamics_frequency_for_remainder_chunk():
     _harmonize_overlap_chunk_frequencies(kw3b, 250)
     assert kw3b["nsavc"] == 16
 
+    kw_pretreat = {
+        "inbfrq": 200,
+        "ihbfrq": 200,
+        "ilbfrq": 200,
+        "imgfrq": 200,
+        "nsavc": 80,
+        "nprint": 80,
+        "iprfrq": 80,
+        "isvfrq": 80,
+    }
+    _harmonize_overlap_chunk_frequencies(kw_pretreat, 250)
+    assert kw_pretreat["inbfrq"] == 125
+    assert kw_pretreat["imgfrq"] == 125
+    assert kw_pretreat["imgfrq"] % kw_pretreat["inbfrq"] == 0
+
+    kw_mismatch = {"inbfrq": 300, "imgfrq": 100, "ihbfrq": 100, "ilbfrq": 100}
+    _harmonize_overlap_chunk_frequencies(kw_mismatch, 250)
+    assert kw_mismatch["imgfrq"] == 100
+    assert kw_mismatch["inbfrq"] == 100
+    assert kw_mismatch["imgfrq"] % kw_mismatch["inbfrq"] == 0
+
     kw4 = {
         "nsavc": 250,
         "_target_dcd_nsavc": 250,
@@ -3210,6 +3230,33 @@ def test_harmonize_overlap_chunk_non_loose_pbc_lifts_ntrfrq():
     kw = {"ntrfrq": 1000, "nstep": 1250, "iprfrq": 1250, "isvfrq": 1250}
     _harmonize_overlap_chunk_frequencies(kw, 1250, loose_pbc=False)
     assert kw["ntrfrq"] == 1251
+
+
+def test_harmonize_overlap_chunk_fixed_volume_lifts_ixtfrq():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _harmonize_overlap_chunk_frequencies,
+    )
+
+    kw = {"ixtfrq": 1000, "nstep": 1600, "iprfrq": 1600, "isvfrq": 1600}
+    _harmonize_overlap_chunk_frequencies(kw, 1600, loose_pbc=False)
+    assert kw["ixtfrq"] == 1601
+
+
+def test_harmonize_overlap_chunk_npt_keeps_ixtfrq():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _harmonize_overlap_chunk_frequencies,
+    )
+
+    kw = {
+        "ixtfrq": 1000,
+        "nstep": 1600,
+        "cpt": True,
+        "pmass": 16,
+        "iprfrq": 1600,
+        "isvfrq": 1600,
+    }
+    _harmonize_overlap_chunk_frequencies(kw, 1600, loose_pbc=False)
+    assert kw["ixtfrq"] == 1000
 
 
 def test_harmonize_overlap_chunk_loose_pbc_disables_image_freqs():
@@ -3461,7 +3508,7 @@ def test_prepare_overlap_chunk_skips_upinb_when_mlpot_active(tmp_path: Path):
     assert ctx.charmm_cubic_box_side_A == pytest.approx(50.0)
 
 
-def test_prepare_post_rescue_overlap_handoff_assigns_velocities_in_memory():
+def test_prepare_post_rescue_overlap_handoff_sets_single_dyna_start():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _prepare_post_rescue_overlap_handoff,
     )
@@ -3476,22 +3523,16 @@ def test_prepare_post_rescue_overlap_handoff_assigns_velocities_in_memory():
     }
     ctx = mock.Mock(use_pbc=True, charmm_cubic_box_side_A=180.0)
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.assign_velocities_at_temperature",
-    ) as assign_vel, mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
     ) as ensure_crystal:
         _prepare_post_rescue_overlap_handoff(chunk_kw, mlpot_ctx=ctx)
 
-    assign_vel.assert_called_once_with(
-        63.0,
-        timestep_ps=0.0001,
-        restart_path=None,
-        use_pbc=True,
-    )
     ensure_crystal.assert_called_once_with(180.0, quiet=True)
     assert chunk_kw["restart"] is False
-    assert chunk_kw["iasvel"] == 0
+    assert chunk_kw["start"] is True
+    assert chunk_kw["iasvel"] == 1
     assert chunk_kw["iunrea"] == -1
+    assert chunk_kw["firstt"] == 63.0
     assert "finalt" not in chunk_kw
 
 
@@ -3512,20 +3553,14 @@ def test_post_rescue_bath_target_prefers_hoover_reft_for_cpt_prod():
     }
     ctx = mock.Mock(use_pbc=True, charmm_cubic_box_side_A=40.0)
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.assign_velocities_at_temperature",
-    ) as assign_vel, mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
     ):
         _prepare_post_rescue_overlap_handoff(chunk_kw, mlpot_ctx=ctx)
 
-    assign_vel.assert_called_once_with(
-        90.0,
-        timestep_ps=0.00025,
-        restart_path=None,
-        use_pbc=True,
-    )
     assert chunk_kw["hoover reft"] == 90.0
     assert chunk_kw["firstt"] == 90.0
+    assert chunk_kw["start"] is True
+    assert chunk_kw["iasvel"] == 1
 
 
 def test_mlpot_cpt_overlap_uses_scratch_restart_handoff(tmp_path, monkeypatch):

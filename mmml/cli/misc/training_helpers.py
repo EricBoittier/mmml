@@ -296,7 +296,7 @@ def run_training(
         ckpt_dir = Path("checkpoints")
     
     # Run training
-    params_out = train_model(
+    ema_params, _best_loss, _run_ckpt_dir = train_model(
         train_key,
         model,
         train_data,
@@ -326,7 +326,7 @@ def run_training(
     )
     
     result = {
-        'params': params_out,
+        'params': ema_params,
         'setup': setup,
         'config': config,
     }
@@ -336,7 +336,7 @@ def run_training(
         now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         params_file = f"{config.tag}_params_{now}.json"
         with open(params_file, 'w') as f:
-            json.dump(to_jsonable(params_out), f, indent=2)
+            json.dump(to_jsonable(ema_params), f, indent=2)
         result['params_file'] = params_file
     
     return result

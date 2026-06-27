@@ -50,6 +50,7 @@ def test_apply_liquid_box_profile_dense_enables_liquid_prep():
     assert args.setup == "pbc_nvt"
     assert args.box_auto == "density"
     assert int(args.mini_lattice_abnr_steps) >= 200
+    assert float(args.min_intermonomer_atom_distance) == pytest.approx(1.0)
 
 
 def test_apply_liquid_box_profile_standard_skips_liquid_prep():
@@ -189,3 +190,121 @@ def test_liquid_box_cli_parser_requires_composition():
     )
     assert ns.composition == "DCM:10"
     assert ns.profile == "standard"
+
+
+def test_composition_tag_from_liquid_box_args_without_residue():
+    """liquid-box uses --composition only; cluster tag must not require --residue."""
+    from mmml.cli.run.liquid_box import build_parser
+    from mmml.cli.run.md_pbc_suite.ase import _parse_composition
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import composition_tag
+
+    parser = build_parser()
+    args = parser.parse_args(
+        ["--composition", "DCM:206", "--output-dir", "/tmp/x", "--profile", "dense"]
+    )
+    composition = _parse_composition(args.composition)
+    n_mol = sum(count for _, count in composition)
+    residue = getattr(args, "residue", composition[0][0]).upper()
+    tag = composition_tag(composition, residue, n_mol)
+    assert tag == "dcm_206"
+    assert not hasattr(args, "residue")
+
+
+def test_liquid_box_args_resolve_dcd_nsavc_without_flag():
+    """Mini box equil must not require md-system-only --dcd-nsavc."""
+    from mmml.cli.run.liquid_box import build_parser
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_dcd_nsavc_for_args
+
+    parser = build_parser()
+    args = parser.parse_args(
+        ["--composition", "DCM:206", "--output-dir", "/tmp/x", "--profile", "dense"]
+    )
+    timestep_ps = float(args.dt_fs) * 1.0e-3
+    nstep = max(1, int(round(2.0 / timestep_ps)))
+    nsavc = resolve_dcd_nsavc_for_args(args, nstep=nstep, timestep_ps=timestep_ps)
+    assert nsavc >= 1
+    assert not hasattr(args, "dcd_nsavc")
+
+
+def test_liquid_box_pretreat_cpt_echeck_disabled_by_default():
+    from mmml.cli.run.liquid_box import build_parser
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        resolve_charmm_mm_pretreat_cpt_echeck,
+    )
+
+    parser = build_parser()
+    args = parser.parse_args(
+        ["--composition", "DCM:103", "--output-dir", "/tmp/x", "--profile", "dense"]
+    )
+    assert resolve_charmm_mm_pretreat_cpt_echeck(args, echeck=5150.0) == -1.0
+
+
+def test_liquid_box_pretreat_cpt_echeck_explicit_override():
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        resolve_charmm_mm_pretreat_cpt_echeck,
+    )
+
+    args = argparse.Namespace(
+        charmm_mm_pretreat_echeck=8000.0,
+        no_echeck=False,
+        no_scale_echeck=False,
+    )
+    assert resolve_charmm_mm_pretreat_cpt_echeck(args, echeck=100.0) == pytest.approx(8000.0)
+
+
+def test_apply_liquid_box_profile_dense_sets_no_echeck():
+    args = _args(profile="dense")
+    apply_liquid_box_profile(args)
+    assert args.no_echeck is True
+
+
+def test_configure_liquid_box_mini_equil_uses_fixed_box_nvt():
+    from mmml.interfaces.pycharmmInterface.mlpot.box_equil import (
+        configure_liquid_box_mini_equil_args,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+        should_run_mini_box_equil,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import (
+        _pretreat_use_fixed_box_nvt,
+    )
+
+    args = _args(profile="dense", mini_box_equil_ps=2.0)
+    apply_liquid_box_profile(args)
+    assert args.mini_box_equil_fixed_nvt is True
+    configure_liquid_box_mini_equil_args(args, box_side_A=28.5)
+    assert args.box_size == pytest.approx(28.5)
+    assert args.mini_box_equil_allow_fixed_box is True
+    assert _pretreat_use_fixed_box_nvt(args, use_pbc=True)
+    assert should_run_mini_box_equil(
+        args,
+        charmm_pbc=True,
+        pretreat_mm=False,
+        stages=["mini"],
+    )
+
+
+def test_pretreat_fixed_nvt_flag_without_box_size():
+    from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import (
+        _pretreat_use_fixed_box_nvt,
+    )
+
+    args = argparse.Namespace(mini_box_equil_fixed_nvt=True)
+    assert _pretreat_use_fixed_box_nvt(args, use_pbc=True)
+
+
+def test_apply_charmm_dynamics_echeck_kw_sets_global_state(monkeypatch):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        apply_charmm_dynamics_echeck_kw,
+    )
+
+    calls: list[float] = []
+    monkeypatch.setattr(
+        "pycharmm.dynamics.set_echeck",
+        lambda val: calls.append(float(val)),
+    )
+    kw: dict[str, float | int] = {"echeck": 500.0}
+    apply_charmm_dynamics_echeck_kw(kw, -1.0)
+    assert kw["echeck"] == -1.0
+    assert kw["ichecw"] == 0
+    assert calls == [-1.0]

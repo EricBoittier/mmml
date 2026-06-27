@@ -333,7 +333,11 @@ def _build_stage_dynamics_kw(
     if stage == "heat":
         heat_firstt, heat_finalt = resolve_heat_firstt_finalt(args, default_temp=temp)
         # ML USER-only heat (no SHAKE) often exceeds tight echeck before Hoover equilibrates.
-        if getattr(args, "no_echeck_heat", False) or getattr(args, "no_echeck", False):
+        if (
+            getattr(args, "no_echeck_heat", False)
+            or getattr(args, "no_echeck", False)
+            or getattr(args, "_auto_no_echeck_heat", False)
+        ):
             heat_echeck = -1.0
         else:
             from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
@@ -507,7 +511,6 @@ def _configure_heat_dynamics_start(
     """
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _valid_restart_file,
-        assign_velocities_at_temperature,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_restart_last_step,
@@ -525,34 +528,16 @@ def _configure_heat_dynamics_start(
         io.restart_read = None
         kw["restart"] = False
         kw["new"] = False
-        if hoover_cpt_heat:
-            # Single dyna: Boltzmann at FIRSTT (start=True, iasvel=1).  A separate
-            # nstep=0 assign before Hoover CPT leaves barostat pistons uninitialized
-            # (garbage PIXX/PRESS at step 0) and triggers a second dynamc/lambdata_init
-            # that can segfault on BLOCK builds.
-            kw["iasvel"] = 1
-            kw["start"] = True
-            if not quiet:
-                print(
-                    f"HEAT: dyna start FIRSTT={firstt:.1f} K "
-                    "(in-memory coords after mini); Hoover CPT NVT (no ihtfrq); "
-                    "single dyna (no nstep=0 assign)",
-                    flush=True,
-                )
-            return
-        assign_velocities_at_temperature(
-            firstt,
-            timestep_ps=timestep_ps,
-            restart_path=None,
-            use_pbc=use_pbc,
-        )
-        kw["iasvel"] = 1
-        kw["iasors"] = 0
-        kw["start"] = False
+        kw["start"] = True
         if not quiet:
             print(
-                f"HEAT: Boltzmann velocities at FIRSTT={firstt:.1f} K "
-                "(in-memory coords after mini); ihtfrq scales (iasors=0)",
+                f"HEAT: dyna start FIRSTT={firstt:.1f} K "
+                "(in-memory coords after mini); "
+                + (
+                    "Hoover CPT NVT (no ihtfrq); single dyna (no nstep=0 assign)"
+                    if hoover_cpt_heat
+                    else "ihtfrq scales (iasors=0); single dyna (no nstep=0 assign)"
+                ),
                 flush=True,
             )
         return
@@ -581,35 +566,19 @@ def _configure_heat_dynamics_start(
 
     if restart_from_file and io.restart_read is not None:
         restart_path = io.restart_read
-        if hoover_cpt_heat:
-            kw["restart"] = True
-            kw["new"] = False
-            kw["start"] = True
-            kw["iasvel"] = 1
-            if not quiet:
-                print(
-                    f"HEAT: dyna restart+start FIRSTT={firstt:.1f} K "
-                    f"(coords from {restart_path}); Hoover CPT NVT (no ihtfrq); "
-                    "single dyna (no nstep=0 assign)",
-                    flush=True,
-                )
-            return
-        assign_velocities_at_temperature(
-            firstt,
-            timestep_ps=timestep_ps,
-            restart_path=restart_path,
-            use_pbc=use_pbc,
-        )
-        io.restart_read = None
-        kw["restart"] = False
+        kw["restart"] = True
         kw["new"] = False
-        kw.pop("iunrea", None)
-        kw["iunrea"] = -1
-        kw["start"] = False
+        kw["start"] = True
+        kw["iasvel"] = 1
         if not quiet:
             print(
-                f"HEAT: Boltzmann velocities at FIRSTT={firstt:.1f} K "
-                f"(coords from {restart_path}); ihtfrq scales (iasors=0)",
+                f"HEAT: dyna restart+start FIRSTT={firstt:.1f} K "
+                f"(coords from {restart_path}); "
+                + (
+                    "Hoover CPT NVT (no ihtfrq); single dyna (no nstep=0 assign)"
+                    if hoover_cpt_heat
+                    else "ihtfrq scales (iasors=0); single dyna (no nstep=0 assign)"
+                ),
                 flush=True,
             )
         return
@@ -640,61 +609,43 @@ def _configure_nve_dynamics_start(
     quiet: bool,
     temp: float,
 ) -> None:
-    """One-shot Boltzmann draw at ``temp``, then microcanonical ``dyna`` (no START).
+    """One-shot Boltzmann draw at ``temp`` in the main ``dyna`` call (``start=True``).
 
     After MLpot mini, coordinates are in memory but the saved CRD is not a CHARMM
-    restart (memory handoff).  Omit START and keep ``iasvel=1`` so CHARMM cannot
-    reuse comparison coordinates as velocities if START lingers from the assign
-    call.  Mirrors the heat-stage ``assign_velocities_at_temperature`` pattern.
+    restart (memory handoff).  Use ``start=True`` and ``iasvel=1`` so CHARMM assigns
+    at ``FIRSTT`` in the same call as integration (``nstep>=1``).
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
-        assign_velocities_at_temperature,
-    )
-
     target_t = float(temp)
     for key in ("iasors", "iscale", "iscvel", "ichecw", "firstt", "finalt", "tbath", "tstruct"):
         kw.pop(key, None)
     kw["iasvel"] = 1
     kw["ihtfrq"] = 0
+    kw["firstt"] = target_t
+    kw["tbath"] = target_t
+    kw["tstruct"] = target_t
 
     if coords_in_memory:
         io.restart_read = None
         kw["restart"] = False
         kw["new"] = False
-        assign_velocities_at_temperature(
-            target_t,
-            timestep_ps=timestep_ps,
-            restart_path=None,
-            use_pbc=use_pbc,
-        )
-        kw["start"] = False
-        # Match HEAT: continue from in-memory state. Do not READYN the scratch
-        # restart written after the 1-step Boltzmann draw — CHARMM often leaves a
-        # coordinate-history REST (EOF on READYN) while coords/vel are valid in RAM.
+        kw["start"] = True
         if not quiet:
             print(
-                f"NVE: Boltzmann velocities at {target_t:.1f} K "
-                "(in-memory coords after mini); start omitted, iasvel=1",
+                f"NVE: dyna start at {target_t:.1f} K "
+                "(in-memory coords after mini); single dyna (no nstep=0 assign)",
                 flush=True,
             )
         return
 
     if restart_from_file and io.restart_read is not None:
         restart_path = io.restart_read
-        assign_velocities_at_temperature(
-            target_t,
-            timestep_ps=timestep_ps,
-            restart_path=restart_path,
-            use_pbc=use_pbc,
-        )
-        io.restart_read = None
-        kw["restart"] = False
+        kw["restart"] = True
         kw["new"] = False
-        kw["start"] = False
+        kw["start"] = True
         if not quiet:
             print(
-                f"NVE: Boltzmann velocities at {target_t:.1f} K "
-                f"(coords from {restart_path}); start omitted, iasvel=1",
+                f"NVE: dyna restart+start at {target_t:.1f} K "
+                f"(coords from {restart_path}); single dyna (no nstep=0 assign)",
                 flush=True,
             )
         return
@@ -1222,13 +1173,13 @@ def _load_or_build_cluster(
 def run_staged_workflow(args: argparse.Namespace) -> int:
     from mmml.interfaces.pycharmmInterface.mlpot.cleanup_mode import apply_cleanup_defaults
     from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
-        apply_density_prep_resilient_defaults,
+        apply_condensed_phase_md_defaults,
         liquid_prep_enabled,
         run_pre_mlpot_geometry_gate,
     )
 
     apply_cleanup_defaults(args)
-    apply_density_prep_resilient_defaults(args)
+    apply_condensed_phase_md_defaults(args)
     if getattr(args, "mlpot_profile", False):
         import os
         os.environ["MMML_MLPOT_PROFILE"] = "1"
@@ -1249,6 +1200,9 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     dynamics_constrain = resolve_constrain_resids(args)
     ckpt = resolve_checkpoint(args.checkpoint)
     z, r, n_mol, tag = _load_or_build_cluster(args, handoff_in=handoff_in)
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import reconcile_n_monomers_with_psf
+
+    n_mol, _ = reconcile_n_monomers_with_psf(args, z, n_mol)
     if handoff_in is not None:
         from mmml.cli.run.md_handoff import validate_handoff_matches_cluster_geometry
 
@@ -1328,6 +1282,12 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     charmm_pbc = resolve_charmm_use_pbc(args)
     mlpot_pbc = resolve_mlpot_use_pbc(args)
     loose_pbc = resolve_loose_pbc(charmm_pbc, mlpot_pbc)
+    if charmm_pbc:
+        from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+            apply_certified_box_size_from_artifacts,
+        )
+
+        apply_certified_box_size_from_artifacts(args)
     box_side = resolve_pbc_box_side(args, r) if charmm_pbc else None
     atoms_per_list = getattr(args, "_cluster_atoms_per_list", None)
     if atoms_per_list is None and int(n_mol) > 0 and int(n_atoms) % int(n_mol) == 0:
@@ -1336,6 +1296,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
             apply_mc_density_equalization,
         )
+        from mmml.utils.intermonomer_geometry import resolve_pre_mlpot_overlap_min_distance
 
         r, box_side_after_mc, mc_density_summary = apply_mc_density_equalization(
             args,
@@ -1349,9 +1310,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 or bool(getattr(args, "skip_cluster_build", False))
                 or getattr(args, "from_psf", None) is not None
             ),
-            min_intermonomer_distance_A=float(
-                getattr(args, "min_intermonomer_atom_distance", 0.1) or 0.1
-            ),
+            min_intermonomer_distance_A=resolve_pre_mlpot_overlap_min_distance(args),
             min_box_side_A=(
                 cubic_box_length_from_geometry(
                     r,
@@ -1774,6 +1733,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         ckpt,
         n_atoms,
         n_mol,
+        atoms_per_monomer=getattr(args, "_cluster_atoms_per_list", None),
         ml_batch_size=getattr(args, "ml_batch_size", None),
         ml_gpu_count=getattr(args, "ml_gpu_count", None),
         ml_max_active_dimers=getattr(args, "ml_max_active_dimers", None),
@@ -2164,6 +2124,40 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             )
             current_grms = float(ladder_grms)
             setattr(args, "_density_prep_ladder_summary", ladder_summary.to_dict())
+
+        from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+            run_pre_dynamics_hybrid_calculator_prep,
+        )
+
+        calc_grms, calc_ran = run_pre_dynamics_hybrid_calculator_prep(
+            ctx,
+            args,
+            context_prefix="Pre-dynamics",
+            verbose=not args.quiet,
+        )
+        if calc_ran:
+            current_grms = float(calc_grms)
+            current_grms = refresh_mlpot_energy_and_grms(
+                ctx,
+                context="Pre-dynamics gate (post-calculator mini)"
+                if not args.quiet
+                else "",
+            )
+
+        _auto_echeck_off_grms = 30.0
+        if (
+            float(current_grms) > _auto_echeck_off_grms
+            and not getattr(args, "no_echeck_heat", False)
+            and not getattr(args, "no_echeck", False)
+        ):
+            if not args.quiet:
+                print(
+                    f"Pre-heat: hybrid GRMS {float(current_grms):.1f} > "
+                    f"{_auto_echeck_off_grms:.0f} kcal/mol/Å — auto-disabling ECHECK "
+                    "for heat (ML geometry stress; set no_echeck_heat: true to silence)",
+                    flush=True,
+                )
+            setattr(args, "_auto_no_echeck_heat", True)
 
         assert_dynamics_ready(
             max_grms=max_grms,

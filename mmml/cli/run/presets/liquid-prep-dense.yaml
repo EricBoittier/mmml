@@ -1,0 +1,27 @@
+# Resilient dense-liquid prep: MC density, mini box equil, 1 Å contact floor, ladder.
+defaults:
+  liquid_prep: true
+  density_prep_ladder: true
+  density_prep_ladder_max_rounds: 3
+  density_prep_lattice_abnr_steps: 200
+  mini_lattice_abnr_steps: 200
+  mini_lattice_abnr_allow_fixed_box: true
+  mini_box_equil_ps: 2.0
+  mini_box_equil_allow_fixed_box: true
+  mini_box_equil_fixed_nvt: true
+  box_auto: density
+  bulk_density_fraction: 0.75
+  target_density_g_cm3: 1.326
+  mc_density_equalize: true
+  mc_density_steps: 80
+  mc_density_min_scale: 0.35
+  mc_density_max_scale: 1.5
+  min_intermonomer_atom_distance: 1.0
+  charmm_pre_minimize: true
+  charmm_sd_steps: 1000
+  charmm_abnr_steps: 1000
+  mini_nstep: 500
+  bonded_mm_mini: true
+  bonded_mm_mini_after: mini,heat
+  bonded_mm_mini_steps: 500
+  max_grms_before_dyn: 50.0

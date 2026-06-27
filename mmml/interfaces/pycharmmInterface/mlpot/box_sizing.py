@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import json
+from pathlib import Path
 from typing import Literal
 
 import numpy as np
@@ -42,6 +44,51 @@ def parse_composition_dict(spec: str | None) -> dict[str, int] | None:
             raise ValueError(f"Invalid composition token: {tok!r}")
         out[residue] = out.get(residue, 0) + int(count)
     return out or None
+
+
+def resolve_box_size_from_certified_artifacts(args: argparse.Namespace) -> float | None:
+    """Read ``box_side_A`` from ``box.json`` next to liquid-box / ``--from-psf`` inputs."""
+    path_attrs = ("from_psf", "from_crd", "restart_from")
+    seen: set[Path] = set()
+    for attr in path_attrs:
+        raw = getattr(args, attr, None)
+        if not raw:
+            continue
+        start = Path(str(raw)).expanduser().resolve()
+        for candidate in (start, start.parent, start.parent.parent):
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            box_json = candidate / "box.json"
+            if not box_json.is_file():
+                continue
+            try:
+                payload = json.loads(box_json.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError, TypeError, ValueError):
+                continue
+            side_raw = payload.get("box_side_A", payload.get("box_side"))
+            if side_raw is None:
+                continue
+            side = float(side_raw)
+            if side > 0.0:
+                return side
+    return None
+
+
+def apply_certified_box_size_from_artifacts(args: argparse.Namespace) -> float | None:
+    """Set ``args.box_size`` from ``box.json`` when unset; return the side (Å)."""
+    if getattr(args, "box_size", None) is not None:
+        return float(args.box_size)
+    side = resolve_box_size_from_certified_artifacts(args)
+    if side is None:
+        return None
+    args.box_size = float(side)
+    if not getattr(args, "quiet", False):
+        print(
+            f"PBC box side from certified box.json: {float(side):.3f} Å",
+            flush=True,
+        )
+    return float(side)
 
 
 def resolve_box_auto_mode(args: argparse.Namespace) -> BoxAutoMode:

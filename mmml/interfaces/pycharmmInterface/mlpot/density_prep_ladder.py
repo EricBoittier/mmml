@@ -125,11 +125,37 @@ def apply_density_prep_resilient_defaults(args: argparse.Namespace) -> None:
     if float(getattr(args, "mini_box_equil_ps", 0.0) or 0.0) <= 0.0:
         args.mini_box_equil_ps = 2.0
 
+    if getattr(args, "min_intermonomer_atom_distance", None) is None:
+        from mmml.utils.intermonomer_geometry import DEFAULT_PRE_MLPOT_OVERLAP_MIN_A
+
+        args.min_intermonomer_atom_distance = float(DEFAULT_PRE_MLPOT_OVERLAP_MIN_A)
+
     if getattr(args, "box_size", None) is not None:
         args.mini_lattice_abnr_allow_fixed_box = True
         args.mini_box_equil_allow_fixed_box = True
 
     args.calculator_pre_minimize = bool(getattr(args, "calculator_pre_minimize", True))
+    _bump_int_attr(args, "pre_min_steps", 200)
+    _bump_int_attr(args, "fire_min_steps", 200)
+
+
+def condensed_phase_md_prep_recommended(args: argparse.Namespace) -> bool:
+    """True when md-system should use dense-liquid prep defaults without Packmol."""
+    if liquid_prep_enabled(args):
+        return True
+    if getattr(args, "from_psf", None) or getattr(args, "skip_cluster_build", False):
+        return True
+    n_mol = _composition_monomer_count(args)
+    return n_mol is not None and int(n_mol) >= 15
+
+
+def apply_condensed_phase_md_defaults(args: argparse.Namespace) -> None:
+    """Apply resilient liquid prep defaults for certified-box / large-cluster md-system runs."""
+    if not condensed_phase_md_prep_recommended(args):
+        return
+    if not liquid_prep_enabled(args):
+        args.liquid_prep = True
+    apply_density_prep_resilient_defaults(args)
 
 
 @dataclass
@@ -467,7 +493,7 @@ def run_density_prep_ladder(
         )
 
     max_rounds = max(1, int(getattr(args, "density_prep_ladder_max_rounds", 3) or 3))
-    min_overlap = float(getattr(args, "min_intermonomer_atom_distance", 0.1) or 0.1)
+    min_overlap = resolve_pre_mlpot_overlap_min_distance(args)
     spacing = getattr(args, "spacing", None)
     seed = getattr(args, "seed", None)
     lattice_steps = int(getattr(args, "density_prep_lattice_abnr_steps", 0) or 0)
@@ -651,6 +677,7 @@ def run_density_prep_ladder(
             from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
                 HybridCalculatorFireConfig,
                 HybridCalculatorMinimizeConfig,
+                coerce_hybrid_minimize_result,
                 minimize_hybrid_calculator_before_sd,
                 minimize_hybrid_calculator_fire_before_sd,
             )
@@ -689,12 +716,16 @@ def run_density_prep_ladder(
             ):
                 step_label = f"round{round_idx + 1}:{tag}"
                 try:
-                    grms = runner(
-                        mlpot_ctx,
-                        context_prefix=f"Density prep ladder ({step_label})",
-                        **kwargs,
+                    mini = coerce_hybrid_minimize_result(
+                        runner(
+                            mlpot_ctx,
+                            context_prefix=f"Density prep ladder ({step_label})",
+                            **kwargs,
+                        )
                     )
-                    result.steps_applied.append(step_label)
+                    grms = float(mini.grms)
+                    if mini.ran:
+                        result.steps_applied.append(step_label)
                     grms = _refresh_after_step(step_label)
                 except Exception as exc:
                     journal.skip_step(step_label, str(exc))
@@ -1196,6 +1227,7 @@ def run_geometry_packing_recovery(
         from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
             HybridCalculatorFireConfig,
             HybridCalculatorMinimizeConfig,
+            coerce_hybrid_minimize_result,
             minimize_hybrid_calculator_before_sd,
             minimize_hybrid_calculator_fire_before_sd,
         )
@@ -1229,11 +1261,16 @@ def run_geometry_packing_recovery(
 
         def _run_bfgs() -> float:
             nonlocal grms
-            grms = minimize_hybrid_calculator_before_sd(
-                mlpot_ctx,
-                bfgs_config,
-                context_prefix=f"{context_prefix} (BFGS)",
+            mini = coerce_hybrid_minimize_result(
+                minimize_hybrid_calculator_before_sd(
+                    mlpot_ctx,
+                    bfgs_config,
+                    context_prefix=f"{context_prefix} (BFGS)",
+                )
             )
+            grms = float(mini.grms)
+            if not mini.ran:
+                return refresh_mlpot_energy_and_grms(mlpot_ctx, context="")
             refreshed = refresh_mlpot_energy_and_grms(mlpot_ctx, context="")
             journal.record_step(f"{context_prefix} (post-BFGS)", _metrics(refreshed))
             _record_cleanup_step(f"{context_prefix} (post-BFGS)", refreshed)
@@ -1241,11 +1278,16 @@ def run_geometry_packing_recovery(
 
         def _run_fire() -> float:
             nonlocal grms
-            grms = minimize_hybrid_calculator_fire_before_sd(
-                mlpot_ctx,
-                config=fire_config,
-                context_prefix=f"{context_prefix} (FIRE)",
+            fire = coerce_hybrid_minimize_result(
+                minimize_hybrid_calculator_fire_before_sd(
+                    mlpot_ctx,
+                    config=fire_config,
+                    context_prefix=f"{context_prefix} (FIRE)",
+                )
             )
+            grms = float(fire.grms)
+            if not fire.ran:
+                return refresh_mlpot_energy_and_grms(mlpot_ctx, context="")
             refreshed = refresh_mlpot_energy_and_grms(mlpot_ctx, context="")
             journal.record_step(f"{context_prefix} (post-FIRE)", _metrics(refreshed))
             _record_cleanup_step(f"{context_prefix} (post-FIRE)", refreshed)

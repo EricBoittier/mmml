@@ -637,6 +637,16 @@ def add_charmm_mm_pretreat_physics_args(group: Any) -> None:
         ),
     )
     group.add_argument(
+        "--charmm-mm-pretreat-echeck",
+        type=float,
+        default=None,
+        metavar="KCAL",
+        help=(
+            "ECHECK for pretreat CPT equi/prod and mini box equil (kcal/mol). "
+            "Default: disabled. Use 0 or a negative value to keep ECHECK off."
+        ),
+    )
+    group.add_argument(
         "--charmm-mm-pretreat-inbfrq",
         type=int,
         default=None,
@@ -1363,7 +1373,11 @@ def build_cluster_from_args_with_tag(
             )
         n_mol = sum(count for _, count in composition)
         composition_summary = {str(res): int(count) for res, count in composition}
-        tag = composition_tag(composition, args.residue.upper(), n_mol)
+        tag = composition_tag(
+            composition,
+            getattr(args, "residue", composition[0][0]).upper(),
+            n_mol,
+        )
     else:
         residue = args.residue.upper()
         n_mol = int(args.n_molecules)
@@ -2279,6 +2293,7 @@ def prepare_mlpot_hybrid_state_for_sd(
     from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
         HybridCalculatorFireConfig,
         HybridCalculatorMinimizeConfig,
+        coerce_hybrid_minimize_result,
         hybrid_calculator_mini_eligible,
         minimize_hybrid_calculator_before_sd,
         minimize_hybrid_calculator_fire_before_sd,
@@ -2326,21 +2341,28 @@ def prepare_mlpot_hybrid_state_for_sd(
         ):
             return
         start_cap = _effective_max_start(force=force)
-        hybrid_grms = minimize_hybrid_calculator_before_sd(
-            mlpot_ctx,
-            HybridCalculatorMinimizeConfig(
-                max_steps=int(calculator_minimize_steps),
-                fmax_ev_a=float(calculator_minimize_fmax_ev_a),
-                bfgs_maxstep=float(calculator_bfgs_maxstep),
-                verbose=verbose,
-                quiet_bfgs=quiet_bfgs,
-                max_start_grms_kcalmol_A=start_cap,
-                max_initial_fmax_ev_a=1000.0 if force else 100.0,
-            ),
-            context_prefix=f"{context_prefix} ({phase})",
+        max_initial_fmax = 1000.0 if force else 100.0
+        mini = coerce_hybrid_minimize_result(
+            minimize_hybrid_calculator_before_sd(
+                mlpot_ctx,
+                HybridCalculatorMinimizeConfig(
+                    max_steps=int(calculator_minimize_steps),
+                    fmax_ev_a=float(calculator_minimize_fmax_ev_a),
+                    bfgs_maxstep=float(calculator_bfgs_maxstep),
+                    verbose=verbose,
+                    quiet_bfgs=quiet_bfgs,
+                    max_start_grms_kcalmol_A=start_cap,
+                    max_initial_fmax_ev_a=max_initial_fmax,
+                ),
+                context_prefix=f"{context_prefix} ({phase})",
+            )
         )
+        hybrid_grms = float(mini.grms)
+        if not mini.ran:
+            return
         ran_calculator_mini = True
         diag = measure_hybrid_charmm_grms(mlpot_ctx)
+        hybrid_grms = float(diag.hybrid)
         _print_hybrid_charmm_grms_diag(
             f"{context_prefix} post-calculator hybrid GRMS" if verbose else "",
             diag,
@@ -2367,19 +2389,27 @@ def prepare_mlpot_hybrid_state_for_sd(
                     flush=True,
                 )
             return
-        hybrid_grms = minimize_hybrid_calculator_fire_before_sd(
-            mlpot_ctx,
-            config=HybridCalculatorFireConfig(
-                max_steps=int(calculator_fire_steps),
-                fmax_ev_a=float(fire_fmax),
-                fire_maxstep=float(calculator_fire_maxstep),
-                verbose=verbose,
-                max_start_grms_kcalmol_A=_effective_max_start(force=force),
-            ),
-            context_prefix=f"{context_prefix} ({phase})",
+        max_initial_fmax = 1000.0 if force else 100.0
+        fire = coerce_hybrid_minimize_result(
+            minimize_hybrid_calculator_fire_before_sd(
+                mlpot_ctx,
+                config=HybridCalculatorFireConfig(
+                    max_steps=int(calculator_fire_steps),
+                    fmax_ev_a=float(fire_fmax),
+                    fire_maxstep=float(calculator_fire_maxstep),
+                    verbose=verbose,
+                    max_start_grms_kcalmol_A=_effective_max_start(force=force),
+                    max_initial_fmax_ev_a=max_initial_fmax,
+                ),
+                context_prefix=f"{context_prefix} ({phase})",
+            )
         )
+        hybrid_grms = float(fire.grms)
+        if not fire.ran:
+            return
         ran_calculator_fire = True
         diag = measure_hybrid_charmm_grms(mlpot_ctx)
+        hybrid_grms = float(diag.hybrid)
         _print_hybrid_charmm_grms_diag(
             f"{context_prefix} post-FIRE hybrid GRMS" if verbose else "",
             diag,
@@ -2812,6 +2842,28 @@ def resolve_mini_nstep(
             flush=True,
         )
     return scaled
+
+
+def resolve_charmm_mm_pretreat_cpt_echeck(
+    args: argparse.Namespace,
+    *,
+    echeck: float,
+) -> float:
+    """ECHECK for MM pretreat CPT (mini box equil, pretreat equi/prod).
+
+    Default off: NPT box relaxation on Packmol placements routinely exceeds
+    ML-scaled ECHECK floors. Use ``--charmm-mm-pretreat-echeck``, ``--no-echeck``,
+    or ``--no-scale-echeck --echeck`` to override.
+    """
+    if getattr(args, "no_echeck", False):
+        return -1.0
+    explicit = getattr(args, "charmm_mm_pretreat_echeck", None)
+    if explicit is not None:
+        val = float(explicit)
+        return -1.0 if val <= 0 else max(val, 500.0)
+    if float(echeck) > 0 and getattr(args, "no_scale_echeck", False):
+        return max(float(echeck), 500.0)
+    return -1.0
 
 
 def recommend_echeck_kcal(n_monomers: int, n_atoms: int) -> float:

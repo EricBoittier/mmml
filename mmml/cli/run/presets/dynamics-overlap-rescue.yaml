@@ -1,0 +1,9 @@
+# Inter-monomer overlap detection and CHARMM SD/ABNR rescue during dynamics.
+defaults:
+  dynamics_overlap_action: rescue
+  dynamics_overlap_min_distance: 1.5
+  dynamics_intra_min_distance: 0.5
+  dynamics_overlap_check_interval: 250
+  dynamics_overlap_charmm_sd_steps: 200
+  dynamics_overlap_charmm_abnr_steps: 400
+  dynamics_overlap_separate_margin: 0.2

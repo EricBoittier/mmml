@@ -1200,6 +1200,32 @@ def _ensure_ntrfrq_above_nstep(kw: dict[str, Any], nstep: int) -> None:
         kw["ntrfrq"] = n + 1
 
 
+def _ensure_ixtfrq_above_nstep(kw: dict[str, Any], nstep: int) -> None:
+    """Skip crystal transform updates (``ixtfrq``) within this integration segment.
+
+    Fixed-box NVT (scale heat, Hoover with ``pmass=0``) does not resize the cell;
+    ``UPDECI`` at ``ixtfrq`` can segfault in ``mlpot_update`` on MPI-linked MLpot PBC.
+    """
+    if "ixtfrq" not in kw:
+        return
+    n = max(1, int(nstep))
+    val = int(kw["ixtfrq"])
+    if val > 0 and val <= n:
+        kw["ixtfrq"] = n + 1
+
+
+def _maybe_disable_ixtfrq_for_fixed_volume_chunk(
+    chunk_kw: dict[str, Any],
+    chunk_nstep: int,
+) -> None:
+    """Disable ``ixtfrq`` within a dynamics chunk unless this segment is NPT barostat."""
+    pmass = chunk_kw.get("pmass")
+    is_npt = bool(chunk_kw.get("cpt")) and pmass is not None and int(pmass) > 0
+    if is_npt:
+        return
+    _ensure_ixtfrq_above_nstep(chunk_kw, chunk_nstep)
+
+
 def apply_loose_pbc_dyn_freq_kwargs(kw: dict[str, Any], *, nstep: int) -> None:
     """Set crystal/image list rebuild freqs above ``nstep`` so they never fire.
 
@@ -1538,27 +1564,22 @@ def _infer_heat_velocity_init_label(
             "single dyna (start=True, restart=False, iasvel=1): Boltzmann at "
             "FIRSTT, then ihtfrq velocity scaling (iasors=0)"
         )
-    if restart and start and iasvel == 1 and hoover_cpt:
+    if restart and start and iasvel == 1:
+        if hoover_cpt:
+            return (
+                "single dyna (restart+start, iasvel=1): READYN coordinates + Boltzmann "
+                "+ CPT barostat init (no separate nstep=0)"
+            )
         return (
             "single dyna (restart+start, iasvel=1): READYN coordinates + Boltzmann "
-            "+ CPT barostat init (no separate nstep=0)"
+            "at FIRSTT, then ihtfrq velocity scaling (iasors=0)"
         )
     if restart and not start:
         return (
             "dyna restart (start=False, iasvel=0): continue global step and "
             "thermostat/barostat state from READYN"
         )
-    if not restart and not start and int(kw.get("ihtfrq", 0) or 0) > 0 and iasvel == 1:
-        return (
-            "post nstep=0 Boltzmann assign (scale path only): velocities "
-            "pre-assigned; dyna integrates with ihtfrq scaling"
-        )
     if not restart and not start and iasvel == 0:
-        if int(kw.get("ihtfrq", 0) or 0) > 0:
-            return (
-                "post nstep=0 Boltzmann assign (scale path only): velocities "
-                "pre-assigned; dyna integrates with ihtfrq scaling"
-            )
         return (
             "in-process continuation (iasvel=0): keep in-memory velocities "
             "(overlap chunk / CPT sub-chunk / segment handoff)"
@@ -2031,6 +2052,8 @@ def build_heat_dynamics(
         }
     )
     apply_heat_ramp_frequencies(kw, nstep=nstep, ihtfrq=ihtfrq)
+    if use_pbc:
+        _ensure_ixtfrq_above_nstep(kw, nstep)
     return kw
 
 
@@ -2118,7 +2141,7 @@ def build_hoover_heat_dynamics(
     # Constant-volume Hoover NVT (pmass=0): skip crystal resize updates. They are
     # unnecessary for fixed-box heating and can segfault in libcharmm after MLpot
     # PBC image/NB rebuilds on MPI-linked builds (aco/dcm clusters @ ~6k steps).
-    kw["ixtfrq"] = int(nstep) + 1
+    _ensure_ixtfrq_above_nstep(kw, nstep)
     return kw
 
 
@@ -2155,60 +2178,13 @@ def assign_velocities_at_temperature(
     use_pbc: bool = True,
     read_unit: int = 90,
 ) -> None:
-    """Boltzmann-assign velocities at ``firstt`` without integrating (``nstep=0``).
-
-    Uses current coordinates when ``restart_path`` is None. Otherwise loads coords
-    from the restart file first (velocities are replaced at ``firstt``).
-    A one-step ``dyna`` integration was removed because it quenched COM kinetic energy
-    before Hoover / NVE handoff while leaving misleading CHARMM temperature prints.
-    """
-    freq_kwargs = {} if use_pbc else _non_pbc_dyn_freq_kwargs()
-    kw = _base_dyn_kwargs(
-        timestep=timestep_ps,
-        nstep=0,
-        nsavc=1,
-        nprint=0,
-        iprfrq=0,
-        isvfrq=0,
-        ntrfrq=0,
-        echeck=-1,
-        **freq_kwargs,
+    """Removed: Boltzmann assignment must happen in the main ``dyna`` call."""
+    raise RuntimeError(
+        "assign_velocities_at_temperature (nstep=0 Boltzmann assign) was removed; "
+        "use start=True, iasvel=1, nstep>=1 on the main dynamics call instead "
+        f"(firstt={float(firstt):.4g} K, restart_path={restart_path!r}, "
+        f"timestep_ps={float(timestep_ps)}, use_pbc={use_pbc}, read_unit={read_unit})"
     )
-    if not use_pbc:
-        _strip_crystal_dyn_keywords(kw)
-    t = float(firstt)
-    kw.update(boltzmann_velocity_kwargs(t))
-    kw.update(
-        {
-            "verlet": True,
-            "new": False,
-            "start": True,
-            "restart": restart_path is not None,
-            "ihtfrq": 0,
-            "ieqfrq": 0,
-            "TEMINC": 0.0,
-            "iunrea": -1,
-            "iunwri": -1,
-            "iuncrd": -1,
-        }
-    )
-    if restart_path is None:
-        run_dynamics(kw)
-        return
-
-    import pycharmm
-
-    restart_file = pycharmm.CharmmFile(
-        file_name=str(restart_path),
-        file_unit=read_unit,
-        formatted=True,
-        read_only=True,
-    )
-    try:
-        kw["iunrea"] = read_unit
-        run_dynamics(kw)
-    finally:
-        restart_file.close()
 
 
 def build_nve_dynamics(
@@ -2305,6 +2281,7 @@ def _apply_npt_cpt_kwargs(
             "pmass": pmass,
             "ihtfrq": 0,
             "ieqfrq": 0,
+            "ichecw": 0,
         }
     )
     apply_npt_pressure_reference(kw, pref=pref, pressure_tensor=pressure_tensor)
@@ -2590,20 +2567,46 @@ def _strip_non_charmm_dynamics_keywords(kw: dict[str, Any]) -> None:
             kw.pop(key, None)
 
 
+def apply_charmm_dynamics_echeck_kw(kw: dict[str, Any], echeck: float) -> None:
+    """Apply ECHECK to dynamics kwargs and CHARMM global state.
+
+    Pretreat/minimize legs can leave a positive ECHECK in Fortran; dynamics must
+    reset it explicitly or short NPT legs abort at iprfrq cadence (e.g. step 240).
+    """
+    val = float(echeck)
+    kw["echeck"] = val
+    kw["ichecw"] = 0
+    try:
+        import pycharmm.dynamics as charm_dyn
+
+        charm_dyn.set_echeck(val)
+    except ImportError:
+        pass
+
+
 def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     """Instantiate and run ``pycharmm.DynamicsScript``."""
+    kw = dict(dynamics_kwargs)
+    _strip_non_charmm_dynamics_keywords(kw)
+    nstep = int(kw.get("nstep", 0) or 0)
+    if nstep < 1:
+        raise ValueError(
+            f"run_dynamics: nstep must be >= 1 (got {nstep}); "
+            "use start=True, iasvel=1 on the main dyna call for velocity assignment"
+        )
+
     from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
         clear_comparison_coordinates,
     )
 
     import pycharmm
-    kw = dict(dynamics_kwargs)
-    _strip_non_charmm_dynamics_keywords(kw)
     # PyCHARMM omits ``start`` from the script when start=False, so CHARMM may keep
     # START active after a prior Boltzmann assign. With iasvel=0 that reads COMP
     # coordinates as velocities — zero COMP defensively.
     if not kw.get("start") and int(kw.get("iasvel", 1)) == 0:
         clear_comparison_coordinates()
+    if "echeck" in kw:
+        apply_charmm_dynamics_echeck_kw(kw, float(kw["echeck"]))
     _release_charmm_dynamics_api_buffers()
     dyn = pycharmm.DynamicsScript(**kw)
     dyn.run()
@@ -2734,12 +2737,6 @@ def _materialize_early_abort_restart_handoff(
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         patch_restart_global_step,
     )
-
-    if chunk_kw is not None and bool(chunk_kw.get("cpt")):
-        _assign_post_rescue_velocities_and_crystal(
-            chunk_kw,
-            mlpot_ctx=mlpot_ctx,
-        )
 
     read_path = (
         Path(chunk_io.restart_read) if chunk_io.restart_read is not None else None
@@ -3187,7 +3184,22 @@ def _ensure_nsavc_below_nstep(kw: dict[str, Any]) -> None:
     kw["nsavc"] = new
 
 
+def _align_inbfrq_with_imgfrq(chunk_kw: dict[str, Any]) -> None:
+    """CHARMM FINCYC: ``IMGFRQ`` must be a multiple of ``INBFRQ`` when ``INBFRQ > 0``."""
+    if "inbfrq" not in chunk_kw or "imgfrq" not in chunk_kw:
+        return
+    inb = int(chunk_kw["inbfrq"])
+    img = int(chunk_kw["imgfrq"])
+    if inb <= 0 or img <= 0 or img % inb == 0:
+        return
+    for d in range(min(inb, img), 0, -1):
+        if img % d == 0:
+            chunk_kw["inbfrq"] = d
+            return
+
+
 _OVERLAP_CHUNK_FREQ_KEYS = (
+    "inbfrq",
     "ihbfrq",
     "ilbfrq",
     "imgfrq",
@@ -3227,10 +3239,12 @@ def _harmonize_overlap_chunk_frequencies(
                         chunk_kw[k] = old
         else:
             chunk_kw[key] = _harmonize_dynamics_frequency(int(chunk_kw[key]), n)
+    _align_inbfrq_with_imgfrq(chunk_kw)
     if loose_pbc:
         apply_loose_pbc_dyn_freq_kwargs(chunk_kw, nstep=n)
     else:
         _ensure_ntrfrq_above_nstep(chunk_kw, n)
+        _maybe_disable_ixtfrq_for_fixed_volume_chunk(chunk_kw, n)
 
 
 def _mlpot_ctx_cubic_box_side_A(mlpot_ctx: Optional["MlpotContext"]) -> float | None:
@@ -3254,20 +3268,19 @@ def _post_rescue_bath_target_K(chunk_kw: dict[str, Any]) -> float:
     )
 
 
-def _assign_post_rescue_velocities_and_crystal(
+def _prepare_post_rescue_bath_and_crystal(
     chunk_kw: dict[str, Any],
     *,
     mlpot_ctx: Optional["MlpotContext"],
 ) -> None:
-    """Boltzmann-draw on rescued coordinates; reset CPT crystal when needed."""
+    """Set bath keywords and CRYSTal before post-rescue dynamics (no ``nstep=0`` assign)."""
+    bath = _post_rescue_bath_target_K(chunk_kw)
+    if "hoover reft" in chunk_kw:
+        chunk_kw["hoover reft"] = bath
+    chunk_kw["firstt"] = bath
+    chunk_kw["tbath"] = bath
     use_pbc = bool(chunk_kw.get("cpt")) or (
         mlpot_ctx is not None and bool(getattr(mlpot_ctx, "use_pbc", False))
-    )
-    assign_velocities_at_temperature(
-        _post_rescue_bath_target_K(chunk_kw),
-        timestep_ps=float(chunk_kw.get("timestep", 0.00025)),
-        restart_path=None,
-        use_pbc=use_pbc,
     )
     if use_pbc and bool(chunk_kw.get("cpt")):
         side = _mlpot_ctx_cubic_box_side_A(mlpot_ctx)
@@ -3277,6 +3290,15 @@ def _assign_post_rescue_velocities_and_crystal(
             )
 
             ensure_charmm_crystal_for_cpt(side, quiet=True)
+
+
+def _assign_post_rescue_velocities_and_crystal(
+    chunk_kw: dict[str, Any],
+    *,
+    mlpot_ctx: Optional["MlpotContext"],
+) -> None:
+    """Alias kept for overlap tests; bath/crystal only — velocities via ``start=True``."""
+    _prepare_post_rescue_bath_and_crystal(chunk_kw, mlpot_ctx=mlpot_ctx)
 
 
 def _prepare_post_rescue_overlap_handoff(
@@ -3289,20 +3311,16 @@ def _prepare_post_rescue_overlap_handoff(
     Required for Hoover CPT: static ``write restart`` lacks barostat piston
     internals, so ``READYN`` on scratch ``.overlap_*.res`` files fails with EOF.
     """
-    _assign_post_rescue_velocities_and_crystal(chunk_kw, mlpot_ctx=mlpot_ctx)
-    bath = _post_rescue_bath_target_K(chunk_kw)
+    _prepare_post_rescue_bath_and_crystal(chunk_kw, mlpot_ctx=mlpot_ctx)
     chunk_kw["restart"] = False
     chunk_kw["new"] = False
-    chunk_kw["start"] = False
-    chunk_kw["iasvel"] = 0
+    chunk_kw["start"] = True
+    chunk_kw["iasvel"] = 1
     chunk_kw.pop("iunrea", None)
     chunk_kw["iunrea"] = -1
     _strip_stale_heat_ramp_keywords(chunk_kw)
     if int(chunk_kw.get("ihtfrq", 0) or 0) != 0:
         chunk_kw["ihtfrq"] = 0
-    if "hoover reft" in chunk_kw:
-        chunk_kw["hoover reft"] = bath
-        chunk_kw["firstt"] = bath
 
 
 def _materialize_post_rescue_restart_handoff(
@@ -3375,18 +3393,15 @@ def _materialize_post_rescue_restart_handoff(
     if valid_read is None and write_path is not None:
         valid_read = _valid_restart_file(write_path)
 
-    bath = _post_rescue_bath_target_K(chunk_kw)
+    _prepare_post_rescue_bath_and_crystal(chunk_kw, mlpot_ctx=mlpot_ctx)
     chunk_kw["restart"] = True
     chunk_kw["new"] = False
-    chunk_kw["start"] = False
-    chunk_kw["iasvel"] = 0
+    chunk_kw["start"] = True
+    chunk_kw["iasvel"] = 1
     chunk_kw.pop("iunrea", None)
     _strip_stale_heat_ramp_keywords(chunk_kw)
     if int(chunk_kw.get("ihtfrq", 0) or 0) != 0:
         chunk_kw["ihtfrq"] = 0
-    if "hoover reft" in chunk_kw:
-        chunk_kw["hoover reft"] = bath
-        chunk_kw["firstt"] = bath
 
     print(
         f"overlap ({overlap_context}): post-rescue restart handoff from "
@@ -4056,7 +4071,19 @@ def _run_cpt_stability_subchunked(
             validate_charmm_dynamics_state_after_chunk(
                 context=f"{overlap_context} at step {steps_done + n}",
             )
-        global_step = max(0, int(global_step_offset) + steps_done + n)
+        chunk_end = steps_done + n
+        if restart_path is not None:
+            from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+                read_restart_last_step,
+            )
+
+            actual_global = read_restart_last_step(Path(restart_path))
+            if actual_global is not None:
+                actual_in_segment = int(actual_global) - int(global_step_offset)
+                if actual_in_segment < chunk_end:
+                    steps_done = max(steps_done, actual_in_segment)
+                    break
+        global_step = max(0, int(global_step_offset) + chunk_end)
         if (
             use_restart_handoff
             and write_path is not None
@@ -4199,10 +4226,24 @@ def run_dynamics_with_io(
                 rng_base=rng_base,
                 chunk_nstep=cpt_chunk,
             )
+            integrated = int(total_nstep)
+            completed = True
+            if io is not None and io.restart_write is not None:
+                from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+                    resolve_integrated_restart_step,
+                )
+
+                restart_step = resolve_integrated_restart_step(
+                    Path(io.restart_write),
+                    expected_nstep=total_nstep,
+                )
+                if restart_step is not None:
+                    integrated = int(restart_step)
+                    completed = integrated >= max(1, int(total_nstep * 0.95))
             return _overlap_dynamics_result(
                 last_dyn,
-                integrated_step=total_nstep,
-                completed_full=True,
+                integrated_step=integrated,
+                completed_full=completed,
             )
         last_dyn = _run_dynamics_chunk(
             kw,

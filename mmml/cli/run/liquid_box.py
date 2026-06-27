@@ -65,11 +65,18 @@ def build_parser() -> argparse.ArgumentParser:
         default=0.25,
         help="Timestep for mini box equilibration (fs).",
     )
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import add_dynamics_stability_args
+
+    add_dynamics_stability_args(parser)
     parser.add_argument(
-        "--echeck",
+        "--charmm-mm-pretreat-echeck",
         type=float,
-        default=100.0,
-        help="CHARMM energy check frequency during mini box equil.",
+        default=None,
+        metavar="KCAL",
+        help=(
+            "Enable ECHECK during mini box CPT equil (kcal/mol). "
+            "Default: disabled (NPT prep often exceeds ML echeck floors)."
+        ),
     )
     parser.add_argument(
         "--charmm-sd-steps",

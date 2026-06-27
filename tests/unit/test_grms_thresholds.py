@@ -52,6 +52,32 @@ def test_resolve_grms_thresholds_from_stats_scales_with_hybrid_tail():
     assert thresholds.max_grms_before_dyn >= 50.0
 
 
+def test_resolve_grms_thresholds_caps_intervention_for_geometry_stress():
+    from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+        MonomerGrmsStats,
+        resolve_grms_thresholds_from_stats,
+    )
+
+    # Per-monomer tails can be huge while the live hybrid total is moderate (DCM:52 case).
+    stats = MonomerGrmsStats(
+        charmm_per_monomer=np.full(52, 0.13),
+        hybrid_per_monomer=np.concatenate(
+            [np.full(51, 2.0), np.array([601.72])]
+        ),
+        charmm_total=0.1346,
+        hybrid_total=144.0367,
+    )
+    thresholds = resolve_grms_thresholds_from_stats(
+        stats,
+        n_monomers=52,
+        n_atoms=260,
+        pbc=True,
+        base_max_grms=50.0,
+    )
+    assert thresholds.intervention_grms == pytest.approx(0.85 * 144.0367, rel=1e-3)
+    assert thresholds.intervention_grms < 144.0367
+
+
 def test_resilient_defaults_use_conservative_bulk_fraction_for_large_clusters():
     from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         apply_density_prep_resilient_defaults,

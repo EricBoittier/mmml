@@ -98,6 +98,27 @@ def resolve_dynamics_overlap_reference_A(args: argparse.Namespace | None) -> flo
     return float(DYNAMICS_OVERLAP_REFERENCE_A)
 
 
+def resolve_mc_min_intermonomer_distance_A(args: argparse.Namespace) -> float:
+    """Minimum contact distance for MC / box-compression moves (Å).
+
+    Under liquid prep, use the same floor as pre-MLpot certification (default 1.0 Å)
+    so volume moves do not leave sub-floor contacts that only MD cleanup would fix.
+    """
+    try:
+        from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+            liquid_prep_enabled,
+        )
+
+        if liquid_prep_enabled(args):
+            return resolve_pre_mlpot_overlap_min_distance(args)
+    except ImportError:
+        pass
+    build = getattr(args, "min_intermonomer_atom_distance", None)
+    if build is not None:
+        return float(build)
+    return 0.1
+
+
 @dataclass(frozen=True)
 class IntermonomerContactSummary:
     distance_A: float

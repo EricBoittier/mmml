@@ -1,0 +1,11 @@
+# Stricter heat chunking: geometry at every segment boundary; overlap checks
+# aligned to 1600-step chunks. Use after fly-off or high pre-heat GRMS.
+defaults:
+  n_heat_segments: 25
+  heat_overlap_segment_boundary_only: true
+  dynamics_overlap_check_interval: 1600
+  dynamics_max_monomer_extent: 12.0
+  dynamics_overlap_charmm_sd_steps: 400
+  dynamics_overlap_charmm_abnr_steps: 800
+  liquid_prep: true
+  density_prep_ladder: true

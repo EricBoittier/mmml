@@ -421,6 +421,24 @@ def test_build_stage_dynamics_kw_heat_hoover_pbc_disables_ihtfrq_ramp():
     assert "TEMINC" not in kw
 
 
+def test_build_stage_dynamics_kw_heat_auto_no_echeck_heat_disables_echeck():
+    args = argparse.Namespace(heat_thermostat="scale", _auto_no_echeck_heat=True)
+    dyn_print = {"nprint": 100, "iprfrq": 500, "isvfrq": 500}
+    kw = _build_stage_dynamics_kw(
+        "heat",
+        args=args,
+        timestep_ps=0.00025,
+        nstep=80000,
+        save_interval_ps=0.125,
+        temp=300.0,
+        echeck=8000.0,
+        dyn_print=dyn_print,
+        restart=False,
+        use_pbc=True,
+    )
+    assert kw["echeck"] == -1.0
+
+
 def test_build_stage_dynamics_kw_heat_no_echeck_heat_disables_echeck():
     args = argparse.Namespace(heat_thermostat="scale", no_echeck_heat=True)
     dyn_print = {"nprint": 100, "iprfrq": 500, "isvfrq": 500}
@@ -601,8 +619,8 @@ def test_configure_heat_dynamics_start_hoover_memory_handoff_no_comp_velocities(
     assert kw["iasvel"] == 1
 
 
-def test_configure_heat_dynamics_start_scale_memory_handoff_assign_then_dyna():
-    """Scale heat after mini: nstep=0 assign, then dyna start=False (overlap-safe)."""
+def test_configure_heat_dynamics_start_scale_memory_handoff_single_dyna():
+    """Scale heat after mini: single dyna start=True (no nstep=0 assign)."""
     io = CharmmTrajectoryFiles()
     kw = {
         "firstt": 26.0,
@@ -612,57 +630,45 @@ def test_configure_heat_dynamics_start_scale_memory_handoff_assign_then_dyna():
         "start": False,
     }
 
-    with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.assign_velocities_at_temperature"
-    ) as assign:
-        _configure_heat_dynamics_start(
-            kw,
-            io,
-            coords_in_memory=True,
-            restart_from_file=False,
-            timestep_ps=0.0002,
-            use_pbc=True,
-            quiet=True,
-            heat_thermostat="scale",
-        )
+    _configure_heat_dynamics_start(
+        kw,
+        io,
+        coords_in_memory=True,
+        restart_from_file=False,
+        timestep_ps=0.0002,
+        use_pbc=True,
+        quiet=True,
+        heat_thermostat="scale",
+    )
 
-    assign.assert_called_once()
     assert kw["restart"] is False
     assert kw["new"] is False
-    assert kw["start"] is False
+    assert kw["start"] is True
     assert kw["iasvel"] == 1
     assert kw["iasors"] == 0
 
 
-def test_configure_nve_dynamics_start_memory_handoff_no_readyn(tmp_path):
-    """After mini, NVE must not READYN a 1-step scratch restart (CHARMM EOF)."""
-    from unittest.mock import patch
-
+def test_configure_nve_dynamics_start_memory_handoff_single_dyna(tmp_path):
+    """After mini, NVE uses start=True on the main dyna (no nstep=0 assign)."""
     res = tmp_path / "nve_dcm_5.res"
     io = CharmmTrajectoryFiles(restart_write=res)
     kw = {"restart": True, "start": True, "iasvel": 1, "firstt": 300.0}
 
-    with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.assign_velocities_at_temperature"
-    ) as assign, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.rewrite_dynamics_restart_from_current_state"
-    ) as rewrite:
-        _configure_nve_dynamics_start(
-            kw,
-            io,
-            coords_in_memory=True,
-            restart_from_file=False,
-            timestep_ps=0.00025,
-            use_pbc=False,
-            quiet=True,
-            temp=60.0,
-        )
+    _configure_nve_dynamics_start(
+        kw,
+        io,
+        coords_in_memory=True,
+        restart_from_file=False,
+        timestep_ps=0.00025,
+        use_pbc=False,
+        quiet=True,
+        temp=60.0,
+    )
 
-    assign.assert_called_once()
-    rewrite.assert_not_called()
     assert kw["restart"] is False
-    assert kw["start"] is False
+    assert kw["start"] is True
     assert kw["iasvel"] == 1
+    assert float(kw["firstt"]) == 60.0
     assert io.restart_read is None
 
 

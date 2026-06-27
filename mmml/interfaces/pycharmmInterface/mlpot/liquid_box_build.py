@@ -106,6 +106,12 @@ def apply_liquid_box_profile(
 
     apply_density_prep_resilient_defaults(args)
 
+    if getattr(args, "charmm_mm_pretreat_echeck", None) is None and not getattr(
+        args, "no_scale_echeck", False
+    ):
+        args.no_echeck = True
+    args.mini_box_equil_fixed_nvt = True
+
     if resolved == "conservative":
         if getattr(args, "box_size", None) is None and getattr(
             args, "target_density_g_cm3", None
@@ -356,9 +362,7 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
             box_side_A=box_side,
             use_pbc=charmm_pbc,
             handoff_present=False,
-            min_intermonomer_distance_A=float(
-                getattr(args, "min_intermonomer_atom_distance", 0.1) or 0.1
-            ),
+            min_intermonomer_distance_A=resolve_pre_mlpot_overlap_min_distance(args),
             min_box_side_A=cubic_box_length_from_geometry(
                 r,
                 ml_cutoff=float(getattr(args, "ml_cutoff", 12.0)),
@@ -493,10 +497,10 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
     steps_applied.append("write_model_crd")
 
     prep_floor = resolve_pre_mlpot_overlap_min_distance(args)
-    worst = gate_summary.get("worst_intermonomer_A") if gate_summary else None
+    worst: float | None = None
     passed = True
     cert_message = ""
-    if worst is None and atoms_per_list is not None:
+    if atoms_per_list is not None:
         worst, passed, cert_message = certify_intermonomer_geometry(
             r,
             list(atoms_per_list),
@@ -506,8 +510,9 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
         )
     elif gate_summary is not None:
         passed = not bool(gate_summary.get("aborted"))
-        worst = gate_summary.get("worst_intermonomer_A")
-        cert_message = gate_summary.get("reason", "")
+        worst_raw = gate_summary.get("worst_intermonomer_A")
+        worst = float(worst_raw) if worst_raw is not None else None
+        cert_message = str(gate_summary.get("reason", ""))
 
     density = estimate_density_g_cm3(
         composition=comp,

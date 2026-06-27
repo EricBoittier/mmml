@@ -288,7 +288,7 @@ def train_model_progressive(
             early_stop_patience=growth_patience,
         )
 
-        ema_params, stage_best_loss = train_model(
+        ema_params, stage_best_loss, _run_ckpt_dir = train_model(
             key=train_key,
             model=model,
             train_data=train_data,

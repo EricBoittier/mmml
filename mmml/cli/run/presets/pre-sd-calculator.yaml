@@ -1,0 +1,10 @@
+# ASE hybrid FIRE → BFGS before MLpot SD and at pre-dynamics gate.
+defaults:
+  calculator_pre_minimize: true
+  pre_min_steps: 200
+  pre_min_fmax: 0.05
+  bfgs_maxstep: 0.05
+  fire_min_steps: 200
+  fire_min_maxstep: 0.2
+  rescue_fire_fmax: 0.05
+  quiet_bfgs: false

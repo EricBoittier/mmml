@@ -1,0 +1,13 @@
+# Shared physical defaults: 0.25 fs integrator, hybrid ML/MM cutoffs.
+defaults:
+  dt_fs: 0.25
+  temperature: 300.0
+  pressure: 1.0
+  seed: 123
+  spacing: 4.0
+  mm_switch_on: 6.0
+  mm_switch_width: 4.0
+  ml_switch_width: 1.0
+  mlpot_mm_internal_scale: 0.0
+  include_mm: true
+  mm_nonbond_mode: jax_mic

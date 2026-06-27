@@ -150,6 +150,25 @@ def test_resolve_pretreat_dyn_inbfrq_scales_with_dt():
     assert resolve_pretreat_dyn_inbfrq(args, dt_fs=2.0) == 400
 
 
+def test_resolve_charmm_mm_pretreat_cpt_echeck_defaults_off():
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        resolve_charmm_mm_pretreat_cpt_echeck,
+    )
+
+    args = argparse.Namespace(no_echeck=False, no_scale_echeck=False)
+    assert resolve_charmm_mm_pretreat_cpt_echeck(args, echeck=5150.0) == -1.0
+
+
+def test_resolve_charmm_mm_pretreat_cpt_echeck_no_scale_legacy():
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        resolve_charmm_mm_pretreat_cpt_echeck,
+    )
+
+    args = argparse.Namespace(no_echeck=False, no_scale_echeck=True)
+    assert resolve_charmm_mm_pretreat_cpt_echeck(args, echeck=100.0) == pytest.approx(500.0)
+    assert resolve_charmm_mm_pretreat_cpt_echeck(args, echeck=8000.0) == pytest.approx(8000.0)
+
+
 def test_apply_pretreat_dyn_freq_kwargs_pbc():
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
         apply_pretreat_dyn_freq_kwargs,

@@ -154,3 +154,28 @@ def test_should_run_mini_box_equil_true_for_pbc_mini():
         pretreat_mm=False,
         stages=["mini", "heat"],
     )
+
+
+def test_apply_certified_box_size_from_box_json(tmp_path) -> None:
+    import json
+
+    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+        apply_certified_box_size_from_artifacts,
+    )
+
+    box_dir = tmp_path / "boxes" / "dcm103"
+    box_dir.mkdir(parents=True)
+    (box_dir / "box.json").write_text(
+        json.dumps({"box_side_A": 55.229, "composition": "DCM:103"}),
+        encoding="utf-8",
+    )
+    psf = box_dir / "model.psf"
+    psf.write_text("stub", encoding="utf-8")
+    args = argparse.Namespace(
+        from_psf=str(psf),
+        from_crd=str(box_dir / "model.crd"),
+        quiet=True,
+    )
+    side = apply_certified_box_size_from_artifacts(args)
+    assert side == pytest.approx(55.229)
+    assert args.box_size == pytest.approx(55.229)

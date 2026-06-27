@@ -11,10 +11,11 @@ mmml md-system --config mmml/cli/run/md_system.example.yaml
 # Dense liquid box prep (resilient density mode)
 mmml md-system --config mmml/cli/run/md_system.dense_liquid_prep.example.yaml
 
-# Campaign with defaults plus named runs
-mmml md-system --config mmml/cli/run/md_system.example.yaml --run-all
-mmml md-system --config mmml/cli/run/md_system.dense_liquid_prep.example.yaml --run-all
-mmml md-system --config mmml/cli/run/md_system.example.yaml --job-id jaxmd_prod
+# DCM:103 from certified liquid-box (preset stack)
+mmml md-system --config mmml/cli/run/md_system.dcm103_equil.example.yaml --job-id dcm103_equil
+
+# Composable presets — see mmml/cli/run/presets/README.md
+mmml md-system --config my_campaign.yaml --run-all
 ```
 
 The main goal for these configs is condensed-phase setup: build a dense molecular box, relax overlaps, hand it between PyCHARMM and JAX-MD, then run production with neighbor-list settings that are large and fresh enough for the density.

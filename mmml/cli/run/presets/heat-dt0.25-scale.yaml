@@ -1,0 +1,9 @@
+# Velocity-scaling heat (iasors=0) when Hoover CPT is not required.
+defaults:
+  dt_fs: 0.25
+  heat_thermostat: scale
+  no_echeck_heat: true
+  heat_comp_damp: false
+  ps_heat: 10.0
+  n_heat_segments: 4
+  heat_ihtfrq: 500

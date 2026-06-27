@@ -1,0 +1,47 @@
+# Example PhysNetJAX transfer-learning config for: mmml physnet-train --config job_dcm.yaml
+# Copy to job_dcm.yaml and adjust paths. CLI flags override values from this file.
+
+data:
+  - output/general_pretrain.npz
+  - output/dcm_domain.npz
+valid_data: output/dcm_valid.npz
+ckpt_dir: ./ckpts/dcm_finetune
+tag: dcm_finetune
+
+# Transfer: warm-start + optional distillation
+physnet_transfer_model: joint-training-defaults
+match_checkpoint_architecture: true
+distill: true
+distill_alpha: 0.75
+distill_targets:
+  - energy
+  - forces
+  - dipole
+
+# Training
+batch_size: 32
+num_epochs: 500
+learning_rate: 0.0003
+early_stop_patience: 40
+objective: valid_forces_mae
+charges: true
+seed: 42
+
+energy_weight: 1.0
+forces_weight: 52.91
+dipole_weight: 27.21
+charges_weight: 14.39
+
+# Optional: scale reported energy/force MAE only (does not rewrite NPZ data).
+# conversion:
+#   energy: 23.060549
+#   forces: 23.060549
+
+# Learning curves (post-hoc from Orbax epoch checkpoints)
+save_every_epoch: true
+metrics_plot: ./ckpts/dcm_finetune/learning_curves.png
+log_loss: true
+
+# Manual alternative after training:
+# mmml extract-checkpoint-metrics ./ckpts/dcm_finetune/dcm_finetune-<uuid>/ \
+#   -o learning_curves.png --log-loss

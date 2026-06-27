@@ -332,15 +332,31 @@ def collect_psf_topology_mapping(
 
     masses = np.asarray(psf.get_amass(), dtype=float)
     charges = np.asarray(psf.get_charges(), dtype=float)
-    atypes = [str(x) for x in np.asarray(psf.get_atype(), dtype=str)]
+    atom_names = [str(x) for x in np.asarray(psf.get_atype(), dtype=str)]
     iac = np.asarray(psf.get_iac(), dtype=int)
 
-    unique_types, type_counts = np.unique(atypes, return_counts=True)
-    type_parts = [
-        f"{t}×{int(c)}" for t, c in zip(unique_types[:max_type_samples], type_counts[:max_type_samples])
+    unique_names, name_counts = np.unique(atom_names, return_counts=True)
+    name_parts = [
+        f"{t}×{int(c)}"
+        for t, c in zip(unique_names[:max_type_samples], name_counts[:max_type_samples])
     ]
-    if len(unique_types) > max_type_samples:
-        type_parts.append(f"…+{len(unique_types) - max_type_samples} types")
+    if len(unique_names) > max_type_samples:
+        name_parts.append(f"…+{len(unique_names) - max_type_samples} names")
+
+    chem_type_parts: list[str] = []
+    try:
+        from pycharmm import atom_info
+
+        chem_types = atom_info.get_chem_types(list(range(n_atom)))
+        unique_chem, chem_counts = np.unique(chem_types, return_counts=True)
+        chem_type_parts = [
+            f"{t}×{int(c)}"
+            for t, c in zip(unique_chem[:max_type_samples], chem_counts[:max_type_samples])
+        ]
+        if len(unique_chem) > max_type_samples:
+            chem_type_parts.append(f"…+{len(unique_chem) - max_type_samples} types")
+    except Exception:
+        chem_type_parts = []
 
     n_res, res_label = _psf_residue_summary(
         psf,
@@ -348,15 +364,18 @@ def collect_psf_topology_mapping(
         max_residue_rows=max_residue_rows,
     )
 
-    return {
+    mapping: dict[str, Any] = {
         "n_atoms": n_atom,
         "n_residues": n_res,
         "total_charge": f"{float(np.sum(charges)):.4f} e",
         "mass_range_amu": f"{float(masses.min()):.3f}–{float(masses.max()):.3f}",
-        "atom_types": ", ".join(type_parts) if type_parts else "—",
-        "type_index_range": f"{int(iac.min())}–{int(iac.max())}",
+        "atom_names": ", ".join(name_parts) if name_parts else "—",
+        "iac_index_range": f"{int(iac.min())}–{int(iac.max())}",
         "residues": res_label,
     }
+    if chem_type_parts:
+        mapping["cgenff_types"] = ", ".join(chem_type_parts)
+    return mapping
 
 
 def _psf_residue_summary(
