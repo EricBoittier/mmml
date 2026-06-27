@@ -2669,9 +2669,22 @@ def run_backend(backend: str, argv: list[str], args: argparse.Namespace) -> int:
         plan: list[MdStageSummary] = build_pycharmm_plan_rows(job_name, args)
         tag = pycharmm_trajectory_tag(args)
         out_dir = Path(args.output_dir) if args.output_dir is not None else None
+        from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
+        from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import stage_restart
+
         for row in plan:
             if row.stage != "mini":
-                if exit_code == 0:
+                if exit_code == 0 and out_dir is not None:
+                    res = stage_restart(out_dir, row.stage)
+                    if _valid_restart_file(res) is not None:
+                        row.nsteps_completed = row.nsteps_requested
+                        row.ps_completed = row.ps_requested
+                        row.status = "complete"
+                    else:
+                        row.nsteps_completed = 0
+                        row.ps_completed = 0.0
+                        row.status = "planned"
+                elif exit_code == 0:
                     row.nsteps_completed = row.nsteps_requested
                     row.ps_completed = row.ps_requested
                     row.status = "complete"

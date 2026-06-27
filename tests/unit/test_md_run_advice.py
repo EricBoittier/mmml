@@ -290,8 +290,83 @@ def test_build_run_advice_full_success_has_no_resume_command(tmp_path: Path) -> 
     assert "exec " in sh_text or "no resume" in sh_text
 
 
-def test_shell_script_uses_bash_array(tmp_path: Path) -> None:
+def test_build_run_advice_pre_heat_gate(tmp_path: Path) -> None:
     out = tmp_path / "run"
+    out.mkdir()
+    prep = out / "prep_ladder"
+    prep.mkdir()
+    prep_crd = prep / "006_pre_mlpot.crd"
+    prep_crd.write_text("crd\n", encoding="ascii")
+    (prep / "journal.json").write_text(
+        json.dumps(
+            {
+                "steps": [
+                    {
+                        "label": "pre_mlpot",
+                        "stem": "006_pre_mlpot",
+                        "hybrid_grms_kcalmol_A": 7.6,
+                        "files": {"crd": str(prep_crd)},
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    cleanup_crd = out / "cleanup" / "005_post_fire.crd"
+    cleanup_crd.parent.mkdir(parents=True)
+    cleanup_crd.write_text("crd\n", encoding="ascii")
+    (out / "cleanup" / "journal.json").write_text(
+        json.dumps(
+            {
+                "steps": [
+                    {
+                        "label": "post-FIRE",
+                        "stem": "005_post_fire",
+                        "hybrid_grms_kcalmol_A": 144.0,
+                        "files": {"crd": str(cleanup_crd)},
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    (out / "mini.crd").write_text("crd\n", encoding="ascii")
+    summary = {
+        "exit_code": 2,
+        "stages": [
+            {"stage": "heat", "status": "error", "nsteps_completed": 0},
+            {"stage": "equi", "status": "error", "nsteps_completed": 0},
+        ],
+    }
+    (out / "stage_summary.json").write_text(json.dumps(summary), encoding="utf-8")
+    manifest = {
+        "job_name": "dcm52_equil",
+        "backend": "pycharmm",
+        "exit_code": 2,
+        "args": {
+            "config": "heat.conf",
+            "md_stages": "mini,heat,equi",
+            "output_dir": str(out),
+        },
+    }
+    advice = build_run_advice(
+        manifest=manifest,
+        output_dir=out,
+        exit_code=2,
+        repo_root=tmp_path,
+    )
+    assert advice is not None
+    assert advice.restart is not None
+    assert "prep_ladder" in str(advice.restart.path)
+    assert advice.md_stages == "mini,heat,equi"
+    assert "Pre-heat gate failed" in advice.headline
+    assert "dynamics_intra_rescue_sd_steps" in advice.config_yaml
+    assert "flyoff-strict" not in advice.config_yaml
+    assert "--config" in advice.command and "heat.conf" in advice.command
+
+
+def test_shell_script_uses_bash_array(tmp_path: Path) -> None:
+    out = tmp_path / "run_shell"
     out.mkdir()
     _write_restart(out / "baseline.res")
     manifest = {

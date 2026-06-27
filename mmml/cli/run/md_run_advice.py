@@ -335,10 +335,28 @@ def _mlpot_pool(candidates: list[RestartCandidate]) -> list[RestartCandidate]:
     return pool if pool else list(candidates)
 
 
+def _failure_leg_priority(leg: str) -> int:
+    """Lower rank = preferred restart source on failure."""
+    leg_l = leg.lower()
+    ranks = {
+        "baseline": 0,
+        "prep_ladder": 1,
+        "bonded_mm": 2,
+        "mini": 3,
+        "heat": 4,
+        "nve": 4,
+        "equi": 4,
+        "prod": 4,
+        "cleanup": 9,
+    }
+    return ranks.get(leg_l, 5)
+
+
 def select_restart_candidate(
     candidates: list[RestartCandidate],
     *,
     failed: bool,
+    failure_mode: str | None = None,
 ) -> RestartCandidate | None:
     """Pick restart leg: lowest hybrid GRMS on failure; latest stage .res on success."""
     if not candidates:
@@ -350,7 +368,24 @@ def select_restart_candidate(
     if not pool:
         return None
 
+    if failed and failure_mode == "pre_heat_gate":
+        prep = [c for c in pool if c.leg == "prep_ladder"]
+        if prep:
+            return max(
+                prep,
+                key=lambda c: (
+                    c.mtime,
+                    -float(c.hybrid_grms if c.hybrid_grms is not None else 1e9),
+                ),
+            )
+        baseline = [c for c in pool if c.leg == "baseline"]
+        if baseline:
+            return max(baseline, key=lambda c: c.mtime)
+
     if failed:
+        prep_exists = any(c.leg == "prep_ladder" for c in pool)
+        if prep_exists:
+            pool = [c for c in pool if c.leg != "cleanup"] or pool
         with_grms = [
             c
             for c in pool
@@ -364,8 +399,11 @@ def select_restart_candidate(
                 for c in with_grms
                 if float(c.hybrid_grms) <= float(min_grms) + tol  # type: ignore[arg-type]
             ]
-            return max(tied, key=lambda c: c.mtime)
-        return max(pool, key=lambda c: c.mtime)
+            return max(
+                tied,
+                key=lambda c: (_failure_leg_priority(c.leg), -c.mtime),
+            )
+        return max(pool, key=lambda c: (_failure_leg_priority(c.leg), c.mtime))
 
     restart_pool = [c for c in pool if c.is_restart]
     search = restart_pool if restart_pool else pool
@@ -428,6 +466,67 @@ def _infer_failed_stage(
     return planned[-1] if planned else None
 
 
+def _error_stages(summary: dict[str, Any] | None) -> set[str]:
+    out: set[str] = set()
+    if not summary:
+        return out
+    for row in summary.get("stages") or []:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("status") or "") in {"error", "truncated"}:
+            stage = str(row.get("stage") or "")
+            if stage:
+                out.add(stage)
+    return out
+
+
+def _stage_row(summary: dict[str, Any] | None, stage: str) -> dict[str, Any] | None:
+    if not summary:
+        return None
+    for row in summary.get("stages") or []:
+        if isinstance(row, dict) and str(row.get("stage") or "") == stage:
+            return row
+    return None
+
+
+def _detect_failure_mode(
+    output_dir: Path,
+    summary: dict[str, Any] | None,
+    *,
+    exit_code: int,
+) -> str | None:
+    """Classify common failure modes for targeted resume hints."""
+    if not _job_failed(exit_code, summary):
+        return None
+    out = Path(output_dir)
+    heat_row = _stage_row(summary, "heat")
+    if heat_row is None:
+        return None
+    if str(heat_row.get("status") or "") != "error":
+        return None
+    if int(heat_row.get("nsteps_completed") or 0) > 0:
+        return "dynamics"
+    has_mini = any(
+        p.is_file() and p.stat().st_size > 0
+        for p in (out / "mini.crd", out / "02_mini.crd")
+    )
+    heat_res = stage_restart(out, "heat")
+    if has_mini and not _is_valid_restart(heat_res):
+        return "pre_heat_gate"
+    return "dynamics"
+
+
+def _job_failed(
+    exit_code: int,
+    summary: dict[str, Any] | None,
+) -> bool:
+    if int(exit_code) != 0:
+        return True
+    if summary and int(summary.get("exit_code", 0)) != 0:
+        return True
+    return bool(_error_stages(summary))
+
+
 def _completed_stages(summary: dict[str, Any] | None) -> set[str]:
     done: set[str] = set()
     if not summary:
@@ -449,13 +548,24 @@ def _infer_completed_stages(
     *,
     exit_code: int,
 ) -> set[str]:
-    """Merge stage_summary with on-disk artifacts (mini often omits status=complete)."""
+    """Merge stage_summary with on-disk artifacts; never trust stale restarts on error."""
+    error_stages = _error_stages(summary)
     completed = _completed_stages(summary)
+    completed -= error_stages
+
     if int(exit_code) != 0:
         return completed
 
     out = Path(output_dir)
     for stage in planned:
+        if stage in error_stages:
+            completed.discard(stage)
+            continue
+        row = _stage_row(summary, stage)
+        if row and str(row.get("status") or "") == "complete":
+            if stage == "mini" or int(row.get("nsteps_completed") or 0) > 0:
+                completed.add(stage)
+            continue
         if stage == "mini":
             if any(
                 p.is_file() and p.stat().st_size > 0
@@ -469,7 +579,8 @@ def _infer_completed_stages(
             continue
         res = stage_restart(out, stage)
         if _is_valid_restart(res):
-            completed.add(stage)
+            if row is None or int(row.get("nsteps_completed") or 0) > 0:
+                completed.add(stage)
     return completed
 
 
@@ -485,9 +596,24 @@ def _remaining_stages(planned: list[str], completed: set[str]) -> list[str]:
 def _failure_preset_hints(
     output_dir: Path,
     manifest_args: dict[str, Any],
+    *,
+    failure_mode: str | None = None,
 ) -> tuple[list[str], list[str]]:
     includes: list[str] = []
     notes: list[str] = []
+
+    if failure_mode == "pre_heat_gate":
+        notes.append(
+            "Pre-heat gate failed (intra-monomer overlap after MLpot mini). "
+            "Re-run from prep_ladder with md_stages mini,heat,equi."
+        )
+        current_sd = int(manifest_args.get("dynamics_intra_rescue_sd_steps") or 200)
+        notes.append(
+            f"Try --dynamics-intra-rescue-sd-steps {max(400, current_sd * 2)} "
+            "or relax --dynamics-intra-min-distance slightly (e.g. 0.95)."
+        )
+        return includes, notes
+
     cleanup_journal = output_dir / "cleanup" / "journal.json"
     if cleanup_journal.is_file() and _journal_steps(cleanup_journal):
         includes.append("presets/dynamics-flyoff-strict.yaml")
@@ -578,15 +704,22 @@ def build_run_advice(
     if not out_dir.is_dir():
         return None
 
-    failed = int(exit_code) != 0
     planned = _parse_md_stages(args.get("md_stages"))
     summary = _load_stage_summary(out_dir)
+    failed = _job_failed(int(exit_code), summary)
+    failure_mode = (
+        _detect_failure_mode(out_dir, summary, exit_code=int(exit_code))
+        if failed
+        else None
+    )
     completed = _infer_completed_stages(
         out_dir, planned, summary, exit_code=int(exit_code)
     )
     remaining = _remaining_stages(planned, completed)
     candidates = collect_restart_candidates(out_dir)
-    restart = select_restart_candidate(candidates, failed=failed)
+    restart = select_restart_candidate(
+        candidates, failed=failed, failure_mode=failure_mode
+    )
 
     config_path = args.get("config") or manifest.get("config")
     job_name = str(manifest.get("job_name") or args.get("job_name") or "run")
@@ -620,19 +753,31 @@ def build_run_advice(
         notes.append("No valid restart file found — rebuild from liquid-box or pretreat.")
 
     if failed:
-        failed_stage = _infer_failed_stage(planned, summary, restart)
-        remaining_after_fail = _remaining_stages(planned, completed)
-        if remaining_after_fail:
-            overrides["md_stages"] = ",".join(remaining_after_fail)
-        elif failed_stage and failed_stage in planned:
-            idx = planned.index(failed_stage)
-            overrides["md_stages"] = ",".join(planned[idx:])
-        preset_includes, preset_notes = _failure_preset_hints(out_dir, args)
+        if failure_mode == "pre_heat_gate":
+            if planned and "mini" in planned:
+                mini_idx = planned.index("mini")
+                overrides["md_stages"] = ",".join(planned[mini_idx:])
+            else:
+                overrides["md_stages"] = "mini,heat,equi"
+            current_sd = int(args.get("dynamics_intra_rescue_sd_steps") or 200)
+            overrides["dynamics_intra_rescue_sd_steps"] = max(400, current_sd * 2)
+            headline = "Pre-heat gate failed — restart from prep_ladder, re-run mini"
+        else:
+            failed_stage = _infer_failed_stage(planned, summary, restart)
+            remaining_after_fail = _remaining_stages(planned, completed)
+            if remaining_after_fail:
+                overrides["md_stages"] = ",".join(remaining_after_fail)
+            elif failed_stage and failed_stage in planned:
+                idx = planned.index(failed_stage)
+                overrides["md_stages"] = ",".join(planned[idx:])
+            headline = f"Job failed (exit {exit_code}) — resume from best checkpoint"
+        preset_includes, preset_notes = _failure_preset_hints(
+            out_dir, args, failure_mode=failure_mode
+        )
         include_presets.extend(preset_includes)
         notes.extend(preset_notes)
-        if not bool(args.get("no_echeck_heat", False)):
+        if failure_mode != "pre_heat_gate" and not bool(args.get("no_echeck_heat", False)):
             overrides["no_echeck_heat"] = True
-        headline = f"Job failed (exit {exit_code}) — resume from best checkpoint"
     else:
         if remaining:
             overrides["md_stages"] = ",".join(remaining)
@@ -643,7 +788,14 @@ def build_run_advice(
                         overrides["restart_from"] = _relative_path(res, repo_root)
                         notes.append(f"Restart from last completed stage: {stage}.res")
                         break
-            headline = f"Job succeeded — continue remaining stages ({','.join(remaining)})"
+            headline = (
+                f"Incomplete — stages remain ({','.join(remaining)}); "
+                "continue from checkpoint"
+            )
+            notes.append(
+                "Exit code was 0 but dynamics stages did not finish; "
+                "do not treat this as a full success."
+            )
         else:
             suggest_resume = False
             restart = None
