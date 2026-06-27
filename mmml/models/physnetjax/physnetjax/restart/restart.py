@@ -22,6 +22,33 @@ from mmml.models.physnetjax.physnetjax.utils.utils import get_files
 orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
 
 
+def save_training_checkpoint(
+    path: Path | str,
+    ckpt: dict,
+    *,
+    checkpointer: orbax.checkpoint.PyTreeCheckpointer | None = None,
+) -> None:
+    """Save one training epoch checkpoint.
+
+    Uses ``force=True`` when supported so a retry or duplicate save to the same
+  epoch path does not fail with "Destination ... already exists".
+    """
+    import shutil
+
+    from flax.training import orbax_utils
+
+    ckp = Path(path)
+    ckpt_checkpointer = checkpointer or orbax_checkpointer
+    save_args = orbax_utils.save_args_from_target(ckpt)
+    try:
+        ckpt_checkpointer.save(ckp, ckpt, save_args=save_args, force=True)
+    except TypeError:
+        # Older orbax without force= on PyTreeCheckpointer.save
+        if ckp.exists():
+            shutil.rmtree(ckp)
+        ckpt_checkpointer.save(ckp, ckpt, save_args=save_args)
+
+
 def _merge_params(init_params, loaded_params):
     """
     Merge loaded params with init params, filling in any keys missing from loaded.

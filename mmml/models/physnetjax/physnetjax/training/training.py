@@ -9,7 +9,7 @@ from pathlib import Path
 import ase.units
 import e3x
 import jax
-from flax.training import orbax_utils, train_state
+from flax.training import train_state
 
 # Try to enable lovely_jax for better array printing (optional; may fail with lovely-numpy>=0.2.19)
 try:
@@ -31,6 +31,7 @@ from mmml.models.physnetjax.physnetjax.directories import BASE_CKPT_DIR, print_p
 from mmml.models.physnetjax.physnetjax.restart.restart import (
     orbax_checkpointer,
     restart_training,
+    save_training_checkpoint,
 )
 from mmml.data.units import TRAINING_UNITS
 from mmml.models.physnetjax.physnetjax.training.evalstep import eval_step
@@ -363,6 +364,8 @@ def train_model(
     ckpt_dir = Path(ckpt_dir).resolve()
     uuid_ = str(uuid.uuid4())
     CKPT_DIR = ckpt_dir / f"{name}-{uuid_}"
+    if not restart:
+        CKPT_DIR.mkdir(parents=True, exist_ok=True)
 
     # Batches for the validation set need to be prepared only once.
     key, valid_shuffle_key = jax.random.split(key)
@@ -625,10 +628,9 @@ def train_model(
                     "objectives": obj_res,
                     "training_units": dict(TRAINING_UNITS),
                 }
-                save_args = orbax_utils.save_args_from_target(ckpt)
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore", RuntimeWarning)
-                    orbax_checkpointer.save(ckp, ckpt, save_args=save_args)
+                    save_training_checkpoint(ckp, ckpt)
                 epoch_timing.checkpoint_s = time.perf_counter() - ckpt_t0
 
             epoch_timing.other_s = max(
