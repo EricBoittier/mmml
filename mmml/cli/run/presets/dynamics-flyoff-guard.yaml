@@ -1,0 +1,9 @@
+# Monomer extent (fly-off) guard with baseline/segment restart recovery.
+defaults:
+  dynamics_max_monomer_extent: 12.0
+  no_dynamics_max_monomer_extent: false
+  dynamics_overlap_action: rescue
+  dynamics_overlap_charmm_sd_steps: 200
+  dynamics_overlap_charmm_abnr_steps: 400
+  bonded_mm_mini: true
+  bonded_mm_mini_after: mini,heat

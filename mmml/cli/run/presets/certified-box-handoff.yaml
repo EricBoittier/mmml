@@ -1,0 +1,6 @@
+# Load a certified liquid-box artifact; skip Packmol/cluster rebuild.
+# Set from_psf, from_crd, box_size (from box.json) in your campaign defaults.
+defaults:
+  skip_cluster_build: true
+  charmm_mm_pretreat: true
+  charmm_mm_pretreat_dt_fs: 1.0

@@ -11,10 +11,11 @@ mmml md-system --config mmml/cli/run/md_system.example.yaml
 # Dense liquid box prep (resilient density mode)
 mmml md-system --config mmml/cli/run/md_system.dense_liquid_prep.example.yaml
 
-# Campaign with defaults plus named runs
-mmml md-system --config mmml/cli/run/md_system.example.yaml --run-all
-mmml md-system --config mmml/cli/run/md_system.dense_liquid_prep.example.yaml --run-all
-mmml md-system --config mmml/cli/run/md_system.example.yaml --job-id jaxmd_prod
+# DCM:103 from certified liquid-box (preset stack)
+mmml md-system --config mmml/cli/run/md_system.dcm103_equil.example.yaml --job-id dcm103_equil
+
+# Composable presets — see mmml/cli/run/presets/README.md
+mmml md-system --config my_campaign.yaml --run-all
 ```
 
 The main goal for these configs is condensed-phase setup: build a dense molecular box, relax overlaps, hand it between PyCHARMM and JAX-MD, then run production with neighbor-list settings that are large and fresh enough for the density.
@@ -102,6 +103,26 @@ Campaign-only keys are ignored when building the backend command:
 - `extra_args`: raw backend flags that `md-system` does not expose directly; put each token in its own list item.
 
 Top-level CLI flags win over YAML only for selected campaign-wide runtime controls, including `ml_batch_size`, `ml_gpu_count`, `ml_max_active_dimers`, `skip_jit_warmup`, `handoff_pre_minimize`, and `ml_spatial_mpi`.
+
+## YAML presets (`include`)
+
+Campaign files can chain reusable fragments from `mmml/cli/run/presets/`:
+
+```yaml
+include:
+  - presets/base-dt0.25.yaml
+  - presets/liquid-prep-dense.yaml
+  - presets/heat-dt0.25-conservative.yaml
+  - presets/dynamics-flyoff-strict.yaml
+
+defaults:
+  composition: "DCM:103"
+  from_psf: boxes/dcm103/model.psf
+  from_crd: boxes/dcm103/model.crd
+  box_size: 63.354
+```
+
+Later includes and your own `defaults` override earlier keys. See `mmml/cli/run/presets/README.md` for the full index (`heat-dt0.25-conservative`, `pre-sd-calculator`, etc.) and ready-made campaigns `md_system.dcm103_equil.example.yaml`, `md_system.dcm52_equil.example.yaml`.
 
 ## Recommended campaign structure
 

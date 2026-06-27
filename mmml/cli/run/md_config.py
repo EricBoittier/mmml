@@ -33,6 +33,60 @@ def _normalize_config_key(key: str) -> str:
     return k.replace("-", "_")
 
 
+def _deep_merge_mappings(base: Mapping[str, Any], overlay: Mapping[str, Any]) -> dict[str, Any]:
+    """Recursively merge ``overlay`` into a copy of ``base`` (``defaults`` deep-merge)."""
+    result: dict[str, Any] = dict(base)
+    for key, value in overlay.items():
+        if key == "include":
+            continue
+        if (
+            key == "defaults"
+            and isinstance(value, Mapping)
+            and isinstance(result.get(key), Mapping)
+        ):
+            result[key] = _deep_merge_mappings(result[key], value)
+        elif (
+            key == "runs"
+            and isinstance(value, Mapping)
+            and isinstance(result.get(key), Mapping)
+        ):
+            merged_runs = dict(result[key])
+            merged_runs.update(value)
+            result[key] = merged_runs
+        elif (
+            key == "jobs"
+            and isinstance(value, Mapping)
+            and isinstance(result.get(key), Mapping)
+        ):
+            merged_jobs = dict(result[key])
+            merged_jobs.update(value)
+            result[key] = merged_jobs
+        else:
+            result[key] = value
+    return result
+
+
+def _resolve_include_path(config_path: Path, include_ref: str) -> Path:
+    ref = Path(include_ref)
+    if ref.is_absolute():
+        return ref
+    # Prefer relative to the including file, then repo-root relative (mmml/cli/run/...).
+    candidate = (config_path.parent / ref).resolve()
+    if candidate.is_file():
+        return candidate
+    repo_root = config_path.resolve()
+    for _ in range(8):
+        if (repo_root / "mmml" / "cli" / "run").is_dir():
+            break
+        if repo_root.parent == repo_root:
+            break
+        repo_root = repo_root.parent
+    alt = (repo_root / ref).resolve()
+    if alt.is_file():
+        return alt
+    return candidate
+
+
 def load_yaml_config(path: str | Path) -> dict[str, Any]:
     config_path = Path(path)
     if not config_path.is_file():
@@ -41,7 +95,21 @@ def load_yaml_config(path: str | Path) -> dict[str, Any]:
         raw = yaml.safe_load(handle) or {}
     if not isinstance(raw, dict):
         raise ValueError(f"Config file must contain a YAML mapping, got {type(raw).__name__}")
-    return raw
+
+    includes = raw.get("include") or []
+    if isinstance(includes, str):
+        includes = [includes]
+    if not isinstance(includes, list):
+        raise ValueError(f"'include' must be a string or list of paths, got {type(includes).__name__}")
+
+    merged: dict[str, Any] = {}
+    for include_ref in includes:
+        include_path = _resolve_include_path(config_path, str(include_ref))
+        included = load_yaml_config(include_path)
+        merged = _deep_merge_mappings(merged, included)
+
+    overlay = {k: v for k, v in raw.items() if k != "include"}
+    return _deep_merge_mappings(merged, overlay)
 
 
 def resume_requested(

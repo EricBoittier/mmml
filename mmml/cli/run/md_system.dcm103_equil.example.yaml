@@ -1,0 +1,54 @@
+# DCM:103 equilibration from a certified liquid-box artifact.
+#
+# Prerequisites:
+#   mmml liquid-box --config ...   → boxes/dcm103/{model.psf,model.crd,box.json}
+#   ./scripts/ensure_charmm_mlpot_limits.sh --n-ml 103 --pbc --box-size <L>
+#   export CHARMM_LIB_DIR=.../tier_*_nodomdec/lib
+#
+# Run:
+#   mmml md-system --config mmml/cli/run/md_system.dcm103_equil.example.yaml \
+#     --job-id dcm103_equil
+#
+# Preset docs: mmml/cli/run/presets/README.md
+
+include:
+  - presets/base-dt0.25.yaml
+  - presets/certified-box-handoff.yaml
+  - presets/liquid-prep-dense.yaml
+  - presets/pre-sd-calculator.yaml
+  - presets/heat-dt0.25-conservative.yaml
+  - presets/dynamics-overlap-rescue.yaml
+  - presets/dynamics-flyoff-strict.yaml
+
+defaults:
+  checkpoint: /path/to/DESdimers_params.json
+  seed: 123
+  composition: "DCM:103"
+  # Paths relative to your campaign working directory:
+  from_psf: boxes/dcm103/model.psf
+  from_crd: boxes/dcm103/model.crd
+  box_size: null  # REQUIRED: set from boxes/dcm103/box.json → side_A
+  setup: pbc_npt
+  backend: pycharmm
+  md_stages: "mini,heat,equi"
+  ps_heat: 10.0
+  ps_equi: 10.0
+  n_equi_segments: 1
+  output_dir: runs/dcm103_equil
+  # Optional explicit overrides (presets already set most of these):
+  # no_echeck_heat: true
+  # heat_thermostat: hoover
+  # calculator_pre_minimize: true
+
+campaign_output: artifacts/md_system/dcm103_equil
+
+runs:
+  dcm103_equil:
+    description: "DCM:103 mini → conservative heat → NPT equi (certified box)"
+    backend: pycharmm
+    setup: pbc_npt
+    md_stages: "mini,heat,equi"
+    composition: "DCM:103"
+    ps_heat: 10.0
+    ps_equi: 10.0
+    output_dir: runs/dcm103_equil

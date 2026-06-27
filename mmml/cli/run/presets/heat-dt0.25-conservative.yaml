@@ -1,0 +1,11 @@
+# Conservative NVT heat @ dt=0.25 fs: Hoover, no ECHECK, segmented ramp.
+defaults:
+  dt_fs: 0.25
+  heat_thermostat: hoover
+  no_echeck_heat: true
+  heat_comp_damp: false
+  ps_heat: 10.0
+  n_heat_segments: 4
+  heat_ihtfrq: 0
+  npt_thermostat: hoover
+  npt_pgamma: 5.0

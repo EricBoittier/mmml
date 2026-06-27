@@ -5,73 +5,31 @@
 #
 # Full campaign (PyCHARMM equil → JAX-MD prod):
 #   mmml md-system --config mmml/cli/run/md_system.dense_liquid_prep.example.yaml --run-all
-#   mmml md-system --config mmml/cli/run/md_system.dense_liquid_prep.example.yaml --job-id jaxmd_prod
+#
+# Composable presets (recommended for DCM:103/:206 from liquid-box):
+#   mmml/cli/run/presets/README.md
+#   mmml md-system --config mmml/cli/run/md_system.dcm103_equil.example.yaml
 #
 # See docs/md-system-configs.md § "Resilient density prep" for snippet variants.
+
+include:
+  - presets/base-dt0.25.yaml
+  - presets/liquid-prep-dense.yaml
+  - presets/pre-sd-calculator.yaml
+  - presets/heat-dt0.25-conservative.yaml
+  - presets/dynamics-overlap-rescue.yaml
 
 defaults:
   checkpoint: /path/to/DESdimers_params.json
   seed: 123
-  dt_fs: 0.25
   temperature: 300.0
   pressure: 1.0
-  spacing: 4.0
   packmol_tolerance: 1.5
-  mm_switch_on: 6.0
-  mm_switch_width: 4.0
-  ml_switch_width: 1.0
-  mlpot_mm_internal_scale: 0.0
-  include_mm: true
-  mm_nonbond_mode: jax_mic
-  # ML-only (no MM LJ/Coulomb pairs): include_mm: false
-  # mm_nonbond_mode: periodic_external
-  # lr_solver: scafacos
-  # periodic_charmm_vdw: true
-  # ML + ScaFaCoS Coulomb only (no LJ): periodic_charmm_vdw: false
-
-  # --- Density / box sizing ---
-  box_auto: density
-  bulk_density_fraction: 0.75
-  target_density_g_cm3: 1.326
-  mc_density_equalize: true
-  mc_density_steps: 80
-  mc_density_min_scale: 0.35
-  mc_density_max_scale: 1.5
-
-  # --- Resilient prep (preventive + post-mini ladder); use liquid_prep: true for one-flag setup ---
-  liquid_prep: true
-  density_prep_ladder_max_rounds: 3
-  density_prep_lattice_abnr_steps: 200
-  mini_lattice_abnr_steps: 200
-  mini_lattice_abnr_allow_fixed_box: true
-  mini_box_equil_ps: 2.0
-  mini_box_equil_allow_fixed_box: true
-
-  # --- CHARMM / MLpot minimization ---
   charmm_mm_pretreat: true
   charmm_mm_pretreat_dt_fs: 1.0
   # PBC DCM:206 (1030 ML atoms @ L≈35 Å) needs xlarge tier (max_Npr=12M):
   #   ./scripts/ensure_charmm_mlpot_limits.sh --n-ml 1030 --pbc --box-size 35
   #   export CHARMM_LIB_DIR=~/.cache/mmml-charmm-build/tier_12000000_nodomdec/lib
-  charmm_pre_minimize: true
-  charmm_sd_steps: 1000
-  charmm_abnr_steps: 1000
-  mini_nstep: 500
-  bonded_mm_mini: true
-  bonded_mm_mini_after: mini,heat
-  bonded_mm_mini_steps: 500
-  calculator_pre_minimize: true
-  pre_min_steps: 200
-  pre_min_fmax: 0.05
-  max_grms_before_dyn: 50.0
-
-  # --- Dynamics overlap rescue (dense boxes) ---
-  dynamics_overlap_action: rescue
-  dynamics_overlap_min_distance: 1.5
-  dynamics_intra_min_distance: 0.5
-  dynamics_overlap_check_interval: 250
-  no_echeck_heat: true
-  heat_thermostat: hoover
 
 campaign_output: artifacts/dcm_dense_liquid_prep
 
