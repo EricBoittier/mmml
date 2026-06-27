@@ -3119,6 +3119,27 @@ def test_harmonize_dynamics_frequency_for_remainder_chunk():
     _harmonize_overlap_chunk_frequencies(kw3b, 250)
     assert kw3b["nsavc"] == 16
 
+    kw_pretreat = {
+        "inbfrq": 200,
+        "ihbfrq": 200,
+        "ilbfrq": 200,
+        "imgfrq": 200,
+        "nsavc": 80,
+        "nprint": 80,
+        "iprfrq": 80,
+        "isvfrq": 80,
+    }
+    _harmonize_overlap_chunk_frequencies(kw_pretreat, 250)
+    assert kw_pretreat["inbfrq"] == 125
+    assert kw_pretreat["imgfrq"] == 125
+    assert kw_pretreat["imgfrq"] % kw_pretreat["inbfrq"] == 0
+
+    kw_mismatch = {"inbfrq": 300, "imgfrq": 100, "ihbfrq": 100, "ilbfrq": 100}
+    _harmonize_overlap_chunk_frequencies(kw_mismatch, 250)
+    assert kw_mismatch["imgfrq"] == 100
+    assert kw_mismatch["inbfrq"] == 100
+    assert kw_mismatch["imgfrq"] % kw_mismatch["inbfrq"] == 0
+
     kw4 = {
         "nsavc": 250,
         "_target_dcd_nsavc": 250,

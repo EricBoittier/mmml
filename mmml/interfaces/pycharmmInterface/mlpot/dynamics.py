@@ -3136,7 +3136,22 @@ def _ensure_nsavc_below_nstep(kw: dict[str, Any]) -> None:
     kw["nsavc"] = new
 
 
+def _align_inbfrq_with_imgfrq(chunk_kw: dict[str, Any]) -> None:
+    """CHARMM FINCYC: ``IMGFRQ`` must be a multiple of ``INBFRQ`` when ``INBFRQ > 0``."""
+    if "inbfrq" not in chunk_kw or "imgfrq" not in chunk_kw:
+        return
+    inb = int(chunk_kw["inbfrq"])
+    img = int(chunk_kw["imgfrq"])
+    if inb <= 0 or img <= 0 or img % inb == 0:
+        return
+    for d in range(min(inb, img), 0, -1):
+        if img % d == 0:
+            chunk_kw["inbfrq"] = d
+            return
+
+
 _OVERLAP_CHUNK_FREQ_KEYS = (
+    "inbfrq",
     "ihbfrq",
     "ilbfrq",
     "imgfrq",
@@ -3176,6 +3191,7 @@ def _harmonize_overlap_chunk_frequencies(
                         chunk_kw[k] = old
         else:
             chunk_kw[key] = _harmonize_dynamics_frequency(int(chunk_kw[key]), n)
+    _align_inbfrq_with_imgfrq(chunk_kw)
     if loose_pbc:
         apply_loose_pbc_dyn_freq_kwargs(chunk_kw, nstep=n)
     else:
