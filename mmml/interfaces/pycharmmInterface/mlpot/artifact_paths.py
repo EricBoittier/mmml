@@ -13,6 +13,8 @@ PathLike = str | Path
 
 MODEL_STEM = "model"
 MINI_STEM = "mini"
+PREP_LADDER_SUBDIR = "prep_ladder"
+CLEANUP_SUBDIR = "cleanup"
 SNAPSHOTS_JSON = "snapshots.json"
 VMD_TCL = "view.vmd.tcl"
 BASELINE_RES = "baseline.res"

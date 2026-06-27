@@ -1802,6 +1802,19 @@ def _append_box_sizing_args(cmd: list[str], args: argparse.Namespace) -> None:
     pre_mlpot = getattr(args, "pre_mlpot_overlap_min_distance", None)
     if pre_mlpot is not None:
         cmd.extend(["--pre-mlpot-overlap-min-distance", str(pre_mlpot)])
+    from mmml.interfaces.pycharmmInterface.mlpot.recovery_progress import (
+        CLEANUP_SUBDIR,
+        PREP_LADDER_SUBDIR,
+    )
+
+    prep_ladder_dir = str(getattr(args, "prep_ladder_dir", PREP_LADDER_SUBDIR) or PREP_LADDER_SUBDIR)
+    if prep_ladder_dir != PREP_LADDER_SUBDIR:
+        cmd.extend(["--prep-ladder-dir", prep_ladder_dir])
+    cleanup_dir = str(getattr(args, "cleanup_dir", CLEANUP_SUBDIR) or CLEANUP_SUBDIR)
+    if cleanup_dir != CLEANUP_SUBDIR:
+        cmd.extend(["--cleanup-dir", cleanup_dir])
+    if bool(getattr(args, "no_recovery_artifacts", False)):
+        cmd.append("--no-recovery-artifacts")
 
 
 def _validate_pyxtal_args(args: argparse.Namespace) -> None:
