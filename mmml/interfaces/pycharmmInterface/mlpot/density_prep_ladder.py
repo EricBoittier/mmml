@@ -278,6 +278,7 @@ def _sync_pbc_after_box_change(
     pretreat_restart: Path | None = None,
     args: argparse.Namespace | None = None,
     quiet: bool = False,
+    report_resync: bool = True,
 ) -> float | None:
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import light_resync_mlpot_state
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
@@ -307,9 +308,9 @@ def _sync_pbc_after_box_change(
         )
         light_resync_mlpot_state(
             mlpot_ctx,
-            context="Density prep PBC sync" if not quiet else "",
+            context="Density prep PBC sync" if (not quiet and report_resync) else "",
             silent_charmm=True,
-            verbose=not quiet,
+            verbose=not quiet and report_resync,
             restart_path=pretreat_restart,
         )
         synced = sync_workflow_pbc_box_side_after_mm_pretreat(
@@ -401,17 +402,31 @@ def run_density_prep_ladder(
     )
     grms = float(current_grms)
 
-    if not quiet:
-        print(
-            f"\nDensity prep ladder: GRMS {grms:.4f} > {max_grms:.4f}; "
-            f"up to {max_rounds} round(s)",
-            flush=True,
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import measure_hybrid_charmm_grms
+    from mmml.utils.prep_ladder_report import PrepLadderJournal, PrepMetrics
+
+    journal = PrepLadderJournal(quiet=quiet)
+    journal.begin(initial_grms=grms, max_grms=float(max_grms), max_rounds=max_rounds)
+
+    def _step_metrics(step_grms: float) -> PrepMetrics:
+        diag = measure_hybrid_charmm_grms(mlpot_ctx)
+        return PrepMetrics.from_mlpot(
+            mlpot_ctx,
+            hybrid_grms=float(step_grms),
+            charmm_grms=float(diag.charmm),
+            diag_kind=str(diag.kind),
         )
+
+    def _refresh_after_step(step_label: str) -> float:
+        step_grms = refresh_mlpot_energy_and_grms(mlpot_ctx, context="")
+        journal.record_step(step_label, _step_metrics(step_grms))
+        return float(step_grms)
 
     for round_idx in range(max_rounds):
         if grms <= max_grms:
             break
         result.rounds = round_idx + 1
+        journal.begin_round(round_idx, grms)
         pos = get_charmm_positions_array()
 
         step_label = f"round{round_idx + 1}:monomer_repack"
@@ -431,15 +446,12 @@ def run_density_prep_ladder(
                 mlpot_ctx=mlpot_ctx,
                 args=args,
                 quiet=quiet,
+                report_resync=False,
             )
             result.steps_applied.append(step_label)
-            grms = refresh_mlpot_energy_and_grms(
-                mlpot_ctx,
-                context=f"Density prep ladder ({step_label})" if not quiet else "",
-            )
+            grms = _refresh_after_step(step_label)
         except Exception as exc:
-            if not quiet:
-                print(f"Density prep ladder: skip {step_label} ({exc})", flush=True)
+            journal.skip_step(step_label, str(exc))
 
         if grms <= max_grms:
             break
@@ -466,15 +478,12 @@ def run_density_prep_ladder(
                     mlpot_ctx=mlpot_ctx,
                     args=args,
                     quiet=quiet,
+                    report_resync=False,
                 )
                 result.steps_applied.append(step_label)
-                grms = refresh_mlpot_energy_and_grms(
-                    mlpot_ctx,
-                    context=f"Density prep ladder ({step_label})" if not quiet else "",
-                )
+                grms = _refresh_after_step(step_label)
             except Exception as exc:
-                if not quiet:
-                    print(f"Density prep ladder: skip {step_label} ({exc})", flush=True)
+                journal.skip_step(step_label, str(exc))
 
         if grms <= max_grms:
             break
@@ -500,13 +509,9 @@ def run_density_prep_ladder(
                         mlpot_ctx.cubic_box_side_A = box_side
                         mlpot_ctx.charmm_cubic_box_side_A = box_side
                     result.steps_applied.append(step_label)
-                    grms = refresh_mlpot_energy_and_grms(
-                        mlpot_ctx,
-                        context=f"Density prep ladder ({step_label})" if not quiet else "",
-                    )
+                    grms = _refresh_after_step(step_label)
                 except Exception as exc:
-                    if not quiet:
-                        print(f"Density prep ladder: skip {step_label} ({exc})", flush=True)
+                    journal.skip_step(step_label, str(exc))
                 if grms <= max_grms:
                     break
 
@@ -532,13 +537,9 @@ def run_density_prep_ladder(
                 ),
             )
             result.steps_applied.append(step_label)
-            grms = refresh_mlpot_energy_and_grms(
-                mlpot_ctx,
-                context=f"Density prep ladder ({step_label})" if not quiet else "",
-            )
+            grms = _refresh_after_step(step_label)
         except Exception as exc:
-            if not quiet:
-                print(f"Density prep ladder: skip {step_label} ({exc})", flush=True)
+            journal.skip_step(step_label, str(exc))
 
         if grms <= max_grms:
             break
@@ -591,13 +592,9 @@ def run_density_prep_ladder(
                         **kwargs,
                     )
                     result.steps_applied.append(step_label)
-                    grms = refresh_mlpot_energy_and_grms(
-                        mlpot_ctx,
-                        context=f"Density prep ladder ({step_label})" if not quiet else "",
-                    )
+                    grms = _refresh_after_step(step_label)
                 except Exception as exc:
-                    if not quiet:
-                        print(f"Density prep ladder: skip {step_label} ({exc})", flush=True)
+                    journal.skip_step(step_label, str(exc))
                 if grms <= max_grms:
                     break
 
@@ -633,24 +630,72 @@ def run_density_prep_ladder(
                 )
             )
             result.steps_applied.append(step_label)
-            grms = refresh_mlpot_energy_and_grms(
-                mlpot_ctx,
-                context=f"Density prep ladder ({step_label})" if not quiet else "",
-            )
+            grms = _refresh_after_step(step_label)
         except Exception as exc:
-            if not quiet:
-                print(f"Density prep ladder: skip {step_label} ({exc})", flush=True)
+            journal.skip_step(step_label, str(exc))
 
     result.final_grms = float(grms)
     result.reason = "grms_ok" if grms <= max_grms else "grms_still_high"
-    if not quiet:
-        print(
-            f"Density prep ladder done: GRMS {result.initial_grms:.4f} -> "
-            f"{result.final_grms:.4f} (limit {max_grms:.4f}); "
-            f"rounds={result.rounds}, steps={len(result.steps_applied)}",
-            flush=True,
-        )
+    journal.finish(float(grms), reason=result.reason)
     return float(grms), box_side, result
+
+
+def maybe_run_density_prep_ladder_for_mlpot(
+    mlpot_ctx: Any,
+    *,
+    max_grms: float,
+    context: str = "Density prep ladder",
+    quiet: bool = False,
+) -> tuple[float, bool]:
+    """Run the liquid-prep ladder when enabled on ``mlpot_ctx.workflow_args``."""
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import refresh_mlpot_energy_and_grms
+
+    args = getattr(mlpot_ctx, "workflow_args", None)
+    if args is None or not density_prep_ladder_enabled(args):
+        return refresh_mlpot_energy_and_grms(mlpot_ctx, context=context), False
+
+    atoms_per_list = getattr(mlpot_ctx, "atoms_per_monomer", None)
+    if atoms_per_list is None:
+        atoms_per_list = getattr(args, "_cluster_atoms_per_list", None)
+    if atoms_per_list is None:
+        return refresh_mlpot_energy_and_grms(mlpot_ctx, context=context), False
+
+    pyCModel = getattr(mlpot_ctx, "pyCModel", None)
+    if pyCModel is None:
+        return refresh_mlpot_energy_and_grms(mlpot_ctx, context=context), False
+
+    n_mol = len(atoms_per_list)
+    n_atoms = int(sum(atoms_per_list))
+    box_side = getattr(mlpot_ctx, "cubic_box_side_A", None)
+    if box_side is None:
+        box_side = getattr(mlpot_ctx, "charmm_cubic_box_side_A", None)
+    composition = getattr(args, "_cluster_composition_summary", None)
+    current_grms = refresh_mlpot_energy_and_grms(
+        mlpot_ctx,
+        context=f"{context} (initial)" if not quiet else "",
+    )
+    if current_grms <= float(max_grms):
+        return float(current_grms), False
+
+    ladder_grms, _new_side, _summary = run_density_prep_ladder(
+        args,
+        mlpot_ctx=mlpot_ctx,
+        pyCModel=pyCModel,
+        max_grms=float(max_grms),
+        current_grms=float(current_grms),
+        n_mol=n_mol,
+        n_atoms=n_atoms,
+        box_side=float(box_side) if box_side is not None else None,
+        charmm_pbc=bool(getattr(mlpot_ctx, "use_pbc", False)),
+        atoms_per_list=list(atoms_per_list),
+        composition=composition,
+        mini_nstep=int(getattr(args, "mini_nstep", 500) or 500),
+        mini_nprint=max(1, int(getattr(args, "nprint", 100) or 100)),
+        fix_resids=[],
+        show_energy=False,
+        z=getattr(mlpot_ctx, "ml_Z", None),
+    )
+    return float(ladder_grms), True
 
 
 def run_pre_mlpot_geometry_gate(
@@ -848,18 +893,30 @@ def run_geometry_packing_recovery(
 ) -> float:
     """Repack / MC / FIRE / BFGS path for ``geometry_stress`` (skip bonded-MM first)."""
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        measure_hybrid_charmm_grms,
         refresh_mlpot_energy_and_grms,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+    from mmml.utils.prep_ladder_report import PrepLadderJournal, PrepMetrics
 
     quiet = not verbose
     min_overlap = resolve_pre_mlpot_overlap_min_distance(args)
     spacing = getattr(args, "spacing", None)
     seed = getattr(args, "seed", None)
-    grms = refresh_mlpot_energy_and_grms(
-        mlpot_ctx,
-        context=f"{context_prefix} (initial)" if verbose else "",
-    )
+    journal = PrepLadderJournal(title=context_prefix, quiet=quiet)
+
+    def _metrics(step_grms: float) -> PrepMetrics:
+        diag = measure_hybrid_charmm_grms(mlpot_ctx)
+        return PrepMetrics.from_mlpot(
+            mlpot_ctx,
+            hybrid_grms=float(step_grms),
+            charmm_grms=float(diag.charmm),
+            diag_kind=str(diag.kind),
+        )
+
+    grms = refresh_mlpot_energy_and_grms(mlpot_ctx, context="")
+    journal.begin(initial_grms=grms, max_grms=float(grms_limit or grms), max_rounds=1)
+    journal.record_step("initial", _metrics(grms))
 
     step_label = f"{context_prefix}:monomer_repack"
     try:
@@ -879,14 +936,12 @@ def run_geometry_packing_recovery(
             mlpot_ctx=mlpot_ctx,
             args=args,
             quiet=quiet,
+            report_resync=False,
         )
-        grms = refresh_mlpot_energy_and_grms(
-            mlpot_ctx,
-            context=f"{context_prefix} ({step_label})" if verbose else "",
-        )
+        grms = refresh_mlpot_energy_and_grms(mlpot_ctx, context="")
+        journal.record_step(step_label, _metrics(grms))
     except Exception as exc:
-        if verbose:
-            print(f"{context_prefix}: skip monomer_repack ({exc})", flush=True)
+        journal.skip_step(step_label, str(exc))
 
     if charmm_pbc and composition is not None:
         step_label = f"{context_prefix}:mc_density"
@@ -910,14 +965,12 @@ def run_geometry_packing_recovery(
                 mlpot_ctx=mlpot_ctx,
                 args=args,
                 quiet=quiet,
+                report_resync=False,
             )
-            grms = refresh_mlpot_energy_and_grms(
-                mlpot_ctx,
-                context=f"{context_prefix} ({step_label})" if verbose else "",
-            )
+            grms = refresh_mlpot_energy_and_grms(mlpot_ctx, context="")
+            journal.record_step(step_label, _metrics(grms))
         except Exception as exc:
-            if verbose:
-                print(f"{context_prefix}: skip mc_density ({exc})", flush=True)
+            journal.skip_step(step_label, str(exc))
 
     if calculator_minimize:
         from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
@@ -961,10 +1014,9 @@ def run_geometry_packing_recovery(
                 bfgs_config,
                 context_prefix=f"{context_prefix} (BFGS)",
             )
-            return refresh_mlpot_energy_and_grms(
-                mlpot_ctx,
-                context=f"{context_prefix} (post-BFGS)" if verbose else "",
-            )
+            refreshed = refresh_mlpot_energy_and_grms(mlpot_ctx, context="")
+            journal.record_step(f"{context_prefix} (post-BFGS)", _metrics(refreshed))
+            return refreshed
 
         def _run_fire() -> float:
             nonlocal grms
@@ -973,24 +1025,27 @@ def run_geometry_packing_recovery(
                 config=fire_config,
                 context_prefix=f"{context_prefix} (FIRE)",
             )
-            return refresh_mlpot_energy_and_grms(
-                mlpot_ctx,
-                context=f"{context_prefix} (post-FIRE)" if verbose else "",
-            )
+            refreshed = refresh_mlpot_energy_and_grms(mlpot_ctx, context="")
+            journal.record_step(f"{context_prefix} (post-FIRE)", _metrics(refreshed))
+            return refreshed
 
         if verbose and bfgs_first:
-            print(
-                f"{context_prefix}: GRMS {grms:.1f} > {fire_bfgs_crossover:.1f}; "
-                "running guarded BFGS before FIRE",
-                flush=True,
+            from mmml.utils.prep_ladder_report import emit_prep_phase
+
+            emit_prep_phase(
+                context_prefix,
+                "guarded BFGS before FIRE",
+                metrics=_metrics(grms),
+                note=f"GRMS {grms:.1f} > {fire_bfgs_crossover:.1f}",
+                quiet=quiet,
             )
 
         runners = (_run_bfgs, _run_fire) if bfgs_first else (_run_fire, _run_bfgs)
         for runner in runners:
             try:
-                runner()
+                grms = runner()
             except Exception as exc:
-                if verbose:
-                    print(f"{context_prefix}: calculator mini skipped ({exc})", flush=True)
+                journal.skip_step(f"{context_prefix} calculator mini", str(exc))
 
+    journal.finish(float(grms), reason="packing_done")
     return float(grms)

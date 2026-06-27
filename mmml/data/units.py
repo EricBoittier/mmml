@@ -207,6 +207,30 @@ def format_energy_kcal_ev(
     return f"{e_kcal:.{kcal_digits}f} kcal/mol ({e_ev:.{ev_digits}f} eV)"
 
 
+def format_grms_kcal_ev_a(
+    grms_kcal_mol_a: float,
+    *,
+    kcal_digits: int = 4,
+    ev_digits: int = 4,
+) -> str:
+    """Format GRMS as ``X kcal/mol/Å (Y eV/Å)``."""
+    g_kcal = float(grms_kcal_mol_a)
+    g_ev = g_kcal * KCAL_MOL_TO_EV
+    return f"{g_kcal:.{kcal_digits}f} kcal/mol/Å ({g_ev:.{ev_digits}f} eV/Å)"
+
+
+def format_fmax_ev_kcal_a(
+    fmax_ev_a: float,
+    *,
+    ev_digits: int = 4,
+    kcal_digits: int = 4,
+) -> str:
+    """Format max force as ``X eV/Å (Y kcal/mol/Å)``."""
+    f_ev = float(fmax_ev_a)
+    f_kcal = f_ev * EV_TO_KCAL_MOL
+    return f"{f_ev:.{ev_digits}f} eV/Å ({f_kcal:.{kcal_digits}f} kcal/mol/Å)"
+
+
 def convert_forces(
     values: np.ndarray | float,
     from_unit: str,

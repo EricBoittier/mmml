@@ -19,6 +19,14 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     probe_and_light_resync_if_desync,
     resolve_mlpot_grms_kcalmol_A,
 )
+from mmml.utils import rich_report
+
+
+@pytest.fixture(autouse=True)
+def _no_rich(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MMML_NO_RICH", "1")
+    monkeypatch.delenv("MMML_QUIET", raising=False)
+    rich_report._console.cache_clear()
 
 
 def test_forces_grms_matches_rms_of_components():
@@ -94,7 +102,7 @@ def test_resolve_mlpot_grms_reports_desync(capsys):
 
     assert grms == pytest.approx(30.0)
     out = capsys.readouterr().out
-    assert "possible desync" in out
+    assert "possible hybrid/CHARMM desync" in out
 
 
 def test_resolve_mlpot_grms_falls_back_to_charmm_without_ctx():
@@ -210,11 +218,20 @@ def test_prepare_mlpot_hybrid_state_aborts_when_grms_stays_high():
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
     ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.verify_hybrid_ase_charmm_consistency",
+        return_value=(472.0, 472.0),
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common._geometry_recovery_context",
         return_value=(workflow_args, [5, 5]),
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds.resolve_intervention_grms_threshold",
         return_value=25.0,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.minimize_hybrid_calculator_fire_before_sd",
+        return_value=470.0,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.minimize_hybrid_calculator_before_sd",
+        return_value=470.0,
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder.run_geometry_packing_recovery",
         return_value=470.0,
@@ -222,6 +239,8 @@ def test_prepare_mlpot_hybrid_state_aborts_when_grms_stays_high():
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.measure_hybrid_charmm_grms",
         side_effect=[
             mock.Mock(hybrid=472.0, charmm=1.15, ratio=410.0, kind="geometry_stress"),
+            mock.Mock(hybrid=470.0, charmm=1.1, ratio=427.0, kind="geometry_stress"),
+            mock.Mock(hybrid=470.0, charmm=1.1, ratio=427.0, kind="geometry_stress"),
             mock.Mock(hybrid=470.0, charmm=1.1, ratio=427.0, kind="geometry_stress"),
         ],
     ), mock.patch(
@@ -254,11 +273,20 @@ def test_prepare_mlpot_hybrid_state_runs_packing_recovery_for_geometry_stress():
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
     ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.verify_hybrid_ase_charmm_consistency",
+        return_value=(293.8, 293.8),
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common._geometry_recovery_context",
         return_value=(workflow_args, [5, 5]),
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds.resolve_intervention_grms_threshold",
         return_value=25.0,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.minimize_hybrid_calculator_fire_before_sd",
+        return_value=200.0,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.minimize_hybrid_calculator_before_sd",
+        return_value=200.0,
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder.run_geometry_packing_recovery",
         return_value=180.0,
@@ -266,6 +294,8 @@ def test_prepare_mlpot_hybrid_state_runs_packing_recovery_for_geometry_stress():
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.measure_hybrid_charmm_grms",
         side_effect=[
             mock.Mock(hybrid=293.8, charmm=1.33, ratio=220.0, kind="geometry_stress"),
+            mock.Mock(hybrid=200.0, charmm=1.2, ratio=150.0, kind="geometry_stress"),
+            mock.Mock(hybrid=200.0, charmm=1.2, ratio=150.0, kind="geometry_stress"),
             mock.Mock(hybrid=180.0, charmm=1.2, ratio=150.0, kind="geometry_stress"),
         ],
     ), mock.patch(
@@ -341,11 +371,20 @@ def test_prepare_mlpot_hybrid_state_post_recovery_calculator_mini_when_still_hot
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
     ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.verify_hybrid_ase_charmm_consistency",
+        return_value=(120.0, 120.0),
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common._geometry_recovery_context",
         return_value=(workflow_args, [5, 5]),
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds.resolve_intervention_grms_threshold",
         return_value=25.0,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.minimize_hybrid_calculator_fire_before_sd",
+        return_value=80.0,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.minimize_hybrid_calculator_before_sd",
+        return_value=80.0,
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder.run_geometry_packing_recovery",
         return_value=3.0,
@@ -353,6 +392,8 @@ def test_prepare_mlpot_hybrid_state_post_recovery_calculator_mini_when_still_hot
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.measure_hybrid_charmm_grms",
         side_effect=[
             mock.Mock(hybrid=120.0, charmm=1.2, ratio=100.0, kind="geometry_stress"),
+            mock.Mock(hybrid=80.0, charmm=1.2, ratio=66.0, kind="geometry_stress"),
+            mock.Mock(hybrid=80.0, charmm=1.2, ratio=66.0, kind="geometry_stress"),
             mock.Mock(hybrid=3.0, charmm=2.0, ratio=1.5, kind="ok"),
         ],
     ), mock.patch(
