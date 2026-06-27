@@ -8,11 +8,15 @@ import numpy as np
 import pytest
 
 from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+    HybridCalculatorFireConfig,
     HybridCalculatorMinimizeConfig,
     _BestMinimizationFrame,
     _run_hybrid_calculator_bfgs,
+    _run_hybrid_calculator_fire,
     hybrid_calculator_mini_eligible,
+    resolve_adaptive_fire_maxstep,
     should_abort_bfgs_fmax,
+    should_abort_fire_step,
     spike_fmax_limit_ev_a,
 )
 
@@ -121,6 +125,114 @@ def test_run_hybrid_calculator_bfgs_stops_on_spike_without_stopiteration():
             config,
             context_prefix="Test",
             initial_fmax_ev_a=2.0,
+        )
+
+    assert stopped is True
+    assert best_frame.best_force_fmax == pytest.approx(2.0)
+    assert opt.get_number_of_steps() == 2
+
+
+def test_should_abort_fire_step_on_energy_spike():
+    assert should_abort_fire_step(
+        current_fmax_ev_a=2.0,
+        current_energy_ev=120.0,
+        spike_limit_ev_a=50.0,
+        best_fmax_ev_a=2.0,
+        best_energy_ev=50.0,
+        initial_energy_ev=50.0,
+        absolute_fmax_ceiling_ev_a=500.0,
+        running_spike_factor=1.5,
+        energy_spike_ev=20.0,
+        energy_absolute_ceiling_ev=1.0e4,
+    )
+    assert not should_abort_fire_step(
+        current_fmax_ev_a=2.0,
+        current_energy_ev=60.0,
+        spike_limit_ev_a=50.0,
+        best_fmax_ev_a=2.0,
+        best_energy_ev=50.0,
+        initial_energy_ev=50.0,
+        absolute_fmax_ceiling_ev_a=500.0,
+        running_spike_factor=1.5,
+        energy_spike_ev=20.0,
+        energy_absolute_ceiling_ev=1.0e4,
+    )
+
+
+def test_resolve_adaptive_fire_maxstep_scales_with_grms_and_fmax():
+    assert resolve_adaptive_fire_maxstep(
+        configured_maxstep=0.2,
+        initial_fmax_ev_a=2.0,
+        initial_grms_kcalmol_A=120.0,
+    ) == pytest.approx(0.05)
+    assert resolve_adaptive_fire_maxstep(
+        configured_maxstep=0.2,
+        initial_fmax_ev_a=0.5,
+        initial_grms_kcalmol_A=10.0,
+    ) == pytest.approx(0.2)
+
+
+def test_best_minimization_frame_tracks_lowest_energy():
+    atoms = MagicMock()
+    atoms.get_forces.return_value = np.array([[2.0, 0.0, 0.0]])
+    atoms.get_potential_energy.side_effect = [100.0, 80.0, 500.0]
+    atoms.get_positions.side_effect = [
+        np.zeros((1, 3)),
+        np.ones((1, 3)),
+        np.full((1, 3), 99.0),
+    ]
+    frame = _BestMinimizationFrame(atoms)
+    frame.record("initial")
+    frame.record("step_1")
+    frame.record("step_2")
+    assert frame.best_energy_label == "step_1"
+    assert frame.best_energy_ev == pytest.approx(80.0)
+
+
+def test_run_hybrid_calculator_fire_stops_on_spike():
+    atoms = MagicMock()
+    atoms.get_forces.side_effect = [
+        np.array([[2.0, 0.0, 0.0]]),
+        np.array([[2.0, 0.0, 0.0]]),
+        np.array([[2.0, 0.0, 0.0]]),
+        np.array([[60.0, 0.0, 0.0]]),
+        np.array([[60.0, 0.0, 0.0]]),
+    ]
+    atoms.get_potential_energy.side_effect = [50.0, 50.0, 50.0, 500.0, 500.0]
+    atoms.get_positions.return_value = np.zeros((1, 3))
+
+    class FakeFire:
+        def __init__(self, *args, **kwargs) -> None:
+            self._n = 0
+            self._callbacks = []
+
+        def attach(self, fn, interval=1):
+            self._callbacks.append(fn)
+
+        def get_number_of_steps(self):
+            return self._n
+
+        def irun(self, fmax, steps):
+            for _ in range(2):
+                self._n += 1
+                for fn in self._callbacks:
+                    fn()
+                yield False
+
+    config = HybridCalculatorFireConfig(
+        max_steps=50,
+        verbose=True,
+        energy_spike_ev=20.0,
+    )
+
+    with patch("ase.optimize.fire.FIRE", FakeFire):
+        opt, best_frame, stopped = _run_hybrid_calculator_fire(
+            atoms,
+            config,
+            context_prefix="Test",
+            initial_fmax_ev_a=2.0,
+            initial_energy_ev=50.0,
+            initial_grms_kcalmol_A=40.0,
         )
 
     assert stopped is True
