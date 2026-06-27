@@ -15,7 +15,7 @@ import argparse
 
 
 
-def parse_args():
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--res", type=str)
     parser.add_argument(
@@ -24,7 +24,11 @@ def parse_args():
         action="store_true",
         help="Skip the final CHARMM energy.show() (avoids segfault on some clusters/SLURM).",
     )
-    return parser.parse_args()
+    return parser
+
+
+def parse_args():
+    return build_parser().parse_args()
 
 
 def main_loop(args):
