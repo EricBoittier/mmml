@@ -17,6 +17,8 @@ from mmml.data.units import (
     convert_forces,
     energy_to_ev,
     find_units_manifest,
+    format_energy_ev_kcal,
+    format_energy_kcal_ev,
     forces_to_ev_angstrom,
     load_units_manifest,
     normalize_to_canonical,
@@ -48,6 +50,17 @@ def test_convert_coords_bohr_angstrom() -> None:
 
 def test_energy_to_ev_scalar() -> None:
     assert energy_to_ev(-1.0, "hartree") == pytest.approx(-HARTREE_TO_EV)
+
+
+def test_format_energy_dual_units() -> None:
+    from mmml.data.units import EV_TO_KCAL_MOL, KCAL_MOL_TO_EV
+
+    ev = -930.27
+    kcal = ev * EV_TO_KCAL_MOL
+    assert format_energy_ev_kcal(ev) == f"{ev:.6f} eV ({kcal:.4f} kcal/mol)"
+    assert format_energy_kcal_ev(kcal) == (
+        f"{kcal:.4f} kcal/mol ({kcal * KCAL_MOL_TO_EV:.6f} eV)"
+    )
 
 
 def test_subtract_atom_refs_respects_energy_unit() -> None:

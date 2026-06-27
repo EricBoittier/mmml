@@ -11,6 +11,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
     HybridCalculatorMinimizeConfig,
     _BestMinimizationFrame,
     _run_hybrid_calculator_bfgs,
+    annotate_ase_optimizer_log_line,
     hybrid_calculator_mini_eligible,
     should_abort_bfgs_fmax,
     spike_fmax_limit_ev_a,
@@ -20,6 +21,20 @@ from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
 def test_spike_fmax_limit_uses_factor_and_floor():
     assert spike_fmax_limit_ev_a(2.27, factor=4.0, floor_ev_a=15.0) == pytest.approx(15.0)
     assert spike_fmax_limit_ev_a(5.0, factor=4.0, floor_ev_a=15.0) == pytest.approx(20.0)
+
+
+def test_annotate_ase_optimizer_log_line_adds_kcal_mol():
+    from mmml.data.units import EV_TO_KCAL_MOL
+
+    header = "      Step     Time          Energy          fmax"
+    annotated_header = annotate_ase_optimizer_log_line(header)
+    assert "Energy[eV (kcal/mol)]" in annotated_header
+
+    step = "FIRE:    0 15:37:38     -930.270153     1489.849493\n"
+    annotated_step = annotate_ase_optimizer_log_line(step)
+    kcal = -930.270153 * EV_TO_KCAL_MOL
+    assert f"-930.270153 ({kcal:.2f})" in annotated_step
+    assert "1489.849493" in annotated_step
 
 
 def test_should_abort_bfgs_fmax_running_best_spike():

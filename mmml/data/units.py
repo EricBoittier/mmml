@@ -183,6 +183,30 @@ def convert_energy(
     return float(out) if scalar else out
 
 
+def format_energy_ev_kcal(
+    energy_ev: float,
+    *,
+    ev_digits: int = 6,
+    kcal_digits: int = 4,
+) -> str:
+    """Format hybrid/ML energy as ``X eV (Y kcal/mol)``."""
+    e_ev = float(energy_ev)
+    e_kcal = e_ev * EV_TO_KCAL_MOL
+    return f"{e_ev:.{ev_digits}f} eV ({e_kcal:.{kcal_digits}f} kcal/mol)"
+
+
+def format_energy_kcal_ev(
+    energy_kcal: float,
+    *,
+    kcal_digits: int = 4,
+    ev_digits: int = 6,
+) -> str:
+    """Format CHARMM energy as ``X kcal/mol (Y eV)``."""
+    e_kcal = float(energy_kcal)
+    e_ev = e_kcal * KCAL_MOL_TO_EV
+    return f"{e_kcal:.{kcal_digits}f} kcal/mol ({e_ev:.{ev_digits}f} eV)"
+
+
 def convert_forces(
     values: np.ndarray | float,
     from_unit: str,

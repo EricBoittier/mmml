@@ -7,6 +7,8 @@ from typing import Any, Sequence
 
 import numpy as np
 
+from mmml.data.units import format_energy_kcal_ev
+
 
 @dataclass(frozen=True)
 class TestFirstConfig:
@@ -136,7 +138,7 @@ def run_mlpot_python_fd_test(
             f"\nMLpot Python FD test ({label}, step={step} Å, tol={config.tol}):",
             flush=True,
         )
-        print(f"  E = {float(jax.device_get(e0)):.6f} kcal/mol", flush=True)
+        print(f"  E = {format_energy_kcal_ev(float(jax.device_get(e0)))}", flush=True)
         print(
             f"  {len(pairs) - n_fail}/{len(pairs)} components within tol; "
             f"max |fd - grad| = {max_dev:.6f} kcal/mol/Å",

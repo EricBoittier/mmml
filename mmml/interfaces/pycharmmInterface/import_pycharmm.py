@@ -180,6 +180,32 @@ def should_skip_charmm_energy_show() -> bool:
     return False
 
 
+def print_charmm_energy_summary() -> None:
+    """Print ENER/USER in kcal/mol and eV after CHARMM ``energy.show()``."""
+    if not PYCHARMM_AVAILABLE:
+        return
+    import math
+
+    from mmml.data.units import format_energy_kcal_ev
+
+    try:
+        parts: list[str] = []
+        for term in ("ENER", "USER"):
+            try:
+                val = float(energy.get_property_by_name(term))
+            except Exception:
+                continue
+            if not math.isfinite(val):
+                continue
+            if term == "USER" and abs(val) < 1e-8:
+                continue
+            parts.append(f"{term}={format_energy_kcal_ev(val)}")
+        if parts:
+            print(f"  CHARMM energy summary: {', '.join(parts)}", flush=True)
+    except Exception:
+        pass
+
+
 def safe_energy_show():
     """
     Call energy.show() unless the environment requests skipping it to avoid segfault.
@@ -191,6 +217,7 @@ def safe_energy_show():
         print("Skipping energy.show() (SKIP_CHARMM_ENERGY_SHOW, SLURM, or macOS).")
     else:
         energy.show()
+        print_charmm_energy_summary()
 
 
 def reset_block_no_internal():
