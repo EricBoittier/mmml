@@ -467,6 +467,18 @@ def add_box_sizing_args(parser: argparse.ArgumentParser) -> None:
             "--mini-lattice-abnr-steps or 100)."
         ),
     )
+    group.add_argument(
+        "--pre-mlpot-overlap-min-distance",
+        type=float,
+        default=None,
+        metavar="ANG",
+        help=(
+            "Pre-MLpot geometry gate: minimum inter-monomer atom distance in Å "
+            "(default: 1.0; independent of --dynamics-overlap-min-distance). "
+            "Catches true cross-monomer clashes while allowing tight liquid "
+            "contacts that hybrid mini relaxes."
+        ),
+    )
     from mmml.interfaces.pycharmmInterface.mlpot.cleanup_mode import add_cleanup_args
 
     add_cleanup_args(parser)

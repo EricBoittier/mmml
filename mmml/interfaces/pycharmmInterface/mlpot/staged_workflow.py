@@ -1733,6 +1733,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             charmm_pbc=charmm_pbc,
             n_mol=n_mol,
             n_atoms=n_atoms,
+            atomic_numbers=np.asarray(z, dtype=int),
         )
         setattr(args, "_pre_mlpot_geometry_gate_summary", gate_summary.to_dict())
         if charmm_pbc and box_side is not None:
