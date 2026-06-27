@@ -31,6 +31,7 @@ from mmml.data.units import (
     convert_forces,
     energy_to_ev,
     forces_to_ev_angstrom,
+    format_energy_ev_kcal,
     infer_reference_energy_unit,
     infer_reference_force_unit,
     normalize_energy_unit,
@@ -162,7 +163,7 @@ def _print_evaluate_npz_summary(
     if quiet:
         parts = [f"mmml evaluate-npz ({backend}):"]
         if energy is not None:
-            parts.append(f"E={float(energy):.6f} eV")
+            parts.append(f"E={format_energy_ev_kcal(float(energy))}")
         if max_f is not None:
             parts.append(f"max|F|={float(max_f):.4f} eV/A")
         if n_eval_frames is not None:
@@ -172,7 +173,10 @@ def _print_evaluate_npz_summary(
         return
 
     print(f"mmml md-system evaluate-npz ({backend}):", flush=True)
-    print(f"  energy = {energy}", flush=True)
+    if energy is not None:
+        print(f"  energy = {format_energy_ev_kcal(float(energy))}", flush=True)
+    else:
+        print(f"  energy = {energy}", flush=True)
     print(f"  max|F| = {max_f}", flush=True)
     if n_eval_frames is not None:
         print(f"  wrote {n_eval_frames} frames to trajectory", flush=True)

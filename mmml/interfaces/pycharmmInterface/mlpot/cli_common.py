@@ -2886,7 +2886,12 @@ def assert_dynamics_ready(
                     flush=True,
                 )
     if grms <= max_grms:
-        extra = f", USER={user_kcal:.2f} kcal/mol" if user_kcal is not None else ""
+        if user_kcal is not None:
+            from mmml.data.units import format_energy_kcal_ev
+
+            extra = f", USER={format_energy_kcal_ev(float(user_kcal))}"
+        else:
+            extra = ""
         print(
             f"Pre-dynamics GRMS OK: {grms:.4f} kcal/mol/Å (limit {max_grms}){extra}",
             flush=True,

@@ -246,11 +246,12 @@ def assert_mlpot_user_active(
             f"MLpot USER term is zero/missing before {context}; refusing to run dynamics"
         )
     if not quiet:
+        from mmml.data.units import format_energy_kcal_ev
         from mmml.utils.rich_report import emit_tagged
 
         emit_tagged(
             "MLpot",
-            f"USER active before {context}: {user:.6f} kcal/mol",
+            f"USER active before {context}: {format_energy_kcal_ev(float(user))}",
             tag_style="bold green",
         )
     return float(user)

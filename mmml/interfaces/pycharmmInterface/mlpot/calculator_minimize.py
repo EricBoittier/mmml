@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import re
+import sys
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TextIO
 
 import numpy as np
+
+from mmml.data.units import EV_TO_KCAL_MOL, format_energy_ev_kcal
 
 from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     mlpot_hybrid_grms_from_calculator,
@@ -160,6 +164,65 @@ def resolve_adaptive_fire_maxstep(
         scale = float(grms_soft_cap_kcalmol_A) / float(initial_grms_kcalmol_A)
         maxstep = min(maxstep, max(0.01, maxstep * scale))
     return float(max(0.01, maxstep))
+
+
+_ASE_OPTIMIZER_STEP_RE = re.compile(
+    r"^(\S+:\s+\d+\s+\d+:\d+:\d+\s+)"
+    r"([-+]?\d*\.?\d+(?:[eE][-+]?\d+)?)"
+    r"(\s+)"
+    r"([-+]?\d*\.?\d+(?:[eE][-+]?\d+)?)\s*$"
+)
+
+
+def annotate_ase_optimizer_log_line(line: str) -> str:
+    """Add kcal/mol beside eV energies in ASE FIRE/BFGS optimizer log lines."""
+    if "Energy" in line and "fmax" in line and "Step" in line:
+        return line.replace("Energy", "Energy[eV (kcal/mol)]", 1)
+
+    stripped = line.strip()
+    if not stripped or stripped.startswith("---"):
+        return line
+
+    match = _ASE_OPTIMIZER_STEP_RE.match(stripped)
+    if match is None:
+        return line
+
+    prefix, e_str, mid, fmax_str = match.groups()
+    try:
+        e_ev = float(e_str)
+    except ValueError:
+        return line
+    e_kcal = e_ev * EV_TO_KCAL_MOL
+    lead = line[: len(line) - len(line.lstrip())]
+    body = f"{prefix}{e_ev:.6f} ({e_kcal:.2f}){mid}{fmax_str}"
+    newline = "\n" if line.endswith("\n") else ""
+    return f"{lead}{body}{newline}"
+
+
+class _DualUnitAseOptimizerLog:
+    """Stream wrapper that annotates ASE optimizer energy columns with kcal/mol."""
+
+    def __init__(self, stream: TextIO | None = None) -> None:
+        self._stream = stream or sys.stdout
+        self._buf = ""
+
+    def write(self, data: str) -> int:
+        self._buf += data
+        while "\n" in self._buf:
+            line, self._buf = self._buf.split("\n", 1)
+            self._stream.write(annotate_ase_optimizer_log_line(line + "\n"))
+        return len(data)
+
+    def flush(self) -> None:
+        if self._buf:
+            self._stream.write(annotate_ase_optimizer_log_line(self._buf))
+            self._buf = ""
+        self._stream.flush()
+
+
+def ase_optimizer_dual_unit_logfile(stream: TextIO | None = None) -> _DualUnitAseOptimizerLog:
+    """Logfile target for ASE optimizers: energy column shows eV and kcal/mol."""
+    return _DualUnitAseOptimizerLog(stream)
 
 
 class _BestMinimizationFrame:
@@ -348,7 +411,7 @@ def _run_hybrid_calculator_bfgs(
 
     opt = BfgsOptimizer(
         atoms,
-        logfile=None if config.quiet_bfgs else "-",
+        logfile=None if config.quiet_bfgs else ase_optimizer_dual_unit_logfile(),
         maxstep=float(config.bfgs_maxstep),
     )
     opt.attach(_record_step, interval=1)
@@ -462,7 +525,7 @@ def _run_hybrid_calculator_fire(
 
     opt = FIRE(
         atoms,
-        logfile=None if not config.verbose else "-",
+        logfile=None if not config.verbose else ase_optimizer_dual_unit_logfile(),
         maxstep=float(fire_maxstep),
     )
     opt.attach(_record_step, interval=1)
@@ -579,10 +642,16 @@ def minimize_hybrid_calculator_before_sd(
     if config.verbose:
         fmax = float(np.abs(atoms.get_forces()).max())
         spike_note = " (spike abort)" if stopped_on_spike else ""
+        try:
+            e_final = float(atoms.get_potential_energy())
+            energy_txt = format_energy_ev_kcal(e_final)
+        except Exception:
+            energy_txt = "?"
         print(
             f"{context_prefix} hybrid calculator BFGS done{spike_note}: "
             f"GRMS {grms_txt} -> {grms1:.4f} kcal/mol/Å, "
-            f"fmax={fmax:.6f} eV/Å, steps={opt.get_number_of_steps()}",
+            f"E={energy_txt}, fmax={fmax:.6f} eV/Å, "
+            f"steps={opt.get_number_of_steps()}",
             flush=True,
         )
     mlpot_ctx.sd_watchdog_baseline_grms = float(grms1)
@@ -701,10 +770,16 @@ def minimize_hybrid_calculator_fire_before_sd(
         fmax = float(np.abs(atoms.get_forces()).max())
         grms_txt = f"{grms0:.4f}" if grms0 is not None and np.isfinite(grms0) else "?"
         spike_note = " (spike abort)" if stopped_on_spike else ""
+        try:
+            e_final = float(atoms.get_potential_energy())
+            energy_txt = format_energy_ev_kcal(e_final)
+        except Exception:
+            energy_txt = "?"
         print(
             f"{context_prefix} hybrid calculator FIRE done{spike_note}: "
             f"GRMS {grms_txt} -> {grms1:.4f} kcal/mol/Å, "
-            f"fmax={fmax:.6f} eV/Å, steps={opt.get_number_of_steps()}",
+            f"E={energy_txt}, fmax={fmax:.6f} eV/Å, "
+            f"steps={opt.get_number_of_steps()}",
             flush=True,
         )
     mlpot_ctx.sd_watchdog_baseline_grms = float(grms1)
