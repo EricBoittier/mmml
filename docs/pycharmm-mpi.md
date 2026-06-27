@@ -5,8 +5,8 @@ How MMML uses OpenMPI-linked `libcharmm.so`, what the [pyCHARMM Workshop MPI exa
 Related:
 
 - [`docs/mlpot-spatial-mpi.md`](mlpot-spatial-mpi.md) — spatial ML decomposition design
-- [`tests/functionality/mlpot/SPATIAL_MPI_DOMDEC.md`](../tests/functionality/mlpot/SPATIAL_MPI_DOMDEC.md) — Tier 3 DOMDEC spike (out of scope here)
-- [`mmml/interfaces/pycharmmInterface/charmm_mpi.py`](../mmml/interfaces/pycharmmInterface/charmm_mpi.py) — runtime bootstrap
+- [`tests/functionality/mlpot/SPATIAL_MPI_DOMDEC.md`](https://github.com/EricBoittier/mmml/blob/main/tests/functionality/mlpot/SPATIAL_MPI_DOMDEC.md) — Tier 3 DOMDEC spike (out of scope here)
+- [`mmml/interfaces/pycharmmInterface/charmm_mpi.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/charmm_mpi.py) — runtime bootstrap
 
 ---
 
@@ -87,7 +87,7 @@ pytest tests/charmm_mpi/ -m "charmm_mpi and not pycharmm" -q
 ./scripts/ci/run_pycharmm_smoke_pytest.sh -q tests/charmm_mpi/test_mpi_live_energy.py
 ```
 
-See [`tests/charmm_mpi/README.md`](../tests/charmm_mpi/README.md).
+See [`tests/charmm_mpi/README.md`](https://github.com/EricBoittier/mmml/blob/main/tests/charmm_mpi/README.md).
 
 ### Workshop smoke (user-run on CHARMM node)
 
@@ -260,7 +260,7 @@ Run `mmml mpi-check --tier2` before long jobs; it encodes most of the above.
 
 ### DLPack loose coupling — where it applies
 
-DLPack (`__dlpack__` / `from_dlpack`) gives **zero-copy GPU array interchange** between JAX and CuPy. It is implemented in [`nl_gpu.py`](../mmml/interfaces/pycharmmInterface/nl_gpu.py) for the **MM neighbor-list rebuild** path, not for CHARMM↔MLpot force handoff.
+DLPack (`__dlpack__` / `from_dlpack`) gives **zero-copy GPU array interchange** between JAX and CuPy. It is implemented in [`nl_gpu.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/nl_gpu.py) for the **MM neighbor-list rebuild** path, not for CHARMM↔MLpot force handoff.
 
 | Path | DLPack? | Benefit |
 |------|---------|---------|
@@ -269,7 +269,7 @@ DLPack (`__dlpack__` / `from_dlpack`) gives **zero-copy GPU array interchange** 
 | Spatial MPI force merge (`force_exchange.py`) | **No** — numpy host arrays + MPI allreduce | Correctness path; not a GPU tensor pipeline |
 | `mm_energy_forces.py` when positions already device-resident | Yes (same as NL GPU path) | Faster MM energy when simulation state lives on GPU |
 
-**When to invest in DLPack:** JAX-MD or other runners that keep positions on device across steps. **When not to:** PyCHARMM hybrid MD until Fortran exposes GPU coordinates (Tier 3+ / upstream). See [`NONBOND_LISTS.md`](../mmml/interfaces/pycharmmInterface/mlpot/NONBOND_LISTS.md) GPU section and `tests/functionality/neighbor_lists/11_gpu_nl_sync_profile.py` for timing validation.
+**When to invest in DLPack:** JAX-MD or other runners that keep positions on device across steps. **When not to:** PyCHARMM hybrid MD until Fortran exposes GPU coordinates (Tier 3+ / upstream). See [`NONBOND_LISTS.md`](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/mlpot/NONBOND_LISTS.md) GPU section and `tests/functionality/neighbor_lists/11_gpu_nl_sync_profile.py` for timing validation.
 
 ### Known limitations (Phase 2)
 
@@ -321,4 +321,4 @@ DLPack (`__dlpack__` / `from_dlpack`) gives **zero-copy GPU array interchange** 
 
 - [3SimpleMPIExample](https://github.com/BrooksResearchGroup-UM/pyCHARMM-Workshop/tree/main/3SimpleMPIExample) — mpi4py task parallel CHARMM
 - [5Aladipeptide_HFBString_MPI](https://github.com/BrooksResearchGroup-UM/pyCHARMM-Workshop/tree/main/5Aladipeptide_HFBString_MPI) — temporarily disabled upstream
-- [`scripts/mmml-charmm-mpirun.sh`](../scripts/mmml-charmm-mpirun.sh)
+- [`scripts/mmml-charmm-mpirun.sh`](https://github.com/EricBoittier/mmml/blob/main/scripts/mmml-charmm-mpirun.sh)

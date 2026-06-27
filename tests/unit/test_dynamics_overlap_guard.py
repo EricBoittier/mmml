@@ -3135,7 +3135,7 @@ def test_harmonize_dynamics_frequency_for_remainder_chunk():
     assert kw_pretreat["imgfrq"] % kw_pretreat["inbfrq"] == 0
 
     kw_mismatch = {"inbfrq": 300, "imgfrq": 100, "ihbfrq": 100, "ilbfrq": 100}
-    _harmonize_overlap_chunk_frequencies(kw_mismatch, 250)
+    _harmonize_overlap_chunk_frequencies(kw_mismatch, 300)
     assert kw_mismatch["imgfrq"] == 100
     assert kw_mismatch["inbfrq"] == 100
     assert kw_mismatch["imgfrq"] % kw_mismatch["inbfrq"] == 0

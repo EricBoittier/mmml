@@ -1231,6 +1231,27 @@ def prepare_notebook_kernel(*, jax_required: bool = True) -> None:
     _prepare_notebook_kernel(jax_required=jax_required)
 
 
+def parse_composition(spec: str) -> list[tuple[str, int]]:
+    """Parse ``RES:count`` composition strings (e.g. ``DCM:52,MEOH:10``)."""
+    out: list[tuple[str, int]] = []
+    for tok in spec.split(","):
+        tok = tok.strip()
+        if not tok:
+            continue
+        if ":" in tok:
+            residue, count_str = tok.split(":", 1)
+            count = int(count_str)
+        else:
+            residue, count = tok, 1
+        residue = residue.strip().upper()
+        if not residue or count <= 0:
+            raise ValueError(f"Invalid composition token: '{tok}'")
+        out.append((residue, count))
+    if not out:
+        raise ValueError("Empty composition")
+    return out
+
+
 def composition_tag(composition: list[tuple[str, int]] | None, residue: str, n_molecules: int) -> str:
     if composition:
         parts = [f"{res.lower()}_{count}" for res, count in composition]

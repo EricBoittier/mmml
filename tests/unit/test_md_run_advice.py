@@ -286,8 +286,8 @@ def test_build_run_advice_full_success_has_no_resume_command(tmp_path: Path) -> 
     assert "complete" in advice.headline.lower()
     paths = write_run_advice_files(advice, out)
     sh_text = paths["sh"].read_text(encoding="utf-8")
-    assert "CMD=(" in sh_text
-    assert "exec " in sh_text or "no resume" in sh_text
+    assert "no resume" in sh_text.lower() or "staged leg complete" in sh_text.lower()
+    assert advice.command == ""
 
 
 def test_build_run_advice_pre_heat_gate(tmp_path: Path) -> None:

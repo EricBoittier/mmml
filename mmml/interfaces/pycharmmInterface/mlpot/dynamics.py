@@ -2580,7 +2580,7 @@ def apply_charmm_dynamics_echeck_kw(kw: dict[str, Any], echeck: float) -> None:
         import pycharmm.dynamics as charm_dyn
 
         charm_dyn.set_echeck(val)
-    except ImportError:
+    except (ImportError, OSError):
         pass
 
 

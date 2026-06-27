@@ -35,5 +35,13 @@ def test_maybe_rerun_run_pycharmm_subcommand(monkeypatch, tmp_path):
         )
     assert code == 0
     cmd = mock_run.call_args.args[0]
-    assert cmd[7:9] == ["-m", "mmml.cli.__main__"]
-    assert cmd[9:11] == ["run-pycharmm", "--pdbfile"]
+    assert cmd[3:9] == [
+        "--mca",
+        "pmix",
+        "^ext3x",
+        "--mca",
+        "orte_abort_print_stack",
+        "1",
+    ]
+    assert cmd[10:12] == ["-m", "mmml.cli.__main__"]
+    assert cmd[12:14] == ["run-pycharmm", "--pdbfile"]

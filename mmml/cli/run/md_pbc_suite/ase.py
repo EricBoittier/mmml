@@ -60,6 +60,7 @@ from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
     DEFAULT_JAX_MD_SKIN_DISTANCE_A,
     _get_actual_psf_charges,
 )
+from mmml.interfaces.pycharmmInterface.mlpot.cli_common import parse_composition
 from mmml.utils.geometry_checks import assert_no_intermonomer_atom_overlap
 from mmml.utils.jax_gpu_warmup import warmup_ase_mmml_energy_forces
 import pycharmm.param as param
@@ -78,6 +79,8 @@ from mmml.cli.run.md_pbc_suite.cluster import _build_psf_ordered_cluster
 from mmml.paths import default_meoh_template_pdb
 
 pyci.read = read
+
+_parse_composition = parse_composition
 pyci.settings = settings
 pyci.psf = psf
 
@@ -261,26 +264,6 @@ def _randomize_monomer_com_positions(
         com = randomized[s:e].mean(axis=0)
         randomized[s:e] += target - com
     return randomized
-
-
-def _parse_composition(spec: str) -> list[tuple[str, int]]:
-    out: list[tuple[str, int]] = []
-    for tok in spec.split(","):
-        tok = tok.strip()
-        if not tok:
-            continue
-        if ":" in tok:
-            residue, count_str = tok.split(":", 1)
-            count = int(count_str)
-        else:
-            residue, count = tok, 1
-        residue = residue.strip().upper()
-        if not residue or count <= 0:
-            raise ValueError(f"Invalid composition token: '{tok}'")
-        out.append((residue, count))
-    if not out:
-        raise ValueError("Empty composition")
-    return out
 
 
 def _load_packmol_sphere_positions(

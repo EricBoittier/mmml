@@ -165,7 +165,7 @@ def resolve_grms_thresholds_from_stats(
         # density-prep / calculator mini run before dynamics (per-monomer tails
         # from registration can otherwise set intervention in the thousands).
         stress_cap = max(25.0, 0.85 * float(hybrid_total))
-        intervention = min(intervention, stress_cap)
+        intervention = stress_cap
     elif (
         hybrid_total is not None
         and hybrid_max is not None

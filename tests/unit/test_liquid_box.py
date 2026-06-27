@@ -195,14 +195,16 @@ def test_liquid_box_cli_parser_requires_composition():
 def test_composition_tag_from_liquid_box_args_without_residue():
     """liquid-box uses --composition only; cluster tag must not require --residue."""
     from mmml.cli.run.liquid_box import build_parser
-    from mmml.cli.run.md_pbc_suite.ase import _parse_composition
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import composition_tag
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        composition_tag,
+        parse_composition,
+    )
 
     parser = build_parser()
     args = parser.parse_args(
         ["--composition", "DCM:206", "--output-dir", "/tmp/x", "--profile", "dense"]
     )
-    composition = _parse_composition(args.composition)
+    composition = parse_composition(args.composition)
     n_mol = sum(count for _, count in composition)
     residue = getattr(args, "residue", composition[0][0]).upper()
     tag = composition_tag(composition, residue, n_mol)
@@ -294,15 +296,20 @@ def test_pretreat_fixed_nvt_flag_without_box_size():
 
 
 def test_apply_charmm_dynamics_echeck_kw_sets_global_state(monkeypatch):
+    import sys
+    import types
+
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         apply_charmm_dynamics_echeck_kw,
     )
 
     calls: list[float] = []
-    monkeypatch.setattr(
-        "pycharmm.dynamics.set_echeck",
-        lambda val: calls.append(float(val)),
-    )
+    fake_dyn = types.ModuleType("pycharmm.dynamics")
+    fake_dyn.set_echeck = lambda val: calls.append(float(val))
+    fake_pycharmm = types.ModuleType("pycharmm")
+    fake_pycharmm.dynamics = fake_dyn
+    monkeypatch.setitem(sys.modules, "pycharmm", fake_pycharmm)
+    monkeypatch.setitem(sys.modules, "pycharmm.dynamics", fake_dyn)
     kw: dict[str, float | int] = {"echeck": 500.0}
     apply_charmm_dynamics_echeck_kw(kw, -1.0)
     assert kw["echeck"] == -1.0

@@ -78,6 +78,7 @@ def test_mlpot_runs_on_all_ranks_when_spatial_mpi(monkeypatch):
 
 def test_mlpot_runs_on_rank0_only_when_size_gt_1(monkeypatch):
     monkeypatch.delenv("MMML_MLPOT_RANK0_BRIDGE", raising=False)
+    monkeypatch.delenv("MMML_MLPOT_SPATIAL_MPI", raising=False)
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
         return_value=(0, 4),

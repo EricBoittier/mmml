@@ -694,8 +694,12 @@ def resolve_transfer_checkpoints(
         if warm_start_path is not None:
             teacher_path = warm_start_path
         else:
-            selected = resolve_hf_physnet_model(JOINT_TRAINING_CATEGORY)
-            teacher_path = Path(selected["path"])
+            try:
+                selected = resolve_hf_physnet_model(JOINT_TRAINING_CATEGORY)
+            except (KeyError, FileNotFoundError, ValueError):
+                selected = None
+            if selected is not None:
+                teacher_path = Path(selected["path"])
 
     return warm_start_path, teacher_path
 

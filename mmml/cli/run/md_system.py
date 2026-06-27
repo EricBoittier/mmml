@@ -1428,7 +1428,7 @@ def parse_md_system_args(argv: list[str] | None = None) -> argparse.Namespace:
         if isinstance(defaults_block, dict):
             merged.update(defaults_block)
         for key, value in cfg.items():
-            if key in {"defaults", "runs", "jobs", "include", "campaign_output"}:
+            if key in {"defaults", "runs", "jobs", "include"}:
                 continue
             merged[key] = value
         tmp = argparse.Namespace(**defaults)
