@@ -85,7 +85,11 @@ eval "$(
 
 if [[ "$WARMUP_ENABLED" == "1" ]]; then
   echo "=== warmup-mlpot-jax (serial, before mpirun) ==="
-  unset OMPI_COMM_WORLD_SIZE PMI_SIZE PMIX_SIZE OMPI_COMM_WORLD_RANK 2>/dev/null || true
+  # Snakemake Slurm jobsteps export PMI/PMIX vars without a real mpirun launch.
+  # warmup-mlpot-jax must run serial with compile threads enabled.
+  while IFS= read -r _var; do
+    [[ -n "$_var" ]] && unset "$_var" 2>/dev/null || true
+  done < <(env | cut -d= -f1 | grep -E '^(OMPI_|PMI_|PMIX_|MPI_LOCALRANKID$|SLURM_MPI_TYPE$)' || true)
   WARMUP_ARGS="$("$PY" -c "
 import sys
 from pathlib import Path

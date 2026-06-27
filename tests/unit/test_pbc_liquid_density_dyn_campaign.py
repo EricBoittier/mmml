@@ -83,6 +83,7 @@ def test_build_campaign_liquid_prep_and_ladder(cfg: dict, cell: RunCell) -> None
     assert defaults["density_prep_ladder"] is True
     assert defaults["target_density_g_cm3"] == pytest.approx(1.326)
     assert "bulk_density_fraction" in defaults
+    assert "mlpot_profile" not in defaults
     init = camp["runs"]["pycharmm_init"]
     assert init["md_stages"] == "mini,heat"
     assert init["cleanup"] is True
@@ -112,6 +113,12 @@ def test_warmup_argv_matches_cell(cfg: dict, cell: RunCell) -> None:
         assert "--do-mm" in argv
     else:
         assert "--do-mm" not in argv
+
+
+def test_mlpot_profile_in_campaign_defaults(cfg: dict, cell: RunCell) -> None:
+    cfg_prof = {**cfg, "mlpot_profile": True}
+    defaults = build_campaign(cfg_prof, cell)["defaults"]
+    assert defaults.get("mlpot_profile") is True
 
 
 def test_cell_bulk_density_fraction(cfg: dict, cell: RunCell) -> None:
