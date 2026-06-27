@@ -17,6 +17,7 @@ from mmml.utils.geometry_checks import (
     find_worst_intermonomer_overlap,
     wrap_monomers_primary_cell,
 )
+from mmml.utils.intermonomer_geometry import resolve_mc_min_intermonomer_distance_A
 
 
 @dataclass(frozen=True)
@@ -258,7 +259,7 @@ def apply_mc_density_equalization(
     min_contact = (
         float(min_intermonomer_distance_A)
         if min_intermonomer_distance_A is not None
-        else float(getattr(args, "min_intermonomer_atom_distance", 0.1) or 0.1)
+        else resolve_mc_min_intermonomer_distance_A(args)
     )
 
     current_L = initial_L

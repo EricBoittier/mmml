@@ -1286,6 +1286,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
             apply_mc_density_equalization,
         )
+        from mmml.utils.intermonomer_geometry import resolve_pre_mlpot_overlap_min_distance
 
         r, box_side_after_mc, mc_density_summary = apply_mc_density_equalization(
             args,
@@ -1299,9 +1300,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 or bool(getattr(args, "skip_cluster_build", False))
                 or getattr(args, "from_psf", None) is not None
             ),
-            min_intermonomer_distance_A=float(
-                getattr(args, "min_intermonomer_atom_distance", 0.1) or 0.1
-            ),
+            min_intermonomer_distance_A=resolve_pre_mlpot_overlap_min_distance(args),
             min_box_side_A=(
                 cubic_box_length_from_geometry(
                     r,

@@ -354,9 +354,7 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
             box_side_A=box_side,
             use_pbc=charmm_pbc,
             handoff_present=False,
-            min_intermonomer_distance_A=float(
-                getattr(args, "min_intermonomer_atom_distance", 0.1) or 0.1
-            ),
+            min_intermonomer_distance_A=resolve_pre_mlpot_overlap_min_distance(args),
             min_box_side_A=cubic_box_length_from_geometry(
                 r,
                 ml_cutoff=float(getattr(args, "ml_cutoff", 12.0)),

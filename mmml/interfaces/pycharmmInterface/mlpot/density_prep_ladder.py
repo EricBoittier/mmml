@@ -125,6 +125,11 @@ def apply_density_prep_resilient_defaults(args: argparse.Namespace) -> None:
     if float(getattr(args, "mini_box_equil_ps", 0.0) or 0.0) <= 0.0:
         args.mini_box_equil_ps = 2.0
 
+    if getattr(args, "min_intermonomer_atom_distance", None) is None:
+        from mmml.utils.intermonomer_geometry import DEFAULT_PRE_MLPOT_OVERLAP_MIN_A
+
+        args.min_intermonomer_atom_distance = float(DEFAULT_PRE_MLPOT_OVERLAP_MIN_A)
+
     if getattr(args, "box_size", None) is not None:
         args.mini_lattice_abnr_allow_fixed_box = True
         args.mini_box_equil_allow_fixed_box = True
