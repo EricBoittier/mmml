@@ -15,18 +15,31 @@ mmml_resolve_env "$REPO_ROOT"
 PY="${MMML_PYTHON}"
 
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
-export MMML_MPI_NP="${MMML_MPI_NP:-1}"
 
 CFG="${MMML_WORKFLOW_CONFIG:-$WORKFLOW_ROOT/config.yaml}"
 
-read -r SCHEDULER MLPOT_DEV <<<"$("$PY" -c "
+read -r SCHEDULER MLPOT_DEV CFG_MPI_NP MLPOT_PROF JAX_TIMERS <<<"$("$PY" -c "
 import sys
 from pathlib import Path
 sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
 from campaign_lib import load_config, mlpot_device_name, scheduler_mode
 cfg = load_config(Path('${CFG}'))
-print(scheduler_mode(cfg), mlpot_device_name(cfg))
+print(
+    scheduler_mode(cfg),
+    mlpot_device_name(cfg),
+    int(cfg.get('MMML_MPI_NP', 1)),
+    int(bool(cfg.get('mlpot_profile', False))),
+    int(bool(cfg.get('jax_compile_timers', False))),
+)
 ")"
+
+export MMML_MPI_NP="${MMML_MPI_NP:-$CFG_MPI_NP}"
+if [[ "$MLPOT_PROF" == "1" ]]; then
+  export MMML_MLPOT_PROFILE=1
+fi
+if [[ "$JAX_TIMERS" == "1" ]]; then
+  export MMML_JAX_COMPILE_TIMERS=1
+fi
 
 export MMML_MLPOT_DEVICE="${MMML_MLPOT_DEVICE:-$MLPOT_DEV}"
 export JAX_PLATFORMS="${JAX_PLATFORMS:-$MLPOT_DEV}"
@@ -56,8 +69,8 @@ echo "=== pbc_liquid_density_dyn: ${RUN_TAG} ==="
 echo "REPO_ROOT=${REPO_ROOT}"
 echo "PY=${PY}"
 echo "CONFIG=${CFG}"
-echo "scheduler=${SCHEDULER} MMML_MLPOT_DEVICE=${MMML_MLPOT_DEVICE}"
-echo "MMML_CKPT=${MMML_CKPT:-<unset>}"
+echo "scheduler=${SCHEDULER} MMML_MLPOT_DEVICE=${MMML_MLPOT_DEVICE} MMML_MPI_NP=${MMML_MPI_NP}"
+echo "MMML_CKPT=${MMML_CKPT:-<unset>} MMML_MLPOT_PROFILE=${MMML_MLPOT_PROFILE:-0}"
 
 read -r N_ML BOX_SIZE WARMUP_ENABLED <<<"$("$PY" -c "
 import sys

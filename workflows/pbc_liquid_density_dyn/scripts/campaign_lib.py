@@ -282,6 +282,8 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
         "cleanup_strategy_name": strategy.name,
         **liquid,
     }
+    if bool(cfg.get("mlpot_profile", False)):
+        defaults["mlpot_profile"] = True
 
     runs: dict[str, Any] = {
         "pycharmm_init": _attach_leg_output_dir(
