@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ctypes
 import os
+import platform
 import subprocess
 import sys
 from functools import lru_cache
@@ -19,6 +20,7 @@ _MPI_LDD_KEYWORDS = (
 )
 
 _pmix_preloaded = False
+_IS_DARWIN = platform.system() == "Darwin"
 
 
 def _truthy(name: str) -> bool:
@@ -69,8 +71,14 @@ def _charmm_lib_path() -> Path | None:
     lib_dir = (os.environ.get("CHARMM_LIB_DIR") or "").strip()
     if not lib_dir:
         return None
-    for name in ("libcharmm.so", "charmm.so"):
+    names = ("libcharmm.so", "libcharmm.dylib", "charmm.so", "charmm.dylib")
+    for name in names:
         candidate = Path(lib_dir) / name
+        if candidate.is_file():
+            return candidate
+    lib_subdir = Path(lib_dir) / "lib"
+    for name in names:
+        candidate = lib_subdir / name
         if candidate.is_file():
             return candidate
     return None
@@ -83,13 +91,22 @@ def charmm_lib_available() -> bool:
 
 def _run_ldd(lib: Path) -> str:
     try:
-        proc = subprocess.run(
-            ["ldd", str(lib)],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
+        if _IS_DARWIN:
+            proc = subprocess.run(
+                ["otool", "-L", str(lib)],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+        else:
+            proc = subprocess.run(
+                ["ldd", str(lib)],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
     except (OSError, subprocess.TimeoutExpired):
         return ""
     if proc.returncode != 0:
@@ -97,21 +114,34 @@ def _run_ldd(lib: Path) -> str:
     return proc.stdout
 
 
+def _linked_library_path(line: str) -> str | None:
+    """Extract an absolute shared-library path from ``ldd`` or ``otool -L`` output."""
+    line = line.strip()
+    if not line or line.endswith(":"):
+        return None
+    if "=>" in line:
+        _, _, rest = line.partition("=>")
+        libpath = rest.split("(", 1)[0].strip()
+    elif " (compatibility" in line:
+        if line.startswith("\t"):
+            line = line[1:]
+        libpath = line.split(" (compatibility", 1)[0].strip()
+    else:
+        return None
+    if libpath.startswith("/"):
+        return libpath
+    return None
+
+
 def _parse_ldd_mpi_library_dirs(ldd_stdout: str) -> tuple[str, ...]:
     dirs: list[str] = []
     seen: set[str] = set()
     for line in ldd_stdout.splitlines():
-        if "=>" not in line:
-            continue
         low = line.lower()
         if not any(key in low for key in _MPI_LDD_KEYWORDS):
             continue
-        try:
-            _, _, rest = line.partition("=>")
-            libpath = rest.split("(", 1)[0].strip()
-        except IndexError:
-            continue
-        if not libpath.startswith("/"):
+        libpath = _linked_library_path(line)
+        if libpath is None:
             continue
         lib_dir = str(Path(libpath).parent.resolve())
         if lib_dir not in seen:
@@ -122,14 +152,10 @@ def _parse_ldd_mpi_library_dirs(ldd_stdout: str) -> tuple[str, ...]:
 
 def _parse_ldd_library_paths(ldd_stdout: str, *, keyword: str) -> Path | None:
     for line in ldd_stdout.splitlines():
-        if keyword not in line.lower() or "=>" not in line:
+        if keyword not in line.lower():
             continue
-        try:
-            _, _, rest = line.partition("=>")
-            libpath = rest.split("(", 1)[0].strip()
-        except IndexError:
-            continue
-        if libpath.startswith("/"):
+        libpath = _linked_library_path(line)
+        if libpath is not None:
             return Path(libpath)
     return None
 
@@ -182,7 +208,8 @@ def mpi_library_path_export() -> str:
     if not dirs:
         return ""
     prefix = os.pathsep.join(dirs)
-    return f"export LD_LIBRARY_PATH={prefix}${{LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}}"
+    var = "DYLD_LIBRARY_PATH" if _IS_DARWIN else "LD_LIBRARY_PATH"
+    return f"export {var}={prefix}${{{var}:+:${var}}}"
 
 
 def _libmpi_paths_from_ldd(ldd_stdout: str) -> list[Path]:
@@ -190,21 +217,17 @@ def _libmpi_paths_from_ldd(ldd_stdout: str) -> list[Path]:
     seen: set[Path] = set()
     for line in ldd_stdout.splitlines():
         low = line.lower()
-        if "libmpi.so" not in low or "=>" not in line:
+        if "libmpi" not in low:
             continue
-        try:
-            _, _, rest = line.partition("=>")
-            libpath = rest.split("(", 1)[0].strip()
-        except IndexError:
-            continue
-        if not libpath.startswith("/"):
+        libpath = _linked_library_path(line)
+        if libpath is None:
             continue
         libmpi_path = Path(libpath)
         if libmpi_path in seen:
             continue
         seen.add(libmpi_path)
         paths.append(libmpi_path)
-    # Prefer the OpenMPI prefix used to build libcharmm.so over distro /usr/lib.
+    # Prefer the OpenMPI prefix used to build libcharmm over distro /usr/lib.
     paths.sort(key=lambda p: (str(p).startswith("/usr"), str(p)))
     return paths
 
@@ -364,13 +387,14 @@ def ensure_charmm_mpi_library_path() -> list[str]:
     dirs = charmm_mpi_library_dirs()
     if not dirs:
         return []
-    cur_parts = [p for p in os.environ.get("LD_LIBRARY_PATH", "").split(os.pathsep) if p]
+    var = "DYLD_LIBRARY_PATH" if _IS_DARWIN else "LD_LIBRARY_PATH"
+    cur_parts = [p for p in os.environ.get(var, "").split(os.pathsep) if p]
     prepended: list[str] = []
     for lib_dir in dirs:
         if lib_dir not in cur_parts:
             prepended.append(lib_dir)
     if prepended:
-        os.environ["LD_LIBRARY_PATH"] = os.pathsep.join(prepended + cur_parts)
+        os.environ[var] = os.pathsep.join(prepended + cur_parts)
     return prepended
 
 

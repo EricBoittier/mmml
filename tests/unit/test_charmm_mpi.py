@@ -366,3 +366,26 @@ def test_defer_jax_warmup_until_after_mlpot_sd_serial(monkeypatch):
         return_value=False,
     ):
         assert charmm_mpi.defer_jax_warmup_until_after_mlpot_sd() is False
+
+
+def test_parse_otool_mpi_library_dirs():
+    otool_out = (
+        "/tmp/libcharmm.dylib:\n"
+        "\t@rpath/libcharmm.dylib (compatibility version 0.0.0, current version 0.0.0)\n"
+        "\t/opt/homebrew/opt/open-mpi/lib/libmpi.40.dylib (compatibility version 81.0.0, current version 81.7.0)\n"
+    )
+    dirs = charmm_mpi._parse_ldd_mpi_library_dirs(otool_out)
+    assert len(dirs) == 1
+    assert "open-mpi" in dirs[0] and dirs[0].endswith("/lib")
+
+
+def test_mpi_library_path_export_uses_dyld_on_darwin(monkeypatch):
+    monkeypatch.setattr(charmm_mpi, "_IS_DARWIN", True, raising=False)
+    charmm_mpi.charmm_mpi_library_dirs.cache_clear()
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_mpi_library_dirs",
+        return_value=("/opt/homebrew/opt/open-mpi/lib",),
+    ):
+        export = charmm_mpi.mpi_library_path_export()
+    assert export.startswith("export DYLD_LIBRARY_PATH=")
+    charmm_mpi.charmm_mpi_library_dirs.cache_clear()

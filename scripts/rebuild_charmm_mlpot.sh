@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Rebuild libcharmm.so after changing MLpot limits in source/api/api_func.F90.
+# Rebuild libcharmm.so / libcharmm.dylib after changing MLpot limits in source/api/api_func.F90.
 #
 # Uses a local (non-NFS) build directory by default. CMake OpenMP probe compiles
 # fail with "Stale file handle" when build/cmake lives on /mmhome NFS after a
@@ -8,11 +8,45 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CHARMM_HOME="${CHARMM_HOME:-$ROOT/setup/charmm}"
-LIB_OUT="$CHARMM_HOME/libcharmm.so"
+CHARMM_TAR="${CHARMM_TAR:-$ROOT/setup/charmm.tar.xz}"
 NFS_BUILD="$CHARMM_HOME/build/cmake"
-LOCAL_BUILD="${CHARMM_BUILD_DIR:-${HOME}/.cache/mmml-charmm-build}"
-OPENMPI_ROOT="${OPENMPI_ROOT:-/opt/gcc-14.2.0/openmpi-5.0.5/build}"
+
+_platform_tag() {
+  local os arch
+  os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+  arch="$(uname -m)"
+  case "$os" in
+    darwin) echo "darwin-${arch}" ;;
+    linux) echo "linux-${arch}" ;;
+    *) echo "${os}-${arch}" ;;
+  esac
+}
+
+_default_openmpi_root() {
+  if [[ -d /opt/gcc-14.2.0/openmpi-5.0.5/build/bin ]]; then
+    echo /opt/gcc-14.2.0/openmpi-5.0.5/build
+  elif [[ "$(uname -s)" == "Darwin" && -d /opt/homebrew/opt/open-mpi/bin ]]; then
+    echo /opt/homebrew/opt/open-mpi
+  elif [[ "$(uname -s)" == "Darwin" && -d /opt/homebrew/bin ]]; then
+    echo /opt/homebrew
+  elif [[ -d /usr/bin/mpicc ]]; then
+    echo /usr
+  else
+    echo /usr
+  fi
+}
+
+PLATFORM_TAG="$(_platform_tag)"
+LOCAL_BUILD="${CHARMM_BUILD_DIR:-${HOME}/.cache/mmml-charmm-build/${PLATFORM_TAG}}"
+OPENMPI_ROOT="${OPENMPI_ROOT:-$(_default_openmpi_root)}"
 PMIX_LIB="${PMIX_LIB:-/opt/gcc-14.2.0/pmix-5.0.4/lib}"
+
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  LIB_BASENAME="libcharmm.dylib"
+else
+  LIB_BASENAME="libcharmm.so"
+fi
+LIB_OUT="$CHARMM_HOME/$LIB_BASENAME"
 
 CLEAN=0
 USE_NFS_BUILD=0
@@ -26,7 +60,7 @@ usage() {
 Usage: $(basename "$0") [--clean] [--use-nfs-build] [--debug] [--no-sync-patches] [--no-domdec]
 
   --clean             Remove the cmake build directory and reconfigure from scratch.
-  --use-nfs-build     Build in setup/charmm/build/cmake (default: \$HOME/.cache/mmml-charmm-build).
+  --use-nfs-build     Build in setup/charmm/build/cmake (default: \$HOME/.cache/mmml-charmm-build/<platform>).
   --debug             RelWithDebInfo + -g -fbacktrace (readable gdb/addr2line on segfaults).
   --no-sync-patches   Skip copying setup/api/api_func.F90 into the CHARMM tree.
   --no-domdec         CMake -Ddomdec=OFF (no DOMDEC send_coord_to_recip path; MPI MLpot SD).
@@ -37,9 +71,9 @@ Use --no-domdec when MLpot SD still segfaults in send_coord_to_recip after JAX w
 
 Environment:
   CHARMM_HOME       CHARMM source tree (default: $ROOT/setup/charmm)
-  CHARMM_BUILD_DIR  CMake build directory (default: \$HOME/.cache/mmml-charmm-build)
+  CHARMM_BUILD_DIR  CMake build directory (default: \$HOME/.cache/mmml-charmm-build/${PLATFORM_TAG})
   CHARMM_BUILD_TYPE CMake build type (default: Release; --debug sets RelWithDebInfo)
-  OPENMPI_ROOT      OpenMPI 5 prefix (default: $OPENMPI_ROOT)
+  OPENMPI_ROOT      OpenMPI prefix (default: auto-detect; Linux cluster: /opt/gcc-14.2.0/openmpi-5.0.5/build)
 EOF
 }
 
@@ -54,6 +88,21 @@ while [[ $# -gt 0 ]]; do
     *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
+
+ensure_charmm_cmake_source() {
+  if [[ -f "$CHARMM_HOME/CMakeLists.txt" ]]; then
+    return 0
+  fi
+  if [[ ! -f "$CHARMM_TAR" ]]; then
+    echo "rebuild_charmm_mlpot: missing $CHARMM_HOME/CMakeLists.txt and $CHARMM_TAR" >&2
+    echo "Extract setup/charmm from setup/charmm.tar.xz (bash setup/install.sh) or restore CMakeLists.txt." >&2
+    exit 1
+  fi
+  echo "Extracting CMakeLists.txt and tool/cmake from $CHARMM_TAR"
+  tar -xf "$CHARMM_TAR" -C "$ROOT/setup" charmm/CMakeLists.txt charmm/tool/cmake
+}
+
+ensure_charmm_cmake_source
 
 F90="$CHARMM_HOME/source/api/api_func.F90"
 PATCH_F90="${MMML_PATCH_SOURCE:-$ROOT/setup/api/api_func.F90}"
@@ -89,10 +138,14 @@ fi
 echo "MLpot limits in source:"
 grep -E 'max_Nml|max_Npr' "$F90" || true
 
-# Match OpenMPI 5 used by the installed libcharmm.so (not system OpenMPI 3).
+# Match OpenMPI used by the installed libcharmm (not an unrelated system OpenMPI).
 if [[ -d "$OPENMPI_ROOT/bin" ]]; then
   export PATH="$OPENMPI_ROOT/bin:${PATH}"
-  export LD_LIBRARY_PATH="${OPENMPI_ROOT}/lib:${PMIX_LIB}:${LD_LIBRARY_PATH:-}"
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    export DYLD_LIBRARY_PATH="${OPENMPI_ROOT}/lib:${PMIX_LIB}:${DYLD_LIBRARY_PATH:-}"
+  else
+    export LD_LIBRARY_PATH="${OPENMPI_ROOT}/lib:${PMIX_LIB}:${LD_LIBRARY_PATH:-}"
+  fi
 fi
 if command -v python3 >/dev/null 2>&1; then
   while IFS= read -r line; do
@@ -184,6 +237,14 @@ if [[ "$needs_configure" == 1 ]]; then
     -DMPI_CXX_COMPILER="$MPI_CXX"
     -DMPI_Fortran_COMPILER="$MPI_FC"
   )
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    CMAKE_ARGS+=(
+      -Dcuda=OFF
+      -Ddomdec_gpu=OFF
+      -Dopencl=OFF
+      -Dqchem=OFF
+    )
+  fi
   FFLAGS="$CODE_MODEL_FLAG"
   CFLAGS="$CODE_MODEL_FLAG"
   CXXFLAGS="$CODE_MODEL_FLAG"
@@ -204,25 +265,35 @@ if [[ "$needs_configure" == 1 ]]; then
   cmake "${CMAKE_ARGS[@]}"
 fi
 
-echo "Building libcharmm.so in $BUILD_DIR ..."
-cmake --build "$BUILD_DIR" -j "$(nproc)"
-cmake --install "$BUILD_DIR"
+echo "Building $LIB_BASENAME in $BUILD_DIR ..."
+_build_jobs() {
+  if command -v nproc >/dev/null 2>&1; then
+    nproc
+  elif [[ "$(uname -s)" == "Darwin" ]]; then
+    sysctl -n hw.ncpu
+  else
+    echo 4
+  fi
+}
+cmake --build "$BUILD_DIR" -j "$(_build_jobs)"
+cmake --install "$BUILD_DIR" || true
 
 BUILT=""
 for candidate in \
-  "$CHARMM_HOME/lib/libcharmm.so" \
-  "$BUILD_DIR/libcharmm.so" \
-  "$BUILD_DIR/lib/libcharmm.so"; do
+  "$CHARMM_HOME/lib/$LIB_BASENAME" \
+  "$CHARMM_HOME/$LIB_BASENAME" \
+  "$BUILD_DIR/$LIB_BASENAME" \
+  "$BUILD_DIR/lib/$LIB_BASENAME"; do
   if [[ -f "$candidate" ]]; then
     BUILT="$candidate"
     break
   fi
 done
 if [[ -z "$BUILT" ]]; then
-  BUILT="$(find "$BUILD_DIR" -name 'libcharmm.so' -print -quit || true)"
+  BUILT="$(find "$BUILD_DIR" -name "$LIB_BASENAME" -print -quit || true)"
 fi
 if [[ -z "$BUILT" ]]; then
-  echo "rebuild_charmm_mlpot: build finished but libcharmm.so not found" >&2
+  echo "rebuild_charmm_mlpot: build finished but $LIB_BASENAME not found" >&2
   exit 1
 fi
 
@@ -231,14 +302,16 @@ echo "Installed $LIB_OUT (from $BUILT)"
 if [[ "$DEBUG" == 1 ]]; then
   if command -v readelf >/dev/null 2>&1 && readelf -S "$LIB_OUT" 2>/dev/null | grep -q '\.debug'; then
     echo "Debug symbols: present in $LIB_OUT"
+  elif [[ "$(uname -s)" == "Darwin" ]] && dsymutil "$LIB_OUT" >/dev/null 2>&1; then
+    echo "Debug symbols: present in $LIB_OUT (Darwin dSYM)"
   else
-    echo "rebuild_charmm_mlpot: warning: no .debug sections in $LIB_OUT (gdb backtraces may lack line numbers)" >&2
+    echo "rebuild_charmm_mlpot: warning: no debug sections in $LIB_OUT (gdb backtraces may lack line numbers)" >&2
   fi
 fi
 cat <<EOF
 Verify:
   uv run python -c "from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import mlpot_limits_message; print(mlpot_limits_message())"
-Expect: max_Nml=50000, max_Npr=3998000, source=api_func.F90 (libcharmm.so is up to date)
+Expect: max_Nml=50000, max_Npr=3998000, source=api_func.F90 ($LIB_BASENAME is up to date)
 If you see max_Nml=100: set CHARMM_HOME/CHARMM_LIB_DIR in CHARMMSETUP or export them, then rebuild again.
 
 Segfault diagnosis:
