@@ -2030,10 +2030,12 @@ def light_resync_mlpot_state(
     silent_charmm: bool = True,
     verbose: bool = False,
     restart_path: Path | str | None = None,
+    verify_ase_calculator: bool = False,
 ) -> float:
     """Reregister MLpot, ``ENER FORCE``, ``UPDATE``, and sync PBC; return hybrid GRMS.
 
     Does **not** call ``upinb`` / ``update_bnbnd`` (unsafe with MLpot registered).
+    When ``verify_ase_calculator`` is True, compare ASE hybrid forces to JAX spherical_fn.
     """
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
@@ -2064,6 +2066,13 @@ def light_resync_mlpot_state(
         pycharmm.lingo.charmm_script("ENER FORCE")
         pycharmm.lingo.charmm_script("UPDATE")
     diag = measure_hybrid_charmm_grms(mlpot_ctx)
+    if verify_ase_calculator:
+        verify_hybrid_ase_charmm_consistency(
+            mlpot_ctx,
+            context=f"{context} ASE verify" if context else "ASE verify",
+            verbose=verbose,
+        )
+        diag = measure_hybrid_charmm_grms(mlpot_ctx)
     if context:
         print(
             f"{context}: hybrid GRMS {diag.hybrid:.4f} kcal/mol/Å after light resync "
@@ -2071,6 +2080,57 @@ def light_resync_mlpot_state(
             flush=True,
         )
     return float(diag.hybrid)
+
+
+def verify_hybrid_ase_charmm_consistency(
+    mlpot_ctx: Any,
+    *,
+    context: str = "Hybrid ASE verify",
+    verbose: bool = True,
+    grms_ratio_warn: float = 1.25,
+) -> tuple[float, float]:
+    """Compare hybrid GRMS from ASE calculator vs JAX ``spherical_fn``."""
+    import ase
+
+    from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+        _hybrid_mlpot_ase_calculator_class,
+    )
+
+    pyCModel = getattr(mlpot_ctx, "pyCModel", None)
+    if pyCModel is None:
+        return float("nan"), float("nan")
+
+    pos = charmm_positions_angstrom()
+    z = getattr(mlpot_ctx, "ml_Z", None)
+    if z is None:
+        import pycharmm.coor as coor
+
+        z = coor.get_positions()["resid"].to_numpy(dtype=int)
+    atoms = ase.Atoms(numbers=np.asarray(z, dtype=int), positions=pos)
+    calc_cls = _hybrid_mlpot_ase_calculator_class()
+    atoms.calc = calc_cls(mlpot_ctx)
+    ase_forces = np.asarray(atoms.get_forces(), dtype=np.float64)
+    from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
+
+    ase_grms = forces_grms_kcalmol_A(ase_forces * float(ev2kcalmol))
+    jax_grms = mlpot_hybrid_grms_from_calculator(mlpot_ctx)
+    if jax_grms is None or not np.isfinite(jax_grms):
+        jax_grms = float("nan")
+    if verbose and context:
+        ratio = (
+            float(max(ase_grms / jax_grms, jax_grms / ase_grms))
+            if np.isfinite(ase_grms) and np.isfinite(jax_grms) and jax_grms > 0
+            else float("inf")
+        )
+        note = "consistent"
+        if ratio > grms_ratio_warn:
+            note = f"possible desync (ASE/JAX GRMS ratio={ratio:.2f})"
+        print(
+            f"{context}: ASE hybrid GRMS={ase_grms:.4f}, "
+            f"JAX hybrid GRMS={jax_grms:.4f} kcal/mol/Å ({note})",
+            flush=True,
+        )
+    return float(ase_grms), float(jax_grms)
 
 
 def probe_and_light_resync_if_desync(
@@ -2092,8 +2152,27 @@ def probe_and_light_resync_if_desync(
             silent_charmm=silent_charmm,
             verbose=verbose,
             restart_path=restart_path,
+            verify_ase_calculator=True,
         )
     return float(diag.hybrid)
+
+
+def _geometry_recovery_context(mlpot_ctx: Any) -> tuple[Any | None, list[int] | None]:
+    args = getattr(mlpot_ctx, "workflow_args", None)
+    atoms_per = getattr(mlpot_ctx, "atoms_per_monomer", None)
+    if atoms_per is None and args is not None:
+        atoms_per = getattr(args, "_cluster_atoms_per_list", None)
+    if atoms_per is not None:
+        try:
+            return args, [int(x) for x in atoms_per]
+        except TypeError:
+            return args, None
+    pyCModel = getattr(mlpot_ctx, "pyCModel", None)
+    if pyCModel is not None:
+        apm = getattr(pyCModel, "_atoms_per_monomer", None)
+        if apm is not None:
+            return args, [int(x) for x in apm]
+    return args, None
 
 
 def prepare_mlpot_hybrid_state_for_sd(
@@ -2143,17 +2222,108 @@ def prepare_mlpot_hybrid_state_for_sd(
     hybrid_grms = float(diag.hybrid)
     mlpot_ctx.sd_watchdog_baseline_grms = None
 
+    if diag.kind == "both_high":
+        raise RuntimeError(
+            f"{context_prefix}: hybrid GRMS {diag.hybrid:.2f} and CHARMM GRMS "
+            f"{diag.charmm:.2f} kcal/mol/Å are both high (ratio {diag.ratio:.1f}). "
+            "Restart from a geometry baseline / handoff or rebuild the box "
+            "(Packmol at lower density, then compress with MC/NPT)."
+        )
+
     if diag.kind == "desync_suspected":
         hybrid_grms = light_resync_mlpot_state(
             mlpot_ctx,
             context=f"{context_prefix} light resync" if verbose else "",
             verbose=verbose,
             restart_path=restart_path,
+            verify_ase_calculator=True,
         )
         diag = measure_hybrid_charmm_grms(mlpot_ctx)
 
     grms_hot = grms_limit is not None and hybrid_grms > float(grms_limit)
     user_hot = energy_limit is not None and user > float(energy_limit)
+
+    workflow_args, atoms_per_list = _geometry_recovery_context(mlpot_ctx)
+    intervention_grms: float | None = None
+    if workflow_args is not None and atoms_per_list is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+            resolve_intervention_grms_threshold,
+        )
+
+        n_mol = len(atoms_per_list)
+        n_at = int(sum(atoms_per_list))
+        intervention_grms = resolve_intervention_grms_threshold(
+            workflow_args,
+            atoms_per_list=atoms_per_list,
+            n_monomers=n_mol,
+            n_atoms=n_at,
+            mlpot_ctx=mlpot_ctx,
+            pbc=bool(getattr(mlpot_ctx, "use_pbc", False)),
+        )
+    elif grms_limit is not None:
+        intervention_grms = float(grms_limit) * 0.5
+
+    ran_geometry_packing = False
+    if (
+        diag.kind == "geometry_stress"
+        or (
+            intervention_grms is not None
+            and hybrid_grms > float(intervention_grms)
+            and (grms_hot or user_hot)
+        )
+    ) and workflow_args is not None and atoms_per_list is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+            parse_composition_dict,
+        )
+        from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+            run_geometry_packing_recovery,
+        )
+
+        composition = parse_composition_dict(getattr(workflow_args, "composition", None))
+        if composition is None:
+            composition = getattr(workflow_args, "_cluster_composition_summary", None)
+        box_side = getattr(mlpot_ctx, "cubic_box_side_A", None)
+        if box_side is None:
+            box_side = getattr(mlpot_ctx, "charmm_cubic_box_side_A", None)
+        if verbose:
+            print(
+                f"{context_prefix}: geometry_stress / GRMS {hybrid_grms:.1f} > "
+                f"intervention {float(intervention_grms):.1f}; "
+                "running repack → MC → FIRE → BFGS (skipping bonded-MM first)",
+                flush=True,
+            )
+        box_side_arg: float | None
+        try:
+            box_side_arg = float(box_side) if box_side is not None else None
+        except (TypeError, ValueError):
+            box_side_arg = None
+        hybrid_grms = run_geometry_packing_recovery(
+            mlpot_ctx,
+            args=workflow_args,
+            atoms_per_list=atoms_per_list,
+            composition=composition,
+            box_side=box_side_arg,
+            charmm_pbc=bool(getattr(mlpot_ctx, "use_pbc", False)),
+            context_prefix=f"{context_prefix} packing",
+            calculator_minimize=calculator_minimize,
+            calculator_minimize_steps=calculator_minimize_steps,
+            calculator_minimize_fmax_ev_a=calculator_minimize_fmax_ev_a,
+            calculator_bfgs_maxstep=calculator_bfgs_maxstep,
+            calculator_fire_steps=calculator_fire_steps,
+            calculator_fire_fmax_ev_a=calculator_fire_fmax_ev_a,
+            calculator_fire_maxstep=calculator_fire_maxstep,
+            quiet_bfgs=quiet_bfgs,
+            verbose=verbose,
+            grms_limit=grms_limit,
+        )
+        ran_geometry_packing = True
+        diag = measure_hybrid_charmm_grms(mlpot_ctx)
+        _print_hybrid_charmm_grms_diag(
+            f"{context_prefix} post-packing hybrid GRMS" if verbose else "",
+            diag,
+        )
+        grms_hot = grms_limit is not None and hybrid_grms > float(grms_limit)
+        user_hot = energy_limit is not None and user > float(energy_limit)
 
     from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
         HybridCalculatorMinimizeConfig,
@@ -2320,14 +2490,21 @@ def prepare_mlpot_hybrid_state_for_sd(
             hybrid_grms = float(diag.hybrid)
             grms_hot = grms_limit is not None and hybrid_grms > float(grms_limit)
 
-    if calculator_minimize:
+    if calculator_minimize and not ran_geometry_packing:
         _run_calculator_mini("pre-recovery")
 
-    if grms_hot or user_hot:
+    if (grms_hot or user_hot) and diag.kind != "geometry_stress":
         _run_bonded_recovery()
+    elif (grms_hot or user_hot) and diag.kind == "geometry_stress" and not ran_geometry_packing:
+        if verbose:
+            print(
+                f"{context_prefix}: geometry_stress — skipping bonded-MM recovery "
+                "(ineffective for ML clash stress)",
+                flush=True,
+            )
 
     still_hot = grms_limit is not None and hybrid_grms > float(grms_limit)
-    if calculator_minimize and not ran_calculator_mini and (
+    if calculator_minimize and not ran_calculator_mini and not ran_geometry_packing and (
         hybrid_grms <= max_start_grms or ran_bonded_recovery
     ):
         _run_calculator_mini(
@@ -2336,7 +2513,7 @@ def prepare_mlpot_hybrid_state_for_sd(
         )
         still_hot = grms_limit is not None and hybrid_grms > float(grms_limit)
 
-    if calculator_minimize and still_hot:
+    if calculator_minimize and still_hot and not ran_geometry_packing:
         if not ran_calculator_mini:
             _run_calculator_mini("post-recovery", force=True)
             still_hot = grms_limit is not None and hybrid_grms > float(grms_limit)
@@ -2344,7 +2521,7 @@ def prepare_mlpot_hybrid_state_for_sd(
             _run_calculator_fire("post-recovery", force=True)
             still_hot = grms_limit is not None and hybrid_grms > float(grms_limit)
 
-    if (grms_hot or user_hot) and not ran_bonded_recovery:
+    if (grms_hot or user_hot) and not ran_bonded_recovery and diag.kind != "geometry_stress":
         _run_bonded_recovery()
         still_hot = grms_limit is not None and hybrid_grms > float(grms_limit)
         if calculator_minimize and still_hot:
@@ -2589,15 +2766,34 @@ def resolve_max_grms_before_dyn(
     n_atoms: int,
     *,
     pbc: bool = False,
+    mlpot_ctx: Any | None = None,
 ) -> float:
     """Size-aware GRMS ceiling before MLpot dynamics (kcal/mol/Å).
 
-    CHARMM SD can report a stale low GRMS while MLpot USER forces are still large
-    on dense PBC clusters.  Scale the default 50 kcal/mol/Å floor with system size.
+    Uses per-monomer CHARMM and hybrid GRMS when available; otherwise falls back
+    to legacy size scaling from monomer/atom counts.
     """
     base = float(getattr(args, "max_grms_before_dyn", 50.0))
     if getattr(args, "allow_high_grms", False) or getattr(args, "no_scale_max_grms", False):
         return base
+
+    atoms_per_list = getattr(args, "_cluster_atoms_per_list", None)
+    try:
+        from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+            resolve_max_grms_before_dyn_intelligent,
+        )
+
+        return resolve_max_grms_before_dyn_intelligent(
+            args,
+            n_monomers,
+            n_atoms,
+            pbc=pbc,
+            mlpot_ctx=mlpot_ctx,
+            atoms_per_list=atoms_per_list,
+        )
+    except Exception:
+        pass
+
     n_mol = max(1, int(n_monomers))
     n_at = max(1, int(n_atoms))
     if n_mol == 1 and n_at < 100:

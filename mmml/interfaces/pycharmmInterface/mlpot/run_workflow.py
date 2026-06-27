@@ -751,6 +751,8 @@ def _register_mlpot_context(
                 )
     ctx.ml_Z = np.asarray(z, dtype=int)
     ctx.use_pbc = bool(mlpot_use_pbc)
+    ctx.atoms_per_monomer = list(apm)
+    ctx.workflow_args = args
     ctx.cubic_box_side_A = float(cubic_box_side_A) if mlpot_use_pbc and cubic_box_side_A else None
     ctx.charmm_cubic_box_side_A = (
         float(cubic_box_side_A) if cubic_box_side_A is not None else None
