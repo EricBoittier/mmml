@@ -31,6 +31,20 @@ print(scheduler_mode(cfg), mlpot_device_name(cfg))
 export MMML_MLPOT_DEVICE="${MMML_MLPOT_DEVICE:-$MLPOT_DEV}"
 export JAX_PLATFORMS="${JAX_PLATFORMS:-$MLPOT_DEV}"
 
+CLUSTER="$("$PY" -c "
+import sys
+from pathlib import Path
+sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
+from campaign_lib import cluster_name, load_config
+cfg = load_config(Path('${CFG}'))
+print(cluster_name(cfg))
+")"
+
+if [[ "$SCHEDULER" == "cpu" || "$CLUSTER" == "pc-bach" || "${MMML_CLUSTER:-}" == "pc-bach" ]]; then
+  # shellcheck source=../../../scripts/pc_bach_env.sh
+  source "$REPO_ROOT/scripts/pc_bach_env.sh"
+fi
+
 if [[ "$SCHEDULER" != "cpu" ]]; then
   if ! ldconfig -p 2>/dev/null | grep -q 'libOpenCL\.so'; then
     echo "ERROR: libOpenCL.so.1 not found on $(hostname). Use a GPU compute node." >&2

@@ -88,20 +88,67 @@ bash scripts/status.sh
 
 ### pc-bach CPU cluster (`long` partition)
 
-Module stack (example):
+Three-step setup on **pc-bach** (OpenMPI **4.1.4** under gcc-12.2.0 — not the gcc-14.2 paths in gpu docs).
+
+#### Step 1 — validate tier libs (skip rebuild when OK)
+
+`ensure_charmm_mlpot_limits.sh` selects the smallest NPR tier per cell (e.g. **8M** → `tier_8000000_nodomdec`). Jobs reuse an existing tier lib; they only rebuild when that tier’s `libcharmm.so` is missing or stale.
 
 ```bash
-module load gcc/gcc-12.2.0-cmake-3.25.1-openmpi-4.1.4
-module load charmm/c47a2-gcc-12.2.0-openmpi-4.1.4
+cd workflows/pbc_liquid_density_dyn
 export MMML_CKPT=/path/to/DESdimers_params.json
-export CHARMM_HOME=... CHARMM_LIB_DIR=...
+bash scripts/check_pc_bach_step1.sh
 ```
 
-Uses `profiles/slurm-cpu` (no `--gres=gpu`) and `config.pc-bach.cpu.yaml` (`scheduler: cpu`, `MMML_MLPOT_DEVICE=cpu`):
+Manual spot-check for one cell size:
+
+```bash
+source ../../scripts/pc_bach_env.sh
+bash ../../scripts/check_charmm_tier_lib.sh --n-ml 2660 --pbc --box-size 32 --pc-bach
+ls -l ~/.cache/mmml-charmm-build/tier_*_nodomdec/lib/libcharmm.so
+```
+
+If Step 1 fails, build tiers once (Step 2) then re-run Step 1.
+
+#### Step 2 — build tier libs (only when Step 1 reports missing/stale)
+
+Source the pc-bach OpenMPI stack first, then prebuild all matrix tiers:
+
+```bash
+source ../../scripts/pc_bach_env.sh
+bash scripts/prebuild_charmm_tiers.sh
+```
+
+Fresh `libcharmm.so` on pc-bach may require a **PIC FFTW** built locally (module `fftw` sometimes lacks `-fPIC`). Build/install FFTW with position-independent code, then point CMake at it before `rebuild_charmm_mlpot.sh` / `ensure_charmm_mlpot_limits.sh`. Skip this entirely when Step 1 already passes.
+
+#### Step 3 — job environment (Slurm prolog / interactive)
+
+Add to your Slurm batch prolog or shell before `md-system` (paths replace gcc-14.2 gpu defaults):
+
+```bash
+source /path/to/mmml/scripts/pc_bach_env.sh
+# module load gcc/gcc-12.2.0-cmake-3.25.1-openmpi-4.1.4   # optional if pc_bach_env.sh loads them
+# module load charmm/c47a2-gcc-12.2.0-openmpi-4.1.4
+export OPENMPI_ROOT=/opt/gcc-12.2.0/openmpi-4.1.4/build
+export PATH="$OPENMPI_ROOT/bin:$PATH"
+export LD_LIBRARY_PATH="$OPENMPI_ROOT/lib:${LD_LIBRARY_PATH:-}"
+# CHARMM_LIB_DIR set per job by ensure_charmm_mlpot_limits.sh, e.g.:
+# export CHARMM_LIB_DIR=$HOME/.cache/mmml-charmm-build/tier_8000000_nodomdec/lib
+export MMML_CKPT=/path/to/DESdimers_params.json
+export JAX_ENABLE_X64=1
+export MMML_MLPOT_DEVICE=cpu JAX_PLATFORMS=cpu
+
+MMML_MPI_NP=1 ../../scripts/mmml-charmm-mpirun.sh md-system --config ...   # smoke
+```
+
+`job_shell.sh` and `snakemake_slurm_cpu.sh` source `pc_bach_env.sh` automatically when `scheduler: cpu` or `cluster: pc-bach` in config.
+
+Uses `profiles/slurm-cpu` (no `--gres=gpu`) and `config.pc-bach.cpu.yaml`:
 
 ```bash
 cd workflows/pbc_liquid_density_dyn
 bash scripts/preflight.sh --config config.pc-bach.cpu.yaml
+bash scripts/check_pc_bach_step1.sh
 bash scripts/snakemake_slurm_cpu.sh
 
 # Or explicitly:

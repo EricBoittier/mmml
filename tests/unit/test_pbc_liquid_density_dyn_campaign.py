@@ -37,6 +37,7 @@ campaign_job_order = cl.campaign_job_order
 cell_bulk_density_fraction = cl.cell_bulk_density_fraction
 cell_from_cli = cl.cell_from_cli
 cell_run_tag = cl.cell_run_tag
+cluster_name = cl.cluster_name
 iter_matrix_cells = cl.iter_matrix_cells
 load_config = cl.load_config
 matrix_job_count = cl.matrix_job_count
@@ -45,6 +46,7 @@ mlpot_device_name = cl.mlpot_device_name
 scheduler_mode = cl.scheduler_mode
 slurm_launch_jobs = cl.slurm_launch_jobs
 slurm_resources_cli = cl.slurm_resources_cli
+workflow_root = cl.workflow_root
 
 
 @pytest.fixture
@@ -141,3 +143,9 @@ def test_mlpot_device_cpu_when_scheduler_cpu(cfg: dict) -> None:
     cpu_cfg = {**cfg, "scheduler": "cpu"}
     assert scheduler_mode(cpu_cfg) == "cpu"
     assert mlpot_device_name(cpu_cfg) == "cpu"
+
+
+def test_cluster_name_pc_bach() -> None:
+    cfg = load_config(workflow_root() / "config.pc-bach.cpu.yaml")
+    assert cluster_name(cfg) == "pc-bach"
+    assert scheduler_mode(cfg) == "cpu"

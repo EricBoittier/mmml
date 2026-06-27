@@ -504,6 +504,11 @@ def scheduler_mode(cfg: dict[str, Any]) -> str:
     return str(cfg.get("scheduler", "gpu")).strip().lower()
 
 
+def cluster_name(cfg: dict[str, Any]) -> str:
+    """Optional cluster label (e.g. ``pc-bach``) for job-environment prologs."""
+    return str(cfg.get("cluster", "") or "").strip().lower()
+
+
 def mlpot_device_name(cfg: dict[str, Any]) -> str:
     dev = str(cfg.get("mlpot_device", "") or "").strip().lower()
     if dev in ("cpu", "gpu"):
