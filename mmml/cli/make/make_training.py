@@ -290,6 +290,12 @@ See mmml/cli/misc/physnet_train.example.yaml for a template.
     )
     parser.set_defaults(save_every_epoch=True)
     parser.add_argument(
+        "--profile-epoch-timing",
+        action="store_true",
+        dest="profile_epoch_timing",
+        help="Print per-epoch timing breakdown (batch prep / train / valid / checkpoint)",
+    )
+    parser.add_argument(
         "--print-freq",
         "--print_freq",
         type=int,
@@ -720,6 +726,7 @@ def main_loop(args):
         rot_augment=args.rot_augment,
         rot_perturbation=args.rot_perturbation,
         save_every_epoch=args.save_every_epoch,
+        profile_epoch_timing=args.profile_epoch_timing,
     )
 
     # save portable JSON (params + architecture) for inference / physnet-evaluate

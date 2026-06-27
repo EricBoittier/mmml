@@ -518,3 +518,150 @@ def prepare_batches_advanced_minibatching(
 
 
 _prepare_batches = prepare_batches_jit #jax.jit(prepare_batches_jit, static_argnames=("batch_size", "num_atoms", "data_keys"))
+
+
+def _as_numpy_dict(data: Dict[str, jnp.ndarray]) -> Dict[str, np.ndarray]:
+    """Host-side arrays for fast fancy indexing during batch prep."""
+    return {k: np.asarray(v) for k, v in data.items()}
+
+
+def _pair_indices(
+    num_atoms: int,
+    batch_size: int,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """Precompute batched pair indices and segment ids (constant across epochs)."""
+    batch_segments = jnp.repeat(jnp.arange(batch_size), num_atoms)
+    offsets = jnp.arange(batch_size) * num_atoms
+    dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(num_atoms)
+    dst_2d = dst_idx + offsets[:, None]
+    src_2d = src_idx + offsets[:, None]
+    return (
+        batch_segments,
+        offsets,
+        dst_2d,
+        src_2d,
+        dst_2d.reshape(-1),
+        src_2d.reshape(-1),
+    )
+
+
+def prepare_batches_fast(
+    key,
+    data: Dict[str, jnp.ndarray],
+    batch_size: int,
+    data_keys: Optional[List[str]] = None,
+    num_atoms: int = 60,
+    dst_idx: Optional[jnp.ndarray] = None,
+    src_idx: Optional[jnp.ndarray] = None,
+    include_id: bool = False,
+    debug_mode: bool = False,
+    rot_augment: bool = False,
+    rot_perturbation: float = 1.0,
+    pair_cache: tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray] | None = None,
+) -> List[Dict[str, jnp.ndarray]]:
+    """Vectorized batch preparation (same outputs as ``prepare_batches_jit``).
+
+    Gathers all epoch batches with NumPy fancy indexing, then materializes a
+    list of per-step dicts.  Pair indices and segment metadata are computed once
+    and reused across epochs via ``pair_cache``.
+    """
+    required_keys = ["R", "N", "Z"]
+    for req_key in required_keys:
+        if req_key not in data:
+            raise ValueError(f"Data dictionary must contain '{req_key}' key.")
+
+    if data_keys is None:
+        data_keys = list(data.keys())
+
+    host = _as_numpy_dict(data)
+    data_size = int(host["R"].shape[0])
+    steps_per_epoch = data_size // batch_size
+    if steps_per_epoch == 0:
+        raise ValueError(
+            "Batch size is larger than the dataset size or no full batch available."
+        )
+
+    perms = np.asarray(
+        jax.random.permutation(key, data_size)[: steps_per_epoch * batch_size],
+        dtype=np.int64,
+    )
+    perms = perms.reshape((steps_per_epoch, batch_size))
+
+    if pair_cache is None:
+        pair_cache = _pair_indices(num_atoms, batch_size)
+    batch_segments, offsets, dst_2d, src_2d, dst_flat, src_flat = pair_cache
+    offsets_np = np.asarray(offsets, dtype=np.int64)
+    dst_2d_np = np.asarray(dst_2d)
+    src_2d_np = np.asarray(src_2d)
+
+    reshape_rules = {
+        "R": (batch_size * num_atoms, 3),
+        "F": (batch_size * num_atoms, 3),
+        "E": (batch_size, 1),
+        "Z": (batch_size * num_atoms,),
+        "D": (batch_size, 3),
+        "N": (batch_size,),
+        "mono": (batch_size * num_atoms,),
+    }
+
+    stacked: Dict[str, np.ndarray] = {}
+    for k in data_keys:
+        if k not in host:
+            continue
+        gathered = host[k][perms]
+        new_shape = reshape_rules.get(k)
+        if new_shape is not None:
+            stacked[k] = gathered.reshape((steps_per_epoch, *new_shape))
+        else:
+            stacked[k] = gathered
+
+    if rot_augment:
+        for step in range(steps_per_epoch):
+            rot_key = jax.random.fold_in(key, int(perms[step, 0]))
+            rotations = sample_random_rotations(
+                rot_key, batch_size, perturbation=rot_perturbation
+            )
+            if "R" in stacked:
+                r = stacked["R"][step].reshape(batch_size, num_atoms, 3)
+                stacked["R"][step] = np.asarray(
+                    rotate_batched_vectors(r, rotations)
+                ).reshape(batch_size * num_atoms, 3)
+            if "F" in stacked:
+                f = stacked["F"][step].reshape(batch_size, num_atoms, 3)
+                stacked["F"][step] = np.asarray(
+                    rotate_batched_vectors(f, rotations)
+                ).reshape(batch_size * num_atoms, 3)
+            if "D" in stacked:
+                d = stacked["D"][step]
+                if d.ndim == 2 and d.shape[-1] == 3:
+                    stacked["D"][step] = np.asarray(
+                        rotate_batched_vectors(d, rotations)
+                    )
+
+    n_batch = stacked["N"]
+    expanded_n = n_batch[:, :, None] + offsets_np[None, :, None]
+    valid = (dst_2d_np[None, :, :] < expanded_n) & (src_2d_np[None, :, :] < expanded_n)
+    good_indices = valid.reshape(steps_per_epoch, -1).astype(np.int32)
+
+    atom_mask = (stacked["Z"] > 0).astype(np.int32)
+
+    output: List[Dict[str, jnp.ndarray]] = []
+    for step in range(steps_per_epoch):
+        batch: Dict[str, jnp.ndarray] = {}
+        for k in data_keys:
+            if k in stacked:
+                batch[k] = jnp.asarray(stacked[k][step])
+        if include_id and "id" in host and "id" in data_keys:
+            batch["id"] = jnp.asarray(host["id"][perms[step]])
+        batch["dst_idx"] = dst_flat
+        batch["src_idx"] = src_flat
+        batch["batch_mask"] = jnp.asarray(good_indices[step])
+        batch["batch_segments"] = batch_segments
+        batch["atom_mask"] = jnp.asarray(atom_mask[step].reshape(-1))
+        if debug_mode:
+            assert batch["R"].shape == (batch_size * num_atoms, 3)
+        output.append(batch)
+    return output
+
+
+_prepare_batches = prepare_batches_fast
