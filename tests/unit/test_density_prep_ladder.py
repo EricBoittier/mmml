@@ -115,6 +115,71 @@ def test_liquid_prep_shorthand_enables_defaults():
     assert args.mini_lattice_abnr_steps == 200
 
 
+def test_sync_pbc_after_box_change_skips_prepare_charmm_pbc_with_mlpot(monkeypatch):
+    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+        _sync_pbc_after_box_change,
+    )
+
+    calls: list[str] = []
+
+    class _Ctx:
+        cubic_box_side_A = 28.0
+        charmm_cubic_box_side_A = 28.0
+        pyCModel = object()
+        use_pbc = True
+
+    def _fake_prepare(_side: float) -> None:
+        calls.append("prepare_charmm_pbc")
+
+    def _fake_light_resync(*_a, **_kw) -> float:
+        calls.append("light_resync")
+        return 1.0
+
+    def _fake_sync_workflow(*_a, **_kw) -> float:
+        calls.append("sync_workflow")
+        return 30.0
+
+    def _fake_sync_mic(*_a, **_kw) -> float:
+        calls.append("sync_mic")
+        return 30.0
+
+    def _fake_sync_pos(_pos) -> None:
+        calls.append("sync_pos")
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.prepare_charmm_pbc",
+        _fake_prepare,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.light_resync_mlpot_state",
+        _fake_light_resync,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.sync_workflow_pbc_box_side_after_mm_pretreat",
+        _fake_sync_workflow,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.run_workflow.sync_mlpot_pbc_cell_from_charmm",
+        _fake_sync_mic,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        _fake_sync_pos,
+    )
+
+    side = _sync_pbc_after_box_change(
+        positions=np.zeros((4, 3)),
+        box_side=30.0,
+        charmm_pbc=True,
+        mlpot_ctx=_Ctx(),
+        quiet=True,
+    )
+    assert side == 30.0
+    assert "prepare_charmm_pbc" not in calls
+    assert "light_resync" in calls
+    assert "sync_mic" in calls
+
+
 def test_build_pycharmm_command_forwards_liquid_prep():
     from mmml.cli.run.md_system import build_pycharmm_command
     from tests.unit.test_md_system_pycharmm_cmd import _pycharmm_args
