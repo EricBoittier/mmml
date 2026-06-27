@@ -2299,21 +2299,20 @@ def test_overlap_aborts_before_charmm_when_scratch_restart_is_invalid(tmp_path):
     assert len(calls) == 1
 
 
-def test_assign_velocities_at_temperature_uses_nstep_zero():
-    from unittest.mock import patch
+def test_run_dynamics_rejects_nstep_zero():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics
 
+    with pytest.raises(ValueError, match="nstep must be >= 1"):
+        run_dynamics({"nstep": 0, "timestep": 0.00025})
+
+
+def test_assign_velocities_at_temperature_raises():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         assign_velocities_at_temperature,
     )
 
-    with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.run_dynamics"
-    ) as run_dyn:
+    with pytest.raises(RuntimeError, match="nstep=0 Boltzmann assign"):
         assign_velocities_at_temperature(48.0, use_pbc=False)
-    kw = run_dyn.call_args.args[0]
-    assert int(kw["nstep"]) == 0
-    assert int(kw["iasvel"]) == 1
-    assert float(kw["firstt"]) == 48.0
 
 
 def test_overlap_config_for_stage_heat_uses_mid_segment_checks_by_default():
@@ -3461,7 +3460,7 @@ def test_prepare_overlap_chunk_skips_upinb_when_mlpot_active(tmp_path: Path):
     assert ctx.charmm_cubic_box_side_A == pytest.approx(50.0)
 
 
-def test_prepare_post_rescue_overlap_handoff_assigns_velocities_in_memory():
+def test_prepare_post_rescue_overlap_handoff_sets_single_dyna_start():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _prepare_post_rescue_overlap_handoff,
     )
@@ -3476,22 +3475,16 @@ def test_prepare_post_rescue_overlap_handoff_assigns_velocities_in_memory():
     }
     ctx = mock.Mock(use_pbc=True, charmm_cubic_box_side_A=180.0)
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.assign_velocities_at_temperature",
-    ) as assign_vel, mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
     ) as ensure_crystal:
         _prepare_post_rescue_overlap_handoff(chunk_kw, mlpot_ctx=ctx)
 
-    assign_vel.assert_called_once_with(
-        63.0,
-        timestep_ps=0.0001,
-        restart_path=None,
-        use_pbc=True,
-    )
     ensure_crystal.assert_called_once_with(180.0, quiet=True)
     assert chunk_kw["restart"] is False
-    assert chunk_kw["iasvel"] == 0
+    assert chunk_kw["start"] is True
+    assert chunk_kw["iasvel"] == 1
     assert chunk_kw["iunrea"] == -1
+    assert chunk_kw["firstt"] == 63.0
     assert "finalt" not in chunk_kw
 
 
@@ -3512,20 +3505,14 @@ def test_post_rescue_bath_target_prefers_hoover_reft_for_cpt_prod():
     }
     ctx = mock.Mock(use_pbc=True, charmm_cubic_box_side_A=40.0)
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.assign_velocities_at_temperature",
-    ) as assign_vel, mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
     ):
         _prepare_post_rescue_overlap_handoff(chunk_kw, mlpot_ctx=ctx)
 
-    assign_vel.assert_called_once_with(
-        90.0,
-        timestep_ps=0.00025,
-        restart_path=None,
-        use_pbc=True,
-    )
     assert chunk_kw["hoover reft"] == 90.0
     assert chunk_kw["firstt"] == 90.0
+    assert chunk_kw["start"] is True
+    assert chunk_kw["iasvel"] == 1
 
 
 def test_mlpot_cpt_overlap_uses_scratch_restart_handoff(tmp_path, monkeypatch):

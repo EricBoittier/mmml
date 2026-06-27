@@ -503,7 +503,6 @@ def _configure_heat_dynamics_start(
     """
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _valid_restart_file,
-        assign_velocities_at_temperature,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_restart_last_step,
@@ -521,34 +520,16 @@ def _configure_heat_dynamics_start(
         io.restart_read = None
         kw["restart"] = False
         kw["new"] = False
-        if hoover_cpt_heat:
-            # Single dyna: Boltzmann at FIRSTT (start=True, iasvel=1).  A separate
-            # nstep=0 assign before Hoover CPT leaves barostat pistons uninitialized
-            # (garbage PIXX/PRESS at step 0) and triggers a second dynamc/lambdata_init
-            # that can segfault on BLOCK builds.
-            kw["iasvel"] = 1
-            kw["start"] = True
-            if not quiet:
-                print(
-                    f"HEAT: dyna start FIRSTT={firstt:.1f} K "
-                    "(in-memory coords after mini); Hoover CPT NVT (no ihtfrq); "
-                    "single dyna (no nstep=0 assign)",
-                    flush=True,
-                )
-            return
-        assign_velocities_at_temperature(
-            firstt,
-            timestep_ps=timestep_ps,
-            restart_path=None,
-            use_pbc=use_pbc,
-        )
-        kw["iasvel"] = 1
-        kw["iasors"] = 0
-        kw["start"] = False
+        kw["start"] = True
         if not quiet:
             print(
-                f"HEAT: Boltzmann velocities at FIRSTT={firstt:.1f} K "
-                "(in-memory coords after mini); ihtfrq scales (iasors=0)",
+                f"HEAT: dyna start FIRSTT={firstt:.1f} K "
+                "(in-memory coords after mini); "
+                + (
+                    "Hoover CPT NVT (no ihtfrq); single dyna (no nstep=0 assign)"
+                    if hoover_cpt_heat
+                    else "ihtfrq scales (iasors=0); single dyna (no nstep=0 assign)"
+                ),
                 flush=True,
             )
         return
@@ -577,35 +558,19 @@ def _configure_heat_dynamics_start(
 
     if restart_from_file and io.restart_read is not None:
         restart_path = io.restart_read
-        if hoover_cpt_heat:
-            kw["restart"] = True
-            kw["new"] = False
-            kw["start"] = True
-            kw["iasvel"] = 1
-            if not quiet:
-                print(
-                    f"HEAT: dyna restart+start FIRSTT={firstt:.1f} K "
-                    f"(coords from {restart_path}); Hoover CPT NVT (no ihtfrq); "
-                    "single dyna (no nstep=0 assign)",
-                    flush=True,
-                )
-            return
-        assign_velocities_at_temperature(
-            firstt,
-            timestep_ps=timestep_ps,
-            restart_path=restart_path,
-            use_pbc=use_pbc,
-        )
-        io.restart_read = None
-        kw["restart"] = False
+        kw["restart"] = True
         kw["new"] = False
-        kw.pop("iunrea", None)
-        kw["iunrea"] = -1
-        kw["start"] = False
+        kw["start"] = True
+        kw["iasvel"] = 1
         if not quiet:
             print(
-                f"HEAT: Boltzmann velocities at FIRSTT={firstt:.1f} K "
-                f"(coords from {restart_path}); ihtfrq scales (iasors=0)",
+                f"HEAT: dyna restart+start FIRSTT={firstt:.1f} K "
+                f"(coords from {restart_path}); "
+                + (
+                    "Hoover CPT NVT (no ihtfrq); single dyna (no nstep=0 assign)"
+                    if hoover_cpt_heat
+                    else "ihtfrq scales (iasors=0); single dyna (no nstep=0 assign)"
+                ),
                 flush=True,
             )
         return
@@ -636,61 +601,43 @@ def _configure_nve_dynamics_start(
     quiet: bool,
     temp: float,
 ) -> None:
-    """One-shot Boltzmann draw at ``temp``, then microcanonical ``dyna`` (no START).
+    """One-shot Boltzmann draw at ``temp`` in the main ``dyna`` call (``start=True``).
 
     After MLpot mini, coordinates are in memory but the saved CRD is not a CHARMM
-    restart (memory handoff).  Omit START and keep ``iasvel=1`` so CHARMM cannot
-    reuse comparison coordinates as velocities if START lingers from the assign
-    call.  Mirrors the heat-stage ``assign_velocities_at_temperature`` pattern.
+    restart (memory handoff).  Use ``start=True`` and ``iasvel=1`` so CHARMM assigns
+    at ``FIRSTT`` in the same call as integration (``nstep>=1``).
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
-        assign_velocities_at_temperature,
-    )
-
     target_t = float(temp)
     for key in ("iasors", "iscale", "iscvel", "ichecw", "firstt", "finalt", "tbath", "tstruct"):
         kw.pop(key, None)
     kw["iasvel"] = 1
     kw["ihtfrq"] = 0
+    kw["firstt"] = target_t
+    kw["tbath"] = target_t
+    kw["tstruct"] = target_t
 
     if coords_in_memory:
         io.restart_read = None
         kw["restart"] = False
         kw["new"] = False
-        assign_velocities_at_temperature(
-            target_t,
-            timestep_ps=timestep_ps,
-            restart_path=None,
-            use_pbc=use_pbc,
-        )
-        kw["start"] = False
-        # Match HEAT: continue from in-memory state. Do not READYN the scratch
-        # restart written after the 1-step Boltzmann draw — CHARMM often leaves a
-        # coordinate-history REST (EOF on READYN) while coords/vel are valid in RAM.
+        kw["start"] = True
         if not quiet:
             print(
-                f"NVE: Boltzmann velocities at {target_t:.1f} K "
-                "(in-memory coords after mini); start omitted, iasvel=1",
+                f"NVE: dyna start at {target_t:.1f} K "
+                "(in-memory coords after mini); single dyna (no nstep=0 assign)",
                 flush=True,
             )
         return
 
     if restart_from_file and io.restart_read is not None:
         restart_path = io.restart_read
-        assign_velocities_at_temperature(
-            target_t,
-            timestep_ps=timestep_ps,
-            restart_path=restart_path,
-            use_pbc=use_pbc,
-        )
-        io.restart_read = None
-        kw["restart"] = False
+        kw["restart"] = True
         kw["new"] = False
-        kw["start"] = False
+        kw["start"] = True
         if not quiet:
             print(
-                f"NVE: Boltzmann velocities at {target_t:.1f} K "
-                f"(coords from {restart_path}); start omitted, iasvel=1",
+                f"NVE: dyna restart+start at {target_t:.1f} K "
+                f"(coords from {restart_path}); single dyna (no nstep=0 assign)",
                 flush=True,
             )
         return

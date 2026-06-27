@@ -1538,27 +1538,22 @@ def _infer_heat_velocity_init_label(
             "single dyna (start=True, restart=False, iasvel=1): Boltzmann at "
             "FIRSTT, then ihtfrq velocity scaling (iasors=0)"
         )
-    if restart and start and iasvel == 1 and hoover_cpt:
+    if restart and start and iasvel == 1:
+        if hoover_cpt:
+            return (
+                "single dyna (restart+start, iasvel=1): READYN coordinates + Boltzmann "
+                "+ CPT barostat init (no separate nstep=0)"
+            )
         return (
             "single dyna (restart+start, iasvel=1): READYN coordinates + Boltzmann "
-            "+ CPT barostat init (no separate nstep=0)"
+            "at FIRSTT, then ihtfrq velocity scaling (iasors=0)"
         )
     if restart and not start:
         return (
             "dyna restart (start=False, iasvel=0): continue global step and "
             "thermostat/barostat state from READYN"
         )
-    if not restart and not start and int(kw.get("ihtfrq", 0) or 0) > 0 and iasvel == 1:
-        return (
-            "post nstep=0 Boltzmann assign (scale path only): velocities "
-            "pre-assigned; dyna integrates with ihtfrq scaling"
-        )
     if not restart and not start and iasvel == 0:
-        if int(kw.get("ihtfrq", 0) or 0) > 0:
-            return (
-                "post nstep=0 Boltzmann assign (scale path only): velocities "
-                "pre-assigned; dyna integrates with ihtfrq scaling"
-            )
         return (
             "in-process continuation (iasvel=0): keep in-memory velocities "
             "(overlap chunk / CPT sub-chunk / segment handoff)"
@@ -2155,60 +2150,13 @@ def assign_velocities_at_temperature(
     use_pbc: bool = True,
     read_unit: int = 90,
 ) -> None:
-    """Boltzmann-assign velocities at ``firstt`` without integrating (``nstep=0``).
-
-    Uses current coordinates when ``restart_path`` is None. Otherwise loads coords
-    from the restart file first (velocities are replaced at ``firstt``).
-    A one-step ``dyna`` integration was removed because it quenched COM kinetic energy
-    before Hoover / NVE handoff while leaving misleading CHARMM temperature prints.
-    """
-    freq_kwargs = {} if use_pbc else _non_pbc_dyn_freq_kwargs()
-    kw = _base_dyn_kwargs(
-        timestep=timestep_ps,
-        nstep=0,
-        nsavc=1,
-        nprint=0,
-        iprfrq=0,
-        isvfrq=0,
-        ntrfrq=0,
-        echeck=-1,
-        **freq_kwargs,
+    """Removed: Boltzmann assignment must happen in the main ``dyna`` call."""
+    raise RuntimeError(
+        "assign_velocities_at_temperature (nstep=0 Boltzmann assign) was removed; "
+        "use start=True, iasvel=1, nstep>=1 on the main dynamics call instead "
+        f"(firstt={float(firstt):.4g} K, restart_path={restart_path!r}, "
+        f"timestep_ps={float(timestep_ps)}, use_pbc={use_pbc}, read_unit={read_unit})"
     )
-    if not use_pbc:
-        _strip_crystal_dyn_keywords(kw)
-    t = float(firstt)
-    kw.update(boltzmann_velocity_kwargs(t))
-    kw.update(
-        {
-            "verlet": True,
-            "new": False,
-            "start": True,
-            "restart": restart_path is not None,
-            "ihtfrq": 0,
-            "ieqfrq": 0,
-            "TEMINC": 0.0,
-            "iunrea": -1,
-            "iunwri": -1,
-            "iuncrd": -1,
-        }
-    )
-    if restart_path is None:
-        run_dynamics(kw)
-        return
-
-    import pycharmm
-
-    restart_file = pycharmm.CharmmFile(
-        file_name=str(restart_path),
-        file_unit=read_unit,
-        formatted=True,
-        read_only=True,
-    )
-    try:
-        kw["iunrea"] = read_unit
-        run_dynamics(kw)
-    finally:
-        restart_file.close()
 
 
 def build_nve_dynamics(
@@ -2599,6 +2547,12 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     import pycharmm
     kw = dict(dynamics_kwargs)
     _strip_non_charmm_dynamics_keywords(kw)
+    nstep = int(kw.get("nstep", 0) or 0)
+    if nstep < 1:
+        raise ValueError(
+            f"run_dynamics: nstep must be >= 1 (got {nstep}); "
+            "use start=True, iasvel=1 on the main dyna call for velocity assignment"
+        )
     # PyCHARMM omits ``start`` from the script when start=False, so CHARMM may keep
     # START active after a prior Boltzmann assign. With iasvel=0 that reads COMP
     # coordinates as velocities — zero COMP defensively.
@@ -2734,12 +2688,6 @@ def _materialize_early_abort_restart_handoff(
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         patch_restart_global_step,
     )
-
-    if chunk_kw is not None and bool(chunk_kw.get("cpt")):
-        _assign_post_rescue_velocities_and_crystal(
-            chunk_kw,
-            mlpot_ctx=mlpot_ctx,
-        )
 
     read_path = (
         Path(chunk_io.restart_read) if chunk_io.restart_read is not None else None
@@ -3254,20 +3202,19 @@ def _post_rescue_bath_target_K(chunk_kw: dict[str, Any]) -> float:
     )
 
 
-def _assign_post_rescue_velocities_and_crystal(
+def _prepare_post_rescue_bath_and_crystal(
     chunk_kw: dict[str, Any],
     *,
     mlpot_ctx: Optional["MlpotContext"],
 ) -> None:
-    """Boltzmann-draw on rescued coordinates; reset CPT crystal when needed."""
+    """Set bath keywords and CRYSTal before post-rescue dynamics (no ``nstep=0`` assign)."""
+    bath = _post_rescue_bath_target_K(chunk_kw)
+    if "hoover reft" in chunk_kw:
+        chunk_kw["hoover reft"] = bath
+    chunk_kw["firstt"] = bath
+    chunk_kw["tbath"] = bath
     use_pbc = bool(chunk_kw.get("cpt")) or (
         mlpot_ctx is not None and bool(getattr(mlpot_ctx, "use_pbc", False))
-    )
-    assign_velocities_at_temperature(
-        _post_rescue_bath_target_K(chunk_kw),
-        timestep_ps=float(chunk_kw.get("timestep", 0.00025)),
-        restart_path=None,
-        use_pbc=use_pbc,
     )
     if use_pbc and bool(chunk_kw.get("cpt")):
         side = _mlpot_ctx_cubic_box_side_A(mlpot_ctx)
@@ -3277,6 +3224,15 @@ def _assign_post_rescue_velocities_and_crystal(
             )
 
             ensure_charmm_crystal_for_cpt(side, quiet=True)
+
+
+def _assign_post_rescue_velocities_and_crystal(
+    chunk_kw: dict[str, Any],
+    *,
+    mlpot_ctx: Optional["MlpotContext"],
+) -> None:
+    """Alias kept for overlap tests; bath/crystal only — velocities via ``start=True``."""
+    _prepare_post_rescue_bath_and_crystal(chunk_kw, mlpot_ctx=mlpot_ctx)
 
 
 def _prepare_post_rescue_overlap_handoff(
@@ -3289,20 +3245,16 @@ def _prepare_post_rescue_overlap_handoff(
     Required for Hoover CPT: static ``write restart`` lacks barostat piston
     internals, so ``READYN`` on scratch ``.overlap_*.res`` files fails with EOF.
     """
-    _assign_post_rescue_velocities_and_crystal(chunk_kw, mlpot_ctx=mlpot_ctx)
-    bath = _post_rescue_bath_target_K(chunk_kw)
+    _prepare_post_rescue_bath_and_crystal(chunk_kw, mlpot_ctx=mlpot_ctx)
     chunk_kw["restart"] = False
     chunk_kw["new"] = False
-    chunk_kw["start"] = False
-    chunk_kw["iasvel"] = 0
+    chunk_kw["start"] = True
+    chunk_kw["iasvel"] = 1
     chunk_kw.pop("iunrea", None)
     chunk_kw["iunrea"] = -1
     _strip_stale_heat_ramp_keywords(chunk_kw)
     if int(chunk_kw.get("ihtfrq", 0) or 0) != 0:
         chunk_kw["ihtfrq"] = 0
-    if "hoover reft" in chunk_kw:
-        chunk_kw["hoover reft"] = bath
-        chunk_kw["firstt"] = bath
 
 
 def _materialize_post_rescue_restart_handoff(
@@ -3375,18 +3327,15 @@ def _materialize_post_rescue_restart_handoff(
     if valid_read is None and write_path is not None:
         valid_read = _valid_restart_file(write_path)
 
-    bath = _post_rescue_bath_target_K(chunk_kw)
+    _prepare_post_rescue_bath_and_crystal(chunk_kw, mlpot_ctx=mlpot_ctx)
     chunk_kw["restart"] = True
     chunk_kw["new"] = False
-    chunk_kw["start"] = False
-    chunk_kw["iasvel"] = 0
+    chunk_kw["start"] = True
+    chunk_kw["iasvel"] = 1
     chunk_kw.pop("iunrea", None)
     _strip_stale_heat_ramp_keywords(chunk_kw)
     if int(chunk_kw.get("ihtfrq", 0) or 0) != 0:
         chunk_kw["ihtfrq"] = 0
-    if "hoover reft" in chunk_kw:
-        chunk_kw["hoover reft"] = bath
-        chunk_kw["firstt"] = bath
 
     print(
         f"overlap ({overlap_context}): post-rescue restart handoff from "

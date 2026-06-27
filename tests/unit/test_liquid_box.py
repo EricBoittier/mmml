@@ -207,3 +207,19 @@ def test_composition_tag_from_liquid_box_args_without_residue():
     tag = composition_tag(composition, residue, n_mol)
     assert tag == "dcm_206"
     assert not hasattr(args, "residue")
+
+
+def test_liquid_box_args_resolve_dcd_nsavc_without_flag():
+    """Mini box equil must not require md-system-only --dcd-nsavc."""
+    from mmml.cli.run.liquid_box import build_parser
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_dcd_nsavc_for_args
+
+    parser = build_parser()
+    args = parser.parse_args(
+        ["--composition", "DCM:206", "--output-dir", "/tmp/x", "--profile", "dense"]
+    )
+    timestep_ps = float(args.dt_fs) * 1.0e-3
+    nstep = max(1, int(round(2.0 / timestep_ps)))
+    nsavc = resolve_dcd_nsavc_for_args(args, nstep=nstep, timestep_ps=timestep_ps)
+    assert nsavc >= 1
+    assert not hasattr(args, "dcd_nsavc")

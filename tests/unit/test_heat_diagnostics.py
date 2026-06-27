@@ -85,13 +85,14 @@ def test_infer_heat_velocity_init_post_assign_scale_path():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _infer_heat_velocity_init_label
 
     kw = {
-        "start": False,
+        "start": True,
         "restart": False,
         "iasvel": 1,
         "ihtfrq": 500,
     }
     label = _infer_heat_velocity_init_label(kw, heat_thermostat="scale")
-    assert "post nstep=0 Boltzmann assign" in label
+    assert "single dyna" in label
+    assert "ihtfrq velocity scaling" in label
 
 
 def test_build_heat_dynamics_dashboard_sections():

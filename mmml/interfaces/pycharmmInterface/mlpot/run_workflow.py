@@ -20,6 +20,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_checkpoint,
     resolve_constrain_resids,
     resolve_dcd_nsavc,
+    resolve_dcd_nsavc_for_args,
     resolve_dynamics_print_kwargs,
     resolve_heat_ihtfrq,
     resolve_heat_firstt_finalt,
@@ -47,7 +48,6 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     CharmmTrajectoryFiles,
     MinimizeWithMlpotConfig,
     apply_heat_ramp_frequencies,
-    assign_velocities_at_temperature,
     build_heat_dynamics,
     build_nve_dynamics,
     minimize_charmm_mm_only,
@@ -205,11 +205,10 @@ def _run_charmm_mm_pretreat_cpt_stage(
 
     nstep = max(1, ps_to_nsteps(timestep_ps, duration_ps))
     save = bool(getattr(args, "save", True))
-    dcd_nsavc = resolve_dcd_nsavc(
-        dcd_nsavc=args.dcd_nsavc,
-        dcd_interval_ps=getattr(args, "dcd_interval_ps", None),
-        timestep_ps=timestep_ps,
+    dcd_nsavc = resolve_dcd_nsavc_for_args(
+        args,
         nstep=nstep,
+        timestep_ps=timestep_ps,
     )
     save_interval_ps = timestep_ps * max(1, dcd_nsavc)
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
@@ -484,15 +483,16 @@ def run_charmm_mm_pretreat_before_mlpot(
             )
 
             if heat_integrated == 0:
-                assign_velocities_at_temperature(
-                    float(heat_firstt),
+                _configure_heat_dynamics_start(
+                    kw,
+                    io,
+                    coords_in_memory=True,
+                    restart_from_file=False,
                     timestep_ps=timestep_ps,
-                    restart_path=None,
                     use_pbc=use_pbc,
+                    quiet=True,
+                    heat_thermostat="scale",
                 )
-                kw["restart"] = False
-                kw["new"] = False
-                kw["start"] = False
             else:
                 _configure_heat_dynamics_start(
                     kw,
