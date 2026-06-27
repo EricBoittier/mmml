@@ -661,6 +661,16 @@ def normalize_flax_params_for_apply(
         return obj
 
     params = _recurse(params)
+
+    # Training exports sometimes store [params_tree, epoch_or_metric].
+    if (
+        isinstance(params, list)
+        and len(params) >= 1
+        and isinstance(params[0], dict)
+        and not any(isinstance(x, dict) for x in params[1:])
+    ):
+        params = params[0]
+
     if not isinstance(params, dict):
         return {"params": params}
 

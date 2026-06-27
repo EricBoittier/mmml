@@ -812,6 +812,9 @@ def process_calcs(args):
     return calcs, extra
 
 
+from mmml.interfaces.pyscf4gpuInterface.calcs import _mp2_energy_for_atoms  # noqa: E402
+
+
 def compute_mp2(mol_str: str, basis: str = "def2-SVP", spin: int = 0, charge: int = 0,
                 energy: bool = True, gradient: bool = False, log_file: str = "pyscf.log") -> dict:
     """
@@ -867,6 +870,8 @@ def compute_mp2_single(
     charge: int = 0,
     energy: bool = True,
     gradient: bool = False,
+    gradient_fd: bool = False,
+    fd_step_ang: float = 1e-3,
     dipole: bool = True,
     efield: np.ndarray | None = None,
     efield_include_nuclear_energy: bool = True,
@@ -935,23 +940,58 @@ def compute_mp2_single(
         out["energy_corr"] = np.array(e_corr)
 
     # -----------------------
-    # gradient (NOT supported)
+    # gradient
     # -----------------------
     if gradient:
-        try:
-            g = mp2.nuc_grad_method()
-            g_mp2 = g.kernel()
-            out["gradient"] = np.asarray(g_mp2)
-
-        except NotImplementedError:
-            print(
-                "[WARN] MP2 gradients not implemented in gpu4pyscf. "
-                "Falling back to HF gradients.",
-                file=sys.stderr,
+        if gradient_fd:
+            from mmml.interfaces.pyscf4gpuInterface.finite_difference import (
+                central_difference_gradient,
             )
 
-            g_hf = mf.nuc_grad_method().kernel()
-            out["gradient"] = np.asarray(g_hf)
+            r0 = np.asarray(R, dtype=np.float64)
+            z_arr = np.asarray(Z)
+
+            def energy_fn(r_ang: np.ndarray) -> float:
+                atoms = _RZ_to_atom(r_ang, z_arr)
+                e_tot, _, _ = _mp2_energy_for_atoms(
+                    atoms,
+                    basis=basis,
+                    spin=spin,
+                    charge=charge,
+                    verbose=0,
+                )
+                return e_tot
+
+            out["gradient"] = central_difference_gradient(
+                energy_fn, r0, step_ang=fd_step_ang
+            )
+        else:
+            try:
+                g = mp2.nuc_grad_method()
+                g_mp2 = g.kernel()
+                out["gradient"] = np.asarray(g_mp2)
+
+            except NotImplementedError:
+                print(
+                    "[WARN] MP2 analytic gradients unavailable; "
+                    "falling back to finite differences.",
+                    file=sys.stderr,
+                )
+                return compute_mp2_single(
+                    R,
+                    Z,
+                    basis=basis,
+                    spin=spin,
+                    charge=charge,
+                    energy=energy,
+                    gradient=True,
+                    gradient_fd=True,
+                    fd_step_ang=fd_step_ang,
+                    dipole=dipole,
+                    efield=efield,
+                    efield_include_nuclear_energy=efield_include_nuclear_energy,
+                    verbose=verbose,
+                )
 
     # -----------------------
     # dipole

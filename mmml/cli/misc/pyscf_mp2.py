@@ -7,6 +7,7 @@ MP2 is not DFT; use pyscf-dft for DFT and pyscf-mp2 for MP2.
 Usage:
     mmml pyscf-mp2 --mol "O 0 0 0; H 0.96 0 0; H -0.24 0.93 0" --energy
     mmml pyscf-mp2 --mol water.xyz --energy --gradient --output results
+    mmml pyscf-mp2 --mol water.xyz --energy --gradient --gradient-fd --fd-step 0.001
 
 Requires: gpu4pyscf, pyscf (GPU/quantum environment)
 """
@@ -41,6 +42,18 @@ def main() -> int:
     parser.add_argument("--charge", type=int, default=0)
     parser.add_argument("--energy", action="store_true", help="Compute MP2 energy")
     parser.add_argument("--gradient", action="store_true", help="Compute MP2 gradient")
+    parser.add_argument(
+        "--gradient-fd",
+        action="store_true",
+        help="Use central finite differences for MP2 gradient (Issue #13)",
+    )
+    parser.add_argument(
+        "--fd-step",
+        type=float,
+        default=1e-3,
+        metavar="ANG",
+        help="Finite-difference step in Angstrom (default: 1e-3)",
+    )
     parser.add_argument("--log_file", type=str, default="pyscf.log")
     args = parser.parse_args()
 
@@ -60,6 +73,8 @@ def main() -> int:
         charge=args.charge,
         energy=args.energy,
         gradient=args.gradient,
+        gradient_fd=args.gradient_fd,
+        fd_step_ang=args.fd_step,
         log_file=args.log_file,
     )
     save_pyscf_results(args.output, output)
