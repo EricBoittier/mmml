@@ -213,11 +213,17 @@ def _run_charmm_mm_pretreat_cpt_stage(
     save_interval_ps = timestep_ps * max(1, dcd_nsavc)
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
         apply_pretreat_dyn_freq_kwargs,
+        resolve_charmm_mm_pretreat_cpt_echeck,
         resolve_pretreat_dynamics_print_kwargs,
     )
 
     dyn_print = resolve_pretreat_dynamics_print_kwargs(nstep=nstep)
-    stage_echeck = max(echeck, 500.0) if echeck > 0 else echeck
+    stage_echeck = resolve_charmm_mm_pretreat_cpt_echeck(args, echeck=echeck)
+    if stage_echeck <= 0 and not getattr(args, "quiet", False):
+        print(
+            f"CHARMM MM pretreat {stage}: ECHECK disabled (NPT box prep)",
+            flush=True,
+        )
     use_cpt = use_pbc and not _pretreat_use_fixed_box_nvt(args, use_pbc=use_pbc)
     cpt_opts = _pretreat_npt_cpt_builder_options(args, pressure_atm=pressure_atm)
 

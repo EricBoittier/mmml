@@ -423,7 +423,6 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
         stages=mm_stages,
     ):
         from mmml.interfaces.pycharmmInterface.mlpot.box_equil import run_mini_box_equilibration
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_echeck_for_cluster
         from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
             sync_workflow_pbc_box_side_after_mm_pretreat,
         )
@@ -431,7 +430,7 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
         dt_fs = float(getattr(args, "dt_fs", 0.25))
         timestep_ps = dt_fs * 1.0e-3
         temp = float(getattr(args, "temperature", getattr(args, "temp", 300.0)))
-        echeck = resolve_echeck_for_cluster(args, n_atoms=len(z), n_monomers=n_mol)
+        echeck = float(getattr(args, "echeck", 100.0))
         run_mini_box_equilibration(
             args,
             paths=paths,

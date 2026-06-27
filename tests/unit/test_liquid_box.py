@@ -225,13 +225,27 @@ def test_liquid_box_args_resolve_dcd_nsavc_without_flag():
     assert not hasattr(args, "dcd_nsavc")
 
 
-def test_liquid_box_echeck_scales_with_cluster_size():
+def test_liquid_box_pretreat_cpt_echeck_disabled_by_default():
     from mmml.cli.run.liquid_box import build_parser
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_echeck_for_cluster
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        resolve_charmm_mm_pretreat_cpt_echeck,
+    )
 
     parser = build_parser()
     args = parser.parse_args(
         ["--composition", "DCM:103", "--output-dir", "/tmp/x", "--profile", "dense"]
     )
-    echeck = resolve_echeck_for_cluster(args, n_atoms=515, n_monomers=103)
-    assert echeck == pytest.approx(5150.0)
+    assert resolve_charmm_mm_pretreat_cpt_echeck(args, echeck=5150.0) == -1.0
+
+
+def test_liquid_box_pretreat_cpt_echeck_explicit_override():
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        resolve_charmm_mm_pretreat_cpt_echeck,
+    )
+
+    args = argparse.Namespace(
+        charmm_mm_pretreat_echeck=8000.0,
+        no_echeck=False,
+        no_scale_echeck=False,
+    )
+    assert resolve_charmm_mm_pretreat_cpt_echeck(args, echeck=100.0) == pytest.approx(8000.0)

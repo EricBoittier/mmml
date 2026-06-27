@@ -69,6 +69,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     add_dynamics_stability_args(parser)
     parser.add_argument(
+        "--charmm-mm-pretreat-echeck",
+        type=float,
+        default=None,
+        metavar="KCAL",
+        help=(
+            "Enable ECHECK during mini box CPT equil (kcal/mol). "
+            "Default: disabled (NPT prep often exceeds ML echeck floors)."
+        ),
+    )
+    parser.add_argument(
         "--charmm-sd-steps",
         type=int,
         default=50,
