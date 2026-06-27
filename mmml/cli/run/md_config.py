@@ -210,6 +210,17 @@ def campaign_job_ids(campaign: dict[str, Any]) -> list[str]:
     return list(runs.keys())
 
 
+def config_is_campaign(cfg: Mapping[str, Any]) -> bool:
+    """True when YAML defines a ``runs`` / ``jobs`` table (campaign mode)."""
+    runs = cfg.get("runs") or cfg.get("jobs")
+    return isinstance(runs, Mapping) and bool(runs)
+
+
+def campaign_has_job(cfg: Mapping[str, Any], job_id: str) -> bool:
+    runs = cfg.get("runs") or cfg.get("jobs") or {}
+    return job_id in runs
+
+
 def topological_job_order(campaign: dict[str, Any]) -> list[str]:
     runs = campaign.get("runs") or campaign.get("jobs") or {}
     ids = list(runs.keys())

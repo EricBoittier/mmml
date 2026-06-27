@@ -148,7 +148,8 @@ def test_build_run_advice_failure_suggests_resume(tmp_path: Path) -> None:
     assert "heat,equi" in (advice.md_stages or "")
     assert "presets/dynamics-flyoff-strict.yaml" in advice.include_presets
     assert "--restart-from" in advice.command
-    assert "no_echeck_heat" in advice.config_yaml or "ECHECK" in "\n".join(advice.notes)
+    assert "--job-id" not in advice.command
+    assert "no_echeck_heat" in advice.config_yaml
 
     paths = write_run_advice_files(advice, out)
     assert paths["yaml"].is_file()
@@ -186,3 +187,38 @@ def test_build_run_advice_success_continues_remaining_stages(tmp_path: Path) -> 
     assert advice is not None
     assert advice.md_stages == "equi"
     assert advice.exit_code == 0
+
+
+def test_select_restart_skips_pretreat_mm_on_failure(tmp_path: Path) -> None:
+    from mmml.cli.run.md_run_advice import RestartCandidate, select_restart_candidate
+
+    pretreat = tmp_path / "pretreat" / "01_mm.crd"
+    pretreat.parent.mkdir(parents=True)
+    pretreat.write_text("crd\n", encoding="ascii")
+    prep = tmp_path / "prep_ladder" / "006_pre_mlpot.crd"
+    prep.parent.mkdir(parents=True)
+    prep.write_text("crd\n", encoding="ascii")
+    candidates = [
+        RestartCandidate(
+            path=pretreat,
+            label="mini: CHARMM CGENFF SD/ABNR before MLpot (MM only)",
+            leg="mini",
+            hybrid_grms=0.28,
+            source="test",
+            mtime=1.0,
+            is_restart=False,
+        ),
+        RestartCandidate(
+            path=prep,
+            label="prep_ladder: pre_mlpot_lattice_full",
+            leg="prep_ladder",
+            hybrid_grms=88.0,
+            source="test",
+            mtime=2.0,
+            is_restart=False,
+        ),
+    ]
+    picked = select_restart_candidate(candidates, failed=True)
+    assert picked is not None
+    assert picked.path == prep
+

@@ -317,6 +317,16 @@ def collect_restart_candidates(output_dir: Path) -> list[RestartCandidate]:
     return sorted(by_path.values(), key=lambda c: c.mtime)
 
 
+def _is_mlpot_restart_leg(candidate: RestartCandidate) -> bool:
+    """Skip pretreat MM-only checkpoints when picking MLpot resume legs."""
+    leg = candidate.leg.lower()
+    if leg.startswith("pretreat"):
+        return False
+    label = candidate.label.lower()
+    mm_only_markers = ("mm only", "cgenff sd/abnr", "before mlpot", "mm baseline")
+    return not any(marker in label for marker in mm_only_markers)
+
+
 def select_restart_candidate(
     candidates: list[RestartCandidate],
     *,
@@ -332,9 +342,11 @@ def select_restart_candidate(
         return None
 
     if failed:
+        mlpot_pool = [c for c in pool if _is_mlpot_restart_leg(c)]
+        search = mlpot_pool if mlpot_pool else pool
         with_grms = [
             c
-            for c in pool
+            for c in search
             if c.hybrid_grms is not None and math.isfinite(c.hybrid_grms)
         ]
         if with_grms:
@@ -346,6 +358,8 @@ def select_restart_candidate(
                 if float(c.hybrid_grms) <= float(min_grms) + tol  # type: ignore[arg-type]
             ]
             return max(tied, key=lambda c: c.mtime)
+        if search:
+            return max(search, key=lambda c: c.mtime)
 
     restart_pool = [c for c in pool if c.is_restart]
     if restart_pool:
@@ -498,7 +512,16 @@ def build_run_advice(
 
     config_path = args.get("config") or manifest.get("config")
     job_name = str(manifest.get("job_name") or args.get("job_name") or "run")
-    resume_job = f"{job_name}_resume" if failed else job_name
+    job_id = args.get("job_id")
+
+    is_campaign = False
+    if config_path:
+        try:
+            from mmml.cli.run.md_config import config_is_campaign, load_yaml_config
+
+            is_campaign = config_is_campaign(load_yaml_config(str(config_path)))
+        except (FileNotFoundError, ValueError, OSError):
+            is_campaign = False
 
     overrides: dict[str, Any] = {
         "output_dir": str(args.get("output_dir") or out_dir),
@@ -528,6 +551,8 @@ def build_run_advice(
         preset_includes, preset_notes = _failure_preset_hints(out_dir, args)
         include_presets.extend(preset_includes)
         notes.extend(preset_notes)
+        if not bool(args.get("no_echeck_heat", False)):
+            overrides["no_echeck_heat"] = True
         headline = f"Job failed (exit {exit_code}) — resume from best checkpoint"
     else:
         if remaining:
@@ -580,7 +605,8 @@ def build_run_advice(
     cmd_parts = ["mmml", "md-system"]
     if config_path:
         cmd_parts.extend(["--config", str(config_path)])
-    cmd_parts.extend(["--job-id", resume_job])
+    if is_campaign and job_id:
+        cmd_parts.extend(["--job-id", str(job_id)])
     for key, val in overrides.items():
         flag = key.replace("_", "-")
         if isinstance(val, bool):
@@ -657,13 +683,12 @@ def emit_run_advice(
             table.add_row("md_stages", advice.md_stages)
         for note in advice.notes:
             table.add_row("Note", note)
-        table.add_row("Command", advice.command)
         table.add_row("Config", str(Path(output_dir) / "next_run.yaml"))
         table.add_row("Script", str(Path(output_dir) / "next_run.sh"))
         border = "red" if advice.exit_code != 0 else "green"
         console.print(Panel(table, title="[bold]Next md-system run[/bold]", border_style=border))
-        console.print("[dim]Copy-paste:[/dim]")
-        console.print(advice.command)
+        print("Copy-paste:", flush=True)
+        print(advice.command, flush=True)
     except ImportError:
         print("\n--- Next md-system run ---", flush=True)
         print(advice.headline, flush=True)

@@ -1423,9 +1423,16 @@ def parse_md_system_args(argv: list[str] | None = None) -> argparse.Namespace:
     defaults = vars(parse_args([]))
     if pre_args.config:
         cfg = load_yaml_config(pre_args.config)
-        flat = {k: v for k, v in cfg.items() if k not in {"defaults", "runs", "jobs"}}
+        merged: dict[str, Any] = {}
+        defaults_block = cfg.get("defaults")
+        if isinstance(defaults_block, dict):
+            merged.update(defaults_block)
+        for key, value in cfg.items():
+            if key in {"defaults", "runs", "jobs", "include", "campaign_output"}:
+                continue
+            merged[key] = value
         tmp = argparse.Namespace(**defaults)
-        apply_mapping_to_namespace(tmp, flat, source="config")
+        apply_mapping_to_namespace(tmp, merged, source="config")
         defaults.update(vars(tmp))
         defaults["config"] = pre_args.config
     parser = build_parser()
@@ -2605,9 +2612,16 @@ def run_backend(backend: str, argv: list[str], args: argparse.Namespace) -> int:
         )
 
         prepare_serial_charmm_mpi_env()
-        campaign_active = bool(
-            getattr(args, "config", None)
-            and (getattr(args, "job_id", None) or getattr(args, "run_all", False))
+        campaign_active = False
+        if getattr(args, "config", None):
+            from mmml.cli.run.md_config import config_is_campaign, load_yaml_config
+
+            try:
+                campaign_active = config_is_campaign(load_yaml_config(args.config))
+            except (FileNotFoundError, ValueError):
+                campaign_active = False
+        campaign_active = campaign_active and bool(
+            getattr(args, "job_id", None) or getattr(args, "run_all", False)
         )
         if not campaign_active:
             rerun_code = maybe_rerun_md_system_under_mpirun(sys.argv[1:])
@@ -2729,11 +2743,27 @@ def main() -> int:
             print(f"mmml md-system: error: {exc}", file=sys.stderr)
             exit_code = 2
             return exit_code
-        if args.config and (args.job_id or args.run_all):
+        if args.config and (getattr(args, "job_id", None) or getattr(args, "run_all", False)):
             from mmml.cli.run.md_campaign import run_campaign
+            from mmml.cli.run.md_config import config_is_campaign, load_yaml_config
 
-            exit_code = int(run_campaign(args))
-            return exit_code
+            campaign = load_yaml_config(args.config)
+            if config_is_campaign(campaign):
+                exit_code = int(run_campaign(args))
+                return exit_code
+            if getattr(args, "run_all", False):
+                print(
+                    "mmml md-system: error: --run-all requires runs/jobs in --config",
+                    file=sys.stderr,
+                )
+                exit_code = 2
+                return exit_code
+            if getattr(args, "job_id", None) and not getattr(args, "quiet", False):
+                print(
+                    "mmml md-system: note: --job-id ignored (config has no runs/jobs table); "
+                    "using flat config + CLI flags",
+                    flush=True,
+                )
         if args.setup == "lambda_ti":
             backend = str(args.backend)
             try:

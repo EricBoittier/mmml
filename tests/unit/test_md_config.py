@@ -95,3 +95,44 @@ def test_dcm103_example_campaign_merges_presets() -> None:
     assert d["dynamics_max_monomer_extent"] == pytest.approx(12.0)
     assert d["heat_overlap_segment_boundary_only"] is True
     assert "dcm103_equil" in cfg["runs"]
+
+
+def test_config_is_campaign() -> None:
+    from mmml.cli.run.md_config import config_is_campaign
+
+    assert config_is_campaign({"defaults": {"dt_fs": 0.25}}) is False
+    assert config_is_campaign({"runs": {"a": {"backend": "pycharmm"}}}) is True
+    assert config_is_campaign({"jobs": {"a": {}}}) is True
+    assert config_is_campaign({"runs": {}}) is False
+
+
+def test_parse_md_system_args_applies_defaults_block(tmp_path: Path) -> None:
+    from mmml.cli.run.md_system import parse_md_system_args
+
+    cfg = tmp_path / "heat.conf"
+    cfg.write_text(
+        textwrap.dedent(
+            """
+            defaults:
+              dt_fs: 0.25
+              no_echeck_heat: true
+              composition: "DCM:52"
+            """
+        ).strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    args = parse_md_system_args(
+        [
+            "--config",
+            str(cfg),
+            "--output-dir",
+            str(tmp_path / "out"),
+            "--backend",
+            "pycharmm",
+        ]
+    )
+    assert args.dt_fs == pytest.approx(0.25)
+    assert args.no_echeck_heat is True
+    assert args.composition == "DCM:52"
+
