@@ -313,14 +313,14 @@ def mpi_openmpi_install_env_defaults() -> None:
     the system OpenMPI 3 stack and fail with ``undefined symbol: pmix_value_load``
     when the launcher is OpenMPI 5 + PMIx 5 from ``/opt/gcc-...``.
 
-    Do **not** set ``OMPI_MCA_component_path`` or ``OPAL_PREFIX`` for incomplete
-    in-tree builds (missing ``share/openmpi``); that breaks ``opal_shmem_base_select``.
-    Set ``MMML_OPAL_PREFIX`` only when you have a full OpenMPI install prefix.
+    Do **not** set ``OMPI_MCA_component_path``, ``OPAL_PREFIX``, or ``OMPI_MCA_shmem``
+    for incomplete in-tree builds — forced shmem/OPAL paths break MCA load on
+    ``/opt/gcc-.../build`` trees missing ``share/openmpi``.
+    Set ``MMML_OPAL_PREFIX`` only for a full OpenMPI install prefix.
     """
     if _truthy("MMML_NO_MPI_MCA_PREFIX"):
         return
     os.environ.setdefault("OMPI_MCA_pmix", "^ext3x")
-    os.environ.setdefault("OMPI_MCA_shmem", "posix")
     override = (os.environ.get("MMML_OPAL_PREFIX") or "").strip()
     if override:
         os.environ.setdefault("OPAL_PREFIX", override)
@@ -348,7 +348,7 @@ def mpi_mpirun_extra_args() -> list[str]:
     """Extra ``mpirun`` argv tokens for crash diagnostics."""
     args: list[str] = []
     if not _truthy("MMML_NO_MPI_MCA_PREFIX"):
-        args.extend(["--mca", "pmix", "^ext3x", "--mca", "shmem", "posix"])
+        args.extend(["--mca", "pmix", "^ext3x"])
     if _truthy("MMML_NO_MPI_ABORT_STACK"):
         return args
     args.extend(["--mca", "orte_abort_print_stack", "1"])
@@ -411,7 +411,6 @@ def mpi_shell_setup_lines() -> list[str]:
         )
     if not _truthy("MMML_NO_MPI_MCA_PREFIX"):
         lines.append("export OMPI_MCA_pmix='^ext3x'")
-        lines.append("export OMPI_MCA_shmem=posix")
         opal = (os.environ.get("MMML_OPAL_PREFIX") or "").strip()
         if not opal:
             prefix = openmpi_install_prefix()
