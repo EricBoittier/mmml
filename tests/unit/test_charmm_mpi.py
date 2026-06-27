@@ -231,6 +231,49 @@ def test_prepare_serial_charmm_mpi_env_pins_omp_threads(monkeypatch):
     assert os.environ["OMP_NUM_THREADS"] == "1"
 
 
+def test_configure_mpi4py_charmm_owned_init(monkeypatch):
+    pytest.importorskip("mpi4py")
+    monkeypatch.delenv("MMML_MPI_PY_INIT", raising=False)
+    charmm_mpi._mpi4py_charmm_configured = False
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        return_value=True,
+    ):
+        charmm_mpi.configure_mpi4py_charmm_owned_init()
+    import mpi4py
+
+    assert mpi4py.rc.initialize is False
+    assert mpi4py.rc.finalize is False
+
+
+def test_ensure_charmm_mpi_initialized_idempotent(monkeypatch):
+    import builtins
+
+    charmm_mpi._charmm_mpi_bootstrapped = False
+    calls = {"n": 0}
+    real_import = builtins.__import__
+
+    def tracked_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "mmml.interfaces.pycharmmInterface.import_pycharmm":
+            calls["n"] += 1
+            return mock.MagicMock()
+        return real_import(name, globals, locals, fromlist, level)
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_available",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.configure_mpi4py_charmm_owned_init",
+    ), mock.patch("builtins.__import__", side_effect=tracked_import):
+        charmm_mpi.ensure_charmm_mpi_initialized()
+        charmm_mpi.ensure_charmm_mpi_initialized()
+    assert calls["n"] == 1
+    assert charmm_mpi._charmm_mpi_bootstrapped is True
+
+
 def test_maybe_rerun_md_system_skips_when_disabled(monkeypatch):
     monkeypatch.setenv("MMML_NO_MPI_RERUN", "1")
     assert charmm_mpi.maybe_rerun_md_system_under_mpirun(["md-system", "--help"]) is None

@@ -114,10 +114,13 @@ def broadcast_mlpot_result(
     if size > 1 and spatial_mpi_enabled():
         if forces is None:
             raise ValueError("forces required in spatial MPI mode")
+        from mmml.interfaces.pycharmmInterface.charmm_mpi import ensure_charmm_mpi_initialized
         from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.force_exchange import (
             mpi_allreduce_energy,
             mpi_allreduce_forces,
         )
+
+        ensure_charmm_mpi_initialized()
 
         f_out = mpi_allreduce_forces(np.asarray(forces, dtype=np.float64), comm=comm)
         e_out = mpi_allreduce_energy(float(energy_kcal), comm=comm)
@@ -127,6 +130,9 @@ def broadcast_mlpot_result(
             raise ValueError("forces required on single rank")
         return np.asarray(forces, dtype=np.float64), float(energy_kcal)
 
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import ensure_charmm_mpi_initialized
+
+    ensure_charmm_mpi_initialized()
     if comm is None:
         from mpi4py import MPI
 
