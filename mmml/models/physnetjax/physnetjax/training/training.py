@@ -28,6 +28,7 @@ warnings.filterwarnings("ignore", category=RuntimeWarning, message=".*Task was d
 
 from mmml.models.physnetjax.physnetjax.data.data import print_shapes
 from mmml.models.physnetjax.physnetjax.directories import BASE_CKPT_DIR, print_paths
+from mmml.models.physnetjax.physnetjax.restart.restart import orbax_checkpointer
 from mmml.data.units import TRAINING_UNITS
 from mmml.models.physnetjax.physnetjax.training.evalstep import eval_step
 from mmml.models.physnetjax.physnetjax.training.optimizer import (
