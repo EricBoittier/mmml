@@ -111,7 +111,7 @@ For condensed phase, keep the template staged and explicit:
 2. Use a short PyCHARMM leg first: `md_stages: "mini,heat,equi"` with overlap rescue and bonded MM repair enabled. This catches bad contacts before long JAX-MD runs.
 3. Use JAX-MD for fixed-cell production or NVE replicas after the PyCHARMM handoff. Keep neighbor-list capacity and refresh controls in the JAX-MD run block.
 4. Return to PyCHARMM only when you need CHARMM restart output, CPT/NPT behavior, or MLpot-specific diagnostics.
-5. Keep `output_dir` unique per run and `campaign_output` stable for campaign summaries. Use `--resume-campaign` to skip completed jobs.
+5. Keep `output_dir` unique per run and `campaign_output` stable for campaign summaries. Use `--resume` (or YAML `defaults.resume: true`) to skip completed jobs and reuse output dirs.
 
 Avoid duplicate keys in YAML. If a setting appears twice, YAML keeps only the last value, which can hide mistakes. In particular, keep `dynamics_overlap_action` and `bonded_mm_mini` in one place, usually `defaults`.
 

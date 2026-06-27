@@ -15,7 +15,7 @@ _CONFIG_ALIASES: dict[str, str] = {
     "job": "job_id",
     "job-id": "job_id",
     "run-all": "run_all",
-    "resume-campaign": "resume_campaign",
+    "resume-campaign": "resume_campaign",  # alias; prefer ``resume``
     "continue-from": "continue_from",
     "continue-from-frame": "continue_from_frame",
     "handoff-write-res": "handoff_write_res",
@@ -42,6 +42,41 @@ def load_yaml_config(path: str | Path) -> dict[str, Any]:
     if not isinstance(raw, dict):
         raise ValueError(f"Config file must contain a YAML mapping, got {type(raw).__name__}")
     return raw
+
+
+def resume_requested(
+    args: argparse.Namespace | None = None,
+    *,
+    mapping: Mapping[str, Any] | None = None,
+) -> bool:
+    """True when resume was requested via ``--resume``, ``--resume-campaign``, or YAML."""
+    if args is not None:
+        if bool(getattr(args, "resume", False)) or bool(getattr(args, "resume_campaign", False)):
+            return True
+    if mapping is not None:
+        if mapping.get("resume") is True or mapping.get("resume_campaign") is True:
+            return True
+    return False
+
+
+def normalize_resume_flags(args: argparse.Namespace) -> None:
+    """Keep ``resume`` and ``resume_campaign`` in sync after CLI/YAML parsing."""
+    if resume_requested(args):
+        args.resume = True
+        args.resume_campaign = True
+
+
+def campaign_resume_enabled(
+    args: argparse.Namespace,
+    campaign: Mapping[str, Any],
+) -> bool:
+    """Resume mode for ``--run-all`` (CLI flags or ``defaults.resume`` in YAML)."""
+    if resume_requested(args):
+        return True
+    defaults = campaign.get("defaults")
+    if isinstance(defaults, Mapping):
+        return resume_requested(mapping=defaults)
+    return False
 
 
 def apply_mapping_to_namespace(

@@ -1102,7 +1102,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--resume",
         action="store_true",
-        help="lambda_ti: skip completed production trajectories; redo partial prod.traj files.",
+        help=(
+            "Resume existing work instead of starting in new output directories. "
+            "Campaign (--run-all): reuse output dirs and skip jobs with valid handoffs. "
+            "PyCHARMM retry: when re-running a failed leg in the same output_dir, "
+            "continues from the latest .res checkpoint. "
+            "lambda_ti: skip complete production trajectories; redo partial prod.traj files."
+        ),
     )
 
     # --- YAML config / campaign / handoff -------------------------------------
@@ -1124,13 +1130,13 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Run all jobs from a campaign config in dependency order (in-process). "
             "If the campaign output dir already exists, a new suffixed directory is used "
-            "unless --resume-campaign is set."
+            "unless --resume is set."
         ),
     )
     parser.add_argument(
         "--resume-campaign",
         action="store_true",
-        help="Skip campaign jobs whose output-dir/handoff already exists (reuse output dirs).",
+        help="Alias for --resume when using --run-all or campaign YAML configs.",
     )
     parser.add_argument(
         "--campaign-output-dir",
@@ -1138,7 +1144,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "Directory for campaign_plan.json and campaign_summary.json. "
-            "With --run-all, an existing path gets a UUID suffix unless resuming."
+            "With --run-all, an existing path gets a UUID suffix unless --resume is set."
         ),
     )
     parser.add_argument(
@@ -1416,7 +1422,11 @@ def parse_md_system_args(argv: list[str] | None = None) -> argparse.Namespace:
         defaults["config"] = pre_args.config
     parser = build_parser()
     parser.set_defaults(**defaults)
-    return parser.parse_args(remaining)
+    args = parser.parse_args(remaining)
+    from mmml.cli.run.md_config import normalize_resume_flags
+
+    normalize_resume_flags(args)
+    return args
 
 
 _last_job_stages: list[Any] = []
@@ -2372,6 +2382,7 @@ def _filter_campaign_flags_from_argv(argv: list[str]) -> list[str]:
         "--continue-from-frame",
         "--config",
         "--run-all",
+        "--resume",
         "--resume-campaign",
         "--campaign-output-dir",
     }

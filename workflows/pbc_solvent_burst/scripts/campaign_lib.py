@@ -387,7 +387,7 @@ def build_md_system_campaign_argv(
         "--config",
         str(campaign_path),
         "--run-all",
-        "--resume-campaign",
+        "--resume",
         "--campaign-output-dir",
         str(root),
     ]

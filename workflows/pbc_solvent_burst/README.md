@@ -191,7 +191,7 @@ Default runtime: **48 h** per job (`slurm_runtime_min: 2880`). Adjust in `config
 
 ## Resume
 
-Each cell uses `mmml md-system --resume-campaign`, which skips legs whose output dirs already have valid handoffs. Re-run a single cell:
+Each cell uses `mmml md-system --resume`, which skips legs whose output dirs already have valid handoffs. Re-run a single cell:
 
 ```bash
 bash scripts/job_shell.sh DCM 30

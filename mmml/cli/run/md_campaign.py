@@ -107,6 +107,7 @@ _CAMPAIGN_ONLY_KEYS = frozenset(
         "handoff_write_res",
         "config",
         "run_all",
+        "resume",
         "resume_campaign",
         "campaign_output_dir",
         "output_root",
@@ -245,7 +246,9 @@ def run_campaign(args: Namespace) -> int:
     plan_rows = build_plan_rows(campaign, order)
     campaign_root = Path(getattr(args, "campaign_output_dir", None) or campaign.get("campaign_output", "artifacts/md_campaign"))
     campaign_root = campaign_root.expanduser().resolve()
-    resume = bool(getattr(args, "resume_campaign", False))
+    from mmml.cli.run.md_config import campaign_resume_enabled
+
+    resume = campaign_resume_enabled(args, campaign)
     run_all = bool(getattr(args, "run_all", False))
     requested_campaign_root = campaign_root
     if run_all and not resume:
@@ -327,7 +330,7 @@ def run_campaign(args: Namespace) -> int:
         if handoff_in is None and merged.get("continue_from"):
             handoff_in = load_handoff(Path(str(merged["continue_from"])))
 
-        if getattr(args, "resume_campaign", False) and handoff_is_valid(out_dir):
+        if resume and handoff_is_valid(out_dir):
             print(f"mmml md-system: resume skip complete job {run_id!r}", flush=True)
             if (out_dir / "handoff" / "state.npz").is_file():
                 handoff_by_run[run_id] = load_handoff(out_dir / "handoff" / "state.npz")

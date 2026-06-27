@@ -26,6 +26,7 @@ from ase.optimize.fire import FIRE
 
 import mmml.interfaces.pycharmmInterface.import_pycharmm as pyci
 from mmml.cli.base import resolve_checkpoint_paths
+from mmml.cli.run.md_config import resume_requested
 from mmml.cli.run.md_pbc_suite import ase as md_suite
 from mmml.cli.run.md_pbc_suite.cluster import _build_psf_ordered_cluster
 from mmml.interfaces.pycharmmInterface.import_pycharmm import coor
@@ -1686,7 +1687,10 @@ def add_lambda_dynamics_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--resume",
         action="store_true",
-        help="Skip λ repeats whose production trajectory is complete; redo partial prod.traj files.",
+        help=(
+            "Skip λ repeats whose production trajectory is complete; redo partial prod.traj files. "
+            "Also accepted via md-system as --resume-campaign."
+        ),
     )
     parser.add_argument("--n-equil", type=int, default=500)
     parser.add_argument(
@@ -1801,7 +1805,7 @@ def config_from_namespace(args: argparse.Namespace, repo_root: Path | None = Non
         ),
         packmol_tolerance=float(getattr(args, "packmol_tolerance", 2.0)),
         skip_jit_warmup=bool(getattr(args, "skip_jit_warmup", False)),
-        resume=bool(getattr(args, "resume", False)),
+        resume=resume_requested(args),
         repo_root=repo_root,
     )
 

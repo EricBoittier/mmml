@@ -78,6 +78,48 @@ def test_unique_output_dir_if_exists_honors_resume(tmp_path) -> None:
     assert _unique_output_dir_if_exists(existing, resume=True) == existing.resolve()
 
 
+def test_resume_requested_cli_aliases() -> None:
+    from argparse import Namespace
+
+    from mmml.cli.run.md_config import (
+        campaign_resume_enabled,
+        normalize_resume_flags,
+        resume_requested,
+    )
+
+    assert not resume_requested(Namespace(resume=False, resume_campaign=False))
+
+    ns = Namespace(resume=True, resume_campaign=False)
+    normalize_resume_flags(ns)
+    assert ns.resume is True
+    assert ns.resume_campaign is True
+    assert resume_requested(ns)
+
+    ns2 = Namespace(resume=False, resume_campaign=True)
+    normalize_resume_flags(ns2)
+    assert ns2.resume is True
+    assert resume_requested(ns2)
+
+    campaign = {"defaults": {"resume": True}, "runs": {"a": {}}}
+    assert campaign_resume_enabled(Namespace(resume=False, resume_campaign=False), campaign)
+    assert campaign_resume_enabled(
+        Namespace(resume=False, resume_campaign=False),
+        {"defaults": {"resume_campaign": True}, "runs": {}},
+    )
+
+
+def test_parse_md_system_resume_syncs_campaign_flag() -> None:
+    from mmml.cli.run.md_system import parse_md_system_args
+
+    args = parse_md_system_args(["--resume"])
+    assert args.resume is True
+    assert args.resume_campaign is True
+
+    args2 = parse_md_system_args(["--resume-campaign"])
+    assert args2.resume is True
+    assert args2.resume_campaign is True
+
+
 def test_lookup_resolved_output_dir_prefers_in_run_path(tmp_path) -> None:
     from mmml.cli.run.md_campaign import _lookup_resolved_output_dir
 
