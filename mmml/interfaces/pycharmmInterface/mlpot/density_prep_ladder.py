@@ -694,7 +694,7 @@ def run_density_prep_ladder(
             ):
                 step_label = f"round{round_idx + 1}:{tag}"
                 try:
-                    grms = runner(
+                    grms, _ran = runner(
                         mlpot_ctx,
                         context_prefix=f"Density prep ladder ({step_label})",
                         **kwargs,
@@ -1234,11 +1234,13 @@ def run_geometry_packing_recovery(
 
         def _run_bfgs() -> float:
             nonlocal grms
-            grms = minimize_hybrid_calculator_before_sd(
+            grms, ran = minimize_hybrid_calculator_before_sd(
                 mlpot_ctx,
                 bfgs_config,
                 context_prefix=f"{context_prefix} (BFGS)",
             )
+            if not ran:
+                return refresh_mlpot_energy_and_grms(mlpot_ctx, context="")
             refreshed = refresh_mlpot_energy_and_grms(mlpot_ctx, context="")
             journal.record_step(f"{context_prefix} (post-BFGS)", _metrics(refreshed))
             _record_cleanup_step(f"{context_prefix} (post-BFGS)", refreshed)
@@ -1246,11 +1248,13 @@ def run_geometry_packing_recovery(
 
         def _run_fire() -> float:
             nonlocal grms
-            grms = minimize_hybrid_calculator_fire_before_sd(
+            grms, ran = minimize_hybrid_calculator_fire_before_sd(
                 mlpot_ctx,
                 config=fire_config,
                 context_prefix=f"{context_prefix} (FIRE)",
             )
+            if not ran:
+                return refresh_mlpot_energy_and_grms(mlpot_ctx, context="")
             refreshed = refresh_mlpot_energy_and_grms(mlpot_ctx, context="")
             journal.record_step(f"{context_prefix} (post-FIRE)", _metrics(refreshed))
             _record_cleanup_step(f"{context_prefix} (post-FIRE)", refreshed)

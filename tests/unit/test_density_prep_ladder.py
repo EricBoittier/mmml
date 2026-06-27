@@ -254,11 +254,11 @@ def test_run_geometry_packing_recovery_rolls_back_repack_grms_regression(monkeyp
     )
     monkeypatch.setattr(
         "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.minimize_hybrid_calculator_before_sd",
-        lambda *_a, **_kw: 574.0,
+        lambda *_a, **_kw: (574.0, True),
     )
     monkeypatch.setattr(
         "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.minimize_hybrid_calculator_fire_before_sd",
-        lambda *_a, **_kw: 574.0,
+        lambda *_a, **_kw: (574.0, True),
     )
 
     final_grms = run_geometry_packing_recovery(

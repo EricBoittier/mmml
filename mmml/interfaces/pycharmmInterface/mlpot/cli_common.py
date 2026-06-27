@@ -2340,7 +2340,8 @@ def prepare_mlpot_hybrid_state_for_sd(
         ):
             return
         start_cap = _effective_max_start(force=force)
-        hybrid_grms = minimize_hybrid_calculator_before_sd(
+        max_initial_fmax = 1000.0 if force else 100.0
+        hybrid_grms, mini_ran = minimize_hybrid_calculator_before_sd(
             mlpot_ctx,
             HybridCalculatorMinimizeConfig(
                 max_steps=int(calculator_minimize_steps),
@@ -2349,10 +2350,12 @@ def prepare_mlpot_hybrid_state_for_sd(
                 verbose=verbose,
                 quiet_bfgs=quiet_bfgs,
                 max_start_grms_kcalmol_A=start_cap,
-                max_initial_fmax_ev_a=1000.0 if force else 100.0,
+                max_initial_fmax_ev_a=max_initial_fmax,
             ),
             context_prefix=f"{context_prefix} ({phase})",
         )
+        if not mini_ran:
+            return
         ran_calculator_mini = True
         diag = measure_hybrid_charmm_grms(mlpot_ctx)
         _print_hybrid_charmm_grms_diag(
@@ -2381,7 +2384,8 @@ def prepare_mlpot_hybrid_state_for_sd(
                     flush=True,
                 )
             return
-        hybrid_grms = minimize_hybrid_calculator_fire_before_sd(
+        max_initial_fmax = 1000.0 if force else 100.0
+        hybrid_grms, fire_ran = minimize_hybrid_calculator_fire_before_sd(
             mlpot_ctx,
             config=HybridCalculatorFireConfig(
                 max_steps=int(calculator_fire_steps),
@@ -2389,9 +2393,12 @@ def prepare_mlpot_hybrid_state_for_sd(
                 fire_maxstep=float(calculator_fire_maxstep),
                 verbose=verbose,
                 max_start_grms_kcalmol_A=_effective_max_start(force=force),
+                max_initial_fmax_ev_a=max_initial_fmax,
             ),
             context_prefix=f"{context_prefix} ({phase})",
         )
+        if not fire_ran:
+            return
         ran_calculator_fire = True
         diag = measure_hybrid_charmm_grms(mlpot_ctx)
         _print_hybrid_charmm_grms_diag(

@@ -228,10 +228,10 @@ def test_prepare_mlpot_hybrid_state_aborts_when_grms_stays_high():
         return_value=25.0,
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.minimize_hybrid_calculator_fire_before_sd",
-        return_value=470.0,
+        return_value=(470.0, True),
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.minimize_hybrid_calculator_before_sd",
-        return_value=470.0,
+        return_value=(470.0, True),
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder.run_geometry_packing_recovery",
         return_value=470.0,
@@ -283,10 +283,10 @@ def test_prepare_mlpot_hybrid_state_runs_packing_recovery_for_geometry_stress():
         return_value=25.0,
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.minimize_hybrid_calculator_fire_before_sd",
-        return_value=200.0,
+        return_value=(200.0, True),
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.minimize_hybrid_calculator_before_sd",
-        return_value=200.0,
+        return_value=(200.0, True),
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder.run_geometry_packing_recovery",
         return_value=180.0,
@@ -340,7 +340,7 @@ def test_prepare_mlpot_hybrid_state_resync_before_bonded_recovery():
         return_value=40.0,
     ) as resync, mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.minimize_hybrid_calculator_before_sd",
-        return_value=3.0,
+        return_value=(3.0, True),
     ) as calc_mini, mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_bonded_mm_recovery",
     ) as bonded:
@@ -381,10 +381,10 @@ def test_prepare_mlpot_hybrid_state_post_recovery_calculator_mini_when_still_hot
         return_value=25.0,
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.minimize_hybrid_calculator_fire_before_sd",
-        return_value=80.0,
+        return_value=(80.0, True),
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.minimize_hybrid_calculator_before_sd",
-        return_value=80.0,
+        return_value=(80.0, True),
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder.run_geometry_packing_recovery",
         return_value=3.0,
