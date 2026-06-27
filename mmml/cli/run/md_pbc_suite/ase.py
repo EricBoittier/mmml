@@ -587,7 +587,7 @@ def build_initial_cluster_from_args(
 ) -> tuple[np.ndarray, np.ndarray, list[int], list[str], dict[str, int] | None]:
     """Build cluster geometry; returns z, r0, atoms_per_list, residue_labels, composition_summary."""
     from mmml.interfaces.pycharmmInterface.packmol_placement import (
-        resolve_packmol_cube_side,
+        resolve_packmol_cube_side_from_args,
         resolve_packmol_placement_mode,
         resolve_packmol_sphere_radius,
     )
@@ -652,12 +652,7 @@ def build_initial_cluster_from_args(
                     getattr(args, "flat_bottom_radius", None),
                 )
             else:
-                cube_side = resolve_packmol_cube_side(
-                    box_size=getattr(args, "box_size", None),
-                    packmol_box_size=getattr(args, "packmol_box_size", None),
-                    packmol_radius=getattr(args, "packmol_radius", None),
-                    flat_bottom_radius=getattr(args, "flat_bottom_radius", None),
-                )
+                cube_side = resolve_packmol_cube_side_from_args(args)
             z, r0, atoms_per_list, residue_labels = _build_cluster_from_composition_packmol(
                 composition=composition,
                 placement=placement,

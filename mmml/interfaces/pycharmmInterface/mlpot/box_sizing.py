@@ -171,6 +171,40 @@ def resolve_density_box_side(
     )
 
 
+def resolve_density_packmol_cube_side(
+    args: argparse.Namespace,
+    *,
+    composition: dict[str, int] | None = None,
+    n_molecules: int | None = None,
+) -> float:
+    """Cubic side (Å) for Packmol ``inside cube`` from ``--box-auto density``.
+
+    Uses composition + target density only (no post-placement geometry floor).
+    """
+    if resolve_box_auto_mode(args) != "density":
+        raise ValueError(
+            "resolve_density_packmol_cube_side requires --box-auto density."
+        )
+    comp = composition
+    if comp is None:
+        comp = parse_composition_dict(getattr(args, "composition", None))
+    if comp is None:
+        raise ValueError(
+            "--box-auto density requires --composition (e.g. DCM:60) for Packmol cube sizing."
+        )
+    n_mol = int(n_molecules) if n_molecules is not None else int(sum(comp.values()))
+    n_mol_cli = int(getattr(args, "n_molecules", 0) or 0)
+    if n_mol_cli > 0:
+        n_mol = n_mol_cli
+    rho = resolve_target_density_g_cm3(args, comp)
+    mass_g = total_mass_g_for_composition(comp)
+    return cubic_box_side_from_target_density(
+        n_molecules=n_mol,
+        total_mass_g=mass_g,
+        target_density_g_cm3=rho,
+    )
+
+
 def resolve_initial_pbc_box_side(
     args: argparse.Namespace,
     positions: np.ndarray,

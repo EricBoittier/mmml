@@ -127,6 +127,31 @@ def resolve_packmol_cube_side(
     )
 
 
+def resolve_packmol_cube_side_from_args(args) -> float:
+    """Cube edge (Å) for Packmol from explicit box flags or ``--box-auto density``."""
+    try:
+        return resolve_packmol_cube_side(
+            box_size=getattr(args, "box_size", None),
+            packmol_box_size=getattr(args, "packmol_box_size", None),
+            packmol_radius=getattr(args, "packmol_radius", None),
+            flat_bottom_radius=getattr(args, "flat_bottom_radius", None),
+        )
+    except ValueError:
+        pass
+    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+        resolve_box_auto_mode,
+        resolve_density_packmol_cube_side,
+    )
+
+    if resolve_box_auto_mode(args) == "density":
+        return resolve_density_packmol_cube_side(args)
+    raise ValueError(
+        "Packmol cube placement requires --box-size > 0 (or --packmol-box-size, "
+        "or --box-auto density with --target-density-g-cm3 / --bulk-density-fraction, "
+        "or legacy --packmol-radius / --flat-bottom-radius for a diameter estimate)."
+    )
+
+
 def packmol_cube_origin(
     center: tuple[float, float, float],
     side: float,

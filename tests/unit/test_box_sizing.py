@@ -53,6 +53,42 @@ def test_resolve_initial_pbc_box_side_density_mode():
     assert side > 15.0
 
 
+def test_resolve_density_packmol_cube_side_from_composition():
+    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+        resolve_density_packmol_cube_side,
+    )
+
+    args = argparse.Namespace(
+        box_auto="density",
+        target_density_g_cm3=0.9,
+        bulk_density_fraction=None,
+        composition="DCM:100",
+        n_molecules=100,
+    )
+    side = resolve_density_packmol_cube_side(args)
+    assert 20.0 < side < 30.0
+
+
+def test_resolve_packmol_cube_side_from_args_uses_density_auto():
+    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+        resolve_packmol_cube_side_from_args,
+    )
+
+    args = argparse.Namespace(
+        box_size=None,
+        packmol_box_size=None,
+        packmol_radius=None,
+        flat_bottom_radius=None,
+        box_auto="density",
+        target_density_g_cm3=0.9,
+        bulk_density_fraction=None,
+        composition="DCM:100",
+        n_molecules=100,
+    )
+    side = resolve_packmol_cube_side_from_args(args)
+    assert 20.0 < side < 30.0
+
+
 def test_resolve_initial_pbc_box_side_explicit_box_size():
     from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
         resolve_initial_pbc_box_side,

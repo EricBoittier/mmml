@@ -1679,7 +1679,7 @@ def _pycharmm_run_summary(args: argparse.Namespace) -> str:
 
 def _validate_packmol_args(args: argparse.Namespace) -> None:
     from mmml.interfaces.pycharmmInterface.packmol_placement import (
-        resolve_packmol_cube_side,
+        resolve_packmol_cube_side_from_args,
         resolve_packmol_placement_mode,
         resolve_packmol_sphere_radius,
         resolve_packmol_use,
@@ -1705,12 +1705,7 @@ def _validate_packmol_args(args: argparse.Namespace) -> None:
             args.flat_bottom_radius,
         )
     else:
-        resolve_packmol_cube_side(
-            box_size=getattr(args, "box_size", None),
-            packmol_box_size=getattr(args, "packmol_box_size", None),
-            packmol_radius=getattr(args, "packmol_radius", None),
-            flat_bottom_radius=args.flat_bottom_radius,
-        )
+        resolve_packmol_cube_side_from_args(args)
 
 
 def _validate_packmol_sphere_args(args: argparse.Namespace) -> None:
