@@ -182,14 +182,53 @@ def _step_monomer_repack(
     min_distance: float,
     spacing: float | None,
     seed: int | None,
+    mlpot_ctx: Any | None = None,
+    max_select: int = 2,
+    verbose: bool = False,
 ) -> np.ndarray:
     from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
         monomer_offsets_from_atoms_per,
     )
-    from mmml.utils.geometry_checks import repack_monomers_clear_overlap
+    from mmml.utils.geometry_checks import (
+        repack_monomers_clear_overlap,
+        repack_selected_monomers_clear_overlap,
+    )
 
     offsets = monomer_offsets_from_atoms_per(atoms_per_list)
     cell = np.diag([float(box_side), float(box_side), float(box_side)]) if box_side else None
+
+    if mlpot_ctx is not None:
+        from mmml.utils.monomer_force_diag import resolve_selective_repack_monomers
+
+        diag = resolve_selective_repack_monomers(
+            mlpot_ctx,
+            offsets,
+            max_select=max_select,
+            positions=positions,
+        )
+        if diag is not None:
+            if verbose:
+                flagged_txt = ", ".join(str(i) for i in diag.flagged)
+                grms_txt = ", ".join(
+                    f"{i}:{diag.grms_per_monomer[i]:.1f}" for i in diag.flagged
+                )
+                print(
+                    f"Selective monomer repack: patch [{flagged_txt}] "
+                    f"(per-mono GRMS {grms_txt} kcal/mol/Å; "
+                    f"cluster {diag.cluster_grms:.1f})",
+                    flush=True,
+                )
+            return repack_selected_monomers_clear_overlap(
+                positions,
+                offsets,
+                list(diag.flagged),
+                min_distance=float(min_distance),
+                spacing=spacing,
+                margin=0.2,
+                seed=seed,
+                cell=cell,
+            )
+
     return repack_monomers_clear_overlap(
         positions,
         offsets,
@@ -486,6 +525,8 @@ def run_density_prep_ladder(
                 min_distance=min_overlap,
                 spacing=float(spacing) if spacing is not None else None,
                 seed=int(seed) + round_idx if seed is not None else None,
+                mlpot_ctx=mlpot_ctx,
+                verbose=not quiet,
             )
             box_side = _sync_pbc_after_box_change(
                 positions=new_pos,
@@ -980,6 +1021,8 @@ def run_geometry_packing_recovery(
             min_distance=min_overlap,
             spacing=float(spacing) if spacing is not None else None,
             seed=int(seed) if seed is not None else None,
+            mlpot_ctx=mlpot_ctx,
+            verbose=verbose,
         )
         box_side = _sync_pbc_after_box_change(
             positions=new_pos,

@@ -835,7 +835,11 @@ def _run_intramonomer_bonded_rescue(
     run_intra_monomer_overlap_rescue(mlpot_ctx, config)
 
 
-def apply_overlap_repack_last_resort(config: DynamicsOverlapConfig) -> float:
+def apply_overlap_repack_last_resort(
+    config: DynamicsOverlapConfig,
+    *,
+    mlpot_ctx: "MlpotContext | None" = None,
+) -> float:
     """Re-place monomer COMs with preserved internal geometry (Packmol-style repack)."""
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
@@ -848,17 +852,56 @@ def apply_overlap_repack_last_resort(config: DynamicsOverlapConfig) -> float:
         use_pbc=config.use_pbc,
         fallback_box_side_A=config.fallback_box_side_A,
     )
-    new_pos = _repack_monomers_clear_overlap_fn()(
-        pos,
-        offsets,
-        min_distance=config.min_distance_A,
-        spacing=config.repack_spacing_A,
-        margin=config.separate_margin_A,
-        seed=config.recovery_seed,
-        cell=cell,
-    )
+    find_overlap = _find_worst_intermonomer_overlap_fn()
+    best_dist, violation = find_overlap(pos, offsets, cell=cell)
+    overlap_hint: tuple[int, ...] = ()
+    if violation is not None:
+        overlap_hint = (int(violation.monomer_i), int(violation.monomer_j))
+
+    repack_fn = _repack_monomers_clear_overlap_fn()
+    new_pos = None
+    if mlpot_ctx is not None:
+        from mmml.utils.geometry_checks import repack_selected_monomers_clear_overlap
+        from mmml.utils.monomer_force_diag import resolve_selective_repack_monomers
+
+        diag = resolve_selective_repack_monomers(
+            mlpot_ctx,
+            offsets,
+            overlap_monomers=overlap_hint,
+            positions=pos,
+        )
+        if diag is not None:
+            print(
+                f"Overlap repack: selective patch monomers "
+                f"{list(diag.flagged)} "
+                f"(per-mono GRMS "
+                f"{', '.join(f'{i}:{diag.grms_per_monomer[i]:.1f}' for i in diag.flagged)} "
+                f"kcal/mol/Å; cluster {diag.cluster_grms:.1f})",
+                flush=True,
+            )
+            new_pos = repack_selected_monomers_clear_overlap(
+                pos,
+                offsets,
+                list(diag.flagged),
+                min_distance=config.min_distance_A,
+                spacing=config.repack_spacing_A,
+                margin=config.separate_margin_A,
+                seed=config.recovery_seed,
+                cell=cell,
+            )
+
+    if new_pos is None:
+        new_pos = repack_fn(
+            pos,
+            offsets,
+            min_distance=config.min_distance_A,
+            spacing=config.repack_spacing_A,
+            margin=config.separate_margin_A,
+            seed=config.recovery_seed,
+            cell=cell,
+        )
     sync_charmm_positions(new_pos)
-    best_dist, _ = _find_worst_intermonomer_overlap_fn()(new_pos, offsets, cell=cell)
+    best_dist, _ = find_overlap(new_pos, offsets, cell=cell)
     return float(best_dist)
 
 
@@ -892,6 +935,7 @@ def _apply_repack_or_raise(
     *,
     label: str,
     cause: RuntimeError,
+    mlpot_ctx: "MlpotContext | None" = None,
 ) -> float:
     if not config.separate_on_rescue_fail:
         raise cause
@@ -905,7 +949,7 @@ def _apply_repack_or_raise(
         flush=True,
     )
     try:
-        d_repack = apply_overlap_repack_last_resort(config)
+        d_repack = apply_overlap_repack_last_resort(config, mlpot_ctx=mlpot_ctx)
         print(
             f"Overlap repack: min inter-monomer distance now {d_repack:.4f} Å",
             flush=True,
@@ -949,8 +993,11 @@ def _apply_separation_or_raise(
     *,
     label: str,
     cause: RuntimeError,
+    mlpot_ctx: "MlpotContext | None" = None,
 ) -> float:
-    return _apply_repack_or_raise(config, label=label, cause=cause)
+    return _apply_repack_or_raise(
+        config, label=label, cause=cause, mlpot_ctx=mlpot_ctx
+    )
 
 
 def _handle_inter_monomer_rescue(
@@ -975,7 +1022,9 @@ def _handle_inter_monomer_rescue(
     except Exception as rescue_exc:
         if config.separate_on_rescue_fail:
             print(f"MLpot overlap rescue failed: {rescue_exc}", flush=True)
-            return _apply_separation_or_raise(config, label=label, cause=exc)
+            return _apply_separation_or_raise(
+                config, label=label, cause=exc, mlpot_ctx=mlpot_ctx
+            )
         raise RuntimeError(
             f"{exc}; MLpot overlap rescue failed: {rescue_exc}"
         ) from rescue_exc
@@ -983,7 +1032,9 @@ def _handle_inter_monomer_rescue(
         return _overlap_check(config, context=f"{label} after overlap rescue")
     except RuntimeError as still_bad:
         if config.separate_on_rescue_fail:
-            return _apply_separation_or_raise(config, label=label, cause=still_bad)
+            return _apply_separation_or_raise(
+                config, label=label, cause=still_bad, mlpot_ctx=mlpot_ctx
+            )
         raise RuntimeError(
             f"{still_bad}; overlap rescue "
             f"(SD={config.rescue.nstep_sd}, ABNR={config.rescue.nstep_abnr}) "
