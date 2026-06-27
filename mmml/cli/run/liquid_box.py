@@ -126,10 +126,21 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
-    args = parser.parse_args(argv)
+    parsed_argv = list(argv) if argv is not None else sys.argv[1:]
+    args = parser.parse_args(parsed_argv)
     args.setup = "pbc_nvt"
     args.save = True
     args.tag = None
+
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+        maybe_rerun_mmml_under_mpirun,
+        prepare_serial_charmm_mpi_env,
+    )
+
+    prepare_serial_charmm_mpi_env()
+    rerun_code = maybe_rerun_mmml_under_mpirun(parsed_argv, subcommand="liquid-box")
+    if rerun_code is not None:
+        return int(rerun_code)
 
     try:
         from mmml.interfaces.pycharmmInterface.mlpot.liquid_box_build import (

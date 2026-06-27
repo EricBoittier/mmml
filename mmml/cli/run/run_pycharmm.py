@@ -159,7 +159,19 @@ def run_pycharmm(args: argparse.Namespace):
 
 def main() -> int:
     """CLI entry point."""
-    args = parse_args()
+    parsed_argv = sys.argv[1:]
+    args = build_parser().parse_args(parsed_argv)
+
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+        maybe_rerun_mmml_under_mpirun,
+        prepare_serial_charmm_mpi_env,
+    )
+
+    prepare_serial_charmm_mpi_env()
+    rerun_code = maybe_rerun_mmml_under_mpirun(parsed_argv, subcommand="run-pycharmm")
+    if rerun_code is not None:
+        return int(rerun_code)
+
     if not args.pdbfile.exists():
         print(f"Error: PDB file not found: {args.pdbfile}", file=sys.stderr)
         return 1

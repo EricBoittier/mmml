@@ -97,7 +97,15 @@ if [[ "$MPI_NP" -gt 1 && "${_ML_GPU_COUNT:-1}" -gt 1 ]]; then
 fi
 
 # Pin one GPU per MPI rank when spatial ML is enabled (local rank -> CUDA_VISIBLE_DEVICES).
-if [[ "$MPI_NP" -gt 1 && ( "${MMML_MLPOT_SPATIAL_MPI:-}" == 1 || "${MMML_MLPOT_SPATIAL_MPI:-}" == true || "${MMML_MLPOT_SPATIAL_MPI:-}" == yes ) ]]; then
+_SPATIAL_MPI=0
+for ((i=1; i<=${#@}; i++)); do
+  if [[ "${!i}" == "--ml-spatial-mpi" ]]; then
+    _SPATIAL_MPI=1
+    export MMML_MLPOT_SPATIAL_MPI=1
+    break
+  fi
+done
+if [[ "$MPI_NP" -gt 1 && ( "${MMML_MLPOT_SPATIAL_MPI:-}" == 1 || "${MMML_MLPOT_SPATIAL_MPI:-}" == true || "${MMML_MLPOT_SPATIAL_MPI:-}" == yes || "$_SPATIAL_MPI" == 1 ) ]]; then
   export MMML_MPI_PIN_GPU_PER_RANK="${MMML_MPI_PIN_GPU_PER_RANK:-1}"
 fi
 

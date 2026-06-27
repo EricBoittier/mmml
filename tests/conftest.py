@@ -25,6 +25,7 @@ _PYCHARMM_SEED_PDBS = (
 _PYCHARMM_PATH_PREFIXES = (
     "functionality/pycharmmETC/",
     "functionality/charmm/",
+    "charmm_mpi/test_mpi_live",
     "functionality/mlpot/test_mlpot_energy_matches_ase.py",
     "functionality/mlpot/test_mlpot_dynamics_smoke.py",
     "functionality/mlpot/test_comp_velocities_integration.py",
@@ -108,6 +109,8 @@ def pycharmm_workdir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     for item in items:
         rel = _rel_test_path(item)
+        if rel.startswith("charmm_mpi/"):
+            item.add_marker(pytest.mark.charmm_mpi)
         if _matches_any(rel, _PYCHARMM_PATH_PREFIXES):
             item.add_marker(pytest.mark.pycharmm)
         if _matches_any(rel, _GPU_PATH_PREFIXES):

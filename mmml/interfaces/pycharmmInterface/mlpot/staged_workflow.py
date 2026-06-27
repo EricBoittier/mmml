@@ -268,27 +268,31 @@ def _prior_restart_for_stage(
 
 
 def _io_for_stage(stage: MdStage, paths: dict[str, Path]) -> CharmmTrajectoryFiles:
+    from mmml.interfaces.pycharmmInterface.mpi_rank_io import gate_charmm_trajectory_io
+
     if stage == "heat":
-        return CharmmTrajectoryFiles(
+        io = CharmmTrajectoryFiles(
             restart_write=paths["heat_res"],
             trajectory=paths["heat_dcd"],
         )
-    if stage == "nve":
-        return CharmmTrajectoryFiles(
+    elif stage == "nve":
+        io = CharmmTrajectoryFiles(
             restart_write=paths["nve_res"],
             trajectory=paths["nve_dcd"],
         )
-    if stage == "equi":
-        return CharmmTrajectoryFiles(
+    elif stage == "equi":
+        io = CharmmTrajectoryFiles(
             restart_write=paths["equi_res"],
             trajectory=paths["equi_dcd"],
         )
-    if stage == "prod":
-        return CharmmTrajectoryFiles(
+    elif stage == "prod":
+        io = CharmmTrajectoryFiles(
             restart_write=paths["prod_res"],
             trajectory=paths["prod_dcd"],
         )
-    raise ValueError(f"no dynamics I/O for stage {stage!r}")
+    else:
+        raise ValueError(f"no dynamics I/O for stage {stage!r}")
+    return gate_charmm_trajectory_io(io)
 
 
 def _sync_mlpot_cell_before_npt(
@@ -692,7 +696,9 @@ def _reset_stage_trajectory(
     Default: remove any prior ``path`` (fresh trajectory for this stage).
     With ``rescue_old=True``, rename the old file to ``*.rescued.N.dcd`` instead.
     """
-    if path is None:
+    from mmml.interfaces.pycharmmInterface.mpi_rank_io import is_mpi_rank_zero, rank0_print
+
+    if path is None or not is_mpi_rank_zero():
         return
 
     dcd_path = Path(path)
@@ -706,12 +712,12 @@ def _reset_stage_trajectory(
             )
             if not rescue_path.exists():
                 dcd_path.replace(rescue_path)
-                print(f"Rescued existing DCD: {dcd_path} -> {rescue_path}", flush=True)
+                rank0_print(f"Rescued existing DCD: {dcd_path} -> {rescue_path}", flush=True)
                 return
         raise RuntimeError(f"could not find an available rescue name for {dcd_path}")
 
     dcd_path.unlink(missing_ok=True)
-    print(f"Removed prior DCD: {dcd_path}", flush=True)
+    rank0_print(f"Removed prior DCD: {dcd_path}", flush=True)
 
 
 def _heat_in_place_restart(io: CharmmTrajectoryFiles) -> bool:
@@ -1585,11 +1591,13 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     elif "mini" in stages and not getattr(args, "skip_cluster_build", False):
         save_mini = bool(getattr(args, "save", True))
         mini_dcd_nsavc = resolve_dcd_nsavc_for_args(args, nstep=mini_nstep)
+        from mmml.interfaces.pycharmmInterface.mpi_rank_io import rank0_trajectory_path
+
         r = _charmm_pre_minimize_before_mlpot(
             args,
             nprint=mini_nprint,
             reference_positions=r,
-            dcd_path=paths["mini_charmm_dcd"] if save_mini else None,
+            dcd_path=rank0_trajectory_path(paths["mini_charmm_dcd"] if save_mini else None),
             dcd_nsavc=mini_dcd_nsavc if save_mini else 0,
             save_crd_path=paths["charmm_mm_crd"] if save_mini else None,
             save_pdb_path=paths["charmm_mm_pdb"] if save_mini else None,
@@ -1768,6 +1776,8 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             fix_sel = select_by_resids(fix_resids) if fix_resids else None
             save_mini = bool(getattr(args, "save", True))
             mini_dcd_nsavc = resolve_dcd_nsavc_for_args(args, nstep=mini_nstep)
+            from mmml.interfaces.pycharmmInterface.mpi_rank_io import rank0_trajectory_path
+
             if not args.quiet:
                 print(
                     f"\nMLpot SD minimize: {mini_nstep} steps/pass, {n_atoms} atoms",
@@ -1798,7 +1808,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     psf_path=paths["mlpot_mmml_psf"] if save_mini else None,
                     energy_json_path=paths["mlpot_mmml_energy_json"] if save_mini else None,
                     xyz_path=paths["mlpot_mmml_xyz"] if save_mini else None,
-                    dcd_path=paths["mlpot_mmml_dcd"] if save_mini else None,
+                    dcd_path=rank0_trajectory_path(paths["mlpot_mmml_dcd"] if save_mini else None),
                     dcd_nsavc=mini_dcd_nsavc if save_mini else 0,
                     title=MLPOT_MMML.label,
                     skip_if_crd_exists=bool(getattr(args, "skip_if_crd_exists", False)),

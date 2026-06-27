@@ -104,25 +104,7 @@ Campaign-only keys are ignored when building the backend command:
 
 Top-level CLI flags win over YAML only for selected campaign-wide runtime controls, including `ml_batch_size`, `ml_gpu_count`, `ml_max_active_dimers`, `skip_jit_warmup`, `handoff_pre_minimize`, and `ml_spatial_mpi`.
 
-## YAML presets (`include`)
-
-Campaign files can chain reusable fragments from `mmml/cli/run/presets/`:
-
-```yaml
-include:
-  - presets/base-dt0.25.yaml
-  - presets/liquid-prep-dense.yaml
-  - presets/heat-dt0.25-conservative.yaml
-  - presets/dynamics-flyoff-strict.yaml
-
-defaults:
-  composition: "DCM:103"
-  from_psf: boxes/dcm103/model.psf
-  from_crd: boxes/dcm103/model.crd
-  box_size: 63.354
-```
-
-Later includes and your own `defaults` override earlier keys. See `mmml/cli/run/presets/README.md` for the full index (`heat-dt0.25-conservative`, `pre-sd-calculator`, etc.) and ready-made campaigns `md_system.dcm103_equil.example.yaml`, `md_system.dcm52_equil.example.yaml`.
+Tier 2 spatial MPI example YAML: `mmml/cli/run/md_system.spatial_mpi.example.yaml` (set `ml_spatial_mpi: true`, `ml_gpu_count: 1`, launch with `MMML_MPI_NP>=2` and `mmml-charmm-mpirun.sh`). Dry-run: `python tests/functionality/mlpot/07_md_system_spatial_mpi_mini.py --dry-run`.
 
 ## Recommended campaign structure
 

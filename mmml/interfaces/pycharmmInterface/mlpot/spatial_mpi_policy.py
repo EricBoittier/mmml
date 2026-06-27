@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from typing import Any
 
 
 def _truthy(name: str, default: bool = False) -> bool:
@@ -35,3 +36,39 @@ def pin_cuda_for_spatial_mpi() -> bool:
         return False
     os.environ["CUDA_VISIBLE_DEVICES"] = str(int(local))
     return True
+
+
+def sync_spatial_mpi_env(*, explicit: bool | None = None) -> bool:
+    """Set ``MMML_MLPOT_SPATIAL_MPI=1`` when spatial ML is requested."""
+    if explicit is True or (explicit is None and spatial_mpi_enabled()):
+        os.environ[_SPATIAL_ENV] = "1"
+        return True
+    return False
+
+
+def sync_spatial_mpi_env_from_args(args: Any) -> bool:
+    """Mirror ``--ml-spatial-mpi`` / YAML ``ml_spatial_mpi`` into the process env."""
+    if args is None:
+        return False
+    return sync_spatial_mpi_env(explicit=bool(getattr(args, "ml_spatial_mpi", False)))
+
+
+def sync_spatial_mpi_env_from_campaign(
+    campaign: dict[str, Any] | None,
+    args: Any = None,
+) -> bool:
+    """Set spatial MPI env from campaign defaults, jobs, and parent CLI."""
+    enabled = False
+    if args is not None and bool(getattr(args, "ml_spatial_mpi", False)):
+        enabled = True
+    if campaign:
+        defaults = campaign.get("defaults")
+        if isinstance(defaults, dict) and defaults.get("ml_spatial_mpi"):
+            enabled = True
+        runs = campaign.get("runs") or campaign.get("jobs") or {}
+        if isinstance(runs, dict):
+            for job in runs.values():
+                if isinstance(job, dict) and job.get("ml_spatial_mpi"):
+                    enabled = True
+                    break
+    return sync_spatial_mpi_env(explicit=enabled if enabled else None)

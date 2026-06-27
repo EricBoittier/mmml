@@ -225,6 +225,11 @@ def run_campaign(args: Namespace) -> int:
     from mmml.cli.run import md_system
 
     campaign = load_yaml_config(args.config)
+    from mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
+        sync_spatial_mpi_env_from_campaign,
+    )
+
+    sync_spatial_mpi_env_from_campaign(campaign, args)
     if getattr(args, "job_id", None):
         order = [str(args.job_id)]
     elif getattr(args, "run_all", False):

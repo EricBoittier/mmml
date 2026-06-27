@@ -207,11 +207,19 @@ def write_liquid_box_artifacts(
     *,
     args: argparse.Namespace | None = None,
 ) -> None:
+    from mmml.interfaces.pycharmmInterface.mpi_rank_io import (
+        is_mpi_rank_zero,
+        rank0_write_json,
+        rank0_write_text,
+    )
+
+    if not is_mpi_rank_zero():
+        return
     result.out_dir.mkdir(parents=True, exist_ok=True)
     box_path = result.out_dir / BOX_JSON
     report_path = result.out_dir / REPORT_MD
-    box_path.write_text(json.dumps(result.to_box_json(args=args), indent=2), encoding="utf-8")
-    report_path.write_text(render_liquid_box_report(result, args=args), encoding="utf-8")
+    rank0_write_json(box_path, result.to_box_json(args=args))
+    rank0_write_text(report_path, render_liquid_box_report(result, args=args))
     result.box_json_path = box_path
     result.report_path = report_path
 
@@ -535,10 +543,12 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
     write_liquid_box_artifacts(result, args=args)
 
     if not getattr(args, "quiet", False):
-        print(f"\nliquid-box: {result.status.upper()} → {out_dir}")
+        from mmml.interfaces.pycharmmInterface.mpi_rank_io import rank0_print
+
+        rank0_print(f"\nliquid-box: {result.status.upper()} → {out_dir}")
         if result.report_path is not None:
-            print(f"  report: {result.report_path}")
+            rank0_print(f"  report: {result.report_path}")
         if result.box_json_path is not None:
-            print(f"  box.json: {result.box_json_path}")
+            rank0_print(f"  box.json: {result.box_json_path}")
 
     return result

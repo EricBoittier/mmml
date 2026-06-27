@@ -34,6 +34,7 @@ Available commands:
   run         MM/ML simulation (ASE + JAX-MD with hybrid calculator)
   md-system   Run mixed-composition MD setups (free/pbc NVE/NVT + pbc NPT + lambda TI)
   liquid-box  Build and certify periodic liquid boxes (MM only, no MLpot)
+  mpi-check   Validate OpenMPI / CHARMM / mpi4py environment for MLpot
   lambda-mbar MBAR post-processing for lambda-dynamics runs
   run-pycharmm  Pure CHARMM heating and equilibration (no ML)
   pycharmm-two-residue-sample  Restrained sampling for a two-residue CHARMM system
@@ -161,6 +162,11 @@ Shell tab completion (bash/zsh/fish):
         from .run import liquid_box
         sys.argv = ['mmml liquid-box'] + args.args
         return liquid_box.main()
+
+    elif args.command == 'mpi-check':
+        from .run import mpi_check
+        sys.argv = ['mmml mpi-check'] + args.args
+        return mpi_check.main()
 
     elif args.command == 'lambda-mbar':
         from .run import lambda_mbar

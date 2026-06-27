@@ -621,10 +621,14 @@ def defer_jax_warmup_until_after_mlpot_sd() -> bool:
     return charmm_lib_links_mpi() and _under_mpirun()
 
 
-def maybe_rerun_md_system_under_mpirun(argv: list[str]) -> int | None:
-    """Re-exec ``mmml md-system`` under ``mpirun -np 1`` for MPI-linked CHARMM.
+def maybe_rerun_mmml_under_mpirun(
+    argv: list[str],
+    *,
+    subcommand: str = "md-system",
+) -> int | None:
+    """Re-exec ``mmml <subcommand>`` under ``mpirun -np 1`` for MPI-linked CHARMM.
 
-    Serial ``python -m mmml md-system`` can intermittently segfault in Fortran
+    Serial ``python -m mmml <subcommand>`` can intermittently segfault in Fortran
     ``upinb`` during MLpot registration.  Launching under the same OpenMPI as
     ``libcharmm.so`` initializes MPI before CHARMM/Python start.
     """
@@ -638,9 +642,9 @@ def maybe_rerun_md_system_under_mpirun(argv: list[str]) -> int | None:
     mpirun = charmm_mpirun_path()
     if mpirun is None:
         print(
-            "mmml: MPI-linked CHARMM but no matching OpenMPI mpirun found. "
-            "Set OPENMPI_ROOT or MMML_MPIRUN, or use:\n  "
-            + mpirun_launch_hint("mmml md-system"),
+            f"mmml: MPI-linked CHARMM but no matching OpenMPI mpirun found. "
+            f"Set OPENMPI_ROOT or MMML_MPIRUN, or use:\n  "
+            + mpirun_launch_hint(f"mmml {subcommand}"),
             flush=True,
         )
         return None
@@ -655,11 +659,8 @@ def maybe_rerun_md_system_under_mpirun(argv: list[str]) -> int | None:
         )
     prepare_serial_charmm_mpi_env()
     tail = list(argv)
-    # ``mmml md-system`` via ``cli.__main__`` rewrites sys.argv to
-    # ``['mmml md-system', '--config', ...]`` so callers often pass argv[1:]
-    # without the ``md-system`` subcommand.
-    if not tail or tail[0] != "md-system":
-        tail = ["md-system", *tail]
+    if not tail or tail[0] != subcommand:
+        tail = [subcommand, *tail]
     cmd = [
         str(mpirun),
         "-np",
@@ -676,14 +677,19 @@ def maybe_rerun_md_system_under_mpirun(argv: list[str]) -> int | None:
     if bindir not in path_parts:
         env["PATH"] = os.pathsep.join([bindir, *path_parts])
     print(
-        "mmml: MPI-linked CHARMM — re-launching under OpenMPI for MLpot registration:\n  "
+        f"mmml: MPI-linked CHARMM — re-launching under OpenMPI for {subcommand}:\n  "
         + " ".join(cmd),
         flush=True,
     )
     proc = subprocess.run(cmd, env=env)
     rc = int(proc.returncode)
-    explain_mpi_crash(rc, argv0="mmml md-system")
+    explain_mpi_crash(rc, argv0=f"mmml {subcommand}")
     return rc
+
+
+def maybe_rerun_md_system_under_mpirun(argv: list[str]) -> int | None:
+    """Backward-compatible alias for :func:`maybe_rerun_mmml_under_mpirun`."""
+    return maybe_rerun_mmml_under_mpirun(argv, subcommand="md-system")
 
 
 _apply_cuda_mpi_env_defaults()

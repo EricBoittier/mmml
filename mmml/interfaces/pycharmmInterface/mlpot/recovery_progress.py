@@ -127,7 +127,9 @@ class RecoveryProgressStore:
         self._steps.append(entry)
         self._write_journal()
         if not self.quiet:
-            print(
+            from mmml.interfaces.pycharmmInterface.mpi_rank_io import rank0_print
+
+            rank0_print(
                 f"{self.category}: checkpoint {self._index:03d} → {self.root.name}/{stem} "
                 f"({label})",
                 flush=True,
@@ -135,6 +137,10 @@ class RecoveryProgressStore:
         return files
 
     def finish(self, summary: dict[str, Any] | None = None) -> None:
+        from mmml.interfaces.pycharmmInterface.mpi_rank_io import is_mpi_rank_zero
+
+        if not is_mpi_rank_zero():
+            return
         payload = {
             "category": self.category,
             "title": self.title,
@@ -149,6 +155,10 @@ class RecoveryProgressStore:
         self._write_journal()
 
     def _write_journal(self) -> None:
+        from mmml.interfaces.pycharmmInterface.mpi_rank_io import is_mpi_rank_zero
+
+        if not is_mpi_rank_zero():
+            return
         (self.root / "journal.json").write_text(
             json.dumps(
                 {

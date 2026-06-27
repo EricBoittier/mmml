@@ -1,0 +1,73 @@
+# Tier 2 spatial MPI mini smoke — PyCHARMM MLpot (GPU cluster)
+#
+# Single run (mini only, ~20 SD steps):
+#   MMML_MPI_NP=2 MMML_MLPOT_SPATIAL_MPI=1 \
+#     ./scripts/mmml-charmm-mpirun.sh md-system \
+#     --config mmml/cli/run/md_system.spatial_mpi.example.yaml
+#
+# Dry-run / argv validation (no CHARMM):
+#   python tests/functionality/mlpot/07_md_system_spatial_mpi_mini.py --dry-run
+#
+# See docs/pycharmm-mpi.md and tests/functionality/mlpot/SPATIAL_MPI_DOMDEC.md
+
+setup: pbc_npt
+backend: pycharmm
+composition: "DCM:20"
+checkpoint: /path/to/DESdimers_params.json
+output_dir: artifacts/spatial_mpi_mini
+box_size: 32.0
+spacing: 5.0
+seed: 42
+temperature: 260.0
+pressure: 1.0
+
+# --- Tier 2 spatial ML (requires MMML_MPI_NP>=2 on cluster) ---
+ml_spatial_mpi: true
+ml_gpu_count: 1
+ml_batch_size: 64
+skip_jit_warmup: true
+
+# --- Minimal mini stage only ---
+md_stages: mini
+mini_nstep: 20
+charmm_pre_minimize: true
+charmm_sd_steps: 50
+charmm_abnr_steps: 50
+bonded_mm_mini: true
+bonded_mm_mini_steps: 50
+calculator_pre_minimize: true
+pre_min_steps: 50
+max_grms_before_dyn: 100.0
+no_echeck: true
+quiet: false
+
+# --- PBC / MMpot ---
+mm_switch_on: 9.0
+mm_switch_width: 1.5
+ml_switch_width: 1.0
+include_mm: true
+mm_nonbond_mode: jax_mic
+
+# --- Campaign variant (uncomment to use --run-all) ---------------------------
+# campaign_output: artifacts/spatial_mpi_campaign
+#
+# defaults:
+#   composition: "DCM:20"
+#   checkpoint: /path/to/DESdimers_params.json
+#   box_size: 32.0
+#   ml_spatial_mpi: true
+#   ml_gpu_count: 1
+#   ml_batch_size: 64
+#   skip_jit_warmup: true
+#   md_stages: mini
+#   mini_nstep: 20
+#   charmm_pre_minimize: true
+#   bonded_mm_mini: true
+#   no_echeck: true
+#
+# runs:
+#   spatial_mini:
+#     description: "Tier 2 spatial MPI mini smoke (DCM:20)"
+#     backend: pycharmm
+#     setup: pbc_npt
+#     output_dir: results/spatial_mpi_mini
