@@ -1272,6 +1272,12 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     charmm_pbc = resolve_charmm_use_pbc(args)
     mlpot_pbc = resolve_mlpot_use_pbc(args)
     loose_pbc = resolve_loose_pbc(charmm_pbc, mlpot_pbc)
+    if charmm_pbc:
+        from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+            apply_certified_box_size_from_artifacts,
+        )
+
+        apply_certified_box_size_from_artifacts(args)
     box_side = resolve_pbc_box_side(args, r) if charmm_pbc else None
     atoms_per_list = getattr(args, "_cluster_atoms_per_list", None)
     if atoms_per_list is None and int(n_mol) > 0 and int(n_atoms) % int(n_mol) == 0:
