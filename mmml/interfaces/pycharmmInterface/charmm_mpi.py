@@ -307,8 +307,24 @@ def openmpi_install_prefix() -> Path | None:
     return None
 
 
+def openmpi_opal_library_path() -> Path | None:
+    """Resolved ``libopen-pal`` from the matched OpenMPI prefix."""
+    prefix = openmpi_install_prefix()
+    if prefix is None:
+        return None
+    for sub in ("lib", "lib64"):
+        lib_dir = prefix / sub
+        if not lib_dir.is_dir():
+            continue
+        for pattern in ("libopen-pal.so", "libopen-pal.so*"):
+            for shared in sorted(lib_dir.glob(pattern)):
+                if shared.is_file():
+                    return shared.resolve()
+    return None
+
+
 def openmpi_mca_component_dir() -> Path | None:
-    """Directory under the matched OpenMPI prefix containing ``mca_*.so`` plugins."""
+    """Directory for OpenMPI MCA plugin search under the matched prefix."""
     override = (os.environ.get("MMML_MPI_MCA_COMPONENT_DIR") or "").strip()
     if override:
         path = Path(override).expanduser()
@@ -316,17 +332,27 @@ def openmpi_mca_component_dir() -> Path | None:
     prefix = openmpi_install_prefix()
     if prefix is None:
         return None
+    empty_openmpi: Path | None = None
     for sub in ("lib/openmpi", "lib64/openmpi", "lib", "lib64"):
         candidate = prefix / sub
-        if candidate.is_dir() and any(candidate.glob("mca_*.so")):
+        if not candidate.is_dir():
+            continue
+        if any(candidate.glob("mca_*.so")):
             return candidate
+        if sub.endswith("openmpi") and empty_openmpi is None:
+            empty_openmpi = candidate
+    if empty_openmpi is not None:
+        return empty_openmpi
+    opal = openmpi_opal_library_path()
+    if opal is not None:
+        return opal.parent
     return None
 
 
 def openmpi_shmem_mca_component() -> str | None:
-    """Best shmem MCA component present in the matched OpenMPI prefix."""
+    """Shmem MCA component with a ``mca_shmem_<name>.so`` plugin in the prefix."""
     override = (os.environ.get("MMML_MCA_SHMEM") or "").strip()
-    if override:
+    if override and not override.startswith("^"):
         return override
     prefix = openmpi_install_prefix()
     if prefix is None:
@@ -344,6 +370,35 @@ def openmpi_shmem_mca_component() -> str | None:
             if (directory / f"mca_shmem_{name}.so").is_file():
                 return name
     return None
+
+
+def openmpi_shmem_mca_for_launch() -> str | None:
+    """Shmem MCA token for ``mpirun`` / env (DSO name or static-built fallback)."""
+    override = (os.environ.get("MMML_MCA_SHMEM") or "").strip()
+    if override:
+        return override
+    found = openmpi_shmem_mca_component()
+    if found is not None:
+        return found
+    if openmpi_install_prefix() is None or _truthy("MMML_NO_MPI_SHMEM_FALLBACK"):
+        return None
+    # In-tree / --disable-dlopen builds often have no mca_shmem_*.so; use built-in mmap.
+    fallback = (os.environ.get("MMML_MCA_SHMEM_STATIC_FALLBACK") or "mmap").strip()
+    return fallback or None
+
+
+def _export_openmpi_opal_ld_preload() -> None:
+    """``LD_PRELOAD`` matched ``libopen-pal`` for ``orted`` / rank children."""
+    if _truthy("MMML_NO_MPI_OPAL_PRELOAD") or _truthy("MMML_NO_MPI_LD_PATH"):
+        return
+    opal = openmpi_opal_library_path()
+    if opal is None:
+        return
+    path = str(opal)
+    var = "DYLD_INSERT_LIBRARIES" if _IS_DARWIN else "LD_PRELOAD"
+    parts = [p for p in os.environ.get(var, "").split(os.pathsep) if p]
+    if path not in parts:
+        os.environ[var] = os.pathsep.join([path, *parts])
 
 
 def mpi_openmpi_install_env_defaults() -> None:
@@ -365,9 +420,10 @@ def mpi_openmpi_install_env_defaults() -> None:
         path = str(mca_dir)
         os.environ.setdefault("OMPI_MCA_component_path", path)
         os.environ.setdefault("OMPI_MCA_mca_base_component_path", path)
-    shmem = openmpi_shmem_mca_component()
+    shmem = openmpi_shmem_mca_for_launch()
     if shmem is not None:
         os.environ.setdefault("OMPI_MCA_shmem", shmem)
+    _export_openmpi_opal_ld_preload()
     override = (os.environ.get("MMML_OPAL_PREFIX") or "").strip()
     if override:
         os.environ.setdefault("OPAL_PREFIX", override)
@@ -399,7 +455,7 @@ def mpi_mpirun_extra_args() -> list[str]:
         mca_dir = openmpi_mca_component_dir()
         if mca_dir is not None:
             args.extend(["--mca", "mca_base_component_path", str(mca_dir)])
-        shmem = openmpi_shmem_mca_component()
+        shmem = openmpi_shmem_mca_for_launch()
         if shmem is not None:
             args.extend(["--mca", "shmem", shmem])
     if _truthy("MMML_NO_MPI_ABORT_STACK"):
@@ -468,9 +524,13 @@ def mpi_shell_setup_lines() -> list[str]:
         if mca_dir is not None:
             lines.append(f"export OMPI_MCA_component_path={mca_dir}")
             lines.append(f"export OMPI_MCA_mca_base_component_path={mca_dir}")
-        shmem = openmpi_shmem_mca_component()
+        shmem = openmpi_shmem_mca_for_launch()
         if shmem is not None:
             lines.append(f"export OMPI_MCA_shmem={shmem}")
+        opal = openmpi_opal_library_path()
+        if opal is not None and not _truthy("MMML_NO_MPI_OPAL_PRELOAD"):
+            var = "DYLD_INSERT_LIBRARIES" if _IS_DARWIN else "LD_PRELOAD"
+            lines.append(f"export {var}={opal}${{{var}:+:${var}}}")
         opal = (os.environ.get("MMML_OPAL_PREFIX") or "").strip()
         if not opal:
             prefix = openmpi_install_prefix()
@@ -531,24 +591,14 @@ def _preload_openmpi_opal_global() -> None:
     global _opal_preloaded
     if _opal_preloaded or _truthy("MMML_NO_MPI_LD_PATH") or _truthy("MMML_NO_MPI_OPAL_PRELOAD"):
         return
-    prefix = openmpi_install_prefix()
-    if prefix is None:
+    opal = openmpi_opal_library_path()
+    if opal is None:
         return
-    for sub in ("lib", "lib64"):
-        lib_dir = prefix / sub
-        if not lib_dir.is_dir():
-            continue
-        for pattern in ("libopen-pal.so", "libopen-pal.so*"):
-            matches = sorted(lib_dir.glob(pattern))
-            for shared in matches:
-                if not shared.is_file():
-                    continue
-                try:
-                    ctypes.CDLL(str(shared.resolve()), mode=ctypes.RTLD_GLOBAL)
-                    _opal_preloaded = True
-                    return
-                except OSError:
-                    continue
+    try:
+        ctypes.CDLL(str(opal), mode=ctypes.RTLD_GLOBAL)
+        _opal_preloaded = True
+    except OSError:
+        return
 
 
 def prepare_charmm_mpi_runtime() -> None:
