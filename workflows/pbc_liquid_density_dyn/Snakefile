@@ -61,7 +61,7 @@ def _sched_gpu_slow(wildcards) -> int:
 
 
 def _slurm_extra(wildcards) -> str:
-    mail = str(config.get("slurm_mail_user", ""))
+    mail = str(config.get("slurm_mail_user", "") or "").strip()
     parts = []
     if mail:
         parts.append(f"--mail-user={mail} --mail-type=END,FAIL")

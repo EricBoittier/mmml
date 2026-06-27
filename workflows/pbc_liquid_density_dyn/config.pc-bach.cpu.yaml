@@ -102,6 +102,7 @@ slurm_ntasks: 1
 slurm_cpus_per_task: 8
 slurm_mem_mb_per_cpu: 4000
 slurm_runtime_min: 4320
+# slurm_mail_user: you@example.com   # optional; omit = no Slurm mail
 # Omit nodelist to let Slurm pick idle nodes on ``long``.
 # slurm_cpu_nodes: []
 

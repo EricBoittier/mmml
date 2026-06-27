@@ -42,7 +42,7 @@ slurm_ntasks: 1
 slurm_cpus_per_task: 4
 slurm_mem_mb_per_cpu: 3000
 slurm_runtime_min: 2880
-slurm_mail_user: ericdavid.boittier@unibas.ch
+# slurm_mail_user: you@example.com   # optional; omit to disable Slurm END/FAIL mail
 # Comma list: SLURM schedules on whichever node is free (set "" to drop --nodelist).
 slurm_nodelist: gpu08,gpu09
 slurm_gpu_nodes: [gpu08, gpu09]

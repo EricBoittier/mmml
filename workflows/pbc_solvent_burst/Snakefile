@@ -65,14 +65,17 @@ def _sched_gpu_slow(wildcards) -> int:
 
 
 def _slurm_extra(wildcards) -> str:
-    mail = str(config.get("slurm_mail_user", "ericdavid.boittier@unibas.ch"))
+    mail = str(config.get("slurm_mail_user", "") or "").strip()
     if _TIER_ENABLED:
         nodelist = slurm_nodelist_for_tier(_CFG, _burst_tier(wildcards))
     else:
         nodelist = slurm_nodelist_for_tier(_CFG, "fast")
+    parts = []
+    if mail:
+        parts.append(f"--mail-user={mail} --mail-type=END,FAIL")
     if nodelist:
-        return f"--mail-user={mail} --mail-type=END,FAIL --nodelist={nodelist}"
-    return f"--mail-user={mail} --mail-type=END,FAIL"
+        parts.append(f"--nodelist={nodelist}")
+    return " ".join(parts)
 
 
 rule all:

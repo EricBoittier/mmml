@@ -66,11 +66,14 @@ def _slurm_nodelist() -> str:
 
 def _slurm_extra(wildcards) -> str:
     """SLURM flags not covered by standard Snakemake resources (no mem/tasks/cpus here)."""
-    mail = str(config.get("slurm_mail_user", "ericdavid.boittier@unibas.ch"))
+    mail = str(config.get("slurm_mail_user", "") or "").strip()
     nodelist = _slurm_nodelist()
+    parts = []
+    if mail:
+        parts.append(f"--mail-user={mail} --mail-type=END,FAIL")
     if nodelist:
-        return f"--mail-user={mail} --mail-type=END,FAIL --nodelist={nodelist}"
-    return f"--mail-user={mail} --mail-type=END,FAIL"
+        parts.append(f"--nodelist={nodelist}")
+    return " ".join(parts)
 
 
 rule all:
