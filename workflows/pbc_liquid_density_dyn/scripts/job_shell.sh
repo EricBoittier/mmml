@@ -100,7 +100,11 @@ cell = cell_from_tag(cfg, '${RUN_TAG}')
 print(' '.join(warmup_mlpot_argv(cfg, cell)))
 ")"
   # shellcheck disable=SC2086
-  if ! "$PY" -m mmml.cli.__main__ $WARMUP_ARGS; then
+  _warmup_extra=()
+  if [[ -n "${SLURM_JOB_ID:-}" ]]; then
+    _warmup_extra=(--allow-under-mpirun)
+  fi
+  if ! "$PY" -m mmml.cli.__main__ $WARMUP_ARGS "${_warmup_extra[@]}"; then
     echo "ERROR: warmup-mlpot-jax failed" >&2
     exit 1
   fi
