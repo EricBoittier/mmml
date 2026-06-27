@@ -839,13 +839,18 @@ def _maybe_abort_sd_on_grms_stall(
     if target is not None and current_grms <= float(target):
         return False
     if config.verbose:
+        from mmml.utils.prep_ladder_report import PrepMetrics, emit_sd_event
+
         prev_txt = f"{previous_grms:.4f}" if previous_grms is not None else "?"
-        print(
-            f"MLpot SD stall ({pass_label}, {step_label}): "
-            f"hybrid GRMS unchanged at {current_grms:.4f} kcal/mol/Å "
-            f"(was {prev_txt}) for {stagnant_chunks} chunk(s); "
-            "stopping minimization early",
-            flush=True,
+        emit_sd_event(
+            "stall",
+            pass_label,
+            metrics=PrepMetrics.from_mlpot(config.mlpot_ctx, hybrid_grms=current_grms),
+            detail=(
+                f"hybrid GRMS unchanged at {current_grms:.4f} kcal/mol/Å "
+                f"(was {prev_txt}) for {stagnant_chunks} chunk(s); stopping early"
+            ),
+            quiet=False,
         )
     return True
 
@@ -909,6 +914,8 @@ def _sync_mlpot_lists_after_sd_chunk(
     pass_label: str,
     chunk_index: int,
     n_chunks: int,
+    method: str = "SD",
+    nstep: int = 0,
 ) -> float | None:
     """CHARMM UPDATE + hybrid GRMS after one SD/ABNR chunk."""
     sync_charmm_lists_after_mini(quiet=True)
@@ -917,17 +924,26 @@ def _sync_mlpot_lists_after_sd_chunk(
         return None
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import refresh_mlpot_energy_and_grms
 
-    context = (
-        f"{pass_label} chunk {chunk_index + 1}/{n_chunks} sync"
-        if config.verbose and n_chunks > 1
-        else ""
-    )
-    return refresh_mlpot_energy_and_grms(
+    context = ""
+    grms = refresh_mlpot_energy_and_grms(
         config.mlpot_ctx,
         context=context,
         reregister=False,
         verbose=False,
     )
+    if config.verbose and n_chunks > 1:
+        from mmml.utils.prep_ladder_report import PrepMetrics, emit_sd_chunk_progress
+
+        emit_sd_chunk_progress(
+            method,
+            pass_label,
+            chunk_index=chunk_index + 1,
+            n_chunks=n_chunks,
+            nstep=nstep,
+            metrics=PrepMetrics.from_mlpot(config.mlpot_ctx, hybrid_grms=grms),
+            quiet=False,
+        )
+    return grms
 
 
 def _rollback_mlpot_sd_chunk_geometry(
@@ -987,13 +1003,6 @@ def _run_minimize_in_chunks(
     chunk_cap = _mlpot_sd_chunk_nstep(config)
     min_chunk = min(chunk_cap, 10)
     n_chunks = max(1, (remaining + min_chunk - 1) // min_chunk)
-    if config.verbose and n_chunks > 1:
-        print(
-            f"{method} {pass_label}: {remaining} steps in up to {n_chunks} chunks "
-            f"(≤{chunk_cap} steps/chunk, adaptive down to {min_chunk}, "
-            "inbfrq=0 + UPDATE between chunks)",
-            flush=True,
-        )
 
     initial_grms: float | None = None
     previous_grms: float | None = None
@@ -1005,6 +1014,26 @@ def _run_minimize_in_chunks(
     elif config.mlpot_ctx is not None:
         initial_grms = resolve_mlpot_grms_kcalmol_A(config.mlpot_ctx, context="")
         previous_grms = initial_grms
+
+    if config.verbose and n_chunks > 1:
+        from mmml.utils.prep_ladder_report import PrepMetrics, emit_sd_pass_header
+
+        baseline_metrics = None
+        if config.mlpot_ctx is not None and initial_grms is not None and np.isfinite(initial_grms):
+            baseline_metrics = PrepMetrics.from_mlpot(
+                config.mlpot_ctx,
+                hybrid_grms=float(initial_grms),
+            )
+        emit_sd_pass_header(
+            method,
+            pass_label,
+            remaining=remaining,
+            n_chunks=n_chunks,
+            chunk_cap=chunk_cap,
+            min_chunk=min_chunk,
+            metrics=baseline_metrics,
+            quiet=False,
+        )
 
     last_good_positions: np.ndarray | None = None
     last_good_grms: float | None = None
@@ -1024,15 +1053,15 @@ def _run_minimize_in_chunks(
         _prepare_mlpot_sd_list_frequencies(pycharmm, sd_kw=kw)
         if config.verbose:
             if n_chunks > 1:
-                print(
-                    f"{method} {pass_label}: chunk {chunk_index}/{n_chunks} "
-                    f"nstep={step}",
-                    flush=True,
-                )
+                pass
             elif chunk_index == 1:
-                print(
+                from mmml.utils.prep_ladder_report import emit_tagged
+
+                emit_tagged(
+                    "SD",
                     f"{method} {pass_label}: nstep={remaining} nprint={config.nprint}",
-                    flush=True,
+                    tag_style="bold blue",
+                    quiet=False,
                 )
         with charmm_quiet_output():
             run_fn(**kw)
@@ -1044,6 +1073,8 @@ def _run_minimize_in_chunks(
             pass_label=pass_label,
             chunk_index=chunk_index,
             n_chunks=n_chunks,
+            method=method,
+            nstep=step,
         )
         if grms is not None and converged_grms is not None and grms <= float(converged_grms):
             improved = (
@@ -5226,10 +5257,16 @@ def minimize_with_mlpot(
             if baseline is not None:
                 config.sd_watchdog_initial_grms = baseline
                 if config.verbose:
-                    print(
-                        f"MLpot SD watchdog baseline: hybrid GRMS={baseline:.4f} "
-                        "kcal/mol/Å (post calculator pre-minimize)",
-                        flush=True,
+                    from mmml.utils.prep_ladder_report import PrepMetrics, emit_prep_checkpoint
+
+                    emit_prep_checkpoint(
+                        "MLpot SD watchdog baseline",
+                        PrepMetrics.from_mlpot(
+                            config.mlpot_ctx,
+                            hybrid_grms=baseline,
+                        ),
+                        note="post calculator pre-minimize",
+                        quiet=False,
                     )
         sd_result = _run_mlpot_sd_then_abnr(
             minimize,

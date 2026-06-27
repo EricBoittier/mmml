@@ -19,6 +19,14 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     probe_and_light_resync_if_desync,
     resolve_mlpot_grms_kcalmol_A,
 )
+from mmml.utils import rich_report
+
+
+@pytest.fixture(autouse=True)
+def _no_rich(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MMML_NO_RICH", "1")
+    monkeypatch.delenv("MMML_QUIET", raising=False)
+    rich_report._console.cache_clear()
 
 
 def test_forces_grms_matches_rms_of_components():
@@ -94,7 +102,7 @@ def test_resolve_mlpot_grms_reports_desync(capsys):
 
     assert grms == pytest.approx(30.0)
     out = capsys.readouterr().out
-    assert "possible desync" in out
+    assert "possible hybrid/CHARMM desync" in out
 
 
 def test_resolve_mlpot_grms_falls_back_to_charmm_without_ctx():
