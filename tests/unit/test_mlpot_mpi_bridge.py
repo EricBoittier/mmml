@@ -32,6 +32,30 @@ def test_mpi_rank_size_from_openmpi_env():
     assert size == 4
 
 
+def test_mpi_rank_size_prefers_launcher_env_when_mpi4py_singleton():
+    """CHARMM MPI_Init can leave mpi4py COMM_WORLD at size 1 under mpirun -np N."""
+    env = {
+        "OMPI_COMM_WORLD_RANK": "2",
+        "OMPI_COMM_WORLD_SIZE": "4",
+    }
+    fake_comm = mock.MagicMock()
+    fake_comm.Get_rank.return_value = 0
+    fake_comm.Get_size.return_value = 1
+    fake_mpi = mock.MagicMock()
+    fake_mpi.COMM_WORLD = fake_comm
+
+    with mock.patch.dict(os.environ, env, clear=True):
+        with mock.patch.dict("sys.modules", {"mpi4py": fake_mpi}):
+            with mock.patch(
+                "mpi4py.MPI",
+                fake_mpi,
+                create=True,
+            ):
+                rank, size = mpi_bridge.mpi_rank_size()
+    assert rank == 2
+    assert size == 4
+
+
 def test_mlpot_runs_on_all_ranks_when_spatial_mpi(monkeypatch):
     monkeypatch.setenv("MMML_MLPOT_SPATIAL_MPI", "1")
     with mock.patch(
