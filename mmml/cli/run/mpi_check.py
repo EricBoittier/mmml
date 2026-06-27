@@ -172,17 +172,42 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Treat warnings as errors (non-zero exit).",
     )
+    parser.add_argument(
+        "--tier2",
+        action="store_true",
+        help="Also validate Tier 2 spatial MPI + GPU environment for MLpot.",
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     report = run_mpi_check(strict=bool(args.strict))
+    tier2_ok = True
+    tier2_report = None
+    if args.tier2:
+        from mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_validate import (
+            validate_tier2_spatial_mpi_env,
+        )
+
+        tier2_report = validate_tier2_spatial_mpi_env(strict=bool(args.strict))
+        tier2_ok = tier2_report.ok
+
     if args.json:
-        print(json.dumps(report.to_dict(), indent=2))
+        payload = report.to_dict()
+        if tier2_report is not None:
+            payload["tier2"] = tier2_report.to_dict()
+        print(json.dumps(payload, indent=2))
     else:
         print(render_mpi_check_report(report))
-    return 0 if report.ok else 1
+        if tier2_report is not None:
+            from mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_validate import (
+                render_tier2_report,
+            )
+
+            print()
+            print(render_tier2_report(tier2_report))
+    return 0 if report.ok and tier2_ok else 1
 
 
 if __name__ == "__main__":

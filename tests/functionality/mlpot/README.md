@@ -31,6 +31,7 @@ pip install -e .
 | `03_energy_compare.py` | yes | Tabulate ASE vs direct callback vs CHARMM energy after `MLpot` |
 | `04_mlpot_minimize_stub.py` | yes | SD minimization + optional `--save` outputs |
 | `05_mlpot_dynamics_stub.py` | yes | Short NVE with DCD/restart (`--run`) |
+| `06_spatial_mpi_tier2_smoke.py` | optional | Tier 2 spatial MPI env + hybrid callback under `mpirun` (see `docs/pycharmm-mpi.md`) |
 | `run_all.sh` | — | Run 00→03; `RUN_EXTENDED=1` adds 04–05 |
 
 ```bash

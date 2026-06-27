@@ -111,6 +111,50 @@ def test_mpi_rank_io_rank0_write_text(tmp_path):
     assert path.read_text() == "hello"
 
 
+def test_mpi_check_tier2_flag(monkeypatch, tmp_path):
+    from mmml.cli.run.mpi_check import main
+
+    mpirun = tmp_path / "mpirun"
+    mpirun.write_text("#!/bin/sh\nexit 0\n")
+    mpirun.chmod(0o755)
+    monkeypatch.setenv("CHARMM_LIB_DIR", str(tmp_path))
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_available",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._charmm_lib_path",
+        return_value=tmp_path / "libcharmm.so",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_mpirun_path",
+        return_value=mpirun.resolve(),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        return_value=(0, 2),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._mpi4py_available",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy.spatial_mpi_enabled",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_name",
+        return_value="gpu",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_local_gpu_count",
+        return_value=0,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.defer_jax_warmup_until_after_mlpot_sd",
+        return_value=True,
+    ):
+        assert main(["--tier2"]) == 1
+
+
 def test_maybe_rerun_liquid_box_subcommand(monkeypatch, tmp_path):
     from mmml.interfaces.pycharmmInterface import charmm_mpi
 
