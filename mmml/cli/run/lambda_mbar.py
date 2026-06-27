@@ -16,7 +16,7 @@ from mmml.cli.run.lambda_dynamics import (
 )
 
 
-def parse_args() -> argparse.Namespace:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
             "MBAR analysis for a completed lambda-dynamics run. "
@@ -47,7 +47,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--mm-cutoff", type=float, default=5.0)
     parser.add_argument("--mbar-verbose", action="store_true")
     parser.add_argument("--no-plots", action="store_true", help="Skip updating diagnostic plots.")
-    return parser.parse_args()
+    return parser
+
+
+def parse_args() -> argparse.Namespace:
+    return build_parser().parse_args()
 
 
 def _temperature_from_summary(run_dir: Path, override: float | None) -> float:
