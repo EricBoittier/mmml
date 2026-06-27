@@ -31,7 +31,6 @@ import argparse
 import sys
 from unittest import mock
 
-import jax.numpy as jnp
 import numpy as np
 
 
@@ -51,17 +50,9 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _mpi_info() -> tuple[int, int]:
-    try:
-        from mpi4py import MPI
+    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
-        comm = MPI.COMM_WORLD
-        return int(comm.Get_rank()), int(comm.Get_size())
-    except ImportError:
-        import os
-
-        rank = int(os.environ.get("OMPI_COMM_WORLD_RANK", os.environ.get("PMI_RANK", "0")))
-        size = int(os.environ.get("OMPI_COMM_WORLD_SIZE", os.environ.get("PMI_SIZE", "1")))
-        return rank, max(1, size)
+    return mpi_rank_size()
 
 
 def _tier2_validate() -> int:
@@ -79,6 +70,8 @@ def _tier2_validate() -> int:
 
 def _hybrid_callback_smoke(box_side: float) -> int:
     """Exercise DecomposedMlpotCalculator spatial path without CHARMM ENER."""
+    import jax.numpy as jnp
+
     from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
     from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotCalculator
     from mmml.interfaces.pycharmmInterface.mlpot.medium_pbc_validation import (
@@ -239,6 +232,9 @@ def _charmm_ener_smoke(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import prepare_serial_charmm_mpi_env
+
+    prepare_serial_charmm_mpi_env()
     args = _parse_args()
     rank, size = _mpi_info()
     if rank == 0:

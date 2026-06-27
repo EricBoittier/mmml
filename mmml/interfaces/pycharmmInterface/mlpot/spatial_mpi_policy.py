@@ -23,18 +23,37 @@ def spatial_mpi_enabled(explicit: bool | None = None) -> bool:
     return _truthy(_SPATIAL_ENV, default=False)
 
 
+def _mpi_local_rank_index() -> int | None:
+    """OpenMPI / PMI local rank for single-node GPU pinning."""
+    for key in (
+        "OMPI_COMM_WORLD_LOCAL_RANK",
+        "MPI_LOCALRANKID",
+        "PMIX_LOCAL_RANK",
+    ):
+        raw = os.environ.get(key)
+        if raw is not None and str(raw).strip() != "":
+            return int(raw)
+    # Single-node fallback when only world rank is exported.
+    world = os.environ.get("OMPI_COMM_WORLD_RANK") or os.environ.get("PMI_RANK")
+    if world is not None and str(world).strip() != "":
+        return int(world)
+    return None
+
+
 def pin_cuda_for_spatial_mpi() -> bool:
-    """Pin ``CUDA_VISIBLE_DEVICES`` to local MPI rank when spatial ML is on."""
+    """Pin ``CUDA_VISIBLE_DEVICES`` to local MPI rank when spatial ML is on.
+
+    Must run before the first ``import jax`` on each rank so JAX does not all
+    attach to physical GPU 0 (``CUDA_ERROR_DEVICE_UNAVAILABLE`` on rank > 0).
+    """
     if not spatial_mpi_enabled():
         return False
     if not _truthy("MMML_MPI_PIN_GPU_PER_RANK", default=True):
         return False
-    local = os.environ.get("OMPI_COMM_WORLD_LOCAL_RANK")
-    if local is None:
-        local = os.environ.get("MPI_LOCALRANKID")
+    local = _mpi_local_rank_index()
     if local is None:
         return False
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(int(local))
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(local)
     return True
 
 

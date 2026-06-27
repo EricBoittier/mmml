@@ -186,6 +186,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import prepare_serial_charmm_mpi_env
+
+    prepare_serial_charmm_mpi_env()
     args = build_parser().parse_args(argv)
     report = run_mpi_check(strict=bool(args.strict))
     tier2_ok = True
