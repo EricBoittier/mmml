@@ -86,3 +86,17 @@ def test_tier2_ok_serial_spatial_disabled(monkeypatch):
     with _tier2_patches(spatial_mpi_enabled=False, mpi_rank_size=(0, 1)):
         report = validate_tier2_spatial_mpi_env()
     assert report.ok is True
+
+
+def test_tier2_prelaunch_strict_ok_without_spatial_env(monkeypatch):
+    monkeypatch.delenv("MMML_MLPOT_SPATIAL_MPI", raising=False)
+    with _tier2_patches(spatial_mpi_enabled=False, mpi_rank_size=(0, 1)):
+        report = validate_tier2_spatial_mpi_env(strict=True, prelaunch=True)
+    assert report.ok is True
+
+
+def test_tier2_strict_without_prelaunch_fails_on_spatial_off(monkeypatch):
+    monkeypatch.delenv("MMML_MLPOT_SPATIAL_MPI", raising=False)
+    with _tier2_patches(spatial_mpi_enabled=False, mpi_rank_size=(0, 1)):
+        report = validate_tier2_spatial_mpi_env(strict=True, prelaunch=False)
+    assert report.ok is False

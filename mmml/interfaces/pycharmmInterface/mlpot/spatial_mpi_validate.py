@@ -45,8 +45,16 @@ class Tier2MlpotMpiReport:
         }
 
 
-def validate_tier2_spatial_mpi_env(*, strict: bool = False) -> Tier2MlpotMpiReport:
-    """Check env for Tier 2 spatial ML MPI (does not run MLpot)."""
+def validate_tier2_spatial_mpi_env(
+    *,
+    strict: bool = False,
+    prelaunch: bool = False,
+) -> Tier2MlpotMpiReport:
+    """Check env for Tier 2 spatial ML MPI (does not run MLpot).
+
+    With ``prelaunch=True``, serial checks before ``mmml-charmm-mpirun.sh`` do not
+    fail ``strict`` on expected warnings (spatial env unset, not under mpirun, etc.).
+    """
     from mmml.interfaces.pycharmmInterface.charmm_mpi import (
         _under_mpirun,
         charmm_lib_links_mpi,
@@ -115,10 +123,15 @@ def validate_tier2_spatial_mpi_env(*, strict: bool = False) -> Tier2MlpotMpiRepo
         )
 
     if report.charmm_links_mpi and not report.defer_jax_warmup and report.mlpot_device == "gpu":
-        report.warnings.append(
-            "JAX GPU warmup may run before MLpot SD; prefer mmml-charmm-mpirun.sh "
-            "(defer_jax_warmup default on MPI builds)"
-        )
+        if report.under_mpirun:
+            report.warnings.append(
+                "JAX GPU warmup may run before MLpot SD; prefer mmml-charmm-mpirun.sh "
+                "(defer_jax_warmup default on MPI builds)"
+            )
+        else:
+            report.warnings.append(
+                "Defer JAX until after MLpot SD applies under mpirun (launcher sets this)"
+            )
 
     if os.environ.get("MMML_MLPOT_RANK0_BRIDGE", "1").strip().lower() in ("0", "false"):
         if report.spatial_mpi_enabled and report.mpi_size > 1:
@@ -137,12 +150,27 @@ def validate_tier2_spatial_mpi_env(*, strict: bool = False) -> Tier2MlpotMpiRepo
     )
 
     if strict and report.warnings:
-        report.ok = False
+        if prelaunch:
+            blocking = [w for w in report.warnings if not _prelaunch_ok_warning(w)]
+            if blocking:
+                report.ok = False
+        else:
+            report.ok = False
 
     return report
 
 
-def render_tier2_report(report: Tier2MlpotMpiReport) -> str:
+def _prelaunch_ok_warning(message: str) -> bool:
+    """Warnings that are normal for serial ``mpi-check`` before ``mpirun`` launch."""
+    ok_fragments = (
+        "MMML_MLPOT_SPATIAL_MPI is off",
+        "spatial MPI enabled but mpi_size=",
+        "Defer JAX until after MLpot SD applies under mpirun",
+    )
+    return any(fragment in message for fragment in ok_fragments)
+
+
+def render_tier2_report(report: Tier2MlpotMpiReport, *, prelaunch: bool = False) -> str:
     lines = [
         "MMML Tier 2 spatial MPI + MLpot check",
         "====================================",
@@ -159,6 +187,14 @@ def render_tier2_report(report: Tier2MlpotMpiReport) -> str:
         lines.extend(["", "Warnings:"] + [f"  - {w}" for w in report.warnings])
     if report.errors:
         lines.extend(["", "Errors:"] + [f"  - {e}" for e in report.errors])
+    if prelaunch and not report.under_mpirun:
+        lines.extend(
+            [
+                "",
+                "Pre-launch note: serial mpi-check is OK. For strict Tier 2 under launch:",
+                "  MMML_MPI_NP=2 MMML_MLPOT_SPATIAL_MPI=1 ./scripts/mmml-charmm-mpirun.sh mpi-check --tier2 --strict",
+            ]
+        )
     lines.extend(
         [
             "",
