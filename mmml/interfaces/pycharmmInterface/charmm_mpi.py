@@ -307,24 +307,27 @@ def openmpi_install_prefix() -> Path | None:
 
 
 def mpi_openmpi_install_env_defaults() -> None:
-    """Prefer CHARMM-linked OpenMPI MCA and block distro ``pmix/ext3x`` plugins.
+    """Block distro ``pmix/ext3x`` MCA; avoid breaking in-tree OpenMPI shmem.
 
     On shared GPU nodes, ``orted`` can load ``/usr/lib/.../mca_pmix_ext3x.so`` from
     the system OpenMPI 3 stack and fail with ``undefined symbol: pmix_value_load``
     when the launcher is OpenMPI 5 + PMIx 5 from ``/opt/gcc-...``.
+
+    Do **not** set ``OMPI_MCA_component_path`` or ``OPAL_PREFIX`` for incomplete
+    in-tree builds (missing ``share/openmpi``); that breaks ``opal_shmem_base_select``.
+    Set ``MMML_OPAL_PREFIX`` only when you have a full OpenMPI install prefix.
     """
     if _truthy("MMML_NO_MPI_MCA_PREFIX"):
         return
-    prefix = openmpi_install_prefix()
-    if prefix is None:
-        return
-    os.environ.setdefault("OPAL_PREFIX", str(prefix))
     os.environ.setdefault("OMPI_MCA_pmix", "^ext3x")
-    for sub in ("lib/openmpi", "lib"):
-        mca_dir = prefix / sub
-        if mca_dir.is_dir():
-            os.environ.setdefault("OMPI_MCA_component_path", str(mca_dir))
-            break
+    os.environ.setdefault("OMPI_MCA_shmem", "posix")
+    override = (os.environ.get("MMML_OPAL_PREFIX") or "").strip()
+    if override:
+        os.environ.setdefault("OPAL_PREFIX", override)
+        return
+    prefix = openmpi_install_prefix()
+    if prefix is not None and (prefix / "share" / "openmpi").is_dir():
+        os.environ.setdefault("OPAL_PREFIX", str(prefix))
 
 
 def _scrub_deprecated_openmpi_mca_env() -> None:
@@ -345,7 +348,7 @@ def mpi_mpirun_extra_args() -> list[str]:
     """Extra ``mpirun`` argv tokens for crash diagnostics."""
     args: list[str] = []
     if not _truthy("MMML_NO_MPI_MCA_PREFIX"):
-        args.extend(["--mca", "pmix", "^ext3x"])
+        args.extend(["--mca", "pmix", "^ext3x", "--mca", "shmem", "posix"])
     if _truthy("MMML_NO_MPI_ABORT_STACK"):
         return args
     args.extend(["--mca", "orte_abort_print_stack", "1"])
@@ -406,15 +409,16 @@ def mpi_shell_setup_lines() -> list[str]:
                 "export OMPI_MCA_orte_base_help_aggregate=0",
             ]
         )
-    prefix = openmpi_install_prefix()
-    if prefix is not None and not _truthy("MMML_NO_MPI_MCA_PREFIX"):
-        lines.append(f"export OPAL_PREFIX={prefix}")
+    if not _truthy("MMML_NO_MPI_MCA_PREFIX"):
         lines.append("export OMPI_MCA_pmix='^ext3x'")
-        for sub in ("lib/openmpi", "lib"):
-            mca_dir = prefix / sub
-            if mca_dir.is_dir():
-                lines.append(f"export OMPI_MCA_component_path={mca_dir}")
-                break
+        lines.append("export OMPI_MCA_shmem=posix")
+        opal = (os.environ.get("MMML_OPAL_PREFIX") or "").strip()
+        if not opal:
+            prefix = openmpi_install_prefix()
+            if prefix is not None and (prefix / "share" / "openmpi").is_dir():
+                opal = str(prefix)
+        if opal:
+            lines.append(f"export OPAL_PREFIX={opal}")
     ld = mpi_library_path_export()
     if ld:
         lines.append(ld)
