@@ -11,6 +11,17 @@ import pytest
 from mmml.interfaces.pycharmmInterface.mlpot import mpi_bridge
 
 
+def test_mpi_rank_size_defers_mpi4py_before_init(monkeypatch):
+    monkeypatch.setenv("OMPI_COMM_WORLD_RANK", "1")
+    monkeypatch.setenv("OMPI_COMM_WORLD_SIZE", "4")
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge._mpi4py_is_initialized",
+        return_value=False,
+    ):
+        rank, size = mpi_bridge.mpi_rank_size()
+    assert (rank, size) == (1, 4)
+
+
 def test_mpi_rank_size_serial_defaults():
     with mock.patch.dict(os.environ, {}, clear=True):
         rank, size = mpi_bridge.mpi_rank_size()
