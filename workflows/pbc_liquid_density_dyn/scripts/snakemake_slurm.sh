@@ -15,10 +15,12 @@ PY="${MMML_PYTHON}"
 
 PROFILE="${MMML_SNAKEMAKE_PROFILE:-profiles/slurm}"
 CFG="${MMML_WORKFLOW_CONFIG:-config.yaml}"
-CONFIG_ARGS=()
-if [[ "$CFG" != "config.yaml" ]]; then
-  CONFIG_ARGS=(--configfile "$CFG")
+if [[ "$CFG" == */* ]]; then
+  CFG_PATH="$(cd "$(dirname "$CFG")" && pwd)/$(basename "$CFG")"
+else
+  CFG_PATH="${WORKFLOW_ROOT}/${CFG}"
 fi
+CONFIG_ARGS=(--configfile "$CFG_PATH")
 
 IFS=$'\t' read -r DEFAULT_JOBS DEFAULT_RES <<EOF
 $("$PY" -c "
@@ -26,15 +28,20 @@ import sys
 from pathlib import Path
 sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
 from campaign_lib import load_config, slurm_launch_jobs, slurm_resources_cli
-cfg = load_config(Path('${CFG}'))
+cfg = load_config(Path('${CFG_PATH}'))
 print(f\"{slurm_launch_jobs(cfg)}\t{slurm_resources_cli(cfg)}\")
 ")
 EOF
 
+if [[ -z "${DEFAULT_RES// }" ]]; then
+  echo "ERROR: could not resolve Slurm resources from ${CFG_PATH}" >&2
+  exit 1
+fi
+
 JOBS="${1:-$DEFAULT_JOBS}"
 shift || true
 
-echo "Snakemake Slurm: profile=${PROFILE} config=${CFG} -j${JOBS} --resources ${DEFAULT_RES}" >&2
+echo "Snakemake Slurm: profile=${PROFILE} config=${CFG_PATH} -j${JOBS} --resources ${DEFAULT_RES}" >&2
 
 # shellcheck disable=SC2086
 exec uv run --with snakemake --with snakemake-executor-plugin-slurm snakemake \
