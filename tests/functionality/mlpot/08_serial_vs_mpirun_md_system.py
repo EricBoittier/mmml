@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Compare serial ``python md-system`` vs ``mpirun`` for MPI-linked CHARMM.
 
-The docs claim serial ``md-system`` with MPI-linked ``libcharmm.so`` can segfault in
-Fortran ``upinb`` during MLpot registration. This script measures both paths on
-**your** cluster so the claim can be verified or retired.
+Historical docs and DCM-cluster reports say serial ``md-system`` with MPI-linked
+``libcharmm.so`` **may** segfault in Fortran ``upinb`` during MLpot registration.
+This script measures both paths on **your** cluster so the claim can be verified or
+retired. **gpu09 (June 2026):** both paths passed with matching outputs.
 
 **Dry-run (CI / anywhere):**
 
@@ -23,10 +24,14 @@ python tests/functionality/mlpot/08_serial_vs_mpirun_md_system.py --run-both \\
 **Interpretation:**
 
 - Both exit 0 → serial path is OK on this node; mpirun still recommended for production.
-- Serial SIGSEGV / exit 139, mpirun OK → docs claim holds; keep ``mmml-charmm-mpirun.sh``.
+- Serial SIGSEGV / exit 139, mpirun OK → use ``mmml-charmm-mpirun.sh`` on this stack.
 - Both fail → unrelated setup issue (checkpoint, GPU, etc.).
 
+Re-run after OpenMPI / module / ``libcharmm.so`` changes or on a new node.
+
 Serial run sets ``MMML_NO_MPI_RERUN=1`` so ``md-system`` does **not** auto re-exec under mpirun.
+The JSON report records hostname, timestamp, and env snapshot (``MMML_MLPOT_DEVICE``,
+``OMP_NUM_THREADS``, ``JAX_PLATFORMS``, ``CUDA_VISIBLE_DEVICES``) plus per-run elapsed time.
 """
 
 from __future__ import annotations
@@ -35,11 +40,37 @@ import argparse
 import json
 import os
 import signal
+import socket
 import subprocess
 import sys
 import time
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from pathlib import Path
+
+
+_ENV_KEYS = (
+    "MMML_MLPOT_DEVICE",
+    "JAX_PLATFORMS",
+    "OMP_NUM_THREADS",
+    "MMML_CHARMM_OMP_THREADS",
+    "CUDA_VISIBLE_DEVICES",
+    "MMML_MPI_NP",
+    "MMML_NO_MPI_RERUN",
+    "CHARMM_LIB_DIR",
+)
+
+
+def _environment_snapshot(*, overrides: dict[str, str] | None = None) -> dict[str, str | None]:
+    """Capture env vars relevant to serial vs mpirun MLpot comparisons."""
+    snap: dict[str, str | None] = {}
+    for key in _ENV_KEYS:
+        if overrides and key in overrides:
+            snap[key] = overrides[key]
+        else:
+            val = os.environ.get(key)
+            snap[key] = val if val is not None else None
+    return snap
 
 
 def _repo_root() -> Path:
@@ -57,6 +88,7 @@ class RunOutcome:
     exit_code: int
     elapsed_s: float
     signal_name: str | None = None
+    environment: dict[str, str | None] | None = None
 
     @property
     def ok(self) -> bool:
@@ -130,7 +162,13 @@ def _format_cmd(cmd: list[str]) -> str:
     return " ".join(cmd)
 
 
-def _run_subprocess(label: str, cmd: list[str], env: dict[str, str]) -> RunOutcome:
+def _run_subprocess(
+    label: str,
+    cmd: list[str],
+    env: dict[str, str],
+    *,
+    env_snapshot: dict[str, str | None],
+) -> RunOutcome:
     print(f"\n=== {label} ===", flush=True)
     print(_format_cmd(cmd), flush=True)
     t0 = time.perf_counter()
@@ -143,8 +181,9 @@ def _run_subprocess(label: str, cmd: list[str], env: dict[str, str]) -> RunOutco
         label=label,
         command=cmd,
         exit_code=int(proc.returncode),
-        elapsed_s=elapsed,
+        elapsed_s=round(elapsed, 3),
         signal_name=sig,
+        environment=env_snapshot,
     )
     print(
         f"-> exit={outcome.exit_code}"
@@ -200,22 +239,33 @@ def main() -> int:
         env = os.environ.copy()
         env["MMML_NO_MPI_RERUN"] = "1"
         env.setdefault("OMP_NUM_THREADS", "1")
+        serial_overrides = {
+            "MMML_NO_MPI_RERUN": "1",
+            "OMP_NUM_THREADS": env["OMP_NUM_THREADS"],
+            "MMML_MPI_NP": None,
+        }
         outcomes.append(
             _run_subprocess(
                 "serial_python",
                 [py, "-m", "mmml.cli.__main__", *md_argv],
                 env,
+                env_snapshot=_environment_snapshot(overrides=serial_overrides),
             )
         )
 
     if args.run_mpirun or args.run_both:
         env = os.environ.copy()
         env["MMML_MPI_NP"] = "1"
+        mpi_overrides = {
+            "MMML_MPI_NP": "1",
+            "MMML_NO_MPI_RERUN": env.get("MMML_NO_MPI_RERUN"),
+        }
         outcomes.append(
             _run_subprocess(
                 "mpirun_np1",
                 [str(mpi_sh), "md-system", *md_argv[1:]],
                 env,
+                env_snapshot=_environment_snapshot(overrides=mpi_overrides),
             )
         )
 
@@ -226,9 +276,12 @@ def main() -> int:
         report_path = Path("serial_vs_mpirun.json")
 
     payload = {
+        "hostname": socket.gethostname(),
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "config": str(args.config),
         "checkpoint": checkpoint,
         "output_dir": output_dir,
+        "environment": _environment_snapshot(),
         "runs": [o.to_dict() for o in outcomes],
     }
     report_path.parent.mkdir(parents=True, exist_ok=True)

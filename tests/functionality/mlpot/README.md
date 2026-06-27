@@ -33,6 +33,7 @@ pip install -e .
 | `05_mlpot_dynamics_stub.py` | yes | Short NVE with DCD/restart (`--run`) |
 | `06_spatial_mpi_tier2_smoke.py` | optional | Tier 2 spatial MPI env + hybrid callback under `mpirun` (see `docs/pycharmm-mpi.md`) |
 | `07_md_system_spatial_mpi_mini.py` | optional | Full `md-system --ml-spatial-mpi` mini dry-run / cluster smoke |
+| `08_serial_vs_mpirun_md_system.py` | optional | A/B serial `python md-system` vs `mpirun np=1` (`upinb` claim); writes JSON report |
 | `run_all.sh` | — | Run 00→03; `RUN_EXTENDED=1` adds 04–05 |
 
 ```bash
@@ -173,6 +174,23 @@ for s in d['snapshots']:
 Pass criteria: `force_rmse_spherical_fn_eV_A` ≈ ASE evaluate-npz (~0.003 for frame 16566);
 `force_rmse_charmm_total_eV_A` exposes the static CHARMM export bug if still ~0.25.
 Post-dyna `cross_lane_force_rmse_eV_A` shows whether DYNA changes the mismatch.
+
+## Serial vs mpirun probe (`08`)
+
+Validates whether serial `python md-system` is safe on your MPI-linked CHARMM stack
+(see `docs/pycharmm-mpi.md`). **Passed on gpu09 (June 2026)** with matching outputs.
+
+```bash
+python tests/functionality/mlpot/08_serial_vs_mpirun_md_system.py --dry-run
+
+export MMML_CKPT=/path/to/checkpoint.json
+python tests/functionality/mlpot/08_serial_vs_mpirun_md_system.py --run-both \
+  --checkpoint "$MMML_CKPT" \
+  --output-dir artifacts/serial_vs_mpirun_$(date +%Y%m%d_%H%M%S)
+```
+
+Config: `mmml/cli/run/md_system.serial_mpi_probe.yaml` (ACO:2 hybrid mini). JSON report
+includes hostname, UTC timestamp, env snapshot, and per-run `elapsed_s`.
 
 ## Library module
 
