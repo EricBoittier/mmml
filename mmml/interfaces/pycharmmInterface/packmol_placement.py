@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import os
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 from typing import Literal
 
@@ -14,23 +16,49 @@ PackmolPlacement = Literal["cube", "sphere"]
 PACKMOL_PATH = Path("~/mmml/mmml/generate/packmol/packmol").expanduser()
 
 
+def _binary_runs_on_host(path: Path) -> bool:
+    """Return False for committed Linux ELFs on macOS (or other foreign binaries)."""
+    if not path.is_file() or not os.access(path, os.X_OK):
+        return False
+    try:
+        proc = subprocess.run(
+            ["file", "-b", str(path)],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return True
+    if proc.returncode != 0:
+        return True
+    desc = proc.stdout.lower()
+    if sys.platform == "darwin":
+        return "mach-o" in desc
+    if sys.platform.startswith("linux"):
+        return "elf" in desc
+    return True
+
+
 def packmol_executable() -> str:
     from mmml.paths import bundled_file
 
     candidates = [
         bundled_file("generate", "packmol", "packmol"),
+        bundled_file("generate", "packmol", "bin", "packmol"),
         Path(os.path.expanduser(str(PACKMOL_PATH))),
     ]
     for path in candidates:
-        if path.is_file():
+        if _binary_runs_on_host(path):
             return str(path)
     found = shutil.which("packmol")
     if found:
         return found
     tried = ", ".join(str(p) for p in candidates)
     raise FileNotFoundError(
-        "packmol not found on PATH and no bundled binary "
-        f"(tried {tried}). Install packmol or build mmml/generate/packmol."
+        "packmol not found for this platform "
+        f"(tried {tried}). Run: bash scripts/rebuild_charmm_mlpot.sh "
+        "or bash scripts/rebuild_packmol.sh"
     )
 
 

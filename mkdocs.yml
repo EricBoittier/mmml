@@ -47,6 +47,5 @@ nav:
   - Cross-backend MD handoff: handoff.md
   - Spatial ML MPI: mlpot-spatial-mpi.md
   - Development: development.md
-  - Releasing: releasing.md
   - Units Summary: UNITS_SUMMARY.md
   - API Reference: api.md

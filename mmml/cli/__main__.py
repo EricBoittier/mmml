@@ -28,6 +28,7 @@ def main():
         epilog="""
 Available commands:
   make-res    Generate residue (PDB, PSF, topology) via PyCHARMM/CGENFF
+              Use ``mmml make-res --list-residues`` to browse CGENFF residue names.
   make-box    Pack molecules into periodic box (vacuum or solvated)
   build-crystal  Build symmetry-aware crystals with PyXtal (+ optional ASE opt)
   run         MM/ML simulation (ASE + JAX-MD with hybrid calculator)
@@ -63,6 +64,7 @@ Available commands:
   orca-external  Standalone ORCA external-tool wrapper (no server)
 
 Examples:
+  mmml make-res --list-residues
   mmml make-res --res CYBZ
   mmml make-box --res CYBZ --n 50 --side_length 25.0
   mmml build-crystal -m benzene.xyz --spg 14 --z 2 -o crystal.extxyz
