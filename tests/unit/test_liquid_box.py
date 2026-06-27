@@ -223,3 +223,15 @@ def test_liquid_box_args_resolve_dcd_nsavc_without_flag():
     nsavc = resolve_dcd_nsavc_for_args(args, nstep=nstep, timestep_ps=timestep_ps)
     assert nsavc >= 1
     assert not hasattr(args, "dcd_nsavc")
+
+
+def test_liquid_box_echeck_scales_with_cluster_size():
+    from mmml.cli.run.liquid_box import build_parser
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_echeck_for_cluster
+
+    parser = build_parser()
+    args = parser.parse_args(
+        ["--composition", "DCM:103", "--output-dir", "/tmp/x", "--profile", "dense"]
+    )
+    echeck = resolve_echeck_for_cluster(args, n_atoms=515, n_monomers=103)
+    assert echeck == pytest.approx(5150.0)

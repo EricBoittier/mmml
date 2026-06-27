@@ -65,12 +65,9 @@ def build_parser() -> argparse.ArgumentParser:
         default=0.25,
         help="Timestep for mini box equilibration (fs).",
     )
-    parser.add_argument(
-        "--echeck",
-        type=float,
-        default=100.0,
-        help="CHARMM energy check frequency during mini box equil.",
-    )
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import add_dynamics_stability_args
+
+    add_dynamics_stability_args(parser)
     parser.add_argument(
         "--charmm-sd-steps",
         type=int,
