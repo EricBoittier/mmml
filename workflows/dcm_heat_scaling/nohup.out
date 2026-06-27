@@ -1,0 +1,3163 @@
+Using profile profiles/slurm for setting default command line arguments.
+
+SNAKEMAKE
+=========
+  Date: 2026-06-08 14:48:10
+  Workflow ID: 5c43e019-430d-421f-bf9d-07f313a5edab
+  Platform: Linux-5.15.0-118-generic-x86_64-with-glibc2.35
+  Host: pc-studix
+  User: boittier
+  Snakemake version: 9.22.0
+  Python version: 3.13.1 (main, Dec  6 2024, 18:40:43) [Clang 18.1.8 ]
+  Command: /mmhome/boittier/home/.cache/uv/builds-v0/.tmpVaYmSt/bin/snakemake --profile profiles/slurm -j4 --resources gpu=1 mpi=1 --keep-going --rerun-incomplete
+  Snakefile: /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/Snakefile
+  Base directory: /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling
+  Run directory: /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling
+  Working directory: /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling
+  Config file(s): ['config.yaml']
+  Config MD5: 9466103269b7592dfc46ceff0e9fa869
+
+Building DAG of jobs...
+SLURM run ID: 236523fd-883e-44c5-aee1-3223252e4208
+MinJobAge 300s (>= 120s). 'squeue' should work reliably for status queries.
+Using shell: /usr/bin/bash
+Provided remote nodes: 4
+Provided resources: gpu=Resource("gpu", 1), mpi=Resource("mpi", 1)
+Job stats:
+job         count
+--------  -------
+run_heat       36
+all             1
+total          37
+
+Select jobs to execute...
+Execute 1 jobs...
+No SLURM account given, trying to guess.
+No account was given, not able to get a SLURM account via sacct: sacct: invalid option -- '1'
+
+Unable to guess SLURM account. Trying to proceed without.
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 36
+    output: ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 90 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt0125/heat_dcm_90.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 36.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 36
+    output: ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 90 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt0125/heat_dcm_90.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 6
+    output: ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 15 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt0125/heat_dcm_15.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 6.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 6
+    output: ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 15 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt0125/heat_dcm_15.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 14
+    output: ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 35 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt0125/heat_dcm_35.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 14.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 14
+    output: ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 35 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt0125/heat_dcm_35.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 24
+    output: ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 60 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt0125/heat_dcm_60.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 24.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 24
+    output: ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 60 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt0125/heat_dcm_60.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 17
+    output: ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 45 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt025/heat_dcm_45.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 17.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 17
+    output: ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 45 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt025/heat_dcm_45.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 2
+    output: ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 5 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt0125/heat_dcm_5.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 2.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 2
+    output: ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 5 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt0125/heat_dcm_5.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 32
+    output: ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 80 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt0125/heat_dcm_80.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 32.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 32
+    output: ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 80 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt0125/heat_dcm_80.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 10
+    output: ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 25 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt0125/heat_dcm_25.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 10.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 10
+    output: ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 25 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt0125/heat_dcm_25.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 25
+    output: ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 65 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt025/heat_dcm_65.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 25.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 25
+    output: ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 65 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt025/heat_dcm_65.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 18
+    output: ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 45 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt0125/heat_dcm_45.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 18.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 18
+    output: ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 45 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt0125/heat_dcm_45.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 3
+    output: ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 10 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt025/heat_dcm_10.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 3.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 3
+    output: ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 10 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt025/heat_dcm_10.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 33
+    output: ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 85 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt025/heat_dcm_85.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 33.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 33
+    output: ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 85 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt025/heat_dcm_85.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 11
+    output: ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 30 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt025/heat_dcm_30.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 11.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 11
+    output: ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 30 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt025/heat_dcm_30.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 26
+    output: ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 65 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt0125/heat_dcm_65.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 26.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 26
+    output: ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 65 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt0125/heat_dcm_65.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 19
+    output: ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 50 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt025/heat_dcm_50.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 19.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 19
+    output: ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 50 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt025/heat_dcm_50.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 4
+    output: ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 10 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt0125/heat_dcm_10.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 4.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 4
+    output: ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 10 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt0125/heat_dcm_10.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 34
+    output: ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 85 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt0125/heat_dcm_85.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 34.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 34
+    output: ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 85 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt0125/heat_dcm_85.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 12
+    output: ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 30 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt0125/heat_dcm_30.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 12.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 12
+    output: ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 30 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt0125/heat_dcm_30.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 7
+    output: ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 20 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt025/heat_dcm_20.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 7.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 7
+    output: ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 20 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt025/heat_dcm_20.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 9
+    output: ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 25 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt025/heat_dcm_25.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 9.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 9
+    output: ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 25 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt025/heat_dcm_25.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 27
+    output: ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 70 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt025/heat_dcm_70.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 27.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 27
+    output: ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 70 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt025/heat_dcm_70.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 16
+    output: ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 40 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt0125/heat_dcm_40.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 16.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 16
+    output: ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 40 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt0125/heat_dcm_40.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 29
+    output: ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 75 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt025/heat_dcm_75.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 29.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 29
+    output: ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 75 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt025/heat_dcm_75.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 31
+    output: ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 80 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt025/heat_dcm_80.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 31.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 31
+    output: ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 80 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt025/heat_dcm_80.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 20
+    output: ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 50 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt0125/heat_dcm_50.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 20.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 20
+    output: ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 50 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt0125/heat_dcm_50.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 5
+    output: ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 15 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt025/heat_dcm_15.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 5.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:10 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 5
+    output: ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 15 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt025/heat_dcm_15.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:11 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 22
+    output: ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 55 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt0125/heat_dcm_55.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 22.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:11 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 22
+    output: ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 55 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt0125/heat_dcm_55.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:11 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 1
+    output: ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 5 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt025/heat_dcm_5.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 1.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:11 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 1
+    output: ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 5 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt025/heat_dcm_5.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:11 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 8
+    output: ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 20 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt0125/heat_dcm_20.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 8.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:11 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 8
+    output: ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 20 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt0125/heat_dcm_20.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:11 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 23
+    output: ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 60 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt025/heat_dcm_60.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 23.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:11 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 23
+    output: ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 60 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt025/heat_dcm_60.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:11 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 21
+    output: ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 55 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt025/heat_dcm_55.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 21.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:11 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 21
+    output: ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 55 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt025/heat_dcm_55.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:11 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 30
+    output: ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 75 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt0125/heat_dcm_75.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 30.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:11 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 30
+    output: ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 75 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt0125/heat_dcm_75.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:11 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 13
+    output: ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 35 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt025/heat_dcm_35.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 13.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:11 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 13
+    output: ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 35 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt025/heat_dcm_35.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:11 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 15
+    output: ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 40 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt025/heat_dcm_40.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 15.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:11 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 15
+    output: ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 40 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt025/heat_dcm_40.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:11 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 35
+    output: ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 90 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt025/heat_dcm_90.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 35.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:11 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 35
+    output: ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 90 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt025/heat_dcm_90.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:11 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 28
+    output: ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 70 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt0125/heat_dcm_70.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 28.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:11 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 28
+    output: ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 70 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt0125/heat_dcm_70.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Terminating processes on user request, this might take some time.
+Traceback (most recent call last):
+  File "/mmhome/boittier/home/.cache/uv/archive-v0/YMdOTkPECQi4tdrIzISeW/lib/python3.13/site-packages/snakemake/scheduling/job_scheduler.py", line 270, in schedule
+    self._executor.shutdown()
+    ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/mmhome/boittier/home/.cache/uv/archive-v0/YMdOTkPECQi4tdrIzISeW/lib/python3.13/site-packages/snakemake_executor_plugin_slurm/__init__.py", line 559, in shutdown
+    super().shutdown()
+    ~~~~~~~~~~~~~~~~^^
+  File "/mmhome/boittier/home/.cache/uv/archive-v0/YMdOTkPECQi4tdrIzISeW/lib/python3.13/site-packages/snakemake_interface_executor_plugins/executors/remote.py", line 204, in shutdown
+    self.wait_thread.join()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "/mmhome/boittier/home/.local/share/uv/python/cpython-3.13.1-linux-x86_64-gnu/lib/python3.13/threading.py", line 1092, in join
+    self._handle.join(timeout)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^
+KeyboardInterrupt
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/mmhome/boittier/home/.cache/uv/builds-v0/.tmpVaYmSt/bin/snakemake", line 10, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/mmhome/boittier/home/.cache/uv/archive-v0/YMdOTkPECQi4tdrIzISeW/lib/python3.13/site-packages/snakemake/cli.py", line 2392, in main
+    success = args_to_api(args, parser)
+  File "/mmhome/boittier/home/.cache/uv/archive-v0/YMdOTkPECQi4tdrIzISeW/lib/python3.13/site-packages/snakemake/cli.py", line 2308, in args_to_api
+    dag_api.execute_workflow(
+    ~~~~~~~~~~~~~~~~~~~~~~~~^
+        executor=args.executor,
+        ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<46 lines>...
+        scheduler_settings=scheduler_settings,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/mmhome/boittier/home/.cache/uv/archive-v0/YMdOTkPECQi4tdrIzISeW/lib/python3.13/site-packages/snakemake/api.py", line 638, in execute_workflow
+    workflow.execute(
+    ~~~~~~~~~~~~~~~~^
+        executor_plugin=executor_plugin,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+        updated_files=updated_files,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/mmhome/boittier/home/.cache/uv/archive-v0/YMdOTkPECQi4tdrIzISeW/lib/python3.13/site-packages/snakemake/workflow.py", line 1503, in execute
+    success = self.scheduler.schedule()
+  File "/mmhome/boittier/home/.cache/uv/archive-v0/YMdOTkPECQi4tdrIzISeW/lib/python3.13/site-packages/snakemake/scheduling/job_scheduler.py", line 407, in schedule
+    self._executor.cancel()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "/mmhome/boittier/home/.cache/uv/archive-v0/YMdOTkPECQi4tdrIzISeW/lib/python3.13/site-packages/snakemake_interface_executor_plugins/executors/remote.py", line 110, in cancel
+    self.shutdown()
+    ~~~~~~~~~~~~~^^
+  File "/mmhome/boittier/home/.cache/uv/archive-v0/YMdOTkPECQi4tdrIzISeW/lib/python3.13/site-packages/snakemake_executor_plugin_slurm/__init__.py", line 559, in shutdown
+    super().shutdown()
+    ~~~~~~~~~~~~~~~~^^
+  File "/mmhome/boittier/home/.cache/uv/archive-v0/YMdOTkPECQi4tdrIzISeW/lib/python3.13/site-packages/snakemake_interface_executor_plugins/executors/remote.py", line 204, in shutdown
+    self.wait_thread.join()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "/mmhome/boittier/home/.local/share/uv/python/cpython-3.13.1-linux-x86_64-gnu/lib/python3.13/threading.py", line 1092, in join
+    self._handle.join(timeout)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^
+KeyboardInterrupt
+Using profile profiles/slurm for setting default command line arguments.
+
+SNAKEMAKE
+=========
+  Date: 2026-06-08 14:48:20
+  Workflow ID: c4ae27a7-e6cb-4a0d-ab1e-09f72b2f29b8
+  Platform: Linux-5.15.0-118-generic-x86_64-with-glibc2.35
+  Host: pc-studix
+  User: boittier
+  Snakemake version: 9.22.0
+  Python version: 3.13.1 (main, Dec  6 2024, 18:40:43) [Clang 18.1.8 ]
+  Command: /mmhome/boittier/home/.cache/uv/builds-v0/.tmp3r0fx1/bin/snakemake --profile profiles/slurm -j4 --resources gpu=1 mpi=1 --keep-going --rerun-incomplete
+  Snakefile: /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/Snakefile
+  Base directory: /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling
+  Run directory: /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling
+  Working directory: /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling
+  Config file(s): ['config.yaml']
+  Config MD5: 9466103269b7592dfc46ceff0e9fa869
+
+Building DAG of jobs...
+SLURM run ID: 5628197c-4830-44d8-b4be-a316e6920f27
+MinJobAge 300s (>= 120s). 'squeue' should work reliably for status queries.
+Using shell: /usr/bin/bash
+Provided remote nodes: 4
+Provided resources: gpu=Resource("gpu", 1), mpi=Resource("mpi", 1)
+Job stats:
+job         count
+--------  -------
+run_heat       36
+all             1
+total          37
+
+Select jobs to execute...
+Execute 1 jobs...
+No SLURM account given, trying to guess.
+No account was given, not able to get a SLURM account via sacct: sacct: invalid option -- '1'
+
+Unable to guess SLURM account. Trying to proceed without.
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:20 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 36
+    output: ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 90 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt0125/heat_dcm_90.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 36.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:20 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 36
+    output: ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 90 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt0125/heat_dcm_90.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:20 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 6
+    output: ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 15 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt0125/heat_dcm_15.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 6.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:20 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 6
+    output: ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 15 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt0125/heat_dcm_15.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:20 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 14
+    output: ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 35 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt0125/heat_dcm_35.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 14.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:20 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 14
+    output: ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 35 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt0125/heat_dcm_35.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:20 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 24
+    output: ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 60 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt0125/heat_dcm_60.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 24.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:20 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 24
+    output: ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 60 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt0125/heat_dcm_60.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:20 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 17
+    output: ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 45 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt025/heat_dcm_45.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 17.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:20 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 17
+    output: ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 45 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt025/heat_dcm_45.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:20 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 2
+    output: ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 5 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt0125/heat_dcm_5.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 2.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:20 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 2
+    output: ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 5 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt0125/heat_dcm_5.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:20 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 32
+    output: ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 80 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt0125/heat_dcm_80.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 32.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:20 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 32
+    output: ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 80 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt0125/heat_dcm_80.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:20 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 10
+    output: ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 25 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt0125/heat_dcm_25.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 10.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:20 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 10
+    output: ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 25 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt0125/heat_dcm_25.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:20 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 25
+    output: ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 65 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt025/heat_dcm_65.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 25.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:20 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 25
+    output: ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 65 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt025/heat_dcm_65.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:20 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 18
+    output: ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 45 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt0125/heat_dcm_45.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 18.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:20 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 18
+    output: ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 45 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt0125/heat_dcm_45.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:20 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 3
+    output: ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 10 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt025/heat_dcm_10.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 3.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:20 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 3
+    output: ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 10 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt025/heat_dcm_10.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:20 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 33
+    output: ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 85 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt025/heat_dcm_85.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 33.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:20 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 33
+    output: ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 85 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt025/heat_dcm_85.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:20 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 11
+    output: ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 30 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt025/heat_dcm_30.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 11.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:20 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 11
+    output: ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 30 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt025/heat_dcm_30.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:20 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 26
+    output: ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 65 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt0125/heat_dcm_65.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 26.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:20 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 26
+    output: ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 65 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt0125/heat_dcm_65.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:20 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 19
+    output: ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 50 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt025/heat_dcm_50.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 19.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:20 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 19
+    output: ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 50 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt025/heat_dcm_50.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 4
+    output: ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 10 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt0125/heat_dcm_10.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 4.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 4
+    output: ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 10 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt0125/heat_dcm_10.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 34
+    output: ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 85 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt0125/heat_dcm_85.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 34.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 34
+    output: ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 85 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt0125/heat_dcm_85.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 12
+    output: ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 30 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt0125/heat_dcm_30.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 12.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 12
+    output: ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 30 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt0125/heat_dcm_30.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 7
+    output: ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 20 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt025/heat_dcm_20.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 7.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 7
+    output: ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 20 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt025/heat_dcm_20.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 9
+    output: ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 25 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt025/heat_dcm_25.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 9.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 9
+    output: ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 25 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt025/heat_dcm_25.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 27
+    output: ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 70 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt025/heat_dcm_70.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 27.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 27
+    output: ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 70 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt025/heat_dcm_70.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 16
+    output: ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 40 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt0125/heat_dcm_40.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 16.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 16
+    output: ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 40 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt0125/heat_dcm_40.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 29
+    output: ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 75 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt025/heat_dcm_75.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 29.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 29
+    output: ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 75 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt025/heat_dcm_75.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 31
+    output: ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 80 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt025/heat_dcm_80.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 31.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 31
+    output: ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 80 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt025/heat_dcm_80.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 20
+    output: ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 50 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt0125/heat_dcm_50.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 20.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 20
+    output: ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 50 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt0125/heat_dcm_50.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 5
+    output: ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 15 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt025/heat_dcm_15.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 5.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 5
+    output: ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 15 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt025/heat_dcm_15.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 22
+    output: ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 55 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt0125/heat_dcm_55.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 22.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 22
+    output: ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 55 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt0125/heat_dcm_55.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 1
+    output: ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 5 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt025/heat_dcm_5.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 1.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 1
+    output: ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 5 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt025/heat_dcm_5.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 8
+    output: ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 20 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt0125/heat_dcm_20.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 8.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 8
+    output: ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 20 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt0125/heat_dcm_20.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 23
+    output: ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 60 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt025/heat_dcm_60.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 23.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 23
+    output: ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 60 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt025/heat_dcm_60.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 21
+    output: ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 55 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt025/heat_dcm_55.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 21.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 21
+    output: ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 55 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt025/heat_dcm_55.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 30
+    output: ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 75 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt0125/heat_dcm_75.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 30.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 30
+    output: ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 75 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt0125/heat_dcm_75.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 13
+    output: ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 35 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt025/heat_dcm_35.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 13.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 13
+    output: ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 35 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt025/heat_dcm_35.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 15
+    output: ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 40 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt025/heat_dcm_40.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 15.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 15
+    output: ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 40 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt025/heat_dcm_40.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 35
+    output: ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 90 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt025/heat_dcm_90.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 35.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 35
+    output: ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 90 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt025/heat_dcm_90.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 28
+    output: ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 70 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt0125/heat_dcm_70.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Trying to restart job 28.
+Select jobs to execute...
+Execute 1 jobs...
+Exception in run_job for rule run_heat: For MPI jobs, 'tasks' must be greater than 1.
+[Mon Jun  8 14:48:21 2026]
+Error in rule run_heat:
+    message: Job submission failed with exception: For MPI jobs, 'tasks' must be greater than 1.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 28
+    output: ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 70 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt0125/heat_dcm_70.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+Cleaning up SLURM log files older than 10 day(s).
+Exiting because a job execution failed. Look below for error messages
+[Mon Jun  8 14:49:00 2026]
+Error in rule run_heat:
+    message: None
+    jobid: 9
+    output: ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 25 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt025/heat_dcm_25.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+[Mon Jun  8 14:49:00 2026]
+Error in rule run_heat:
+    message: None
+    jobid: 24
+    output: ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 60 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt0125/heat_dcm_60.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+[Mon Jun  8 14:49:00 2026]
+Error in rule run_heat:
+    message: None
+    jobid: 17
+    output: ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 45 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt025/heat_dcm_45.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+[Mon Jun  8 14:49:00 2026]
+Error in rule run_heat:
+    message: None
+    jobid: 2
+    output: ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 5 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt0125/heat_dcm_5.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+[Mon Jun  8 14:49:00 2026]
+Error in rule run_heat:
+    message: None
+    jobid: 32
+    output: ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 80 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt0125/heat_dcm_80.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+[Mon Jun  8 14:49:00 2026]
+Error in rule run_heat:
+    message: None
+    jobid: 10
+    output: ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 25 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt0125/heat_dcm_25.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm25_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+[Mon Jun  8 14:49:00 2026]
+Error in rule run_heat:
+    message: None
+    jobid: 25
+    output: ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 65 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt025/heat_dcm_65.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+[Mon Jun  8 14:49:00 2026]
+Error in rule run_heat:
+    message: None
+    jobid: 18
+    output: ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 45 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt0125/heat_dcm_45.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm45_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+[Mon Jun  8 14:49:00 2026]
+Error in rule run_heat:
+    message: None
+    jobid: 3
+    output: ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 10 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt025/heat_dcm_10.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+[Mon Jun  8 14:49:00 2026]
+Error in rule run_heat:
+    message: None
+    jobid: 33
+    output: ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 85 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt025/heat_dcm_85.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+[Mon Jun  8 14:49:00 2026]
+Error in rule run_heat:
+    message: None
+    jobid: 11
+    output: ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 30 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt025/heat_dcm_30.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+[Mon Jun  8 14:49:00 2026]
+Error in rule run_heat:
+    message: None
+    jobid: 26
+    output: ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 65 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt0125/heat_dcm_65.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm65_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+[Mon Jun  8 14:49:00 2026]
+Error in rule run_heat:
+    message: None
+    jobid: 19
+    output: ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 50 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt025/heat_dcm_50.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+[Mon Jun  8 14:49:00 2026]
+Error in rule run_heat:
+    message: None
+    jobid: 4
+    output: ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 10 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt0125/heat_dcm_10.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm10_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+[Mon Jun  8 14:49:00 2026]
+Error in rule run_heat:
+    message: None
+    jobid: 34
+    output: ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 85 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt0125/heat_dcm_85.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm85_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+[Mon Jun  8 14:49:00 2026]
+Error in rule run_heat:
+    message: None
+    jobid: 12
+    output: ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 30 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt0125/heat_dcm_30.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+[Mon Jun  8 14:49:00 2026]
+Error in rule run_heat:
+    message: None
+    jobid: 27
+    output: ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 70 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt025/heat_dcm_70.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+[Mon Jun  8 14:49:00 2026]
+Error in rule run_heat:
+    message: None
+    jobid: 20
+    output: ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 50 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt0125/heat_dcm_50.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm50_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+[Mon Jun  8 14:49:00 2026]
+Error in rule run_heat:
+    message: None
+    jobid: 5
+    output: ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 15 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt025/heat_dcm_15.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+[Mon Jun  8 14:49:00 2026]
+Error in rule run_heat:
+    message: None
+    jobid: 35
+    output: ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 90 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt025/heat_dcm_90.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+[Mon Jun  8 14:49:00 2026]
+Error in rule run_heat:
+    message: None
+    jobid: 13
+    output: ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 35 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt025/heat_dcm_35.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+[Mon Jun  8 14:49:00 2026]
+Error in rule run_heat:
+    message: None
+    jobid: 28
+    output: ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 70 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt0125/heat_dcm_70.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm70_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+[Mon Jun  8 14:49:00 2026]
+Error in rule run_heat:
+    message: None
+    jobid: 21
+    output: ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 55 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt025/heat_dcm_55.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+[Mon Jun  8 14:49:00 2026]
+Error in rule run_heat:
+    message: None
+    jobid: 6
+    output: ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 15 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt0125/heat_dcm_15.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm15_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+[Mon Jun  8 14:49:00 2026]
+Error in rule run_heat:
+    message: None
+    jobid: 36
+    output: ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 90 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt0125/heat_dcm_90.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm90_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+[Mon Jun  8 14:49:00 2026]
+Error in rule run_heat:
+    message: None
+    jobid: 14
+    output: ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 35 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt0125/heat_dcm_35.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm35_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+[Mon Jun  8 14:49:00 2026]
+Error in rule run_heat:
+    message: None
+    jobid: 29
+    output: ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 75 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt025/heat_dcm_75.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+[Mon Jun  8 14:49:00 2026]
+Error in rule run_heat:
+    message: None
+    jobid: 22
+    output: ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 55 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt0125/heat_dcm_55.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm55_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+[Mon Jun  8 14:49:00 2026]
+Error in rule run_heat:
+    message: None
+    jobid: 7
+    output: ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 20 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt025/heat_dcm_20.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+[Mon Jun  8 14:49:00 2026]
+Error in rule run_heat:
+    message: None
+    jobid: 15
+    output: ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 40 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt025/heat_dcm_40.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+[Mon Jun  8 14:49:00 2026]
+Error in rule run_heat:
+    message: None
+    jobid: 30
+    output: ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 75 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt0125/heat_dcm_75.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm75_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+[Mon Jun  8 14:49:00 2026]
+Error in rule run_heat:
+    message: None
+    jobid: 23
+    output: ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 60 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt025/heat_dcm_60.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm60_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+[Mon Jun  8 14:49:00 2026]
+Error in rule run_heat:
+    message: None
+    jobid: 8
+    output: ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 20 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt0125/heat_dcm_20.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm20_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+[Mon Jun  8 14:49:00 2026]
+Error in rule run_heat:
+    message: None
+    jobid: 16
+    output: ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt0125/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt0125/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt0125
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 40 1 dt0125             > ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt0125/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt0125/heat_dcm_40.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm40_npt_x64_1/dt0125/done.txt
+        
+        (command exited with non-zero exit code)
+[Mon Jun  8 14:49:00 2026]
+Error in rule run_heat:
+    message: None
+    jobid: 1
+    output: ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 5 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt025/heat_dcm_5.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm5_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+[Mon Jun  8 14:49:00 2026]
+Error in rule run_heat:
+    message: None
+    jobid: 31
+    output: ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt025/done.txt
+    log: ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt025/stdout.log (check log file(s) for error details)
+    shell:
+        
+        mkdir -p ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt025
+        bash /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/scripts/job_shell.sh 80 1 dt025             > ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt025/stdout.log 2>&1
+        test -s ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt025/heat_dcm_80.dcd
+        touch ../../artifacts/pycharmm_mlpot/dcm80_npt_x64_1/dt025/done.txt
+        
+        (command exited with non-zero exit code)
+Complete log(s): /mmhome/boittier/home/mmml/workflows/dcm_heat_scaling/.snakemake/log/2026-06-08T144820.505759.snakemake.log
+WorkflowError:
+At least one job did not complete successfully.

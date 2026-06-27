@@ -1,0 +1,226 @@
+Snakemake Slurm: -j34 --resources gpu_fast=14 gpu_slow=20 charmm_slot=34
+Using profile profiles/slurm for setting default command line arguments.
+
+SNAKEMAKE
+=========
+  Date: 2026-06-21 23:38:08
+  Workflow ID: 2dd4761b-5b8b-4894-93e4-29c64ce81a3e
+  Platform: Linux-5.15.0-118-generic-x86_64-with-glibc2.35
+  Host: pc-studix
+  User: boittier
+  Snakemake version: 9.23.1
+  Python version: 3.13.1 (main, Dec  6 2024, 18:40:43) [Clang 18.1.8 ]
+  Command: /mmhome/boittier/home/.cache/uv/builds-v0/.tmpYeNNH1/bin/snakemake --profile profiles/slurm -j34 --resources gpu_fast=14 gpu_slow=20 charmm_slot=34 --keep-going
+  Snakefile: /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst/Snakefile
+  Base directory: /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst
+  Run directory: /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst
+  Working directory: /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst
+  Config file(s): ['config.yaml']
+  Config MD5: 6f20750769147b0c3e7bec29938117dd
+
+WorkflowError:
+The following environment variables are requested by the workflow but undefined. Please make sure that they are correctly defined before running Snakemake:
+MMML_CKPT
+Snakemake Slurm: -j34 --resources gpu_fast=14 gpu_slow=20 charmm_slot=34
+Using profile profiles/slurm for setting default command line arguments.
+
+SNAKEMAKE
+=========
+  Date: 2026-06-21 23:38:45
+  Workflow ID: bad7ceed-3b35-4ef8-b0a1-9b8ba1c061e1
+  Platform: Linux-5.15.0-118-generic-x86_64-with-glibc2.35
+  Host: pc-studix
+  User: boittier
+  Snakemake version: 9.23.1
+  Python version: 3.13.1 (main, Dec  6 2024, 18:40:43) [Clang 18.1.8 ]
+  Command: /mmhome/boittier/home/.cache/uv/builds-v0/.tmplOf9mD/bin/snakemake --profile profiles/slurm -j34 --resources gpu_fast=14 gpu_slow=20 charmm_slot=34 --keep-going
+  Snakefile: /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst/Snakefile
+  Base directory: /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst
+  Run directory: /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst
+  Working directory: /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst
+  Config file(s): ['config.yaml']
+  Config MD5: 6f20750769147b0c3e7bec29938117dd
+
+Building DAG of jobs...
+LockException:
+Error: Directory cannot be locked. Please make sure that no other Snakemake process is trying to create the same files in the following directory:
+/mmhome/boittier/home/mmml/workflows/pbc_solvent_burst
+If you are sure that no other instances of snakemake are running on this directory, the remaining lock was likely caused by a kill signal or a power loss. It can be removed with the --unlock argument.
+Snakemake Slurm: -j34 --resources gpu_fast=14 gpu_slow=20 charmm_slot=34
+Using profile profiles/slurm for setting default command line arguments.
+
+SNAKEMAKE
+=========
+  Date: 2026-06-21 23:41:09
+  Workflow ID: 48d64d4e-3870-40c8-9388-db28af72d01b
+  Platform: Linux-5.15.0-118-generic-x86_64-with-glibc2.35
+  Host: pc-studix
+  User: boittier
+  Snakemake version: 9.23.1
+  Python version: 3.13.1 (main, Dec  6 2024, 18:40:43) [Clang 18.1.8 ]
+  Command: /mmhome/boittier/home/.cache/uv/builds-v0/.tmpnkwXtd/bin/snakemake --profile profiles/slurm -j34 --resources gpu_fast=14 gpu_slow=20 charmm_slot=34 --keep-going
+  Snakefile: /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst/Snakefile
+  Base directory: /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst
+  Run directory: /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst
+  Working directory: /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst
+  Config file(s): ['config.yaml']
+  Config MD5: 6f20750769147b0c3e7bec29938117dd
+
+Building DAG of jobs...
+LockException:
+Error: Directory cannot be locked. Please make sure that no other Snakemake process is trying to create the same files in the following directory:
+/mmhome/boittier/home/mmml/workflows/pbc_solvent_burst
+If you are sure that no other instances of snakemake are running on this directory, the remaining lock was likely caused by a kill signal or a power loss. It can be removed with the --unlock argument.
+Snakemake Slurm: -j34 --resources gpu_fast=14 gpu_slow=20 charmm_slot=34
+Using profile profiles/slurm for setting default command line arguments.
+
+SNAKEMAKE
+=========
+  Date: 2026-06-21 23:43:43
+  Workflow ID: 50334f7b-76ed-4dd5-ac5f-a3606d573966
+  Platform: Linux-5.15.0-118-generic-x86_64-with-glibc2.35
+  Host: pc-studix
+  User: boittier
+  Snakemake version: 9.23.1
+  Python version: 3.13.1 (main, Dec  6 2024, 18:40:43) [Clang 18.1.8 ]
+  Command: /mmhome/boittier/home/.cache/uv/builds-v0/.tmp7kAVOq/bin/snakemake --profile profiles/slurm -j34 --resources gpu_fast=14 gpu_slow=20 charmm_slot=34 --keep-going
+  Snakefile: /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst/Snakefile
+  Base directory: /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst
+  Run directory: /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst
+  Working directory: /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst
+  Config file(s): ['config.yaml']
+  Config MD5: 6f20750769147b0c3e7bec29938117dd
+
+Building DAG of jobs...
+SLURM run ID: eaeb89f8-11c7-449b-9647-2fddc0840422
+MinJobAge 300s (>= 120s). 'squeue' should work reliably for status queries.
+Using shell: /usr/bin/bash
+Provided remote nodes: 34
+Provided resources: gpu_fast=Resource("gpu_fast", 14), gpu_slow=Resource("gpu_slow", 20), charmm_slot=Resource("charmm_slot", 34)
+Job stats:
+job          count
+---------  -------
+run_burst       36
+all              1
+total           37
+
+Select jobs to execute...
+Execute 14 jobs...
+No SLURM account given, trying to guess.
+No SLURM account given, trying to guess.
+No account was given, not able to get a SLURM account via sacct: sacct: invalid option -- '1'
+
+Unable to guess SLURM account. Trying to proceed without.
+No account was given, not able to get a SLURM account via sacct: sacct: invalid option -- '1'
+
+Unable to guess SLURM account. Trying to proceed without.
+Job 1 has been submitted with SLURM jobid 202733 (log: /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst/.snakemake/slurm_logs/rule_run_burst/.._.._artifacts_pbc_solvent_burst_dcm_52_t50_l28/202733.log).
+Job 31 has been submitted with SLURM jobid 202734 (log: /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst/.snakemake/slurm_logs/rule_run_burst/.._.._artifacts_pbc_solvent_burst_aco_67_t50_l32/202734.log).
+Job 9 has been submitted with SLURM jobid 202735 (log: /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst/.snakemake/slurm_logs/rule_run_burst/.._.._artifacts_pbc_solvent_burst_dcm_63_t150_l30/202735.log).
+Job 13 has been submitted with SLURM jobid 202736 (log: /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst/.snakemake/slurm_logs/rule_run_burst/.._.._artifacts_pbc_solvent_burst_dcm_77_t50_l32/202736.log).
+Job 28 has been submitted with SLURM jobid 202737 (log: /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst/.snakemake/slurm_logs/rule_run_burst/.._.._artifacts_pbc_solvent_burst_aco_110_t50_l30/202737.log).
+Job 21 has been submitted with SLURM jobid 202738 (log: /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst/.snakemake/slurm_logs/rule_run_burst/.._.._artifacts_pbc_solvent_burst_aco_45_t150_l28/202738.log).
+Job 6 has been submitted with SLURM jobid 202739 (log: /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst/.snakemake/slurm_logs/rule_run_burst/.._.._artifacts_pbc_solvent_burst_dcm_103_t150_l28/202739.log).
+Job 36 has been submitted with SLURM jobid 202740 (log: /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst/.snakemake/slurm_logs/rule_run_burst/.._.._artifacts_pbc_solvent_burst_aco_133_t150_l32/202740.log).
+Job 29 has been submitted with SLURM jobid 202741 (log: /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst/.snakemake/slurm_logs/rule_run_burst/.._.._artifacts_pbc_solvent_burst_aco_110_t100_l30/202741.log).
+Job 14 has been submitted with SLURM jobid 202742 (log: /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst/.snakemake/slurm_logs/rule_run_burst/.._.._artifacts_pbc_solvent_burst_dcm_77_t100_l32/202742.log).
+Job 22 has been submitted with SLURM jobid 202743 (log: /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst/.snakemake/slurm_logs/rule_run_burst/.._.._artifacts_pbc_solvent_burst_aco_89_t50_l28/202743.log).
+Job 7 has been submitted with SLURM jobid 202744 (log: /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst/.snakemake/slurm_logs/rule_run_burst/.._.._artifacts_pbc_solvent_burst_dcm_63_t50_l30/202744.log).
+Job 30 has been submitted with SLURM jobid 202745 (log: /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst/.snakemake/slurm_logs/rule_run_burst/.._.._artifacts_pbc_solvent_burst_aco_110_t150_l30/202745.log).
+Job 15 has been submitted with SLURM jobid 202746 (log: /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst/.snakemake/slurm_logs/rule_run_burst/.._.._artifacts_pbc_solvent_burst_dcm_77_t150_l32/202746.log).
+Select jobs to execute...
+[Sun Jun 21 23:44:23 2026]
+Error in rule run_burst:
+    message: SLURM-job '202733' failed, SLURM status is: 'FAILED'. Reason: Unknown.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 1
+    output: ../../artifacts/pbc_solvent_burst/dcm_52_t50_l28/done.txt
+    log: ../../artifacts/pbc_solvent_burst/dcm_52_t50_l28/stdout.log, /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst/.snakemake/slurm_logs/rule_run_burst/.._.._artifacts_pbc_solvent_burst_dcm_52_t50_l28/202733.log (check log file(s) for error details)
+    shell:
+        
+        set -euo pipefail
+        mkdir -p /mmhome/boittier/home/mmml/artifacts/pbc_solvent_burst/dcm_52_t50_l28
+        bash /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst/scripts/job_shell.sh dcm_52_t50_l28           > ../../artifacts/pbc_solvent_burst/dcm_52_t50_l28/stdout.log 2>&1
+        test -s ../../artifacts/pbc_solvent_burst/dcm_52_t50_l28/done.txt
+        
+        (command exited with non-zero exit code)
+    external_jobid: 202733
+Trying to restart job 1.
+Execute 1 jobs...
+Job 23 has been submitted with SLURM jobid 202747 (log: /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst/.snakemake/slurm_logs/rule_run_burst/.._.._artifacts_pbc_solvent_burst_aco_89_t100_l28/202747.log).
+[Sun Jun 21 23:44:23 2026]
+Error in rule run_burst:
+    message: SLURM-job '202734' failed, SLURM status is: 'FAILED'. Reason: Unknown.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 31
+    output: ../../artifacts/pbc_solvent_burst/aco_67_t50_l32/done.txt
+    log: ../../artifacts/pbc_solvent_burst/aco_67_t50_l32/stdout.log, /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst/.snakemake/slurm_logs/rule_run_burst/.._.._artifacts_pbc_solvent_burst_aco_67_t50_l32/202734.log (check log file(s) for error details)
+    shell:
+        
+        set -euo pipefail
+        mkdir -p /mmhome/boittier/home/mmml/artifacts/pbc_solvent_burst/aco_67_t50_l32
+        bash /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst/scripts/job_shell.sh aco_67_t50_l32           > ../../artifacts/pbc_solvent_burst/aco_67_t50_l32/stdout.log 2>&1
+        test -s ../../artifacts/pbc_solvent_burst/aco_67_t50_l32/done.txt
+        
+        (command exited with non-zero exit code)
+    external_jobid: 202734
+Trying to restart job 31.
+Select jobs to execute...
+Execute 1 jobs...
+Job 16 has been submitted with SLURM jobid 202748 (log: /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst/.snakemake/slurm_logs/rule_run_burst/.._.._artifacts_pbc_solvent_burst_dcm_154_t50_l32/202748.log).
+[Sun Jun 21 23:44:23 2026]
+Error in rule run_burst:
+    message: SLURM-job '202735' failed, SLURM status is: 'FAILED'. Reason: Unknown.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 9
+    output: ../../artifacts/pbc_solvent_burst/dcm_63_t150_l30/done.txt
+    log: ../../artifacts/pbc_solvent_burst/dcm_63_t150_l30/stdout.log, /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst/.snakemake/slurm_logs/rule_run_burst/.._.._artifacts_pbc_solvent_burst_dcm_63_t150_l30/202735.log (check log file(s) for error details)
+    shell:
+        
+        set -euo pipefail
+        mkdir -p /mmhome/boittier/home/mmml/artifacts/pbc_solvent_burst/dcm_63_t150_l30
+        bash /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst/scripts/job_shell.sh dcm_63_t150_l30           > ../../artifacts/pbc_solvent_burst/dcm_63_t150_l30/stdout.log 2>&1
+        test -s ../../artifacts/pbc_solvent_burst/dcm_63_t150_l30/done.txt
+        
+        (command exited with non-zero exit code)
+    external_jobid: 202735
+Trying to restart job 9.
+Select jobs to execute...
+Execute 1 jobs...
+Job 1 has been submitted with SLURM jobid 202749 (log: /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst/.snakemake/slurm_logs/rule_run_burst/.._.._artifacts_pbc_solvent_burst_dcm_52_t50_l28/202749.log).
+[Sun Jun 21 23:44:23 2026]
+Error in rule run_burst:
+    message: SLURM-job '202740' failed, SLURM status is: 'FAILED'. Reason: Unknown.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 36
+    output: ../../artifacts/pbc_solvent_burst/aco_133_t150_l32/done.txt
+    log: ../../artifacts/pbc_solvent_burst/aco_133_t150_l32/stdout.log, /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst/.snakemake/slurm_logs/rule_run_burst/.._.._artifacts_pbc_solvent_burst_aco_133_t150_l32/202740.log (check log file(s) for error details)
+    shell:
+        
+        set -euo pipefail
+        mkdir -p /mmhome/boittier/home/mmml/artifacts/pbc_solvent_burst/aco_133_t150_l32
+        bash /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst/scripts/job_shell.sh aco_133_t150_l32           > ../../artifacts/pbc_solvent_burst/aco_133_t150_l32/stdout.log 2>&1
+        test -s ../../artifacts/pbc_solvent_burst/aco_133_t150_l32/done.txt
+        
+        (command exited with non-zero exit code)
+    external_jobid: 202740
+Trying to restart job 36.
+Select jobs to execute...
+Execute 1 jobs...
+Select jobs to execute...
+Job 31 has been submitted with SLURM jobid 202750 (log: /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst/.snakemake/slurm_logs/rule_run_burst/.._.._artifacts_pbc_solvent_burst_aco_67_t50_l32/202750.log).
+[Sun Jun 21 23:45:14 2026]
+Error in rule run_burst:
+    message: SLURM-job '202744' failed, SLURM status is: 'FAILED'. Reason: Unknown.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 7
+    output: ../../artifacts/pbc_solvent_burst/dcm_63_t50_l30/done.txt
+    log: ../../artifacts/pbc_solvent_burst/dcm_63_t50_l30/stdout.log, /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst/.snakemake/slurm_logs/rule_run_burst/.._.._artifacts_pbc_solvent_burst_dcm_63_t50_l30/202744.log (check log file(s) for error details)
+    shell:
+        
+        set -euo pipefail
+        mkdir -p /mmhome/boittier/home/mmml/artifacts/pbc_solvent_burst/dcm_63_t50_l30
+        bash /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst/scripts/job_shell.sh dcm_63_t50_l30           > ../../artifacts/pbc_solvent_burst/dcm_63_t50_l30/stdout.log 2>&1
+        test -s ../../artifacts/pbc_solvent_burst/dcm_63_t50_l30/done.txt
+        
+        (command exited with non-zero exit code)
+    external_jobid: 202744
+Trying to restart job 7.
+Execute 1 jobs...
+Select jobs to execute...
+Job 9 has been submitted with SLURM jobid 202751 (log: /mmhome/boittier/home/mmml/workflows/pbc_solvent_burst/.snakemake/slurm_logs/rule_run_burst/.._.._artifacts_pbc_solvent_burst_dcm_63_t150_l30/202751.log).
