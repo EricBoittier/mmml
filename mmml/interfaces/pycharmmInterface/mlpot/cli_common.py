@@ -2263,69 +2263,8 @@ def prepare_mlpot_hybrid_state_for_sd(
     elif grms_limit is not None:
         intervention_grms = float(grms_limit) * 0.5
 
-    ran_geometry_packing = False
-    if (
-        diag.kind == "geometry_stress"
-        or (
-            intervention_grms is not None
-            and hybrid_grms > float(intervention_grms)
-            and (grms_hot or user_hot)
-        )
-    ) and workflow_args is not None and atoms_per_list is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
-            parse_composition_dict,
-        )
-        from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
-            run_geometry_packing_recovery,
-        )
-
-        composition = parse_composition_dict(getattr(workflow_args, "composition", None))
-        if composition is None:
-            composition = getattr(workflow_args, "_cluster_composition_summary", None)
-        box_side = getattr(mlpot_ctx, "cubic_box_side_A", None)
-        if box_side is None:
-            box_side = getattr(mlpot_ctx, "charmm_cubic_box_side_A", None)
-        if verbose:
-            print(
-                f"{context_prefix}: geometry_stress / GRMS {hybrid_grms:.1f} > "
-                f"intervention {float(intervention_grms):.1f}; "
-                "running repack → MC → guarded BFGS/FIRE (skipping bonded-MM first)",
-                flush=True,
-            )
-        box_side_arg: float | None
-        try:
-            box_side_arg = float(box_side) if box_side is not None else None
-        except (TypeError, ValueError):
-            box_side_arg = None
-        hybrid_grms = run_geometry_packing_recovery(
-            mlpot_ctx,
-            args=workflow_args,
-            atoms_per_list=atoms_per_list,
-            composition=composition,
-            box_side=box_side_arg,
-            charmm_pbc=bool(getattr(mlpot_ctx, "use_pbc", False)),
-            context_prefix=f"{context_prefix} packing",
-            calculator_minimize=calculator_minimize,
-            calculator_minimize_steps=calculator_minimize_steps,
-            calculator_minimize_fmax_ev_a=calculator_minimize_fmax_ev_a,
-            calculator_bfgs_maxstep=calculator_bfgs_maxstep,
-            calculator_fire_steps=calculator_fire_steps,
-            calculator_fire_fmax_ev_a=calculator_fire_fmax_ev_a,
-            calculator_fire_maxstep=calculator_fire_maxstep,
-            quiet_bfgs=quiet_bfgs,
-            verbose=verbose,
-            grms_limit=grms_limit,
-        )
-        ran_geometry_packing = True
-        diag = measure_hybrid_charmm_grms(mlpot_ctx)
-        _print_hybrid_charmm_grms_diag(
-            f"{context_prefix} post-packing hybrid GRMS" if verbose else "",
-            diag,
-        )
-        grms_hot = grms_limit is not None and hybrid_grms > float(grms_limit)
-        user_hot = energy_limit is not None and user > float(energy_limit)
-
     from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+        HybridCalculatorFireConfig,
         HybridCalculatorMinimizeConfig,
         hybrid_calculator_mini_eligible,
         minimize_hybrid_calculator_before_sd,
@@ -2345,6 +2284,7 @@ def prepare_mlpot_hybrid_state_for_sd(
     ran_calculator_mini = False
     ran_calculator_fire = False
     ran_bonded_recovery = False
+    ran_geometry_packing = False
 
     def _effective_max_start(*, force: bool) -> float:
         if force:
@@ -2414,11 +2354,13 @@ def prepare_mlpot_hybrid_state_for_sd(
             return
         hybrid_grms = minimize_hybrid_calculator_fire_before_sd(
             mlpot_ctx,
-            max_steps=int(calculator_fire_steps),
-            fmax_ev_a=float(fire_fmax),
-            fire_maxstep=float(calculator_fire_maxstep),
-            verbose=verbose,
-            max_start_grms_kcalmol_A=_effective_max_start(force=force),
+            config=HybridCalculatorFireConfig(
+                max_steps=int(calculator_fire_steps),
+                fmax_ev_a=float(fire_fmax),
+                fire_maxstep=float(calculator_fire_maxstep),
+                verbose=verbose,
+                max_start_grms_kcalmol_A=_effective_max_start(force=force),
+            ),
             context_prefix=f"{context_prefix} ({phase})",
         )
         ran_calculator_fire = True
@@ -2489,6 +2431,101 @@ def prepare_mlpot_hybrid_state_for_sd(
             diag = measure_hybrid_charmm_grms(mlpot_ctx)
             hybrid_grms = float(diag.hybrid)
             grms_hot = grms_limit is not None and hybrid_grms > float(grms_limit)
+
+    def _run_geometry_packing() -> None:
+        nonlocal hybrid_grms, diag, grms_hot, user_hot, ran_geometry_packing
+        if workflow_args is None or atoms_per_list is None:
+            return
+        if not (
+            diag.kind == "geometry_stress"
+            or (
+                intervention_grms is not None
+                and hybrid_grms > float(intervention_grms)
+                and (grms_hot or user_hot)
+            )
+        ):
+            return
+        from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+            parse_composition_dict,
+        )
+        from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+            run_geometry_packing_recovery,
+        )
+
+        composition = parse_composition_dict(getattr(workflow_args, "composition", None))
+        if composition is None:
+            composition = getattr(workflow_args, "_cluster_composition_summary", None)
+        box_side = getattr(mlpot_ctx, "cubic_box_side_A", None)
+        if box_side is None:
+            box_side = getattr(mlpot_ctx, "charmm_cubic_box_side_A", None)
+        if verbose:
+            print(
+                f"{context_prefix}: geometry_stress / GRMS {hybrid_grms:.1f} > "
+                f"intervention {float(intervention_grms):.1f}; "
+                "running repack → MC → guarded BFGS/FIRE (skipping bonded-MM first)",
+                flush=True,
+            )
+        box_side_arg: float | None
+        try:
+            box_side_arg = float(box_side) if box_side is not None else None
+        except (TypeError, ValueError):
+            box_side_arg = None
+        hybrid_grms = run_geometry_packing_recovery(
+            mlpot_ctx,
+            args=workflow_args,
+            atoms_per_list=atoms_per_list,
+            composition=composition,
+            box_side=box_side_arg,
+            charmm_pbc=bool(getattr(mlpot_ctx, "use_pbc", False)),
+            context_prefix=f"{context_prefix} packing",
+            calculator_minimize=calculator_minimize,
+            calculator_minimize_steps=calculator_minimize_steps,
+            calculator_minimize_fmax_ev_a=calculator_minimize_fmax_ev_a,
+            calculator_bfgs_maxstep=calculator_bfgs_maxstep,
+            calculator_fire_steps=calculator_fire_steps,
+            calculator_fire_fmax_ev_a=calculator_fire_fmax_ev_a,
+            calculator_fire_maxstep=calculator_fire_maxstep,
+            quiet_bfgs=quiet_bfgs,
+            verbose=verbose,
+            grms_limit=grms_limit,
+        )
+        ran_geometry_packing = True
+        diag = measure_hybrid_charmm_grms(mlpot_ctx)
+        _print_hybrid_charmm_grms_diag(
+            f"{context_prefix} post-packing hybrid GRMS" if verbose else "",
+            diag,
+        )
+        grms_hot = grms_limit is not None and hybrid_grms > float(grms_limit)
+        user_hot = energy_limit is not None and user > float(energy_limit)
+
+    if calculator_minimize and diag.kind == "geometry_stress":
+        verify_hybrid_ase_charmm_consistency(
+            mlpot_ctx,
+            context=f"{context_prefix} pre-ASE-mini verify" if verbose else "",
+            verbose=verbose,
+        )
+        if verbose:
+            print(
+                f"{context_prefix}: geometry_stress — running ASE hybrid calculator "
+                "mini first (FIRE → BFGS) while MLpot/CHARMM MM stay attached",
+                flush=True,
+            )
+        _run_calculator_fire("ASE-first", force=True)
+        _run_calculator_mini("ASE-first", force=True)
+        verify_hybrid_ase_charmm_consistency(
+            mlpot_ctx,
+            context=f"{context_prefix} post-ASE-mini verify" if verbose else "",
+            verbose=verbose,
+        )
+
+    _run_geometry_packing()
+
+    if calculator_minimize and ran_geometry_packing:
+        verify_hybrid_ase_charmm_consistency(
+            mlpot_ctx,
+            context=f"{context_prefix} post-packing ASE verify" if verbose else "",
+            verbose=verbose,
+        )
 
     if calculator_minimize and not ran_geometry_packing:
         _run_calculator_mini("pre-recovery")

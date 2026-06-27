@@ -653,6 +653,64 @@ def run_density_prep_ladder(
     return float(grms), box_side, result
 
 
+def maybe_run_density_prep_ladder_for_mlpot(
+    mlpot_ctx: Any,
+    *,
+    max_grms: float,
+    context: str = "Density prep ladder",
+    quiet: bool = False,
+) -> tuple[float, bool]:
+    """Run the liquid-prep ladder when enabled on ``mlpot_ctx.workflow_args``."""
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import refresh_mlpot_energy_and_grms
+
+    args = getattr(mlpot_ctx, "workflow_args", None)
+    if args is None or not density_prep_ladder_enabled(args):
+        return refresh_mlpot_energy_and_grms(mlpot_ctx, context=context), False
+
+    atoms_per_list = getattr(mlpot_ctx, "atoms_per_monomer", None)
+    if atoms_per_list is None:
+        atoms_per_list = getattr(args, "_cluster_atoms_per_list", None)
+    if atoms_per_list is None:
+        return refresh_mlpot_energy_and_grms(mlpot_ctx, context=context), False
+
+    pyCModel = getattr(mlpot_ctx, "pyCModel", None)
+    if pyCModel is None:
+        return refresh_mlpot_energy_and_grms(mlpot_ctx, context=context), False
+
+    n_mol = len(atoms_per_list)
+    n_atoms = int(sum(atoms_per_list))
+    box_side = getattr(mlpot_ctx, "cubic_box_side_A", None)
+    if box_side is None:
+        box_side = getattr(mlpot_ctx, "charmm_cubic_box_side_A", None)
+    composition = getattr(args, "_cluster_composition_summary", None)
+    current_grms = refresh_mlpot_energy_and_grms(
+        mlpot_ctx,
+        context=f"{context} (initial)" if not quiet else "",
+    )
+    if current_grms <= float(max_grms):
+        return float(current_grms), False
+
+    ladder_grms, _new_side, _summary = run_density_prep_ladder(
+        args,
+        mlpot_ctx=mlpot_ctx,
+        pyCModel=pyCModel,
+        max_grms=float(max_grms),
+        current_grms=float(current_grms),
+        n_mol=n_mol,
+        n_atoms=n_atoms,
+        box_side=float(box_side) if box_side is not None else None,
+        charmm_pbc=bool(getattr(mlpot_ctx, "use_pbc", False)),
+        atoms_per_list=list(atoms_per_list),
+        composition=composition,
+        mini_nstep=int(getattr(args, "mini_nstep", 500) or 500),
+        mini_nprint=max(1, int(getattr(args, "nprint", 100) or 100)),
+        fix_resids=[],
+        show_energy=False,
+        z=getattr(mlpot_ctx, "ml_Z", None),
+    )
+    return float(ladder_grms), True
+
+
 def run_pre_mlpot_geometry_gate(
     args: argparse.Namespace,
     *,

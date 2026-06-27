@@ -656,6 +656,11 @@ class MinimizeWithMlpotConfig:
     # Stop SD/ABNR early when hybrid GRMS exceeds ``factor * initial`` or rises sharply.
     sd_grms_watchdog_factor: float = 2.5
     sd_abort_on_grms_increase: bool = True
+    # Abort when hybrid GRMS plateaus (CHARMM SD ineffective on geometry_stress).
+    sd_stall_patience_chunks: int = 3
+    sd_stall_grms_abs_tol: float = 0.1
+    # Skip remaining SD chunks when hybrid GRMS is already at/below this ceiling.
+    sd_converged_grms_kcalmol_A: Optional[float] = None
     # ASE BFGS on hybrid calculator before MLpot SD (geometry_stress / high GRMS).
     calculator_pre_minimize: bool = True
     calculator_minimize_steps: int = 200
@@ -675,6 +680,7 @@ class MlpotSdChunkResult:
 
     completed: bool
     rolled_back: bool = False
+    stalled: bool = False
     last_grms: float | None = None
     rolled_back_chunk: int = 0
 
@@ -806,6 +812,42 @@ def _effective_mlpot_sd_chunk_nstep(
 
 # Post-calculator-mini GRMS is often <1 kcal/mol/Å; SD chunk noise to ~2–3 is normal.
 _SD_WATCHDOG_LOW_BASELINE_GRMS = 5.0
+
+
+def _resolved_sd_converged_grms(config: MinimizeWithMlpotConfig) -> float | None:
+    """GRMS ceiling below which chunked SD is treated as already converged."""
+    if config.sd_converged_grms_kcalmol_A is not None:
+        return float(config.sd_converged_grms_kcalmol_A)
+    if config.pre_sd_bonded_recovery_grms_kcalmol_A is not None:
+        return float(config.pre_sd_bonded_recovery_grms_kcalmol_A)
+    return None
+
+
+def _maybe_abort_sd_on_grms_stall(
+    config: MinimizeWithMlpotConfig,
+    *,
+    previous_grms: float | None,
+    current_grms: float,
+    stagnant_chunks: int,
+    pass_label: str,
+    step_label: str,
+) -> bool:
+    """Return True when hybrid GRMS has plateaued and SD is making no progress."""
+    if stagnant_chunks < int(config.sd_stall_patience_chunks):
+        return False
+    target = _resolved_sd_converged_grms(config)
+    if target is not None and current_grms <= float(target):
+        return False
+    if config.verbose:
+        prev_txt = f"{previous_grms:.4f}" if previous_grms is not None else "?"
+        print(
+            f"MLpot SD stall ({pass_label}, {step_label}): "
+            f"hybrid GRMS unchanged at {current_grms:.4f} kcal/mol/Å "
+            f"(was {prev_txt}) for {stagnant_chunks} chunk(s); "
+            "stopping minimization early",
+            flush=True,
+        )
+    return True
 
 
 def _maybe_abort_sd_on_grms(
@@ -973,6 +1015,8 @@ def _run_minimize_in_chunks(
         last_good_chunk = 0
 
     chunk_index = 0
+    stagnant_chunks = 0
+    converged_grms = _resolved_sd_converged_grms(config)
     while remaining > 0:
         chunk_index += 1
         step = min(_effective_mlpot_sd_chunk_nstep(config, previous_grms=previous_grms), remaining)
@@ -1001,6 +1045,38 @@ def _run_minimize_in_chunks(
             chunk_index=chunk_index,
             n_chunks=n_chunks,
         )
+        if grms is not None and converged_grms is not None and grms <= float(converged_grms):
+            improved = (
+                initial_grms is None
+                or not np.isfinite(initial_grms)
+                or float(grms) < float(initial_grms) - float(config.sd_stall_grms_abs_tol)
+            )
+            if improved:
+                if config.verbose:
+                    print(
+                        f"MLpot SD converged ({pass_label}, after chunk {chunk_index}): "
+                        f"hybrid GRMS {grms:.4f} <= {float(converged_grms):.4f} kcal/mol/Å",
+                        flush=True,
+                    )
+                return MlpotSdChunkResult(completed=True, last_grms=grms)
+        if grms is not None and previous_grms is not None:
+            if abs(float(grms) - float(previous_grms)) <= float(config.sd_stall_grms_abs_tol):
+                stagnant_chunks += 1
+            else:
+                stagnant_chunks = 0
+        if grms is not None and _maybe_abort_sd_on_grms_stall(
+            config,
+            previous_grms=previous_grms,
+            current_grms=grms,
+            stagnant_chunks=stagnant_chunks,
+            pass_label=pass_label,
+            step_label=f"after chunk {chunk_index}",
+        ):
+            return MlpotSdChunkResult(
+                completed=False,
+                stalled=True,
+                last_grms=grms,
+            )
         if grms is not None and _maybe_abort_sd_on_grms(
             config,
             initial_grms=initial_grms,
@@ -5163,7 +5239,40 @@ def minimize_with_mlpot(
             pass_label="pass 1 (free, all atoms)",
         )
         if not sd_result.completed:
-            if sd_result.rolled_back:
+            if sd_result.stalled:
+                grms_txt = (
+                    f"{sd_result.last_grms:.4f}"
+                    if sd_result.last_grms is not None
+                    else "?"
+                )
+                print(
+                    "MLpot SD pass 1 stalled: hybrid GRMS plateaued "
+                    f"(GRMS≈{grms_txt} kcal/mol/Å); CHARMM SD ineffective on "
+                    "geometry_stress — skipping remaining SD chunks",
+                    flush=True,
+                )
+                if (
+                    config.mlpot_ctx is not None
+                    and config.pre_sd_bonded_recovery_grms_kcalmol_A is not None
+                ):
+                    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+                        maybe_run_density_prep_ladder_for_mlpot,
+                    )
+
+                    ladder_grms, ran_ladder = maybe_run_density_prep_ladder_for_mlpot(
+                        config.mlpot_ctx,
+                        max_grms=float(config.pre_sd_bonded_recovery_grms_kcalmol_A),
+                        context="Post-SD-stall density prep ladder",
+                        quiet=not config.verbose,
+                    )
+                    if ran_ladder and config.verbose:
+                        print(
+                            f"Post-SD-stall density prep ladder: GRMS→{ladder_grms:.4f} "
+                            f"kcal/mol/Å (limit "
+                            f"{float(config.pre_sd_bonded_recovery_grms_kcalmol_A):.4f})",
+                            flush=True,
+                        )
+            elif sd_result.rolled_back:
                 grms_txt = (
                     f"{sd_result.last_grms:.4f}"
                     if sd_result.last_grms is not None
