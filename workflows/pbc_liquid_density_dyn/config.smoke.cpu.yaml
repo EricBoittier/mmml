@@ -38,10 +38,10 @@ max_grms_before_dyn: 50.0
 cleanup_strategy:
   name: pbc_liquid_density_smoke
   charmm_mm:
-    pretreat_on_pycharmm: true
+    pretreat_on_pycharmm: false
     ps_heat: 0.5
-    ps_equi: 0.5
-    ps_prod: 0.5
+    ps_equi: 0.0
+    ps_prod: 0.0
     overlap_rescue_sd_steps: 100
     overlap_rescue_abnr_steps: 200
   mlpot:
