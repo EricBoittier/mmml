@@ -122,8 +122,7 @@ def _collect_frames(
     return R_arr, Z_ref, N_arr
 
 
-def main() -> int:
-    """Run active-learning CLI."""
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Extract frames from MD trajectories for active learning (pyscf-evaluate input).",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -170,8 +169,12 @@ def main() -> int:
         action="store_true",
         help="Do not filter by temperature (keep all frames)",
     )
+    return parser
 
-    args = parser.parse_args()
+
+def main() -> int:
+    """Run active-learning CLI."""
+    args = build_parser().parse_args()
 
     # Expand globs
     paths = []

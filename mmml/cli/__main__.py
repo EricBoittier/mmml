@@ -8,9 +8,19 @@ Provides a unified interface for all MMML command-line tools.
 import sys
 import argparse
 
+from mmml.cli.completion import MMML_COMMANDS, completion_main, try_autocomplete
+
+_DISPATCH_COMMANDS = tuple(c for c in MMML_COMMANDS if c != "completion")
+
 
 def main():
     """Main CLI dispatcher."""
+    if len(sys.argv) > 1 and sys.argv[1] == "completion":
+        return completion_main(sys.argv[2:])
+
+    if try_autocomplete():
+        return 0
+
     parser = argparse.ArgumentParser(
         prog='mmml',
         description='MMML: Machine Learning for Molecular Modeling',
@@ -94,14 +104,17 @@ Examples:
 
 For help on a specific command:
   mmml <command> --help
+
+Shell tab completion (bash/zsh/fish):
+  pip install 'mmml[cli]'    # or: pip install argcomplete
+  eval "$(mmml completion bash)"
+  # or: eval "$(register-python-argcomplete mmml)"
         """
     )
     
     parser.add_argument(
         'command',
-        choices=['make-res', 'make-box', 'build-crystal', 'run', 'md-system', 'lambda-mbar', 'run-pycharmm', 'pycharmm-two-residue-sample', 'xml2npz', 'validate', 'train', 'train-joint', 'evaluate', 'downstream',
-                  'fix-and-split', 'pyscf-dft', 'pyscf-mp2', 'pyscf-evaluate', 'pyscf-evaluate-mp2', 'verify-esp-alignment', 'normal-mode-sample', 'physnet-train', 'physnet-md', 'physnet-evaluate', 'ef-train', 'ef-evaluate', 'ef-md',
-                  'active-learning', 'kernel-fit', 'interpolate-xyz', 'unwrap-traj', 'sample-diverse-xyz', 'gui', 'extract-checkpoint-metrics', 'orbax-to-json', 'orca-server', 'orca-client', 'orca-external'],
+        choices=list(_DISPATCH_COMMANDS),
         help='Command to run'
     )
     parser.add_argument(
