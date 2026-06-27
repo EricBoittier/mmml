@@ -106,7 +106,8 @@ slurm_ntasks: 1
 slurm_cpus_per_task: 4
 slurm_mem_mb_per_cpu: 3000
 slurm_runtime_min: 2880
-#slurm_mail_user: ericdavid.boittier@unibas.ch
+# Optional Slurm mail (omit or leave unset to disable END/FAIL notifications):
+# slurm_mail_user: you@example.com
 slurm_gpu_nodes_fast:
   - gpu08   # RTX5090 ×2
   - gpu09

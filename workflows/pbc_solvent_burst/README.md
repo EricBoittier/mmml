@@ -6,7 +6,7 @@ Snakemake workflow for **DCM** and **ACO** in cubic PBC boxes. Each matrix cell 
 2. **PyCHARMM equi** — 5 × 10 ps NPT equilibration segments (50 ps total)
 3. **JAX-MD bursts** — 5 × 200 ps NVT (1 ns total), with PBC FIRE at handoff and CHARMM overlap rescue during dynamics
 
-Sibling workflows: [dcm_heat_scaling](../dcm_heat_scaling/) (long heat-only screening), [dcm5_md_benchmark](../dcm5_md_benchmark/) (cross-backend smoke).
+Sibling workflows: [dcm_heat_scaling](../dcm_heat_scaling/) (long heat-only screening), [dcm5_md_benchmark](../dcm5_md_benchmark/) (cross-backend smoke), [pbc_liquid_density_dyn](../pbc_liquid_density_dyn/) (liquid-density PyCHARMM equil + prod).
 
 ## Do not commit run outputs
 

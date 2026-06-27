@@ -13,16 +13,11 @@ def _repo_python() -> str:
     venv = repo / ".venv" / "bin" / "python"
     if venv.is_file():
         return str(venv)
-    conda_prefix = os.environ.get("CONDA_PREFIX", "").strip()
-    if conda_prefix:
-        conda_py = Path(conda_prefix) / "bin" / "python"
-        if conda_py.is_file():
-            return str(conda_py)
     return "python3"
 
 
 _REPO_ROOT = Path(workflow.basedir).resolve().parents[1]
-_OUTPUT_ROOT = str(config.get("output_root", "artifacts/pbc_solvent_burst"))
+_OUTPUT_ROOT = str(config.get("output_root", "artifacts/pbc_liquid_density_dyn"))
 _ARTIFACT_ROOT = f"../../{_OUTPUT_ROOT}"
 
 _SCRIPTS = Path(workflow.basedir) / "scripts"
@@ -40,7 +35,48 @@ from campaign_lib import (  # noqa: E402
 _MATRIX = list(iter_matrix_cells(dict(config)))
 _CFG = dict(config)
 _CELL_TAGS = [cell_run_tag(c, _CFG) for c in _MATRIX]
-_TIER_ENABLED = slurm_tier_enabled(_CFG)
+_SCHEDULER = str(config.get("scheduler", "gpu")).strip().lower()
+_CPU_SCHEDULER = _SCHEDULER == "cpu"
+_TIER_ENABLED = slurm_tier_enabled(_CFG) and not _CPU_SCHEDULER
+
+
+def _sched_gpu(wildcards) -> int:
+    return 0 if _CPU_SCHEDULER else 1
+
+
+def _sched_gpu_fast(wildcards) -> int:
+    if _CPU_SCHEDULER:
+        return 0
+    if not _TIER_ENABLED:
+        return 1
+    return 0 if _burst_tier(wildcards) == "slow" else 1
+
+
+def _sched_gpu_slow(wildcards) -> int:
+    if _CPU_SCHEDULER:
+        return 0
+    if not _TIER_ENABLED:
+        return 0
+    return 1 if _burst_tier(wildcards) == "slow" else 0
+
+
+def _slurm_extra(wildcards) -> str:
+    mail = str(config.get("slurm_mail_user", "") or "").strip()
+    parts = []
+    if mail:
+        parts.append(f"--mail-user={mail} --mail-type=END,FAIL")
+    if _CPU_SCHEDULER:
+        nodes = [str(x).strip() for x in (config.get("slurm_cpu_nodes") or []) if str(x).strip()]
+        if nodes:
+            parts.append(f"--nodelist={','.join(nodes)}")
+        return " ".join(parts)
+    if _TIER_ENABLED:
+        nodelist = slurm_nodelist_for_tier(_CFG, _burst_tier(wildcards))
+    else:
+        nodelist = slurm_nodelist_for_tier(_CFG, "fast")
+    if nodelist:
+        parts.append(f"--nodelist={nodelist}")
+    return " ".join(parts)
 
 
 def _artifact_dir(wildcards) -> str:
@@ -52,32 +88,6 @@ def _burst_tier(wildcards) -> str:
     return cell_slurm_tier(cell, _CFG)
 
 
-def _sched_gpu_fast(wildcards) -> int:
-    if not _TIER_ENABLED:
-        return 1
-    return 0 if _burst_tier(wildcards) == "slow" else 1
-
-
-def _sched_gpu_slow(wildcards) -> int:
-    if not _TIER_ENABLED:
-        return 0
-    return 1 if _burst_tier(wildcards) == "slow" else 0
-
-
-def _slurm_extra(wildcards) -> str:
-    mail = str(config.get("slurm_mail_user", "") or "").strip()
-    if _TIER_ENABLED:
-        nodelist = slurm_nodelist_for_tier(_CFG, _burst_tier(wildcards))
-    else:
-        nodelist = slurm_nodelist_for_tier(_CFG, "fast")
-    parts = []
-    if mail:
-        parts.append(f"--mail-user={mail} --mail-type=END,FAIL")
-    if nodelist:
-        parts.append(f"--nodelist={nodelist}")
-    return " ".join(parts)
-
-
 rule all:
     input:
         expand(
@@ -87,7 +97,7 @@ rule all:
         ),
 
 
-rule run_burst:
+rule run_liquid_density_dyn:
     output:
         touch("{root}/{tag}/done.txt"),
     log:
@@ -96,12 +106,12 @@ rule run_burst:
         out_dir=_artifact_dir,
         workflow_dir=workflow.basedir,
     resources:
-        gpu=1,
+        gpu=_sched_gpu,
         gpu_fast=_sched_gpu_fast,
         gpu_slow=_sched_gpu_slow,
         charmm_slot=1,
-        runtime=int(config.get("slurm_runtime_min", 2880)),
-        mem_mb_per_cpu=int(config.get("slurm_mem_mb_per_cpu", 3000)),
+        runtime=int(config.get("slurm_runtime_min", 4320)),
+        mem_mb_per_cpu=int(config.get("slurm_mem_mb_per_cpu", 4000)),
         tasks=int(config.get("slurm_ntasks", 1)),
         cpus_per_task=int(config.get("slurm_cpus_per_task", 4)),
         nodes=int(config.get("slurm_nodes", 1)),
