@@ -1212,12 +1212,14 @@ def _load_or_build_cluster(
 
 
 def run_staged_workflow(args: argparse.Namespace) -> int:
+    from mmml.interfaces.pycharmmInterface.mlpot.cleanup_mode import apply_cleanup_defaults
     from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         apply_density_prep_resilient_defaults,
         liquid_prep_enabled,
         run_pre_mlpot_geometry_gate,
     )
 
+    apply_cleanup_defaults(args)
     apply_density_prep_resilient_defaults(args)
     if getattr(args, "mlpot_profile", False):
         import os

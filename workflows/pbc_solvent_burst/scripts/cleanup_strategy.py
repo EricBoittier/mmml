@@ -1,7 +1,10 @@
 """Map ``cleanup_strategy`` workflow YAML to md-system campaign job flags.
 
 The strategy describes the hybrid recovery ladder used when geometry or handoff
-quality breaks during a burst campaign:
+quality breaks during a burst campaign.  On the CLI, ``mmml md-system --cleanup``
+is the single switch that enables the same stack for one-shot recovery runs
+(liquid prep, density ladder, bonded-MM / overlap rescue); re-run without it for
+production trajectories.
 
 1. **charmm_mm** — CGENFF pretreat (heat/equi/prod) before MLpot; CHARMM SD/ABNR
    during overlap rescue on PyCHARMM legs.
@@ -161,7 +164,8 @@ def pretreat_job_flags(strategy: CleanupStrategy) -> dict[str, Any]:
 def pycharmm_job_flags(strategy: CleanupStrategy) -> dict[str, Any]:
     mm = strategy.charmm_mm
     ml = strategy.mlpot
-    return {
+    flags: dict[str, Any] = {
+        "cleanup": bool(ml.get("cleanup", strategy.name != "legacy_flat")),
         "dynamics_overlap_action": str(ml.get("dynamics_overlap_action", "rescue")),
         "dynamics_overlap_min_distance": float(ml.get("dynamics_overlap_min_distance", 1.5)),
         "dynamics_intra_min_distance": float(ml.get("dynamics_intra_min_distance", 0.5)),
@@ -188,6 +192,7 @@ def pycharmm_job_flags(strategy: CleanupStrategy) -> dict[str, Any]:
         "save_run_state": bool(ml.get("save_run_state", False)),
         "overlap_run_state_every_chunks": int(ml.get("overlap_run_state_every_chunks", 0)),
     }
+    return flags
 
 
 def jaxmd_job_flags(strategy: CleanupStrategy) -> dict[str, Any]:

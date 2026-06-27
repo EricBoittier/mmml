@@ -343,9 +343,16 @@ def resolve_dynamics_overlap_config(
         heat_segment_boundary_only=bool(
             getattr(args, "heat_overlap_segment_boundary_only", False)
         ),
-        density_prep_ladder_fallback=bool(getattr(args, "liquid_prep", False))
-        or str(getattr(args, "density_prep_mode", "off") or "off").lower() == "resilient",
+        density_prep_ladder_fallback=_cleanup_overlap_fallback_from_args(args),
     )
+
+
+def _cleanup_overlap_fallback_from_args(args: argparse.Namespace) -> bool:
+    from mmml.interfaces.pycharmmInterface.mlpot.cleanup_mode import (
+        cleanup_overlap_fallback_enabled,
+    )
+
+    return cleanup_overlap_fallback_enabled(args)
 
 
 def augment_overlap_config_for_rescue(

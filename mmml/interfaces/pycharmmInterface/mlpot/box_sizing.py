@@ -425,7 +425,8 @@ def add_box_sizing_args(parser: argparse.ArgumentParser) -> None:
         help=(
             "Easy dense-liquid setup: same as --density-prep-mode resilient "
             "(looser Packmol, MC density equalization, stronger CHARMM/lattice mini, "
-            "mini box equil, post-mini rescue ladder when GRMS is high)."
+            "mini box equil, post-mini rescue ladder when GRMS is high). "
+            "For full prep + dynamics recovery in one flag, prefer --cleanup."
         ),
     )
     group.add_argument(
@@ -466,3 +467,6 @@ def add_box_sizing_args(parser: argparse.ArgumentParser) -> None:
             "--mini-lattice-abnr-steps or 100)."
         ),
     )
+    from mmml.interfaces.pycharmmInterface.mlpot.cleanup_mode import add_cleanup_args
+
+    add_cleanup_args(parser)

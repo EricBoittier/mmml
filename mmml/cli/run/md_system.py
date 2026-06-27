@@ -1784,6 +1784,8 @@ def _append_box_sizing_args(cmd: list[str], args: argparse.Namespace) -> None:
         cmd.append("--mini-lattice-abnr-allow-fixed-box")
     if bool(getattr(args, "liquid_prep", False)):
         cmd.append("--liquid-prep")
+    elif bool(getattr(args, "cleanup", False)):
+        cmd.append("--cleanup")
     else:
         mode = getattr(args, "density_prep_mode", None)
         if mode is not None and str(mode).strip().lower() != "off":
