@@ -629,8 +629,6 @@ def train_model(
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore", RuntimeWarning)
                     orbax_checkpointer.save(ckp, ckpt, save_args=save_args)
-
-                    orbax_checkpointer.save(ckp, ckpt, save_args=save_args)
                 epoch_timing.checkpoint_s = time.perf_counter() - ckpt_t0
 
             epoch_timing.other_s = max(
