@@ -716,6 +716,57 @@ def report_charmm_topology_summary(*, quiet: bool = False) -> bool:
     return emit_charmm_topology_summary(quiet=quiet)
 
 
+def reconcile_n_monomers_with_psf(
+    args: Any,
+    z: np.ndarray,
+    n_mol: int,
+) -> tuple[int, list[int] | None]:
+    """Use CHARMM PSF residue boundaries when CLI monomer count disagrees with topology."""
+    n_atoms = int(len(z))
+    if n_atoms <= 0:
+        return int(n_mol), getattr(args, "_cluster_atoms_per_list", None)
+
+    try:
+        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+        from mmml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
+            atoms_per_monomer_from_psf,
+        )
+
+        atoms_per = atoms_per_monomer_from_psf()
+    except Exception:
+        return int(n_mol), getattr(args, "_cluster_atoms_per_list", None)
+
+    if sum(atoms_per) != n_atoms:
+        return int(n_mol), getattr(args, "_cluster_atoms_per_list", None)
+
+    n_psf = len(atoms_per)
+    n_mol = int(n_mol)
+    existing: list[int] | None = getattr(args, "_cluster_atoms_per_list", None)
+
+    if n_psf == n_mol and n_atoms % max(n_mol, 1) == 0:
+        apm = list(existing) if existing is not None and len(existing) == n_mol else atoms_per
+        if existing is None:
+            setattr(args, "_cluster_atoms_per_list", list(apm))
+        return n_mol, apm
+
+    if n_psf != n_mol or n_atoms % max(n_mol, 1) != 0:
+        if not getattr(args, "quiet", False):
+            per = atoms_per[0] if atoms_per else 0
+            print(
+                f"Cluster monomer count: CLI n_monomers={n_mol} -> PSF nres={n_psf} "
+                f"({n_atoms} atoms, {per} atoms/monomer typical)",
+                flush=True,
+            )
+        setattr(args, "_cluster_atoms_per_list", list(atoms_per))
+        comp = getattr(args, "_cluster_composition_summary", None)
+        if not comp and n_psf > 0:
+            residue = str(getattr(args, "residue", "MOL")).upper()
+            setattr(args, "_cluster_composition_summary", {residue: n_psf})
+        return n_psf, atoms_per
+
+    return n_mol, existing
+
+
 def load_cluster_from_artifacts(
     args: Any,
 ) -> tuple[np.ndarray, np.ndarray, int, str]:
@@ -803,6 +854,7 @@ def load_cluster_from_artifacts(
     tag = str(getattr(args, "tag", None) or psf_path.stem.replace("mini_full_mlpot_", ""))
     if not getattr(args, "quiet", False):
         report_charmm_topology_summary()
+    n_mol, _ = reconcile_n_monomers_with_psf(args, z, n_mol)
     return z, r, n_mol, tag
 
 
@@ -837,8 +889,17 @@ def load_physnet_mlpot_bundle(
 
         if atoms_per_monomer is None:
             if int(n_atoms) % int(n_monomers) != 0:
+                nres_hint = ""
+                try:
+                    import pycharmm.psf as psf
+
+                    if hasattr(psf, "get_nres"):
+                        nres_hint = f"; PSF has {int(psf.get_nres())} residues"
+                except Exception:
+                    pass
                 raise ValueError(
-                    f"atom count {n_atoms} not divisible by n_monomers={n_monomers}"
+                    f"atom count {n_atoms} not divisible by n_monomers={n_monomers}{nres_hint}. "
+                    "Align --composition or --n-molecules with the loaded PSF/box."
                 )
             per = int(n_atoms) // int(n_monomers)
             atoms_per_monomer = [per] * int(n_monomers)

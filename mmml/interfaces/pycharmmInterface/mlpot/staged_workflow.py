@@ -1190,6 +1190,9 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     dynamics_constrain = resolve_constrain_resids(args)
     ckpt = resolve_checkpoint(args.checkpoint)
     z, r, n_mol, tag = _load_or_build_cluster(args, handoff_in=handoff_in)
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import reconcile_n_monomers_with_psf
+
+    n_mol, _ = reconcile_n_monomers_with_psf(args, z, n_mol)
     if handoff_in is not None:
         from mmml.cli.run.md_handoff import validate_handoff_matches_cluster_geometry
 
@@ -1713,6 +1716,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         ckpt,
         n_atoms,
         n_mol,
+        atoms_per_monomer=getattr(args, "_cluster_atoms_per_list", None),
         ml_batch_size=getattr(args, "ml_batch_size", None),
         ml_gpu_count=getattr(args, "ml_gpu_count", None),
         ml_max_active_dimers=getattr(args, "ml_max_active_dimers", None),
