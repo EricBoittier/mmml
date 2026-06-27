@@ -257,6 +257,31 @@ def test_apply_liquid_box_profile_dense_sets_no_echeck():
     assert args.no_echeck is True
 
 
+def test_configure_liquid_box_mini_equil_uses_fixed_box_nvt():
+    from mmml.interfaces.pycharmmInterface.mlpot.box_equil import (
+        configure_liquid_box_mini_equil_args,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+        should_run_mini_box_equil,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import (
+        _pretreat_use_fixed_box_nvt,
+    )
+
+    args = _args(profile="dense", mini_box_equil_ps=2.0)
+    apply_liquid_box_profile(args)
+    configure_liquid_box_mini_equil_args(args, box_side_A=28.5)
+    assert args.box_size == pytest.approx(28.5)
+    assert args.mini_box_equil_allow_fixed_box is True
+    assert _pretreat_use_fixed_box_nvt(args, use_pbc=True)
+    assert should_run_mini_box_equil(
+        args,
+        charmm_pbc=True,
+        pretreat_mm=False,
+        stages=["mini"],
+    )
+
+
 def test_apply_charmm_dynamics_echeck_kw_sets_global_state(monkeypatch):
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         apply_charmm_dynamics_echeck_kw,
