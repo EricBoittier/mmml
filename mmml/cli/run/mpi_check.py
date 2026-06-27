@@ -24,6 +24,8 @@ class MpiCheckReport:
     mpi_size: int = 1
     mpi4py_available: bool = False
     mpi4py_initialized: bool = False
+    charmm_libmpi: str | None = None
+    mpi4py_libmpi: str | None = None
     jax_device: str | None = None
     omp_num_threads: str | None = None
     recommended_launch: str | None = None
@@ -38,8 +40,11 @@ def run_mpi_check(*, strict: bool = False, prelaunch: bool = False) -> MpiCheckR
         _under_mpirun,
         charmm_lib_available,
         charmm_lib_links_mpi,
+        charmm_libmpi_path,
         charmm_mpirun_path,
         mpirun_launch_hint,
+        mpi4py_libmpi_path,
+        mpi4py_openmpi_mismatch,
         _charmm_lib_path,
         _mpi4py_available,
     )
@@ -74,6 +79,16 @@ def run_mpi_check(*, strict: bool = False, prelaunch: bool = False) -> MpiCheckR
         )
         report.ok = False
 
+    charm_mpi = charmm_libmpi_path()
+    py_mpi = mpi4py_libmpi_path() if report.mpi4py_available else None
+    report.charmm_libmpi = str(charm_mpi) if charm_mpi is not None else None
+    report.mpi4py_libmpi = str(py_mpi) if py_mpi is not None else None
+
+    mismatch_ok, mismatch_msg = mpi4py_openmpi_mismatch()
+    if not mismatch_ok:
+        report.errors.append(mismatch_msg)
+        report.ok = False
+
     if report.charmm_links_mpi and not report.under_mpirun:
         report.warnings.append(
             "Not under mpirun; use ./scripts/mmml-charmm-mpirun.sh for MLpot jobs"
@@ -87,7 +102,7 @@ def run_mpi_check(*, strict: bool = False, prelaunch: bool = False) -> MpiCheckR
         else:
             report.warnings.append(msg)
 
-    if report.mpi4py_available:
+    if report.mpi4py_available and mismatch_ok:
         try:
             from mpi4py import MPI
 
@@ -142,10 +157,17 @@ def render_mpi_check_report(report: MpiCheckReport) -> str:
         f"Under mpirun: {report.under_mpirun} (rank {report.mpi_rank}/{report.mpi_size})",
         f"mpi4py: {'yes' if report.mpi4py_available else 'no'}"
         + (f", initialized={report.mpi4py_initialized}" if report.mpi4py_available else ""),
-        f"JAX devices: {report.jax_device or '(unknown)'}",
-        f"OMP_NUM_THREADS: {report.omp_num_threads or '(unset)'}",
-        f"Spatial MPI env: {report.spatial_mpi_env}",
     ]
+    if report.charmm_libmpi or report.mpi4py_libmpi:
+        lines.append(f"libcharmm libmpi: {report.charmm_libmpi or '(unknown)'}")
+        lines.append(f"mpi4py libmpi: {report.mpi4py_libmpi or '(unknown)'}")
+    lines.extend(
+        [
+            f"JAX devices: {report.jax_device or '(unknown)'}",
+            f"OMP_NUM_THREADS: {report.omp_num_threads or '(unset)'}",
+            f"Spatial MPI env: {report.spatial_mpi_env}",
+        ]
+    )
     if report.recommended_launch:
         lines.append(f"Recommended: {report.recommended_launch}")
     if report.warnings:

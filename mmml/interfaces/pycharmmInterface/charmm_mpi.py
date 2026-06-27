@@ -475,6 +475,75 @@ def mpi_mpirun_extra_args() -> list[str]:
     return args
 
 
+def charmm_libmpi_path() -> Path | None:
+    """``libmpi`` shared library linked from ``libcharmm.so`` (``ldd``)."""
+    lib = _charmm_lib_path()
+    if lib is None:
+        return None
+    paths = _libmpi_paths_from_ldd(_run_ldd(lib))
+    return paths[0] if paths else None
+
+
+def mpi4py_mpi_extension_path() -> Path | None:
+    """Path to the compiled ``mpi4py.MPI`` extension module (no ``MPI_Init``)."""
+    if not _mpi4py_available():
+        return None
+    import importlib.util
+
+    try:
+        spec = importlib.util.find_spec("mpi4py.MPI")
+    except (ImportError, AttributeError, ModuleNotFoundError, ValueError):
+        return None
+    if spec is None or not spec.origin:
+        return None
+    origin = Path(spec.origin).expanduser().resolve()
+    return origin if origin.is_file() else None
+
+
+def mpi4py_libmpi_path() -> Path | None:
+    """``libmpi`` shared library linked from the ``mpi4py.MPI`` extension (``ldd``)."""
+    ext = mpi4py_mpi_extension_path()
+    if ext is None:
+        return None
+    paths = _libmpi_paths_from_ldd(_run_ldd(ext))
+    return paths[0] if paths else None
+
+
+def mpi4py_openmpi_mismatch() -> tuple[bool, str]:
+    """Return ``(ok, message)``; ``ok=False`` when mpi4py and CHARMM use different ``libmpi``."""
+    if not _mpi4py_available() or not charmm_lib_links_mpi():
+        return True, ""
+    charm_mpi = charmm_libmpi_path()
+    py_mpi = mpi4py_libmpi_path()
+    if charm_mpi is None or py_mpi is None:
+        return True, ""
+    try:
+        same = charm_mpi.resolve() == py_mpi.resolve()
+    except OSError:
+        same = str(charm_mpi) == str(py_mpi)
+    if same:
+        return True, ""
+    return (
+        False,
+        "mpi4py is linked to "
+        f"{py_mpi} but libcharmm.so uses {charm_mpi}. "
+        "MPI_Init will segfault (mixed distro + custom OpenMPI). "
+        "Rebuild: ./scripts/rebuild_mpi4py_for_charmm.sh",
+    )
+
+
+def rebuild_mpi4py_shell_hint() -> str:
+    mpirun = charmm_mpirun_path()
+    if mpirun is None:
+        return "./scripts/rebuild_mpi4py_for_charmm.sh"
+    bindir = mpirun.parent
+    return (
+        f"export MPICC={bindir}/mpicc\n"
+        f"export MPICXX={bindir}/mpicxx\n"
+        "./scripts/rebuild_mpi4py_for_charmm.sh"
+    )
+
+
 def explain_mpi_crash(exit_code: int, *, argv0: str = "mmml md-system") -> None:
     """Print actionable hints after SIGSEGV/SIGABRT under ``mpirun``."""
     if exit_code not in (134, 139, -6, -11):
@@ -490,6 +559,9 @@ def explain_mpi_crash(exit_code: int, *, argv0: str = "mmml md-system") -> None:
         "         <python> -m mmml.cli.__main__ md-system ...",
     ]
     if exit_code in (139, -11):
+        mismatch_ok, mismatch_msg = mpi4py_openmpi_mismatch()
+        if not mismatch_ok:
+            lines.append(f"  mpi4py/OpenMPI mismatch: {mismatch_msg}")
         lines.append(
             "  MLpot ``upinb`` segfaults: use vendored pycharmm (skip_iblo_inb_update), "
             "OMP_NUM_THREADS=1, and mmml-charmm-mpirun.sh."

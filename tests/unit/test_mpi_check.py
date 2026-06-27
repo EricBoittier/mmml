@@ -77,6 +77,66 @@ def test_run_mpi_check_mpi_linked_warns_without_mpirun(monkeypatch, tmp_path):
     assert any("Not under mpirun" in w for w in report.warnings)
 
 
+def test_run_mpi_check_reports_mpi4py_openmpi_mismatch(monkeypatch, tmp_path):
+    lib = tmp_path / "libcharmm.so"
+    lib.write_bytes(b"x")
+    monkeypatch.setenv("CHARMM_LIB_DIR", str(tmp_path))
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_available",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._charmm_lib_path",
+        return_value=lib,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_mpirun_path",
+        return_value=(tmp_path / "mpirun").resolve(),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        return_value=(0, 1),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._mpi4py_available",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.mpi4py_openmpi_mismatch",
+        return_value=(False, "mpi4py is linked to /usr/lib/libmpi.so but libcharmm.so uses /opt/libmpi.so. Rebuild: ./scripts/rebuild_mpi4py_for_charmm.sh"),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy.spatial_mpi_enabled",
+        return_value=False,
+    ):
+        report = run_mpi_check()
+    assert report.ok is False
+    assert any("rebuild_mpi4py" in e for e in report.errors)
+
+
+def test_mpi4py_openmpi_mismatch_same_path(tmp_path):
+    from mmml.interfaces.pycharmmInterface import charmm_mpi
+
+    libmpi = tmp_path / "libmpi.so"
+    libmpi.write_bytes(b"x")
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._mpi4py_available",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_libmpi_path",
+        return_value=libmpi,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.mpi4py_libmpi_path",
+        return_value=libmpi,
+    ):
+        ok, msg = charmm_mpi.mpi4py_openmpi_mismatch()
+    assert ok is True
+    assert msg == ""
+
+
 def test_render_mpi_check_report_includes_status():
     from mmml.cli.run.mpi_check import MpiCheckReport
 
