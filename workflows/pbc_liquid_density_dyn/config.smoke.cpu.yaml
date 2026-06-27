@@ -1,0 +1,78 @@
+# Minimal CPU/MPI smoke: 10 DCM in L=28 Å (not bulk liquid density; validates pipeline).
+cluster: pc-bach
+scheduler: cpu
+mlpot_device: cpu
+
+solvents: [DCM]
+cluster_sizes: [10]
+temperatures: [300.0]
+box_sizes: [28.0]
+checkpoint: ${MMML_CKPT}
+output_root: artifacts/pbc_liquid_density_dyn_smoke
+seed_base: 4242
+
+ps_heat: 1.0
+n_heat_segments: 1
+heat_firstt: 50.0
+heat_thermostat: hoover
+pycharmm_equi_ps: 1.0
+pycharmm_equi_legs: 1
+pycharmm_prod_ps: 1.0
+pycharmm_prod_legs: 1
+prod_ensemble: pbc_npt
+
+dt_fs: 0.25
+pressure: 1.0
+spacing: 4.0
+packmol_tolerance: 1.5
+
+liquid_prep: true
+density_prep_ladder: true
+density_prep_ladder_max_rounds: 2
+density_prep_lattice_abnr_steps: 50
+mini_lattice_abnr_steps: 50
+mc_density_equalize: false
+min_intermonomer_atom_distance: 1.0
+max_grms_before_dyn: 50.0
+
+cleanup_strategy:
+  name: pbc_liquid_density_smoke
+  charmm_mm:
+    pretreat_on_pycharmm: false
+    ps_heat: 0.5
+    ps_equi: 0.0
+    ps_prod: 0.0
+    overlap_rescue_sd_steps: 100
+    overlap_rescue_abnr_steps: 200
+  mlpot:
+    cleanup: true
+    no_echeck_heat: true
+    dynamics_overlap_action: rescue
+    dynamics_overlap_min_distance: 1.5
+    dynamics_intra_min_distance: 0.5
+    dynamics_overlap_check_interval: 250
+    dynamics_overlap_memory_handoff: true
+    bonded_mm_mini: true
+    bonded_mm_mini_after: mini,heat
+    bonded_mm_mini_steps: 200
+    charmm_pre_minimize: true
+    charmm_sd_steps: 200
+    charmm_abnr_steps: 200
+    mini_nstep: 100
+    dcd_nsavc: 50
+    dyn_nprint: 50
+    save_run_state: true
+  jaxmd_pbc: {}
+
+mm_switch_on: 8.0
+mm_switch_width: 5.0
+ml_switch_width: 1.5
+ml_gpu_count: 1
+ml_batch_size: 128
+
+warmup_mlpot_jax: true
+warmup_do_mm: false
+use_mpirun_wrapper: true
+
+mpirun_wrapper: ../../scripts/mmml-charmm-mpirun.sh
+MMML_MPI_NP: 1

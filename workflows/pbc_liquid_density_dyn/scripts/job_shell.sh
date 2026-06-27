@@ -96,7 +96,10 @@ cell = cell_from_tag(cfg, '${RUN_TAG}')
 print(' '.join(warmup_mlpot_argv(cfg, cell)))
 ")"
   # shellcheck disable=SC2086
-  "$PY" -m mmml.cli.__main__ $WARMUP_ARGS
+  if ! "$PY" -m mmml.cli.__main__ $WARMUP_ARGS; then
+    echo "ERROR: warmup-mlpot-jax failed" >&2
+    exit 1
+  fi
 fi
 
 exec "$PY" "$WORKFLOW_ROOT/scripts/run_job.py" --tag "$RUN_TAG" --config "$CFG"

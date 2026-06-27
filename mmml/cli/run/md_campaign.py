@@ -7,7 +7,7 @@ import time
 import uuid
 from argparse import Namespace
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from mmml.cli.run.md_config import (
     campaign_job_ids,
@@ -122,6 +122,12 @@ _CAMPAIGN_ONLY_KEYS = frozenset(
         "handoff_pre_minimize",
     }
 )
+
+
+def strip_campaign_metadata_keys(mapping: Mapping[str, Any]) -> dict[str, Any]:
+    """Drop workflow-only keys before ``parse_md_system_args`` applies campaign defaults."""
+    return {k: v for k, v in mapping.items() if k not in _CAMPAIGN_ONLY_KEYS}
+
 
 # Parent ``md-system`` CLI flags that override per-job YAML when explicitly set.
 _CAMPAIGN_CLI_OVERRIDE_KEYS: tuple[str, ...] = (
