@@ -34,6 +34,7 @@ from mmml.models.physnetjax.physnetjax.restart.restart import (
     save_training_checkpoint,
 )
 from mmml.data.units import TRAINING_UNITS
+from mmml.models.physnetjax.physnetjax.training.distill import parse_distill_targets
 from mmml.models.physnetjax.physnetjax.training.evalstep import eval_step
 from mmml.models.physnetjax.physnetjax.training.optimizer import (
     base_optimizer,
@@ -137,6 +138,9 @@ def train_model(
     rot_perturbation: float = 1.0,
     save_every_epoch: bool = True,
     profile_epoch_timing: bool | None = None,
+    teacher_params=None,
+    distill_alpha: float = 1.0,
+    distill_targets=None,
 ):
     """
     Train a PhysNetJax model with comprehensive logging and checkpointing.
@@ -354,7 +358,12 @@ def train_model(
         "save_every_epoch": save_every_epoch,
         "data_keys": data_keys,
         "objective": objective,
+        "distill": teacher_params is not None and distill_alpha < 1.0,
+        "distill_alpha": distill_alpha,
+        "distill_targets": distill_targets,
     }
+    distill_energy, distill_forces, distill_dipole = parse_distill_targets(distill_targets)
+    do_distill = teacher_params is not None and distill_alpha < 1.0
 
     if console is not None:
         print_dict_as_table(optimizer_kwargs, title="Optimizer Arguments", plot=True)
@@ -528,6 +537,12 @@ def train_model(
                     doCharges=do_charges,
                     params=params,
                     ema_params=ema_params,
+                    teacher_params=teacher_params,
+                    distill_alpha=distill_alpha,
+                    doDistill=do_distill,
+                    distill_energy=distill_energy,
+                    distill_forces=distill_forces,
+                    distill_dipole=distill_dipole,
                     debug=True,
                 )
                 # Block until JAX operations complete to avoid async context issues
@@ -688,5 +703,5 @@ def train_model(
     if profile_epoch_timing and console is not None and timing_summary.epochs > 0:
         console.print(timing_summary.format_means())
 
-    # Return final model parameters and best objective value.
-    return ema_params, best_loss
+    # Return final model parameters, best objective value, and run checkpoint dir.
+    return ema_params, best_loss, CKPT_DIR

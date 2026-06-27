@@ -8,6 +8,7 @@ from mmml.cli.make.make_training import (
     CONFIG_ALIASES,
     apply_mapping_to_namespace,
     namespace_from_yaml,
+    normalize_data_paths,
     parse_args,
     parse_train_args,
     save_train_config,
@@ -211,4 +212,78 @@ debug: false
     assert loaded.zbl is True
     assert loaded.use_pbc is True
     assert loaded.debug is False
+
+
+def test_transfer_learning_yaml_keys(tmp_path: Path):
+    cfg = tmp_path / "transfer.yaml"
+    cfg.write_text(
+        """
+data:
+  - train_a.npz
+  - train_b.npz
+valid_data: valid.npz
+physnet_transfer_model: joint-training-defaults
+match_checkpoint_architecture: true
+distill: true
+distill_alpha: 0.8
+distill_targets:
+  - energy
+  - forces
+metrics_plot: curves.png
+log_loss: true
+""".strip()
+    )
+    loaded = namespace_from_yaml(cfg)
+    assert loaded.data == ["train_a.npz", "train_b.npz"]
+    assert loaded.physnet_transfer_model == "joint-training-defaults"
+    assert loaded.match_checkpoint_architecture is True
+    assert loaded.distill is True
+    assert loaded.distill_alpha == 0.8
+    assert loaded.distill_targets == ["energy", "forces"]
+    assert loaded.metrics_plot == "curves.png"
+    assert loaded.log_loss is True
+
+
+def test_normalize_data_paths():
+    assert normalize_data_paths("a.npz") == ["a.npz"]
+    assert normalize_data_paths("a.npz,b.npz") == ["a.npz", "b.npz"]
+    assert normalize_data_paths(["a.npz", "b.npz"]) == ["a.npz", "b.npz"]
+
+
+def test_validate_restart_transfer_conflict():
+    args = parse_args([])
+    args.data = "train.npz"
+    args.restart = "run/epoch-1"
+    args.physnet_checkpoint = "teacher.json"
+    with pytest.raises(ValueError, match="restart"):
+        validate_train_args(args)
+
+
+def test_validate_distill_requires_teacher(monkeypatch):
+    args = parse_args([])
+    args.data = "train.npz"
+    args.distill = True
+    args.distill_alpha = 0.5
+    args.physnet_transfer_model = None
+    args.physnet_checkpoint = None
+    args.teacher_checkpoint = None
+
+    def _fail(_selection):
+        raise KeyError("missing")
+
+    monkeypatch.setattr(
+        "mmml.cli.make.make_training.resolve_hf_physnet_model",
+        _fail,
+    )
+    with pytest.raises(ValueError, match="teacher checkpoint"):
+        validate_train_args(args)
+
+
+def test_validate_transfer_model_checkpoint_conflict():
+    args = parse_args([])
+    args.data = "train.npz"
+    args.physnet_transfer_model = "mmml-default"
+    args.physnet_checkpoint = "teacher.json"
+    with pytest.raises(ValueError, match="physnet-transfer-model"):
+        validate_train_args(args)
 

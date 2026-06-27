@@ -139,9 +139,6 @@ from mmml.data.units import (
     EV_TO_KCAL_MOL,
     HARTREE_TO_KCAL_MOL,
 )
-from mmml.utils.model_checkpoint import load_model_checkpoint
-
-
 from mmml.models.physnetjax.checkpoint_utils import (
     load_physnet_checkpoint as _load_physnet_checkpoint,
     print_bundled_physnet_models as _print_bundled_physnet_models,

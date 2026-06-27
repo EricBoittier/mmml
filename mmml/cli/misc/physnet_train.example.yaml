@@ -40,5 +40,7 @@ use_energy_bias: true
 #   forces: 23.060549
 #
 # Dipole arrays (D / Dxyz) must be e·Å before training. PySCF exports Debye;
+# See mmml/cli/misc/physnet_train_transfer.example.yaml for transfer learning,
+# distillation, multi-NPZ data mixing, and post-hoc learning curves.
 # convert with fix-and-split (--dipole-in debye --dipole-out e-angstrom) or
 # multiply by DEBYE_TO_EANGSTROM (0.208194). --conversion does not convert dipoles.

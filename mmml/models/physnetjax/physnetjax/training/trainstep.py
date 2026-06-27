@@ -19,7 +19,9 @@ except ModuleNotFoundError:  # pragma: no cover
 from mmml.models.physnetjax.physnetjax.training.loss import (
     mean_absolute_error,
     mean_squared_loss,
+    mean_squared_loss_distill,
     mean_squared_loss_QD,
+    mean_squared_loss_QD_distill,
 )
 
 
@@ -29,6 +31,20 @@ Performs forward pass, computes loss, calculates gradients, updates
 parameters, and maintains exponential moving average (EMA) of parameters.
 Supports both standard energy/force prediction and charge/dipole prediction.
 """
+
+
+def _forward(model_apply, params, batch, batch_size):
+    return model_apply(
+        params,
+        atomic_numbers=batch["Z"],
+        positions=batch["R"],
+        dst_idx=batch["dst_idx"],
+        src_idx=batch["src_idx"],
+        batch_segments=batch["batch_segments"],
+        batch_size=batch_size,
+        batch_mask=batch["batch_mask"],
+        atom_mask=batch["atom_mask"],
+    )
 
 
 if jax is None or jnp is None or optax is None or otu is None:  # pragma: no cover
@@ -51,6 +67,10 @@ else:
             "optimizer_update",
             "batch_size",
             "doCharges",
+            "doDistill",
+            "distill_energy",
+            "distill_forces",
+            "distill_dipole",
             "debug",
         ),
     )
@@ -68,41 +88,66 @@ else:
         opt_state,
         params,
         ema_params,
+        teacher_params=None,
+        distill_alpha=1.0,
+        doDistill=False,
+        distill_energy=True,
+        distill_forces=True,
+        distill_dipole=True,
         debug: bool = False,
         ema_decay: float = 0.999,
     ):
         """Implementation of :data:`TRAIN_STEP_DOC`."""
 
+        teacher_output = None
+        if doDistill and teacher_params is not None:
+            teacher_output = jax.lax.stop_gradient(
+                _forward(model_apply, teacher_params, batch, batch_size)
+            )
+
         if doCharges:
 
             def loss_fn(params):
-                output = model_apply(
-                    params,
-                    atomic_numbers=batch["Z"],
-                    positions=batch["R"],
-                    dst_idx=batch["dst_idx"],
-                    src_idx=batch["src_idx"],
-                    batch_segments=batch["batch_segments"],
-                    batch_size=batch_size,
-                    batch_mask=batch["batch_mask"],
-                    atom_mask=batch["atom_mask"],
-                )
-
-                loss = mean_squared_loss_QD(
-                    energy_prediction=output["energy"],
-                    energy_target=batch["E"],
-                    energy_weight=energy_weight,
-                    forces_prediction=output["forces"],
-                    forces_target=batch["F"],
-                    forces_weight=forces_weight,
-                    dipole_prediction=output["dipoles"],
-                    dipole_target=batch["D"],
-                    dipole_weight=dipole_weight,
-                    total_charges_prediction=output["sum_charges"],
-                    total_charge_target=jnp.zeros_like(output["sum_charges"]),
-                    total_charge_weight=charges_weight,
-                    atomic_mask=batch["atom_mask"],
-                )
+                output = _forward(model_apply, params, batch, batch_size)
+                if doDistill and teacher_output is not None:
+                    loss = mean_squared_loss_QD_distill(
+                        energy_prediction=output["energy"],
+                        forces_prediction=output["forces"],
+                        dipole_prediction=output["dipoles"],
+                        total_charges_prediction=output["sum_charges"],
+                        energy_target_gt=batch["E"],
+                        forces_target_gt=batch["F"],
+                        dipole_target_gt=batch["D"],
+                        total_charge_target=jnp.zeros_like(output["sum_charges"]),
+                        energy_target_teacher=teacher_output["energy"],
+                        forces_target_teacher=teacher_output["forces"],
+                        dipole_target_teacher=teacher_output["dipoles"],
+                        energy_weight=energy_weight,
+                        forces_weight=forces_weight,
+                        dipole_weight=dipole_weight,
+                        total_charge_weight=charges_weight,
+                        atomic_mask=batch["atom_mask"],
+                        distill_alpha=distill_alpha,
+                        distill_energy=distill_energy,
+                        distill_forces=distill_forces,
+                        distill_dipole=distill_dipole,
+                    )
+                else:
+                    loss = mean_squared_loss_QD(
+                        energy_prediction=output["energy"],
+                        energy_target=batch["E"],
+                        energy_weight=energy_weight,
+                        forces_prediction=output["forces"],
+                        forces_target=batch["F"],
+                        forces_weight=forces_weight,
+                        dipole_prediction=output["dipoles"],
+                        dipole_target=batch["D"],
+                        dipole_weight=dipole_weight,
+                        total_charges_prediction=output["sum_charges"],
+                        total_charge_target=jnp.zeros_like(output["sum_charges"]),
+                        total_charge_weight=charges_weight,
+                        atomic_mask=batch["atom_mask"],
+                    )
                 return loss, (
                     output["energy"],
                     output["forces"],
@@ -113,26 +158,32 @@ else:
         else:
 
             def loss_fn(params):
-                output = model_apply(
-                    params,
-                    atomic_numbers=batch["Z"],
-                    positions=batch["R"],
-                    dst_idx=batch["dst_idx"],
-                    src_idx=batch["src_idx"],
-                    batch_segments=batch["batch_segments"],
-                    batch_size=batch_size,
-                    batch_mask=batch["batch_mask"],
-                    atom_mask=batch["atom_mask"],
-                )
-                loss = mean_squared_loss(
-                    energy_prediction=output["energy"],
-                    energy_target=batch["E"],
-                    forces_prediction=output["forces"],
-                    forces_target=batch["F"],
-                    forces_weight=forces_weight,
-                    energy_weight=energy_weight,
-                    atomic_mask=batch["atom_mask"],
-                )
+                output = _forward(model_apply, params, batch, batch_size)
+                if doDistill and teacher_output is not None:
+                    loss = mean_squared_loss_distill(
+                        energy_prediction=output["energy"],
+                        forces_prediction=output["forces"],
+                        energy_target_gt=batch["E"],
+                        forces_target_gt=batch["F"],
+                        energy_target_teacher=teacher_output["energy"],
+                        forces_target_teacher=teacher_output["forces"],
+                        energy_weight=energy_weight,
+                        forces_weight=forces_weight,
+                        atomic_mask=batch["atom_mask"],
+                        distill_alpha=distill_alpha,
+                        distill_energy=distill_energy,
+                        distill_forces=distill_forces,
+                    )
+                else:
+                    loss = mean_squared_loss(
+                        energy_prediction=output["energy"],
+                        energy_target=batch["E"],
+                        forces_prediction=output["forces"],
+                        forces_target=batch["F"],
+                        forces_weight=forces_weight,
+                        energy_weight=energy_weight,
+                        atomic_mask=batch["atom_mask"],
+                    )
                 return loss, (output["energy"], output["forces"])
 
         if doCharges:

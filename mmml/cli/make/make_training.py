@@ -30,9 +30,16 @@ import jax
 import yaml
 
 # from mmml.models.physnetjax.physnetjax.models import model as model
+from mmml.models.physnetjax.defaults import JOINT_TRAINING_CATEGORY, resolve_hf_physnet_model
+from mmml.models.physnetjax.checkpoint_utils import (
+    apply_checkpoint_architecture,
+    load_physnet_checkpoint,
+    print_bundled_physnet_models,
+)
 from mmml.models.physnetjax.physnetjax.models.model import EF
 from mmml.models.physnetjax.physnetjax.training.training import train_model
 from mmml.models.physnetjax.physnetjax.data.data import prepare_datasets
+from mmml.utils.model_checkpoint import normalize_flax_params_for_apply
 # from mmml.models.physnetjax.physnetjax.data.batches import prepare_batches_jit
 
 import numpy as np
@@ -119,6 +126,7 @@ Examples:
 
 YAML keys match CLI flags (with optional aliases: train, output, max_epochs).
 See mmml/cli/misc/physnet_train.example.yaml for a template.
+See mmml/cli/misc/physnet_train_transfer.example.yaml for transfer learning / distillation.
         """,
     )
     parser.add_argument(
@@ -355,6 +363,105 @@ See mmml/cli/misc/physnet_train.example.yaml for a template.
         help="JSON string or file path to initialize flax parameters",
     )
 
+    # Transfer learning
+    parser.add_argument(
+        "--physnet-checkpoint",
+        "--physnet_checkpoint",
+        type=str,
+        default=None,
+        dest="physnet_checkpoint",
+        help="PhysNet checkpoint path (JSON or Orbax) for warm-start transfer learning",
+    )
+    parser.add_argument(
+        "--physnet-transfer-model",
+        "--physnet_transfer_model",
+        type=str,
+        default=None,
+        dest="physnet_transfer_model",
+        help=(
+            "Bundled PhysNet transfer model ID, file stem, or category. "
+            f"Defaults to {JOINT_TRAINING_CATEGORY!r} when distillation is enabled."
+        ),
+    )
+    parser.add_argument(
+        "--list-physnet-transfer-models",
+        action="store_true",
+        default=False,
+        dest="list_physnet_transfer_models",
+        help="List bundled PhysNet transfer-learning models and exit",
+    )
+    parser.add_argument(
+        "--physnet-transfer-category",
+        "--physnet_transfer_category",
+        type=str,
+        default=None,
+        dest="physnet_transfer_category",
+        help="Filter --list-physnet-transfer-models by manifest category",
+    )
+    parser.add_argument(
+        "--match-checkpoint-architecture",
+        action="store_true",
+        default=True,
+        dest="match_checkpoint_architecture",
+        help="Override EF hyperparameters from transfer checkpoint config (default: on)",
+    )
+    parser.add_argument(
+        "--no-match-checkpoint-architecture",
+        action="store_false",
+        dest="match_checkpoint_architecture",
+        help="Do not override EF hyperparameters from transfer checkpoint config",
+    )
+
+    # Knowledge distillation
+    parser.add_argument(
+        "--distill",
+        action="store_true",
+        default=False,
+        help="Enable teacher distillation loss during training",
+    )
+    parser.add_argument(
+        "--distill-alpha",
+        "--distill_alpha",
+        type=float,
+        default=1.0,
+        dest="distill_alpha",
+        help="Ground-truth loss weight (1.0=GT only, 0.0=teacher only)",
+    )
+    parser.add_argument(
+        "--distill-targets",
+        "--distill_targets",
+        type=str,
+        nargs="+",
+        default=None,
+        dest="distill_targets",
+        help="Distillation targets: energy forces dipole (default: all three)",
+    )
+    parser.add_argument(
+        "--teacher-checkpoint",
+        "--teacher_checkpoint",
+        type=str,
+        default=None,
+        dest="teacher_checkpoint",
+        help="Teacher checkpoint for distillation (defaults to warm-start checkpoint)",
+    )
+
+    # Post-hoc learning curves
+    parser.add_argument(
+        "--metrics-plot",
+        "--metrics_plot",
+        type=str,
+        default=None,
+        dest="metrics_plot",
+        help="After training, write learning-curve plot to this path via Orbax checkpoints",
+    )
+    parser.add_argument(
+        "--log-loss",
+        action="store_true",
+        default=False,
+        dest="log_loss",
+        help="Use log scale on loss axes when generating --metrics-plot",
+    )
+
     # Data Augmentation Options
     parser.add_argument(
         "--rot-augment",
@@ -511,6 +618,33 @@ def save_train_config(args: argparse.Namespace, path: str | Path) -> None:
 def validate_train_args(args: argparse.Namespace) -> None:
     if not args.data:
         raise ValueError("--data is required (or set 'data' / 'train' in --config)")
+    data_paths = normalize_data_paths(args.data)
+    if not data_paths:
+        raise ValueError("--data must contain at least one NPZ path")
+
+    if args.restart:
+        if args.physnet_checkpoint or args.physnet_transfer_model:
+            raise ValueError("--restart cannot be combined with transfer-learning checkpoints")
+        if args.distill:
+            raise ValueError("--restart cannot be combined with --distill")
+        if args.teacher_checkpoint:
+            raise ValueError("--restart cannot be combined with --teacher-checkpoint")
+
+    if args.physnet_transfer_model and args.physnet_checkpoint:
+        raise ValueError(
+            "--physnet-transfer-model cannot be combined with --physnet-checkpoint"
+        )
+
+    if args.distill:
+        if not (0.0 <= args.distill_alpha <= 1.0):
+            raise ValueError("--distill-alpha must be between 0 and 1")
+        warm_start, teacher = resolve_transfer_checkpoints(args)
+        if teacher is None:
+            raise ValueError(
+                "--distill requires a teacher checkpoint "
+                "(set --teacher-checkpoint, --physnet-checkpoint, or --physnet-transfer-model)"
+            )
+
     if args.valid_data:
         if args.n_train > 0 or args.n_valid > 0:
             raise ValueError(
@@ -521,6 +655,129 @@ def validate_train_args(args: argparse.Namespace) -> None:
         raise ValueError("--n-train and --n-valid must be >= 0")
     if args.n_train + args.n_valid <= 0:
         raise ValueError("At least one of --n-train or --n-valid must be > 0")
+
+
+def normalize_data_paths(data: Any) -> list[str]:
+    """Normalize ``data`` config/CLI value to a list of NPZ paths."""
+    if data is None:
+        return []
+    if isinstance(data, str):
+        stripped = data.strip()
+        if not stripped:
+            return []
+        if "," in stripped:
+            return [part.strip() for part in stripped.split(",") if part.strip()]
+        return [stripped]
+    if isinstance(data, (list, tuple)):
+        paths = []
+        for item in data:
+            paths.extend(normalize_data_paths(item))
+        return paths
+    raise ValueError(f"Invalid data path specification: {data!r}")
+
+
+def resolve_transfer_checkpoints(
+    args: argparse.Namespace,
+) -> tuple[Optional[Path], Optional[Path]]:
+    """Resolve warm-start and teacher checkpoint paths from CLI/config."""
+    warm_start_path: Optional[Path] = None
+    if args.physnet_transfer_model:
+        selected = resolve_hf_physnet_model(args.physnet_transfer_model)
+        warm_start_path = Path(selected["path"])
+    elif args.physnet_checkpoint:
+        warm_start_path = Path(args.physnet_checkpoint)
+
+    teacher_path: Optional[Path] = None
+    if args.teacher_checkpoint:
+        teacher_path = Path(args.teacher_checkpoint)
+    elif args.distill:
+        if warm_start_path is not None:
+            teacher_path = warm_start_path
+        else:
+            selected = resolve_hf_physnet_model(JOINT_TRAINING_CATEGORY)
+            teacher_path = Path(selected["path"])
+
+    return warm_start_path, teacher_path
+
+
+def load_transfer_init_params(
+    args: argparse.Namespace,
+) -> tuple[Optional[dict], Optional[dict], Optional[dict]]:
+    """Load warm-start and teacher params; optionally apply checkpoint architecture."""
+    explicit_init = _parse_dict_option(args.init_params)
+    warm_start_path, teacher_path = resolve_transfer_checkpoints(args)
+
+    warm_config = None
+    init_params = explicit_init
+    if init_params is None and warm_start_path is not None:
+        init_params, warm_config = load_physnet_checkpoint(warm_start_path)
+        print(f"Loaded warm-start checkpoint: {warm_start_path}")
+
+    teacher_params = None
+    teacher_config = None
+    if args.distill and teacher_path is not None:
+        if warm_start_path is not None and teacher_path.resolve() == warm_start_path.resolve():
+            teacher_params = init_params
+            teacher_config = warm_config
+        else:
+            teacher_params, teacher_config = load_physnet_checkpoint(teacher_path)
+        print(f"Loaded teacher checkpoint: {teacher_path}")
+
+    arch_config = warm_config or teacher_config
+    if args.match_checkpoint_architecture and arch_config is not None:
+        apply_checkpoint_architecture(args, arch_config)
+
+    return init_params, teacher_params, arch_config
+
+
+def _detect_natoms_from_data(data_paths: Sequence[str], num_atoms: Optional[int]) -> tuple[list[str], int]:
+    """Unpad and detect natoms from the first training NPZ path."""
+    paths = list(data_paths)
+    if not paths:
+        raise ValueError("No training data paths provided")
+    first_path, natoms = _maybe_unpad_dataset(paths[0], num_atoms)
+    paths[0] = first_path
+    if num_atoms is None:
+        for idx in range(1, len(paths)):
+            path, _ = _maybe_unpad_dataset(paths[idx], natoms)
+            paths[idx] = path
+    return paths, natoms
+
+
+def _merge_physnet_npz_dicts(chunks: Sequence[dict]) -> dict:
+    merged = {}
+    for chunk in chunks:
+        for key, value in chunk.items():
+            if key not in merged:
+                merged[key] = value
+            else:
+                merged[key] = np.concatenate([merged[key], value], axis=0)
+    return merged
+
+
+def _plot_training_metrics_from_run(
+    run_ckpt_dir: Path,
+    output_path: Path,
+    *,
+    log_loss: bool,
+    tag: str,
+) -> None:
+    from mmml.cli.misc.extract_checkpoint_metrics import (
+        collect_all_metrics,
+        plot_training_metrics,
+    )
+
+    metrics = collect_all_metrics(run_ckpt_dir, verbose=True)
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    plot_training_metrics(
+        metrics,
+        output_path,
+        ckpt_name=tag,
+        log_loss=log_loss,
+        verbose=True,
+    )
+    print(f"Wrote learning-curve plot to {output_path}")
 
 
 def args_from_kwargs(**overrides) -> argparse.Namespace:
@@ -642,26 +899,32 @@ def main_loop(args):
     else:
         ckpt_dir = None
 
+    data_paths, natoms = _detect_natoms_from_data(
+        normalize_data_paths(args.data),
+        args.num_atoms,
+    )
+    args.data = data_paths if len(data_paths) > 1 else data_paths[0]
     if args.num_atoms is None:
-        print("Auto-detecting number of atoms from dataset...")
-        data_path, natoms = _maybe_unpad_dataset(args.data, None)
-        args.data = data_path
+        print(f"Auto-detected num_atoms = {natoms}")
     else:
-        natoms = args.num_atoms
         print(f"Using specified num_atoms = {natoms}")
-        data_path, natoms = _maybe_unpad_dataset(args.data, natoms)
-        args.data = data_path
+
+    init_params, teacher_params, _arch_config = load_transfer_init_params(args)
+    distill_targets = _parse_list_option(args.distill_targets)
+    if args.distill and distill_targets is None:
+        distill_targets = ["energy", "forces", "dipole"]
 
     if args.valid_data:
         valid_path, _ = _maybe_unpad_dataset(args.valid_data, natoms)
         args.valid_data = valid_path
-        print(f"Using fixed splits:\n  train: {args.data}\n  valid: {args.valid_data}")
-        train_data = _load_physnet_npz_dict(args.data, natoms)
+        train_label = data_paths if len(data_paths) > 1 else data_paths[0]
+        print(f"Using fixed splits:\n  train: {train_label}\n  valid: {args.valid_data}")
+        train_chunks = [_load_physnet_npz_dict(path, natoms) for path in data_paths]
+        train_data = _merge_physnet_npz_dicts(train_chunks) if len(train_chunks) > 1 else train_chunks[0]
         valid_data = _load_physnet_npz_dict(args.valid_data, natoms)
     else:
-        files = [args.data]
         train_data, valid_data = prepare_datasets(
-            data_key, args.n_train, args.n_valid, files, natoms=natoms
+            data_key, args.n_train, args.n_valid, data_paths, natoms=natoms
         )
     
     if args.model is not None:
@@ -686,7 +949,6 @@ def main_loop(args):
             debug=args.debug,
         )
         try:
-            # save the model to a file
             with open("args.model.json", 'w') as f:
                 print("Saving model to args.model.json")
                 print(model.return_attributes())
@@ -702,9 +964,8 @@ def main_loop(args):
         data_keys = tuple(data_keys_list)
     else:
         data_keys = ('R', 'Z', 'F', "N", 'E', 'D', 'batch_segments')
-    init_params = _parse_dict_option(args.init_params)
 
-    params_out = train_model(
+    ema_params, best_loss, run_ckpt_dir = train_model(
         train_key,
         model,
         train_data,
@@ -725,7 +986,7 @@ def main_loop(args):
         transform=args.transform,
         schedule_fn=args.schedule_fn,
         objective=args.objective,
-        ckpt_dir=ckpt_dir,  # Use absolute path
+        ckpt_dir=ckpt_dir,
         log_tb=False,
         batch_method=args.batch_method,
         batch_args_dict=batch_args_dict,
@@ -737,15 +998,25 @@ def main_loop(args):
         rot_perturbation=args.rot_perturbation,
         save_every_epoch=args.save_every_epoch,
         profile_epoch_timing=args.profile_epoch_timing,
+        teacher_params=teacher_params if args.distill else None,
+        distill_alpha=args.distill_alpha,
+        distill_targets=distill_targets,
     )
 
-    # save portable JSON (params + architecture) for inference / physnet-evaluate
+    if args.metrics_plot and run_ckpt_dir is not None:
+        try:
+            _plot_training_metrics_from_run(
+                Path(run_ckpt_dir),
+                Path(args.metrics_plot),
+                log_loss=args.log_loss,
+                tag=args.tag,
+            )
+        except Exception as exc:
+            print(f"Warning: failed to write metrics plot: {exc}")
+
     now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     model_attrs = model.return_attributes()
-    from mmml.utils.model_checkpoint import normalize_flax_params_for_apply
-
-    # Store the bare module tree once; Flax init/apply wrap under `params`.
-    params_inner = normalize_flax_params_for_apply(params_out, backend="jax")["params"]
+    params_inner = normalize_flax_params_for_apply(ema_params, backend="jax")["params"]
     portable = {"params": params_inner, "config": model_attrs}
     params_path = (ckpt_dir / f"params_{args.tag}_{now}.json") if ckpt_dir else Path(f"params_{args.tag}_{now}.json")
     if ckpt_dir:
@@ -754,7 +1025,7 @@ def main_loop(args):
         print(f"Saving portable checkpoint to {params_path}")
         json.dump(portable, f, default=to_jsonable)
 
-    return params_out, params_path
+    return ema_params, params_path, run_ckpt_dir
     
 
 
@@ -802,6 +1073,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     try:
         args = parse_train_args(argv)
+        if args.list_physnet_transfer_models:
+            print_bundled_physnet_models(args.physnet_transfer_category)
+            return 0
         if args.save_config:
             save_train_config(args, args.save_config)
             print(f"Wrote training config to {args.save_config}")

@@ -203,6 +203,157 @@ def mean_squared_loss_QD(
     )
 
 
+def blend_regression_loss(
+    gt_loss: jnp.ndarray,
+    teacher_loss: jnp.ndarray,
+    alpha: float,
+) -> jnp.ndarray:
+    """Blend ground-truth and teacher regression losses.
+
+    ``alpha=1`` uses ground truth only; ``alpha=0`` uses teacher only.
+    """
+    return alpha * gt_loss + (1.0 - alpha) * teacher_loss
+
+
+def blend_component_loss(
+    gt_loss: jnp.ndarray,
+    teacher_loss: jnp.ndarray,
+    alpha: float,
+    distill: bool,
+) -> jnp.ndarray:
+    """Blend one loss component when distillation is enabled for that target."""
+    if not distill:
+        return gt_loss
+    return blend_regression_loss(gt_loss, teacher_loss, alpha)
+
+
+def mean_squared_loss_distill(
+    energy_prediction: jnp.ndarray,
+    forces_prediction: jnp.ndarray,
+    energy_target_gt: jnp.ndarray,
+    forces_target_gt: jnp.ndarray,
+    energy_target_teacher: jnp.ndarray,
+    forces_target_teacher: jnp.ndarray,
+    energy_weight: float,
+    forces_weight: float,
+    atomic_mask: jnp.ndarray,
+    distill_alpha: float,
+    distill_energy: bool,
+    distill_forces: bool,
+) -> jnp.ndarray:
+    """Energy/forces loss with optional per-target teacher distillation."""
+    energy_gt = jnp.mean(
+        optax.l2_loss(energy_prediction.flatten(), energy_target_gt.flatten())
+    )
+    energy_teacher = jnp.mean(
+        optax.l2_loss(energy_prediction.flatten(), energy_target_teacher.flatten())
+    )
+    forces_gt = (
+        jnp.sum(optax.l2_loss(forces_prediction.flatten(), forces_target_gt.flatten()))
+        / atomic_mask.sum()
+    )
+    forces_teacher = (
+        jnp.sum(
+            optax.l2_loss(forces_prediction.flatten(), forces_target_teacher.flatten())
+        )
+        / atomic_mask.sum()
+    )
+    energy_loss = blend_component_loss(
+        energy_gt, energy_teacher, distill_alpha, distill_energy
+    )
+    forces_loss = blend_component_loss(
+        forces_gt, forces_teacher, distill_alpha, distill_forces
+    )
+    return energy_weight * energy_loss + forces_weight * forces_loss
+
+
+def mean_squared_loss_QD_distill(
+    energy_prediction: jnp.ndarray,
+    forces_prediction: jnp.ndarray,
+    dipole_prediction: jnp.ndarray,
+    total_charges_prediction: jnp.ndarray,
+    energy_target_gt: jnp.ndarray,
+    forces_target_gt: jnp.ndarray,
+    dipole_target_gt: jnp.ndarray,
+    total_charge_target: jnp.ndarray,
+    energy_target_teacher: jnp.ndarray,
+    forces_target_teacher: jnp.ndarray,
+    dipole_target_teacher: jnp.ndarray,
+    energy_weight: float,
+    forces_weight: float,
+    dipole_weight: float,
+    total_charge_weight: float,
+    atomic_mask: jnp.ndarray,
+    distill_alpha: float,
+    distill_energy: bool,
+    distill_forces: bool,
+    distill_dipole: bool,
+) -> jnp.ndarray:
+    """Charge/dipole loss with optional per-target teacher distillation."""
+    forces_prediction = forces_prediction * atomic_mask[..., None]
+    forces_target_gt = forces_target_gt * atomic_mask[..., None]
+    forces_target_teacher = forces_target_teacher * atomic_mask[..., None]
+
+    energy_gt = (
+        jnp.sum(optax.l2_loss(energy_prediction.flatten(), energy_target_gt.flatten()))
+        / atomic_mask.sum()
+    )
+    energy_teacher = (
+        jnp.sum(
+            optax.l2_loss(energy_prediction.flatten(), energy_target_teacher.flatten())
+        )
+        / atomic_mask.sum()
+    )
+    forces_gt = (
+        jnp.sum(optax.l2_loss(forces_prediction.flatten(), forces_target_gt.flatten()))
+        / atomic_mask.sum()
+        * 3
+    )
+    forces_teacher = (
+        jnp.sum(
+            optax.l2_loss(
+                forces_prediction.flatten(), forces_target_teacher.flatten()
+            )
+        )
+        / atomic_mask.sum()
+        * 3
+    )
+    dipole_gt = (
+        jnp.sum(optax.l2_loss(dipole_prediction.flatten(), dipole_target_gt.flatten()))
+        / 3
+    )
+    dipole_teacher = (
+        jnp.sum(
+            optax.l2_loss(dipole_prediction.flatten(), dipole_target_teacher.flatten())
+        )
+        / 3
+    )
+    charges_loss = (
+        jnp.sum(
+            optax.l2_loss(
+                total_charges_prediction.flatten(), total_charge_target.flatten()
+            )
+        )
+        / atomic_mask.sum()
+    )
+
+    energy_loss = blend_component_loss(
+        energy_gt, energy_teacher, distill_alpha, distill_energy
+    )
+    forces_loss = blend_component_loss(
+        forces_gt, forces_teacher, distill_alpha, distill_forces
+    )
+    dipole_loss = blend_component_loss(
+        dipole_gt, dipole_teacher, distill_alpha, distill_dipole
+    )
+    return (
+        energy_weight * energy_loss
+        + forces_weight * forces_loss
+        + dipole_weight * dipole_loss
+        + total_charge_weight * charges_loss
+    )
+
+
 def mean_absolute_error(
     prediction: jnp.ndarray, target: jnp.ndarray, nsamples: int
 ) -> float:
