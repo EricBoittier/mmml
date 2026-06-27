@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call
 
 
 def _stub_pycharmm(monkeypatch) -> tuple[MagicMock, MagicMock]:
@@ -36,9 +36,9 @@ def test_charmm_silent_command_restores_prior_levels(monkeypatch):
     with charmm_silent_command():
         pass
 
-    assert mock_settings.set_verbosity.call_args_list == [(0,), (5,)]
-    assert mock_settings.set_warn_level.call_args_list == [(0,), (5,)]
-    assert mock_settings.set_bomb_level.call_args_list == [(-2,), (0,)]
+    assert mock_settings.set_verbosity.call_args_list == [call(0), call(5)]
+    assert mock_settings.set_warn_level.call_args_list == [call(0), call(5)]
+    assert mock_settings.set_bomb_level.call_args_list == [call(-2), call(0)]
     fake.lingo.charmm_script.assert_not_called()
 
 
@@ -49,8 +49,8 @@ def test_charmm_relaxed_bomlev_restores_prior_level(monkeypatch):
     with charmm_relaxed_bomlev():
         pass
 
-    assert mock_settings.set_bomb_level.call_args_list == [(-2,), (0,)]
-    assert mock_settings.set_warn_level.call_args_list == [(-2,), (0,)]
+    assert mock_settings.set_bomb_level.call_args_list == [call(-2), call(0)]
+    assert mock_settings.set_warn_level.call_args_list == [call(-2), call(0)]
 
 
 def test_run_charmm_script_quiet_does_not_echo_level_commands(monkeypatch):
@@ -69,7 +69,7 @@ def test_run_charmm_script_quiet_does_not_echo_level_commands(monkeypatch):
     run_charmm_script_quiet("ENER\n")
 
     mock_lingo.charmm_script.assert_called_once_with("ENER\n")
-    assert mock_settings.set_verbosity.call_args_list == [(0,), (5,)]
+    assert mock_settings.set_verbosity.call_args_list == [call(0), call(5)]
 
 
 def test_topology_loaders_do_not_pin_bomlev_zero():
