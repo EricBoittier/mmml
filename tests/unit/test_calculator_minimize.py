@@ -41,6 +41,24 @@ def test_annotate_ase_optimizer_log_line_adds_kcal_mol():
     assert "1489.849493" in annotated_step
 
 
+def test_dual_unit_logfile_is_treated_as_open_by_ase():
+    from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+        ase_optimizer_dual_unit_logfile,
+    )
+
+    log = ase_optimizer_dual_unit_logfile()
+    assert hasattr(log, "close")
+    try:
+        from ase.utils import IOContext
+    except ImportError:
+        pytest.skip("ASE not installed")
+    comm = MagicMock()
+    comm.rank = 0
+    with IOContext() as ctx:
+        opened = ctx.openfile(log, comm=comm, mode="a")
+    assert opened is log
+
+
 def test_should_abort_bfgs_fmax_running_best_spike():
     assert should_abort_bfgs_fmax(
         1470.0,

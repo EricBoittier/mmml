@@ -238,6 +238,10 @@ class _DualUnitAseOptimizerLog:
             self._buf = ""
         self._stream.flush()
 
+    def close(self) -> None:
+        """Mark as an open file for ASE IOContext (no-op; stream stays open)."""
+        self.flush()
+
 
 def ase_optimizer_dual_unit_logfile(stream: TextIO | None = None) -> _DualUnitAseOptimizerLog:
     """Logfile target for ASE optimizers: energy column shows eV and kcal/mol."""
