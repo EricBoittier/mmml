@@ -243,8 +243,21 @@ class _DualUnitAseOptimizerLog:
         self.flush()
 
 
-def ase_optimizer_dual_unit_logfile(stream: TextIO | None = None) -> _DualUnitAseOptimizerLog:
-    """Logfile target for ASE optimizers: energy column shows eV and kcal/mol."""
+def ase_optimizer_dual_unit_logfile(stream: TextIO | None = None) -> str | _DualUnitAseOptimizerLog:
+    """Logfile target for ASE optimizers: energy column shows eV and kcal/mol.
+
+    ASE >= 3.26 ``Optimizer.openfile`` only accepts path-like targets, not custom
+    stream wrappers; fall back to stdout (``'-'``) on those versions.
+    """
+    try:
+        from packaging.version import Version
+
+        import ase
+
+        if Version(getattr(ase, "__version__", "0")) >= Version("3.26.0"):
+            return "-"
+    except Exception:
+        pass
     return _DualUnitAseOptimizerLog(stream)
 
 

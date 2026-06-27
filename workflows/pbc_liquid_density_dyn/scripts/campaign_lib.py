@@ -56,6 +56,13 @@ def resolve_checkpoint(raw: str) -> Path:
     return path
 
 
+def expand_checkpoint_ref(raw: str) -> str:
+    """Resolve checkpoint for YAML/CLI; only ``${MMML_CKPT}`` requires a live file."""
+    if raw == "${MMML_CKPT}":
+        return str(resolve_checkpoint(raw))
+    return str(Path(os.path.expandvars(raw)).expanduser())
+
+
 def solvent_slug(solvent: str) -> str:
     return str(solvent).strip().upper()
 
@@ -251,7 +258,7 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
 
     defaults: dict[str, Any] = {
         "composition": comp,
-        "checkpoint": str(cfg["checkpoint"]),
+        "checkpoint": expand_checkpoint_ref(str(cfg["checkpoint"])),
         "box_size": float(cell.box_size),
         "output_root": str(cell_root),
         "packmol_cache_dir": str(cell_root / ".packmol_cache"),
@@ -555,7 +562,7 @@ def warmup_mlpot_argv(cfg: dict[str, Any], cell: RunCell) -> list[str]:
     argv = [
         "warmup-mlpot-jax",
         "--checkpoint",
-        str(cfg["checkpoint"]),
+        str(expand_checkpoint_ref(str(cfg["checkpoint"]))),
         "--n-monomers",
         str(int(cell.n_monomers)),
         "--box-side",

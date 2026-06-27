@@ -429,6 +429,14 @@ def add_box_sizing_args(parser: argparse.ArgumentParser) -> None:
         ),
     )
     group.add_argument(
+        "--mini-box-equil-fixed-nvt",
+        action="store_true",
+        help=(
+            "During mini box equil with a fixed --box-size, use Hoover NVT instead of CPT NPT "
+            "(liquid-prep dense default)."
+        ),
+    )
+    group.add_argument(
         "--jaxmd-mini-box-equil-ps",
         type=float,
         default=0.0,

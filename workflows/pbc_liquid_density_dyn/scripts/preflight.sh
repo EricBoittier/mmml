@@ -8,6 +8,11 @@ CFG="${MMML_WORKFLOW_CONFIG:-config.yaml}"
 if [[ "${1:-}" == "--config" ]]; then
   CFG="${2:?--config requires path}"
 fi
+if [[ "$CFG" == */* ]]; then
+  CFG_PATH="$(cd "$(dirname "$CFG")" && pwd)/$(basename "$CFG")"
+else
+  CFG_PATH="${WORKFLOW_ROOT}/${CFG}"
+fi
 
 # shellcheck source=../../../scripts/resolve_mmml_env.sh
 source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
@@ -17,9 +22,10 @@ PY="${MMML_PYTHON}"
 "$PY" -c "
 from pathlib import Path
 import sys
-sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
 _BURST = Path('${WORKFLOW_ROOT}').parent / 'pbc_solvent_burst' / 'scripts'
 sys.path.insert(0, str(_BURST))
+# Workflow scripts must win over pbc_solvent_burst (also has campaign_lib.py).
+sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
 from bulk_density import bulk_reference_table, matrix_uses_bulk_density
 from campaign_lib import (
     campaign_job_order,
@@ -36,7 +42,7 @@ from campaign_lib import (
     total_pycharmm_prod_ps,
 )
 from cleanup_strategy import resolve_cleanup_strategy
-cfg_path = Path('${WORKFLOW_ROOT}') / '${CFG}'
+cfg_path = Path('${CFG_PATH}')
 cfg = load_config(cfg_path)
 ckpt = resolve_checkpoint(str(cfg['checkpoint']))
 strategy = resolve_cleanup_strategy(cfg)
