@@ -2,6 +2,8 @@
 
 Target architecture for multi-rank MLpot aligned with CHARMM DOMDEC and existing sparse-dimer logic.
 
+**Operations guide (Phases 0–2):** [`docs/pycharmm-mpi.md`](pycharmm-mpi.md) — `mmml mpi-check`, `mmml-charmm-mpirun.sh`, Tier 1/2 launch recipes.
+
 ## Current state
 
 - **Single rank (`np=1`)** — global sparse dimers; dual-GPU pmap via `--ml-gpu-count 2`.
