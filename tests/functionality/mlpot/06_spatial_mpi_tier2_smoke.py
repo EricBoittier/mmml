@@ -232,9 +232,18 @@ def _charmm_ener_smoke(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import prepare_serial_charmm_mpi_env
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+        mpi4py_openmpi_mismatch,
+        prepare_serial_charmm_mpi_env,
+        rebuild_mpi4py_shell_hint,
+    )
 
     prepare_serial_charmm_mpi_env()
+    ok, msg = mpi4py_openmpi_mismatch()
+    if not ok:
+        print(f"FAIL: {msg}", file=sys.stderr)
+        print(rebuild_mpi4py_shell_hint(), file=sys.stderr)
+        return 1
     args = _parse_args()
     rank, size = _mpi_info()
     if rank == 0:
