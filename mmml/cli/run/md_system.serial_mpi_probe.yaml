@@ -1,0 +1,40 @@
+# Minimal md-system probe: serial Python vs mpirun (cluster validation).
+#
+#   python tests/functionality/mlpot/08_serial_vs_mpirun_md_system.py --dry-run
+#   python tests/functionality/mlpot/08_serial_vs_mpirun_md_system.py --run-both \
+#     --checkpoint "$MMML_CKPT"
+#
+# Serial path uses MMML_NO_MPI_RERUN=1 (no auto mpirun re-exec).
+# MPI path uses MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh
+
+setup: pbc_npt
+backend: pycharmm
+composition: "ACO:2"
+output_dir: artifacts/serial_vs_mpirun_probe
+box_size: 24.0
+spacing: 5.0
+temperature: 260.0
+pressure: 1.0
+
+md_stages: mini
+mini_nstep: 5
+skip_jit_warmup: true
+ml_batch_size: 64
+ml_gpu_count: 1
+
+charmm_pre_minimize: true
+charmm_sd_steps: 10
+charmm_abnr_steps: 10
+bonded_mm_mini: true
+bonded_mm_mini_steps: 10
+calculator_pre_minimize: true
+pre_min_steps: 10
+max_grms_before_dyn: 100.0
+no_echeck: true
+quiet: true
+
+mm_switch_on: 9.0
+mm_switch_width: 1.5
+ml_switch_width: 1.0
+include_mm: true
+mm_nonbond_mode: jax_mic
