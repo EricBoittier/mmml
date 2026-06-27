@@ -400,7 +400,7 @@ def sync_workflow_pbc_box_side_after_mm_pretreat(
             )
     elif not quiet:
         print(
-            f"PBC box after CHARMM MM pretreat: L={live:.3f} Å (source={source})",
+            f"PBC workflow box: L={live:.3f} Å (source={source})",
             flush=True,
         )
     if args is not None and getattr(args, "box_size", None) is not None:
