@@ -33,7 +33,7 @@ class MpiCheckReport:
         return asdict(self)
 
 
-def run_mpi_check(*, strict: bool = False) -> MpiCheckReport:
+def run_mpi_check(*, strict: bool = False, prelaunch: bool = False) -> MpiCheckReport:
     from mmml.interfaces.pycharmmInterface.charmm_mpi import (
         _under_mpirun,
         charmm_lib_available,
@@ -52,6 +52,8 @@ def run_mpi_check(*, strict: bool = False) -> MpiCheckReport:
     report.charmm_lib_dir = (os.environ.get("CHARMM_LIB_DIR") or "").strip() or None
     lib = _charmm_lib_path()
     report.charmm_lib = str(lib) if lib is not None else None
+    if report.charmm_lib_dir is None and lib is not None:
+        report.charmm_lib_dir = str(lib.parent)
     report.charmm_links_mpi = bool(charmm_lib_links_mpi())
     report.under_mpirun = bool(_under_mpirun())
     report.mpi_rank, report.mpi_size = mpi_rank_size()
@@ -114,7 +116,16 @@ def run_mpi_check(*, strict: bool = False) -> MpiCheckReport:
         report.recommended_launch = "mmml md-system ...  # serial libcharmm"
 
     if strict and report.warnings:
-        report.ok = False
+        if prelaunch:
+            blocking = [
+                w
+                for w in report.warnings
+                if "Not under mpirun" not in w
+            ]
+            if blocking:
+                report.ok = False
+        else:
+            report.ok = False
 
     return report
 
@@ -173,6 +184,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Treat warnings as errors (non-zero exit).",
     )
     parser.add_argument(
+        "--prelaunch",
+        action="store_true",
+        help="Serial pre-flight before mpirun: relax strict Tier 2 warnings (spatial env unset, np=1).",
+    )
+    parser.add_argument(
         "--tier2",
         action="store_true",
         help="Also validate Tier 2 spatial MPI + GPU environment for MLpot.",
@@ -187,7 +203,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    report = run_mpi_check(strict=bool(args.strict))
+    report = run_mpi_check(strict=bool(args.strict), prelaunch=bool(args.prelaunch))
     tier2_ok = True
     tier2_report = None
     tier3_ok = True
@@ -197,7 +213,10 @@ def main(argv: list[str] | None = None) -> int:
             validate_tier2_spatial_mpi_env,
         )
 
-        tier2_report = validate_tier2_spatial_mpi_env(strict=bool(args.strict))
+        tier2_report = validate_tier2_spatial_mpi_env(
+            strict=bool(args.strict),
+            prelaunch=bool(args.prelaunch),
+        )
         tier2_ok = tier2_report.ok
 
     if args.tier3:
@@ -223,7 +242,7 @@ def main(argv: list[str] | None = None) -> int:
             )
 
             print()
-            print(render_tier2_report(tier2_report))
+            print(render_tier2_report(tier2_report, prelaunch=bool(args.prelaunch)))
         if tier3_report is not None:
             from mmml.interfaces.pycharmmInterface.mlpot.tier3_domdec_validate import (
                 render_tier3_report,

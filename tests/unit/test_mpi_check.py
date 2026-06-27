@@ -111,6 +111,58 @@ def test_mpi_rank_io_rank0_write_text(tmp_path):
     assert path.read_text() == "hello"
 
 
+def test_mpi_check_prelaunch_strict(monkeypatch, tmp_path):
+    import sys
+
+    from mmml.cli.run.mpi_check import main
+
+    fake_mpi = mock.MagicMock()
+    fake_mpi.Is_initialized.return_value = True
+    monkeypatch.setitem(sys.modules, "mpi4py", mock.MagicMock(MPI=fake_mpi))
+
+    mpirun = tmp_path / "mpirun"
+    mpirun.write_text("#!/bin/sh\nexit 0\n")
+    mpirun.chmod(0o755)
+    lib = tmp_path / "libcharmm.so"
+    lib.write_bytes(b"x")
+    monkeypatch.setenv("CHARMM_LIB_DIR", str(tmp_path))
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_available",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._charmm_lib_path",
+        return_value=lib,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_mpirun_path",
+        return_value=mpirun.resolve(),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        return_value=(0, 1),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._mpi4py_available",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy.spatial_mpi_enabled",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_name",
+        return_value="gpu",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_local_gpu_count",
+        return_value=1,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.defer_jax_warmup_until_after_mlpot_sd",
+        return_value=False,
+    ):
+        assert main(["--tier2", "--strict", "--prelaunch"]) == 0
+
+
 def test_mpi_check_tier2_flag(monkeypatch, tmp_path):
     from mmml.cli.run.mpi_check import main
 
