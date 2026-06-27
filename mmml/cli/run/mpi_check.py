@@ -177,6 +177,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Also validate Tier 2 spatial MPI + GPU environment for MLpot.",
     )
+    parser.add_argument(
+        "--tier3",
+        action="store_true",
+        help="Survey Tier 3 DOMDEC + MLpot blockers (informational; production blocked).",
+    )
     return parser
 
 
@@ -185,6 +190,8 @@ def main(argv: list[str] | None = None) -> int:
     report = run_mpi_check(strict=bool(args.strict))
     tier2_ok = True
     tier2_report = None
+    tier3_ok = True
+    tier3_report = None
     if args.tier2:
         from mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_validate import (
             validate_tier2_spatial_mpi_env,
@@ -193,10 +200,20 @@ def main(argv: list[str] | None = None) -> int:
         tier2_report = validate_tier2_spatial_mpi_env(strict=bool(args.strict))
         tier2_ok = tier2_report.ok
 
+    if args.tier3:
+        from mmml.interfaces.pycharmmInterface.mlpot.tier3_domdec_validate import (
+            validate_tier3_domdec_env,
+        )
+
+        tier3_report = validate_tier3_domdec_env(strict=bool(args.strict))
+        tier3_ok = tier3_report.ok
+
     if args.json:
         payload = report.to_dict()
         if tier2_report is not None:
             payload["tier2"] = tier2_report.to_dict()
+        if tier3_report is not None:
+            payload["tier3"] = tier3_report.to_dict()
         print(json.dumps(payload, indent=2))
     else:
         print(render_mpi_check_report(report))
@@ -207,7 +224,14 @@ def main(argv: list[str] | None = None) -> int:
 
             print()
             print(render_tier2_report(tier2_report))
-    return 0 if report.ok and tier2_ok else 1
+        if tier3_report is not None:
+            from mmml.interfaces.pycharmmInterface.mlpot.tier3_domdec_validate import (
+                render_tier3_report,
+            )
+
+            print()
+            print(render_tier3_report(tier3_report))
+    return 0 if report.ok and tier2_ok and tier3_ok else 1
 
 
 if __name__ == "__main__":

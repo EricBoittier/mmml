@@ -64,3 +64,36 @@ def rank0_call(fn: Callable[[], T], *, default: T | None = None) -> T | None:
     if not is_mpi_rank_zero():
         return default
     return fn()
+
+
+def rank0_trajectory_path(path: Path | str | None) -> Path | None:
+    """Return ``path`` on rank 0 only; ``None`` on other ranks (skip DCD writes)."""
+    if path is None:
+        return None
+    return rank0_only(Path(path))
+
+
+def gate_charmm_trajectory_io(io: Any) -> Any:
+    """Clear ``trajectory`` on non-rank-0 ranks for ``CharmmTrajectoryFiles``-like objects."""
+    from dataclasses import fields, is_dataclass, replace
+
+    if is_mpi_rank_zero():
+        return io
+    if is_dataclass(io):
+        if any(f.name == "trajectory" for f in fields(io)):
+            return replace(io, trajectory=None)
+        return io
+    traj = getattr(io, "trajectory", None)
+    if traj is None:
+        return io
+    if hasattr(io, "model_copy"):
+        return io.model_copy(update={"trajectory": None})
+    if hasattr(io, "copy"):
+        copy = io.copy()
+        copy.trajectory = None
+        return copy
+    try:
+        io.trajectory = None
+    except Exception:
+        pass
+    return io

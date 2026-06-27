@@ -72,9 +72,22 @@ mmml mpi-check              # human summary, exit 0 if launcher OK
 mmml mpi-check --json         # machine-readable report
 mmml mpi-check --strict       # exit 1 on warnings (e.g. mpi4py missing)
 mmml mpi-check --tier2        # also validate Tier 2 spatial MPI + GPU env
+mmml mpi-check --tier3        # survey Tier 3 DOMDEC blockers (informational)
 ```
 
-Reports: `CHARMM_LIB_DIR`, MPI-linked detection, `mpirun` path, rank/size under launch, mpi4py, JAX device, recommended launch line. With `--tier2`, adds MLpot spatial-MPI GPU footgun checks via `spatial_mpi_validate.py`.
+Reports: `CHARMM_LIB_DIR`, MPI-linked detection, `mpirun` path, rank/size under launch, mpi4py, JAX device, recommended launch line. With `--tier2`, adds MLpot spatial-MPI GPU footgun checks via `spatial_mpi_validate.py`. With `--tier3`, reports DOMDEC API blockers via `tier3_domdec_validate.py`.
+
+### CHARMM MPI test suite (CI)
+
+```bash
+# Fast (build job): mocked bootstrap, rank-0 I/O, Tier 3 survey
+pytest tests/charmm_mpi/ -m "charmm_mpi and not pycharmm" -q
+
+# Live (charmm job, under mpirun): energy + mpi-check smoke
+./scripts/ci/run_pycharmm_smoke_pytest.sh -q tests/charmm_mpi/test_mpi_live_energy.py
+```
+
+See [`tests/charmm_mpi/README.md`](../tests/charmm_mpi/README.md).
 
 ### Workshop smoke (user-run on CHARMM node)
 
@@ -268,19 +281,27 @@ DLPack (`__dlpack__` / `from_dlpack`) gives **zero-copy GPU array interchange** 
 
 - [x] `maybe_rerun_mmml_under_mpirun()` generalization
 - [x] `liquid-box` MPI bootstrap
+- [x] `run-pycharmm` MPI bootstrap
 - [x] `docs/examples/slurm_mlpot_mpi.sh`
-- [ ] `run-pycharmm` MPI bootstrap (follow-up)
 
 ### Phase 2
 
 - [x] `mpi_rank_io.py` helpers
 - [x] Rank-0 gating in `recovery_progress` / `liquid_box_build` writes
+- [x] Rank-0 DCD gating in `staged_workflow` (`gate_charmm_trajectory_io`, `rank0_trajectory_path`)
 - [x] `spatial_mpi_validate.py` + `mmml mpi-check --tier2`
 - [x] Mocked MLpot callback integration tests (`test_mlpot_spatial_mpi_integration.py`)
 - [x] Tier 2 smoke script (`06_spatial_mpi_tier2_smoke.py`)
-- [ ] Rank-0 DCD writes in `staged_workflow` (follow-up)
+- [x] CHARMM MPI test suite (`tests/charmm_mpi/`) in CI
 - [ ] Full `md-system --ml-spatial-mpi` mini on cluster (user validation)
 - [ ] Spatial MPI enabled in example YAML campaigns (follow-up)
+
+### Phase 3 (blocked)
+
+- [x] DOMDEC API survey (`domdec_info.py`, `tier3_domdec_validate.py`)
+- [x] `mmml mpi-check --tier3` (informational; production blocked)
+- [ ] PyCHARMM per-rank local/ghost atom API (upstream blocker)
+- [ ] DOMDEC + MLpot coexistence spike (`tests/functionality/mlpot/SPATIAL_MPI_DOMDEC.md`)
 
 ---
 

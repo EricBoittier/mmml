@@ -33,6 +33,16 @@ Uses a single TIP3 water (`setupRes`) — CGENFF only:
 
 Port of [pyCHARMM Workshop 3SimpleMPIExample](https://github.com/BrooksResearchGroup-UM/pyCHARMM-Workshop/tree/main/3SimpleMPIExample): phi/psi grid sharded across mpi4py ranks.
 
+## Layer 3 — CHARMM MPI pytest suite (CI)
+
+```bash
+# Unit (no CHARMM)
+pytest tests/charmm_mpi/ -m "charmm_mpi and not pycharmm" -q
+
+# Live under mpirun (CHARMM node / CI charmm job)
+MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh pytest tests/charmm_mpi/test_mpi_live_energy.py -q
+```
+
 ```bash
 # Environment check first
 mmml mpi-check
