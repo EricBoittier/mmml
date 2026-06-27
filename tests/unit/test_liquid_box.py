@@ -249,3 +249,26 @@ def test_liquid_box_pretreat_cpt_echeck_explicit_override():
         no_scale_echeck=False,
     )
     assert resolve_charmm_mm_pretreat_cpt_echeck(args, echeck=100.0) == pytest.approx(8000.0)
+
+
+def test_apply_liquid_box_profile_dense_sets_no_echeck():
+    args = _args(profile="dense")
+    apply_liquid_box_profile(args)
+    assert args.no_echeck is True
+
+
+def test_apply_charmm_dynamics_echeck_kw_sets_global_state(monkeypatch):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        apply_charmm_dynamics_echeck_kw,
+    )
+
+    calls: list[float] = []
+    monkeypatch.setattr(
+        "pycharmm.dynamics.set_echeck",
+        lambda val: calls.append(float(val)),
+    )
+    kw: dict[str, float | int] = {"echeck": 500.0}
+    apply_charmm_dynamics_echeck_kw(kw, -1.0)
+    assert kw["echeck"] == -1.0
+    assert kw["ichecw"] == 0
+    assert calls == [-1.0]

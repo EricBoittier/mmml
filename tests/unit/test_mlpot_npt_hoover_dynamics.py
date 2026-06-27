@@ -114,6 +114,7 @@ def test_equi_hoover_default_uses_mass_formula_and_disables_rescaling():
     )
     script = _script_string(**kw)
 
+    assert kw["ichecw"] == 0
     assert kw["ihtfrq"] == 0
     assert kw["ieqfrq"] == 0
     assert kw["hoover reft"] == 300.0

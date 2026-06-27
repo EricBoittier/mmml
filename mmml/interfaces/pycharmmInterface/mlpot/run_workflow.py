@@ -305,6 +305,14 @@ def _run_charmm_mm_pretreat_cpt_stage(
         temp=temp,
         box_side=box_side,
     )
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import apply_charmm_dynamics_echeck_kw
+
+    apply_charmm_dynamics_echeck_kw(kw, stage_echeck)
+    if not getattr(args, "quiet", False):
+        print(
+            f"CHARMM MM pretreat {stage}: dynamics echeck={kw['echeck']}",
+            flush=True,
+        )
     run_dynamics_with_io(
         kw,
         io,

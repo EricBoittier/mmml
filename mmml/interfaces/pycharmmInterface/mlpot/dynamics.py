@@ -2253,6 +2253,7 @@ def _apply_npt_cpt_kwargs(
             "pmass": pmass,
             "ihtfrq": 0,
             "ieqfrq": 0,
+            "ichecw": 0,
         }
     )
     apply_npt_pressure_reference(kw, pref=pref, pressure_tensor=pressure_tensor)
@@ -2538,6 +2539,23 @@ def _strip_non_charmm_dynamics_keywords(kw: dict[str, Any]) -> None:
             kw.pop(key, None)
 
 
+def apply_charmm_dynamics_echeck_kw(kw: dict[str, Any], echeck: float) -> None:
+    """Apply ECHECK to dynamics kwargs and CHARMM global state.
+
+    Pretreat/minimize legs can leave a positive ECHECK in Fortran; dynamics must
+    reset it explicitly or short NPT legs abort at iprfrq cadence (e.g. step 240).
+    """
+    val = float(echeck)
+    kw["echeck"] = val
+    kw["ichecw"] = 0
+    try:
+        import pycharmm.dynamics as charm_dyn
+
+        charm_dyn.set_echeck(val)
+    except ImportError:
+        pass
+
+
 def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     """Instantiate and run ``pycharmm.DynamicsScript``."""
     kw = dict(dynamics_kwargs)
@@ -2559,6 +2577,8 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     # coordinates as velocities — zero COMP defensively.
     if not kw.get("start") and int(kw.get("iasvel", 1)) == 0:
         clear_comparison_coordinates()
+    if "echeck" in kw:
+        apply_charmm_dynamics_echeck_kw(kw, float(kw["echeck"]))
     _release_charmm_dynamics_api_buffers()
     dyn = pycharmm.DynamicsScript(**kw)
     dyn.run()
@@ -4022,7 +4042,19 @@ def _run_cpt_stability_subchunked(
             validate_charmm_dynamics_state_after_chunk(
                 context=f"{overlap_context} at step {steps_done + n}",
             )
-        global_step = max(0, int(global_step_offset) + steps_done + n)
+        chunk_end = steps_done + n
+        if restart_path is not None:
+            from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+                read_restart_last_step,
+            )
+
+            actual_global = read_restart_last_step(Path(restart_path))
+            if actual_global is not None:
+                actual_in_segment = int(actual_global) - int(global_step_offset)
+                if actual_in_segment < chunk_end:
+                    steps_done = max(steps_done, actual_in_segment)
+                    break
+        global_step = max(0, int(global_step_offset) + chunk_end)
         if (
             use_restart_handoff
             and write_path is not None
@@ -4165,10 +4197,24 @@ def run_dynamics_with_io(
                 rng_base=rng_base,
                 chunk_nstep=cpt_chunk,
             )
+            integrated = int(total_nstep)
+            completed = True
+            if io is not None and io.restart_write is not None:
+                from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+                    resolve_integrated_restart_step,
+                )
+
+                restart_step = resolve_integrated_restart_step(
+                    Path(io.restart_write),
+                    expected_nstep=total_nstep,
+                )
+                if restart_step is not None:
+                    integrated = int(restart_step)
+                    completed = integrated >= max(1, int(total_nstep * 0.95))
             return _overlap_dynamics_result(
                 last_dyn,
-                integrated_step=total_nstep,
-                completed_full=True,
+                integrated_step=integrated,
+                completed_full=completed,
             )
         last_dyn = _run_dynamics_chunk(
             kw,

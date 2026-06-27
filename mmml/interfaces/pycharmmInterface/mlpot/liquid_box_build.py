@@ -106,6 +106,11 @@ def apply_liquid_box_profile(
 
     apply_density_prep_resilient_defaults(args)
 
+    if getattr(args, "charmm_mm_pretreat_echeck", None) is None and not getattr(
+        args, "no_scale_echeck", False
+    ):
+        args.no_echeck = True
+
     if resolved == "conservative":
         if getattr(args, "box_size", None) is None and getattr(
             args, "target_density_g_cm3", None
