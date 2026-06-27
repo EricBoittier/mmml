@@ -419,12 +419,11 @@ def view_pycharmm_state():
 
 
 def _apply_print_levels(prnlev: int, wrnlev: int) -> None:
-    """Set CHARMM PRNLev/WRNLev via stream API and scripting (keeps both in sync)."""
+    """Set CHARMM PRNLev/WRNLev via stream API (no command echo)."""
     if not PYCHARMM_AVAILABLE:
         return
     settings.set_verbosity(int(prnlev))
     settings.set_warn_level(int(wrnlev))
-    pycharmm.lingo.charmm_script(f"PRNLev {int(prnlev)}\nWRNLev {int(wrnlev)}")
 
 
 def pycharmm_quiet() -> None:
@@ -453,13 +452,11 @@ def charmm_print_level(prnlev: int = 0, wrnlev: int | None = None):
         wrnlev = prnlev
     old_prn = settings.set_verbosity(int(prnlev))
     old_wrn = settings.set_warn_level(int(wrnlev))
-    pycharmm.lingo.charmm_script(f"PRNLev {int(prnlev)}\nWRNLev {int(wrnlev)}")
     try:
         yield
     finally:
         settings.set_verbosity(old_prn)
         settings.set_warn_level(old_wrn)
-        pycharmm.lingo.charmm_script(f"PRNLev {int(old_prn)}\nWRNLev {int(old_wrn)}")
 
 
 from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev  # noqa: E402

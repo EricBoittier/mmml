@@ -468,11 +468,6 @@ def apply_charmm_verbosity(
         "warnlev": int(settings.set_warn_level(int(warnlev))),
         "bomlev": int(settings.set_bomb_level(int(bomlev))),
     }
-    from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
-
-    run_charmm_script_quiet(
-        f"PRNLev {int(prnlev)}\nWRNLev {int(warnlev)}\nbomlev {int(bomlev)}"
-    )
     return old
 
 
