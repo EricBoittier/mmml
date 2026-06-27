@@ -376,6 +376,8 @@ def test_mpi_openmpi_static_shmem_fallback(monkeypatch, tmp_path):
     monkeypatch.delenv("MMML_NO_MPI_MCA_PREFIX", raising=False)
     monkeypatch.delenv("OMPI_MCA_shmem", raising=False)
     monkeypatch.delenv("MMML_MCA_SHMEM", raising=False)
+    monkeypatch.delenv("OMPI_MCA_mca_base_component_path", raising=False)
+    monkeypatch.delenv("OMPI_MCA_component_path", raising=False)
     lib = tmp_path / "lib"
     lib.mkdir()
     (lib / "libopen-pal.so").write_bytes(b"")
@@ -385,7 +387,19 @@ def test_mpi_openmpi_static_shmem_fallback(monkeypatch, tmp_path):
     ):
         charmm_mpi.mpi_openmpi_install_env_defaults()
     assert os.environ["OMPI_MCA_shmem"] == "mmap"
-    assert os.environ["OMPI_MCA_mca_base_component_path"] == str(lib)
+    assert "OMPI_MCA_mca_base_component_path" not in os.environ
+
+
+def test_openmpi_mca_component_dir_ignores_dbg_msgq_only_openmpi(tmp_path):
+    prefix = tmp_path / "prefix"
+    ompi = prefix / "lib" / "openmpi"
+    ompi.mkdir(parents=True)
+    (ompi / "libompi_dbg_msgq.so").write_bytes(b"")
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.openmpi_install_prefix",
+        return_value=prefix,
+    ):
+        assert charmm_mpi.openmpi_mca_component_dir() is None
 
 
 def test_mpi_openmpi_install_env_defaults(monkeypatch, tmp_path):
