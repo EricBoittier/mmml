@@ -29,19 +29,43 @@ def rank0_bridge_enabled() -> bool:
     return _truthy(_BRIDGE_ENV, default=True)
 
 
+def _rank_size_from_launcher_env() -> Tuple[int, int]:
+    """Read rank/size from OpenMPI / PMI launcher env (set under ``mpirun``)."""
+    rank_raw = (
+        os.environ.get("OMPI_COMM_WORLD_RANK")
+        or os.environ.get("PMIX_RANK")
+        or os.environ.get("PMI_RANK")
+        or "0"
+    )
+    size_raw = (
+        os.environ.get("OMPI_COMM_WORLD_SIZE")
+        or os.environ.get("PMIX_SIZE")
+        or os.environ.get("PMI_SIZE")
+        or "1"
+    )
+    return int(rank_raw), max(1, int(size_raw))
+
+
 def mpi_rank_size(comm: Any = None) -> Tuple[int, int]:
-    """Return ``(rank, size)`` using mpi4py or OpenMPI env vars."""
+    """Return ``(rank, size)`` using mpi4py or OpenMPI env vars.
+
+    CHARMM-linked builds call ``MPI_Init`` from Fortran; mpi4py's ``COMM_WORLD``
+    can remain a singleton (size 1) even when ``mpirun -np N`` launched N ranks.
+    When launcher env reports ``size > 1`` but mpi4py does not, trust the env.
+    """
     if comm is not None:
         return int(comm.Get_rank()), int(comm.Get_size())
+    env_rank, env_size = _rank_size_from_launcher_env()
     try:
         from mpi4py import MPI
 
         c = MPI.COMM_WORLD
-        return int(c.Get_rank()), int(c.Get_size())
+        rank, size = int(c.Get_rank()), int(c.Get_size())
+        if size <= 1 and env_size > 1:
+            return env_rank, env_size
+        return rank, size
     except Exception:
-        rank = int(os.environ.get("OMPI_COMM_WORLD_RANK", os.environ.get("PMI_RANK", "0")))
-        size = int(os.environ.get("OMPI_COMM_WORLD_SIZE", os.environ.get("PMI_SIZE", "1")))
-        return rank, max(1, size)
+        return env_rank, env_size
 
 
 def mlpot_runs_on_this_rank(comm: Any = None) -> bool:
