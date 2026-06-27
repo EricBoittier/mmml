@@ -35,6 +35,7 @@ Available commands:
   md-system   Run mixed-composition MD setups (free/pbc NVE/NVT + pbc NPT + lambda TI)
   liquid-box  Build and certify periodic liquid boxes (MM only, no MLpot)
   mpi-check   Validate OpenMPI / CHARMM / mpi4py environment for MLpot
+  warmup-mlpot-jax  Serial JAX JIT warmup for MLpot (outside mpirun; populates compile cache)
   lambda-mbar MBAR post-processing for lambda-dynamics runs
   run-pycharmm  Pure CHARMM heating and equilibration (no ML)
   pycharmm-two-residue-sample  Restrained sampling for a two-residue CHARMM system
@@ -79,6 +80,7 @@ Examples:
   mmml md-system --setup free_nve --backend pycharmm --residue ACO --n-molecules 4 --flat-bottom-radius 20 --ps 0.5
   mmml md-system --setup pycharmm_minimize --composition ACO:2 --mini-nstep 30
   mmml md-system --setup lambda_ti --composition MEOH:2 --couple-residues 1 --lambda-md-mode free_nve --pre-min-steps 50
+  mmml warmup-mlpot-jax --checkpoint "$MMML_CKPT" --n-monomers 20 --ml-batch-size 64
   mmml lambda-mbar --run-dir artifacts/meoh_dimer_lambda_ti
   mmml xml2npz input.xml -o output.npz
   mmml xml2npz inputs/*.xml -o dataset.npz --validate
@@ -167,6 +169,11 @@ Shell tab completion (bash/zsh/fish):
         from .run import mpi_check
         sys.argv = ['mmml mpi-check'] + args.args
         return mpi_check.main()
+
+    elif args.command == 'warmup-mlpot-jax':
+        from .run import warmup_mlpot_jax
+        sys.argv = ['mmml warmup-mlpot-jax'] + args.args
+        return warmup_mlpot_jax.main()
 
     elif args.command == 'lambda-mbar':
         from .run import lambda_mbar

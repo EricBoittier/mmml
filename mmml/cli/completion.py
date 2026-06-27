@@ -17,6 +17,7 @@ MMML_COMMANDS: tuple[str, ...] = (
     "md-system",
     "liquid-box",
     "mpi-check",
+    "warmup-mlpot-jax",
     "lambda-mbar",
     "run-pycharmm",
     "pycharmm-two-residue-sample",
