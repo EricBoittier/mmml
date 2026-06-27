@@ -108,7 +108,10 @@ def test_warmup_argv_matches_cell(cfg: dict, cell: RunCell) -> None:
     argv = warmup_mlpot_argv(cfg, cell)
     assert argv[0] == "warmup-mlpot-jax"
     assert "--n-monomers" in argv
-    assert "--do-mm" in argv
+    if cfg.get("warmup_do_mm", True):
+        assert "--do-mm" in argv
+    else:
+        assert "--do-mm" not in argv
 
 
 def test_cell_bulk_density_fraction(cfg: dict, cell: RunCell) -> None:

@@ -87,11 +87,18 @@ def _resolve_checkpoint(path: Path | None) -> Path:
         for name in ("params.json", "DESdimers_params.json"):
             hit = candidate / name
             if hit.is_file():
-                candidate = hit
-                break
-    if not candidate.is_file():
-        raise SystemExit(f"warmup-mlpot-jax: checkpoint not found: {candidate}")
-    return candidate.resolve()
+                return hit.resolve()
+        # Orbax experiment root (epoch-* subdirs) — same resolution as md-system.
+        try:
+            from mmml.cli.base import resolve_checkpoint_paths
+
+            base, epoch = resolve_checkpoint_paths(candidate)
+            return base.resolve()
+        except SystemExit:
+            pass
+    if candidate.is_file():
+        return candidate.resolve()
+    raise SystemExit(f"warmup-mlpot-jax: checkpoint not found: {candidate}")
 
 
 def _default_atomic_numbers(n_monomers: int, atoms_per: int) -> list[int]:

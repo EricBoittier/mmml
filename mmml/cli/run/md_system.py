@@ -1413,7 +1413,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def parse_md_system_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse CLI with optional ``--config`` YAML (CLI overrides file)."""
-    from mmml.cli.run.md_config import apply_mapping_to_namespace, load_yaml_config
+    from mmml.cli.run.md_config import (
+        apply_mapping_to_namespace,
+        config_is_campaign,
+        load_yaml_config,
+    )
 
     if argv is None:
         argv = sys.argv[1:]
