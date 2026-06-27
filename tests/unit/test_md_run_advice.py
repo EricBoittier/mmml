@@ -190,8 +190,6 @@ def test_build_run_advice_success_continues_remaining_stages(tmp_path: Path) -> 
 
 
 def test_select_restart_skips_pretreat_mm_on_failure(tmp_path: Path) -> None:
-    from mmml.cli.run.md_run_advice import RestartCandidate, select_restart_candidate
-
     pretreat = tmp_path / "pretreat" / "01_mm.crd"
     pretreat.parent.mkdir(parents=True)
     pretreat.write_text("crd\n", encoding="ascii")
@@ -221,4 +219,102 @@ def test_select_restart_skips_pretreat_mm_on_failure(tmp_path: Path) -> None:
     picked = select_restart_candidate(candidates, failed=True)
     assert picked is not None
     assert picked.path == prep
+
+
+def test_select_restart_skips_pretreat_on_success(tmp_path: Path) -> None:
+    pretreat = tmp_path / "pretreat" / "01_mm.crd"
+    pretreat.parent.mkdir(parents=True)
+    pretreat.write_text("crd\n", encoding="ascii")
+    heat = tmp_path / "heat.res"
+    _write_restart(heat)
+    candidates = [
+        RestartCandidate(
+            path=pretreat,
+            label="mini: CHARMM CGENFF SD/ABNR before MLpot (MM only)",
+            leg="mini",
+            hybrid_grms=1.02,
+            source="test",
+            mtime=5.0,
+            is_restart=False,
+        ),
+        RestartCandidate(
+            path=heat,
+            label="heat stage restart",
+            leg="heat",
+            hybrid_grms=None,
+            source="test",
+            mtime=3.0,
+            is_restart=True,
+        ),
+    ]
+    picked = select_restart_candidate(candidates, failed=False)
+    assert picked is not None
+    assert picked.path == heat
+
+
+def test_build_run_advice_full_success_has_no_resume_command(tmp_path: Path) -> None:
+    out = tmp_path / "run"
+    out.mkdir()
+    (out / "mini.crd").write_text("crd\n", encoding="ascii")
+    _write_restart(out / "heat.res")
+    _write_restart(out / "equi.res")
+    summary = {
+        "stages": [
+            {"stage": "mini", "status": "planned"},
+            {"stage": "heat", "status": "complete"},
+            {"stage": "equi", "status": "complete"},
+        ]
+    }
+    (out / "stage_summary.json").write_text(json.dumps(summary), encoding="utf-8")
+    manifest = {
+        "job_name": "dcm52_equil",
+        "backend": "pycharmm",
+        "exit_code": 0,
+        "args": {
+            "md_stages": "mini,heat,equi",
+            "output_dir": str(out),
+        },
+    }
+    advice = build_run_advice(
+        manifest=manifest,
+        output_dir=out,
+        exit_code=0,
+        repo_root=tmp_path,
+    )
+    assert advice is not None
+    assert advice.command == ""
+    assert "complete" in advice.headline.lower()
+    paths = write_run_advice_files(advice, out)
+    sh_text = paths["sh"].read_text(encoding="utf-8")
+    assert "CMD=(" in sh_text
+    assert "exec " in sh_text or "no resume" in sh_text
+
+
+def test_shell_script_uses_bash_array(tmp_path: Path) -> None:
+    out = tmp_path / "run"
+    out.mkdir()
+    _write_restart(out / "baseline.res")
+    manifest = {
+        "job_name": "dcm52_equil",
+        "backend": "pycharmm",
+        "exit_code": 1,
+        "args": {
+            "config": "heat.conf",
+            "md_stages": "mini,heat,equi",
+            "output_dir": str(out),
+        },
+    }
+    advice = build_run_advice(
+        manifest=manifest,
+        output_dir=out,
+        exit_code=1,
+        repo_root=tmp_path,
+    )
+    assert advice is not None
+    assert "\n" not in advice.command
+    assert "--md-stages" in advice.command
+    assert advice.shell_script.count("CMD=(") == 1
+    assert 'exec "${CMD[@]}"' in advice.shell_script
+    paths = write_run_advice_files(advice, out)
+    assert paths["command"].read_text(encoding="utf-8").strip() == advice.command
 

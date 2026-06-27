@@ -6,6 +6,7 @@ import json
 import math
 import re
 import shlex
+import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -319,6 +320,8 @@ def collect_restart_candidates(output_dir: Path) -> list[RestartCandidate]:
 
 def _is_mlpot_restart_leg(candidate: RestartCandidate) -> bool:
     """Skip pretreat MM-only checkpoints when picking MLpot resume legs."""
+    if "pretreat" in candidate.path.parts:
+        return False
     leg = candidate.leg.lower()
     if leg.startswith("pretreat"):
         return False
@@ -327,26 +330,30 @@ def _is_mlpot_restart_leg(candidate: RestartCandidate) -> bool:
     return not any(marker in label for marker in mm_only_markers)
 
 
+def _mlpot_pool(candidates: list[RestartCandidate]) -> list[RestartCandidate]:
+    pool = [c for c in candidates if _is_mlpot_restart_leg(c)]
+    return pool if pool else list(candidates)
+
+
 def select_restart_candidate(
     candidates: list[RestartCandidate],
     *,
     failed: bool,
 ) -> RestartCandidate | None:
-    """Pick restart leg: lowest hybrid GRMS on failure; latest restart on success."""
+    """Pick restart leg: lowest hybrid GRMS on failure; latest stage .res on success."""
     if not candidates:
         return None
 
     restarts = [c for c in candidates if c.is_restart]
     pool = restarts if restarts else [c for c in candidates if c.path.suffix.lower() == ".crd"]
+    pool = _mlpot_pool(pool)
     if not pool:
         return None
 
     if failed:
-        mlpot_pool = [c for c in pool if _is_mlpot_restart_leg(c)]
-        search = mlpot_pool if mlpot_pool else pool
         with_grms = [
             c
-            for c in search
+            for c in pool
             if c.hybrid_grms is not None and math.isfinite(c.hybrid_grms)
         ]
         if with_grms:
@@ -358,13 +365,11 @@ def select_restart_candidate(
                 if float(c.hybrid_grms) <= float(min_grms) + tol  # type: ignore[arg-type]
             ]
             return max(tied, key=lambda c: c.mtime)
-        if search:
-            return max(search, key=lambda c: c.mtime)
+        return max(pool, key=lambda c: c.mtime)
 
     restart_pool = [c for c in pool if c.is_restart]
-    if restart_pool:
-        return max(restart_pool, key=lambda c: c.mtime)
-    return max(pool, key=lambda c: c.mtime)
+    search = restart_pool if restart_pool else pool
+    return max(search, key=lambda c: (_stage_leg_rank(c.leg), c.mtime))
 
 
 def _parse_md_stages(raw: Any) -> list[str]:
@@ -437,6 +442,37 @@ def _completed_stages(summary: dict[str, Any] | None) -> set[str]:
     return done
 
 
+def _infer_completed_stages(
+    output_dir: Path,
+    planned: list[str],
+    summary: dict[str, Any] | None,
+    *,
+    exit_code: int,
+) -> set[str]:
+    """Merge stage_summary with on-disk artifacts (mini often omits status=complete)."""
+    completed = _completed_stages(summary)
+    if int(exit_code) != 0:
+        return completed
+
+    out = Path(output_dir)
+    for stage in planned:
+        if stage == "mini":
+            if any(
+                p.is_file() and p.stat().st_size > 0
+                for p in (
+                    out / "mini.crd",
+                    out / "02_mini.crd",
+                    out / "mlpot_mmml.crd",
+                )
+            ):
+                completed.add("mini")
+            continue
+        res = stage_restart(out, stage)
+        if _is_valid_restart(res):
+            completed.add(stage)
+    return completed
+
+
 def _remaining_stages(planned: list[str], completed: set[str]) -> list[str]:
     if not planned:
         return []
@@ -482,6 +518,47 @@ def _relative_path(path: Path, base: Path | None) -> str:
         return str(path)
 
 
+def _command_parts_from_overrides(
+    *,
+    config_path: Any,
+    is_campaign: bool,
+    job_id: Any,
+    overrides: dict[str, Any],
+) -> list[str]:
+    cmd_parts = ["mmml", "md-system"]
+    if config_path:
+        cmd_parts.extend(["--config", str(config_path)])
+    if is_campaign and job_id:
+        cmd_parts.extend(["--job-id", str(job_id)])
+    for key, val in overrides.items():
+        flag = key.replace("_", "-")
+        if isinstance(val, bool):
+            cmd_parts.append(f"--{flag}" if val else f"--no-{flag}")
+        else:
+            cmd_parts.extend([f"--{flag}", str(val)])
+    return cmd_parts
+
+
+def _command_line(cmd_parts: list[str]) -> str:
+    line = " ".join(shlex.quote(p) for p in cmd_parts)
+    if "\n" in line or "\r" in line:
+        raise ValueError("advice command must be a single line")
+    return line
+
+
+def _shell_script(cmd_parts: list[str], *, job_name: str, exit_code: int) -> str:
+    lines = [
+        "#!/usr/bin/env bash",
+        "set -euo pipefail",
+        "# Suggested resume (wrap with ./scripts/mmml-charmm-mpirun.sh on GPU nodes).",
+        f"# prior job: {job_name} exit={exit_code}",
+        "CMD=(",
+    ]
+    lines.extend(f"  {shlex.quote(p)}" for p in cmd_parts)
+    lines.extend([')', 'exec "${CMD[@]}"', ""])
+    return "\n".join(lines)
+
+
 def build_run_advice(
     *,
     manifest: dict[str, Any],
@@ -504,11 +581,12 @@ def build_run_advice(
     failed = int(exit_code) != 0
     planned = _parse_md_stages(args.get("md_stages"))
     summary = _load_stage_summary(out_dir)
+    completed = _infer_completed_stages(
+        out_dir, planned, summary, exit_code=int(exit_code)
+    )
+    remaining = _remaining_stages(planned, completed)
     candidates = collect_restart_candidates(out_dir)
     restart = select_restart_candidate(candidates, failed=failed)
-
-    completed = _completed_stages(summary)
-    remaining = _remaining_stages(planned, completed)
 
     config_path = args.get("config") or manifest.get("config")
     job_name = str(manifest.get("job_name") or args.get("job_name") or "run")
@@ -529,8 +607,9 @@ def build_run_advice(
     }
     include_presets: list[str] = []
     notes: list[str] = []
+    suggest_resume = failed or bool(remaining)
 
-    if restart is not None:
+    if suggest_resume and restart is not None:
         overrides["restart_from"] = _relative_path(restart.path, repo_root)
         if not restart.is_restart:
             notes.append(
@@ -566,13 +645,16 @@ def build_run_advice(
                         break
             headline = f"Job succeeded — continue remaining stages ({','.join(remaining)})"
         else:
+            suggest_resume = False
+            restart = None
+            overrides.pop("restart_from", None)
             headline = "Job succeeded — staged PyCHARMM leg complete"
             notes.append(
                 "Optional: hand off to JAX-MD with mmml md-system --backend jaxmd "
                 "and --continue-from <handoff.npz>."
             )
 
-    md_stages = str(overrides.get("md_stages") or args.get("md_stages") or "")
+    md_stages = str(overrides.get("md_stages") or "") if suggest_resume else ""
 
     yaml_lines: list[str] = [
         "# Suggested resume config (generated by mmml md-system)",
@@ -602,30 +684,25 @@ def build_run_advice(
 
     config_yaml = "\n".join(yaml_lines) + "\n"
 
-    cmd_parts = ["mmml", "md-system"]
-    if config_path:
-        cmd_parts.extend(["--config", str(config_path)])
-    if is_campaign and job_id:
-        cmd_parts.extend(["--job-id", str(job_id)])
-    for key, val in overrides.items():
-        flag = key.replace("_", "-")
-        if isinstance(val, bool):
-            cmd_parts.append(f"--{flag}" if val else f"--no-{flag}")
-        else:
-            cmd_parts.extend([f"--{flag}", str(val)])
-    command = " ".join(shlex.quote(p) for p in cmd_parts)
-
-    shell_script = "\n".join(
-        [
-            "#!/usr/bin/env bash",
-            "set -euo pipefail",
-            "# Suggested resume (wrap with ./scripts/mmml-charmm-mpirun.sh on GPU nodes).",
-            f"# prior job: {job_name} exit={exit_code}",
-            "",
-            command,
-            "",
-        ]
-    )
+    command = ""
+    shell_script = ""
+    if suggest_resume:
+        resume_overrides = dict(overrides)
+        if md_stages:
+            resume_overrides["md_stages"] = md_stages
+        cmd_parts = _command_parts_from_overrides(
+            config_path=config_path,
+            is_campaign=is_campaign,
+            job_id=job_id,
+            overrides=resume_overrides,
+        )
+        command = _command_line(cmd_parts)
+        shell_script = _shell_script(cmd_parts, job_name=job_name, exit_code=int(exit_code))
+    else:
+        config_yaml = (
+            "\n".join(yaml_lines[:2])
+            + "\n# No resume command — staged leg complete.\n"
+        )
 
     return RunAdvice(
         exit_code=int(exit_code),
@@ -648,14 +725,23 @@ def write_run_advice_files(advice: RunAdvice, output_dir: Path) -> dict[str, Pat
         "json": out_dir / "next_run_advice.json",
         "yaml": out_dir / "next_run.yaml",
         "sh": out_dir / "next_run.sh",
+        "command": out_dir / "next_run.command",
     }
     paths["json"].write_text(
         json.dumps(advice.to_dict(), indent=2) + "\n",
         encoding="utf-8",
     )
     paths["yaml"].write_text(advice.config_yaml, encoding="utf-8")
-    paths["sh"].write_text(advice.shell_script, encoding="utf-8")
-    paths["sh"].chmod(paths["sh"].stat().st_mode | 0o111)
+    if advice.command:
+        paths["sh"].write_text(advice.shell_script, encoding="utf-8")
+        paths["sh"].chmod(paths["sh"].stat().st_mode | 0o111)
+        paths["command"].write_text(advice.command + "\n", encoding="utf-8")
+    else:
+        paths["sh"].write_text(
+            "#!/usr/bin/env bash\n# Staged leg complete — no resume command.\n",
+            encoding="utf-8",
+        )
+        paths["command"].write_text("", encoding="utf-8")
     return paths
 
 
@@ -684,11 +770,15 @@ def emit_run_advice(
         for note in advice.notes:
             table.add_row("Note", note)
         table.add_row("Config", str(Path(output_dir) / "next_run.yaml"))
-        table.add_row("Script", str(Path(output_dir) / "next_run.sh"))
+        if advice.command:
+            table.add_row("Script", str(Path(output_dir) / "next_run.sh"))
+            table.add_row("One-liner", str(Path(output_dir) / "next_run.command"))
         border = "red" if advice.exit_code != 0 else "green"
         console.print(Panel(table, title="[bold]Next md-system run[/bold]", border_style=border))
-        print("Copy-paste:", flush=True)
-        print(advice.command, flush=True)
+        if advice.command:
+            sys.stdout.write("Copy-paste:\n")
+            sys.stdout.write(advice.command + "\n")
+            sys.stdout.flush()
     except ImportError:
         print("\n--- Next md-system run ---", flush=True)
         print(advice.headline, flush=True)
