@@ -81,7 +81,7 @@ ml_batch_size: 2048
 
 # Serial JAX warmup before mpirun md-system (populates compile cache).
 warmup_mlpot_jax: true
-warmup_do_mm: true
+warmup_do_mm: false
 
 mpirun_wrapper: ../../scripts/mmml-charmm-mpirun.sh
 MMML_MPI_NP: 1

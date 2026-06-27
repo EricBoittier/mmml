@@ -17,9 +17,9 @@ PY="${MMML_PYTHON}"
 "$PY" -c "
 from pathlib import Path
 import sys
-sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
 _BURST = Path('${WORKFLOW_ROOT}').parent / 'pbc_solvent_burst' / 'scripts'
 sys.path.insert(0, str(_BURST))
+sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
 from bulk_density import bulk_reference_table, matrix_uses_bulk_density
 from campaign_lib import (
     campaign_job_order,

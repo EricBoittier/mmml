@@ -1,0 +1,81 @@
+# Quick GPU smoke: DCM:32 in 25 Å PBC cube (~bulk liquid density).
+# Full matrix uses bulk_density_fractions in config.yaml (N≈186–308).
+#
+# Run (on gpu node):
+#   MMML_WORKFLOW_CONFIG=config.smoke.gpu.yaml \
+#     bash scripts/job_shell.sh dcm_32_t300_l25
+
+solvents: [DCM]
+cluster_sizes: [32]
+temperatures: [300.0]
+box_sizes: [25.0]
+checkpoint: ${MMML_CKPT}
+output_root: artifacts/pbc_liquid_density_dyn_smoke
+seed_base: 4242
+
+ps_heat: 2.0
+n_heat_segments: 2
+heat_firstt: 50.0
+heat_thermostat: hoover
+pycharmm_equi_ps: 5.0
+pycharmm_equi_legs: 1
+pycharmm_prod_ps: 5.0
+pycharmm_prod_legs: 1
+prod_ensemble: pbc_npt
+
+dt_fs: 0.25
+pressure: 1.0
+spacing: 4.0
+packmol_tolerance: 1.5
+
+liquid_prep: true
+density_prep_ladder: true
+density_prep_ladder_max_rounds: 3
+density_prep_lattice_abnr_steps: 100
+mini_lattice_abnr_steps: 100
+mc_density_equalize: true
+mc_density_steps: 40
+min_intermonomer_atom_distance: 1.0
+max_grms_before_dyn: 50.0
+
+cleanup_strategy:
+  name: pbc_liquid_density_smoke
+  charmm_mm:
+    pretreat_on_pycharmm: true
+    ps_heat: 1.0
+    ps_equi: 1.0
+    ps_prod: 0.5
+    overlap_rescue_sd_steps: 200
+    overlap_rescue_abnr_steps: 400
+  mlpot:
+    cleanup: true
+    no_echeck_heat: true
+    dynamics_overlap_action: rescue
+    dynamics_overlap_min_distance: 1.5
+    dynamics_intra_min_distance: 0.5
+    dynamics_overlap_check_interval: 250
+    dynamics_overlap_memory_handoff: true
+    bonded_mm_mini: true
+    bonded_mm_mini_after: mini,heat,equi
+    bonded_mm_mini_steps: 500
+    charmm_pre_minimize: true
+    charmm_sd_steps: 500
+    charmm_abnr_steps: 500
+    mini_nstep: 300
+    dcd_nsavc: 50
+    dyn_nprint: 50
+    save_run_state: true
+    overlap_run_state_every_chunks: 4
+  jaxmd_pbc: {}
+
+mm_switch_on: 8.0
+mm_switch_width: 5.0
+ml_switch_width: 1.5
+ml_gpu_count: 1
+ml_batch_size: 2048
+
+warmup_mlpot_jax: true
+warmup_do_mm: false
+
+mpirun_wrapper: ../../scripts/mmml-charmm-mpirun.sh
+MMML_MPI_NP: 1

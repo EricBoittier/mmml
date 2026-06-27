@@ -151,13 +151,18 @@ def apply_campaign_cli_overrides(merged: dict[str, Any], parent: Namespace) -> N
 def namespace_from_merged(merged: dict[str, Any]) -> Namespace:
     from mmml.cli.run import md_system
 
+    parser_keys = set(vars(md_system.parse_args([])))
     argv: list[str] = []
     extra_tail: list[str] = []
+    passthrough: dict[str, Any] = {}
     raw_extra = merged.get("extra_args")
     if raw_extra:
         extra_tail.extend(["--extra-args", *[str(x) for x in raw_extra]])
     for key, value in merged.items():
         if key in _CAMPAIGN_ONLY_KEYS or value is None or key == "extra_args":
+            continue
+        if key not in parser_keys:
+            passthrough[key] = value
             continue
         flag = f"--{key.replace('_', '-')}"
         if isinstance(value, bool):
@@ -185,6 +190,8 @@ def namespace_from_merged(merged: dict[str, Any]) -> Namespace:
     try:
         args = md_system.parse_md_system_args()
         md_system._apply_backend_setup_defaults(args)
+        for key, value in passthrough.items():
+            setattr(args, key, value)
         return args
     finally:
         sys.argv = old
