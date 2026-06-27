@@ -72,6 +72,23 @@ def test_resilient_defaults_respect_explicit_box_and_ladder_off():
     assert args.mini_box_equil_allow_fixed_box is True
 
 
+def test_condensed_phase_defaults_from_certified_box():
+    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+        apply_condensed_phase_md_defaults,
+        density_prep_ladder_enabled,
+        liquid_prep_enabled,
+    )
+
+    args = _args(from_psf="boxes/dcm52/model.psf", skip_cluster_build=True)
+    apply_condensed_phase_md_defaults(args)
+    assert liquid_prep_enabled(args)
+    assert density_prep_ladder_enabled(args)
+    assert args.mini_box_equil_ps == 2.0
+    assert args.calculator_pre_minimize is True
+    assert int(args.fire_min_steps) >= 200
+    assert int(args.pre_min_steps) >= 200
+
+
 def test_ladder_skipped_when_grms_ok():
     from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         run_density_prep_ladder,

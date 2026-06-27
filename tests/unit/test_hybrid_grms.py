@@ -35,6 +35,30 @@ def test_forces_grms_matches_rms_of_components():
     assert forces_grms_kcalmol_A(forces) == pytest.approx(float(np.sqrt(25.0 / 6.0)))
 
 
+def test_run_pre_dynamics_hybrid_calculator_prep_skips_when_grms_low():
+    from unittest import mock
+
+    from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+        run_pre_dynamics_hybrid_calculator_prep,
+    )
+
+    ctx = mock.Mock()
+    args = argparse.Namespace(calculator_pre_minimize=True)
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.measure_hybrid_charmm_grms",
+        return_value=mock.Mock(
+            hybrid=20.0, charmm=1.0, ratio=20.0, kind="geometry_stress"
+        ),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
+    ):
+        grms, ran = run_pre_dynamics_hybrid_calculator_prep(
+            ctx, args, verbose=False
+        )
+    assert grms == pytest.approx(20.0)
+    assert ran is False
+
+
 def test_coerce_hybrid_minimize_result_accepts_legacy_float():
     from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
         HybridMinimizeResult,

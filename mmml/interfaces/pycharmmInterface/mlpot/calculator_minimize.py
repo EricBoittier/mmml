@@ -803,3 +803,71 @@ def minimize_hybrid_calculator_fire_before_sd(
         )
     mlpot_ctx.sd_watchdog_baseline_grms = float(grms1)
     return HybridMinimizeResult(grms=float(grms1), ran=True)
+
+
+def run_pre_dynamics_hybrid_calculator_prep(
+    mlpot_ctx: Any,
+    args: argparse.Namespace,
+    *,
+    context_prefix: str = "Pre-dynamics",
+    geometry_stress_floor_grms: float = 30.0,
+    verbose: bool = True,
+) -> tuple[float, bool]:
+    """Run ASE FIRE then BFGS when live hybrid GRMS reflects ML geometry stress."""
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        charmm_grms_after_ener_force,
+        measure_hybrid_charmm_grms,
+    )
+
+    charmm_grms_after_ener_force()
+    diag = measure_hybrid_charmm_grms(mlpot_ctx)
+    hybrid = float(diag.hybrid)
+    if str(diag.kind) != "geometry_stress":
+        return hybrid, False
+    if hybrid <= float(geometry_stress_floor_grms):
+        return hybrid, False
+    if not bool(getattr(args, "calculator_pre_minimize", True)):
+        return hybrid, False
+
+    fire_fmax = float(
+        getattr(args, "rescue_fire_fmax", None)
+        or getattr(args, "pre_min_fmax", 0.05)
+        or 0.05
+    )
+    calc_fmax = float(getattr(args, "pre_min_fmax", 0.05) or 0.05)
+    fire = coerce_hybrid_minimize_result(
+        minimize_hybrid_calculator_fire_before_sd(
+            mlpot_ctx,
+            config=HybridCalculatorFireConfig(
+                max_steps=int(getattr(args, "fire_min_steps", 200) or 200),
+                fmax_ev_a=fire_fmax,
+                fire_maxstep=float(getattr(args, "fire_min_maxstep", 0.2) or 0.2),
+                verbose=verbose,
+                max_start_grms_kcalmol_A=float("inf"),
+                max_initial_fmax_ev_a=1000.0,
+            ),
+            context_prefix=f"{context_prefix} (FIRE)",
+        )
+    )
+    hybrid = float(fire.grms)
+    ran = bool(fire.ran)
+    mini = coerce_hybrid_minimize_result(
+        minimize_hybrid_calculator_before_sd(
+            mlpot_ctx,
+            HybridCalculatorMinimizeConfig(
+                max_steps=int(getattr(args, "pre_min_steps", 200) or 200),
+                fmax_ev_a=calc_fmax,
+                bfgs_maxstep=float(getattr(args, "bfgs_maxstep", 0.05) or 0.05),
+                verbose=verbose,
+                quiet_bfgs=bool(getattr(args, "quiet_bfgs", False)),
+                max_start_grms_kcalmol_A=float("inf"),
+                max_initial_fmax_ev_a=1000.0,
+            ),
+            context_prefix=f"{context_prefix} (BFGS)",
+        )
+    )
+    hybrid = float(mini.grms)
+    ran = ran or bool(mini.ran)
+    charmm_grms_after_ener_force()
+    diag = measure_hybrid_charmm_grms(mlpot_ctx)
+    return float(diag.hybrid), ran

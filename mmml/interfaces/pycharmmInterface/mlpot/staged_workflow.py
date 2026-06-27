@@ -329,7 +329,11 @@ def _build_stage_dynamics_kw(
     if stage == "heat":
         heat_firstt, heat_finalt = resolve_heat_firstt_finalt(args, default_temp=temp)
         # ML USER-only heat (no SHAKE) often exceeds tight echeck before Hoover equilibrates.
-        if getattr(args, "no_echeck_heat", False) or getattr(args, "no_echeck", False):
+        if (
+            getattr(args, "no_echeck_heat", False)
+            or getattr(args, "no_echeck", False)
+            or getattr(args, "_auto_no_echeck_heat", False)
+        ):
             heat_echeck = -1.0
         else:
             from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
@@ -1163,13 +1167,13 @@ def _load_or_build_cluster(
 def run_staged_workflow(args: argparse.Namespace) -> int:
     from mmml.interfaces.pycharmmInterface.mlpot.cleanup_mode import apply_cleanup_defaults
     from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
-        apply_density_prep_resilient_defaults,
+        apply_condensed_phase_md_defaults,
         liquid_prep_enabled,
         run_pre_mlpot_geometry_gate,
     )
 
     apply_cleanup_defaults(args)
-    apply_density_prep_resilient_defaults(args)
+    apply_condensed_phase_md_defaults(args)
     if getattr(args, "mlpot_profile", False):
         import os
         os.environ["MMML_MLPOT_PROFILE"] = "1"
@@ -2110,6 +2114,40 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             )
             current_grms = float(ladder_grms)
             setattr(args, "_density_prep_ladder_summary", ladder_summary.to_dict())
+
+        from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+            run_pre_dynamics_hybrid_calculator_prep,
+        )
+
+        calc_grms, calc_ran = run_pre_dynamics_hybrid_calculator_prep(
+            ctx,
+            args,
+            context_prefix="Pre-dynamics",
+            verbose=not args.quiet,
+        )
+        if calc_ran:
+            current_grms = float(calc_grms)
+            current_grms = refresh_mlpot_energy_and_grms(
+                ctx,
+                context="Pre-dynamics gate (post-calculator mini)"
+                if not args.quiet
+                else "",
+            )
+
+        _auto_echeck_off_grms = 30.0
+        if (
+            float(current_grms) > _auto_echeck_off_grms
+            and not getattr(args, "no_echeck_heat", False)
+            and not getattr(args, "no_echeck", False)
+        ):
+            if not args.quiet:
+                print(
+                    f"Pre-heat: hybrid GRMS {float(current_grms):.1f} > "
+                    f"{_auto_echeck_off_grms:.0f} kcal/mol/Å — auto-disabling ECHECK "
+                    "for heat (ML geometry stress; set no_echeck_heat: true to silence)",
+                    flush=True,
+                )
+            setattr(args, "_auto_no_echeck_heat", True)
 
         assert_dynamics_ready(
             max_grms=max_grms,

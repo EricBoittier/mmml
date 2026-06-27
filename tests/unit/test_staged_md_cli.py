@@ -421,6 +421,24 @@ def test_build_stage_dynamics_kw_heat_hoover_pbc_disables_ihtfrq_ramp():
     assert "TEMINC" not in kw
 
 
+def test_build_stage_dynamics_kw_heat_auto_no_echeck_heat_disables_echeck():
+    args = argparse.Namespace(heat_thermostat="scale", _auto_no_echeck_heat=True)
+    dyn_print = {"nprint": 100, "iprfrq": 500, "isvfrq": 500}
+    kw = _build_stage_dynamics_kw(
+        "heat",
+        args=args,
+        timestep_ps=0.00025,
+        nstep=80000,
+        save_interval_ps=0.125,
+        temp=300.0,
+        echeck=8000.0,
+        dyn_print=dyn_print,
+        restart=False,
+        use_pbc=True,
+    )
+    assert kw["echeck"] == -1.0
+
+
 def test_build_stage_dynamics_kw_heat_no_echeck_heat_disables_echeck():
     args = argparse.Namespace(heat_thermostat="scale", no_echeck_heat=True)
     dyn_print = {"nprint": 100, "iprfrq": 500, "isvfrq": 500}

@@ -135,6 +135,27 @@ def apply_density_prep_resilient_defaults(args: argparse.Namespace) -> None:
         args.mini_box_equil_allow_fixed_box = True
 
     args.calculator_pre_minimize = bool(getattr(args, "calculator_pre_minimize", True))
+    _bump_int_attr(args, "pre_min_steps", 200)
+    _bump_int_attr(args, "fire_min_steps", 200)
+
+
+def condensed_phase_md_prep_recommended(args: argparse.Namespace) -> bool:
+    """True when md-system should use dense-liquid prep defaults without Packmol."""
+    if liquid_prep_enabled(args):
+        return True
+    if getattr(args, "from_psf", None) or getattr(args, "skip_cluster_build", False):
+        return True
+    n_mol = _composition_monomer_count(args)
+    return n_mol is not None and int(n_mol) >= 15
+
+
+def apply_condensed_phase_md_defaults(args: argparse.Namespace) -> None:
+    """Apply resilient liquid prep defaults for certified-box / large-cluster md-system runs."""
+    if not condensed_phase_md_prep_recommended(args):
+        return
+    if not liquid_prep_enabled(args):
+        args.liquid_prep = True
+    apply_density_prep_resilient_defaults(args)
 
 
 @dataclass
