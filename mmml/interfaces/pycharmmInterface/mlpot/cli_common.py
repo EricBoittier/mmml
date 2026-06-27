@@ -2293,6 +2293,7 @@ def prepare_mlpot_hybrid_state_for_sd(
     from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
         HybridCalculatorFireConfig,
         HybridCalculatorMinimizeConfig,
+        coerce_hybrid_minimize_result,
         hybrid_calculator_mini_eligible,
         minimize_hybrid_calculator_before_sd,
         minimize_hybrid_calculator_fire_before_sd,
@@ -2341,23 +2342,27 @@ def prepare_mlpot_hybrid_state_for_sd(
             return
         start_cap = _effective_max_start(force=force)
         max_initial_fmax = 1000.0 if force else 100.0
-        hybrid_grms, mini_ran = minimize_hybrid_calculator_before_sd(
-            mlpot_ctx,
-            HybridCalculatorMinimizeConfig(
-                max_steps=int(calculator_minimize_steps),
-                fmax_ev_a=float(calculator_minimize_fmax_ev_a),
-                bfgs_maxstep=float(calculator_bfgs_maxstep),
-                verbose=verbose,
-                quiet_bfgs=quiet_bfgs,
-                max_start_grms_kcalmol_A=start_cap,
-                max_initial_fmax_ev_a=max_initial_fmax,
-            ),
-            context_prefix=f"{context_prefix} ({phase})",
+        mini = coerce_hybrid_minimize_result(
+            minimize_hybrid_calculator_before_sd(
+                mlpot_ctx,
+                HybridCalculatorMinimizeConfig(
+                    max_steps=int(calculator_minimize_steps),
+                    fmax_ev_a=float(calculator_minimize_fmax_ev_a),
+                    bfgs_maxstep=float(calculator_bfgs_maxstep),
+                    verbose=verbose,
+                    quiet_bfgs=quiet_bfgs,
+                    max_start_grms_kcalmol_A=start_cap,
+                    max_initial_fmax_ev_a=max_initial_fmax,
+                ),
+                context_prefix=f"{context_prefix} ({phase})",
+            )
         )
-        if not mini_ran:
+        hybrid_grms = float(mini.grms)
+        if not mini.ran:
             return
         ran_calculator_mini = True
         diag = measure_hybrid_charmm_grms(mlpot_ctx)
+        hybrid_grms = float(diag.hybrid)
         _print_hybrid_charmm_grms_diag(
             f"{context_prefix} post-calculator hybrid GRMS" if verbose else "",
             diag,
@@ -2385,22 +2390,26 @@ def prepare_mlpot_hybrid_state_for_sd(
                 )
             return
         max_initial_fmax = 1000.0 if force else 100.0
-        hybrid_grms, fire_ran = minimize_hybrid_calculator_fire_before_sd(
-            mlpot_ctx,
-            config=HybridCalculatorFireConfig(
-                max_steps=int(calculator_fire_steps),
-                fmax_ev_a=float(fire_fmax),
-                fire_maxstep=float(calculator_fire_maxstep),
-                verbose=verbose,
-                max_start_grms_kcalmol_A=_effective_max_start(force=force),
-                max_initial_fmax_ev_a=max_initial_fmax,
-            ),
-            context_prefix=f"{context_prefix} ({phase})",
+        fire = coerce_hybrid_minimize_result(
+            minimize_hybrid_calculator_fire_before_sd(
+                mlpot_ctx,
+                config=HybridCalculatorFireConfig(
+                    max_steps=int(calculator_fire_steps),
+                    fmax_ev_a=float(fire_fmax),
+                    fire_maxstep=float(calculator_fire_maxstep),
+                    verbose=verbose,
+                    max_start_grms_kcalmol_A=_effective_max_start(force=force),
+                    max_initial_fmax_ev_a=max_initial_fmax,
+                ),
+                context_prefix=f"{context_prefix} ({phase})",
+            )
         )
-        if not fire_ran:
+        hybrid_grms = float(fire.grms)
+        if not fire.ran:
             return
         ran_calculator_fire = True
         diag = measure_hybrid_charmm_grms(mlpot_ctx)
+        hybrid_grms = float(diag.hybrid)
         _print_hybrid_charmm_grms_diag(
             f"{context_prefix} post-FIRE hybrid GRMS" if verbose else "",
             diag,

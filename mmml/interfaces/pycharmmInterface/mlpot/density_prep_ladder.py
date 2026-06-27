@@ -656,6 +656,7 @@ def run_density_prep_ladder(
             from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
                 HybridCalculatorFireConfig,
                 HybridCalculatorMinimizeConfig,
+                coerce_hybrid_minimize_result,
                 minimize_hybrid_calculator_before_sd,
                 minimize_hybrid_calculator_fire_before_sd,
             )
@@ -694,12 +695,16 @@ def run_density_prep_ladder(
             ):
                 step_label = f"round{round_idx + 1}:{tag}"
                 try:
-                    grms, _ran = runner(
-                        mlpot_ctx,
-                        context_prefix=f"Density prep ladder ({step_label})",
-                        **kwargs,
+                    mini = coerce_hybrid_minimize_result(
+                        runner(
+                            mlpot_ctx,
+                            context_prefix=f"Density prep ladder ({step_label})",
+                            **kwargs,
+                        )
                     )
-                    result.steps_applied.append(step_label)
+                    grms = float(mini.grms)
+                    if mini.ran:
+                        result.steps_applied.append(step_label)
                     grms = _refresh_after_step(step_label)
                 except Exception as exc:
                     journal.skip_step(step_label, str(exc))
@@ -1201,6 +1206,7 @@ def run_geometry_packing_recovery(
         from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
             HybridCalculatorFireConfig,
             HybridCalculatorMinimizeConfig,
+            coerce_hybrid_minimize_result,
             minimize_hybrid_calculator_before_sd,
             minimize_hybrid_calculator_fire_before_sd,
         )
@@ -1234,12 +1240,15 @@ def run_geometry_packing_recovery(
 
         def _run_bfgs() -> float:
             nonlocal grms
-            grms, ran = minimize_hybrid_calculator_before_sd(
-                mlpot_ctx,
-                bfgs_config,
-                context_prefix=f"{context_prefix} (BFGS)",
+            mini = coerce_hybrid_minimize_result(
+                minimize_hybrid_calculator_before_sd(
+                    mlpot_ctx,
+                    bfgs_config,
+                    context_prefix=f"{context_prefix} (BFGS)",
+                )
             )
-            if not ran:
+            grms = float(mini.grms)
+            if not mini.ran:
                 return refresh_mlpot_energy_and_grms(mlpot_ctx, context="")
             refreshed = refresh_mlpot_energy_and_grms(mlpot_ctx, context="")
             journal.record_step(f"{context_prefix} (post-BFGS)", _metrics(refreshed))
@@ -1248,12 +1257,15 @@ def run_geometry_packing_recovery(
 
         def _run_fire() -> float:
             nonlocal grms
-            grms, ran = minimize_hybrid_calculator_fire_before_sd(
-                mlpot_ctx,
-                config=fire_config,
-                context_prefix=f"{context_prefix} (FIRE)",
+            fire = coerce_hybrid_minimize_result(
+                minimize_hybrid_calculator_fire_before_sd(
+                    mlpot_ctx,
+                    config=fire_config,
+                    context_prefix=f"{context_prefix} (FIRE)",
+                )
             )
-            if not ran:
+            grms = float(fire.grms)
+            if not fire.ran:
                 return refresh_mlpot_energy_and_grms(mlpot_ctx, context="")
             refreshed = refresh_mlpot_energy_and_grms(mlpot_ctx, context="")
             journal.record_step(f"{context_prefix} (post-FIRE)", _metrics(refreshed))

@@ -35,6 +35,18 @@ def test_forces_grms_matches_rms_of_components():
     assert forces_grms_kcalmol_A(forces) == pytest.approx(float(np.sqrt(25.0 / 6.0)))
 
 
+def test_coerce_hybrid_minimize_result_accepts_legacy_float():
+    from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+        HybridMinimizeResult,
+        coerce_hybrid_minimize_result,
+    )
+
+    assert coerce_hybrid_minimize_result(3.5) == HybridMinimizeResult(grms=3.5, ran=True)
+    assert coerce_hybrid_minimize_result((2.0, False)) == HybridMinimizeResult(
+        grms=2.0, ran=False
+    )
+
+
 def test_mlpot_hybrid_grms_uses_spherical_fn():
     ctx = mock.Mock(use_pbc=True, cubic_box_side_A=50.0, pyCModel=mock.Mock())
     pos = np.zeros((2, 3), dtype=float)

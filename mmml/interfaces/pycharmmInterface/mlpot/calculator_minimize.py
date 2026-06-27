@@ -17,6 +17,25 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
 )
 
 
+@dataclass(frozen=True)
+class HybridMinimizeResult:
+    """Hybrid calculator mini outcome (GRMS in kcal/mol/Å + whether ASE ran)."""
+
+    grms: float
+    ran: bool
+
+
+def coerce_hybrid_minimize_result(
+    result: HybridMinimizeResult | tuple[float, bool] | float,
+) -> HybridMinimizeResult:
+    """Normalize mini return values (supports legacy bare-float mocks)."""
+    if isinstance(result, HybridMinimizeResult):
+        return result
+    if isinstance(result, tuple):
+        return HybridMinimizeResult(grms=float(result[0]), ran=bool(result[1]))
+    return HybridMinimizeResult(grms=float(result), ran=True)
+
+
 @dataclass
 class HybridCalculatorMinimizeConfig:
     """ASE BFGS on the full hybrid calculator (synced to CHARMM coords)."""
@@ -545,11 +564,8 @@ def minimize_hybrid_calculator_before_sd(
     config: HybridCalculatorMinimizeConfig,
     *,
     context_prefix: str = "Pre-SD",
-) -> tuple[float, bool]:
-    """Relax CHARMM coordinates with ASE BFGS on the hybrid calculator.
-
-    Returns ``(hybrid_grms, optimizer_ran)`` in kcal/mol/Å.
-    """
+) -> HybridMinimizeResult:
+    """Relax CHARMM coordinates with ASE BFGS on the hybrid calculator."""
     import ase
 
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
@@ -580,7 +596,7 @@ def minimize_hybrid_calculator_before_sd(
                 flush=True,
             )
         mlpot_ctx.sd_watchdog_baseline_grms = float(grms0)
-        return float(grms0), False
+        return HybridMinimizeResult(grms=float(grms0), ran=False)
     if config.verbose:
         grms_txt = f"{grms0:.4f}" if grms0 is not None and np.isfinite(grms0) else "?"
         opt_name = "BFGSLineSearch" if config.use_bfgs_line_search else "BFGS"
@@ -607,7 +623,10 @@ def minimize_hybrid_calculator_before_sd(
         )
         if mlpot_ctx.sd_watchdog_baseline_grms is None:
             raise RuntimeError("hybrid GRMS unavailable before calculator minimize")
-        return float(mlpot_ctx.sd_watchdog_baseline_grms), False
+        return HybridMinimizeResult(
+            grms=float(mlpot_ctx.sd_watchdog_baseline_grms),
+            ran=False,
+        )
     opt, best_frame, stopped_on_spike = _run_hybrid_calculator_bfgs(
         atoms,
         config,
@@ -655,7 +674,7 @@ def minimize_hybrid_calculator_before_sd(
             flush=True,
         )
     mlpot_ctx.sd_watchdog_baseline_grms = float(grms1)
-    return float(grms1), True
+    return HybridMinimizeResult(grms=float(grms1), ran=True)
 
 
 def minimize_hybrid_calculator_fire_before_sd(
@@ -668,11 +687,8 @@ def minimize_hybrid_calculator_fire_before_sd(
     verbose: bool = True,
     max_start_grms_kcalmol_A: float | None = None,
     context_prefix: str = "Pre-SD",
-) -> tuple[float, bool]:
-    """Relax CHARMM coordinates with guarded ASE FIRE on the hybrid calculator.
-
-    Returns ``(hybrid_grms, optimizer_ran)`` in kcal/mol/Å.
-    """
+) -> HybridMinimizeResult:
+    """Relax CHARMM coordinates with guarded ASE FIRE on the hybrid calculator."""
     import ase
 
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
@@ -710,7 +726,7 @@ def minimize_hybrid_calculator_fire_before_sd(
                 f"(GRMS {float(grms0):.1f} > {float(max_start):.1f} kcal/mol/Å)",
                 flush=True,
             )
-        return float(grms0), False
+        return HybridMinimizeResult(grms=float(grms0), ran=False)
 
     atoms = ase.Atoms(numbers=np.asarray(z, dtype=int), positions=pos0)
     atoms.calc = _hybrid_mlpot_ase_calculator_class()(mlpot_ctx)
@@ -726,7 +742,7 @@ def minimize_hybrid_calculator_fire_before_sd(
             )
         if grms0 is None or not np.isfinite(grms0):
             raise RuntimeError("hybrid GRMS unavailable before calculator FIRE")
-        return float(grms0), False
+        return HybridMinimizeResult(grms=float(grms0), ran=False)
 
     if config.verbose:
         grms_txt = f"{grms0:.4f}" if grms0 is not None and np.isfinite(grms0) else "?"
@@ -786,4 +802,4 @@ def minimize_hybrid_calculator_fire_before_sd(
             flush=True,
         )
     mlpot_ctx.sd_watchdog_baseline_grms = float(grms1)
-    return float(grms1), True
+    return HybridMinimizeResult(grms=float(grms1), ran=True)
