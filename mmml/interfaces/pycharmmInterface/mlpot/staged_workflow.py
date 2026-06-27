@@ -1205,6 +1205,8 @@ def _load_or_build_cluster(
 def run_staged_workflow(args: argparse.Namespace) -> int:
     from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         apply_density_prep_resilient_defaults,
+        liquid_prep_enabled,
+        run_pre_mlpot_geometry_gate,
     )
 
     apply_density_prep_resilient_defaults(args)
@@ -1709,6 +1711,31 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         baseline = record_mm_baseline_strain(verbose=not args.quiet)
         assert_pre_min_bonded_geometry(args, baseline=baseline)
 
+    if liquid_prep_enabled(args) and atoms_per_list is not None:
+        comp_summary = getattr(args, "_cluster_composition_summary", None)
+        r, box_side, gate_summary = run_pre_mlpot_geometry_gate(
+            args,
+            positions=get_charmm_positions_array(),
+            atoms_per_list=list(atoms_per_list),
+            composition=comp_summary,
+            box_side=box_side,
+            charmm_pbc=charmm_pbc,
+            n_mol=n_mol,
+            n_atoms=n_atoms,
+        )
+        setattr(args, "_pre_mlpot_geometry_gate_summary", gate_summary.to_dict())
+        if charmm_pbc and box_side is not None:
+            from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+                sync_workflow_pbc_box_side_after_mm_pretreat,
+            )
+
+            box_side = sync_workflow_pbc_box_side_after_mm_pretreat(
+                box_side,
+                pretreat_restart=paths.get("mini_box_equil_res"),
+                args=args,
+                quiet=bool(args.quiet),
+            )
+
     r = get_charmm_positions_array()
     ctx, pyCModel = _register_mlpot_context(
         z,
@@ -1931,11 +1958,57 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             n_mol,
             n_atoms,
             pbc=charmm_pbc,
+            mlpot_ctx=ctx,
+        )
+        from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+            resolve_intervention_grms_threshold,
+        )
+
+        intervention_grms = resolve_intervention_grms_threshold(
+            args,
+            atoms_per_list=atoms_per_list,
+            n_monomers=n_mol,
+            n_atoms=n_atoms,
+            mlpot_ctx=ctx,
+            pbc=charmm_pbc,
         )
         current_grms = refresh_mlpot_energy_and_grms(
             ctx,
             context="Pre-dynamics gate" if not args.quiet else "",
         )
+
+        if current_grms > intervention_grms:
+            if not args.quiet:
+                print(
+                    f"\nEarly intervention: GRMS {current_grms:.4f} > "
+                    f"intervention {intervention_grms:.4f} — running density prep ladder...",
+                    flush=True,
+                )
+            from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+                run_density_prep_ladder,
+            )
+
+            comp_summary = getattr(args, "_cluster_composition_summary", None)
+            ladder_grms, box_side, ladder_summary = run_density_prep_ladder(
+                args,
+                mlpot_ctx=ctx,
+                pyCModel=pyCModel,
+                max_grms=intervention_grms,
+                current_grms=current_grms,
+                n_mol=n_mol,
+                n_atoms=n_atoms,
+                box_side=box_side,
+                charmm_pbc=charmm_pbc,
+                atoms_per_list=atoms_per_list,
+                composition=comp_summary,
+                mini_nstep=mini_nstep,
+                mini_nprint=mini_nprint,
+                fix_resids=fix_resids,
+                show_energy=show_energy,
+                z=z,
+            )
+            current_grms = float(ladder_grms)
+            setattr(args, "_density_prep_ladder_early_summary", ladder_summary.to_dict())
 
         if current_grms > max_grms:
             if not args.quiet:

@@ -66,6 +66,7 @@ class DynamicsOverlapConfig:
     # When True, heat uses one overlap chunk per segment (checks only at segment end).
     # Default False: mid-segment checks every ``check_interval`` (extent/overlap early).
     heat_segment_boundary_only: bool = False
+    density_prep_ladder_fallback: bool = False
 
     @property
     def enabled(self) -> bool:
@@ -342,6 +343,8 @@ def resolve_dynamics_overlap_config(
         heat_segment_boundary_only=bool(
             getattr(args, "heat_overlap_segment_boundary_only", False)
         ),
+        density_prep_ladder_fallback=bool(getattr(args, "liquid_prep", False))
+        or str(getattr(args, "density_prep_mode", "off") or "off").lower() == "resilient",
     )
 
 
@@ -1069,12 +1072,104 @@ def _handle_extent_rescue(
     try:
         return _extent_check(config, context=f"{label} after fly-off recovery")
     except RuntimeError as still_bad:
+        if config.density_prep_ladder_fallback:
+            try:
+                return _try_density_prep_ladder_after_extent_failure(
+                    config,
+                    label=label,
+                    exc=still_bad,
+                    mlpot_ctx=mlpot_ctx,
+                )
+            except Exception as ladder_exc:
+                if not isinstance(ladder_exc, RuntimeError):
+                    raise
+                still_bad = ladder_exc
         raise RuntimeError(
             f"{still_bad}; fly-off recovery from {recovery_path.name} "
             f"(SD={sd_steps}) did not restore monomer extent "
             f"<= {config.max_monomer_extent_A:.2f} A — inspect the prior restart "
             f"or reduce the timestep / heating rate"
         ) from still_bad
+
+
+def _try_density_prep_ladder_after_extent_failure(
+    config: DynamicsOverlapConfig,
+    *,
+    label: str,
+    exc: RuntimeError,
+    mlpot_ctx: "MlpotContext",
+) -> float:
+    """Fall back to the liquid-prep density ladder when fly-off recovery fails."""
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        refresh_mlpot_energy_and_grms,
+        resolve_max_grms_before_dyn,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+        density_prep_ladder_enabled,
+        run_density_prep_ladder,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+
+    args = getattr(mlpot_ctx, "workflow_args", None)
+    if args is None or not density_prep_ladder_enabled(args):
+        raise exc
+
+    atoms_per_list = getattr(mlpot_ctx, "atoms_per_monomer", None)
+    if atoms_per_list is None:
+        atoms_per_list = getattr(args, "_cluster_atoms_per_list", None)
+    if atoms_per_list is None:
+        raise exc
+
+    n_mol = int(config.n_monomers)
+    n_atoms = int(sum(atoms_per_list))
+    pyCModel = getattr(mlpot_ctx, "pyCModel", None)
+    if pyCModel is None:
+        raise exc
+
+    box_side = config.fallback_box_side_A
+    if box_side is None:
+        box_side = getattr(mlpot_ctx, "cubic_box_side_A", None)
+    current_grms = refresh_mlpot_energy_and_grms(
+        mlpot_ctx,
+        context=f"{label} pre-density-ladder",
+    )
+    max_grms = resolve_max_grms_before_dyn(
+        args,
+        n_mol,
+        n_atoms,
+        pbc=bool(config.use_pbc),
+        mlpot_ctx=mlpot_ctx,
+    )
+    print(
+        f"{exc}\nFly-off recovery insufficient; running density prep ladder "
+        f"(GRMS {current_grms:.4f}, limit {max_grms:.4f})...",
+        flush=True,
+    )
+    composition = getattr(args, "_cluster_composition_summary", None)
+    ladder_grms, _new_side, summary = run_density_prep_ladder(
+        args,
+        mlpot_ctx=mlpot_ctx,
+        pyCModel=pyCModel,
+        max_grms=max_grms,
+        current_grms=current_grms,
+        n_mol=n_mol,
+        n_atoms=n_atoms,
+        box_side=float(box_side) if box_side is not None else None,
+        charmm_pbc=bool(config.use_pbc),
+        atoms_per_list=list(atoms_per_list),
+        composition=composition,
+        mini_nstep=int(getattr(args, "mini_nstep", 500) or 500),
+        mini_nprint=max(1, int(getattr(args, "nprint", 100) or 100)),
+        fix_resids=[],
+        show_energy=False,
+        z=getattr(mlpot_ctx, "ml_Z", None),
+    )
+    setattr(args, "_density_prep_ladder_extent_fallback_summary", summary.to_dict())
+    sync_positions = get_charmm_positions_array()
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+
+    sync_charmm_positions(sync_positions)
+    return _extent_check(config, context=f"{label} after density prep ladder")
 
 
 def _run_geometry_guard(
