@@ -77,8 +77,8 @@ from mmml.interfaces.pycharmmInterface.mlpot.mlpot_gpu_policy import (
 from mmml.cli.run.utils import get_steps_per_frame, normalize_n_atoms_monomer
 
 
-def parse_args() -> argparse.Namespace:
-    """Parse command line arguments."""
+def build_parser() -> argparse.ArgumentParser:
+    """Build argument parser (shared with shell completion)."""
     parser = argparse.ArgumentParser(
         description="PDB file processing and MD simulation demo"
     )
@@ -443,7 +443,12 @@ def parse_args() -> argparse.Namespace:
         "Use to separate slow first-run compilation from production MD.",
     )
 
-    return parser.parse_args()
+    return parser
+
+
+def parse_args() -> argparse.Namespace:
+    """Parse command line arguments."""
+    return build_parser().parse_args()
 
 
 def _make_braille_show_frame(live, args):

@@ -29,8 +29,8 @@ from mmml.cli.run.pycharmm_runner import (
 )
 
 
-def parse_args() -> argparse.Namespace:
-    """Parse command line arguments."""
+def build_parser() -> argparse.ArgumentParser:
+    """Build argument parser (shared with shell completion)."""
     parser = argparse.ArgumentParser(
         description="Pure PyCHARMM: heating and equilibration only (no MM/ML)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -73,7 +73,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Display braille molecular viewer at each phase.",
     )
-    return parser.parse_args()
+    return parser
+
+
+def parse_args() -> argparse.Namespace:
+    return build_parser().parse_args()
 
 
 def _organize_outputs() -> None:

@@ -79,6 +79,11 @@ nl-validation = [
     "vesin",
 ]
 
+# Shell tab completion for ``mmml`` (bash/zsh/fish)
+cli = [
+    "argcomplete>=3.5.0",
+]
+
 # ScaFaCoS long-range Coulomb (libfcs built from source; see scafacosInterface/README.md)
 scafacos-interface = [
     "mpi4py",
