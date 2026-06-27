@@ -4,6 +4,8 @@ latency-wait: 120
 retries: 1
 envvars:
   - MMML_CKPT
+  - MMML_WORKFLOW_CONFIG
+  - JAX_ENABLE_X64
 default-resources:
   - gpu=1
   - gpu_fast=0

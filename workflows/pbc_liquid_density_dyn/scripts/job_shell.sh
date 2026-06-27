@@ -17,7 +17,13 @@ PY="${MMML_PYTHON}"
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 export MMML_MPI_NP="${MMML_MPI_NP:-1}"
 
-CFG="${MMML_WORKFLOW_CONFIG:-$WORKFLOW_ROOT/config.yaml}"
+_cfg_raw="${MMML_WORKFLOW_CONFIG:-$WORKFLOW_ROOT/config.yaml}"
+if [[ "$_cfg_raw" = /* ]]; then
+  CFG="$_cfg_raw"
+else
+  CFG="$WORKFLOW_ROOT/$_cfg_raw"
+fi
+export MMML_WORKFLOW_CONFIG="$CFG"
 
 read -r SCHEDULER MLPOT_DEV <<<"$("$PY" -c "
 import sys
