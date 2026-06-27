@@ -241,13 +241,9 @@ def _step_monomer_repack(
 
 def resolve_pre_mlpot_overlap_min_distance(args: argparse.Namespace) -> float:
     """Minimum inter-monomer distance for pre-MLpot hard abort (Å)."""
-    dyn = getattr(args, "dynamics_overlap_min_distance", None)
-    if dyn is not None and float(dyn) > 0.0:
-        return float(dyn)
-    build = getattr(args, "min_intermonomer_atom_distance", None)
-    if build is not None and float(build) > 0.0:
-        return float(build)
-    return 0.5
+    from mmml.utils.intermonomer_geometry import resolve_pre_mlpot_overlap_min_distance as _resolve
+
+    return _resolve(args)
 
 
 def assert_pre_mlpot_intermonomer_geometry(
@@ -797,6 +793,7 @@ def run_pre_mlpot_geometry_gate(
     charmm_pbc: bool,
     n_mol: int,
     n_atoms: int,
+    atomic_numbers: np.ndarray | None = None,
 ) -> tuple[np.ndarray, float | None, PreMlpotGeometryGateResult]:
     """Preventive MM-only geometry ladder before MLpot registration."""
     from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
@@ -952,9 +949,26 @@ def run_pre_mlpot_geometry_gate(
     sync_charmm_positions(pos)
     result.reason = "ok"
     if not quiet:
+        from mmml.utils.intermonomer_geometry import (
+            resolve_dynamics_overlap_reference_A,
+            summarize_worst_intermonomer_contact,
+        )
+
+        z_arr = atomic_numbers
+        if z_arr is None:
+            z_arr = getattr(args, "_cluster_atomic_numbers", None)
+        summary = summarize_worst_intermonomer_contact(
+            pos,
+            atoms_per_list,
+            box_side=side,
+            use_pbc=charmm_pbc,
+            threshold_A=min_overlap,
+            atomic_numbers=z_arr,
+            dynamics_reference_A=resolve_dynamics_overlap_reference_A(args),
+        )
         print(
             f"Pre-MLpot geometry gate: {len(result.steps_applied)} step(s), "
-            f"worst inter-monomer distance {result.worst_intermonomer_A:.3f} Å",
+            f"{summary.format_log_line()}",
             flush=True,
         )
     return pos, side, result

@@ -1799,6 +1799,9 @@ def _append_box_sizing_args(cmd: list[str], args: argparse.Namespace) -> None:
     lattice_ladder = int(getattr(args, "density_prep_lattice_abnr_steps", 0) or 0)
     if lattice_ladder > 0:
         cmd.extend(["--density-prep-lattice-abnr-steps", str(lattice_ladder)])
+    pre_mlpot = getattr(args, "pre_mlpot_overlap_min_distance", None)
+    if pre_mlpot is not None:
+        cmd.extend(["--pre-mlpot-overlap-min-distance", str(pre_mlpot)])
 
 
 def _validate_pyxtal_args(args: argparse.Namespace) -> None:
