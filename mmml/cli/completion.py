@@ -35,6 +35,7 @@ MMML_COMMANDS: tuple[str, ...] = (
     "physnet-md",
     "physnet-evaluate",
     "compare-npz",
+    "cross-check",
     "ef-train",
     "ef-evaluate",
     "ef-md",
@@ -103,6 +104,12 @@ def _active_learning_parser() -> argparse.ArgumentParser:
     return build_parser()
 
 
+def _cross_check_parser() -> argparse.ArgumentParser:
+    from mmml.cli.misc.cross_check import build_parser
+
+    return build_parser()
+
+
 _SUBCOMMAND_PARSER_BUILDERS: dict[str, Callable[[], argparse.ArgumentParser]] = {
     "md-system": _md_system_parser,
     "physnet-train": _physnet_train_parser,
@@ -111,6 +118,7 @@ _SUBCOMMAND_PARSER_BUILDERS: dict[str, Callable[[], argparse.ArgumentParser]] = 
     "make-res": _make_res_parser,
     "run-pycharmm": _run_pycharmm_parser,
     "active-learning": _active_learning_parser,
+    "cross-check": _cross_check_parser,
 }
 
 

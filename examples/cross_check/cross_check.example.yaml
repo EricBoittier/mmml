@@ -1,0 +1,33 @@
+# Supplementary QC cross-check example config
+#
+# Usage:
+#   mmml cross-check -c examples/cross_check/cross_check.example.yaml
+#
+# Requires:
+#   - mmml[quantum-gpu] for pyscf backend (or pass --reference-npz with precomputed labels)
+#   - mmml[quantum-crosscheck] for xtb backend (tblite)
+#   - ORCA/Molpro binaries on PATH for orca/molpro backends
+
+structures: ../../tests/fixtures/cross_check/water_frames.npz
+
+# Use precomputed PySCF labels as reference (recommended for ML validation):
+# reference_npz: /path/to/07_evaluated.npz
+
+# Or compute reference on the fly:
+reference: pyscf
+
+backends:
+  - name: ml
+    checkpoint: ../../mmml/models/physnetjax/defaults/hf_json/test-f41c04c0-62e3-4785-9018-351ffdc161c4_epoch-251_portable.json
+  - name: xtb
+    method: GFN2-xTB
+  # - name: orca
+  #   method: PBE
+  #   basis: def2-SVP
+  #   template: examples/cross_check/orca_template.inp
+
+max_frames: 5
+stride: 1
+charge: 0
+spin: 0
+output: cross_check_out

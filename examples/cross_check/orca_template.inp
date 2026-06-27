@@ -1,0 +1,3 @@
+! {method} {basis} EnGrad
+%pal nprocs {pal} end
+{xyz}

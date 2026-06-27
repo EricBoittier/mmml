@@ -3,6 +3,8 @@
 Manual verification for `mmml orca-server` / `mmml orca-client` with ORCA 6.
 Do not run in agent sessions; use your GPU node with ORCA + MMML venv.
 
+**Note:** ExtOpt is ORCA → MMML (ORCA drives Opt/GOAT using an ML potential). For ORCA as a **QM reference** to cross-check PySCF/ML, use `mmml cross-check --backend orca` instead — see [docs/qc-cross-check.md](../../../docs/qc-cross-check.md).
+
 ## 1. Start the MMML server (terminal 1)
 
 ```bash

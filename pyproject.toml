@@ -152,6 +152,11 @@ quantum-gpu-cuda12 = [
     "gpu4pyscf-libxc-cuda12x",
 ]
 
+# Semi-empirical xTB cross-check (tblite ASE calculator)
+quantum-crosscheck = [
+    "tblite",
+]
+
 
 # Machine learning extras
 ml = [

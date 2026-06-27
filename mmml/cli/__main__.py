@@ -51,6 +51,7 @@ Available commands:
   physnet-md  PhysNet MD sampling (ASE + JAX-MD)
   physnet-evaluate  Evaluate PhysNet checkpoint on NPZ (E, F, dipole metrics + predictions)
   compare-npz     Compare reference vs model NPZ (per-atom/element force plots)
+  cross-check     Supplementary QC cross-check (PySCF, ORCA QM, xTB, Molpro, ML)
   ef-train    Train EF (electric-field) equivariant model from NPZ splits or single file
   ef-evaluate Evaluate trained EF model (metrics + plots from test NPZ)
   ef-md       MD with trained EF model (ASE or JIT JAX; replicas, field ramp, etc.)
@@ -261,6 +262,11 @@ Shell tab completion (bash/zsh/fish):
         from .misc import compare_npz
         sys.argv = ['mmml compare-npz'] + args.args
         return compare_npz.main()
+
+    elif args.command == 'cross-check':
+        from .misc import cross_check
+        sys.argv = ['mmml cross-check'] + args.args
+        return cross_check.main()
 
     elif args.command == 'pyscf-evaluate-mp2':
         from .misc import pyscf_evaluate_mp2
