@@ -161,6 +161,8 @@ def _pretreat_use_fixed_box_nvt(args: argparse.Namespace, *, use_pbc: bool) -> b
     """Pretreat equi/prod at explicit ``--box-size`` use Hoover NVT, not CPT NPT."""
     if not use_pbc:
         return False
+    if bool(getattr(args, "mini_box_equil_fixed_nvt", False)):
+        return True
     raw = getattr(args, "box_size", None)
     if raw is None:
         return False
@@ -225,6 +227,12 @@ def _run_charmm_mm_pretreat_cpt_stage(
             flush=True,
         )
     use_cpt = use_pbc and not _pretreat_use_fixed_box_nvt(args, use_pbc=use_pbc)
+    if not getattr(args, "quiet", False):
+        print(
+            f"CHARMM MM pretreat {stage}: "
+            f"{'CPT NPT' if use_cpt else 'Hoover NVT (fixed box)'}",
+            flush=True,
+        )
     cpt_opts = _pretreat_npt_cpt_builder_options(args, pressure_atm=pressure_atm)
 
     if stage == "equi":
@@ -240,14 +248,13 @@ def _run_charmm_mm_pretreat_cpt_stage(
                 **cpt_opts,
             )
         else:
-            kw = build_nvt_equilibration_dynamics(
+            kw = build_nvt_production_dynamics(
                 timestep_ps=timestep_ps,
                 duration_ps=duration_ps,
                 save_interval_ps=save_interval_ps,
                 temp=temp,
                 restart=False,
                 echeck=stage_echeck,
-                include_firstt=include_firstt,
             )
     else:
         if use_cpt:

@@ -270,6 +270,7 @@ def test_configure_liquid_box_mini_equil_uses_fixed_box_nvt():
 
     args = _args(profile="dense", mini_box_equil_ps=2.0)
     apply_liquid_box_profile(args)
+    assert args.mini_box_equil_fixed_nvt is True
     configure_liquid_box_mini_equil_args(args, box_side_A=28.5)
     assert args.box_size == pytest.approx(28.5)
     assert args.mini_box_equil_allow_fixed_box is True
@@ -280,6 +281,15 @@ def test_configure_liquid_box_mini_equil_uses_fixed_box_nvt():
         pretreat_mm=False,
         stages=["mini"],
     )
+
+
+def test_pretreat_fixed_nvt_flag_without_box_size():
+    from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import (
+        _pretreat_use_fixed_box_nvt,
+    )
+
+    args = argparse.Namespace(mini_box_equil_fixed_nvt=True)
+    assert _pretreat_use_fixed_box_nvt(args, use_pbc=True)
 
 
 def test_apply_charmm_dynamics_echeck_kw_sets_global_state(monkeypatch):

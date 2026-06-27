@@ -24,6 +24,7 @@ def configure_liquid_box_mini_equil_args(
         raise ValueError(f"box_side_A must be > 0, got {side}")
     args.box_size = side
     args.mini_box_equil_allow_fixed_box = True
+    args.mini_box_equil_fixed_nvt = True
 
 
 def run_mini_box_equilibration(
@@ -46,6 +47,8 @@ def run_mini_box_equilibration(
         return
     if not use_pbc:
         raise ValueError("mini box equilibration requires PBC")
+    if box_side is not None:
+        configure_liquid_box_mini_equil_args(args, box_side_A=float(box_side))
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
         resolve_charmm_mm_pretreat_settings,
     )

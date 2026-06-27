@@ -110,6 +110,7 @@ def apply_liquid_box_profile(
         args, "no_scale_echeck", False
     ):
         args.no_echeck = True
+    args.mini_box_equil_fixed_nvt = True
 
     if resolved == "conservative":
         if getattr(args, "box_size", None) is None and getattr(
@@ -427,16 +428,11 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
         pretreat_mm=False,
         stages=mm_stages,
     ):
-        from mmml.interfaces.pycharmmInterface.mlpot.box_equil import (
-            configure_liquid_box_mini_equil_args,
-            run_mini_box_equilibration,
-        )
+        from mmml.interfaces.pycharmmInterface.mlpot.box_equil import run_mini_box_equilibration
         from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
             sync_workflow_pbc_box_side_after_mm_pretreat,
         )
 
-        if box_side is not None:
-            configure_liquid_box_mini_equil_args(args, box_side_A=float(box_side))
         dt_fs = float(getattr(args, "dt_fs", 0.25))
         timestep_ps = dt_fs * 1.0e-3
         temp = float(getattr(args, "temperature", getattr(args, "temp", 300.0)))
