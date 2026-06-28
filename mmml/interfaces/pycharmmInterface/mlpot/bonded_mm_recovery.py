@@ -11,6 +11,7 @@ import numpy as np
 
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     BondedMmMiniConfig,
+    bonded_mm_mini_config_from_namespace,
     charmm_bonded_term_kcalmol,
     charmm_internal_energy_kcalmol,
     measure_mm_grms_with_full_block,
@@ -644,6 +645,8 @@ def _run_all_ml_intra_overlap_rescue(
         tolgrd=bonded_cfg.tolgrd,
         verbose=bonded_cfg.verbose,
         show_energy=bonded_cfg.show_energy,
+        backend=bonded_cfg.backend,
+        nstep_jax=bonded_cfg.nstep_jax,
     )
     minimize_bonded_mm_recovery(ctx, bonded_cfg)
 
@@ -1060,11 +1063,10 @@ def _run_heavy_bonded_recovery_check(
         nstep = int(getattr(args, "bonded_mm_mini_steps", 50))
         _run_bonded_sd_without_mlpot(
             ctx,
-            BondedMmMiniConfig(
+            bonded_mm_mini_config_from_namespace(
+                args,
                 nstep_sd=nstep,
-                nprint=max(1, int(getattr(args, "dyn_nprint", 500))),
-                verbose=not args.quiet,
-                show_energy=bool(getattr(args, "show_energy", False)),
+                backend="charmm",
             ),
         )
         return BondedMmRecoveryResult(
@@ -1376,12 +1378,7 @@ def maybe_run_bonded_mm_mini_after_stage(
                 flush=True,
             )
     nstep = int(getattr(args, "bonded_mm_mini_steps", 50))
-    bonded_cfg = BondedMmMiniConfig(
-        nstep_sd=nstep,
-        nprint=max(1, int(getattr(args, "dyn_nprint", 500))),
-        verbose=not args.quiet,
-        show_energy=bool(getattr(args, "show_energy", False)),
-    )
+    bonded_cfg = bonded_mm_mini_config_from_namespace(args, nstep_sd=nstep)
     topo = topology_psf or getattr(ctx, "topology_psf_path", None)
     pyCModel = _resolve_pyCModel(ctx, None)
     _run_hybrid_bonded_mlpot_recovery(

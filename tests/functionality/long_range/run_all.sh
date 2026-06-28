@@ -9,7 +9,8 @@ SCAFACOS_MPIEXEC="${SCAFACOS_MPIEXEC:-mpiexec -n 1}"
 
 echo "Using: $($PY --version)"
 for script in 00_check_lr_env.py 01_mic_analytic_dimer.py 02_jax_pme_madelung.py \
-  03_mic_vs_jax_pme.py 04_scafacos_methods.py 05_cross_backend_summary.py; do
+  03_mic_vs_jax_pme.py 04_scafacos_methods.py 05_cross_backend_summary.py \
+  06_hybrid_jax_pme_mm.py; do
   echo
   echo ">>> $script"
   if [[ "$script" == 04_* || "$script" == 05_* ]]; then

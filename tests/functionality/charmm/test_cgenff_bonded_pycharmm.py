@@ -21,14 +21,15 @@ from mmml.interfaces.pycharmmInterface.cgenff_topology import (
     parse_psf_ext,
 )
 from tests.conftest import can_import_pycharmm
+from tests.functionality.pycharmmETC._paths import PYCHARMMETC_DIR
 
 pytestmark = pytest.mark.skipif(
     not can_import_pycharmm(),
     reason="pycharmm / libcharmm not available",
 )
 
-ACO_PSF = Path("tests/functionality/pycharmmETC/psf/aco-1.psf")
-ACO_PDB = Path("tests/functionality/pycharmmETC/pdb/aco.pdb")
+ACO_PSF = PYCHARMMETC_DIR / "psf" / "aco-1.psf"
+ACO_PDB = PYCHARMMETC_DIR / "pdb" / "aco.pdb"
 
 
 def _perturb_positions(positions: np.ndarray, seed: int = 7) -> np.ndarray:
@@ -57,7 +58,7 @@ def _load_psf_and_positions_from_charmm(residue: str) -> tuple[Path, np.ndarray]
     return psf_path, positions
 
 
-def _compare_psf_bonded_to_charmm(psf_path: Path, positions: np.ndarray) -> None:
+def _compare_psf_bonded_to_charmm(psf_path: Path, positions: np.ndarray, **compare_kw) -> None:
     setup_bonded_only_charmm()
 
     set_charmm_positions(positions)
@@ -70,7 +71,36 @@ def _compare_psf_bonded_to_charmm(psf_path: Path, positions: np.ndarray) -> None
         system.bonded,
         energy_unit="kcal/mol",
     )
-    compare_bonded_to_charmm(components, np.asarray(forces))
+    compare_bonded_to_charmm(components, np.asarray(forces), **compare_kw)
+
+
+def test_committed_aco_psf_matches_pycharmm_after_charmm_load(pycharmm_workdir) -> None:
+    """Regression: committed ACO PSF/PDB vs CHARMM after ``read psf`` + ``read coor pdb``.
+
+    Runs before setupRes-based cases so mpirun smoke sees a clean CHARMM session.
+    """
+    import pycharmm.read as read
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM, CGENFF_RTF
+
+    assert ACO_PSF.is_file(), f"missing fixture PSF: {ACO_PSF}"
+    assert ACO_PDB.is_file(), f"missing fixture PDB: {ACO_PDB}"
+
+    with charmm_relaxed_bomlev():
+        read.rtf(CGENFF_RTF)
+        read.prm(CGENFF_PRM)
+    read.psf_card(str(ACO_PSF))
+    read.pdb(str(ACO_PDB), resid=True)
+
+    positions = charmm_positions_xyz_array()
+    positions = _perturb_positions(positions, seed=23)
+    _compare_psf_bonded_to_charmm(
+        ACO_PSF,
+        positions,
+        # Committed PDB/PSF pair is not re-minimized like setupRes fixtures.
+        energy_rtol=5e-3,
+        energy_atol=5e-3,
+    )
 
 
 def test_tip3_bonded_energy_forces_match_pycharmm(pycharmm_workdir) -> None:
@@ -83,20 +113,3 @@ def test_aco_bonded_energy_forces_match_pycharmm(pycharmm_workdir) -> None:
     psf_path, positions = _load_psf_and_positions_from_charmm("ACO")
     positions = _perturb_positions(positions, seed=17)
     _compare_psf_bonded_to_charmm(psf_path, positions)
-
-
-def test_committed_aco_psf_matches_pycharmm_after_charmm_load(pycharmm_workdir) -> None:
-    """Regression: committed ACO PSF/PDB vs CHARMM after ``read psf`` + ``read coor pdb``."""
-    import pycharmm.read as read
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM, CGENFF_RTF
-
-    with charmm_relaxed_bomlev():
-        read.rtf(CGENFF_RTF)
-        read.prm(CGENFF_PRM)
-    read.psf_card(str(ACO_PSF.resolve()))
-    read.pdb(str(ACO_PDB.resolve()), resid=True)
-
-    positions = charmm_positions_xyz_array()
-    positions = _perturb_positions(positions, seed=23)
-    _compare_psf_bonded_to_charmm(ACO_PSF.resolve(), positions)

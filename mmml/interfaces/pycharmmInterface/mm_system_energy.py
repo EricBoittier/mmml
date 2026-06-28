@@ -20,6 +20,12 @@ from mmml.interfaces.pycharmmInterface.cgenff_topology import (
     CgenffBondedSystem,
     load_cgenff_bonded_from_psf,
 )
+from mmml.interfaces.pycharmmInterface.long_range_backend import (
+    box_length_from_cell,
+    compute_jax_pme_coulomb,
+    pick_lr_solver,
+    resolve_jax_pme_method,
+)
 from mmml.interfaces.pycharmmInterface.pbc_utils_jax import mic_displacement
 
 COULOMB_KCAL = 332.063711
@@ -255,8 +261,17 @@ def nonbonded_energy_and_forces(
     *,
     pair_i: np.ndarray | None = None,
     pair_j: np.ndarray | None = None,
+    lr_solver: str | None = None,
+    jax_pme_method: str | None = None,
+    jax_pme_sr_cutoff_A: float = 6.0,
 ) -> tuple[dict[str, Array], Array]:
-    """Switched VDW + MIC Coulomb for all atom pairs within ``cutnb``."""
+    """Switched VDW + Coulomb for all atom pairs within ``cutnb``.
+
+    When ``lr_solver`` resolves to ``jax_pme``, Lennard-Jones stays on the
+    switched pair list and Coulomb is evaluated with jax-pme (Ewald/PME/P3M).
+    """
+    use_jax_pme = pick_lr_solver(lr_solver) == "jax_pme"
+    pme_method = resolve_jax_pme_method(jax_pme_method)
     pos = jnp.asarray(positions, dtype=jnp.float64)
     cell_j = jnp.asarray(cell, dtype=jnp.float64)
     if cell_j.ndim == 1 and cell_j.shape[0] == 3:
@@ -308,7 +323,10 @@ def nonbonded_energy_and_forces(
         elec = COULOMB_KCAL * qq / r_safe
 
         vdw_sw = jnp.sum(switch * vdw)
-        elec_sw = jnp.sum(switch * elec)
+        if use_jax_pme:
+            elec_sw = jnp.array(0.0, dtype=pos.dtype)
+        else:
+            elec_sw = jnp.sum(switch * elec)
         return vdw_sw, elec_sw, vdw_sw + elec_sw
 
     def _energy(positions_arg: Array) -> Array:
@@ -317,6 +335,18 @@ def nonbonded_energy_and_forces(
     energy = _energy(pos)
     vdw_energy, elec_energy, _ = _pair_terms(pos)
     forces = -jax.grad(_energy)(pos)
+    if use_jax_pme:
+        pos_np = np.asarray(positions, dtype=np.float64)
+        pme = compute_jax_pme_coulomb(
+            pos_np,
+            nbond_data.charges,
+            box_length_A=box_length_from_cell(np.asarray(cell)),
+            method=pme_method,
+            sr_cutoff_A=float(jax_pme_sr_cutoff_A),
+        )
+        elec_energy = jnp.asarray(pme.energy_kcalmol, dtype=pos.dtype)
+        forces = forces + jnp.asarray(pme.forces_kcalmol_A, dtype=pos.dtype)
+        energy = vdw_energy + elec_energy
     components = {
         "vdw": vdw_energy,
         "elec": elec_energy,
@@ -333,6 +363,9 @@ def mm_system_energy_and_forces(
     settings: CharmmNbondSettings,
     *,
     prm_file: Path | str | None = None,
+    lr_solver: str | None = None,
+    jax_pme_method: str | None = None,
+    jax_pme_sr_cutoff_A: float = 6.0,
 ) -> MmSystemEnergyResult:
     """Bonded + switched nonbonded MM energy and forces (kcal/mol, kcal/mol/Å)."""
     _ = prm_file
@@ -347,6 +380,9 @@ def mm_system_energy_and_forces(
         nbond_data,
         cell,
         settings,
+        lr_solver=lr_solver,
+        jax_pme_method=jax_pme_method,
+        jax_pme_sr_cutoff_A=jax_pme_sr_cutoff_A,
     )
     forces = np.asarray(bonded_forces + nb_forces, dtype=np.float64)
     bonded = {k: float(v) for k, v in bonded_comp.items()}

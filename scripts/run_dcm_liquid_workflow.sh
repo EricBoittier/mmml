@@ -35,6 +35,10 @@
 #   SKIP_HEALTH=1 SKIP_LIQUID_BOX=1 BOX_DIR=~/tests/boxes/dcm60_l32 ~/mmml/scripts/run_dcm_liquid_workflow.sh
 #   LIQUID_BOX_VERBOSE=1 ~/mmml/scripts/run_dcm_liquid_workflow.sh  # drop --quiet on liquid-box
 #
+# Long-range Coulomb solver comparison (MIC / jax-pme / ScaFaCoS):
+#   ~/mmml/scripts/run_dcm_long_range_workflow.sh
+#   See docs/long-range-solver-tutorial.md
+#
 # Note: CHARMM Fortran I/O fails on paths with uppercase letters (e.g. dcm60_L32).
 # mmml stages I/O under $TMPDIR/mmml-charmm-io/ automatically; prefer lowercase box dirs.
 #

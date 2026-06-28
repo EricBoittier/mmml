@@ -253,3 +253,4 @@ node_modules/
 # NFS stale handles and FFTW wisdom caches (never commit)
 .nfs*
 **/fftw-wisdom.dat
+fftw-wisdom.dat
