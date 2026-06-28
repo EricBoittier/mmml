@@ -12,6 +12,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import os
 import re
@@ -56,12 +57,14 @@ CAMPAIGNS: list[dict[str, Any]] = [
         "config": "config.yaml",
         "driver_log": "snakemake_slurm.log",
         "max_jobs": 4,
+        "auto_start": False,  # paused: gpu08_local handles DCM L28/L32 on-node
     },
     {
         "name": "profile_gpu",
         "config": "config.profile.gpu.yaml",
         "driver_log": "snakemake_profile.log",
         "max_jobs": 2,
+        "auto_start": False,
     },
     # large_boxes (L=36,40) paused — OOM / stuck warmup; config.large_boxes.yaml kept for later.
     {
@@ -287,6 +290,16 @@ def _launcher_script(campaign: str) -> str:
 
 def _snakemake_driver_running(config_path: Path) -> bool:
     cfg_name = config_path.name
+    cfg_resolved = str(config_path.resolve())
+    lock = Path(f"/tmp/mmml_snakemake_locks_{os.environ.get('USER') or os.environ.get('LOGNAME') or 'unknown'}") / f"{cfg_name}.driver.lock"
+    if lock.is_file():
+        try:
+            with lock.open("rb") as fh:
+                fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return True
+        except OSError:
+            return True
     try:
         out = subprocess.run(
             ["pgrep", "-af", "snakemake"],
@@ -299,11 +312,8 @@ def _snakemake_driver_running(config_path: Path) -> bool:
     for line in out.stdout.splitlines():
         if "snakemake" not in line.lower():
             continue
-        if cfg_name in line or str(config_path) in line:
+        if cfg_resolved in line or f"--configfile {cfg_name}" in line or f"--configfile {cfg_resolved}" in line:
             return True
-        if cfg_name == "config.yaml" and "config.profile" not in line and "config.large" not in line and "config.gpu08" not in line:
-            if "pbc_liquid_density_dyn" in line:
-                return True
     return False
 
 
@@ -550,6 +560,9 @@ def _driver_subprocess_env(cfg_path: Path) -> dict[str, str]:
 def _ensure_driver(spec: dict[str, Any], cfg_path: Path, *, incomplete: int, dry_run: bool) -> list[str]:
     actions: list[str] = []
     if incomplete <= 0:
+        return actions
+    if spec.get("auto_start") is False:
+        actions.append(f"auto_start disabled for {cfg_path.name}")
         return actions
     if _snakemake_driver_running(cfg_path):
         actions.append(f"driver already running for {cfg_path.name}")
