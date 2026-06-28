@@ -53,6 +53,9 @@ MMML_COMMANDS: tuple[str, ...] = (
     "orca-server",
     "orca-client",
     "orca-external",
+    "configure",
+    "commands",
+    "examples",
     "completion",
 )
 
@@ -113,6 +116,24 @@ def _cross_check_parser() -> argparse.ArgumentParser:
     return build_parser()
 
 
+def _liquid_box_parser() -> argparse.ArgumentParser:
+    from mmml.cli.run.liquid_box import build_parser
+
+    return build_parser()
+
+
+def _mpi_check_parser() -> argparse.ArgumentParser:
+    from mmml.cli.run.mpi_check import build_parser
+
+    return build_parser()
+
+
+def _configure_parser() -> argparse.ArgumentParser:
+    from mmml.cli.configure import build_parser
+
+    return build_parser()
+
+
 _SUBCOMMAND_PARSER_BUILDERS: dict[str, Callable[[], argparse.ArgumentParser]] = {
     "md-system": _md_system_parser,
     "physnet-train": _physnet_train_parser,
@@ -122,6 +143,9 @@ _SUBCOMMAND_PARSER_BUILDERS: dict[str, Callable[[], argparse.ArgumentParser]] = 
     "run-pycharmm": _run_pycharmm_parser,
     "active-learning": _active_learning_parser,
     "cross-check": _cross_check_parser,
+    "liquid-box": _liquid_box_parser,
+    "mpi-check": _mpi_check_parser,
+    "configure": _configure_parser,
 }
 
 
