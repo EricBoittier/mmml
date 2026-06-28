@@ -1326,12 +1326,6 @@ def main(argv: list[str] | None = None) -> int:
         default=6.0,
         help="Minimum initial COM-COM distance (A) enforced before minimization.",
     )
-    parser.add_argument(
-        "--box-size",
-        type=float,
-        default=None,
-        help="Override periodic cubic box side length in Angstrom (default: auto from initial geometry).",
-    )
     parser.add_argument("--ps", type=float, default=1.0, help="Simulation length (ps)")
     parser.add_argument("--dt-fs", type=float, default=0.25)
     parser.add_argument("--log-every", type=int, default=50)

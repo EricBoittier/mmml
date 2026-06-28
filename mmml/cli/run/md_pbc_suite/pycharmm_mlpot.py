@@ -74,12 +74,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     add_test_first_args(parser)
     add_staged_md_args(parser)
     parser.add_argument(
-        "--box-size",
-        type=float,
-        default=None,
-        help="Cubic PBC box side in Å (with --setup pbc_* or explicit PBC)",
-    )
-    parser.add_argument(
         "--output-dir",
         type=Path,
         default=Path("artifacts/pycharmm_mlpot"),

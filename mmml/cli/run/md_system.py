@@ -100,12 +100,6 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument("--spacing", type=float, default=5.0, help="Target minimum random COM spacing in Angstrom.")
-    parser.add_argument(
-        "--box-size",
-        type=float,
-        default=None,
-        help="Override periodic cubic box side length in Angstrom (default: auto from initial geometry).",
-    )
     parser.add_argument("--ps", type=float, default=1.0, help="Simulation length in ps.")
     parser.add_argument("--dt-fs", type=float, default=0.25, help="Timestep in fs.")
     parser.add_argument(

@@ -122,12 +122,6 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--spacing", type=float, default=5.0, help="Target minimum random COM spacing in Angstrom.")
     p.add_argument("--min-com-start-distance", type=float, default=6.0)
     p.add_argument(
-        "--box-size",
-        type=float,
-        default=None,
-        help="Override periodic cubic box side length in Angstrom (default: auto from initial geometry).",
-    )
-    p.add_argument(
         "--free-space",
         action="store_true",
         help=(
