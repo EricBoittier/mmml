@@ -5,6 +5,8 @@
 #
 # Smallest *MIC-safe* liquid DCM smoke (not bulk-ρ N=20 @ L≈13 Å — too small for MIC).
 # Default workflow: ~/mmml/scripts/run_dcm_liquid_workflow.sh (DCM:60 @ L=32 Å).
+# Fast stripped path: MD_PROFILE=smoke N_DCM=20 BOX_SIZE=45 SKIP_HEALTH=1 \
+#   ~/mmml/scripts/run_dcm_liquid_workflow.sh
 #
 # Phase A — MM-only box certification:
 #   MMML_MPI_NP=1 ~/mmml/scripts/mmml-charmm-mpirun.sh liquid-box \

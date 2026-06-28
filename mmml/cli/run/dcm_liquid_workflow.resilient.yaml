@@ -1,0 +1,35 @@
+# Resilient DCM liquid md-system config for scripts/run_dcm_liquid_workflow.sh
+# (MD_PROFILE=resilient, default).
+#
+# Runtime paths (from_psf, from_crd, checkpoint, output_dir, composition, box_size)
+# are passed on the CLI by the workflow script.
+#
+# Preset docs: mmml/cli/run/presets/README.md
+
+include:
+  - presets/base-dt0.25.yaml
+  - presets/certified-box-handoff.yaml
+  - presets/liquid-prep-dense.yaml
+  - presets/pre-sd-calculator.yaml
+  - presets/heat-dt0.25-conservative.yaml
+  - presets/dynamics-overlap-rescue.yaml
+  - presets/dynamics-flyoff-strict.yaml
+
+defaults:
+  setup: pbc_npt
+  backend: pycharmm
+  skip_cluster_build: true
+  md_stages: "mini,heat,equi"
+  ps_heat: 10.0
+  ps_equi: 10.0
+  mini_nstep: 500
+  temperature: 300.0
+  pressure: 1.0
+  seed: 123
+  ml_batch_size: 64
+  ml_gpu_count: 1
+  # Stronger than liquid-prep-dense defaults (2 ps / 200 lattice / 80 MC)
+  mini_box_equil_ps: 5.0
+  mini_lattice_abnr_steps: 300
+  mc_density_steps: 128
+  charmm_mm_pretreat: true
