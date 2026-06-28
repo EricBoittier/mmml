@@ -114,6 +114,7 @@ class _WarmupBuildArgs:
 
 
 def run_warmup_mlpot_jax(args: argparse.Namespace) -> int:
+    os.environ["MMML_WARMUP_MLPOT_JAX_ONLY"] = "1"
     from mmml.interfaces.pycharmmInterface.charmm_mpi import (
         _under_mpirun,
         scrub_stale_openmpi_env,

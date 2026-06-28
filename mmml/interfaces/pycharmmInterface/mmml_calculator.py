@@ -13,6 +13,7 @@ physics functionality is unchanged when the third-party libraries are present.
 
 from __future__ import annotations
 
+import os
 import warnings
 from functools import partial
 from pathlib import Path
@@ -61,13 +62,25 @@ from mmml.utils.jax_gpu_warmup import (
 )
 
 
-# CHARMM force-field definitions are optional.  During documentation builds we
-# often do not have a functional PyCHARMM installation, so fall back to ``None``
-# when the import fails for any reason (missing module or missing shared libs).
-try:
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM, CGENFF_RTF
-except Exception:  # pragma: no cover - exercised in lightweight envs
-    CGENFF_PRM = CGENFF_RTF = None
+# CHARMM force-field paths (optional). Do not import import_pycharmm here: that
+# module loads MPI-linked libcharmm at import time and breaks serial JAX warmup
+# under Slurm PMI (see job_shell.sh / warmup-mlpot-jax).
+_CGENFF_DIR = Path(__file__).resolve().parent.parent / "data" / "charmm"
+CGENFF_RTF = str((_CGENFF_DIR / "top_all36_cgenff.rtf").resolve())
+CGENFF_PRM = str((_CGENFF_DIR / "par_all36_cgenff.prm").resolve())
+if not Path(CGENFF_RTF).is_file():
+    CGENFF_RTF = None  # type: ignore[assignment]
+if not Path(CGENFF_PRM).is_file():
+    CGENFF_PRM = None  # type: ignore[assignment]
+
+def _warmup_jax_only() -> bool:
+    return (os.environ.get("MMML_WARMUP_MLPOT_JAX_ONLY") or "").strip().lower() in (
+        "1",
+        "yes",
+        "true",
+    )
+
+
 try:
     from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
 except ModuleNotFoundError:  # pragma: no cover - helper requires ASE
@@ -163,6 +176,8 @@ except ModuleNotFoundError:  # pragma: no cover - exercised during doc builds
 
 
 try:  # PyCHARMM is optional and only required for the MM plumbing
+    if _warmup_jax_only():
+        raise ImportError("deferred for warmup-mlpot-jax (ML compile only)")
     import pycharmm  # type: ignore[import-not-found]
     import pycharmm.coor as coor
     import pycharmm.dynamics as dyn
