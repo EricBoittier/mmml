@@ -249,4 +249,8 @@ node_modules/
 *.dcd
 *.pov-state
 *.pov-state.gz
+
+# NFS stale handles and FFTW wisdom caches (never commit)
+.nfs*
+**/fftw-wisdom.dat
 fftw-wisdom.dat
