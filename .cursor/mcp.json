@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "mmml": {
+      "command": "/cluster/home/boittier/mmml/.venv/bin/python",
+      "args": ["-m", "mmml.mcp"],
+      "cwd": "/cluster/home/boittier/mmml",
+      "env": {
+        "JAX_ENABLE_X64": "1",
+        "MMML_CKPT": "/cluster/home/boittier/mmml/examples/ckpts_json/DESdimers_params.json"
+      }
+    }
+  }
+}

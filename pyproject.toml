@@ -86,6 +86,11 @@ cli = [
     "argcomplete>=3.5.0",
 ]
 
+# Model Context Protocol server for agent-driven workflows (Cursor, etc.)
+mcp = [
+    "mcp>=1.0.0",
+]
+
 # ScaFaCoS long-range Coulomb (libfcs built from source; see scafacosInterface/README.md)
 scafacos-interface = [
     "mpi4py",
@@ -271,6 +276,7 @@ mmml-orca-server = "mmml.interfaces.orca_external.server:main"
 mmml-orca-client = "mmml.interfaces.orca_external.client:main"
 mmml-pycharmm-two-residue-sample = "mmml.cli.run.pycharmm_two_residue_sample:main"
 mmml-spectra-md = "mmml.spectra.spectra_md:main"
+mmml-mcp = "mmml.mcp.server:main"
 
 [tool.setuptools]
 zip-safe = false
@@ -293,6 +299,7 @@ mmml = [
     "cli/templates/workflows/**/*",
     "cli/run/*.example.yaml",
     "cli/run/presets/*.yaml",
+    "mcp/recipes/*.yaml",
 ]
 pycharmm = ["README.md", "LICENSE"]
 

@@ -1,0 +1,33 @@
+# Mini PhysNet dipole smoke — used by MCP dipole verification (not full MP2 corpus).
+# Data: fix-and-split on dcm_mp2_psf_order.npz (Debye → e·Å) with a small subset.
+
+data: splits/energies_forces_dipoles_train.npz
+valid_data: splits/energies_forces_dipoles_valid.npz
+ckpt_dir: ckpts/dcm_dipole_smoke
+tag: dcm_dipole_smoke
+
+# Required when valid_data is set (defaults would be n_train=1000).
+n_train: 0
+n_valid: 0
+
+seed: 42
+batch_size: 16
+num_epochs: 8
+learning_rate: 0.001
+
+energy_weight: 1.0
+forces_weight: 52.91
+dipole_weight: 27.21
+charges_weight: 14.39
+objective: valid_loss
+
+charges: true
+num_atoms: 10
+max_atomic_number: 35
+
+features: 32
+max_degree: 0
+num_basis_functions: 16
+num_iterations: 2
+cutoff: 8.0
+use_energy_bias: true

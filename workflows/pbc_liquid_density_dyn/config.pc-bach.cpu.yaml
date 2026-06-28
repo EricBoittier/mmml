@@ -91,7 +91,8 @@ mm_switch_width: 5.0
 ml_switch_width: 1.5
 ml_gpu_count: 1
 ml_batch_size: 512
-warmup_ml_batch_size: 128
+# Smaller warmup batch reduces JAX/LLVM codegen memory (pc-bach LLVM OOM at 128).
+warmup_ml_batch_size: 32
 jax_compile_threads: 1
 warmup_compile_threads: 1
 
