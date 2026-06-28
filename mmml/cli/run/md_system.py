@@ -775,7 +775,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--bonded-mm-mini-steps",
         type=int,
         default=50,
-        help="pycharmm: bonded recovery SD steps (default: 50)",
+        help="pycharmm: bonded recovery mini steps (default: 50)",
+    )
+    parser.add_argument(
+        "--bonded-recovery-backend",
+        choices=("auto", "jax", "charmm"),
+        default="auto",
+        help=(
+            "pycharmm: bonded recovery minimizer — JAX FIRE without MLpot detach "
+            "(auto tries JAX first), CHARMM SD, or auto (default: auto)"
+        ),
     )
     parser.add_argument(
         "--bonded-mm-mini-always",
@@ -2142,6 +2151,12 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
             [
                 "--bonded-mm-mini-steps",
                 str(getattr(args, "bonded_mm_mini_steps", 50)),
+            ]
+        )
+        cmd.extend(
+            [
+                "--bonded-recovery-backend",
+                str(getattr(args, "bonded_recovery_backend", "auto")),
             ]
         )
         cmd.extend(

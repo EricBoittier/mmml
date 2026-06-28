@@ -2234,6 +2234,7 @@ def prepare_mlpot_hybrid_state_for_sd(
     grms_limit: float | None,
     energy_limit: float | None,
     bonded_recovery_nstep: int,
+    bonded_recovery_backend: str = "auto",
     bonded_recovery_verbose: bool = False,
     bonded_recovery_show_energy: bool = False,
     bonded_recovery_nprint: int = 10,
@@ -2462,9 +2463,17 @@ def prepare_mlpot_hybrid_state_for_sd(
                 f"GRMS={hybrid_grms:.1f} kcal/mol/Å > {float(grms_limit):.1f}"
             )
         if diag.kind == "geometry_stress":
-            recovery_note = "bonded-MM SD (MLpot detached; may not lower hybrid GRMS)"
+            recovery_note = (
+                "bonded-MM mini (JAX preferred; may not lower hybrid GRMS)"
+                if str(bonded_recovery_backend).lower() != "charmm"
+                else "bonded-MM SD (MLpot detached; may not lower hybrid GRMS)"
+            )
         else:
-            recovery_note = "bonded-MM SD (MLpot detached)"
+            recovery_note = (
+                "bonded-MM mini (JAX preferred)"
+                if str(bonded_recovery_backend).lower() != "charmm"
+                else "bonded-MM SD (MLpot detached)"
+            )
         from mmml.utils.prep_ladder_report import PrepMetrics, emit_prep_phase
 
         emit_prep_phase(
@@ -2488,6 +2497,7 @@ def prepare_mlpot_hybrid_state_for_sd(
                 tolgrd=float(bonded_recovery_tolgrd),
                 verbose=bonded_recovery_verbose,
                 show_energy=bonded_recovery_show_energy,
+                backend=str(bonded_recovery_backend),
             ),
         )
         ran_bonded_recovery = True
@@ -3486,7 +3496,16 @@ def add_bonded_mm_mini_args(parser: argparse.ArgumentParser) -> None:
         "--bonded-mm-mini-steps",
         type=int,
         default=50,
-        help="SD steps for bonded-only recovery mini (default: 50)",
+        help="Steps for bonded-only recovery mini (default: 50)",
+    )
+    group.add_argument(
+        "--bonded-recovery-backend",
+        choices=("auto", "jax", "charmm"),
+        default="auto",
+        help=(
+            "Bonded recovery minimizer: JAX FIRE without MLpot detach (auto tries JAX "
+            "first), CHARMM SD with MLpot detach, or auto (default: auto)"
+        ),
     )
     group.add_argument(
         "--bonded-mm-mini-always",

@@ -374,7 +374,7 @@ def test_minimize_bonded_recovery_uses_bonded_only_block():
         "mmml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
     ):
         imp.return_value = (MagicMock(), MagicMock(), MagicMock(), MagicMock())
-        minimize_bonded_mm_recovery(ctx, BondedMmMiniConfig(nstep_sd=0))
+        minimize_bonded_mm_recovery(ctx, BondedMmMiniConfig(nstep_sd=0, backend="charmm"))
     detached.assert_called_once()
     bonded_block.assert_called_once()
 
@@ -424,7 +424,9 @@ def test_minimize_bonded_recovery_runs_sd_and_reports_angl():
         "mmml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
     ):
         imp.return_value = (MagicMock(), MagicMock(), MagicMock(), minimize)
-        grms = minimize_bonded_mm_recovery(ctx, BondedMmMiniConfig(nstep_sd=30))
+        grms = minimize_bonded_mm_recovery(
+            ctx, BondedMmMiniConfig(nstep_sd=30, backend="charmm")
+        )
     detached.assert_called_once_with(ctx, ANY)
     minimize.run_sd.assert_called_once()
     assert minimize.run_sd.call_args.kwargs["nstep"] == 30
@@ -457,7 +459,7 @@ def test_minimize_bonded_recovery_unset_and_reregister():
         "mmml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
     ):
         imp.return_value = (MagicMock(), MagicMock(), MagicMock(), MagicMock())
-        minimize_bonded_mm_recovery(ctx, BondedMmMiniConfig(nstep_sd=0))
+        minimize_bonded_mm_recovery(ctx, BondedMmMiniConfig(nstep_sd=0, backend="charmm"))
     ctx.unset.assert_called_once()
     ctx.reregister_mlpot.assert_called_once()
 
