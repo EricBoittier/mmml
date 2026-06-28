@@ -16,6 +16,8 @@ from jax_md import space
 from jax_md.mm_forcefields.base import BondedParameters, Topology
 from jax_md.util import normalize, safe_arccos, safe_norm
 
+from mmml.interfaces.pycharmmInterface.cgenff_cmap import cmap_energy
+
 KCAL_MOL_TO_EV = 0.04336411530877155
 
 
@@ -117,12 +119,14 @@ def bonded_energy_components(
     e_angle = angle_energy()
     e_torsion = torsion_energy()
     e_improper = improper_energy()
-    e_total = e_bond + e_angle + e_torsion + e_improper
+    e_cmap = cmap_energy(positions, topology, bonded, displacement_fn)
+    e_total = e_bond + e_angle + e_torsion + e_improper + e_cmap
     return {
         "bond": e_bond,
         "angle": e_angle,
         "torsion": e_torsion,
         "improper": e_improper,
+        "cmap": e_cmap,
         "total": e_total,
     }
 

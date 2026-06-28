@@ -90,7 +90,6 @@ def test_trialanine_water_bonded_matches_pycharmm(trialanine_water_box) -> None:
     compare_bonded_to_charmm(
         components,
         np.asarray(forces),
-        ignore_charmm_terms=("cmap",),
         energy_rtol=2e-4,
         force_rtol=5e-3,
     )
@@ -156,4 +155,4 @@ def test_trialanine_water_total_mm_matches_pycharmm(
         box.cell,
         _nbond_settings_from_box(box),
     )
-    compare_mm_system_to_charmm(result, ignore_charmm_bonded_terms=("cmap",))
+    compare_mm_system_to_charmm(result)

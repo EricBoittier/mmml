@@ -73,6 +73,7 @@ def compare_bonded_to_charmm(
         "angle": "angl",
         "torsion": "dihe",
         "improper": "impr",
+        "cmap": "cmap",
         "total": "total",
     }
     for jax_key, charmm_key in mapping.items():

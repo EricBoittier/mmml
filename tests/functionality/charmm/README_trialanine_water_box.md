@@ -7,7 +7,7 @@ minimal solvated peptide without Packmol or MLpot.
 
 | Layer | PyCHARMM setup | JAX module | Tolerance |
 |-------|----------------|------------|-----------|
-| Bonded | `BLOCK` ELEC/VDW off | `cgenff_bonded.py` | tight (CMAP subtracted from CHARMM) |
+| Bonded | `BLOCK` ELEC/VDW off | `cgenff_bonded.py` + `cgenff_cmap.py` | tight (incl. CMAP) |
 | Nonbonded | `BLOCK` bonded off | `mm_system_energy.py` | moderate |
 | Total MM | full `BLOCK` MM | bonded + nonbonded | moderate |
 
