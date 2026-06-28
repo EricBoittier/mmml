@@ -142,9 +142,7 @@ def build_trialanine_water_box_in_charmm(
 
     with charmm_relaxed_bomlev():
         read.rtf(str(protein_rtf))
-        read.rtf(str(CGENFF_RTF))
         read.prm(str(protein_prm))
-        read.prm(str(CGENFF_PRM))
 
     settings.set_verbosity(0)
     read.sequence_string("ALA ALA ALA")
@@ -157,7 +155,7 @@ def build_trialanine_water_box_in_charmm(
     ic.prm_fill(replace_all=True)
     ic.build()
 
-    peptide = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
+    peptide = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float).copy()
     peptide -= peptide.mean(axis=0)
     peptide += np.array([box_side_A / 2, box_side_A / 2, box_side_A / 2])
     coor.set_positions(pd.DataFrame(peptide, columns=["x", "y", "z"]))
@@ -176,6 +174,12 @@ def build_trialanine_water_box_in_charmm(
     water_coords = np.vstack(
         [site + (tip3 - tip3_com) for site in oxygen_sites],
     )
+
+    # Load CGENFF after the protein segment is built — loading both PRMs before
+    # ic.build() triggers DRUDE particle generation and aborts on some builds.
+    with charmm_relaxed_bomlev():
+        read.rtf(str(CGENFF_RTF))
+        read.prm(str(CGENFF_PRM))
 
     read.sequence_string(" ".join(["TIP3"] * n_waters))
     generate.new_segment(seg_name="SOLV", setup_ic=False)
