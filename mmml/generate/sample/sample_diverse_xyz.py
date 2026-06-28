@@ -210,7 +210,7 @@ def write_sampled_npz(
     )
 
 
-def parse_args() -> argparse.Namespace:
+def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description="Save top-N diverse structures from XYZ files to sampled.npz (SOAP space)."
     )
@@ -257,7 +257,11 @@ def parse_args() -> argparse.Namespace:
         "--verbose",
         action="store_true",
     )
-    return p.parse_args()
+    return p
+
+
+def parse_args() -> argparse.Namespace:
+    return build_parser().parse_args()
 
 
 def main() -> None:

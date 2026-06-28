@@ -19,7 +19,7 @@ from mmml.interfaces.pyxtal_placement import (
 )
 
 
-def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
             "Build molecular crystals with PyXtal (space-group symmetry) and export "
@@ -151,7 +151,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Suppress ASE optimizer log output",
     )
-    return parser.parse_args(argv)
+    return parser
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    return build_parser().parse_args(argv)
 
 
 def _infer_format(path: Path, override: str | None) -> str | None:

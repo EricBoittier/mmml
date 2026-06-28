@@ -167,7 +167,7 @@ def _load_physnet_checkpoint(checkpoint: Path, natoms: int):
     return restart_path, params, model
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Evaluate PhysNetJAX checkpoint on NPZ (energies, forces, dipoles).",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -237,7 +237,15 @@ def main() -> int:
         action="store_true",
         help="Do not write predictions.npz (default: save).",
     )
-    args = parser.parse_args()
+    return parser
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    return build_parser().parse_args(argv)
+
+
+def main() -> int:
+    args = parse_args()
 
     import jax
     import matplotlib

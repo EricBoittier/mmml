@@ -18,15 +18,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from mmml.interfaces.pycharmmInterface.import_pycharmm import coor
-from mmml.interfaces.pycharmmInterface.setupBox import setup_box_generic
 from mmml.cli.run.pycharmm_sampling_args import add_two_residue_sampling_args
-from mmml.cli.run.pycharmm_runner import (
-    run_equilibration,
-    run_heat,
-    run_dyna,
-    run_pycharmm_setup_and_minimize,
-)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -122,6 +114,15 @@ def _make_braille_show_frame(live, args):
 
 def run_pycharmm(args: argparse.Namespace):
     """Run pure PyCHARMM heating and equilibration."""
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import coor
+    from mmml.interfaces.pycharmmInterface.setupBox import setup_box_generic
+    from mmml.cli.run.pycharmm_runner import (
+        run_dyna,
+        run_equilibration,
+        run_heat,
+        run_pycharmm_setup_and_minimize,
+    )
+
     pdbfilename = str(args.pdbfile)
     skip_energy_show = getattr(args, "skip_setup_energy_show", False)
 

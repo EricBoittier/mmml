@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Convert an Orbax checkpoint to a portable JSON file.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -36,8 +36,15 @@ def main() -> int:
         default="params",
         help='Key to extract from restored checkpoint dict (default: "params")',
     )
+    return parser
 
-    args = parser.parse_args()
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    return build_parser().parse_args(argv)
+
+
+def main() -> int:
+    args = parse_args()
 
     from mmml.cli.base import resolve_checkpoint_paths
     from mmml.utils.model_checkpoint import orbax_to_json

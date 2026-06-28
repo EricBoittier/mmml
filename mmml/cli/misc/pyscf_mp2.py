@@ -18,22 +18,7 @@ import argparse
 from pathlib import Path
 
 
-def main() -> int:
-    """Run pyscf-mp2 CLI."""
-    t0 = time.perf_counter()
-    try:
-        from mmml.interfaces.pyscf4gpuInterface.calcs import (
-            compute_mp2,
-            save_pyscf_results,
-        )
-    except ModuleNotFoundError as e:
-        if "cupy" in str(e).lower() or "gpu4pyscf" in str(e).lower():
-            print("Error: pyscf-mp2 requires cupy and gpu4pyscf.", file=sys.stderr)
-            print("Install with: uv sync --extra quantum-gpu", file=sys.stderr)
-            print("Or: uv pip install cupy-cuda13x gpu4pyscf-cuda13x", file=sys.stderr)
-            return 1
-        raise
-
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="GPU-accelerated MP2 calculations")
     parser.add_argument("--mol", type=str, required=True, help="Molecule (xyz string or file)")
     parser.add_argument("--output", type=str, default="output", help="Output base path (.npz and .h5)")
@@ -55,7 +40,30 @@ def main() -> int:
         help="Finite-difference step in Angstrom (default: 1e-3)",
     )
     parser.add_argument("--log_file", type=str, default="pyscf.log")
-    args = parser.parse_args()
+    return parser
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    return build_parser().parse_args(argv)
+
+
+def main() -> int:
+    """Run pyscf-mp2 CLI."""
+    t0 = time.perf_counter()
+    try:
+        from mmml.interfaces.pyscf4gpuInterface.calcs import (
+            compute_mp2,
+            save_pyscf_results,
+        )
+    except ModuleNotFoundError as e:
+        if "cupy" in str(e).lower() or "gpu4pyscf" in str(e).lower():
+            print("Error: pyscf-mp2 requires cupy and gpu4pyscf.", file=sys.stderr)
+            print("Install with: uv sync --extra quantum-gpu", file=sys.stderr)
+            print("Or: uv pip install cupy-cuda13x gpu4pyscf-cuda13x", file=sys.stderr)
+            return 1
+        raise
+
+    args = parse_args()
 
     if not args.energy and not args.gradient:
         print("Error: At least one of --energy or --gradient is required.", file=sys.stderr)

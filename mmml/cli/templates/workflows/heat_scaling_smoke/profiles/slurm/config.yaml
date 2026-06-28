@@ -1,0 +1,10 @@
+executor: slurm
+jobs: 2
+latency-wait: 60
+envvars:
+  - MMML_CKPT
+default-resources:
+  - gpu=1
+  - charmm_slot=1
+  - runtime=120
+  - slurm_partition=gpu

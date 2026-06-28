@@ -3643,7 +3643,7 @@ def train_model(
     return ema_params  # Return EMA parameters as final model
 
 
-def main():
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Joint PhysNet-DCMNet training",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
@@ -3808,7 +3808,15 @@ def main():
                        help='Number of ESP examples to visualize')
     parser.add_argument('--verbose', action='store_true', default=True,
                        help='Verbose output')
-    
+    return parser
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    return build_parser().parse_args(argv)
+
+
+def main():
+    parser = build_parser()
     args = parser.parse_args()
     if args.list_physnet_transfer_models:
         _print_bundled_physnet_models(args.physnet_transfer_category)

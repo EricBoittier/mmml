@@ -67,8 +67,8 @@ def _fix_argv_efield_negative(argv: list[str]) -> list[str]:
     return out
 
 
-def main() -> int:
-    """Run pyscf-evaluate CLI."""
+def build_parser() -> argparse.ArgumentParser:
+    """Build argument parser (shared with shell completion)."""
     parser = argparse.ArgumentParser(
         description="Evaluate geometries with pyscf-dft (energy, forces, dipoles, ESP).",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -187,8 +187,18 @@ def main() -> int:
         help="With --EF/--efield: use mf.kernel energy only (omit nuclear-field term after SCF).",
     )
     parser.set_defaults(efield_include_nuclear_energy=True)
+    return parser
 
-    args = parser.parse_args(_fix_argv_efield_negative(sys.argv[1:]))
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    if argv is None:
+        argv = sys.argv[1:]
+    return build_parser().parse_args(_fix_argv_efield_negative(argv))
+
+
+def main() -> int:
+    """Run pyscf-evaluate CLI."""
+    args = parse_args()
     t0 = time.perf_counter()
 
     if not args.input.exists():

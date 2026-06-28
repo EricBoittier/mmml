@@ -20,21 +20,29 @@ import numpy as np
 from ase import Atoms
 from ase.optimize import BFGS
 
-# Ensure example modules are importable (for legacy training utilities)
 REPO_ROOT = Path(__file__).resolve().parents[2]
 EXAMPLE_DIR = REPO_ROOT / "examples" / "co2" / "dcmnet_physnet_train"
-sys.path.insert(0, str(EXAMPLE_DIR))
 
-from mmml.calculators.simple_inference import create_calculator_from_checkpoint
-from dynamics_calculator import (  # type: ignore
-    calculate_frequencies,
-    calculate_ir_spectrum,
-    run_molecular_dynamics,
-    compute_ir_from_md,
-)
-from raman_calculator import (  # type: ignore
-    calculate_raman_spectrum,
-)
+
+def _import_legacy_calculators():
+    sys.path.insert(0, str(EXAMPLE_DIR))
+    from mmml.calculators.simple_inference import create_calculator_from_checkpoint
+    from dynamics_calculator import (  # type: ignore
+        calculate_frequencies,
+        calculate_ir_spectrum,
+        compute_ir_from_md,
+        run_molecular_dynamics,
+    )
+    from raman_calculator import calculate_raman_spectrum  # type: ignore
+
+    return (
+        create_calculator_from_checkpoint,
+        calculate_frequencies,
+        calculate_ir_spectrum,
+        run_molecular_dynamics,
+        compute_ir_from_md,
+        calculate_raman_spectrum,
+    )
 
 
 @dataclass
@@ -65,7 +73,7 @@ class MDMetrics:
     runtime_seconds: float
 
 
-def parse_args() -> argparse.Namespace:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="mmml downstream",
         description="Run harmonic / MD downstream analyses on an MMML dataset",
@@ -91,7 +99,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--raman", action="store_true", help="Compute Raman spectrum using finite-field polarizability")
     parser.add_argument("--raman-delta", type=float, default=0.01, help="Displacement for Raman derivatives (Å)")
     parser.add_argument("--raman-field", type=float, default=1e-4, help="Electric field strength for Raman finite-field (V/Å)")
-    return parser.parse_args()
+    return parser
+
+
+def parse_args() -> argparse.Namespace:
+    return build_parser().parse_args()
 
 
 def load_dataset_sample(npz_path: Path, index: int) -> tuple[Atoms, Dict[str, Any]]:
@@ -154,6 +166,15 @@ def run_harmonic_workflow(
     raman_delta: float,
     raman_field: float,
 ) -> HarmonicMetrics:
+    (
+        _create_calc,
+        calculate_frequencies,
+        calculate_ir_spectrum,
+        _run_md,
+        _compute_ir,
+        calculate_raman_spectrum,
+    ) = _import_legacy_calculators()
+
     work_dir = output_dir / label
     work_dir.mkdir(parents=True, exist_ok=True)
 
@@ -218,6 +239,15 @@ def run_md_workflow(
     timestep: float,
     nsteps: int,
 ) -> MDMetrics:
+    (
+        _create_calc,
+        _calc_freq,
+        _calc_ir,
+        run_molecular_dynamics,
+        compute_ir_from_md,
+        _calc_raman,
+    ) = _import_legacy_calculators()
+
     work_dir = output_dir / label
     work_dir.mkdir(parents=True, exist_ok=True)
 
@@ -265,6 +295,7 @@ def run_md_workflow(
 
 def main():
     args = parse_args()
+    create_calculator_from_checkpoint, *_rest = _import_legacy_calculators()
 
     atoms, metadata = load_dataset_sample(args.dataset, args.sample_index)
     print(f"Loaded sample {args.sample_index} with {len(atoms)} atoms from {args.dataset}")

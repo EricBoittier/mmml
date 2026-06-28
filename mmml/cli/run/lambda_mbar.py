@@ -7,14 +7,6 @@ import argparse
 import json
 from pathlib import Path
 
-from mmml.cli.run.lambda_dynamics import (
-    MbarConfig,
-    merge_mbar_into_summary,
-    parse_couple_residue_numbers,
-    print_lambda_summary,
-    run_mbar_analysis,
-)
-
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -67,6 +59,14 @@ def _temperature_from_summary(run_dir: Path, override: float | None) -> float:
 
 
 def main() -> int:
+    from mmml.cli.run.lambda_dynamics import (
+        MbarConfig,
+        merge_mbar_into_summary,
+        parse_couple_residue_numbers,
+        print_lambda_summary,
+        run_mbar_analysis,
+    )
+
     args = parse_args()
     run_dir = args.run_dir.expanduser().resolve()
     temp_K = _temperature_from_summary(run_dir, args.temperature_K)

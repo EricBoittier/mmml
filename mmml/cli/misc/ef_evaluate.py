@@ -1,6 +1,12 @@
 """CLI entry for electric-field (EF) model evaluation (metrics + plots)."""
 
 
+def build_parser():
+    from mmml.models.EF.evaluate import build_parser as _bp
+
+    return _bp()
+
+
 def main() -> int:
     from mmml.models.EF import evaluate
 

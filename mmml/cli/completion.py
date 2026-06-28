@@ -5,135 +5,11 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from collections.abc import Callable
-from typing import Any
 
-# Keep in sync with ``mmml.cli.__main__`` dispatch table.
-MMML_COMMANDS: tuple[str, ...] = (
-    "make-res",
-    "make-box",
-    "build-crystal",
-    "run",
-    "md-system",
-    "liquid-box",
-    "mpi-check",
-    "warmup-mlpot-jax",
-    "lambda-mbar",
-    "run-pycharmm",
-    "pycharmm-two-residue-sample",
-    "xml2npz",
-    "validate",
-    "train",
-    "train-joint",
-    "evaluate",
-    "downstream",
-    "fix-and-split",
-    "pyscf-dft",
-    "pyscf-mp2",
-    "pyscf-evaluate",
-    "pyscf-evaluate-mp2",
-    "verify-esp-alignment",
-    "normal-mode-sample",
-    "physnet-train",
-    "physnet-md",
-    "physnet-evaluate",
-    "compare-npz",
-    "cross-check",
-    "ef-train",
-    "ef-evaluate",
-    "ef-md",
-    "active-learning",
-    "kernel-fit",
-    "interpolate-xyz",
-    "unwrap-traj",
-    "sample-diverse-xyz",
-    "gui",
-    "extract-checkpoint-metrics",
-    "orbax-to-json",
-    "orca-server",
-    "orca-client",
-    "orca-external",
-    "completion",
-)
+from mmml.cli.parser_utils import get_subcommand_parser
+from mmml.cli.registry import MMML_COMMANDS
 
 _COMPLETION_SHELLS = ("bash", "zsh", "fish")
-
-
-def build_top_level_parser() -> argparse.ArgumentParser:
-    """Parser for ``mmml <command>`` (used for top-level command completion)."""
-    return argparse.ArgumentParser(prog="mmml")
-    # argcomplete uses add_argument for choices; attach below in try_autocomplete
-
-
-def _md_system_parser() -> argparse.ArgumentParser:
-    from mmml.cli.run.md_system import build_parser
-
-    return build_parser()
-
-
-def _physnet_train_parser() -> argparse.ArgumentParser:
-    from mmml.cli.make.make_training import build_parser
-
-    return build_parser()
-
-
-def _lambda_mbar_parser() -> argparse.ArgumentParser:
-    from mmml.cli.run.lambda_mbar import build_parser
-
-    return build_parser()
-
-
-def _run_parser() -> argparse.ArgumentParser:
-    from mmml.cli.run.run_sim import build_parser
-
-    return build_parser()
-
-
-def _make_res_parser() -> argparse.ArgumentParser:
-    from mmml.cli.make.make_res import build_parser
-
-    return build_parser()
-
-
-def _run_pycharmm_parser() -> argparse.ArgumentParser:
-    from mmml.cli.run.run_pycharmm import build_parser
-
-    return build_parser()
-
-
-def _active_learning_parser() -> argparse.ArgumentParser:
-    from mmml.cli.misc.active_learning import build_parser
-
-    return build_parser()
-
-
-def _cross_check_parser() -> argparse.ArgumentParser:
-    from mmml.cli.misc.cross_check import build_parser
-
-    return build_parser()
-
-
-_SUBCOMMAND_PARSER_BUILDERS: dict[str, Callable[[], argparse.ArgumentParser]] = {
-    "md-system": _md_system_parser,
-    "physnet-train": _physnet_train_parser,
-    "lambda-mbar": _lambda_mbar_parser,
-    "run": _run_parser,
-    "make-res": _make_res_parser,
-    "run-pycharmm": _run_pycharmm_parser,
-    "active-learning": _active_learning_parser,
-    "cross-check": _cross_check_parser,
-}
-
-
-def get_subcommand_parser(command: str) -> argparse.ArgumentParser | None:
-    """Return an ``ArgumentParser`` for ``mmml <command>`` when wired for completion."""
-    builder = _SUBCOMMAND_PARSER_BUILDERS.get(command)
-    if builder is None:
-        return None
-    try:
-        return builder()
-    except Exception:
-        return None
 
 
 def try_autocomplete() -> bool:
@@ -149,7 +25,7 @@ def try_autocomplete() -> bool:
     if argv and argv[0] == "completion":
         return False
 
-    if argv and argv[0] in _SUBCOMMAND_PARSER_BUILDERS:
+    if argv and argv[0] not in ("commands", "examples", "completion"):
         sub = get_subcommand_parser(argv[0])
         if sub is not None:
             sys.argv = [sys.argv[0], *argv[1:]]

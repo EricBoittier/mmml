@@ -389,7 +389,7 @@ def print_metrics_summary(metrics: Dict[str, np.ndarray], ckpt_dir: Path):
     print("\n" + "="*80)
 
 
-def main():
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Extract and plot training metrics from Orbax checkpoints",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -407,7 +407,6 @@ Examples:
       --output training.png
         """
     )
-    
     parser.add_argument('checkpoint_dir', type=Path,
                        help='Checkpoint directory containing epoch-* subdirectories')
     parser.add_argument('-o', '--output', type=Path, required=True,
@@ -416,9 +415,16 @@ Examples:
                        help='Use log scale for loss axes (recommended)')
     parser.add_argument('--quiet', action='store_true',
                        help='Suppress output')
-    
-    args = parser.parse_args()
-    
+    return parser
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    return build_parser().parse_args(argv)
+
+
+def main():
+    args = parse_args()
+
     verbose = not args.quiet
     
     # Resolve checkpoint directory (handle wildcards)

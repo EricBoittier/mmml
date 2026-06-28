@@ -1,0 +1,30 @@
+# Heat scaling smoke (N=5,10 × dt=0.25) — mmml configure template.
+cluster_sizes: [5, 10]
+repeats: [1]
+dt_fs_values: [0.25]
+composition_prefix: DCM
+checkpoint: "${MMML_CKPT}"
+output_root: artifacts/pycharmm_mlpot
+use_mpirun: false
+seed_base: 123456
+setup: pycharmm_full
+backend: pycharmm
+md_stages: mini,heat
+box_size: 180.0
+ps_heat: 10.0
+n_heat_segments: 20
+heat_thermostat: hoover
+flat_bottom_radius: 55.0
+packmol_radius: 15.0
+temperature: 220.0
+dcd_nsavc: 500
+dynamics_overlap_action: rescue
+ml_gpu_count: 1
+ml_batch_size: 512
+no_echeck: true
+slurm_partition: gpu
+slurm_nodes: 1
+slurm_ntasks: 1
+slurm_cpus_per_task: 4
+slurm_mem_mb_per_cpu: 3000
+slurm_runtime_min: 120

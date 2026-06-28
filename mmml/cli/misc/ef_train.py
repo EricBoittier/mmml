@@ -3,6 +3,12 @@
 import sys
 
 
+def build_parser():
+    from mmml.models.EF.training import build_parser as _bp
+
+    return _bp()
+
+
 def main() -> int:
     from mmml.models.EF import training
 

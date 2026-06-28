@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 
 
-def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
             "Warm up MLpot PhysNet JAX compilation in serial Python (multithreaded XLA). "
@@ -73,7 +73,11 @@ Clear stale launcher env if needed: unset OMPI_COMM_WORLD_SIZE PMI_SIZE PMIX_SIZ
     )
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--verbose", action="store_true")
-    return parser.parse_args(argv)
+    return parser
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    return build_parser().parse_args(argv)
 
 
 def _resolve_checkpoint(path: Path | None) -> Path:
@@ -114,6 +118,7 @@ class _WarmupBuildArgs:
 
 
 def run_warmup_mlpot_jax(args: argparse.Namespace) -> int:
+    os.environ["MMML_WARMUP_MLPOT_JAX_ONLY"] = "1"
     from mmml.interfaces.pycharmmInterface.charmm_mpi import (
         _under_mpirun,
         scrub_stale_openmpi_env,
@@ -234,7 +239,7 @@ def run_warmup_mlpot_jax(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = _parse_args(argv)
+    args = parse_args(argv)
     return run_warmup_mlpot_jax(args)
 
 

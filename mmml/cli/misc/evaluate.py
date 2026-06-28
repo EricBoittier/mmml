@@ -210,8 +210,7 @@ def create_report(
     return report_file
 
 
-def main():
-    """Main evaluation CLI entry point."""
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description='Evaluate MMML models',
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -292,8 +291,16 @@ Examples:
         action='store_true',
         help='Quiet mode'
     )
-    
-    args = parser.parse_args()
+    return parser
+
+
+def parse_args() -> argparse.Namespace:
+    return build_parser().parse_args()
+
+
+def main():
+    """Main evaluation CLI entry point."""
+    args = parse_args()
     verbose = args.verbose and not args.quiet
     
     # Load test data

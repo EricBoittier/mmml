@@ -16,9 +16,17 @@ caveats for working in the cloud VM.
 - `uv.lock` is gitignored (see also `.cursor/rules/`); ignore local lock churn after `uv sync`.
 
 ### Tests / lint / docs
-- Tests: `uv run pytest tests/` passes (currently 533 passed / 39 skipped). Tests needing a live
+- Tests: `uv run pytest tests/` passes (currently 1500+ passed / ~60 skipped). Tests needing a live
   PyCHARMM build or a GPU auto-skip when `pycharmm` is not importable — no extra flags needed.
   To deselect them explicitly: `-m "not pycharmm and not gpu and not mlpot"`.
+- **Before finishing a change, run the tests you touched** — CI installs the latest dependency
+  pins from `pyproject.toml` (e.g. ASE ≥ 3.26), which may differ from a stale local venv:
+  ```bash
+  uv run pytest tests/unit/test_calculator_minimize.py -q   # example: touched minimize code
+  uv run pytest tests/unit/ -q                                # fast pre-push sweep
+  ```
+  When behavior is version-gated (third-party API changes), update the matching unit test in the
+  **same commit** so CI does not regress (see `ase_optimizer_dual_unit_logfile` / ASE 3.26).
 - Per `.cursor/rules/`, do NOT run CHARMM / PyCHARMM dynamics, Packmol box builds, or full
   `mmml md-system` MD in the agent — those libs/GPU are unavailable. Prefer the unit tests above.
 - Lint: `make lint` (`uv run ruff check mmml/ scripts/`) currently reports pre-existing

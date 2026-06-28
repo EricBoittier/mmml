@@ -1,0 +1,47 @@
+configfile: "config.yaml"
+
+_CLUSTER_SIZES = [int(n) for n in config["cluster_sizes"]]
+_REPEATS = [int(r) for r in config.get("repeats", [1])]
+_DT_VALUES = [float(x) for x in config.get("dt_fs_values", [0.25])]
+_OUTPUT_ROOT = str(config.get("output_root", "artifacts/pycharmm_mlpot"))
+_ARTIFACT_ROOT = f"../../../{_OUTPUT_ROOT}"
+
+
+def _dt_slug(dt_fs: float) -> str:
+    if float(dt_fs) == 0.25:
+        return "dt025"
+    return f"dt{str(dt_fs).replace('.', 'p')}"
+
+
+_DT_SLUGS = [_dt_slug(dt) for dt in _DT_VALUES]
+
+
+rule all:
+    input:
+        expand(
+            "{root}/dcm{n}_npt_x64_{repeat}/{dt_slug}/done.txt",
+            root=_ARTIFACT_ROOT,
+            n=_CLUSTER_SIZES,
+            repeat=_REPEATS,
+            dt_slug=_DT_SLUGS,
+        ),
+
+
+rule run_heat:
+    output:
+        touch("{root}/dcm{n}_npt_x64_{repeat}/{dt_slug}/done.txt"),
+    log:
+        stdout="{root}/dcm{n}_npt_x64_{repeat}/{dt_slug}/stdout.log",
+    params:
+        workflow_dir=workflow.basedir,
+    resources:
+        gpu=1,
+        charmm_slot=1,
+        runtime=int(config.get("slurm_runtime_min", 120)),
+        slurm_partition=str(config.get("slurm_partition", "gpu")),
+    shell:
+        """
+        bash {params.workflow_dir}/scripts/job_shell.sh {wildcards.n} {wildcards.repeat} {wildcards.dt_slug} \\
+          > {log.stdout} 2>&1
+        touch {output}
+        """

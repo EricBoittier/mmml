@@ -238,7 +238,7 @@ def _run_checkpoint_inference(
     return {"reference": ref, "predictions": pred, "indices": indices}
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Compare reference and model NPZ data (metrics + plots).",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -316,8 +316,15 @@ def main() -> int:
         action="store_true",
         help="With --checkpoint, save inference NPZ to output dir",
     )
+    return parser
 
-    args = parser.parse_args()
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    return build_parser().parse_args(argv)
+
+
+def main() -> int:
+    args = parse_args()
 
     if args.checkpoint:
         if args.data is None:

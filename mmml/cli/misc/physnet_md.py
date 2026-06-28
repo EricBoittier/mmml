@@ -120,8 +120,7 @@ def _load_structure_from_file(path: Path) -> tuple[np.ndarray, np.ndarray]:
     return atoms.get_positions(), atoms.get_atomic_numbers()
 
 
-def main() -> int:
-    """Run physnet-md CLI."""
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="PhysNet MD sampling with ASE and JAX-MD.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -194,8 +193,16 @@ def main() -> int:
         "ASE: ProcessPoolExecutor; JAX-MD: batched GPU. "
         "With --data, uses first B structures as initial geometries if available. (default: 1)",
     )
+    return parser
 
-    args = parser.parse_args()
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    return build_parser().parse_args(argv)
+
+
+def main() -> int:
+    """Run physnet-md CLI."""
+    args = parse_args()
 
     if not args.checkpoint.exists():
         print(f"Error: Checkpoint not found: {args.checkpoint}", file=sys.stderr)

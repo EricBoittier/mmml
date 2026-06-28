@@ -170,13 +170,7 @@ print("JAX devices:", jax.devices())
 
 
 
-def get_args(**overrides):
-    """Parse command-line arguments, with optional keyword overrides (useful in notebooks).
-
-    Usage:
-        args = get_args()                          # CLI defaults
-        args = get_args(features=32, cutoff=8.0)   # override specific params
-    """
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--data",
@@ -280,7 +274,17 @@ def get_args(**overrides):
         metavar="N",
         help="Save EMA checkpoint every N epochs to params-epoch-NNNN-<uuid>.json (0 = no periodic saves)",
     )
-    args, unknown = parser.parse_known_args()
+    return parser
+
+
+def get_args(**overrides):
+    """Parse command-line arguments, with optional keyword overrides (useful in notebooks).
+
+    Usage:
+        args = get_args()                          # CLI defaults
+        args = get_args(features=32, cutoff=8.0)   # override specific params
+    """
+    args, unknown = build_parser().parse_known_args()
     exit_if_unknown_long_options(unknown, prog="mmml ef-train")
 
     # Apply keyword overrides (for notebook usage)

@@ -39,6 +39,8 @@ dependencies = [
     "ase",
     "pyyaml",
     "chemcoord",
+    # chemcoord only requires numba>=0.35; uv otherwise pins 0.53.1 → llvmlite 0.36 (no Py3.13).
+    "numba>=0.61",
     # Hydra configuration
     # Utilities
     "tqdm",
@@ -288,6 +290,9 @@ mmml = [
     "generate/sample/psf/*.psf",
     "models/physnetjax/defaults/*.json",
     "models/physnetjax/defaults/hf_json/*.json",
+    "cli/templates/workflows/**/*",
+    "cli/run/*.example.yaml",
+    "cli/run/presets/*.yaml",
 ]
 pycharmm = ["README.md", "LICENSE"]
 

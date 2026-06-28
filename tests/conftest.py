@@ -75,11 +75,16 @@ def can_import_pycharmm() -> bool:
 
 
 def charmm_env_configured() -> bool:
-    home = os.environ.get("CHARMM_HOME")
-    lib = os.environ.get("CHARMM_LIB_DIR")
-    if not home or not lib:
+    try:
+        from mmml.interfaces.pycharmmInterface.charmm_mpi import charmm_lib_available
+        from mmml.interfaces.pycharmmInterface.charmm_paths import resolve_charmm_paths
+
+        home, lib = resolve_charmm_paths()
+        if not home or not lib:
+            return False
+        return os.path.exists(home) and os.path.exists(lib) and charmm_lib_available()
+    except Exception:
         return False
-    return os.path.exists(home) and os.path.exists(lib)
 
 
 def jax_gpu_available() -> bool:

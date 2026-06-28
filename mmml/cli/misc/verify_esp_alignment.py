@@ -49,7 +49,7 @@ def compute_esp_at_grid_pyscf(R_angstrom: np.ndarray, Z: np.ndarray, grid_angstr
     return esp
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Verify esp-grid alignment in evaluated NPZ (data generation check).",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -63,7 +63,15 @@ def main() -> int:
     parser.add_argument("--xc", type=str, default="PBE0", help="XC functional (default PBE0)")
     parser.add_argument("--grid-in-angstrom", action="store_true",
                         help="Grid coords already in Angstrom (e.g. from fix-and-split). Default: Bohr (pyscf-evaluate)")
-    args = parser.parse_args()
+    return parser
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    return build_parser().parse_args(argv)
+
+
+def main() -> int:
+    args = parse_args()
 
     if not args.input.exists():
         print(f"Error: File not found: {args.input}", file=sys.stderr)

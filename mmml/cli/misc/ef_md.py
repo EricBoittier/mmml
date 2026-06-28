@@ -21,7 +21,7 @@ import argparse
 import sys
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="mmml ef-md",
         description=(
@@ -58,10 +58,20 @@ JAX-only examples:
         default="ase",
         help="ase (default): ASE integrator; jax: JIT jax_md single-replica runner",
     )
-    _args, rest = parser.parse_known_args()
+    return parser
+
+
+def parse_args(
+    argv: list[str] | None = None,
+) -> tuple[argparse.Namespace, list[str]]:
+    return build_parser().parse_known_args(argv)
+
+
+def main() -> int:
+    args, rest = parse_args()
     sys.argv = [sys.argv[0]] + rest
 
-    if _args.backend == "jax":
+    if args.backend == "jax":
         from mmml.models.EF.jax_md import main as md_main
 
         md_main()

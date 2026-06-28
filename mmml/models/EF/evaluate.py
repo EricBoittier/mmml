@@ -55,6 +55,86 @@ plt.rcParams['savefig.dpi'] = 300
 # Data is expected in eV/angstrom units
 EV_TO_KCAL_MOL = 23.06035  # 1 eV = 23.06035 kcal/mol
 
+_EVALUATE_DEFAULTS = {
+    "params": "params.json",
+    "config": None,
+    "data": "data-full.npz",
+    "output_dir": "evaluation_results",
+    "batch_size": 64,
+    "num_test": None,
+    "model_config": None,
+    "features": None,
+    "max_degree": None,
+    "num_iterations": None,
+    "num_basis_functions": None,
+    "cutoff": None,
+    "max_atomic_number": None,
+    "save_output_npz": False,
+    "output_h5": None,
+    "test_npz": None,
+    "rot_augment": False,
+    "rot_perturbation": 1.0,
+}
+
+
+def build_parser() -> argparse.ArgumentParser:
+    defaults = _EVALUATE_DEFAULTS
+    parser = argparse.ArgumentParser(description="Evaluate trained model")
+    parser.add_argument("--params", type=str, default=defaults["params"],
+                       help="Path to parameters JSON file (can be params-UUID.json or params.json)")
+    parser.add_argument("--config", type=str, default=defaults["config"],
+                       help="Path to config JSON file (will be auto-detected from params UUID if not provided)")
+    parser.add_argument("--data", type=str, default=defaults["data"],
+                       help="Path to dataset NPZ file")
+    parser.add_argument(
+        "--test-npz",
+        type=str,
+        default=defaults["test_npz"],
+        help="Test split NPZ (alias for --data; same as ef-train --test-npz)",
+    )
+    parser.add_argument("--output-dir", type=str, default=defaults["output_dir"],
+                       help="Output directory for plots and metrics")
+    parser.add_argument("--batch-size", type=int, default=defaults["batch_size"],
+                       help="Batch size for evaluation")
+    parser.add_argument("--num-test", type=int, default=defaults["num_test"],
+                       help="Number of test samples to use (None = use all)")
+    parser.add_argument("--model-config", type=str, default=defaults["model_config"],
+                       help="Path to model config JSON (deprecated: use --config)")
+    parser.add_argument("--features", type=int, default=defaults["features"],
+                       help="Model features (will be inferred from params/config if not provided)")
+    parser.add_argument("--max-degree", type=int, default=defaults["max_degree"],
+                       help="Max degree (default: 2)")
+    parser.add_argument("--num-iterations", type=int, default=defaults["num_iterations"],
+                       help="Number of iterations (default: 2)")
+    parser.add_argument("--num-basis-functions", type=int, default=defaults["num_basis_functions"],
+                       help="Number of basis functions (default: 64)")
+    parser.add_argument("--cutoff", type=float, default=defaults["cutoff"],
+                       help="Cutoff radius (default: 10.0)")
+    parser.add_argument("--max-atomic-number", type=int, default=defaults["max_atomic_number"],
+                       help="Max atomic number (default: 55)")
+    parser.add_argument("--save-output-npz", action="store_true",
+                       help="Save evaluation outputs (predictions, targets) to NPZ file")
+    parser.add_argument(
+        "--output-h5",
+        type=str,
+        default=None,
+        metavar="PATH",
+        help="Write HDF5 trajectory for mmml gui (R,Z,N,E,E_pred,F,F_pred,Dxyz,Dxyz_pred,Ef). Requires h5py.",
+    )
+    parser.add_argument(
+        "--rot-augment",
+        action="store_true",
+        help="Apply random SO(3) rotation augmentation when building batches (via prepare_batches)",
+    )
+    parser.add_argument(
+        "--rot-perturbation",
+        type=float,
+        default=defaults["rot_perturbation"],
+        help="Rotation perturbation strength in [0, 1] (used with --rot-augment)",
+    )
+    return parser
+
+
 def get_args(**kwargs):
     """
     Get configuration arguments. Works both from command line and notebooks.
@@ -64,27 +144,7 @@ def get_args(**kwargs):
     
     From command line, use argparse flags as before.
     """
-    # Default values
-    defaults = {
-        "params": "params.json",
-        "config": None,
-        "data": "data-full.npz",
-        "output_dir": "evaluation_results",
-        "batch_size": 64,
-        "num_test": None,
-        "model_config": None,
-        "features": None,
-        "max_degree": None,
-        "num_iterations": None,
-        "num_basis_functions": None,
-        "cutoff": None,
-        "max_atomic_number": None,
-        "save_output_npz": False,
-        "output_h5": None,
-        "test_npz": None,
-        "rot_augment": False,
-        "rot_perturbation": 1.0,
-    }
+    defaults = dict(_EVALUATE_DEFAULTS)
     
     # Check if we're in a notebook/IPython environment
     try:
@@ -103,61 +163,7 @@ def get_args(**kwargs):
     
     # If command line arguments are provided AND we're not in a notebook, use argparse
     if has_flag_args and not in_notebook:
-        parser = argparse.ArgumentParser(description="Evaluate trained model")
-        parser.add_argument("--params", type=str, default=defaults["params"],
-                           help="Path to parameters JSON file (can be params-UUID.json or params.json)")
-        parser.add_argument("--config", type=str, default=defaults["config"],
-                           help="Path to config JSON file (will be auto-detected from params UUID if not provided)")
-        parser.add_argument("--data", type=str, default=defaults["data"],
-                           help="Path to dataset NPZ file")
-        parser.add_argument(
-            "--test-npz",
-            type=str,
-            default=defaults["test_npz"],
-            help="Test split NPZ (alias for --data; same as ef-train --test-npz)",
-        )
-        parser.add_argument("--output-dir", type=str, default=defaults["output_dir"],
-                           help="Output directory for plots and metrics")
-        parser.add_argument("--batch-size", type=int, default=defaults["batch_size"],
-                           help="Batch size for evaluation")
-        parser.add_argument("--num-test", type=int, default=defaults["num_test"],
-                           help="Number of test samples to use (None = use all)")
-        parser.add_argument("--model-config", type=str, default=defaults["model_config"],
-                           help="Path to model config JSON (deprecated: use --config)")
-        parser.add_argument("--features", type=int, default=defaults["features"],
-                           help="Model features (will be inferred from params/config if not provided)")
-        parser.add_argument("--max-degree", type=int, default=defaults["max_degree"],
-                           help="Max degree (default: 2)")
-        parser.add_argument("--num-iterations", type=int, default=defaults["num_iterations"],
-                           help="Number of iterations (default: 2)")
-        parser.add_argument("--num-basis-functions", type=int, default=defaults["num_basis_functions"],
-                           help="Number of basis functions (default: 64)")
-        parser.add_argument("--cutoff", type=float, default=defaults["cutoff"],
-                           help="Cutoff radius (default: 10.0)")
-        parser.add_argument("--max-atomic-number", type=int, default=defaults["max_atomic_number"],
-                           help="Max atomic number (default: 55)")
-        parser.add_argument("--save-output-npz", action="store_true",
-                           help="Save evaluation outputs (predictions, targets) to NPZ file")
-        parser.add_argument(
-            "--output-h5",
-            type=str,
-            default=None,
-            metavar="PATH",
-            help="Write HDF5 trajectory for mmml gui (R,Z,N,E,E_pred,F,F_pred,Dxyz,Dxyz_pred,Ef). Requires h5py.",
-        )
-        parser.add_argument(
-            "--rot-augment",
-            action="store_true",
-            help="Apply random SO(3) rotation augmentation when building batches (via prepare_batches)",
-        )
-        parser.add_argument(
-            "--rot-perturbation",
-            type=float,
-            default=defaults["rot_perturbation"],
-            help="Rotation perturbation strength in [0, 1] (used with --rot-augment)",
-        )
-
-        args, unknown = parser.parse_known_args()
+        args, unknown = build_parser().parse_known_args()
         exit_if_unknown_long_options(unknown, prog="mmml ef-evaluate")
         data_path = args.test_npz if args.test_npz else args.data
         return SimpleNamespace(

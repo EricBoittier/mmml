@@ -11,7 +11,7 @@ Usage:
 import sys
 import argparse
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 import json
 
 # Add parent directory to path for imports
@@ -56,8 +56,7 @@ def find_xml_files(paths: List[Path], recursive: bool = False) -> List[Path]:
     return sorted(xml_files)
 
 
-def main():
-    """Main CLI entry point."""
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description='Convert Molpro XML files to standardized NPZ format',
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -168,8 +167,16 @@ Examples:
         type=int,
         help='Maximum number of files to process (for testing)'
     )
-    
-    args = parser.parse_args()
+    return parser
+
+
+def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
+    return build_parser().parse_args(argv)
+
+
+def main():
+    """Main CLI entry point."""
+    args = parse_args()
     
     # Find all XML files
     if not args.quiet:

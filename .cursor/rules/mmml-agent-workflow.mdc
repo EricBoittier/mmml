@@ -18,6 +18,14 @@ alwaysApply: true
 - Use **functionality scripts** under `tests/functionality/` for staged manual verification (see READMEs there).
 - Build features in layers: **CHARMM FF only** → **MMML / MLpot** → full `md-system` presets.
 - When changing CLI defaults or argv forwarding, update `tests/unit/test_md_system_pycharmm_cmd.py` (or related) in the same change.
+- **Run affected unit tests before finishing** — CI resolves fresh deps from `pyproject.toml` (often newer than a local venv). Example: `uv run pytest tests/unit/test_calculator_minimize.py -q`.
+- When third-party behavior is **version-gated** (e.g. ASE 3.26 `openfile`), update the corresponding unit test in the **same change**; do not leave tests asserting pre-upgrade behavior.
+
+## CI hygiene
+
+- GitHub Actions (`.github/workflows/ci.yml`) runs `pytest -v tests/` on every push/PR to `main`.
+- Prefer `tests/unit/` for agent-session verification; full suite is ~1500 tests / ~1 min on CI.
+- See `devtools/AGENTS.md` for cloud-VM test notes and common skip markers.
 
 ## Constraint / MD work ordering
 

@@ -1,0 +1,64 @@
+# DCM:5 cross-backend MD benchmark (smoke) — generated template for mmml configure.
+# export MMML_CKPT before snakemake.
+
+composition: "DCM:5"
+ps: 2.0
+dt_fs: 0.25
+temperature: 300.0
+pressure: 1.0
+seed: 123
+spacing: 5.0
+packmol_radius: 6.9
+packmol_tolerance: 1.0
+box_size: 25.0
+checkpoint: "${MMML_CKPT}"
+output_root: "results"
+mpirun_wrapper: "../../scripts/mmml-charmm-mpirun.sh"
+
+mm_switch_on: 7.0
+mm_switch_width: 5.0
+ml_switch_width: 0.1
+mini_nstep: 2000
+bonded_mm_mini: true
+dyn_nprint: 500
+dcd_nsavc: 500
+heat_firstt: 10.0
+heat_finalt: 240.0
+echeck: 500.0
+dynamics_overlap_check_interval: 8000
+
+optional_jobs:
+  - jaxmd_pbc_npt
+
+jobs:
+  ase_pbc_nve:
+    backend: ase
+    setup: pbc_nve
+    pbc: true
+    integrator: nve
+    extra_args:
+      - "--nve-temp-K"
+      - "300"
+
+  jaxmd_pbc_nve:
+    backend: jaxmd
+    setup: pbc_nve
+    pbc: true
+    integrator: nve
+    extra_args:
+      - "--steps-per-recording"
+      - "500"
+
+  pycharmm_pbc_npt:
+    backend: pycharmm
+    setup: pbc_npt
+    pbc: true
+    md_stages: mini,heat,nve
+    pressure: 1.0
+
+  jaxmd_pbc_npt:
+    backend: jaxmd
+    setup: pbc_npt
+    pbc: true
+    integrator: npt
+    optional: true

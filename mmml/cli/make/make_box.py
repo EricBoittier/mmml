@@ -12,7 +12,7 @@ import os
 
 import argparse
 
-def parse_args():
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--n", type=int, default=1)
     parser.add_argument("--res", type=str)
@@ -20,8 +20,11 @@ def parse_args():
     parser.add_argument("--pdb", type=str, default=None)
     parser.add_argument("--solvent", type=str, default=None)
     parser.add_argument("--density", type=float, default=None)
+    return parser
 
-    return parser.parse_args()
+
+def parse_args(argv=None):
+    return build_parser().parse_args(argv)
 
 def main_loop(args):
     from mmml.interfaces.pycharmmInterface import setupBox

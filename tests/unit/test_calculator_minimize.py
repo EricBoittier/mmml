@@ -43,20 +43,32 @@ def test_annotate_ase_optimizer_log_line_adds_kcal_mol():
 
 def test_dual_unit_logfile_is_treated_as_open_by_ase():
     from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+        _DualUnitAseOptimizerLog,
         ase_optimizer_dual_unit_logfile,
     )
 
-    log = ase_optimizer_dual_unit_logfile()
-    assert hasattr(log, "close")
     try:
+        from packaging.version import Version
+
+        import ase
         from ase.utils import IOContext
     except ImportError:
         pytest.skip("ASE not installed")
+
+    log = ase_optimizer_dual_unit_logfile()
     comm = MagicMock()
     comm.rank = 0
     with IOContext() as ctx:
         opened = ctx.openfile(log, comm=comm, mode="a")
-    assert opened is log
+
+    if Version(getattr(ase, "__version__", "0")) >= Version("3.26.0"):
+        # ASE 3.26+ openfile() rejects custom stream wrappers; use stdout sentinel.
+        assert log == "-"
+        assert opened is not log
+    else:
+        assert isinstance(log, _DualUnitAseOptimizerLog)
+        assert hasattr(log, "close")
+        assert opened is log
 
 
 def test_should_abort_bfgs_fmax_running_best_spike():

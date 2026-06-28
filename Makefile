@@ -242,7 +242,7 @@ notebook:
 charmm-setup:
 	bash setup/install.sh
 	@echo "CHARMM setup complete"
-	@echo "Source the environment: source CHARMMSETUP"
+	@echo "Build libcharmm: bash scripts/rebuild_charmm_mlpot.sh (paths auto-discovered from setup/charmm)"
 
 # ==============================================================================
 # Utilities

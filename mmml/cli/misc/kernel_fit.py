@@ -4,7 +4,7 @@ import argparse
 from pathlib import Path
 
 
-def main():
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Fit kernel ridge: distance matrix -> (AQ,BQ,CQ). Write CHARMM kernel files and optional H5."
     )
@@ -30,7 +30,15 @@ def main():
     parser.add_argument("--lam", type=float, default=1e-6, help="Kernel ridge regularization")
     parser.add_argument("--sigma", type=float, default=1.0, help="RBF kernel width")
     parser.add_argument("--base-name", default="x_fit", help="Prefix for x_fit/coefs filenames")
-    args = parser.parse_args()
+    return parser
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    return build_parser().parse_args(argv)
+
+
+def main():
+    args = parse_args()
 
     train_indices = None
     if args.train_frames:
