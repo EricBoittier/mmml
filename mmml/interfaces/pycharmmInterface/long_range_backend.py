@@ -8,7 +8,9 @@ outer radius (~13 Å by default).  Optional backends can supply k-space correcti
 * ``scafacos`` — ScaFaCoS ``libfcs`` (PME / P³M / P²NFFT / …)
 
 Selection mirrors ``nl_backend.py``: CLI/YAML may pass an explicit name; otherwise
-``MMML_LR_SOLVER`` and ``auto`` pick the first available backend.
+``MMML_LR_SOLVER`` and ``auto`` pick the first available backend.  ``auto`` prefers
+``jax_pme`` (hybrid switched-MM add-on with full−intra handoff), then ScaFaCoS
+(``periodic_external``), then truncated MIC.
 
 See ``mlpot/LONG_RANGE_ELECTROSTATICS.md`` for how these layers interact with
 CHARMM IMAGE lists and MLpot BLOCK terms.
@@ -143,10 +145,10 @@ def pick_lr_solver(requested: str | None = None) -> LrSolverName:
     """Choose the active long-range electrostatic backend."""
     name = resolve_lr_solver(requested)
     if name == "auto":
-        if have_scafacos():
-            return "scafacos"
         if have_jax_pme():
             return "jax_pme"
+        if have_scafacos():
+            return "scafacos"
         return "mic"
     if name == "scafacos" and not have_scafacos():
         if have_jax_pme():

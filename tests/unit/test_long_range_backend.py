@@ -28,13 +28,24 @@ def test_resolve_lr_solver_rejects_unknown():
         resolve_lr_solver("ewald")
 
 
-def test_pick_lr_solver_auto_prefers_scafacos():
+def test_pick_lr_solver_auto_prefers_jax_pme():
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.long_range_backend.have_scafacos",
         return_value=True,
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
         return_value=True,
+    ):
+        assert pick_lr_solver("auto") == "jax_pme"
+
+
+def test_pick_lr_solver_auto_falls_back_to_scafacos_without_jax_pme():
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.have_scafacos",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
+        return_value=False,
     ):
         assert pick_lr_solver("auto") == "scafacos"
 
@@ -172,6 +183,28 @@ def test_collect_lr_solver_mapping_auto_fallback():
     assert mapping["lr_solver_active"] == "mic"
     assert mapping["lr_solver_requested"] == "auto"
     assert "truncated MIC" in mapping["coulomb_mode"]
+
+
+def test_collect_lr_solver_mapping_auto_in_jax_mic():
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
+        return_value="jax_pme",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.resolve_lr_solver",
+        return_value="auto",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.have_scafacos",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
+        return_value=True,
+    ):
+        mapping = collect_lr_solver_mapping(lr_solver="auto", do_mm=True)
+    assert mapping["lr_solver"] == "jax_pme"
+    assert mapping["lr_solver_active"] == "jax_pme"
+    assert mapping["lr_solver_requested"] == "auto"
+    assert "switched MM" in mapping["coulomb_mode"]
+    assert "note" not in mapping
 
 
 def test_collect_lr_solver_mapping_scafacos_in_jax_mic_is_mic():

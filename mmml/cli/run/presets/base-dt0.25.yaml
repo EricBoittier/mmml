@@ -11,3 +11,6 @@ defaults:
   mlpot_mm_internal_scale: 0.0
   include_mm: true
   mm_nonbond_mode: jax_mic
+  lr_solver: jax_pme
+  jax_pme_method: ewald
+  jax_pme_sr_cutoff: 6.0

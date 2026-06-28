@@ -35,7 +35,7 @@ In `jax_mic` + `jax_pme` mode: **r⁻¹²** repulsion stays on the switched pair
 | Flag                               | Values                               | Default      | Meaning                         |
 | ---------------------------------- | ------------------------------------ | ------------ | ------------------------------- |
 | `--mm-nonbond-mode`                | `jax_mic`, `periodic_external`       | `jax_mic`    | MM stack selection              |
-| `--lr-solver`                      | `auto`, `mic`, `jax_pme`, `scafacos` | env / `auto` | Coulomb backend                 |
+| `--lr-solver`                      | `auto`, `mic`, `jax_pme`, `scafacos` | env / `auto` → **jax_pme** | Hybrid default: switched MM + jax-pme full−intra handoff |
 | `--jax-pme-method`                 | `ewald`, `pme`, `p3m`                | `ewald`      | jax-pme variant                 |
 | `--jax-pme-sr-cutoff`              | float (Å)                            | `6.0`        | jax-pme real-space cutoff       |
 | `--scafacos-method`                | `ewald`, `p3m`, …                    | `ewald`      | ScaFaCoS `fcs_init` string      |
@@ -215,7 +215,7 @@ Log line at MLpot startup (verbose):
 Decomposed MLpot: lr_solver=jax_pme, scafacos=no, jax_pme=yes (jax-pme method=ewald, sr_cutoff=6.0 Å)
 ```
 
-The **Hybrid ML/MM setup** dashboard (always printed at calculator init) includes a **Long-range Coulomb** section with `mm_nonbond_mode`, resolved `lr_solver`, **`lr_solver_active`** (what actually runs), and method-specific settings. In default **`jax_mic`** mode, `auto`→`scafacos` does **not** use ScaFaCoS — the active backend is **truncated MIC** unless you set `--lr-solver jax_pme`. ScaFaCoS and jax-pme full-box Coulomb require **`mm_nonbond_mode: periodic_external`**. The flag `--no-periodic-charmm-vdw` only applies in that mode.
+The **Hybrid ML/MM setup** dashboard (always printed at calculator init) includes a **Long-range Coulomb** section with `mm_nonbond_mode`, resolved `lr_solver`, **`lr_solver_active`** (what actually runs), and method-specific settings. Default **`jax_mic`** + **`auto`** resolves to **jax_pme** when the pinned jax-pme package is available (hybrid switched-MM add-on with full−intra handoff). Use explicit **`mic`** for truncated pair-loop Coulomb only, or **`periodic_external`** for full-box jax-pme/ScaFaCoS without the JAX pair loop.
 
 ---
 

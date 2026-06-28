@@ -68,7 +68,7 @@ Implementation: [`long_range_backend.py`](https://github.com/EricBoittier/mmml/b
 
 | Name | When chosen | Status |
 |------|-------------|--------|
-| `auto` | Default | `scafacos` → `jax_pme` → `mic` |
+| `auto` | Default | `jax_pme` → `scafacos` → `mic` |
 | `mic` | Explicit or fallback | **Production default** — all Coulomb in pair loop |
 | `scafacos` | `MMML_LR_SOLVER=scafacos` and `libfcs` loads | **Interface ready** — session + one-shot API |
 | `jax_pme` | Auto when ScaFaCoS absent and `jax-pme` importable | Reserved (dependency pinned, wiring pending) |
