@@ -1,0 +1,26 @@
+{
+  "timestamp_utc": "2026-06-28T00:24:35.117189+00:00",
+  "repo_root": "/mmhome/boittier/home/mmml",
+  "argv": [
+    "--config",
+    "/mmhome/boittier/home/mmml/artifacts/pbc_liquid_density_profile/dcm_186_t300_l28/campaign.yaml",
+    "--run-all",
+    "--resume",
+    "--campaign-output-dir",
+    "/mmhome/boittier/home/mmml/artifacts/pbc_liquid_density_profile/dcm_186_t300_l28"
+  ],
+  "git_commit": "740a913b6a68ae1bc2c236920ffe65d9b1d2c8ad",
+  "git_branch": "cursor/monitor-failure-retries-e63c",
+  "git_describe": "740a913b6",
+  "git_dirty": false,
+  "git_status_short": [],
+  "md_system": {
+    "setup": "pbc_nve",
+    "backend": "auto",
+    "jax_md_update_interval": 1,
+    "jax_md_skin_distance": 0.25,
+    "steps_per_recording": null,
+    "ps": 1.0,
+    "dt_fs": 0.25
+  }
+}
