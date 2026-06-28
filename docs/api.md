@@ -100,6 +100,14 @@ Canonical command: `mmml efield-evaluate` (replaces deprecated `ef-evaluate`).
 
 Source: [`mmml/models/efield/evaluate.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/models/efield/evaluate.py).
 
+### Unified energy/forces providers
+
+ML checkpoints (PhysNet, joint PhysNet+DCMNet, E-field) and QC backends (PySCF, ORCA, xTB, Molpro) share :class:`~mmml.interfaces.energy_forces.EnergyForcesProvider`.
+
+Source: [`mmml/interfaces/energy_forces/`](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/energy_forces/__init__.py).
+
+Hybrid CHARMM monomer/dimer MLpot requires ``supports_decomposed_ml`` (PhysNet family only); use ``build_provider`` for single-structure inference and cross-check.
+
 ## CLI
 
 ### Entry Point

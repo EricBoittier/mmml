@@ -8,9 +8,9 @@ import jax.numpy as jnp
 
 
 
-class MessagePassingModel(nn.Module):
+class DCMNetMultipole(nn.Module):
     """
-    E(3)-equivariant message passing model for distributed multipoles.
+    E(3)-equivariant message passing model for distributed multipoles (DCMNet).
     
     This model uses E3x to perform equivariant message passing between atoms
     and predicts distributed multipoles and dipoles that reproduce ESP on
@@ -418,3 +418,7 @@ class MessagePassingModelDEBUG(nn.Module):
             atomic_numbers, positions, dst_idx, src_idx, batch_segments, batch_size
         )
 
+
+MessagePassingModel = DCMNetMultipole  # deprecated alias; prefer DCMNetMultipole
+
+__all__ = ["DCMNetMultipole", "MessagePassingModel", "MessagePassingModelDEBUG"]

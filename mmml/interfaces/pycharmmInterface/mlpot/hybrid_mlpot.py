@@ -690,6 +690,9 @@ def build_decomposed_mlpot_model(
     defer_jax_until_after_sd: bool = False,
 ) -> DecomposedMlpotModel:
     ckpt = Path(checkpoint).expanduser().resolve()
+    from mmml.interfaces.energy_forces.ml import assert_hybrid_ml_compatible
+
+    assert_hybrid_ml_compatible(ckpt)
     if args is not None and ml_compute_dtype is None:
         ml_compute_dtype = getattr(args, "ml_compute_dtype", None)
     cutoff_params = (
