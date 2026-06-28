@@ -84,9 +84,19 @@ def _grid_oxygen_sites(
     existing: np.ndarray,
     min_dist_A: float,
     rng: np.random.Generator,
+    water_template: np.ndarray | None = None,
 ) -> list[np.ndarray]:
     """Place water oxygen atoms on a cubic grid, skipping overlaps with ``existing``."""
     sites: list[np.ndarray] = []
+    placed_waters: list[np.ndarray] = []
+    template = np.asarray(water_template, dtype=np.float64) if water_template is not None else None
+    if template is not None:
+        template = template - template.mean(axis=0)
+
+    def _too_close(candidate_atoms: np.ndarray, others: np.ndarray) -> bool:
+        dists = np.linalg.norm(others[:, None, :] - candidate_atoms[None, :, :], axis=-1)
+        return bool(np.any(dists < min_dist_A))
+
     max_coord = float(box_side_A) - margin_A
     coord = margin_A
     while len(sites) < n_waters and coord < max_coord:
@@ -96,10 +106,18 @@ def _grid_oxygen_sites(
                 oxygen += rng.normal(scale=0.05, size=3)
                 if np.any(oxygen < margin_A) or np.any(oxygen > max_coord):
                     continue
-                dists = np.linalg.norm(existing - oxygen, axis=1)
-                if float(dists.min()) < min_dist_A:
+                water_atoms = (
+                    oxygen + template if template is not None else oxygen.reshape(1, 3)
+                )
+                if _too_close(water_atoms, existing):
+                    continue
+                if placed_waters and _too_close(
+                    water_atoms,
+                    np.vstack(placed_waters),
+                ):
                     continue
                 sites.append(oxygen)
+                placed_waters.append(water_atoms)
                 if len(sites) >= n_waters:
                     return sites
         coord += spacing_A
@@ -160,6 +178,8 @@ def build_trialanine_water_box_in_charmm(
     peptide += np.array([box_side_A / 2, box_side_A / 2, box_side_A / 2])
     coor.set_positions(pd.DataFrame(peptide, columns=["x", "y", "z"]))
 
+    tip3 = _tip3_template()
+    tip3_com = tip3.mean(axis=0)
     oxygen_sites = _grid_oxygen_sites(
         n_waters=n_waters,
         box_side_A=box_side_A,
@@ -168,9 +188,8 @@ def build_trialanine_water_box_in_charmm(
         existing=peptide,
         min_dist_A=min_peptide_water_dist_A,
         rng=rng,
+        water_template=tip3,
     )
-    tip3 = _tip3_template()
-    tip3_com = tip3.mean(axis=0)
     water_coords = np.vstack(
         [site + (tip3 - tip3_com) for site in oxygen_sites],
     )

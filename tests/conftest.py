@@ -122,3 +122,12 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             item.add_marker(pytest.mark.gpu)
         if _matches_any(rel, _MLPOT_PATH_PREFIXES):
             item.add_marker(pytest.mark.mlpot)
+
+
+@pytest.fixture(autouse=True)
+def _jax_enable_x64_for_pycharmm_tests(request: pytest.FixtureRequest) -> None:
+    """CHARMM cross-checks need float64 for rtol=1e-4 bonded/improper agreement."""
+    if request.node.get_closest_marker("pycharmm") is not None:
+        import jax
+
+        jax.config.update("jax_enable_x64", True)
