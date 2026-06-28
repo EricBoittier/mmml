@@ -314,6 +314,7 @@ class _JaxPmePowerLawHostEvaluator:
     ) -> LongRangeInteractionResult:
         """Evaluate one fixed-shape jax-pme power-law problem on the host."""
         from ase import Atoms
+        from jaxpme import Ewald, P3M, PME
 
         pos = np.asarray(positions_A, dtype=np.float64)
         coef = np.asarray(coefficients, dtype=np.float64).reshape(-1)
@@ -332,10 +333,10 @@ class _JaxPmePowerLawHostEvaluator:
             cell=np.eye(3, dtype=np.float64) * float(self.box_length_A),
             pbc=True,
         )
-        calc = _cached_jax_pme_calculator(
-            self.method_name,
-            int(self.exponent),
-            float(self.prefactor),
+        calc_map = {"ewald": Ewald, "pme": PME, "p3m": P3M}
+        calc = calc_map[self.method_name](
+            exponent=int(self.exponent),
+            prefactor=float(self.prefactor),
         )
         smearing = float(self.sr_cutoff_A) / 5.0
         mesh_spacing = smearing / 8.0
@@ -368,17 +369,6 @@ class _JaxPmePowerLawHostEvaluator:
             energy_kcalmol=e_host,
             forces_kcalmol_A=f_host,
         )
-
-
-@lru_cache(maxsize=32)
-def _cached_jax_pme_calculator(method_name: JaxPmeMethod, exponent: int, prefactor: float):
-    from jaxpme import Ewald, P3M, PME
-
-    calc_map = {"ewald": Ewald, "pme": PME, "p3m": P3M}
-    return calc_map[method_name](
-        exponent=int(exponent),
-        prefactor=float(prefactor),
-    )
 
 
 @lru_cache(maxsize=128)
