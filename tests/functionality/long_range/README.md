@@ -55,6 +55,19 @@ Requires ``mpi4py`` and ``LD_LIBRARY_PATH`` including the ScaFaCoS plugin direct
 Truncated MIC (13 Å) underestimates full periodic Coulomb; ScaFaCoS ewald/p3m match
 jax-pme to ~0.1–0.7%. ``direct`` is validated on dimers only (not bulk crystals).
 
+### Hybrid MM with jax-pme (LJ + electrostatics)
+
+Set ``MMML_LR_SOLVER=jax_pme`` (or ``lr_solver: jax_pme`` in YAML) to keep **switched
+Lennard-Jones** on the JAX pair path and evaluate **Coulomb** with jax-pme
+(Ewald / PME / P3M via ``JAX_PME_METHOD``):
+
+```bash
+export MMML_LR_SOLVER=jax_pme
+export JAX_PME_METHOD=ewald   # or pme, p3m
+pytest tests/functionality/long_range/test_hybrid_jax_pme_mm.py -v
+python tests/functionality/long_range/06_hybrid_jax_pme_mm.py  # PyCHARMM ACO:2 cluster
+```
+
 ## Test systems
 
 Defined in `_common.py` (mirroring jax-pme `tests/test_ewald.py`):

@@ -249,3 +249,4 @@ node_modules/
 *.dcd
 *.pov-state
 *.pov-state.gz
+fftw-wisdom.dat
