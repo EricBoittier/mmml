@@ -342,41 +342,11 @@ def _predict_dipoles_physnet(
     *,
     batch_size: int = 1,
 ) -> np.ndarray:
-    """PhysNet dipole inference frame-by-frame (avoids batched mask shape issues)."""
-    import e3x
-    import jax.numpy as jnp
+    """PhysNet dipole inference (delegates to JIT implementation)."""
+    from mmml.mcp.ir_comparison import predict_dipoles_physnet_jit
 
-    from mmml.cli.misc.physnet_evaluate import _load_physnet_checkpoint
-
-    n_atoms = len(frames[0])
-    _, params, model = _load_physnet_checkpoint(dipole_ckpt, n_atoms)
-    if not getattr(model, "charges", False):
-        raise ValueError(f"checkpoint does not predict dipoles: {dipole_ckpt}")
-
-    dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(n_atoms)
-    dipoles = np.zeros((len(frames), 3), dtype=np.float64)
-    for i, atoms in enumerate(frames):
-        z = jnp.asarray(atoms.get_atomic_numbers(), dtype=jnp.int32)
-        r = jnp.asarray(atoms.get_positions(), dtype=jnp.float32)
-        atom_mask = (z > 0).astype(jnp.float32)
-        batch_segments = jnp.zeros((n_atoms,), dtype=jnp.int32)
-        valid_pairs = (atom_mask[dst_idx] > 0) & (atom_mask[src_idx] > 0)
-        batch_mask = valid_pairs.astype(jnp.float32)
-        output = model.apply(
-            params,
-            atomic_numbers=z,
-            positions=r,
-            dst_idx=dst_idx,
-            src_idx=src_idx,
-            batch_segments=batch_segments,
-            batch_size=1,
-            batch_mask=batch_mask,
-            atom_mask=atom_mask,
-        )
-        dipoles[i] = np.asarray(output["dipoles"], dtype=np.float64).reshape(3)
-        if i == 0 or (i + 1) % 50 == 0:
-            print(f"      ML dipole frame {i+1}/{len(frames)}")
-    return dipoles
+    _ = batch_size  # kept for API compatibility
+    return predict_dipoles_physnet_jit(frames, dipole_ckpt)
 
 
 def _stage_ir_ml_dipole(
@@ -776,12 +746,20 @@ def _stage_train_dipole(
 
     test_npz = splits / "energies_forces_dipoles_test.npz"
     eval_out = run_dir / "eval" / "dipole_smoke"
+    ckpt_for_eval = ckpt_parent
+    json_ckpts = sorted(ckpt_parent.glob("params*.json"))
+    if json_ckpts:
+        ckpt_for_eval = json_ckpts[-1]
     if test_npz.is_file():
         eval_res = run_mmml(
             "physnet-evaluate",
             [
                 "--checkpoint",
-                str(ckpt_parent),
+                str(
+                    ckpt_for_eval.relative_to(run_dir)
+                    if ckpt_for_eval.is_relative_to(run_dir)
+                    else ckpt_for_eval
+                ),
                 "--data",
                 str(test_npz.relative_to(run_dir)),
                 "-o",
@@ -958,6 +936,29 @@ def _stage_ir(
             "ml_dipole IR skipped: no charges=True checkpoint "
             f"(set dipole_checkpoint or run train_dipole stage)"
         )
+
+    if mode_cfg.get("ir_comparison", True) and dipole_ckpt and _checkpoint_charges_enabled(
+        dipole_ckpt
+    ):
+        try:
+            from mmml.mcp.ir_comparison import generate_ir_comparison_figure
+
+            meta = generate_ir_comparison_figure(
+                run_dir,
+                traj,
+                dipole_ckpt,
+                dt_fs=dt_fs,
+                steps_per_recording=steps_per_recording,
+                stride=int(mode_cfg.get("ir_comparison_stride", 1)),
+                max_frames=mode_cfg.get("ir_comparison_max_frames"),
+            )
+            stdout_parts.append(
+                "publication IR comparison -> "
+                f"{meta['outputs']['comparison_png']}"
+            )
+        except Exception as exc:
+            stderr_parts.append(f"ir_comparison failed: {exc}")
+            rc = max(rc, 1)
 
     if _checkpoint_charges_enabled(ckpt) and "correlation" in ir_methods:
         args = [
