@@ -117,3 +117,18 @@ def test_apply_mapping_hyphen_keys() -> None:
     )
     assert str(args.continue_from) == "/tmp/state.npz"
     assert args.handoff_write_res is False
+
+
+def test_validate_packmol_skips_certified_box_handoff() -> None:
+    from mmml.cli.run.md_system import _validate_packmol_args, parse_args
+
+    args = parse_args(
+        [
+            "--composition",
+            "DCM:20",
+            "--from-psf",
+            "~/tests/boxes/dcm20/model.psf",
+            "--skip-cluster-build",
+        ]
+    )
+    _validate_packmol_args(args)  # no box-size required

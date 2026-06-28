@@ -1,25 +1,35 @@
 # Smallest practical DCM liquid-density smoke on a GPU node (A100).
 #
+# Paths use ~/... so this works from any cwd (not only the mmml repo root).
+# Edit the paths below or override on the CLI.
+#
 # Phase A — MM-only box certification (~few min):
-#   MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh liquid-box \
+#   MMML_MPI_NP=1 ~/mmml/scripts/mmml-charmm-mpirun.sh liquid-box \
 #     --composition DCM:20 --target-density-g-cm3 1.326 \
-#     --profile standard -o boxes/dcm20 \
+#     --profile standard -o ~/tests/boxes/dcm20 \
 #     --charmm-sd-steps 50 --charmm-abnr-steps 50
 #
 # Phase B — hybrid MLpot mini (this file):
-#   export MMML_CKPT=/path/to/DESdimers_params.json
-#   MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh md-system \
-#     --config mmml/cli/run/dcm20_liquid_smoke.example.yaml
+#   export MMML_CKPT=~/mmml/mmml/models/physnetjax/defaults/hf_json/<checkpoint>.json
+#   MMML_MPI_NP=1 ~/mmml/scripts/mmml-charmm-mpirun.sh md-system \
+#     --config ~/mmml/mmml/cli/run/dcm20_liquid_smoke.example.yaml \
+#     --checkpoint "$MMML_CKPT"
 #
 # Preflight:
-#   MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh health-check --require-gpu --live
+#   MMML_MPI_NP=1 ~/mmml/scripts/mmml-charmm-mpirun.sh health-check --require-gpu --live
+
+include:
+  - presets/certified-box-handoff.yaml
 
 setup: pbc_npt
 backend: pycharmm
 composition: "DCM:20"
-from_psf: boxes/dcm20/model.psf
-from_crd: boxes/dcm20/model.crd
-output_dir: artifacts/dcm20_liquid_smoke
+skip_cluster_build: true
+from_psf: ~/tests/boxes/dcm20/model.psf
+from_crd: ~/tests/boxes/dcm20/model.crd
+# box_side_A is read from box.json next to from_psf when unset
+box_size: null
+output_dir: ~/tests/artifacts/dcm20_liquid_smoke
 temperature: 300.0
 pressure: 1.0
 

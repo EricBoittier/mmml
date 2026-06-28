@@ -1727,6 +1727,8 @@ def _validate_packmol_args(args: argparse.Namespace) -> None:
         pyxtal=getattr(args, "pyxtal", None),
     ):
         return
+    if getattr(args, "from_psf", None) or getattr(args, "skip_cluster_build", False):
+        return
     if not args.composition:
         raise ValueError(
             "Packmol placement requires --composition (e.g. ACO:30)."
