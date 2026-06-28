@@ -481,6 +481,7 @@ def _jax_pme_hybrid_mm_pure_callback(
         pi_np: np.ndarray,
         pj_np: np.ndarray,
         mask_np: np.ndarray,
+        **_,
     ) -> tuple[np.ndarray, np.ndarray]:
         pbc = _pbc_from_box_np(box_np)
         pi = None if pi_np.size == 0 else np.asarray(pi_np, dtype=np.int64)
