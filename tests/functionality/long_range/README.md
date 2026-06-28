@@ -23,20 +23,25 @@ JAX_PLATFORMS=cpu pytest tests/functionality/long_range/test_coulomb_backends.py
 
 ## ScaFaCoS
 
-Build and point MMML at `libfcs.so`:
+Build and point MMML at ``libfcs.so``.  Shared builds need plugin libraries on
+``LD_LIBRARY_PATH``; HPC module installs usually handle this.  Run validation
+under MPI when possible:
 
 ```bash
-git clone --recursive https://github.com/scafacos/scafacos.git
-cd scafacos && ./bootstrap && mkdir build && cd build
-../configure --prefix=$HOME/.local/scafacos --enable-shared --disable-fcs-p2nfft
-make -j && make install
-
 export SCAFACOS_LIB=$HOME/.local/scafacos/lib/libfcs.so
 export LD_LIBRARY_PATH=$HOME/.local/scafacos/lib:$LD_LIBRARY_PATH
-export SCAFACOS_METHOD=p3m   # or ewald, p3m, …
+mpiexec -n 1 python tests/functionality/long_range/04_scafacos_methods.py
 ```
 
-Then re-run `04_scafacos_methods.py` and the ScaFaCoS pytest markers.
+Minimal configure (no GSL / pnfft):
+
+```bash
+../configure --prefix=$HOME/.local/scafacos --enable-shared \
+  --disable-fcs-p2nfft --disable-fcs-memd --disable-fcs-wolf
+```
+
+ScaFaCoS tests **skip** when ``have_scafacos()`` is false; jax-pme + MIC tests
+run without ScaFaCoS.
 
 ## Test systems
 

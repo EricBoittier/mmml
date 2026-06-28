@@ -11,7 +11,7 @@ import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Literal, Sequence
+from typing import Literal, Sequence
 
 import jax
 import jax.numpy as jnp
@@ -80,6 +80,12 @@ def have_scafacos_library() -> bool:
     from mmml.interfaces.scafacosInterface import have_scafacos
 
     return have_scafacos()
+
+
+def scafacos_integration_enabled() -> bool:
+    """Opt-in gate for ScaFaCoS integration tests (avoids MPI crashes in CI)."""
+    flag = os.environ.get("MMML_SCAFACOS_TESTS", "").strip().lower()
+    return flag in ("1", "yes", "true") and have_scafacos_library()
 
 
 def ion_dimer_system(

@@ -24,8 +24,8 @@ from mmml.interfaces.scafacosInterface.scafacos_session import SCAFACOS_METHODS
 
 def main() -> int:
     print_header("ScaFaCoS method comparison")
-    if not have_scafacos_library():
-        print("SKIP: ScaFaCoS libfcs not available (set SCAFACOS_LIB)")
+    if not scafacos_integration_enabled():
+        print("SKIP: ScaFaCoS integration (set MMML_SCAFACOS_TESTS=1 and SCAFACOS_LIB)")
         return 0
 
     if not have_jax_pme_package():

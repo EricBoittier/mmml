@@ -23,6 +23,7 @@ from tests.functionality.long_range._common import (
     nacl_cubic,
     random_neutral_cluster,
     scafacos_coulomb_energy_forces,
+    scafacos_integration_enabled,
 )
 from mmml.interfaces.pycharmmInterface.long_range_backend import (
     CHARMM_COULOMB_KCAL,
@@ -110,7 +111,10 @@ def test_mic_vs_jax_pme_large_box_dimer():
     np.testing.assert_allclose(mic.energy_kcalmol, ewald.energy_kcalmol, rtol=0.05)
 
 
-@pytest.mark.skipif(not have_scafacos_library(), reason="ScaFaCoS libfcs not available")
+@pytest.mark.skipif(
+    not scafacos_integration_enabled(),
+    reason="Set MMML_SCAFACOS_TESTS=1 and SCAFACOS_LIB for ScaFaCoS integration",
+)
 @pytest.mark.parametrize("method", ["ewald", "p3m"])
 def test_scafacos_vs_jax_pme_cscl(method: str):
     if not have_jax_pme_package():

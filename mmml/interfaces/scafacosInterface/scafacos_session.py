@@ -82,39 +82,6 @@ def resolve_scafacos_library_path() -> Path | None:
     return None
 
 
-def _preload_scafacos_plugins(library_path: Path | str) -> None:
-    """Load ScaFaCoS plugin shared objects before ``libfcs`` (shared build)."""
-    lib_dir = Path(library_path).resolve().parent
-    if not lib_dir.is_dir():
-        return
-    mode = getattr(ctypes, "RTLD_GLOBAL", 0) | getattr(ctypes, "RTLD_LAZY", 0)
-    # Infrastructure first, then solver plugins (alphabetical within groups).
-    priority = (
-        "libfcs_common.so",
-        "libfcs_mmm.so",
-        "libfcs_resort.so",
-        "libfcs_redist.so",
-        "libfcs_gridsort.so",
-        "libfcs_near.so",
-    )
-    loaded: set[str] = set()
-    for name in priority:
-        path = lib_dir / name
-        if path.is_file():
-            try:
-                ctypes.CDLL(str(path), mode=mode)
-                loaded.add(name)
-            except OSError:
-                continue
-    for path in sorted(lib_dir.glob("libfcs_*.so")):
-        if path.name in loaded or path.name == "libfcs.so":
-            continue
-        try:
-            ctypes.CDLL(str(path), mode=mode)
-        except OSError:
-            continue
-
-
 def load_scafacos_library(path: Path | str | None = None) -> ctypes.CDLL:
     """Load ``libfcs`` with required function signatures bound."""
     if path is None:
@@ -126,11 +93,9 @@ def load_scafacos_library(path: Path | str | None = None) -> ctypes.CDLL:
             )
         path = resolved
 
-    _preload_scafacos_plugins(path)
-
-    # Shared ScaFaCoS builds defer solver symbols to plugin .so files; lazy
-    # binding avoids load-time failures when plugins resolve at first fcs_run.
-    mode = getattr(ctypes, "RTLD_GLOBAL", 0) | getattr(ctypes, "RTLD_LAZY", 0)
+    # Shared ScaFaCoS defers solver symbols to plugin .so files loaded at runtime.
+    # Lazy + global binding lets fcs_init dlopen plugins after libfcs is mapped.
+    mode = getattr(ctypes, "RTLD_GLOBAL", 256) | getattr(ctypes, "RTLD_LAZY", 1)
     lib = ctypes.CDLL(str(path), mode=mode)
 
     lib.fcs_init.argtypes = [
@@ -215,7 +180,7 @@ class ScaFaCoSSession:
         self._handle = ctypes.c_void_p()
         if mpi_comm is None:
             try:
-                from mpi4py import MPI
+                from mpi4py import MPI  # noqa: WPS433 — initializes MPI for ScaFaCoS
 
                 mpi_comm = int(MPI.COMM_WORLD.py2f())
             except Exception:

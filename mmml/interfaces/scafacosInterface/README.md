@@ -35,7 +35,13 @@ uv sync --extra charmm-interface
 
 ### Verify availability
 
+Requires ``mpi4py`` and an MPI library compatible with the ScaFaCoS build.
+Shared-library installs must expose plugin ``.so`` files on ``LD_LIBRARY_PATH``
+(same directory as ``libfcs.so``).  Site module files often set ``LD_PRELOAD`` or
+``RPATH`` automatically.
+
 ```python
+from mpi4py import MPI  # initialize MPI before ScaFaCoS
 from mmml.interfaces.scafacosInterface import have_scafacos
 
 print("ScaFaCoS:", have_scafacos())
