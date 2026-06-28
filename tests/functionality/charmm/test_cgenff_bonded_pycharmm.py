@@ -10,6 +10,7 @@ import pytest
 
 from mmml.interfaces.pycharmmInterface.cgenff_bonded import bonded_energy_and_forces
 from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+    charmm_positions_xyz_array,
     compare_bonded_to_charmm,
     run_charmm_bonded_ener_force,
     set_charmm_positions,
@@ -36,7 +37,6 @@ def _perturb_positions(positions: np.ndarray, seed: int = 7) -> np.ndarray:
 
 
 def _load_psf_and_positions_from_charmm(residue: str) -> tuple[Path, np.ndarray]:
-    import pycharmm.coor as coor
     import pycharmm.write as write
 
     from mmml.interfaces.pycharmmInterface import setupRes
@@ -53,7 +53,7 @@ def _load_psf_and_positions_from_charmm(residue: str) -> tuple[Path, np.ndarray]
 
     psf_path = Path(f"psf/{residue.lower()}-1.psf")
     write.psf_card(str(psf_path))
-    positions = coor.get_positions().to_numpy(dtype=float)
+    positions = charmm_positions_xyz_array()
     return psf_path, positions
 
 
@@ -87,7 +87,6 @@ def test_aco_bonded_energy_forces_match_pycharmm(pycharmm_workdir) -> None:
 
 def test_committed_aco_psf_matches_pycharmm_after_charmm_load(pycharmm_workdir) -> None:
     """Regression: committed ACO PSF/PDB vs CHARMM after ``read psf`` + ``read coor pdb``."""
-    import pycharmm.coor as coor
     import pycharmm.read as read
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
     from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM, CGENFF_RTF
@@ -98,6 +97,6 @@ def test_committed_aco_psf_matches_pycharmm_after_charmm_load(pycharmm_workdir) 
     read.psf_card(str(ACO_PSF.resolve()))
     read.pdb(str(ACO_PDB.resolve()), resid=True)
 
-    positions = coor.get_positions().to_numpy(dtype=float)
+    positions = charmm_positions_xyz_array()
     positions = _perturb_positions(positions, seed=23)
     _compare_psf_bonded_to_charmm(ACO_PSF.resolve(), positions)

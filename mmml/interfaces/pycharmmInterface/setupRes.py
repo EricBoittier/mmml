@@ -111,45 +111,34 @@ def _show_energy(skip_energy_show: bool) -> None:
     safe_energy_show()
 
 
-def _has_resolved_geometry(atoms: Atoms) -> bool:
+def _has_resolved_geometry(atoms: Atoms, *, min_axis_span_A: float = 0.2) -> bool:
+    """True when coordinates span all three Cartesian axes (not a collapsed line/plane)."""
     positions = np.asarray(atoms.get_positions(), dtype=float)
     if positions.size == 0 or not np.all(np.isfinite(positions)):
         return False
     if len(positions) <= 1:
         return True
-    return float(np.max(np.ptp(positions, axis=0))) > 1e-3
+    spans = np.ptp(positions, axis=0)
+    if not np.all(spans >= float(min_axis_span_A)):
+        return False
+    # Reject accidental y/z duplication (bad PDB parsing or coor mix-ups).
+    if np.allclose(positions[:, 1], positions[:, 2], rtol=0.0, atol=1e-6):
+        return False
+    return True
 
 
 def generate_coordinates(skip_energy_show: bool = False, validate: bool = True) -> Atoms:
     print("*" * 5, "Generating coordinates", "*" * 5)
 
     set_up_directories()
-    
-    ic.build()
-    coor.show()
 
-    xyz = coor.get_positions()
-    coor.set_positions(xyz)
-    coor.show()
-    xyz *= 0
-    xyz += 2 * np.random.random(xyz.to_numpy().shape)
-    coor.set_positions(xyz)
-    _ = coor.get_positions()
-    coor.show()
+    ic.build()
     pycharmm_quiet()
 
-    # from mmml.interfaces.pycharmmInterface.pycharmmCommands import nbonds_script
-    # pycharmm.lingo.charmm_script(nbonds_script)
-    # start_energy = pycharmm.lingo.get_energy_value("ENER")
+    # Build from IC, then minimize — do not overwrite with random coords (collapses
+    # methyl groups and can leave y≈z artifacts in written PDBs).
     mini(nbxmod=1, skip_energy_show=skip_energy_show)
-    xyz = coor.get_positions()
-    xyz *= 1 * np.random.random(xyz.to_numpy().shape)
-    coor.set_positions(xyz)
-    coor.show()
     mini(nbxmod=5, skip_energy_show=skip_energy_show)
-
-    xyz = coor.get_positions()
-    coor.show()
     # end_energy = pycharmm.lingo.get_energy_value("ENER")
     # energy_diff = end_energy - start_energy
     # if energy_diff > 0:

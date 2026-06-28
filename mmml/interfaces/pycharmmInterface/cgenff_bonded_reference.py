@@ -10,11 +10,20 @@ import pandas as pd
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics import charmm_bonded_term_kcalmol
 
 
+def charmm_positions_xyz_array() -> np.ndarray:
+    """Read active PyCHARMM coordinates as ``(N, 3)`` with explicit ``x,y,z`` columns."""
+    import pycharmm.coor as coor
+
+    return coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=np.float64)
+
+
 def set_charmm_positions(positions: np.ndarray) -> None:
     """Load ``(N, 3)`` coordinates into the active PyCHARMM session."""
     import pycharmm.coor as coor
 
     arr = np.asarray(positions, dtype=np.float64)
+    if arr.ndim != 2 or arr.shape[1] != 3:
+        raise ValueError(f"positions must be (N, 3), got {arr.shape}")
     coor.set_positions(pd.DataFrame(arr, columns=["x", "y", "z"]))
 
 

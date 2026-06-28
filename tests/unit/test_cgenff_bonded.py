@@ -215,6 +215,9 @@ def test_improper_energy_matches_charmm_n0_formula_aco() -> None:
     from jax_md.mm_forcefields.io.charmm import parse_pdb_simple
 
     _, positions = parse_pdb_simple(str(ACO_PDB))
+    positions = np.asarray(positions, dtype=float)
+    assert not np.allclose(positions[:, 1], positions[:, 2]), "ACO fixture y/z columns duplicated"
+    assert np.all(np.ptp(positions, axis=0) > 0.2), "ACO fixture must span x,y,z"
     system = load_cgenff_bonded_from_psf(ACO_PSF, positions)
     components = bonded_energy_components(
         jnp.asarray(positions),
