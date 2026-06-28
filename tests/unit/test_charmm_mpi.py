@@ -433,6 +433,8 @@ def test_mpi_mpirun_extra_args_abort_stack_by_default(monkeypatch):
     monkeypatch.delenv("MMML_NO_MPI_ABORT_STACK", raising=False)
     monkeypatch.delenv("MMML_MPI_VERBOSE", raising=False)
     monkeypatch.delenv("MMML_NO_MPI_MCA_PREFIX", raising=False)
+    for var in ("LD_LIBRARY_PATH", "OPENMPI_ROOT", "EBROOTOPENMPI", "CHARMM_LIB_DIR"):
+        monkeypatch.delenv(var, raising=False)
     assert charmm_mpi.mpi_mpirun_extra_args() == [
         "--mca",
         "pmix",
@@ -441,6 +443,31 @@ def test_mpi_mpirun_extra_args_abort_stack_by_default(monkeypatch):
         "orte_abort_print_stack",
         "1",
     ]
+
+
+def test_mpi_mpirun_extra_args_forwards_ld_library_path(monkeypatch):
+    monkeypatch.delenv("MMML_NO_MPI_LD_PATH", raising=False)
+    monkeypatch.setenv("LD_LIBRARY_PATH", "/opt/openmpi/lib")
+    args = charmm_mpi.mpi_mpirun_extra_args()
+    assert "-x" in args
+    assert args[args.index("-x") + 1] == "LD_LIBRARY_PATH"
+
+
+def test_preload_openmpi_mpi_libraries_global(tmp_path, monkeypatch):
+    charmm_mpi._mpi_libs_preloaded = False
+    lib_dir = tmp_path / "lib"
+    lib_dir.mkdir()
+    (lib_dir / "libmpi.so.40").write_bytes(b"x")
+    (lib_dir / "libmpi_usempif08.so.40").write_bytes(b"x")
+    monkeypatch.delenv("MMML_NO_MPI_LD_PATH", raising=False)
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._openmpi_mpi_library_candidates",
+        return_value=(lib_dir / "libmpi.so.40", lib_dir / "libmpi_usempif08.so.40"),
+    ), mock.patch("mmml.interfaces.pycharmmInterface.charmm_mpi.ctypes.CDLL") as cdll:
+        charmm_mpi._preload_openmpi_mpi_libraries_global()
+    assert cdll.call_count == 2
+    assert charmm_mpi._mpi_libs_preloaded is True
+    charmm_mpi._mpi_libs_preloaded = False
 
 
 def test_mpi_mpirun_extra_args_verbose(monkeypatch):
