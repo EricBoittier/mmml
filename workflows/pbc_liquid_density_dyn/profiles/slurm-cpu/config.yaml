@@ -9,10 +9,13 @@ envvars:
   - MMML_CKPT
   - MMML_MLPOT_DEVICE
   - JAX_PLATFORMS
+  - JAX_ENABLE_X64
   - MMML_WORKFLOW_CONFIG
   - MMML_CLUSTER
   - OPENMPI_ROOT
   - CHARMM_LIB_DIR
+  - LD_LIBRARY_PATH
+  - PATH
 default-resources:
   - charmm_slot=1
   - runtime=4320

@@ -7,6 +7,10 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [[ "${MMML_CLUSTER:-}" == "pc-bach" && -f "$ROOT/scripts/pc_bach_env.sh" ]]; then
+  # shellcheck source=scripts/pc_bach_env.sh
+  source "$ROOT/scripts/pc_bach_env.sh"
+fi
 CHARMM_HOME="${CHARMM_HOME:-$ROOT/setup/charmm}"
 CHARMM_TAR="${CHARMM_TAR:-$ROOT/setup/charmm.tar.xz}"
 NFS_BUILD="$CHARMM_HOME/build/cmake"

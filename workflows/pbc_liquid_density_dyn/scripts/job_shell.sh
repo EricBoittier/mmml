@@ -103,6 +103,10 @@ if [[ "$WARMUP_ENABLED" == "1" ]]; then
   while IFS= read -r _var; do
     [[ -n "$_var" ]] && unset "$_var" 2>/dev/null || true
   done < <(env | cut -d= -f1 | grep -E '^(OMPI_|PMI_|PMIX_|MPI_LOCALRANKID$|SLURM_MPI_TYPE$)' || true)
+  if [[ -n "${SLURM_JOB_ID:-}" ]]; then
+    export OMPI_MCA_ess=singleton
+    export OMPI_MCA_mpi_init_support=0
+  fi
   WARMUP_ARGS="$("$PY" -c "
 import sys
 from pathlib import Path
