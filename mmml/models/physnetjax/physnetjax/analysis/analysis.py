@@ -223,11 +223,6 @@ def plot_stats(
     return output
 
 
-from sklearn.decomposition import PCA
-from sklearn.manifold import TSNE
-from sklearn.preprocessing import StandardScaler
-
-
 # Function to compute SOAP descriptors
 def compute_soap_descriptors(
     positions, atomic_numbers, species, r_cut=5.0, n_max=8, l_max=6, sigma=0.5
@@ -270,6 +265,8 @@ def flatten_descriptors(descriptors):
 # Function to apply PCA
 def apply_pca(data, n_components=2):
     """Apply PCA to the data."""
+    from sklearn.decomposition import PCA
+
     pca = PCA(n_components=n_components)
     reduced_data = pca.fit_transform(data)
     return reduced_data, pca
@@ -278,6 +275,8 @@ def apply_pca(data, n_components=2):
 # Function to apply t-SNE
 def apply_tsne(data, n_components=2, perplexity=30, random_state=42):
     """Apply t-SNE to the data."""
+    from sklearn.manifold import TSNE
+
     tsne = TSNE(
         n_components=n_components, perplexity=perplexity, random_state=random_state
     )
@@ -318,6 +317,8 @@ def process_data(descriptors, method, **kwargs):
     print("Flattening descriptors...")
     flattened_descriptors = flatten_descriptors(descriptors)
     print("Scaling data...")
+    from sklearn.preprocessing import StandardScaler
+
     scaler = StandardScaler()
     scaled_data = scaler.fit_transform(flattened_descriptors)
     print(f"Applying {method.__name__}...")

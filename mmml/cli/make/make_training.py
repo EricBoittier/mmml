@@ -941,12 +941,12 @@ def main_loop(args):
     if args.model is not None:
         model = load_model(args.model)
     else:
-        model = EF(
+        model_kwargs = dict(
             features=args.features,
             max_degree=args.max_degree,
             num_basis_functions=args.num_basis_functions,
             num_iterations=args.num_iterations,
-            n_res=args.n_res,
+            n_refinement_blocks=args.n_res,
             cutoff=args.cutoff,
             max_atomic_number=args.max_atomic_number,
             zbl=args.zbl,
@@ -956,9 +956,12 @@ def main_loop(args):
             charges=args.charges,
             total_charge=args.total_charge,
             include_electrostatics=args.include_electrostatics,
-            natoms=natoms,
+            max_padded_atoms=natoms,
             debug=args.debug,
         )
+        from mmml.utils.model_checkpoint import physnet_constructor_kwargs
+
+        model = EF(**physnet_constructor_kwargs(model_kwargs, EF))
         try:
             with open("args.model.json", 'w') as f:
                 print("Saving model to args.model.json")

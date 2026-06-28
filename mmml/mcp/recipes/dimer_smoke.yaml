@@ -12,6 +12,19 @@ modes:
     dt_fs: 0.1
     steps_per_recording: 1
     composition: "DCM:2"
+    ir_methods: [classical_cgenff, harmonic_pointcharge]
+    dipole_training_npz: dcm_mp2_psf_order.npz
+  dipole_smoke:
+    skip_stages: [structures, qm, train]
+    checkpoint: examples/ckpts_json/DESdimers_params.json
+    md_ps: 2.0
+    dt_fs: 0.5
+    steps_per_recording: 50
+    composition: "DCM:2"
+    ir_methods: [classical_cgenff, harmonic_pointcharge, ml_dipole]
+    dipole_training_npz: dcm_mp2_psf_order.npz
+    dipole_training_subset: 800
+    dipole_checkpoint: ckpts/dcm_dipole_smoke
   full:
     skip_stages: []
     preset: qm-physnet-pipeline
@@ -56,7 +69,23 @@ stages:
       - md/campaign.yaml
 
   ir:
-    description: Classical CGENFF dipole autocorrelation IR (PhysNet ckpt has charges=False; not EField)
-    method: classical_cgenff
+    description: >
+      Classical CGENFF autocorrelation IR, harmonic point-charge sticks (NIST overlay),
+      and optional ML-dipole IR when a charges=True PhysNet checkpoint is available.
+    methods: [classical_cgenff, harmonic_pointcharge, ml_dipole]
     outputs:
       - spectra/ir.png
+      - spectra/harmonic_ir.png
+      - spectra/ir_ml_dipole.png
+
+  train_dipole:
+    description: >
+      Mini fix-and-split + physnet-train --charges on dcm_mp2_psf_order.npz, then physnet-evaluate.
+    commands:
+      - fix-and-split
+      - physnet-train
+      - physnet-evaluate
+    outputs:
+      - splits/
+      - ckpts/dcm_dipole_smoke/
+      - eval/dipole_smoke/

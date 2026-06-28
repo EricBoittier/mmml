@@ -18,6 +18,7 @@ ALLOWED_COMMANDS: frozenset[str] = frozenset(
         "pyscf-evaluate",
         "fix-and-split",
         "physnet-train",
+        "physnet-evaluate",
         "train-joint",
         "efield-train",
         "md-system",

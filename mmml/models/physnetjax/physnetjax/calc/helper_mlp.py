@@ -107,8 +107,12 @@ def get_ase_calc(
                 dst_idx=dst_idx,
                 src_idx=src_idx,
             )
-            if model.charges and "dipoles" in properties:
-                self.results["dipole"] = output["dipoles"] * conversion["dipole"]
+            if model.charges and (
+                "dipole" in properties or "dipoles" in properties
+            ):
+                self.results["dipole"] = np.asarray(
+                    output["dipoles"], dtype=float
+                ).reshape(-1)[:3] * conversion["dipole"]
             self.results["energy"] = output["energy"].squeeze() * conversion["energy"]
             self.results["forces"] = np.array(output["forces"] * conversion["forces"])
             atoms.info["output"] = output
