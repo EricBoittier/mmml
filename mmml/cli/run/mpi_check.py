@@ -45,9 +45,12 @@ def run_mpi_check(*, strict: bool = False, prelaunch: bool = False) -> MpiCheckR
         mpirun_launch_hint,
         mpi4py_libmpi_path,
         mpi4py_openmpi_mismatch,
+        prepare_charmm_mpi_runtime,
         _charmm_lib_path,
         _mpi4py_available,
     )
+
+    prepare_charmm_mpi_runtime()
     from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
     from mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
         spatial_mpi_enabled,

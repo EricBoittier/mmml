@@ -45,11 +45,8 @@ def _under_mpirun() -> bool:
 
 
 def _mpi4py_available() -> bool:
-    try:
-        import mpi4py  # noqa: F401
-    except ImportError:
-        return False
-    return True
+    """True when ``mpi4py.MPI`` can load (requires ``libmpi`` on ``LD_LIBRARY_PATH``)."""
+    return mpi4py_mpi_extension_path() is not None
 
 
 def _openmpi_env_without_launch() -> bool:
@@ -493,7 +490,7 @@ def mpi4py_mpi_extension_path() -> Path | None:
 
     try:
         spec = importlib.util.find_spec("mpi4py.MPI")
-    except (ImportError, AttributeError, ModuleNotFoundError, ValueError):
+    except (ImportError, AttributeError, ModuleNotFoundError, ValueError, RuntimeError):
         return None
     if spec is None or not spec.origin:
         return None
