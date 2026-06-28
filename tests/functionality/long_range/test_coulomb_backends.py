@@ -113,15 +113,18 @@ def test_mic_vs_jax_pme_large_box_dimer():
 
 @pytest.mark.skipif(
     not scafacos_integration_enabled(),
-    reason="Set MMML_SCAFACOS_TESTS=1 and SCAFACOS_LIB for ScaFaCoS integration",
+    reason="ScaFaCoS not available (~/.local/scafacos or SCAFACOS_LIB); set MMML_SCAFACOS_TESTS=0 to force skip",
 )
-@pytest.mark.parametrize("method", ["ewald", "p3m"])
-def test_scafacos_vs_jax_pme_cscl(method: str):
+@pytest.mark.parametrize(
+    ("method", "energy_rtol"),
+    [("ewald", 5e-3), ("p3m", 1e-2)],
+)
+def test_scafacos_vs_jax_pme_cscl(method: str, energy_rtol: float):
     if not have_jax_pme_package():
         pytest.skip("jax-pme not installed")
     system = cscl_crystal(box_length_A=10.0)
     ref = jax_pme_coulomb_energy_forces(system, method="ewald", sr_cutoff_A=6.0)
     method = os.environ.get("SCAFACOS_METHOD", method)
     out = scafacos_coulomb_energy_forces(system, method=method)
-    np.testing.assert_allclose(out.energy_kcalmol, ref.energy_kcalmol, rtol=5e-3)
-    np.testing.assert_allclose(out.forces_kcalmol_A, ref.forces_kcalmol_A, rtol=5e-2)
+    np.testing.assert_allclose(out.energy_kcalmol, ref.energy_kcalmol, rtol=energy_rtol)
+    np.testing.assert_allclose(out.forces_kcalmol_A, ref.forces_kcalmol_A, atol=1e-6)

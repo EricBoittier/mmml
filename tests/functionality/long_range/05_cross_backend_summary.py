@@ -9,7 +9,7 @@ from _common import (
     cscl_crystal,
     evaluate_backend,
     have_jax_pme_package,
-    have_scafacos_library,
+    scafacos_integration_enabled,
     ion_dimer_system,
     print_header,
     random_neutral_cluster,
@@ -25,7 +25,7 @@ def main() -> int:
     ]
 
     backends = ["mic", "mic_trunc", "jax_ewald", "jax_pme", "jax_p3m"]
-    if have_scafacos_library():
+    if scafacos_integration_enabled():
         backends.append("scafacos")
 
     header = f"{'system':<22}" + "".join(f"{b:>14}" for b in backends)
@@ -39,7 +39,7 @@ def main() -> int:
                 if backend.startswith("jax_") and not have_jax_pme_package():
                     row += f"{'n/a':>14}"
                     continue
-                if backend == "scafacos" and not have_scafacos_library():
+                if backend == "scafacos" and not scafacos_integration_enabled():
                     row += f"{'n/a':>14}"
                     continue
                 e = evaluate_backend(system, backend).energy_kcalmol  # type: ignore[arg-type]

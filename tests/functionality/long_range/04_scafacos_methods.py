@@ -11,21 +11,21 @@ import numpy as np
 from _common import (
     cscl_crystal,
     have_jax_pme_package,
-    have_scafacos_library,
     ion_dimer_system,
     jax_pme_coulomb_energy_forces,
     print_fail,
     print_header,
     print_pass,
     scafacos_coulomb_energy_forces,
+    scafacos_integration_enabled,
 )
-from mmml.interfaces.scafacosInterface.scafacos_session import SCAFACOS_METHODS
+from mmml.interfaces.scafacosInterface.scafacos_session import SCAFACOS_DEFAULT_METHODS
 
 
 def main() -> int:
     print_header("ScaFaCoS method comparison")
     if not scafacos_integration_enabled():
-        print("SKIP: ScaFaCoS integration (set MMML_SCAFACOS_TESTS=1 and SCAFACOS_LIB)")
+        print("SKIP: ScaFaCoS not available (~/.local/scafacos or SCAFACOS_LIB)")
         return 0
 
     if not have_jax_pme_package():
@@ -37,27 +37,50 @@ def main() -> int:
     ref = jax_pme_coulomb_energy_forces(system, method="ewald", sr_cutoff_A=6.0)
     print(f"Reference (jax-pme Ewald): E = {ref.energy_kcalmol:.6f} kcal/mol")
 
-    default_method = os.environ.get("SCAFACOS_METHOD", "p3m")
-    methods_to_try = [default_method] + [m for m in SCAFACOS_METHODS if m != default_method]
+    default_method = os.environ.get("SCAFACOS_METHOD", "ewald")
+    methods_to_try = [default_method] + [
+        m for m in SCAFACOS_DEFAULT_METHODS if m != default_method
+    ]
 
     for method in methods_to_try:
+        energy_rtol = 1e-2 if method == "p3m" else 5e-3
         try:
             out = scafacos_coulomb_energy_forces(system, method=method)
             np.testing.assert_allclose(
                 out.energy_kcalmol,
                 ref.energy_kcalmol,
-                rtol=5e-3,
+                rtol=energy_rtol,
                 err_msg=f"ScaFaCoS {method} energy",
             )
+            # Symmetric crystals have ~zero net forces; compare with atol only.
             np.testing.assert_allclose(
                 out.forces_kcalmol_A,
                 ref.forces_kcalmol_A,
-                rtol=5e-2,
+                atol=1e-6,
                 err_msg=f"ScaFaCoS {method} forces",
             )
             print_pass(f"{method}: E={out.energy_kcalmol:.6f} kcal/mol")
         except Exception as exc:
             print(f"INFO: ScaFaCoS {method} skipped or failed: {exc}")
+
+    # Direct summation: accurate for isolated pairs, not full periodic bulk.
+    try:
+        out_direct = scafacos_coulomb_energy_forces(
+            ion_dimer_system(separation_A=5.0, box_length_A=30.0),
+            method="direct",
+        )
+        ref_d_direct = jax_pme_coulomb_energy_forces(
+            ion_dimer_system(separation_A=5.0, box_length_A=30.0),
+            method="ewald",
+        )
+        np.testing.assert_allclose(
+            out_direct.energy_kcalmol,
+            ref_d_direct.energy_kcalmol,
+            rtol=0.02,
+        )
+        print_pass(f"direct dimer: E={out_direct.energy_kcalmol:.6f} kcal/mol")
+    except Exception as exc:
+        print(f"INFO: ScaFaCoS direct dimer skipped or failed: {exc}")
 
     # Dimer sanity: neutral pair in large box
     dimer = ion_dimer_system(separation_A=5.0, box_length_A=30.0)

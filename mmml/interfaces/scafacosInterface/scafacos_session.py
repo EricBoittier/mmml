@@ -22,7 +22,9 @@ from typing import Sequence
 
 import numpy as np
 
-# Common ScaFaCoS method strings (configure-time availability may vary).
+# Methods known to work with the default ~/.local/scafacos build (no pnfft/GSL).
+SCAFACOS_DEFAULT_METHODS = ("ewald", "p3m")
+
 SCAFACOS_METHODS = (
     "p2nfft",
     "p3m",
@@ -42,6 +44,58 @@ _DEFAULT_LIB_NAMES = (
     "libfcs.dll",
     "libscafacos.so",
 )
+
+_FCS_RESULT = ctypes.c_void_p  # FCSResult; NULL means success
+_MPI_INITIALIZED = False
+
+
+def _ensure_mpi_initialized() -> None:
+    """ScaFaCoS requires MPI_Init before fcs_init (see upstream test/c/test_direct.c)."""
+    global _MPI_INITIALIZED
+    if _MPI_INITIALIZED:
+        return
+    try:
+        from mpi4py import MPI  # noqa: WPS433
+
+        if not MPI.Is_initialized():
+            MPI.Init()
+        _MPI_INITIALIZED = True
+    except ImportError:
+        pass
+
+
+def _default_scafacos_lib_dir(library_path: Path | str) -> Path:
+    return Path(library_path).resolve().parent
+
+
+def _mpi_comm_for_fcs(mpi_comm: int | None = None) -> ctypes.c_void_p:
+    """Return MPI_Comm for ``fcs_init`` (OpenMPI uses opaque pointer, not py2f())."""
+    _ensure_mpi_initialized()
+    if mpi_comm is not None:
+        return ctypes.c_void_p(int(mpi_comm))
+    try:
+        from mpi4py import MPI  # noqa: WPS433
+
+        return ctypes.c_void_p(int(MPI.COMM_WORLD.handle))
+    except Exception:
+        return ctypes.c_void_p(0)
+
+
+def _configure_scafacos_runtime_env(library_path: Path | str) -> None:
+    """Ensure plugin .so files, FFTW, and MPI are visible to libfcs."""
+    lib_dir = _default_scafacos_lib_dir(library_path)
+    extra_paths = [str(lib_dir)]
+    for fftw_dir in ("/usr/lib/x86_64-linux-gnu", "/usr/lib64", "/usr/lib"):
+        if Path(fftw_dir, "libfftw3.so").is_file() or Path(fftw_dir, "libfftw3.so.3").is_file():
+            extra_paths.append(fftw_dir)
+            break
+    ld = os.environ.get("LD_LIBRARY_PATH", "")
+    parts = [p for p in ld.split(":") if p]
+    for path in extra_paths:
+        if path not in parts:
+            parts.insert(0, path)
+    os.environ["LD_LIBRARY_PATH"] = ":".join(parts)
+    _ensure_mpi_initialized()
 
 
 class ScaFaCoSUnavailable(RuntimeError):
@@ -65,6 +119,7 @@ def resolve_scafacos_library_path() -> Path | None:
             return p.resolve()
     for directory in (
         os.environ.get("SCAFACOS_ROOT", ""),
+        str(Path.home() / ".local" / "scafacos" / "lib"),
         "/usr/local/lib",
         "/usr/lib",
     ):
@@ -93,20 +148,36 @@ def load_scafacos_library(path: Path | str | None = None) -> ctypes.CDLL:
             )
         path = resolved
 
-    # Shared ScaFaCoS defers solver symbols to plugin .so files loaded at runtime.
-    # Lazy + global binding lets fcs_init dlopen plugins after libfcs is mapped.
+    _configure_scafacos_runtime_env(path)
+
     mode = getattr(ctypes, "RTLD_GLOBAL", 256) | getattr(ctypes, "RTLD_LAZY", 1)
+    for fftw_dir in ("/usr/lib/x86_64-linux-gnu", "/usr/lib64", "/usr/lib"):
+        for name in ("libfftw3.so.3", "libfftw3.so"):
+            fftw = Path(fftw_dir) / name
+            if fftw.is_file():
+                try:
+                    ctypes.CDLL(str(fftw), mode=mode)
+                except OSError:
+                    pass
+                break
+        else:
+            continue
+        break
+
+    # Shared ScaFaCoS defers solver symbols to plugin .so files loaded at runtime.
     lib = ctypes.CDLL(str(path), mode=mode)
+
+    _FCS = _FCS_RESULT
 
     lib.fcs_init.argtypes = [
         ctypes.POINTER(ctypes.c_void_p),
         ctypes.c_char_p,
-        ctypes.c_int,
+        ctypes.c_void_p,  # MPI_Comm (opaque pointer on OpenMPI)
     ]
-    lib.fcs_init.restype = ctypes.c_char_p
+    lib.fcs_init.restype = _FCS
 
     lib.fcs_destroy.argtypes = [ctypes.c_void_p]
-    lib.fcs_destroy.restype = ctypes.c_char_p
+    lib.fcs_destroy.restype = _FCS
 
     lib.fcs_set_common.argtypes = [
         ctypes.c_void_p,
@@ -118,14 +189,25 @@ def load_scafacos_library(path: Path | str | None = None) -> ctypes.CDLL:
         ctypes.POINTER(ctypes.c_int),
         ctypes.c_int,
     ]
-    lib.fcs_set_common.restype = ctypes.c_char_p
+    lib.fcs_set_common.restype = _FCS
+
+    lib.fcs_set_max_local_particles.argtypes = [ctypes.c_void_p, ctypes.c_int]
+    lib.fcs_set_max_local_particles.restype = _FCS
+
+    lib.fcs_tune.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.c_double),
+        ctypes.POINTER(ctypes.c_double),
+    ]
+    lib.fcs_tune.restype = _FCS
 
     lib.fcs_set_parameters.argtypes = [
         ctypes.c_void_p,
         ctypes.c_char_p,
         ctypes.c_int,
     ]
-    lib.fcs_set_parameters.restype = ctypes.c_char_p
+    lib.fcs_set_parameters.restype = _FCS
 
     lib.fcs_run.argtypes = [
         ctypes.c_void_p,
@@ -135,7 +217,7 @@ def load_scafacos_library(path: Path | str | None = None) -> ctypes.CDLL:
         ctypes.POINTER(ctypes.c_double),
         ctypes.POINTER(ctypes.c_double),
     ]
-    lib.fcs_run.restype = ctypes.c_char_p
+    lib.fcs_run.restype = _FCS
 
     return lib
 
@@ -143,19 +225,39 @@ def load_scafacos_library(path: Path | str | None = None) -> ctypes.CDLL:
 def have_scafacos() -> bool:
     """True when ``libfcs`` is discoverable and loads without error."""
     try:
+        _ensure_mpi_initialized()
         load_scafacos_library()
         return True
     except (ScaFaCoSUnavailable, OSError):
         return False
 
 
-def _check_fcs_result(err: bytes | None, *, where: str) -> None:
-    if err is None:
+def scafacos_runtime_ok(
+    *,
+    method: str = "ewald",
+    library_path: Path | str | None = None,
+) -> bool:
+    """True when a minimal ScaFaCoS Coulomb run completes (MPI + tune + run)."""
+    try:
+        _ensure_mpi_initialized()
+        pos = np.array([[0.0, 0.0, 0.0], [5.0, 0.0, 0.0]], dtype=np.float64)
+        chg = np.array([1.0, -1.0], dtype=np.float64)
+        compute_scafacos_coulomb(
+            pos,
+            chg,
+            box_length_A=30.0,
+            method=method,
+            library_path=library_path,
+        )
+        return True
+    except Exception:
+        return False
+
+
+def _check_fcs_result(err: int | None, *, where: str) -> None:
+    if err is None or err == 0:
         return
-    text = err.decode("utf-8", errors="replace").strip()
-    if not text or text.upper() in ("NULL", "FCS_SUCCESS", "SUCCESS"):
-        return
-    raise ScaFaCoSUnavailable(f"ScaFaCoS {where} failed: {text}")
+    raise ScaFaCoSUnavailable(f"ScaFaCoS {where} failed (FCSResult={err!r})")
 
 
 def _orthorhombic_box_vectors(box_length_A: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -172,23 +274,17 @@ class ScaFaCoSSession:
     def __init__(
         self,
         *,
-        method: str = "p2nfft",
+        method: str = "ewald",
         mpi_comm: int | None = None,
         library_path: Path | str | None = None,
     ) -> None:
         self._lib = load_scafacos_library(library_path)
         self._handle = ctypes.c_void_p()
-        if mpi_comm is None:
-            try:
-                from mpi4py import MPI  # noqa: WPS433 — initializes MPI for ScaFaCoS
-
-                mpi_comm = int(MPI.COMM_WORLD.py2f())
-            except Exception:
-                mpi_comm = 0
+        comm = _mpi_comm_for_fcs(mpi_comm)
         err = self._lib.fcs_init(
             ctypes.byref(self._handle),
             method.encode("ascii"),
-            int(mpi_comm),
+            comm,
         )
         _check_fcs_result(err, where="fcs_init")
         self._destroyed = False
@@ -223,9 +319,12 @@ class ScaFaCoSSession:
         n_atoms: int,
         periodicity: Sequence[int] = (1, 1, 1),
         offset: Sequence[float] = (0.0, 0.0, 0.0),
-        short_range_flag: int = 0,
+        short_range_flag: int = 1,
     ) -> None:
-        """Call ``fcs_set_common`` for a cubic orthorhombic cell (Å)."""
+        """Call ``fcs_set_common`` for a cubic orthorhombic cell (Å).
+
+        ``near_field_flag=1`` matches upstream ScaFaCoS tests (``test_direct.c``).
+        """
         a, b, c = _orthorhombic_box_vectors(box_length_A)
         offset_arr = np.asarray(offset, dtype=np.float64)
         periodicity_arr = np.asarray(periodicity, dtype=np.int32)
@@ -240,6 +339,27 @@ class ScaFaCoSSession:
             int(n_atoms),
         )
         _check_fcs_result(err, where="fcs_set_common")
+
+    def _prepare_particle_run(
+        self,
+        positions_A: np.ndarray,
+        charges_e: np.ndarray,
+    ) -> tuple[int, np.ndarray, np.ndarray]:
+        """Allocate internal buffers via ``fcs_set_max_local_particles`` + ``fcs_tune``."""
+        pos = np.ascontiguousarray(positions_A, dtype=np.float64)
+        chg = np.ascontiguousarray(charges_e, dtype=np.float64).reshape(-1)
+        n_loc = int(pos.shape[0])
+        err = self._lib.fcs_set_max_local_particles(self._handle, n_loc)
+        _check_fcs_result(err, where="fcs_set_max_local_particles")
+        flat_pos = np.ascontiguousarray(pos.reshape(-1))
+        err = self._lib.fcs_tune(
+            self._handle,
+            n_loc,
+            flat_pos.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
+            chg.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
+        )
+        _check_fcs_result(err, where="fcs_tune")
+        return n_loc, flat_pos, chg
 
     def run_coulomb(
         self,
@@ -260,9 +380,7 @@ class ScaFaCoSSession:
             raise ValueError(
                 f"charges length {chg.shape[0]} != n_atoms {pos.shape[0]}"
             )
-        n_loc = int(pos.shape[0])
-        flat_pos = np.ascontiguousarray(pos.reshape(-1))
-        flat_chg = np.ascontiguousarray(chg)
+        n_loc, flat_pos, flat_chg = self._prepare_particle_run(pos, chg)
         field = np.zeros(3 * n_loc, dtype=np.float64)
         potential = np.zeros(n_loc, dtype=np.float64)
         err = self._lib.fcs_run(
@@ -275,7 +393,8 @@ class ScaFaCoSSession:
         )
         _check_fcs_result(err, where="fcs_run")
         forces = field.reshape(n_loc, 3) * 332.063711
-        energy = -0.5 * float(np.dot(chg, potential)) * 332.063711
+        # ScaFaCoS upstream tests use sum(p[i]*q[i]); CHARMM/jax-pme use +½Σqφ.
+        energy = 0.5 * float(np.dot(chg, potential)) * 332.063711
         return CoulombFieldResult(energy_kcalmol=energy, forces_kcalmol_A=forces)
 
 
@@ -284,12 +403,17 @@ def compute_scafacos_coulomb(
     charges_e: np.ndarray,
     *,
     box_length_A: float,
-    method: str = "p2nfft",
+    method: str = "ewald",
     parameters: dict[str, str | float | int] | None = None,
     mpi_comm: int | None = None,
+    library_path: Path | str | None = None,
 ) -> CoulombFieldResult:
     """Convenience one-shot Coulomb evaluation (init → run → destroy)."""
-    with ScaFaCoSSession(method=method, mpi_comm=mpi_comm) as session:
+    with ScaFaCoSSession(
+        method=method,
+        mpi_comm=mpi_comm,
+        library_path=library_path,
+    ) as session:
         session.configure_cubic_box(
             box_length_A=box_length_A,
             n_atoms=int(positions_A.shape[0]),
