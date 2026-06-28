@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
+import shutil
+from dataclasses import dataclass, field
 from pathlib import Path
 
 _CHARMM_LIB_NAMES = ("libcharmm.so", "libcharmm.dylib", "charmm.so", "charmm.dylib")
@@ -148,3 +151,97 @@ def bootstrap_charmm_env(
     if lib:
         environ.setdefault("CHARMM_LIB_DIR", lib)
     return home, lib
+
+
+def _charmm_io_aliases_disabled() -> bool:
+    raw = (os.environ.get("MMML_CHARMM_IO_ALIASES") or "1").strip().lower()
+    return raw in ("0", "false", "no", "off")
+
+
+def fortran_path_needs_alias(path: str | Path) -> bool:
+    """True when CHARMM Fortran I/O may fail on *path* (uppercase in absolute path)."""
+    if _charmm_io_aliases_disabled():
+        return False
+    resolved = str(Path(path).expanduser().resolve())
+    return any(ch.isupper() for ch in resolved)
+
+
+def charmm_io_staging_root() -> Path:
+    raw = (os.environ.get("MMML_CHARMM_IO_STAGING") or "").strip()
+    if raw:
+        return Path(os.path.expandvars(raw)).expanduser()
+    return Path(os.environ.get("TMPDIR", "/tmp")) / "mmml-charmm-io"
+
+
+@dataclass
+class CharmmIoAlias:
+    """Lowercase staging path for CHARMM ``OPEN`` when the real path has capitals."""
+
+    original: Path
+    alias: Path
+    for_write: bool
+    _finalized: bool = field(default=False, repr=False)
+
+    @property
+    def fortran_path(self) -> str:
+        return str(self.alias)
+
+    def finalize(self) -> None:
+        """After a write, copy the staging file back to ``original``."""
+        if self._finalized:
+            return
+        self._finalized = True
+        if not self.for_write or not self.alias.is_file():
+            return
+        self.original.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(self.alias, self.original)
+
+
+def charmm_io_alias(
+    path: str | Path,
+    *,
+    for_write: bool = False,
+    append: bool = False,
+    staging_root: Path | None = None,
+) -> CharmmIoAlias | None:
+    """Return a lowercase alias when CHARMM cannot open *path* directly."""
+    original = Path(path).expanduser().resolve()
+    if not fortran_path_needs_alias(original):
+        return None
+
+    root = staging_root or charmm_io_staging_root()
+    tag = hashlib.sha256(str(original).encode()).hexdigest()[:16]
+    alias_dir = root / tag
+    alias_dir.mkdir(parents=True, exist_ok=True)
+    alias = alias_dir / original.name.lower()
+
+    if for_write:
+        if append and original.is_file() and not alias.is_file():
+            shutil.copy2(original, alias)
+    else:
+        if not original.is_file():
+            raise FileNotFoundError(f"restart not found: {original}")
+        if alias.is_symlink() or alias.exists():
+            alias.unlink()
+        alias.symlink_to(original)
+
+    return CharmmIoAlias(original=original, alias=alias, for_write=for_write)
+
+
+def charmm_fortran_path(
+    path: str | Path,
+    *,
+    for_write: bool = False,
+    append: bool = False,
+    staging_root: Path | None = None,
+) -> tuple[str, CharmmIoAlias | None]:
+    """Return ``(path_for_charmm, alias_or_none)``."""
+    alias = charmm_io_alias(
+        path,
+        for_write=for_write,
+        append=append,
+        staging_root=staging_root,
+    )
+    if alias is None:
+        return str(Path(path).expanduser().resolve()), None
+    return alias.fortran_path, alias
