@@ -62,6 +62,39 @@ def read_charmmsetup(repo_root: Path | None = None) -> dict[str, str]:
     return out
 
 
+def normalize_charmm_lib_dir(raw: str | None) -> str:
+    """Return a directory path for ``CHARMM_LIB_DIR`` (not a ``.so`` file path)."""
+    value = (raw or "").strip()
+    if not value:
+        return ""
+    path = Path(value)
+    if path.suffix in (".so", ".dylib") and path.is_file():
+        return str(path.parent)
+    return value
+
+
+def _resolve_lib_dir(
+    *,
+    env: os._Environ,
+    setup: dict[str, str],
+    default: str,
+) -> str:
+    """Pick the first ``CHARMM_LIB_DIR`` candidate that contains ``libcharmm``."""
+    candidates: list[str] = []
+    for raw in (
+        env.get("CHARMM_LIB_DIR"),
+        setup.get("CHARMM_LIB_DIR"),
+        default,
+    ):
+        norm = normalize_charmm_lib_dir(raw)
+        if norm and norm not in candidates:
+            candidates.append(norm)
+    for candidate in candidates:
+        if find_charmm_lib_in_dir(Path(candidate)):
+            return candidate
+    return candidates[0] if candidates else ""
+
+
 def _resolve_one(
     key: str,
     *,
@@ -97,8 +130,7 @@ def resolve_charmm_paths(
 
     home = _resolve_one("CHARMM_HOME", env=environ, setup=setup, default=default_home_s)
 
-    default_lib = default_home_s
-    lib = _resolve_one("CHARMM_LIB_DIR", env=environ, setup=setup, default=default_lib)
+    lib = _resolve_lib_dir(env=environ, setup=setup, default=default_home_s)
 
     return home, lib
 

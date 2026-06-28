@@ -62,7 +62,11 @@ def test_mpi_rank_size_prefers_launcher_env_when_mpi4py_singleton():
                 fake_mpi,
                 create=True,
             ):
-                rank, size = mpi_bridge.mpi_rank_size()
+                with mock.patch(
+                    "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge._mpi4py_is_initialized",
+                    return_value=True,
+                ):
+                    rank, size = mpi_bridge.mpi_rank_size()
     assert rank == 2
     assert size == 4
 

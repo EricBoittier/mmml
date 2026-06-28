@@ -70,7 +70,34 @@ def run_mpi_check(*, strict: bool = False, prelaunch: bool = False) -> MpiCheckR
     report.mpirun_path = str(mpirun) if mpirun is not None else None
 
     if not charmm_lib_available():
+        lib_dir = (os.environ.get("CHARMM_LIB_DIR") or "").strip()
         report.errors.append("CHARMM_LIB_DIR does not contain libcharmm.so")
+        if lib_dir and "path/to" in lib_dir.lower():
+            report.errors.append(
+                f"Stale placeholder CHARMM_LIB_DIR={lib_dir!r}; "
+                "unset it or point at setup/charmm (directory, not the .so file)"
+            )
+        elif lib_dir.endswith((".so", ".dylib")):
+            report.errors.append(
+                "CHARMM_LIB_DIR must be a directory (e.g. setup/charmm), not libcharmm.so"
+            )
+        else:
+            from mmml.interfaces.pycharmmInterface.charmm_paths import (
+                default_repo_charmm_home,
+                mmml_repo_root,
+            )
+
+            repo_default = default_repo_charmm_home(mmml_repo_root())
+            if repo_default is not None and lib_dir and lib_dir != str(repo_default):
+                report.errors.append(
+                    f"libcharmm not under CHARMM_LIB_DIR={lib_dir!r}; "
+                    f"repo build exists at {repo_default} — try: "
+                    f"unset CHARMM_LIB_DIR CHARMM_HOME"
+                )
+            elif repo_default is not None:
+                report.errors.append(
+                    f"Run ./scripts/rebuild_charmm_mlpot.sh (expected lib under {repo_default})"
+                )
         report.ok = False
     elif report.charmm_links_mpi and mpirun is None:
         report.errors.append(
