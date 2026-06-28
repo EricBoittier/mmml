@@ -67,10 +67,10 @@ def test_mic_dimer_matches_analytic_in_large_box(separation_A: float):
 @pytest.mark.parametrize(
     ("system_factory", "method", "rtol"),
     [
-        (lambda: cscl_crystal(box_length_A=10.0), "ewald", 4e-6),
-        (lambda: cscl_crystal(box_length_A=10.0), "pme", 9e-4),
-        (lambda: cscl_crystal(box_length_A=10.0), "p3m", 9e-4),
-        (lambda: nacl_cubic(box_length_A=5.6), "ewald", 4e-6),
+        (lambda: cscl_crystal(box_length_A=1.0), "ewald", 4e-6),
+        (lambda: cscl_crystal(box_length_A=1.0), "pme", 9e-4),
+        (lambda: cscl_crystal(box_length_A=1.0), "p3m", 9e-4),
+        (lambda: nacl_cubic(box_length_A=2.0), "ewald", 4e-6),
     ],
 )
 def test_jax_pme_madelung(system_factory, method, rtol):

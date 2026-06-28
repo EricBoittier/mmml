@@ -28,10 +28,10 @@ def main() -> int:
 
     ok = True
     cases = [
-        (cscl_crystal(box_length_A=10.0), "ewald", 4e-6),
-        (cscl_crystal(box_length_A=10.0), "pme", 9e-4),
-        (cscl_crystal(box_length_A=10.0), "p3m", 9e-4),
-        (nacl_cubic(box_length_A=5.6), "ewald", 4e-6),
+        (cscl_crystal(box_length_A=1.0), "ewald", 4e-6),
+        (cscl_crystal(box_length_A=1.0), "pme", 9e-4),
+        (cscl_crystal(box_length_A=1.0), "p3m", 9e-4),
+        (nacl_cubic(box_length_A=2.0), "ewald", 4e-6),
     ]
 
     for system, method, rtol in cases:

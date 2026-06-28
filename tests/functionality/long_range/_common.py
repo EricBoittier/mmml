@@ -102,8 +102,11 @@ def ion_dimer_system(
     )
 
 
-def cscl_crystal(*, box_length_A: float = 10.0) -> CoulombSystem:
-    """CsCl primitive cell (1 formula unit). Madelung ref ≈ 2.035361."""
+def cscl_crystal(*, box_length_A: float = 1.0) -> CoulombSystem:
+    """CsCl primitive cell (1 formula unit). Madelung ref ≈ 2.035361.
+
+    Default unit cell edge 1.0 matches jax-pme ``define_crystal("CsCl")``.
+    """
     frac = np.array([[0.0, 0.0, 0.0], [0.5, 0.5, 0.5]], dtype=np.float64)
     pos = frac * float(box_length_A)
     chg = np.array([-1.0, 1.0], dtype=np.float64)
@@ -117,29 +120,33 @@ def cscl_crystal(*, box_length_A: float = 10.0) -> CoulombSystem:
     )
 
 
-def nacl_cubic(*, box_length_A: float = 5.6) -> CoulombSystem:
-    """NaCl rocksalt cubic cell (4 formula units). Madelung ref ≈ 1.74756."""
-    frac = np.array(
+def nacl_cubic(*, box_length_A: float = 2.0) -> CoulombSystem:
+    """NaCl rocksalt cubic cell (4 formula units). Madelung ref ≈ 1.747565.
+
+    Matches jax-pme ``define_crystal("NaCl_cubic")``: integer site coords in a
+    cell of edge 2 (Å or arbitrary units); scale ``box_length_A`` uniformly.
+    """
+    scale = float(box_length_A) / 2.0
+    positions = scale * np.array(
         [
             [0.0, 0.0, 0.0],
-            [0.5, 0.0, 0.0],
-            [0.0, 0.5, 0.0],
-            [0.0, 0.0, 0.5],
-            [0.5, 0.5, 0.0],
-            [0.5, 0.0, 0.5],
-            [0.0, 0.5, 0.5],
-            [0.5, 0.5, 0.5],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [1.0, 1.0, 0.0],
+            [1.0, 0.0, 1.0],
+            [0.0, 1.0, 1.0],
+            [1.0, 1.0, 1.0],
         ],
         dtype=np.float64,
     )
-    pos = frac * float(box_length_A)
     chg = np.array([1.0, -1.0, -1.0, -1.0, 1.0, 1.0, 1.0, -1.0], dtype=np.float64)
     return CoulombSystem(
         name="NaCl_cubic",
-        positions_A=pos,
+        positions_A=positions,
         charges_e=chg,
         box_length_A=float(box_length_A),
-        madelung_ref=1.74756,
+        madelung_ref=1.747565,
         num_formula_units=4,
     )
 
@@ -236,7 +243,7 @@ def jax_pme_coulomb_energy_forces(
         inputs = calc.prepare(
             atoms,
             chg,
-            sr_cutoff=sr_cutoff_A,
+            cutoff=sr_cutoff_A,
             mesh_spacing=mesh_spacing,
             smearing=smearing,
         )
@@ -293,7 +300,11 @@ def evaluate_backend(
 
 
 def madelung_constant(result: CoulombResult, system: CoulombSystem) -> float:
-    """Madelung constant from total energy (charge-neutral crystal)."""
+    """Madelung constant from total energy (jax-pme convention, unit cell size).
+
+    Uses ``M = -E / (k * N_formula)`` with systems built at jax-pme reference
+    cell sizes (CsCl ``L=1``, NaCl cubic ``L=2``).
+    """
     return -result.energy_kcalmol / (
         CHARMM_COULOMB_KCAL * system.num_formula_units
     )

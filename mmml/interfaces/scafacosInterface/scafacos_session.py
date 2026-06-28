@@ -82,20 +82,57 @@ def resolve_scafacos_library_path() -> Path | None:
     return None
 
 
+def _preload_scafacos_plugins(library_path: Path | str) -> None:
+    """Load ScaFaCoS plugin shared objects before ``libfcs`` (shared build)."""
+    lib_dir = Path(library_path).resolve().parent
+    if not lib_dir.is_dir():
+        return
+    mode = getattr(ctypes, "RTLD_GLOBAL", 0) | getattr(ctypes, "RTLD_LAZY", 0)
+    # Infrastructure first, then solver plugins (alphabetical within groups).
+    priority = (
+        "libfcs_common.so",
+        "libfcs_mmm.so",
+        "libfcs_resort.so",
+        "libfcs_redist.so",
+        "libfcs_gridsort.so",
+        "libfcs_near.so",
+    )
+    loaded: set[str] = set()
+    for name in priority:
+        path = lib_dir / name
+        if path.is_file():
+            try:
+                ctypes.CDLL(str(path), mode=mode)
+                loaded.add(name)
+            except OSError:
+                continue
+    for path in sorted(lib_dir.glob("libfcs_*.so")):
+        if path.name in loaded or path.name == "libfcs.so":
+            continue
+        try:
+            ctypes.CDLL(str(path), mode=mode)
+        except OSError:
+            continue
+
+
 def load_scafacos_library(path: Path | str | None = None) -> ctypes.CDLL:
     """Load ``libfcs`` with required function signatures bound."""
     if path is None:
         resolved = resolve_scafacos_library_path()
-        if resolved is None or not resolved.is_file():
+        if resolved is None or not resolved.resolve().is_file():
             raise ScaFaCoSUnavailable(
                 "ScaFaCoS shared library not found. Set SCAFACOS_LIB to libfcs.so "
                 "or install from https://github.com/scafacos/scafacos"
             )
         path = resolved
 
-    lib = ctypes.CDLL(str(path))
+    _preload_scafacos_plugins(path)
 
-  # void* handle out-param; method C string; MPI_Comm (integer handle in mpi4py).
+    # Shared ScaFaCoS builds defer solver symbols to plugin .so files; lazy
+    # binding avoids load-time failures when plugins resolve at first fcs_run.
+    mode = getattr(ctypes, "RTLD_GLOBAL", 0) | getattr(ctypes, "RTLD_LAZY", 0)
+    lib = ctypes.CDLL(str(path), mode=mode)
+
     lib.fcs_init.argtypes = [
         ctypes.POINTER(ctypes.c_void_p),
         ctypes.c_char_p,
@@ -118,12 +155,15 @@ def load_scafacos_library(path: Path | str | None = None) -> ctypes.CDLL:
     ]
     lib.fcs_set_common.restype = ctypes.c_char_p
 
-    lib.fcs_set_parameter.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p]
-    lib.fcs_set_parameter.restype = ctypes.c_char_p
+    lib.fcs_set_parameters.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_char_p,
+        ctypes.c_int,
+    ]
+    lib.fcs_set_parameters.restype = ctypes.c_char_p
 
     lib.fcs_run.argtypes = [
         ctypes.c_void_p,
-        ctypes.c_int,
         ctypes.c_int,
         ctypes.POINTER(ctypes.c_double),
         ctypes.POINTER(ctypes.c_double),
@@ -202,12 +242,14 @@ class ScaFaCoSSession:
         self.close()
 
     def set_parameter(self, key: str, value: str | float | int) -> None:
-        err = self._lib.fcs_set_parameter(
+        """Set one solver parameter via ``fcs_set_parameters`` (``key,value`` string)."""
+        param_str = f"{key},{value}"
+        err = self._lib.fcs_set_parameters(
             self._handle,
-            str(key).encode("ascii"),
-            str(value).encode("ascii"),
+            param_str.encode("ascii"),
+            0,
         )
-        _check_fcs_result(err, where=f"fcs_set_parameter({key!r})")
+        _check_fcs_result(err, where=f"fcs_set_parameters({key!r})")
 
     def configure_cubic_box(
         self,
@@ -254,7 +296,6 @@ class ScaFaCoSSession:
                 f"charges length {chg.shape[0]} != n_atoms {pos.shape[0]}"
             )
         n_loc = int(pos.shape[0])
-        n_max = n_loc
         flat_pos = np.ascontiguousarray(pos.reshape(-1))
         flat_chg = np.ascontiguousarray(chg)
         field = np.zeros(3 * n_loc, dtype=np.float64)
@@ -262,7 +303,6 @@ class ScaFaCoSSession:
         err = self._lib.fcs_run(
             self._handle,
             n_loc,
-            n_max,
             flat_pos.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
             flat_chg.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
             field.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
