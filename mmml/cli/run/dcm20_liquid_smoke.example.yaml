@@ -1,0 +1,41 @@
+# Smallest practical DCM liquid-density smoke on a GPU node (A100).
+#
+# Phase A — MM-only box certification (~few min):
+#   MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh liquid-box \
+#     --composition DCM:20 --target-density-g-cm3 1.326 \
+#     --profile standard -o boxes/dcm20 \
+#     --charmm-sd-steps 50 --charmm-abnr-steps 50
+#
+# Phase B — hybrid MLpot mini (this file):
+#   export MMML_CKPT=/path/to/DESdimers_params.json
+#   MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh md-system \
+#     --config mmml/cli/run/dcm20_liquid_smoke.example.yaml
+#
+# Preflight:
+#   MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh health-check --require-gpu --live
+
+setup: pbc_npt
+backend: pycharmm
+composition: "DCM:20"
+from_psf: boxes/dcm20/model.psf
+from_crd: boxes/dcm20/model.crd
+output_dir: artifacts/dcm20_liquid_smoke
+temperature: 300.0
+pressure: 1.0
+
+md_stages: mini
+mini_nstep: 30
+skip_jit_warmup: false
+ml_batch_size: 64
+ml_gpu_count: 1
+
+charmm_pre_minimize: false
+bonded_mm_mini: false
+no_echeck: true
+quiet: true
+max_grms_before_dyn: 80.0
+
+mm_switch_on: 9.0
+mm_switch_width: 1.5
+ml_switch_width: 1.0
+include_mm: true

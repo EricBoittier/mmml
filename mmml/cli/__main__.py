@@ -109,6 +109,11 @@ def main():
         sys.argv = ["mmml mpi-check"] + args.args
         return mpi_check.main()
 
+    elif command == "health-check":
+        from .run import health_check
+        sys.argv = ["mmml health-check"] + args.args
+        return health_check.main()
+
     elif command == "warmup-mlpot-jax":
         from .run import warmup_mlpot_jax
         sys.argv = ["mmml warmup-mlpot-jax"] + args.args
