@@ -196,8 +196,12 @@ def build_trialanine_water_box_in_charmm(
 
     # Load CGENFF after the protein segment is built — loading both PRMs before
     # ic.build() triggers DRUDE particle generation and aborts on some builds.
+    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+        _rtf_path_without_drude_autogen,
+    )
+
     with charmm_relaxed_bomlev():
-        read.rtf(str(CGENFF_RTF))
+        read.rtf(_rtf_path_without_drude_autogen(CGENFF_RTF))
         read.prm(str(CGENFF_PRM))
 
     read.sequence_string(" ".join(["TIP3"] * n_waters))
