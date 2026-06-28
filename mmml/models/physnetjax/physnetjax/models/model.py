@@ -1,8 +1,7 @@
 """
-Energy and Forces Neural Network Model implementation.
+PhysNet message-passing neural network for molecular energies and forces.
 
-This module implements a neural network model for predicting molecular energies 
-and forces using message passing and equivariant transformations.
+E(3)-equivariant model using message passing and equivariant transformations.
 """
 
 import functools
@@ -30,11 +29,8 @@ DTYPE = jnp.float32
 HARTREE_TO_KCAL_MOL = 627.509  # Conversion factor for energy units
 
 
-class EF(nn.Module):
-    """Energy and Forces Neural Network Model.
-
-    A neural network model that predicts molecular energies and forces using message passing
-    and equivariant transformations.
+class PhysNet(nn.Module):
+    """PhysNet message-passing model for molecular energies and forces.
 
     Attributes:
         features: Number of features in the neural network layers
@@ -44,9 +40,9 @@ class EF(nn.Module):
         cutoff: Cutoff distance for interactions
         max_atomic_number: Maximum atomic number supported
         charges: Whether to predict atomic charges
-        natoms: Maximum number of atoms in a molecule
+        max_padded_atoms: Maximum padded atoms per molecule (batching)
         total_charge: Total molecular charge constraint
-        n_res: Number of residual blocks
+        n_refinement_blocks: Number of refinement residual blocks
         debug: Debug flags (False or list of debug areas)
     """
 
@@ -57,15 +53,31 @@ class EF(nn.Module):
     cutoff: float = 6.0
     max_atomic_number: int = 118
     charges: bool = False
-    natoms: int = 60
+    max_padded_atoms: int = 60
     total_charge: float = 0
-    n_res: int = 3
+    n_refinement_blocks: int = 3
     zbl: bool = True
     debug: bool | List[str] = False
     efa: bool = False
     use_energy_bias: bool = False
     use_pbc: bool = False
     include_electrostatics: bool = True
+
+    @property
+    def natoms(self) -> int:
+        return self.max_padded_atoms
+
+    @natoms.setter
+    def natoms(self, value: int) -> None:
+        object.__setattr__(self, "max_padded_atoms", value)
+
+    @property
+    def n_res(self) -> int:
+        return self.n_refinement_blocks
+
+    @n_res.setter
+    def n_res(self, value: int) -> None:
+        object.__setattr__(self, "n_refinement_blocks", value)
 
     def setup(self) -> None:
         """
@@ -111,9 +123,11 @@ class EF(nn.Module):
             "cutoff": self.cutoff,
             "max_atomic_number": self.max_atomic_number,
             "charges": self.charges,
-            "natoms": self.natoms,
+            "natoms": self.max_padded_atoms,
+            "max_padded_atoms": self.max_padded_atoms,
             "total_charge": self.total_charge,
-            "n_res": self.n_res,
+            "n_res": self.n_refinement_blocks,
+            "n_refinement_blocks": self.n_refinement_blocks,
             "zbl": self.zbl,
             "debug": self.debug,
             "efa": self.efa,
@@ -297,7 +311,7 @@ class EF(nn.Module):
         x = e3x.nn.change_max_degree_or_type(
             x, max_degree=0, include_pseudotensors=False
         )
-        if self.n_res <= -1:
+        if self.n_refinement_blocks <= -1:
             for i in range(self.num_iterations):
                 x = self._attention(
                     x, basis, dst_idx, src_idx, num_heads=self.features // 8
@@ -436,7 +450,7 @@ class EF(nn.Module):
             Refined features
         """
         e3x.nn.silu(x)
-        for _ in range(abs(self.n_res)):
+        for _ in range(abs(self.n_refinement_blocks)):
             y = e3x.nn.silu(x)
             y = e3x.nn.add(x, y)
             y = e3x.nn.Dense(
@@ -814,7 +828,7 @@ class EF(nn.Module):
         atomic_electrostatics = jax.ops.segment_sum(
             electrostatics,
             segment_ids=dst_idx,
-            num_segments=batch_size * self.natoms,
+            num_segments=batch_size * self.max_padded_atoms,
         )
         # Truncate to match atomic_energies shape
         atomic_electrostatics = atomic_electrostatics[:num_atoms_actual]
@@ -1041,3 +1055,8 @@ class EF(nn.Module):
         }
 
         return output
+
+
+EF = PhysNet  # deprecated alias; prefer PhysNet
+
+__all__ = ["PhysNet", "EF"]

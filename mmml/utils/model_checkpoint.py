@@ -96,6 +96,32 @@ def canonicalize_physnet_config_for_save(cfg: dict[str, Any]) -> dict[str, Any]:
     return normalize_physnet_config(cfg)
 
 
+def physnet_constructor_kwargs(cfg: dict[str, Any], model_cls: type) -> dict[str, Any]:
+    """Build kwargs for PhysNet-family model constructors from checkpoint config."""
+    cfg = normalize_physnet_config(cfg)
+    fields = getattr(model_cls, "__dataclass_fields__", None) or {}
+    if not fields:
+        return dict(cfg)
+    out = dict(cfg)
+    if "max_padded_atoms" in fields:
+        if "max_padded_atoms" not in out and "natoms" in out:
+            out["max_padded_atoms"] = out["natoms"]
+        out.pop("natoms", None)
+    elif "natoms" in fields:
+        if "natoms" not in out and "max_padded_atoms" in out:
+            out["natoms"] = out["max_padded_atoms"]
+        out.pop("max_padded_atoms", None)
+    if "n_refinement_blocks" in fields:
+        if "n_refinement_blocks" not in out and "n_res" in out:
+            out["n_refinement_blocks"] = out["n_res"]
+        out.pop("n_res", None)
+    elif "n_res" in fields:
+        if "n_res" not in out and "n_refinement_blocks" in out:
+            out["n_res"] = out["n_refinement_blocks"]
+        out.pop("n_refinement_blocks", None)
+    return {k: v for k, v in out.items() if k in fields}
+
+
 def extract_model_config(model: Any) -> Dict[str, Any]:
     """
     Extract configuration from a model object.
