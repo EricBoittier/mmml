@@ -64,9 +64,16 @@ from mmml.interfaces.pycharmmInterface.charmm_mpi import (  # noqa: E402
     _under_mpirun,
 )
 
-PYCHARMM_AVAILABLE = charmm_lib_available()
+_WARMUP_JAX_ONLY = (os.environ.get("MMML_WARMUP_MLPOT_JAX_ONLY") or "").strip().lower() in (
+    "1",
+    "yes",
+    "true",
+)
 
-prepare_serial_charmm_mpi_env()
+PYCHARMM_AVAILABLE = charmm_lib_available() and not _WARMUP_JAX_ONLY
+
+if not _WARMUP_JAX_ONLY:
+    prepare_serial_charmm_mpi_env()
 
 pycharmm: Any = None
 coor: Any = None
