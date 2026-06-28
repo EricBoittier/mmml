@@ -31,6 +31,8 @@ MPIRUN="${MMML_MPIRUN_WRAPPER:-$MMML_ROOT/scripts/mmml-charmm-mpirun.sh}"
 # shellcheck source=../../../scripts/setup_jax_cuda_env.sh
 source "$MMML_ROOT/scripts/setup_jax_cuda_env.sh" 2>/dev/null || true
 export JAX_PLATFORMS="${JAX_PLATFORMS:-cuda,cpu}"
+export JAX_ENABLE_X64="${JAX_ENABLE_X64:-true}"
+export MMML_JAX_PME_DEVICE="${MMML_JAX_PME_DEVICE:-cpu}"
 export MMML_MPI_NP="${MMML_MPI_NP:-1}"
 
 if [[ -z "${MMML_CKPT:-}" ]]; then
@@ -110,10 +112,27 @@ if ! _warmup_mlpot_jax; then
   exit 1
 fi
 
+_job_already_ok() {
+  local job_id="$1"
+  local manifest="$RUN_ROOT/$job_id/run_manifest.json"
+  [[ "${FORCE_RERUN:-0}" == "1" ]] && return 1
+  [[ -f "$manifest" ]] || return 1
+  "$PY" -c "
+import json, sys
+m = json.load(open(sys.argv[1]))
+sys.exit(0 if m.get('exit_code') == 0 else 1)
+" "$manifest"
+}
+
 _run_job() {
   local job_id="$1"
   local out="$RUN_ROOT/$job_id"
   mkdir -p "$out"
+  if _job_already_ok "$job_id"; then
+    echo ""
+    echo "[job] $job_id — skip (run_manifest exit_code=0)  ($(date -Iseconds))"
+    return 0
+  fi
   echo ""
   echo "[job] $job_id → $out  ($(date -Iseconds))"
   if ! "$PY" "$SCRIPT_DIR/run_one_job.py" \

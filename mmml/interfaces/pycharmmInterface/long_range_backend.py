@@ -17,8 +17,9 @@ CHARMM IMAGE lists and MLpot BLOCK terms.
 from __future__ import annotations
 
 import os
+from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Literal, Protocol
+from typing import Iterator, Literal, Protocol
 
 import numpy as np
 
@@ -27,6 +28,48 @@ JaxPmeMethod = Literal["ewald", "pme", "p3m"]
 
 CHARMM_COULOMB_KCAL = 332.063711
 DEFAULT_JAX_PME_SR_CUTOFF_A = 6.0
+
+
+def jax_pme_host_device_name() -> str:
+    """Device for jax-pme work invoked from host ``pure_callback`` (default CPU)."""
+    return (os.environ.get("MMML_JAX_PME_DEVICE") or "cpu").strip().lower()
+
+
+@contextmanager
+def jax_pme_host_eval_context() -> Iterator[None]:
+    """Run jax-pme ``energy_forces`` on a stable host device.
+
+    Hybrid MM calls jax-pme from CHARMM MLpot ``pure_callback`` while the outer
+    MLpot JAX graph may still be on CPU (MPI defer path) or sharing one GPU.
+    Nested jax-pme on GPU in that window can stall indefinitely for mesh methods
+    (PME/P3M) under ``mpirun``; host evaluation defaults to CPU.
+    """
+    prefer = jax_pme_host_device_name()
+    if prefer == "gpu":
+        yield
+        return
+    import jax
+
+    with jax.default_device(jax.devices("cpu")[0]):
+        yield
+
+
+def warmup_jax_pme_coulomb_host(
+    positions_A: np.ndarray,
+    charges_e: np.ndarray,
+    *,
+    box_length_A: float,
+    method: JaxPmeMethod | str = "ewald",
+    sr_cutoff_A: float = DEFAULT_JAX_PME_SR_CUTOFF_A,
+) -> LongRangeInteractionResult:
+    """Compile jax-pme on the host before the first MLpot ``ENER`` (MPI-safe)."""
+    return compute_jax_pme_coulomb(
+        positions_A,
+        charges_e,
+        box_length_A=float(box_length_A),
+        method=method,
+        sr_cutoff_A=float(sr_cutoff_A),
+    )
 
 
 def have_jax_pme() -> bool:
@@ -205,7 +248,8 @@ def compute_jax_pme_power_law(
             mesh_spacing=mesh_spacing,
             smearing=smearing,
         )
-    energy, forces = calc.energy_forces(*inputs)
+    with jax_pme_host_eval_context():
+        energy, forces = calc.energy_forces(*inputs)
     return LongRangeInteractionResult(
         energy_kcalmol=float(energy),
         forces_kcalmol_A=np.asarray(forces, dtype=np.float64),

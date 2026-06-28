@@ -11,6 +11,8 @@ from mmml.interfaces.pycharmmInterface.long_range_backend import (
     JaxPmeLongRangeSolver,
     compute_jax_pme_coulomb,
     create_lr_solver,
+    jax_pme_host_device_name,
+    jax_pme_host_eval_context,
     pick_lr_solver,
     resolve_jax_pme_method,
 )
@@ -72,6 +74,41 @@ def test_jax_pme_methods_agree_on_cscl(method: str):
         method=method,
     )
     np.testing.assert_allclose(test.energy_kcalmol, ref.energy_kcalmol, rtol=2e-3)
+
+
+def test_jax_pme_host_device_defaults_to_cpu(monkeypatch):
+    monkeypatch.delenv("MMML_JAX_PME_DEVICE", raising=False)
+    assert jax_pme_host_device_name() == "cpu"
+
+
+def test_jax_pme_host_eval_context_uses_cpu_default_device(monkeypatch):
+    monkeypatch.delenv("MMML_JAX_PME_DEVICE", raising=False)
+    import jax
+
+    class _FakeDevice:
+        def __str__(self) -> str:
+            return "cpu:0"
+
+    fake_cpu = [_FakeDevice()]
+
+    def _devices(kind: str):
+        assert kind == "cpu"
+        return fake_cpu
+
+    with mock.patch("jax.devices", side_effect=_devices), mock.patch(
+        "jax.default_device"
+    ) as dd:
+        dd.return_value.__enter__ = lambda self: None
+        dd.return_value.__exit__ = lambda self, *a: None
+        with jax_pme_host_eval_context():
+            pass
+        dd.assert_called_once_with(fake_cpu[0])
+
+
+def test_jax_pme_host_eval_context_noop_when_gpu_requested(monkeypatch):
+    monkeypatch.setenv("MMML_JAX_PME_DEVICE", "gpu")
+    with jax_pme_host_eval_context():
+        pass
 
 
 def test_pick_lr_solver_jax_pme_when_scafacos_absent(monkeypatch):
