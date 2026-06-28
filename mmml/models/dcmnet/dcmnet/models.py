@@ -1,5 +1,5 @@
 # import pandas as pd
-from .modules import DCMNetMultipole, MessagePassingModel
+from .modules import DCMNetCharges, DCMNetMultipole, MessagePassingModel
 import numpy as np
 import os
 
@@ -9,7 +9,7 @@ models = []
 for i in range(1,8):
 
     
-    models.append(DCMNetMultipole(
+    models.append(DCMNetCharges(
         features=32, max_degree=2, num_iterations=2,
         num_basis_functions=32, cutoff=10.0, n_dcm=i,
         include_pseudotensors=False,
@@ -35,13 +35,13 @@ additional training.
 
 Models
 ------
-DCM1 : DCMNetMultipole
-    Model with 1 distributed multipole per atom
-DCM2 : DCMNetMultipole  
-    Model with 2 distributed multipoles per atom
-DCM3 : DCMNetMultipole
-    Model with 3 distributed multipoles per atom
-DCM4 : DCMNetMultipole
+DCM1 : DCMNetCharges
+    Model with 1 distributed charge site per atom
+DCM2 : DCMNetCharges
+    Model with 2 distributed charge sites per atom
+DCM3 : DCMNetCharges
+    Model with 3 distributed charge sites per atom
+DCM4 : DCMNetCharges
     Model with 4 distributed multipoles per atom
 
 Parameters

@@ -21,11 +21,6 @@ def test_capabilities_physnet_supports_decomposed_ml() -> None:
     assert caps.supports_forces is True
 
 
-def test_capabilities_joint_does_not_support_decomposed_ml() -> None:
-    caps = capabilities_for_kind(ProviderKind.JOINT_PHYSNET_DCMNET)
-    assert caps.supports_decomposed_ml is False
-    assert caps.supports_esp is True
-
 
 def test_capabilities_qc_backends() -> None:
     for kind in (ProviderKind.PYSCF, ProviderKind.ORCA, ProviderKind.XTB, ProviderKind.MOLPRO):
@@ -58,11 +53,25 @@ def test_detect_model_kind_efield_config() -> None:
     assert kind == ProviderKind.EFIELD_PHYSNET
 
 
-def test_assert_hybrid_ml_compatible_rejects_joint() -> None:
-    with pytest.raises(ValueError, match="joint_physnet_dcmnet"):
+def test_capabilities_joint_supports_decomposed_ml_physnet_only() -> None:
+    caps = capabilities_for_kind(ProviderKind.JOINT_PHYSNET_DCMNET)
+    assert caps.supports_decomposed_ml is True
+    assert "PhysNet submodule" in caps.notes
+
+
+def test_assert_hybrid_ml_compatible_accepts_joint() -> None:
+    kind = assert_hybrid_ml_compatible(
+        "unused-path",
+        config={"physnet_config": {}, "dcmnet_config": {}},
+    )
+    assert kind == ProviderKind.JOINT_PHYSNET_DCMNET
+
+
+def test_assert_hybrid_ml_compatible_rejects_efield() -> None:
+    with pytest.raises(ValueError, match="E-field"):
         assert_hybrid_ml_compatible(
             "unused-path",
-            config={"physnet_config": {}, "dcmnet_config": {}},
+            config={"field_scale": 0.001, "dipole_field_coupling": False, "features": 32},
         )
 
 

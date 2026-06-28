@@ -8,13 +8,12 @@ import jax.numpy as jnp
 
 
 
-class DCMNetMultipole(nn.Module):
+class DCMNetCharges(nn.Module):
     """
-    E(3)-equivariant message passing model for distributed multipoles (DCMNet).
-    
-    This model uses E3x to perform equivariant message passing between atoms
-    and predicts distributed multipoles and dipoles that reproduce ESP on
-    molecular surfaces.
+    E(3)-equivariant message passing model for distributed charges (DCMNet).
+
+    Predicts distributed charge magnitudes and positions (DCM sites) that
+    reproduce the molecular ESP — not spherical multipole expansions.
     
     Attributes
     ----------
@@ -31,7 +30,7 @@ class DCMNetMultipole(nn.Module):
     max_atomic_number : int
         Maximum atomic number for embedding, by default 17
     n_dcm : int
-        Number of distributed multipoles per atom, by default 4
+        Number of distributed charge sites per atom, by default 4
     include_pseudotensors : bool
         Whether to include pseudotensors, by default False
     """
@@ -234,7 +233,7 @@ class MessagePassingModelDEBUG(nn.Module):
     max_atomic_number : int
         Maximum atomic number for embedding, by default 17
     n_dcm : int
-        Number of distributed multipoles per atom, by default 4
+        Number of distributed charge sites per atom, by default 4
     include_pseudotensors : bool
         Whether to include pseudotensors, by default False
     """
@@ -419,6 +418,7 @@ class MessagePassingModelDEBUG(nn.Module):
         )
 
 
-MessagePassingModel = DCMNetMultipole  # deprecated alias; prefer DCMNetMultipole
+MessagePassingModel = DCMNetCharges  # deprecated alias
+DCMNetMultipole = DCMNetCharges  # deprecated misnomer (distributed charges, not multipoles)
 
-__all__ = ["DCMNetMultipole", "MessagePassingModel", "MessagePassingModelDEBUG"]
+__all__ = ["DCMNetCharges", "DCMNetMultipole", "MessagePassingModel", "MessagePassingModelDEBUG"]

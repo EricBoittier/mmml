@@ -319,6 +319,69 @@ def _import_joint_model_classes() -> tuple[Any, Any]:
     return JointPhysNetDCMNet, JointPhysNetNonEquivariant
 
 
+def is_joint_checkpoint_config(config: dict[str, Any]) -> bool:
+    """True when config describes a joint PhysNet + DCMNet (or non-eq) checkpoint."""
+    return "physnet_config" in config and (
+        "dcmnet_config" in config or "noneq_config" in config
+    )
+
+
+def extract_physnet_params_for_hybrid(params: Any) -> Any:
+    """Return Flax params for the PhysNet submodule only (from joint or standalone)."""
+    params = normalize_flax_params_for_apply(params)
+    if not _is_mapping(params):
+        return {"params": params}
+    root = _to_dict(params.get("params", params))
+    if "physnet" in root:
+        return {"params": root["physnet"]}
+    joint_keys = {"dcmnet", "noneq_model", "charge_mixer"}
+    if joint_keys.intersection(root.keys()):
+        raise ValueError(
+            "Joint checkpoint params missing 'physnet' subtree; "
+            "cannot extract PhysNet for hybrid MLpot."
+        )
+    return params if "params" in params else {"params": root}
+
+
+def load_physnet_for_hybrid_mlpot(
+    checkpoint: Path | str,
+    *,
+    max_padded_atoms: int,
+    dtype: Any | None = None,
+) -> tuple[Any, Any, dict[str, Any]]:
+    """Load PhysNet model + params from a standalone or joint checkpoint for hybrid MLpot.
+
+    Joint checkpoints use only the PhysNet submodule (E/F); DCMNet distributed
+    charges are not evaluated in the decomposed monomer/dimer path.
+    """
+    from mmml.models.physnetjax.physnetjax.models.model import PhysNet
+    from mmml.utils.model_checkpoint import normalize_physnet_config, physnet_constructor_kwargs
+
+    bundle = load_checkpoint_bundle(Path(checkpoint))
+    config = dict(bundle.config)
+
+    if is_joint_checkpoint_config(config):
+        physnet_config = normalize_physnet_config(dict(config["physnet_config"]))
+    else:
+        physnet_config = normalize_physnet_config(config)
+
+    physnet_config["max_padded_atoms"] = int(max_padded_atoms)
+    model = PhysNet(**physnet_constructor_kwargs(physnet_config, PhysNet))
+    model.max_padded_atoms = int(max_padded_atoms)
+
+    params = extract_physnet_params_for_hybrid(bundle.params)
+    if dtype is not None:
+        from mmml.interfaces.pycharmmInterface.ml_dtypes import (
+            cast_pytree_to_ml_dtype,
+            json_tree_to_jax_params,
+        )
+
+        params = json_tree_to_jax_params(params, dtype=dtype)
+        params = cast_pytree_to_ml_dtype(params, dtype=dtype)
+
+    return model, params, config
+
+
 def _build_joint_model(
     saved_config: dict[str, Any],
     params: Any,

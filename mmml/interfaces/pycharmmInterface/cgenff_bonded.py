@@ -104,19 +104,20 @@ def bonded_energy_components(
             y = jnp.sum(jnp.cross(b1_norm, v) * w, axis=-1)
             return jnp.arctan2(y, x)
 
-        # CHARMM PSF impropers are I J K L with I the central atom (CGENFF PRM
-        # column 1).  The signed improper angle uses outer–central–outer–outer:
-        # J, I, K, L → indices (1, 0, 2, 3).
+        # CHARMM PSF impropers are I J K L (I = central atom).  Use PSF atom order
+        # for the signed improper angle; n=0 terms use cos(psi-gamma), not cos(n*psi).
         psi = vmap(compute_dihedral_signed)(
-            positions[idx[:, 1]],
             positions[idx[:, 0]],
+            positions[idx[:, 1]],
             positions[idx[:, 2]],
             positions[idx[:, 3]],
         )
-        return jnp.sum(
-            bonded.improper_k
-            * (1 + jnp.cos(improper_n * psi - bonded.improper_gamma))
+        phase = jnp.where(
+            improper_n == 0,
+            psi - bonded.improper_gamma,
+            improper_n * psi - bonded.improper_gamma,
         )
+        return jnp.sum(bonded.improper_k * (1.0 + jnp.cos(phase)))
 
     e_bond = bond_energy()
     e_angle = angle_energy()

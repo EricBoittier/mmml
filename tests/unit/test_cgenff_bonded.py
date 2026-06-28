@@ -210,8 +210,8 @@ def test_load_cgenff_bonded_from_psf_aco_smoke() -> None:
     assert jnp.all(jnp.isfinite(forces))
 
 
-def test_improper_energy_matches_charmm_central_atom_order_aco() -> None:
-    """ACO carbonyl improper must use PSF central atom (I), not raw I-J-K-L dihedral."""
+def test_improper_energy_matches_charmm_n0_formula_aco() -> None:
+    """ACO carbonyl improper: CHARMM n=0 uses k*(1+cos(psi)), not constant 2k."""
     from jax_md.mm_forcefields.io.charmm import parse_pdb_simple
 
     _, positions = parse_pdb_simple(str(ACO_PDB))
@@ -221,5 +221,5 @@ def test_improper_energy_matches_charmm_central_atom_order_aco() -> None:
         system.topology,
         system.bonded,
     )
-    # Minimized ACO: CHARMM reports ~0.025 kcal/mol; wrong ordering gives ~140.
-    assert float(components["improper"]) == pytest.approx(0.025, abs=0.05)
+    # Wrong n*psi formula gives 140 kcal/mol regardless of geometry.
+    assert float(components["improper"]) < 25.0

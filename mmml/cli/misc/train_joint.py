@@ -42,7 +42,7 @@ KEY CAPABILITIES:
 ARCHITECTURE OPTIONS:
 --------------------
 Option 1: DCMNet (Equivariant - Default)
-  PhysNet → Atomic Charges → DCMNet → Distributed Multipoles → ESP
+  PhysNet → Atomic Charges → DCMNet → Distributed Charges → ESP
            ↓                          ↓                          ↓
        Dipole (Phys)             Dipole (DCM)              ESP (Phys/DCM)
                                           ↓                      ↓
@@ -867,7 +867,7 @@ class JointPhysNetDCMNet(nn.Module):
     Architecture:
     1. PhysNet predicts atomic charges (supervised by molecular dipole)
     2. Charges are fed as monopoles into DCMNet
-    3. DCMNet predicts distributed multipoles for ESP fitting
+    3. DCMNet predicts distributed charge sites for ESP fitting
     4. Full gradient flow from ESP loss back to PhysNet parameters
     
     Optional: Mix PhysNet energy with DCMNet Coulomb energy via learnable λ

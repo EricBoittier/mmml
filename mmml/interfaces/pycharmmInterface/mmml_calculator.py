@@ -598,6 +598,13 @@ def setup_calculator(
         (restart_path.is_file() and restart_path.suffix == ".json")
         or ((restart_path / "params.json").exists())
     )
+    is_joint_checkpoint = False
+    try:
+        from mmml.interfaces.calculators.checkpoint_loading import detect_checkpoint_format
+
+        is_joint_checkpoint = detect_checkpoint_format(restart_path) == "pickle_joint"
+    except FileNotFoundError:
+        pass
 
     from contextlib import ExitStack
     from mmml.interfaces.pycharmmInterface.jax_device_policy import jax_cpu_until_mlpot_registered
@@ -607,7 +614,34 @@ def setup_calculator(
         _mlpot_jax_defer_stack.enter_context(jax_cpu_until_mlpot_registered())
 
     checkpoint_meta: dict[str, Any] | None = None
-    if is_json_checkpoint:
+    if is_joint_checkpoint:
+        from mmml.interfaces.calculators.checkpoint_loading import load_physnet_for_hybrid_mlpot
+
+        try:
+            MODEL, params, config = load_physnet_for_hybrid_mlpot(
+                restart_path,
+                max_padded_atoms=max_atoms,
+                dtype=ml_jnp_dtype if ml_jnp_dtype == jnp.float64 else None,
+            )
+            setup_rows.append(
+                (
+                    "ml_backend",
+                    "PhysNet submodule (joint PhysNet+DCMNet checkpoint; distributed charges not used in MLpot)",
+                )
+            )
+            checkpoint_meta = {
+                "Checkpoint": str(restart_path.resolve()),
+                "name": restart_path.name,
+                "epoch": "—",
+                "best_loss": "—",
+                "Save Time": "—",
+            }
+        except Exception as e:
+            raise FileNotFoundError(
+                f"Failed to load joint checkpoint PhysNet submodule from {restart_path}. "
+                f"Error: {e}"
+            ) from e
+    elif is_json_checkpoint:
         # This is a JSON checkpoint - use it directly
         restart = restart_path
         # Load using JSON loader
@@ -625,65 +659,77 @@ def setup_calculator(
                 dtype=ml_np_dtype if ml_jnp_dtype == jnp.float64 else None,
             )
             params = checkpoint.get('params')
-            config = checkpoint.get('config', {})
-            config = normalize_physnet_config(config) if config else {}
-            
             if params is None:
                 raise FileNotFoundError(f"params not found in JSON checkpoint at {restart_path}")
-            # Use default PhysNet config when config is missing (params-only checkpoint)
-            if not config:
-                config = {
-                    "features": 32,
-                    "max_degree": 3,
-                    "num_iterations": 2,
-                    "num_basis_functions": 16,
-                    "cutoff": 6.0,
-                    "max_atomic_number": 118,
-                    "charges": False,
-                    "include_electrostatics": False,
-                    "natoms": max_atoms,
-                    "total_charge": 0,
-                    "n_res": 3,
-                    "zbl": True,
-                    "debug": False,
-                    "efa": False,
-                    "use_energy_bias": False,
-                    "use_pbc": bool(cell),
-                }
+            config = checkpoint.get('config', {})
+            config = normalize_physnet_config(config) if config else {}
 
-            # Reconstruct model from config
+            from mmml.interfaces.calculators.checkpoint_loading import (
+                extract_physnet_params_for_hybrid,
+                is_joint_checkpoint_config,
+            )
             from mmml.models.physnetjax.physnetjax.models.model import PhysNet
             from mmml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
 
-            # Convert JSON arrays back to JAX arrays for model config
             def json_to_jax_config(obj):
-                """Convert JSON config values back to appropriate types."""
                 if isinstance(obj, dict):
                     return {k: json_to_jax_config(v) for k, v in obj.items()}
-                elif isinstance(obj, list):
-                    # Lists in config are usually parameters, keep as lists
+                if isinstance(obj, list):
                     return obj
-                else:
-                    return obj
-            
-            model_config = json_to_jax_config(config)
-            model_config['natoms'] = max_atoms
-            if cell:
-                model_config['use_pbc'] = True
-            # ML Coulomb only runs when charges=True; keep repr/config consistent for neutral models.
-            if not model_config.get("charges", False):
-                model_config["include_electrostatics"] = False
-            is_spooky_model = (
-                str(config.get("model_type", "")).lower() == "spooky"
-                or "spooky" in str(restart_path).lower()
-            )
-            model_cls = SpookyPhysNet if is_spooky_model else PhysNet
-            model_fields = getattr(model_cls, "__dataclass_fields__", None)
-            if model_fields:
-                model_config = physnet_constructor_kwargs(model_config, model_cls)
-            MODEL = model_cls(**model_config)
-            MODEL.max_padded_atoms = max_atoms
-            
+                return obj
+
+            if is_joint_checkpoint_config(config):
+                physnet_cfg = normalize_physnet_config(dict(config["physnet_config"]))
+                physnet_cfg["max_padded_atoms"] = max_atoms
+                model_config = physnet_constructor_kwargs(
+                    json_to_jax_config(physnet_cfg), PhysNet
+                )
+                MODEL = PhysNet(**model_config)
+                MODEL.max_padded_atoms = max_atoms
+                params = extract_physnet_params_for_hybrid(params)
+                setup_rows.append(
+                    (
+                        "ml_backend",
+                        "PhysNet submodule (joint config in JSON checkpoint)",
+                    )
+                )
+            else:
+                if not config:
+                    config = {
+                        "features": 32,
+                        "max_degree": 3,
+                        "num_iterations": 2,
+                        "num_basis_functions": 16,
+                        "cutoff": 6.0,
+                        "max_atomic_number": 118,
+                        "charges": False,
+                        "include_electrostatics": False,
+                        "natoms": max_atoms,
+                        "total_charge": 0,
+                        "n_res": 3,
+                        "zbl": True,
+                        "debug": False,
+                        "efa": False,
+                        "use_energy_bias": False,
+                        "use_pbc": bool(cell),
+                    }
+                model_config = json_to_jax_config(config)
+                model_config["max_padded_atoms"] = max_atoms
+                if cell:
+                    model_config["use_pbc"] = True
+                if not model_config.get("charges", False):
+                    model_config["include_electrostatics"] = False
+                is_spooky_model = (
+                    str(config.get("model_type", "")).lower() == "spooky"
+                    or "spooky" in str(restart_path).lower()
+                )
+                model_cls = SpookyPhysNet if is_spooky_model else PhysNet
+                model_fields = getattr(model_cls, "__dataclass_fields__", None)
+                if model_fields:
+                    model_config = physnet_constructor_kwargs(model_config, model_cls)
+                MODEL = model_cls(**model_config)
+                MODEL.max_padded_atoms = max_atoms
+
             params = json_tree_to_jax_params(params, dtype=ml_jnp_dtype)
             
             # Flax models expect params to be wrapped in {'params': {...}}

@@ -78,8 +78,11 @@ def capabilities_for_kind(kind: ProviderKind) -> ProviderCapabilities:
             supports_dipole=True,
             supports_charges=True,
             supports_esp=True,
-            supports_decomposed_ml=False,
-            notes="Joint PhysNet+DCMNet; use SimpleInferenceCalculator or cross-check, not CHARMM decomposed MLpot.",
+            supports_decomposed_ml=True,
+            notes=(
+                "Hybrid MLpot uses PhysNet submodule only (E/F); "
+                "DCMNet distributed charges are not evaluated in monomer/dimer batches."
+            ),
         ),
         ProviderKind.EFIELD_PHYSNET: ProviderCapabilities(
             kind=kind,
@@ -94,7 +97,7 @@ def capabilities_for_kind(kind: ProviderKind) -> ProviderCapabilities:
             supports_forces=False,
             supports_esp=True,
             supports_decomposed_ml=False,
-            notes="Distributed multipoles for ESP; not a standalone PES.",
+            notes="Distributed charge sites for ESP; not a standalone PES.",
         ),
         ProviderKind.PYSCF: ProviderCapabilities(
             kind=kind,
@@ -126,12 +129,21 @@ def capabilities_for_kind(kind: ProviderKind) -> ProviderCapabilities:
 def assert_hybrid_ml_compatible(checkpoint: Path | str, *, config: dict[str, Any] | None = None) -> ProviderKind:
     """Raise ``ValueError`` when a checkpoint cannot drive CHARMM decomposed MLpot."""
     kind = detect_model_kind(checkpoint, config=config)
+    if kind == ProviderKind.EFIELD_PHYSNET:
+        raise ValueError(
+            f"Checkpoint {checkpoint} is an E-field PhysNet model and requires an external "
+            "field vector; it cannot drive standard hybrid CHARMM MLpot. "
+            "Use efield-md or build_provider() instead."
+        )
+    if kind == ProviderKind.UNKNOWN:
+        raise ValueError(
+            f"Could not classify checkpoint {checkpoint} for hybrid MLpot."
+        )
     caps = capabilities_for_kind(kind)
     if not caps.supports_decomposed_ml:
         raise ValueError(
-            f"Checkpoint {checkpoint} is {kind.value} and cannot be used in hybrid CHARMM "
-            f"monomer/dimer MLpot. {caps.notes} "
-            "Use build_provider() for single-structure inference or cross-check instead."
+            f"Checkpoint {checkpoint} ({kind.value}) cannot be used in hybrid CHARMM "
+            f"monomer/dimer MLpot. {caps.notes}"
         )
     return kind
 
