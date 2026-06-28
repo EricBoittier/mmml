@@ -419,6 +419,72 @@ def _get_actual_psf_charges(total_atoms: int) -> np.ndarray:
     return recovered_charges
 
 
+def _wrap_mm_fn_with_jax_pme_coulomb(
+    mm_fn: Callable[..., Tuple[Array, Array]],
+    *,
+    charges_np: np.ndarray,
+    pbc_cell: np.ndarray | None,
+    method: str,
+    sr_cutoff_A: float,
+    dynamic: bool,
+) -> Callable[..., Tuple[Array, Array]]:
+    """Add jax-pme periodic Coulomb to a switched-LJ MM function (hybrid path)."""
+    from mmml.interfaces.pycharmmInterface.long_range_backend import (
+        box_length_from_cell,
+        compute_jax_pme_coulomb,
+    )
+
+    charges_host = np.asarray(charges_np, dtype=np.float64)
+
+    def _box_length(box_override: Array | np.ndarray | None) -> float:
+        if box_override is not None:
+            return box_length_from_cell(np.asarray(jax.device_get(box_override)))
+        if pbc_cell is None:
+            raise ValueError("jax_pme Coulomb requires pbc_cell or box_override")
+        return box_length_from_cell(np.asarray(pbc_cell))
+
+    if dynamic:
+
+        def wrapped(
+            positions: Array,
+            pair_idx: Array,
+            pair_mask: Array,
+            box_override: Optional[Array] = None,
+        ) -> Tuple[Array, Array]:
+            e_lj, f_lj = mm_fn(positions, pair_idx, pair_mask, box_override=box_override)
+            pos_np = np.asarray(jax.device_get(positions), dtype=np.float64)
+            lr = compute_jax_pme_coulomb(
+                pos_np,
+                charges_host,
+                box_length_A=_box_length(box_override),
+                method=method,
+                sr_cutoff_A=sr_cutoff_A,
+            )
+            return (
+                e_lj + jnp.asarray(lr.energy_kcalmol, dtype=e_lj.dtype),
+                f_lj + jnp.asarray(lr.forces_kcalmol_A, dtype=f_lj.dtype),
+            )
+
+        return wrapped
+
+    def wrapped(positions: Array) -> Tuple[Array, Array]:
+        e_lj, f_lj = mm_fn(positions)
+        pos_np = np.asarray(jax.device_get(positions), dtype=np.float64)
+        lr = compute_jax_pme_coulomb(
+            pos_np,
+            charges_host,
+            box_length_A=_box_length(None),
+            method=method,
+            sr_cutoff_A=sr_cutoff_A,
+        )
+        return (
+            e_lj + jnp.asarray(lr.energy_kcalmol, dtype=e_lj.dtype),
+            f_lj + jnp.asarray(lr.forces_kcalmol_A, dtype=f_lj.dtype),
+        )
+
+    return wrapped
+
+
 def build_mm_energy_forces_fn(
     R: np.ndarray,
     *,
@@ -454,6 +520,9 @@ def build_mm_energy_forces_fn(
     debug: bool = False,
     ml_compute_dtype: str | None = None,
     defer_xla_gpu_warmup: bool = False,
+    lr_solver: str | None = None,
+    jax_pme_method: str | None = None,
+    jax_pme_sr_cutoff_A: float = 6.0,
 ) -> Any:
     """Build MM energy/forces function with switching.
 
@@ -475,6 +544,14 @@ def build_mm_energy_forces_fn(
         Otherwise: ``mm_fn(positions) -> (energy, forces)`` (single callable).
     """
     ml_jnp_dtype = resolve_ml_compute_dtype(ml_compute_dtype)
+    from mmml.interfaces.pycharmmInterface.long_range_backend import (
+        pick_lr_solver,
+        resolve_jax_pme_method,
+    )
+
+    _use_jax_pme_coulomb = pick_lr_solver(lr_solver) == "jax_pme"
+    _jax_pme_method = resolve_jax_pme_method(jax_pme_method)
+    _jax_pme_sr_cutoff = float(jax_pme_sr_cutoff_A)
     if ml_cutoff_distance is not None:
         ml_switch_width = ml_cutoff_distance
     if mm_cutoff is not None:
@@ -826,6 +903,8 @@ def build_mm_energy_forces_fn(
 
         pair_mask = (pair_idx_atom_atom[:, 0] < pair_idx_atom_atom[:, 1])
         vdw_energies = lennard_jones(distances, pair_rm, pair_ep) * pair_mask
+        if _use_jax_pme_coulomb:
+            return vdw_energies
         electrostatic_energies = coulomb(distances, pair_qq) * pair_mask
         return vdw_energies + electrostatic_energies
 
@@ -928,6 +1007,8 @@ def build_mm_energy_forces_fn(
 
             pair_mask_ij = (pair_i < pair_j)
             vdw = lennard_jones(distances, pair_rm_dyn, pair_ep_dyn) * pair_mask_ij
+            if _use_jax_pme_coulomb:
+                return vdw
             elec = coulomb(distances, pair_qq_dyn) * pair_mask_ij
             return vdw + elec
 
@@ -1493,6 +1574,26 @@ def build_mm_energy_forces_fn(
 
         update_mm_pairs.get_stats = _get_pair_update_stats
 
-        return (calculate_mm_energy_and_forces_dynamic, update_mm_pairs)
+        mm_fn = calculate_mm_energy_and_forces_dynamic
+        if _use_jax_pme_coulomb:
+            mm_fn = _wrap_mm_fn_with_jax_pme_coulomb(
+                mm_fn,
+                charges_np=charges,
+                pbc_cell=np.asarray(pbc_cell) if pbc_cell is not None else None,
+                method=_jax_pme_method,
+                sr_cutoff_A=_jax_pme_sr_cutoff,
+                dynamic=True,
+            )
+        return (mm_fn, update_mm_pairs)
 
-    return calculate_mm_energy_and_forces
+    mm_fn = calculate_mm_energy_and_forces
+    if _use_jax_pme_coulomb:
+        mm_fn = _wrap_mm_fn_with_jax_pme_coulomb(
+            mm_fn,
+            charges_np=charges,
+            pbc_cell=np.asarray(pbc_cell) if pbc_cell is not None else None,
+            method=_jax_pme_method,
+            sr_cutoff_A=_jax_pme_sr_cutoff,
+            dynamic=False,
+        )
+    return mm_fn
