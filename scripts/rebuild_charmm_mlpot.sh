@@ -270,7 +270,12 @@ if [[ "$needs_configure" == 1 ]]; then
     )
     echo "Using code model flags: $FFLAGS (linker: $CODE_MODEL_FLAG)"
   fi
-  cmake "${CMAKE_ARGS[@]}"
+  CMAKE_BIN="${CMAKE_BIN:-cmake}"
+  if [[ -x /opt/gcc-12.2.0/cmake-3.25.1/bin/cmake ]]; then
+    CMAKE_BIN=/opt/gcc-12.2.0/cmake-3.25.1/bin/cmake
+    export LD_LIBRARY_PATH="/opt/gcc-12.2.0/build/lib64:${LD_LIBRARY_PATH:-}"
+  fi
+  "$CMAKE_BIN" "${CMAKE_ARGS[@]}"
 fi
 
 echo "Building $LIB_BASENAME in $BUILD_DIR ..."
@@ -283,8 +288,13 @@ _build_jobs() {
     echo 4
   fi
 }
-cmake --build "$BUILD_DIR" -j "$(_build_jobs)"
-cmake --install "$BUILD_DIR" || true
+CMAKE_BIN="${CMAKE_BIN:-cmake}"
+if [[ -x /opt/gcc-12.2.0/cmake-3.25.1/bin/cmake ]]; then
+  CMAKE_BIN=/opt/gcc-12.2.0/cmake-3.25.1/bin/cmake
+  export LD_LIBRARY_PATH="/opt/gcc-12.2.0/build/lib64:${LD_LIBRARY_PATH:-}"
+fi
+"$CMAKE_BIN" --build "$BUILD_DIR" -j "$(_build_jobs)"
+"$CMAKE_BIN" --install "$BUILD_DIR" || true
 
 BUILT=""
 for candidate in \

@@ -108,10 +108,16 @@ cell = cell_from_tag(cfg, '${RUN_TAG}')
 print(' '.join(warmup_mlpot_argv(cfg, cell)))
 ")"
   if [[ -n "${SLURM_JOB_ID:-}" ]]; then
-    # Slurm srun without PMI cannot run MPI-linked CHARMM/JAX warmup serially.
-    # Launch under the CHARMM-matched OpenMPI wrapper (np=1).
-    if ! "$REPO_ROOT/scripts/mmml-charmm-mpirun.sh" $WARMUP_ARGS; then
-      echo "ERROR: warmup-mlpot-jax failed (mpirun -np 1 under Slurm)" >&2
+    # srun PMI is incompatible with MPI-linked --do-mm warmup; compile JAX ML path only.
+    WARMUP_ARGS="${WARMUP_ARGS// --do-mm/}"
+    while IFS= read -r _var; do
+      [[ -n "$_var" ]] && unset "$_var" 2>/dev/null || true
+    done < <(env | cut -d= -f1 | grep -E '^(OMPI_|PMI_|PMIX_|MPI_LOCALRANKID$|SLURM_MPI_TYPE$)' || true)
+    export OMPI_MCA_ess=singleton
+    export OMPI_MCA_mpi_init_support=0
+    # shellcheck disable=SC2086
+    if ! "$PY" -m mmml.cli.__main__ $WARMUP_ARGS; then
+      echo "ERROR: warmup-mlpot-jax failed (serial JAX under Slurm)" >&2
       exit 1
     fi
   else
