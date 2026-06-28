@@ -105,9 +105,11 @@ class TrainingConfig:
 
 def load_model_from_json(model_file: Union[str, Path]) -> EF:
     """Load a model from a JSON file."""
+    from mmml.utils.model_checkpoint import build_physnet_from_config
+
     with open(model_file, 'r') as f:
         model_attrs = json.load(f)
-    return EF(**model_attrs)
+    return build_physnet_from_config(model_attrs)
 
 
 def prepare_training(

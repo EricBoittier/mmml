@@ -341,6 +341,7 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
     print_cluster_geometry_summary(r, n_mol)
 
     paths = staged_artifact_paths(out_dir, tag)
+    (out_dir / "pretreat").mkdir(parents=True, exist_ok=True)
     charmm_pbc = resolve_charmm_use_pbc(args)
     box_side = resolve_pbc_box_side(args, r) if charmm_pbc else None
     atoms_per_list = getattr(args, "_cluster_atoms_per_list", None)

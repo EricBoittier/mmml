@@ -122,6 +122,20 @@ def physnet_constructor_kwargs(cfg: dict[str, Any], model_cls: type) -> dict[str
     return {k: v for k, v in out.items() if k in fields}
 
 
+def build_physnet_from_config(
+    config: dict[str, Any],
+    model_cls: Any | None = None,
+    **overrides: Any,
+) -> Any:
+    """Construct a PhysNet-family model from checkpoint config (legacy keys OK)."""
+    if model_cls is None:
+        from mmml.models.physnetjax.physnetjax.models.model import PhysNet
+
+        model_cls = PhysNet
+    merged = normalize_physnet_config({**config, **overrides})
+    return model_cls(**physnet_constructor_kwargs(merged, model_cls))
+
+
 def extract_model_config(model: Any) -> Dict[str, Any]:
     """
     Extract configuration from a model object.

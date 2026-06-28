@@ -140,9 +140,14 @@ def get_params_model(
 
     # kwargs = _process_model_attributes(restored["model_attributes"], natoms)
     kwargs = restored["model_attributes"]
-    # print(kwargs)
-    model = EF(**kwargs)
-    model.natoms = natoms
+    from mmml.utils.model_checkpoint import build_physnet_from_config
+
+    model = build_physnet_from_config(
+        kwargs,
+        max_padded_atoms=natoms if natoms is not None else kwargs.get("natoms"),
+    )
+    if natoms is not None:
+        model.max_padded_atoms = natoms
     model.zbl = bool(kwargs["zbl"]) if "zbl" in kwargs.keys() else False
 
     checkpoint_meta = {
@@ -275,14 +280,14 @@ def get_params_model_with_ase(pkl_path, model_path, atoms):
     """
     import pandas as pd
 
-    from physnetjax.models.model import EF
     from physnetjax.utils.utils import _process_model_attributes
+
+    from mmml.utils.model_checkpoint import build_physnet_from_config
 
     params = pd.read_pickle(pkl_path)
     model_kwargs = pd.read_pickle(model_path)
     print(model_kwargs)
     model_kwargs = _process_model_attributes(model_kwargs)
-    model_kwargs["natoms"] = len(atoms)
-    model = EF(**model_kwargs)
+    model = build_physnet_from_config(model_kwargs, max_padded_atoms=len(atoms))
     print(model)
     return params, model

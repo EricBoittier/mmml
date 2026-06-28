@@ -119,6 +119,7 @@ except ImportError:
 
 # Import PhysNet components
 from mmml.models.physnetjax.physnetjax.models.model import EF
+from mmml.utils.model_checkpoint import build_physnet_from_config
 from mmml.models.physnetjax.physnetjax.directories import BASE_CKPT_DIR
 from mmml.cli.base import BUNDLED_PORTABLE_MEOH_PATH
 from mmml.models.physnetjax.defaults import (
@@ -705,7 +706,7 @@ class JointPhysNetNonEquivariant(nn.Module):
     
     def setup(self):
         """Initialize PhysNet and non-equivariant charge model."""
-        self.physnet = EF(**self.physnet_config)
+        self.physnet = build_physnet_from_config(self.physnet_config)
         self.noneq_model = NonEquivariantChargeModel(**self.noneq_config)
 
         mixer_cfg = self.mixer_config or {}
@@ -889,7 +890,7 @@ class JointPhysNetDCMNet(nn.Module):
     def setup(self):
         """Initialize both PhysNet and DCMNet models."""
         # PhysNet must have charges=True to predict atomic charges
-        self.physnet = EF(**self.physnet_config)
+        self.physnet = build_physnet_from_config(self.physnet_config)
         self.dcmnet = MessagePassingModel(**self.dcmnet_config)
 
         mixer_cfg = self.mixer_config or {}

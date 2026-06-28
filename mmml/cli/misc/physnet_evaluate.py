@@ -144,8 +144,10 @@ def _load_physnet_checkpoint(checkpoint: Path, natoms: int):
                 f"{json_path} has weights only (no config). "
                 "Combine with args.model.json into a portable JSON, or use an Orbax epoch-* checkpoint."
             )
-        model = StandardEF(**config)
-        model.natoms = natoms
+        from mmml.utils.model_checkpoint import build_physnet_from_config
+
+        model = build_physnet_from_config(config, model_cls=StandardEF, max_padded_atoms=natoms)
+        model.max_padded_atoms = natoms
         if "zbl" in config:
             model.zbl = bool(config["zbl"])
         params = normalize_flax_params_for_apply(params_raw, backend="jax")

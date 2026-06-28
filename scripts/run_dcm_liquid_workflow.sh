@@ -33,6 +33,8 @@
 #   N_DCM=20 BOX_SIZE=45 SKIP_HEALTH=1 ~/mmml/scripts/run_dcm_liquid_workflow.sh  # fast dilute smoke
 #   MD_STAGES=mini,equi PS_EQUI=10 ~/mmml/scripts/run_dcm_liquid_workflow.sh
 #   SKIP_HEALTH=1 SKIP_LIQUID_BOX=1 BOX_DIR=~/tests/boxes/dcm60_L32 ~/mmml/scripts/run_dcm_liquid_workflow.sh
+#   MINI_BOX_EQUIL_PS=0 ~/mmml/scripts/run_dcm_liquid_workflow.sh   # skip pretreat NVT if I/O fails
+#   LIQUID_BOX_VERBOSE=1 ~/mmml/scripts/run_dcm_liquid_workflow.sh  # drop --quiet on liquid-box
 #
 set -euo pipefail
 
@@ -52,6 +54,7 @@ DCM_RHO="${DCM_RHO:-1.326}"            # g/cm³ target for MC / NPT equilibratio
 MIC_MIN_BOX="${MIC_MIN_BOX:-28}"         # Å; warn below this (L/2 vs ml_cutoff/cutnb)
 ML_CUTOFF="${ML_CUTOFF:-12.0}"
 LIQUID_BOX_PROFILE="${LIQUID_BOX_PROFILE:-dense}"  # dense → liquid_prep + mini-NPT toward ρ
+MINI_BOX_EQUIL_PS="${MINI_BOX_EQUIL_PS:-}"         # empty = liquid-box profile default (2 ps dense)
 
 # --- phases -----------------------------------------------------------------
 SKIP_HEALTH="${SKIP_HEALTH:-0}"
@@ -177,16 +180,24 @@ if [[ "$SKIP_LIQUID_BOX" != "1" ]]; then
   else
     echo "[phase A] liquid-box (MM only, L=${BOX_SIZE} Å, profile=${LIQUID_BOX_PROFILE}) ..."
     mkdir -p "$(dirname "$BOX_DIR")"
-    "$MPIRUN" liquid-box \
-      --composition "DCM:${N_DCM}" \
-      --box-size "$BOX_SIZE" \
-      --target-density-g-cm3 "$DCM_RHO" \
-      --profile "$LIQUID_BOX_PROFILE" \
-      --output-dir "$BOX_DIR" \
-      --charmm-sd-steps "${CHARMM_SD_STEPS:-100}" \
-      --charmm-abnr-steps "${CHARMM_ABNR_STEPS:-200}" \
-      --temperature "$TEMPERATURE" \
-      --quiet
+    LIQUID_BOX_ARGS=(
+      liquid-box
+      --composition "DCM:${N_DCM}"
+      --box-size "$BOX_SIZE"
+      --target-density-g-cm3 "$DCM_RHO"
+      --profile "$LIQUID_BOX_PROFILE"
+      --output-dir "$BOX_DIR"
+      --charmm-sd-steps "${CHARMM_SD_STEPS:-100}"
+      --charmm-abnr-steps "${CHARMM_ABNR_STEPS:-200}"
+      --temperature "$TEMPERATURE"
+    )
+    if [[ -n "$MINI_BOX_EQUIL_PS" ]]; then
+      LIQUID_BOX_ARGS+=(--mini-box-equil-ps "$MINI_BOX_EQUIL_PS")
+    fi
+    if [[ "${LIQUID_BOX_VERBOSE:-0}" != "1" ]]; then
+      LIQUID_BOX_ARGS+=(--quiet)
+    fi
+    "$MPIRUN" "${LIQUID_BOX_ARGS[@]}"
   fi
   if [[ ! -f "$PSF" || ! -f "$CRD" ]]; then
     echo "liquid-box did not write $PSF / $CRD" >&2

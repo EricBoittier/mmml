@@ -33,6 +33,17 @@ def test_canonicalize_for_save_matches_normalize() -> None:
     assert canonicalize_physnet_config_for_save(legacy) == normalize_physnet_config(legacy)
 
 
+def test_build_physnet_from_config_legacy_n_res() -> None:
+    from mmml.utils.model_checkpoint import build_physnet_from_config
+
+    model = build_physnet_from_config(
+        {"features": 32, "n_res": 3, "natoms": 34, "num_iterations": 2, "cutoff": 6.0},
+        max_padded_atoms=34,
+    )
+    assert model.n_refinement_blocks == 3
+    assert model.max_padded_atoms == 34
+
+
 def test_physnet_constructor_kwargs_prefers_canonical_fields() -> None:
     class _PhysNet:
         __dataclass_fields__ = {

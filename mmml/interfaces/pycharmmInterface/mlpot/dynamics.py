@@ -75,8 +75,10 @@ class CharmmTrajectoryFiles:
             open_files.append(f)
             kw["iunrea"] = self.restart_read_unit
         if self.restart_write is not None:
+            p = Path(self.restart_write)
+            p.parent.mkdir(parents=True, exist_ok=True)
             f = pycharmm.CharmmFile(
-                file_name=str(self.restart_write),
+                file_name=str(p),
                 file_unit=self.restart_write_unit,
                 formatted=True,
                 read_only=False,

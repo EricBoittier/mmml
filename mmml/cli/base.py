@@ -274,15 +274,15 @@ def load_physnet_params_and_ef_model(
     """
     p = resolved_checkpoint
     if p.is_file() and p.suffix == ".json":
-        from mmml.models.physnetjax.physnetjax.models.model import EF
-        from mmml.utils.model_checkpoint import load_model_checkpoint
-
-        from mmml.utils.model_checkpoint import normalize_flax_params_for_apply
+        from mmml.utils.model_checkpoint import (
+            build_physnet_from_config,
+            load_model_checkpoint,
+            normalize_flax_params_for_apply,
+        )
 
         ck = load_model_checkpoint(p, use_orbax=False)
         cfg = dict(ck.get("config") or {})
-        cfg["natoms"] = natoms
-        model = EF(**cfg)
+        model = build_physnet_from_config(cfg, max_padded_atoms=natoms)
         params = normalize_flax_params_for_apply(ck["params"])
         return params, model
 

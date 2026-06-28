@@ -207,6 +207,8 @@ def _run_charmm_mm_pretreat_cpt_stage(
 
     nstep = max(1, ps_to_nsteps(timestep_ps, duration_ps))
     save = bool(getattr(args, "save", True))
+    pretreat_dir = Path(paths[res_key]).parent
+    pretreat_dir.mkdir(parents=True, exist_ok=True)
     dcd_nsavc = resolve_dcd_nsavc_for_args(
         args,
         nstep=nstep,
