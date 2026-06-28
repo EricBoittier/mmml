@@ -62,17 +62,17 @@ def main():
     if command == "commands":
         from .commands_help import commands_main
 
-        return commands_main(args.args or None)
+        return commands_main(args.args)
 
     elif command == "examples":
         from .commands_help import examples_main
 
-        return examples_main(args.args or None)
+        return examples_main(args.args)
 
     elif command == "configure":
         from .configure import configure_main
 
-        return configure_main(args.args or None)
+        return configure_main(args.args)
 
     elif command == "make-res":
         from .misc import make_res_cli
@@ -141,7 +141,7 @@ def main():
 
     elif command == "validate":
         from .misc import validate_cli
-        return validate_cli.main(args.args or None)
+        return validate_cli.main(args.args)
 
     elif command == "train":
         from . import train
@@ -280,15 +280,15 @@ def main():
 
     elif command == "orca-server":
         from mmml.interfaces.orca_external.server import main as orca_server_main
-        return orca_server_main(args.args or None)
+        return orca_server_main(args.args)
 
     elif command == "orca-client":
         from mmml.interfaces.orca_external.client import main as orca_client_main
-        return orca_client_main(args.args or None)
+        return orca_client_main(args.args)
 
     elif command == "orca-external":
         from mmml.interfaces.orca_external.runner import main as orca_external_main
-        return orca_external_main(args.args or None)
+        return orca_external_main(args.args)
 
     else:
         parser.print_help()

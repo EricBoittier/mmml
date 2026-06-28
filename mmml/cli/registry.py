@@ -146,7 +146,7 @@ def format_audit_report() -> str:
     for spec in COMMAND_REGISTRY:
         if spec.status != "active":
             continue
-        flag = "✓ flags" if parser_available(spec.name) else "  (top-level only)"
+        flag = "✓ flags" if parser_available(spec.name, import_module=False) else "  (top-level only)"
         lines.append(f"  {spec.name:<28} {flag}  {spec.summary}")
     lines.append("")
     lines.append("Install: pip install 'mmml[cli]' && eval \"$(register-python-argcomplete mmml)\"")

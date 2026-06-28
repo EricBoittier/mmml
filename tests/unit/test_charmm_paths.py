@@ -50,6 +50,44 @@ def test_explicit_env_overrides_repo_default(tmp_path):
     assert home == str(chm)
 
 
+def test_stale_explicit_lib_dir_falls_back_to_repo_default(tmp_path):
+    repo = tmp_path / "repo"
+    chm = repo / "setup" / "charmm"
+    lib_dir = chm / "lib"
+    lib_dir.mkdir(parents=True)
+    (lib_dir / "libcharmm.so").write_bytes(b"stub")
+
+    home, lib = charmm_paths.resolve_charmm_paths(
+        repo_root=repo,
+        env={"CHARMM_LIB_DIR": "/path/to/charmm"},
+    )
+
+    assert home == str(chm)
+    assert lib == str(chm)
+
+
+def test_normalize_charmm_lib_dir_so_file(tmp_path):
+    lib = tmp_path / "libcharmm.so"
+    lib.write_bytes(b"x")
+    assert charmm_paths.normalize_charmm_lib_dir(str(lib)) == str(tmp_path)
+
+
+def test_resolve_lib_dir_accepts_lib_subdir(tmp_path):
+    repo = tmp_path / "repo"
+    chm = repo / "setup" / "charmm"
+    lib_dir = chm / "lib"
+    lib_dir.mkdir(parents=True)
+    (lib_dir / "libcharmm.so").write_bytes(b"stub")
+
+    home, lib = charmm_paths.resolve_charmm_paths(
+        repo_root=repo,
+        env={"CHARMM_LIB_DIR": str(lib_dir)},
+    )
+
+    assert lib == str(lib_dir)
+    assert home == str(chm)
+
+
 def test_charmmsetup_legacy_export_format(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()

@@ -68,7 +68,7 @@ def mpi_rank_size(comm: Any = None) -> Tuple[int, int]:
     if comm is not None:
         return int(comm.Get_rank()), int(comm.Get_size())
     env_rank, env_size = _rank_size_from_launcher_env()
-    if not _mpi4py_is_initialized() and env_size > 1:
+    if not _mpi4py_is_initialized():
         return env_rank, env_size
     try:
         from mpi4py import MPI

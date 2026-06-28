@@ -34,7 +34,7 @@ def build_examples_parser() -> argparse.ArgumentParser:
 
 
 def commands_main(argv: list[str] | None = None) -> int:
-    args = build_commands_parser().parse_args(argv)
+    args = build_commands_parser().parse_args(argv if argv is not None else [])
     if args.audit:
         sys.stdout.write(format_audit_report() + "\n")
         return 0
@@ -43,6 +43,6 @@ def commands_main(argv: list[str] | None = None) -> int:
 
 
 def examples_main(argv: list[str] | None = None) -> int:
-    build_examples_parser().parse_args(argv)
+    build_examples_parser().parse_args(argv if argv is not None else [])
     sys.stdout.write(format_examples_help() + "\n")
     return 0
