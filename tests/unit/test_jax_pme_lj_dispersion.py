@@ -5,6 +5,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
+    hybrid_jax_pme_lj_dispersion_correction,
+    intra_monomer_jax_pme_lj_dispersion,
+)
 from mmml.interfaces.pycharmmInterface.long_range_backend import (
     compute_jax_pme_lj_dispersion,
     per_atom_jax_pme_c6_sqrt,
@@ -76,3 +80,84 @@ def test_jax_pme_lj_methods_agree_ewald_reference(method: str):
         pos, c6_sqrt, box_length_A=L, method=method, sr_cutoff_A=6.0
     )
     np.testing.assert_allclose(test.energy_kcalmol, ref.energy_kcalmol, rtol=5e-2)
+
+
+def test_intra_monomer_lj_dispersion_sums_per_monomer():
+    """Intra r^-6 term is the sum of single-monomer jax-pme evaluations."""
+    ep = 0.1
+    sig = 3.5
+    r = 5.0
+    L = 100.0
+    pos = np.array([[0.0, 0.0, 0.0], [r, 0.0, 0.0]])
+    c6_sqrt = per_atom_jax_pme_c6_sqrt_for_atoms(
+        np.array([-ep, -ep]),
+        np.array([sig, sig]),
+    )
+    offsets = np.array([0, 1, 2], dtype=np.int64)
+    intra = intra_monomer_jax_pme_lj_dispersion(
+        pos,
+        c6_sqrt,
+        offsets,
+        box_length_A=L,
+        method="ewald",
+        sr_cutoff_A=6.0,
+    )
+    e0 = compute_jax_pme_lj_dispersion(
+        pos[0:1], c6_sqrt[0:1], box_length_A=L, method="ewald", sr_cutoff_A=6.0
+    )
+    e1 = compute_jax_pme_lj_dispersion(
+        pos[1:2], c6_sqrt[1:2], box_length_A=L, method="ewald", sr_cutoff_A=6.0
+    )
+    np.testing.assert_allclose(
+        intra.energy_kcalmol,
+        e0.energy_kcalmol + e1.energy_kcalmol,
+        rtol=1e-10,
+    )
+
+
+def test_hybrid_lj_dispersion_is_full_minus_intra_scaled():
+    """MM r^-6 uses scale * (E_pme - E_intra), not the full periodic sum."""
+    ep = 0.1
+    sig = 3.5
+    r = 5.0
+    L = 100.0
+    pos = np.array([[0.0, 0.0, 0.0], [r, 0.0, 0.0]])
+    c6_sqrt = per_atom_jax_pme_c6_sqrt_for_atoms(
+        np.array([-ep, -ep]),
+        np.array([sig, sig]),
+    )
+    offsets = np.array([0, 1, 2], dtype=np.int64)
+    full = compute_jax_pme_lj_dispersion(
+        pos, c6_sqrt, box_length_A=L, method="ewald", sr_cutoff_A=6.0
+    )
+    intra = intra_monomer_jax_pme_lj_dispersion(
+        pos,
+        c6_sqrt,
+        offsets,
+        box_length_A=L,
+        method="ewald",
+        sr_cutoff_A=6.0,
+    )
+    switch_scale = 1.0
+    corr = hybrid_jax_pme_lj_dispersion_correction(
+        pos,
+        c6_sqrt,
+        offsets,
+        box_length_A=L,
+        method="ewald",
+        sr_cutoff_A=6.0,
+        switch_scale=switch_scale,
+    )
+    expected_unscaled = full.energy_kcalmol - intra.energy_kcalmol
+    np.testing.assert_allclose(
+        corr.energy_kcalmol,
+        switch_scale * expected_unscaled,
+        rtol=1e-10,
+    )
+    expected_f = full.forces_kcalmol_A - intra.forces_kcalmol_A
+    np.testing.assert_allclose(
+        corr.forces_kcalmol_A,
+        switch_scale * expected_f,
+        rtol=1e-8,
+    )
+

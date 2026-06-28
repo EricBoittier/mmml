@@ -1,10 +1,10 @@
-"""Hybrid ML/MM jax-pme Coulomb: cross-monomer periodic with intra subtraction.
+"""Hybrid ML/MM jax-pme: cross-monomer periodic Coulomb and r⁻⁶ LJ dispersion.
 
 The hybrid ``build_mm_energy_forces_fn`` path evaluates MM on **cross-monomer**
-pairs with COM switching (LJ only when jax-pme supplies Coulomb).  Full-box
-jax-pme includes intra-monomer Coulomb that must not enter the MM term.
+pairs with COM switching (r⁻¹² repulsion when jax-pme supplies dispersion).
+Full-box jax-pme includes intra-monomer terms that must not enter the MM term.
 
-The MM electrostatic contribution is::
+Each MM long-range contribution is::
 
     scale * (E_pme_full - E_intra)
 
@@ -12,8 +12,8 @@ where ``E_intra`` is the sum of jax-pme energies over each monomer slice in the
 same periodic box.  COM switching uses the same sharpstep logic as the pair loop.
 
 A finer SR/LR split (MIC cross pairs + ``E_pme - E_intra - E_mic``) is available
-for testing but is not used in production: CHARMM MIC 1/r does not match the
-jax-pme screened real-space kernel within ``sr_cutoff_A``.
+for Coulomb testing but is not used in production: CHARMM MIC 1/r does not match
+the jax-pme screened real-space kernel within ``sr_cutoff_A``.
 """
 
 from __future__ import annotations
@@ -26,16 +26,32 @@ from mmml.interfaces.pycharmmInterface.long_range_backend import (
     CHARMM_COULOMB_KCAL,
     box_length_from_cell,
     compute_jax_pme_coulomb,
+    compute_jax_pme_lj_dispersion,
+    compute_jax_pme_power_law,
 )
 
 
 @dataclass(frozen=True)
-class HybridJaxPmeCoulombResult:
+class HybridJaxPmeCorrectionResult:
     energy_kcalmol: float
     forces_kcalmol_A: np.ndarray
     energy_intra_kcalmol: float
     energy_mic_cross_kcalmol: float
     switch_scale: float
+
+
+# Backward-compatible alias
+HybridJaxPmeCoulombResult = HybridJaxPmeCorrectionResult
+
+
+@dataclass(frozen=True)
+class HybridJaxPmeMmResult:
+    """Combined Coulomb + r⁻⁶ dispersion hybrid corrections."""
+
+    energy_kcalmol: float
+    forces_kcalmol_A: np.ndarray
+    coulomb: HybridJaxPmeCorrectionResult
+    dispersion: HybridJaxPmeCorrectionResult | None
 
 
 def _mic_displacement_np(ri: np.ndarray, rj: np.ndarray, cell: np.ndarray) -> np.ndarray:
@@ -84,13 +100,17 @@ def _mm_switch_scales(
             if mm_r_min is not None and r < float(mm_r_min):
                 scale = 0.0
             elif complementary_handoff:
-                handoff = float(_sharpstep(r, mm_switch_on - ml_switch_width, mm_switch_on, gamma=GAMMA_ON))
+                handoff = float(
+                    _sharpstep(r, mm_switch_on - ml_switch_width, mm_switch_on, gamma=GAMMA_ON)
+                )
                 taper = 1.0 - float(
                     _sharpstep(r, mm_switch_on, mm_switch_on + mm_switch_width, gamma=GAMMA_OFF)
                 )
                 scale = handoff * taper
             else:
-                mm_on = float(_sharpstep(r, mm_switch_on, mm_switch_on + mm_switch_width, gamma=GAMMA_ON))
+                mm_on = float(
+                    _sharpstep(r, mm_switch_on, mm_switch_on + mm_switch_width, gamma=GAMMA_ON)
+                )
                 mm_off = float(
                     _sharpstep(
                         r,
@@ -106,18 +126,46 @@ def _mm_switch_scales(
     return scales[:idx] if idx else np.array([0.0], dtype=np.float64)
 
 
-def intra_monomer_jax_pme_coulomb(
+def _mean_switch_scale(
+    positions: np.ndarray,
+    monomer_offsets: np.ndarray,
+    *,
+    pbc_cell: np.ndarray | None,
+    ml_switch_width: float,
+    mm_switch_on: float,
+    mm_switch_width: float,
+    complementary_handoff: bool,
+    mm_r_min: float | None,
+) -> float:
+    if pbc_cell is None:
+        return 1.0
+    scales = _mm_switch_scales(
+        positions,
+        monomer_offsets,
+        ml_switch_width=ml_switch_width,
+        mm_switch_on=mm_switch_on,
+        mm_switch_width=mm_switch_width,
+        complementary_handoff=complementary_handoff,
+        pbc_cell=np.asarray(pbc_cell, dtype=np.float64),
+        mm_r_min=mm_r_min,
+    )
+    return float(np.mean(scales)) if scales.size else 0.0
+
+
+def _intra_monomer_jax_pme_power_law(
     positions_A: np.ndarray,
-    charges_e: np.ndarray,
+    coefficients: np.ndarray,
     monomer_offsets: np.ndarray,
     *,
     box_length_A: float,
     method: str,
     sr_cutoff_A: float,
-) -> HybridJaxPmeCoulombResult:
-    """Sum jax-pme Coulomb over each monomer slice (intra-monomer contribution)."""
+    exponent: int,
+    prefactor: float | None,
+) -> HybridJaxPmeCorrectionResult:
+    """Sum jax-pme 1/r^p over each monomer slice (intra-monomer contribution)."""
     pos = np.asarray(positions_A, dtype=np.float64)
-    chg = np.asarray(charges_e, dtype=np.float64).reshape(-1)
+    coef = np.asarray(coefficients, dtype=np.float64).reshape(-1)
     offsets = np.asarray(monomer_offsets, dtype=np.int64)
     n_monomers = int(len(offsets) - 1)
     energy = 0.0
@@ -126,21 +174,73 @@ def intra_monomer_jax_pme_coulomb(
         sl = slice(int(offsets[m]), int(offsets[m + 1]))
         if sl.stop - sl.start == 0:
             continue
-        sub = compute_jax_pme_coulomb(
+        sub = compute_jax_pme_power_law(
             pos[sl],
-            chg[sl],
+            coef[sl],
             box_length_A=float(box_length_A),
             method=method,
             sr_cutoff_A=sr_cutoff_A,
+            exponent=int(exponent),
+            prefactor=prefactor,
         )
         energy += float(sub.energy_kcalmol)
         forces[sl] += sub.forces_kcalmol_A
-    return HybridJaxPmeCoulombResult(
+    return HybridJaxPmeCorrectionResult(
         energy_kcalmol=energy,
         forces_kcalmol_A=forces,
         energy_intra_kcalmol=energy,
         energy_mic_cross_kcalmol=0.0,
         switch_scale=1.0,
+    )
+
+
+def intra_monomer_jax_pme_coulomb(
+    positions_A: np.ndarray,
+    charges_e: np.ndarray,
+    monomer_offsets: np.ndarray,
+    *,
+    box_length_A: float,
+    method: str,
+    sr_cutoff_A: float,
+) -> HybridJaxPmeCorrectionResult:
+    """Sum jax-pme Coulomb over each monomer slice (intra-monomer contribution)."""
+    from jaxpme import prefactors as jpref
+
+    return _intra_monomer_jax_pme_power_law(
+        positions_A,
+        charges_e,
+        monomer_offsets,
+        box_length_A=box_length_A,
+        method=method,
+        sr_cutoff_A=sr_cutoff_A,
+        exponent=1,
+        prefactor=float(jpref.kcalmol_A),
+    )
+
+
+def intra_monomer_jax_pme_lj_dispersion(
+    positions_A: np.ndarray,
+    c6_sqrt: np.ndarray,
+    monomer_offsets: np.ndarray,
+    *,
+    box_length_A: float,
+    method: str,
+    sr_cutoff_A: float,
+) -> HybridJaxPmeCorrectionResult:
+    """Sum jax-pme r⁻⁶ dispersion over each monomer slice."""
+    from mmml.interfaces.pycharmmInterface.long_range_backend import (
+        DEFAULT_JAX_PME_LJ_PREFACTOR,
+    )
+
+    return _intra_monomer_jax_pme_power_law(
+        positions_A,
+        c6_sqrt,
+        monomer_offsets,
+        box_length_A=box_length_A,
+        method=method,
+        sr_cutoff_A=sr_cutoff_A,
+        exponent=6,
+        prefactor=DEFAULT_JAX_PME_LJ_PREFACTOR,
     )
 
 
@@ -185,6 +285,35 @@ def mic_cross_coulomb_unswitched(
     return energy, forces
 
 
+def _hybrid_jax_pme_power_law_correction(
+    positions_A: np.ndarray,
+    coefficients: np.ndarray,
+    monomer_offsets: np.ndarray,
+    *,
+    box_length_A: float,
+    method: str,
+    sr_cutoff_A: float,
+    exponent: int,
+    prefactor: float | None,
+    switch_scale: float,
+    full_compute,
+    intra_compute,
+) -> HybridJaxPmeCorrectionResult:
+    pos = np.asarray(positions_A, dtype=np.float64)
+    coef = np.asarray(coefficients, dtype=np.float64)
+    full = full_compute(pos, coef)
+    intra = intra_compute(pos, coef)
+    lr_e = float(full.energy_kcalmol) - intra.energy_kcalmol
+    lr_f = np.asarray(full.forces_kcalmol_A - intra.forces_kcalmol_A, dtype=np.float64)
+    return HybridJaxPmeCorrectionResult(
+        energy_kcalmol=switch_scale * lr_e,
+        forces_kcalmol_A=switch_scale * lr_f,
+        energy_intra_kcalmol=intra.energy_kcalmol,
+        energy_mic_cross_kcalmol=0.0,
+        switch_scale=switch_scale,
+    )
+
+
 def hybrid_jax_pme_coulomb_correction(
     positions_A: np.ndarray,
     charges_e: np.ndarray,
@@ -205,15 +334,22 @@ def hybrid_jax_pme_coulomb_correction(
     complementary_handoff: bool = True,
     mm_r_min: float | None = None,
     subtract_pair_mic_sr: bool = False,
-) -> HybridJaxPmeCoulombResult:
-    """Periodic Coulomb correction: jax-pme full box minus intra-monomer terms.
-
-    When ``subtract_pair_mic_sr`` is True and pair lists are supplied, also
-    subtracts unswitched MIC Coulomb on cross-monomer pairs (experimental; kernels
-    must match for a consistent Ewald split).
-    """
+) -> HybridJaxPmeCorrectionResult:
+    """Periodic Coulomb correction: jax-pme full box minus intra-monomer terms."""
     pos = np.asarray(positions_A, dtype=np.float64)
     chg = np.asarray(charges_e, dtype=np.float64)
+    offsets = np.asarray(monomer_offsets, dtype=np.int64)
+    switch_scale = _mean_switch_scale(
+        pos,
+        offsets,
+        pbc_cell=pbc_cell,
+        ml_switch_width=ml_switch_width,
+        mm_switch_on=mm_switch_on,
+        mm_switch_width=mm_switch_width,
+        complementary_handoff=complementary_handoff,
+        mm_r_min=mm_r_min,
+    )
+
     full = compute_jax_pme_coulomb(
         pos,
         chg,
@@ -224,7 +360,7 @@ def hybrid_jax_pme_coulomb_correction(
     intra = intra_monomer_jax_pme_coulomb(
         pos,
         chg,
-        monomer_offsets,
+        offsets,
         box_length_A=float(box_length_A),
         method=method,
         sr_cutoff_A=sr_cutoff_A,
@@ -252,26 +388,120 @@ def hybrid_jax_pme_coulomb_correction(
     lr_e = float(full.energy_kcalmol) - intra.energy_kcalmol - mic_e
     lr_f = np.asarray(full.forces_kcalmol_A - intra.forces_kcalmol_A - mic_f, dtype=np.float64)
 
-    switch_scale = 1.0
-    if pbc_cell is not None:
-        scales = _mm_switch_scales(
-            pos,
-            monomer_offsets,
-            ml_switch_width=ml_switch_width,
-            mm_switch_on=mm_switch_on,
-            mm_switch_width=mm_switch_width,
-            complementary_handoff=complementary_handoff,
-            pbc_cell=np.asarray(pbc_cell, dtype=np.float64),
-            mm_r_min=mm_r_min,
-        )
-        switch_scale = float(np.mean(scales)) if scales.size else 0.0
-
-    return HybridJaxPmeCoulombResult(
+    return HybridJaxPmeCorrectionResult(
         energy_kcalmol=switch_scale * lr_e,
         forces_kcalmol_A=switch_scale * lr_f,
         energy_intra_kcalmol=intra.energy_kcalmol,
         energy_mic_cross_kcalmol=mic_e,
         switch_scale=switch_scale,
+    )
+
+
+def hybrid_jax_pme_lj_dispersion_correction(
+    positions_A: np.ndarray,
+    c6_sqrt: np.ndarray,
+    monomer_offsets: np.ndarray,
+    *,
+    box_length_A: float,
+    method: str,
+    sr_cutoff_A: float,
+    switch_scale: float,
+) -> HybridJaxPmeCorrectionResult:
+    """Periodic r⁻⁶ LJ tail: jax-pme full box minus intra-monomer dispersion."""
+    pos = np.asarray(positions_A, dtype=np.float64)
+    coef = np.asarray(c6_sqrt, dtype=np.float64).reshape(-1)
+    offsets = np.asarray(monomer_offsets, dtype=np.int64)
+
+    full = compute_jax_pme_lj_dispersion(
+        pos,
+        coef,
+        box_length_A=float(box_length_A),
+        method=method,
+        sr_cutoff_A=sr_cutoff_A,
+    )
+    intra = intra_monomer_jax_pme_lj_dispersion(
+        pos,
+        coef,
+        offsets,
+        box_length_A=float(box_length_A),
+        method=method,
+        sr_cutoff_A=sr_cutoff_A,
+    )
+    lr_e = float(full.energy_kcalmol) - intra.energy_kcalmol
+    lr_f = np.asarray(full.forces_kcalmol_A - intra.forces_kcalmol_A, dtype=np.float64)
+    return HybridJaxPmeCorrectionResult(
+        energy_kcalmol=switch_scale * lr_e,
+        forces_kcalmol_A=switch_scale * lr_f,
+        energy_intra_kcalmol=intra.energy_kcalmol,
+        energy_mic_cross_kcalmol=0.0,
+        switch_scale=switch_scale,
+    )
+
+
+def hybrid_jax_pme_mm_lr_correction(
+    positions_A: np.ndarray,
+    charges_e: np.ndarray,
+    monomer_offsets: np.ndarray,
+    *,
+    box_length_A: float,
+    method: str,
+    sr_cutoff_A: float,
+    c6_sqrt: np.ndarray | None = None,
+    pair_i: np.ndarray | None = None,
+    pair_j: np.ndarray | None = None,
+    pair_mask: np.ndarray | None = None,
+    monomer_id: np.ndarray | None = None,
+    lambda_monomer: np.ndarray | None = None,
+    pbc_cell: np.ndarray | None = None,
+    ml_switch_width: float = 1.0,
+    mm_switch_on: float = 12.0,
+    mm_switch_width: float = 1.0,
+    complementary_handoff: bool = True,
+    mm_r_min: float | None = None,
+    subtract_pair_mic_sr: bool = False,
+) -> HybridJaxPmeMmResult:
+    """Combined hybrid Coulomb + r⁻⁶ dispersion (each full − intra, same COM scale)."""
+    coulomb = hybrid_jax_pme_coulomb_correction(
+        positions_A,
+        charges_e,
+        monomer_offsets,
+        box_length_A=box_length_A,
+        method=method,
+        sr_cutoff_A=sr_cutoff_A,
+        pair_i=pair_i,
+        pair_j=pair_j,
+        pair_mask=pair_mask,
+        monomer_id=monomer_id,
+        lambda_monomer=lambda_monomer,
+        pbc_cell=pbc_cell,
+        ml_switch_width=ml_switch_width,
+        mm_switch_on=mm_switch_on,
+        mm_switch_width=mm_switch_width,
+        complementary_handoff=complementary_handoff,
+        mm_r_min=mm_r_min,
+        subtract_pair_mic_sr=subtract_pair_mic_sr,
+    )
+    dispersion: HybridJaxPmeCorrectionResult | None = None
+    if c6_sqrt is not None:
+        dispersion = hybrid_jax_pme_lj_dispersion_correction(
+            positions_A,
+            c6_sqrt,
+            monomer_offsets,
+            box_length_A=box_length_A,
+            method=method,
+            sr_cutoff_A=sr_cutoff_A,
+            switch_scale=coulomb.switch_scale,
+        )
+    e = coulomb.energy_kcalmol
+    f = np.asarray(coulomb.forces_kcalmol_A, dtype=np.float64)
+    if dispersion is not None:
+        e += dispersion.energy_kcalmol
+        f = f + dispersion.forces_kcalmol_A
+    return HybridJaxPmeMmResult(
+        energy_kcalmol=e,
+        forces_kcalmol_A=f,
+        coulomb=coulomb,
+        dispersion=dispersion,
     )
 
 
@@ -282,5 +512,5 @@ def box_length_from_positions_context(
     if box_override is not None:
         return box_length_from_cell(np.asarray(box_override))
     if pbc_cell is None:
-        raise ValueError("jax_pme Coulomb requires pbc_cell or box_override")
+        raise ValueError("jax_pme requires pbc_cell or box_override")
     return box_length_from_cell(np.asarray(pbc_cell))

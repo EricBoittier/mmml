@@ -22,9 +22,11 @@ Examples:
   export MMML_CKPT=/path/to/DESdimers_params.json
   mmml warmup-mlpot-jax --n-monomers 20 --ml-batch-size 128
 
-  # Match spatial-mini production fingerprint (single-GPU PhysNet path):
-  mmml warmup-mlpot-jax --checkpoint "$MMML_CKPT" --n-monomers 20 \\
-    --box-side 32 --ml-batch-size 64 --ml-gpu-count 1 --do-mm
+  # Match DCM:60 liquid workflow (resilient preset cutoffs + sparse dimer cap):
+  mmml warmup-mlpot-jax --checkpoint "$MMML_CKPT" --n-monomers 60 \\
+    --atoms-per-monomer 5 --box-side 32 --ml-batch-size 64 --ml-gpu-count 1 \\
+    --ml-max-active-dimers 1770 --mm-switch-on 6.0 --mm-switch-width 4.0 \\
+    --ml-switch-width 1.0 --do-mm
 
   # Then under MPI:
   MMML_MPI_NP=2 MMML_MLPOT_SPATIAL_MPI=1 ./scripts/mmml-charmm-mpirun.sh md-system ...
@@ -50,6 +52,19 @@ Clear stale launcher env if needed: unset OMPI_COMM_WORLD_SIZE PMI_SIZE PMIX_SIZ
     parser.add_argument("--spacing", type=float, default=5.0, help="Lattice spacing Å")
     parser.add_argument("--ml-batch-size", type=int, default=128, help="MLpot batch size")
     parser.add_argument("--ml-gpu-count", type=int, default=1, help="JAX pmap GPU count")
+    parser.add_argument(
+        "--ml-max-active-dimers",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "Sparse ML dimer slot cap per step (PBC default all unique dimers when n≤4005; "
+            "same as md-system --ml-max-active-dimers)."
+        ),
+    )
+    from mmml.interfaces.pycharmmInterface.cutoffs import add_handoff_cutoff_args
+
+    add_handoff_cutoff_args(parser)
     parser.add_argument(
         "--do-mm",
         action="store_true",
@@ -107,14 +122,33 @@ def _resolve_checkpoint(path: Path | None) -> Path:
 
 def _default_atomic_numbers(n_monomers: int, atoms_per: int) -> list[int]:
     pattern = [6, 1, 1, 1, 8, 1, 1, 1, 1, 1]
-    if atoms_per != len(pattern):
-        return [6] + [1] * (atoms_per - 1)
-    return list(pattern) * int(n_monomers)
+    dcm_pattern = [6, 1, 1, 17, 1]
+    if atoms_per == len(dcm_pattern):
+        per = dcm_pattern
+    elif atoms_per != len(pattern):
+        per = [6] + [1] * (atoms_per - 1)
+    else:
+        per = pattern
+    return list(per) * int(n_monomers)
 
 
 class _WarmupBuildArgs:
-    def __init__(self, *, include_mm: bool) -> None:
+    """Minimal md-system-like namespace for :func:`build_decomposed_mlpot_model`."""
+
+    def __init__(
+        self,
+        *,
+        include_mm: bool,
+        ml_switch_width: float,
+        mm_switch_on: float,
+        mm_switch_width: float,
+        no_complementary_handoff: bool,
+    ) -> None:
         self.include_mm = include_mm
+        self.ml_switch_width = ml_switch_width
+        self.mm_switch_on = mm_switch_on
+        self.mm_switch_width = mm_switch_width
+        self.no_complementary_handoff = no_complementary_handoff
 
 
 def run_warmup_mlpot_jax(args: argparse.Namespace) -> int:
@@ -160,12 +194,30 @@ def run_warmup_mlpot_jax(args: argparse.Namespace) -> int:
     cache_dir = mlpot_jax_compilation_cache_dir()
     compile_threads = resolve_jax_compile_thread_count()
 
+    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
+        resolve_max_active_dimers,
+    )
+
+    n_dimers_total = int(n_monomers) * (int(n_monomers) - 1) // 2
+    dimer_cap = resolve_max_active_dimers(
+        int(n_monomers),
+        n_dimers_total,
+        args.ml_max_active_dimers,
+        free_space=not cell,
+    )
+
     if args.dry_run:
         print("warmup-mlpot-jax dry-run:")
         print(f"  checkpoint: {ckpt}")
         print(f"  n_monomers: {n_monomers}  atoms_per_monomer: {atoms_per}")
         print(f"  box_side: {box_side}  do_mm: {bool(args.do_mm)}")
         print(f"  ml_batch_size: {args.ml_batch_size}  ml_gpu_count: {args.ml_gpu_count}")
+        print(f"  ml_max_active_dimers: {args.ml_max_active_dimers} -> cap {dimer_cap}")
+        print(
+            f"  handoff: mm_switch_on={args.mm_switch_on} "
+            f"mm_switch_width={args.mm_switch_width} "
+            f"ml_switch_width={args.ml_switch_width}"
+        )
         print(f"  compile_threads: {compile_threads}")
         print(f"  JAX_COMPILATION_CACHE_DIR: {cache_dir or '<disabled>'}")
         return 0
@@ -200,6 +252,8 @@ def run_warmup_mlpot_jax(args: argparse.Namespace) -> int:
         print(
             f"warmup-mlpot-jax: {n_monomers} monomers, {len(z)} atoms, "
             f"batch={args.ml_batch_size}, gpus={args.ml_gpu_count}, "
+            f"max_active_dimers={dimer_cap}, "
+            f"handoff={args.mm_switch_on}/{args.mm_switch_width}/{args.ml_switch_width} Å, "
             f"compile_threads={compile_threads}",
             flush=True,
         )
@@ -207,7 +261,13 @@ def run_warmup_mlpot_jax(args: argparse.Namespace) -> int:
             print(f"warmup-mlpot-jax: cache -> {cache_dir}", flush=True)
 
     t0 = time.perf_counter()
-    build_args = _WarmupBuildArgs(include_mm=bool(args.do_mm))
+    build_args = _WarmupBuildArgs(
+        include_mm=bool(args.do_mm),
+        ml_switch_width=float(args.ml_switch_width),
+        mm_switch_on=float(args.mm_switch_on),
+        mm_switch_width=float(args.mm_switch_width),
+        no_complementary_handoff=bool(args.no_complementary_handoff),
+    )
     model = build_decomposed_mlpot_model(
         ckpt,
         z,
@@ -215,6 +275,7 @@ def run_warmup_mlpot_jax(args: argparse.Namespace) -> int:
         n_monomers,
         ml_batch_size=int(args.ml_batch_size),
         ml_gpu_count=int(args.ml_gpu_count),
+        ml_max_active_dimers=args.ml_max_active_dimers,
         cell=cell,
         verbose=args.verbose,
         args=build_args,

@@ -347,6 +347,7 @@ def setup_calculator(
     verbose: bool = False,
     ml_reorder_indices=None,
     at_codes_override=None,
+    mm_atomic_numbers: Optional[np.ndarray] = None,
     lambda_monomer: Optional[np.ndarray] = None,
     cell_list_safety_factor: float = 3.0,
     cell_list_density_estimate: Optional[float] = None,
@@ -491,6 +492,16 @@ def setup_calculator(
     for i, n in enumerate(atoms_per_monomer_list):
         monomer_offsets[i + 1] = monomer_offsets[i] + n
     total_atoms = int(monomer_offsets[-1])
+
+    if mm_atomic_numbers is not None:
+        _mm_atomic_numbers = np.asarray(mm_atomic_numbers, dtype=int).reshape(-1)
+        if int(_mm_atomic_numbers.shape[0]) != total_atoms:
+            raise ValueError(
+                f"mm_atomic_numbers length {_mm_atomic_numbers.shape[0]} != "
+                f"total_atoms {total_atoms}"
+            )
+    else:
+        _mm_atomic_numbers = None
 
     # Convenience: keep a uniform value when all monomers are the same size.
     _all_same_size = len(set(atoms_per_monomer_list)) == 1
@@ -1001,6 +1012,7 @@ def setup_calculator(
             ep_scale=ep_scale,
             sig_scale=sig_scale,
             at_codes_override=at_codes_override,
+            atomic_numbers=_mm_atomic_numbers,
             pbc_cell=cell_for_build,
             max_pairs=max_pairs,
             cell_list_safety_factor=cell_list_safety_factor,
@@ -1038,6 +1050,7 @@ def setup_calculator(
                 ep_scale=ep_scale,
                 sig_scale=sig_scale,
                 at_codes_override=at_codes_override,
+                atomic_numbers=_mm_atomic_numbers,
                 pbc_cell=cell_for_build,
                 max_pairs=max_pairs,
                 cell_list_safety_factor=cell_list_safety_factor,
