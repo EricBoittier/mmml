@@ -747,11 +747,15 @@ def warmup_hybrid_spherical_cutoff(
     mm_pair_idx: Any = None,
     mm_pair_mask: Any = None,
     box: Any = None,
+    prefer_cpu: bool = False,
 ) -> None:
     """Compile and run one hybrid MMML eval; block until GPU work completes.
 
     Call after PyCHARMM/MM setup (e.g. CGENFF drudes) and before timed JAX-MD compiles.
     Identical repeat calls in one process are skipped (MLpot used to warm twice).
+
+    When ``prefer_cpu`` is true (hybrid jax-pme path), compile the first hybrid eval on
+    CPU so nested jax-pme mesh work inside ``pure_callback`` cannot deadlock GPU XLA.
     """
     kwargs = dict(
         positions=positions,
@@ -782,7 +786,7 @@ def warmup_hybrid_spherical_cutoff(
         return
 
     backend = _jax_warmup_backend()
-    if backend == "gpu":
+    if backend == "gpu" and not prefer_cpu:
         ensure_jax_cuda_toolchain(required=True)
         ensure_xla_gpu_warmed(force=False)
     try:
@@ -792,7 +796,7 @@ def warmup_hybrid_spherical_cutoff(
 
     device_ctx = (
         jax.default_device(jax.devices("cpu")[0])
-        if backend == "cpu"
+        if backend == "cpu" or prefer_cpu
         else nullcontext()
     )
 

@@ -264,10 +264,24 @@ def jax_pme_coulomb_energy_forces(
             smearing=smearing,
         )
 
-    energy, forces = calc.energy_forces(*inputs)
+    from mmml.interfaces.pycharmmInterface.long_range_backend import (
+        jax_pme_host_eval_context,
+        jax_pme_mesh_method,
+        jax_pme_pure_callback_host_context,
+        materialize_jax_pme_host_numpy,
+    )
+
+    host_ctx = (
+        jax_pme_pure_callback_host_context
+        if jax_pme_mesh_method(method)
+        else jax_pme_host_eval_context
+    )
+    with host_ctx():
+        energy, forces = calc.energy_forces(*inputs)
+    e_host, f_host = materialize_jax_pme_host_numpy(energy, forces)
     return CoulombResult(
-        energy_kcalmol=float(energy),
-        forces_kcalmol_A=np.asarray(forces, dtype=np.float64),
+        energy_kcalmol=e_host,
+        forces_kcalmol_A=f_host,
     )
 
 
