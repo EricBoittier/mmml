@@ -6,12 +6,143 @@ import json
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import yaml
 
 from mmml.cli.configure_presets import PRESET_BY_KEY, apply_preset
 from mmml.mcp.env import default_checkpoint, ensure_run_dir, recipes_dir, repo_root
 from mmml.mcp.manifest import RunManifest, save_manifest
 from mmml.mcp.runner import CommandResult, run_console_script, run_mmml
+
+# CGENFF partial charges (e) for smoke IR when ML checkpoint has charges=False.
+_CGENFF_MONOMER_CHARGES: dict[str, np.ndarray] = {
+    "DCM": np.array([-0.018, 0.090, 0.090, -0.081, -0.081], dtype=np.float64),
+}
+
+
+def _checkpoint_charges_enabled(ckpt: Path) -> bool:
+    data = json.loads(ckpt.read_text(encoding="utf-8"))
+    cfg = data.get("config") or {}
+    if "charges" in cfg:
+        return bool(cfg["charges"])
+    return True
+
+
+def _parse_composition(composition: str) -> list[tuple[str, int]]:
+    out: list[tuple[str, int]] = []
+    for part in composition.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        name, count = part.split(":")
+        out.append((name.strip().upper(), int(count)))
+    return out
+
+
+def _classical_cgenff_charges(n_atoms: int, composition: str) -> np.ndarray:
+    specs = _parse_composition(composition)
+    charges: list[np.ndarray] = []
+    for name, count in specs:
+        monomer = _CGENFF_MONOMER_CHARGES.get(name)
+        if monomer is None:
+            raise ValueError(f"no CGENFF charge template for residue {name}")
+        charges.extend([monomer] * count)
+    flat = np.concatenate(charges) if charges else np.array([], dtype=np.float64)
+    if flat.shape[0] != n_atoms:
+        raise ValueError(
+            f"charge template length {flat.shape[0]} != trajectory atoms {n_atoms} "
+            f"(composition={composition!r})"
+        )
+    return flat
+
+
+def _stage_ir_classical_cgenff(
+    run_dir: Path,
+    traj: Path,
+    *,
+    composition: str,
+    dt_fs: float,
+    dry_run: bool,
+) -> CommandResult:
+    from ase.io.trajectory import Trajectory
+
+    from mmml.spectra.spectra_md import (
+        autocorrelation,
+        compute_magnetic_dipoles,
+        correlation_to_spectrum,
+        cross_correlation,
+    )
+
+    out_dir = run_dir / "spectra"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        "classical_cgenff_ir",
+        str(traj.relative_to(run_dir)),
+        f"composition={composition}",
+        f"dt_fs={dt_fs}",
+    ]
+    if dry_run:
+        return CommandResult(
+            command=cmd,
+            cwd=str(run_dir),
+            returncode=0,
+            stdout="(dry run — classical CGENFF IR not executed)",
+            stderr="",
+        )
+
+    frames = list(Trajectory(str(traj)))
+    charges = _classical_cgenff_charges(len(frames[0]), composition)
+    positions = np.stack([f.get_positions() for f in frames], axis=0).astype(np.float64)
+    velocities = np.stack(
+        [np.nan_to_num(f.get_velocities()) for f in frames], axis=0
+    ).astype(np.float64)
+    dipoles = np.sum(positions * charges[None, :, None], axis=1)
+    charges_t = np.broadcast_to(charges, (len(frames), len(charges))).astype(np.float32)
+    mag = compute_magnetic_dipoles(
+        positions.astype(np.float32), velocities.astype(np.float32), charges_t
+    )
+    acf = autocorrelation(dipoles.astype(np.float32))
+    ccf = cross_correlation(dipoles.astype(np.float32), mag)
+    freq_cm, ir_spec = correlation_to_spectrum(acf, dt_fs)
+    _, vcd_spec = correlation_to_spectrum(ccf, dt_fs)
+
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(2, 1, figsize=(8, 6), sharex=True)
+    mask = (freq_cm >= 200) & (freq_cm <= 4000)
+    ax[0].plot(freq_cm[mask], ir_spec[mask])
+    ax[0].set_ylabel("IR (arb.)")
+    ax[1].plot(freq_cm[mask], vcd_spec[mask])
+    ax[1].set_ylabel("VCD (arb.)")
+    ax[1].set_xlabel("cm$^{-1}$")
+    fig.tight_layout()
+    fig.savefig(out_dir / "ir.png", dpi=120)
+    plt.close(fig)
+    np.savez(
+        out_dir / "correlation_spectra.npz",
+        freq_cm=freq_cm,
+        ir=ir_spec,
+        vcd=vcd_spec,
+        acf=acf,
+        ccf=ccf,
+        dipoles=dipoles,
+        charges=charges,
+        method="classical_cgenff_dipole",
+    )
+    mu_norm = np.linalg.norm(dipoles, axis=1)
+    return CommandResult(
+        command=cmd,
+        cwd=str(run_dir),
+        returncode=0,
+        stdout=(
+            f"classical CGENFF dipole IR -> {out_dir}/ir.png\n"
+            f"|mu| range: {mu_norm.min():.4f} – {mu_norm.max():.4f}"
+        ),
+        stderr="",
+    )
 
 
 def list_recipe_names() -> list[str]:
@@ -274,25 +405,56 @@ def _stage_ir(
     dry_run: bool,
     background: bool,
 ) -> CommandResult:
-    md_dir = run_dir / "md"
-    traj_candidates = list(md_dir.rglob("*.traj")) + list(md_dir.rglob("*.h5"))
+    traj_roots = (run_dir / "md", run_dir / "results")
+    traj_candidates: list[Path] = []
+    for root in traj_roots:
+        if root.is_dir():
+            traj_candidates.extend(root.rglob("*.traj"))
+            traj_candidates.extend(root.rglob("*.h5"))
+    prod = [
+        p
+        for p in traj_candidates
+        if "bfgs_min" not in p.name and not p.name.endswith("_min.traj")
+    ]
+    traj_candidates = prod or traj_candidates
     if not traj_candidates:
         return CommandResult(
             command=["mmml-spectra-md"],
             cwd=str(run_dir),
             returncode=1,
             stdout="",
-            stderr=f"no trajectory under {md_dir}; run md stage first",
+            stderr=f"no trajectory under {run_dir}/{{md,results}}; run md stage first",
         )
     traj = sorted(traj_candidates, key=lambda p: p.stat().st_mtime, reverse=True)[0]
-    params = default_checkpoint()
+    ckpt = default_checkpoint()
     out_dir = run_dir / "spectra"
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    md_cfg_path = run_dir / "configs" / "md_smoke.yaml"
+    dt_fs = 0.5
+    composition = "DCM:2"
+    if md_cfg_path.is_file():
+        md_cfg = yaml.safe_load(md_cfg_path.read_text(encoding="utf-8")) or {}
+        defaults = md_cfg.get("defaults") or {}
+        dt_fs = float(defaults.get("dt_fs", dt_fs))
+        comp = defaults.get("composition")
+        if comp:
+            composition = str(comp)
+
+    if not _checkpoint_charges_enabled(ckpt):
+        return _stage_ir_classical_cgenff(
+            run_dir,
+            traj,
+            composition=composition,
+            dt_fs=dt_fs,
+            dry_run=dry_run,
+        )
+
     args = [
         "--trajectory",
         str(traj.relative_to(run_dir) if traj.is_relative_to(run_dir) else traj),
         "--params",
-        str(params),
+        str(ckpt),
         "--output-dir",
         str(out_dir.relative_to(run_dir)),
         "--method",

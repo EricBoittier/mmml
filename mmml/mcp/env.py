@@ -59,6 +59,25 @@ def resolve_python() -> Path:
     raise FileNotFoundError("Python interpreter not found")
 
 
+def resolve_console_script(script: str) -> Path:
+    """Resolve an allowlisted console script (e.g. mmml-spectra-md) in the venv."""
+    env_key = f"MMML_{script.upper().replace('-', '_')}_BIN"
+    env = os.environ.get(env_key, "").strip()
+    if env:
+        path = Path(env)
+        if path.is_file():
+            return path.resolve()
+    venv_script = repo_root() / ".venv" / "bin" / script
+    if venv_script.is_file():
+        return venv_script.resolve()
+    found = shutil.which(script)
+    if found:
+        return Path(found).resolve()
+    raise FileNotFoundError(
+        f"console script not found: {script}; set {env_key} or uv sync"
+    )
+
+
 def default_checkpoint() -> Path:
     env = os.environ.get("MMML_CKPT", "").strip()
     if env:

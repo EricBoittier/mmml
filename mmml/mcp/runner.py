@@ -13,7 +13,12 @@ from mmml.mcp.allowlist import (
     is_allowed_mmml_command,
     validate_cli_args,
 )
-from mmml.mcp.env import assert_under_runs, resolve_mmml_bin, resolve_python, repo_root
+from mmml.mcp.env import (
+    assert_under_runs,
+    resolve_console_script,
+    resolve_mmml_bin,
+    repo_root,
+)
 
 
 @dataclass(frozen=True)
@@ -152,8 +157,8 @@ def run_console_script(
     if not is_allowed_console_script(script):
         raise ValueError(f"console script not allowlisted: {script}")
     argv = validate_cli_args(list(args or []))
-    py = str(resolve_python())
-    full_cmd = [py, "-m", _module_for_script(script), *argv]
+    script_bin = str(resolve_console_script(script))
+    full_cmd = [script_bin, *argv]
     cwd = str(run_dir.resolve()) if run_dir else str(repo_root())
     if run_dir is not None:
         assert_under_runs(run_dir)
@@ -215,11 +220,3 @@ def run_console_script(
         log_path=str(log_path),
     )
 
-
-def _module_for_script(script: str) -> str:
-    mapping = {
-        "mmml-spectra-md": "mmml.spectra.spectra_md",
-    }
-    if script not in mapping:
-        raise ValueError(f"no module mapping for {script}")
-    return mapping[script]
