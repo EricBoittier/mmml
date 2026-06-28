@@ -40,6 +40,12 @@ def test_md_system_parser_has_setup():
     parser = get_subcommand_parser("md-system")
     assert parser is not None
     assert any(a.dest == "setup" for a in parser._actions)
+    box_actions = [
+        a
+        for a in parser._actions
+        if any(opt == "--box-size" for opt in getattr(a, "option_strings", ()))
+    ]
+    assert len(box_actions) == 1
 
 
 def test_audit_report_mentions_deprecated():

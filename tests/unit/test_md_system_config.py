@@ -106,6 +106,22 @@ runs:
     assert str(args.campaign_output_dir).endswith("artifacts/my_campaign")
 
 
+def test_md_system_parser_single_box_size_flag() -> None:
+    from mmml.cli.run.md_system import build_parser, parse_args
+
+    parser = build_parser()
+    box_actions = [
+        a
+        for a in parser._actions
+        if any(opt == "--box-size" for opt in getattr(a, "option_strings", ()))
+    ]
+    assert len(box_actions) == 1
+    args = parse_args([])
+    assert args.box_size is None
+    args = parse_args(["--box-size", "32"])
+    assert args.box_size == pytest.approx(32.0)
+
+
 def test_apply_mapping_hyphen_keys() -> None:
     from mmml.cli.run.md_system import parse_args
 
