@@ -62,6 +62,7 @@ def _stage_ir_classical_cgenff(
     *,
     composition: str,
     dt_fs: float,
+    steps_per_recording: int = 1,
     dry_run: bool,
 ) -> CommandResult:
     from ase.io.trajectory import Trajectory
@@ -71,6 +72,7 @@ def _stage_ir_classical_cgenff(
         compute_magnetic_dipoles,
         correlation_to_spectrum,
         cross_correlation,
+        dipole_fluctuation_ir_spectrum,
     )
 
     out_dir = run_dir / "spectra"
@@ -80,6 +82,7 @@ def _stage_ir_classical_cgenff(
         str(traj.relative_to(run_dir)),
         f"composition={composition}",
         f"dt_fs={dt_fs}",
+        f"steps_per_recording={steps_per_recording}",
     ]
     if dry_run:
         return CommandResult(
@@ -101,10 +104,12 @@ def _stage_ir_classical_cgenff(
     mag = compute_magnetic_dipoles(
         positions.astype(np.float32), velocities.astype(np.float32), charges_t
     )
-    acf = autocorrelation(dipoles.astype(np.float32))
-    ccf = cross_correlation(dipoles.astype(np.float32), mag)
-    freq_cm, ir_spec = correlation_to_spectrum(acf, dt_fs)
-    _, vcd_spec = correlation_to_spectrum(ccf, dt_fs)
+    mu_fluct = (dipoles - dipoles.mean(axis=0)).astype(np.float32)
+    frame_dt_fs = float(dt_fs) * max(1, int(steps_per_recording))
+    freq_cm, ir_spec = dipole_fluctuation_ir_spectrum(dipoles, frame_dt_fs)
+    acf = autocorrelation(mu_fluct)
+    ccf = cross_correlation(mu_fluct, mag)
+    _, vcd_spec = correlation_to_spectrum(ccf, frame_dt_fs)
 
     import matplotlib
 
@@ -115,6 +120,7 @@ def _stage_ir_classical_cgenff(
     mask = (freq_cm >= 200) & (freq_cm <= 4000)
     ax[0].plot(freq_cm[mask], ir_spec[mask])
     ax[0].set_ylabel("IR (arb.)")
+    ax[0].set_ylim(bottom=0)
     ax[1].plot(freq_cm[mask], vcd_spec[mask])
     ax[1].set_ylabel("VCD (arb.)")
     ax[1].set_xlabel("cm$^{-1}$")
@@ -226,8 +232,8 @@ def _write_md_smoke_config(
     if not ckpt.is_file():
         ckpt = default_checkpoint()
     composition = mode_cfg.get("composition", "DCM:2")
-    ps = float(mode_cfg.get("md_ps", 2.0))
-    dt_fs = float(mode_cfg.get("dt_fs", 0.25))
+    ps = float(mode_cfg.get("md_ps", 20.0))
+    dt_fs = float(mode_cfg.get("dt_fs", 0.1))
     steps_per_recording = int(mode_cfg.get("steps_per_recording", 10))
     body = {
         "defaults": {
@@ -436,7 +442,8 @@ def _stage_ir(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     md_cfg_path = run_dir / "configs" / "md_smoke.yaml"
-    dt_fs = 0.5
+    dt_fs = 0.1
+    steps_per_recording = 10
     composition = "DCM:2"
     if md_cfg_path.is_file():
         md_cfg = yaml.safe_load(md_cfg_path.read_text(encoding="utf-8")) or {}
@@ -445,6 +452,11 @@ def _stage_ir(
         comp = defaults.get("composition")
         if comp:
             composition = str(comp)
+        extra = (md_cfg.get("runs") or {}).get("jaxmd_smoke", {}).get("extra_args") or []
+        for i, arg in enumerate(extra):
+            if arg == "--steps-per-recording" and i + 1 < len(extra):
+                steps_per_recording = int(extra[i + 1])
+                break
 
     if not _checkpoint_charges_enabled(ckpt):
         return _stage_ir_classical_cgenff(
@@ -452,6 +464,7 @@ def _stage_ir(
             traj,
             composition=composition,
             dt_fs=dt_fs,
+            steps_per_recording=steps_per_recording,
             dry_run=dry_run,
         )
 

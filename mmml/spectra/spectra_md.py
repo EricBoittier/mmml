@@ -655,9 +655,38 @@ def correlation_to_spectrum(corr, dt_fs, window='hann',
 
     if qcf == 'harmonic':
         spec *= np.where(freq_cm > 0, freq_cm, 0)
+        spec = np.maximum(spec, 0.0)
     elif qcf == 'classical':
         spec *= np.where(freq_cm > 0, freq_cm ** 2, 0)
+        spec = np.maximum(spec, 0.0)
     return freq_cm, spec
+
+
+def dipole_fluctuation_ir_spectrum(
+    dipoles: np.ndarray,
+    frame_dt_fs: float,
+    *,
+    window: str = "hann",
+    zero_pad: int = 4,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Non-negative IR absorbance from a dipole time series (classical MD).
+
+    Centers ``μ(t)``, applies a windowed periodogram (|FT μ|²), and weights by
+    ``ω`` (harmonic QCF).  ``frame_dt_fs`` is the time between stored frames
+  (integrator ``dt_fs`` × ``steps_per_recording``).
+    """
+    mu = np.asarray(dipoles, dtype=np.float64)
+    mu = mu - mu.mean(axis=0, keepdims=True)
+    n = len(mu)
+    w = _make_window(n, window) if window else np.ones(n)
+    n_fft = max(n * zero_pad, _next_pow2(n))
+    spec = np.zeros(n_fft // 2 + 1, dtype=np.float64)
+    for axis in range(mu.shape[1]):
+        ft = np.fft.rfft(mu[:, axis] * w, n=n_fft)
+        spec += np.abs(ft) ** 2
+    freq_cm = np.fft.rfftfreq(n_fft, d=frame_dt_fs) * FS_INV_TO_CM_INV
+    ir = spec * np.where(freq_cm > 0, freq_cm, 0.0)
+    return freq_cm, np.maximum(ir, 0.0)
 
 
 # =====================================================================

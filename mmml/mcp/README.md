@@ -51,9 +51,9 @@ Smoke mode skips QM/training and uses `examples/ckpts_json/DESdimers_params.json
 (PhysNet, `charges=False`). IR uses **classical CGENFF dipole** autocorrelation — not
 `mmml-spectra-md` / EFieldPhysNet (incompatible with this checkpoint).
 
-Default smoke MD: **2.0 ps** at **0.25 fs** (8000 steps), recording every 10 steps.
-
-Example IR from `smoke001`: [`docs/images/mcp/smoke001_ir.png`](../../docs/images/mcp/smoke001_ir.png).
+Default smoke MD: **20.0 ps** at **0.1 fs** (200k steps), recording every 10 steps
+(frame spacing **1.0 fs**). IR uses centered dipole fluctuations and a non-negative
+ω-weighted periodogram (not EField).
 
 ## Layout
 
