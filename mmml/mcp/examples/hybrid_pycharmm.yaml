@@ -1,0 +1,23 @@
+# Hybrid calculator smoke — PyCHARMM MLpot backend.
+defaults:
+  composition: "DCM:2"
+  checkpoint: examples/ckpts_json/DESdimers_params.json
+  spacing: 5.0
+  box_size: 28.0
+  packmol_radius: 6.9
+  packmol_tolerance: 2.0
+  dt_fs: 0.5
+  temperature: 300.0
+  seed: 42
+
+campaign_output: results
+runs:
+  hybrid_pycharmm:
+    description: Vacuum NVE — PyCHARMM MLpot hybrid dynamics
+    backend: pycharmm
+    setup: free_nve
+    ps: 0.05
+    output_dir: results/hybrid_pycharmm
+    extra_args:
+      - --skip-jit-warmup
+      - --quiet

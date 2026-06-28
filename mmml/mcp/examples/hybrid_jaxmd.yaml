@@ -1,0 +1,23 @@
+# Hybrid calculator smoke — JAX-MD backend.
+defaults:
+  composition: "DCM:2"
+  checkpoint: examples/ckpts_json/DESdimers_params.json
+  spacing: 5.0
+  # packmol_radius suffices for jaxmd free_nve (box-size omitted from subprocess argv)
+  packmol_radius: 6.9
+  packmol_tolerance: 2.0
+  dt_fs: 0.5
+  temperature: 300.0
+  seed: 42
+
+campaign_output: results
+runs:
+  hybrid_jaxmd:
+    description: Vacuum NVE — JAX-MD + spherical_cutoff_calculator hybrid ML/MM
+    backend: jaxmd
+    setup: free_nve
+    ps: 0.05
+    output_dir: results/hybrid_jaxmd
+    extra_args:
+      - --skip-jit-warmup
+      - --quiet

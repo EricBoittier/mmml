@@ -24,6 +24,7 @@ def test_allowlist_rejects_shell_metachar() -> None:
 def test_list_recipes() -> None:
     names = list_recipe_names()
     assert "dimer_smoke" in names
+    assert "build_smoke" in names
     recipe = load_recipe("dimer_smoke")
     assert recipe["name"] == "dimer_smoke"
 

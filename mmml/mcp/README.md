@@ -39,6 +39,8 @@ in Cursor after checkout.
 
 ## Smoke test workflow
 
+### `dimer_smoke` (MD → IR)
+
 In Cursor (with MCP connected), ask the agent:
 
 1. Call `health_check`
@@ -55,14 +57,50 @@ Default smoke MD: **20.0 ps** at **0.1 fs** (200k steps), **record every step**
 (frame spacing **0.1 fs**). IR uses centered dipole fluctuations and a non-negative
 ω-weighted periodogram (not EField).
 
+### `build_smoke` (geometry + hybrid backends)
+
+Tests `make-res`, `liquid-box`, and short hybrid MD with **ASE**, **JAX-MD**, and
+**PyCHARMM** (`setup_calculator` ML/MM). Requires `CHARMM_HOME`, `CHARMM_LIB_DIR`,
+and Packmol.
+
+```bash
+source examples/md_cpu/_env.sh
+bash examples/mcp/run_build_smoke.sh build001          # full smoke
+DRY_RUN=1 bash examples/mcp/run_build_smoke.sh build001 # print commands only
+MODE=minimal bash examples/mcp/run_build_smoke.sh build001  # skip box + pycharmm
+```
+
+Or via MCP tools: `configure_run_tool` with `recipe="build_smoke"`, then stages
+`make_res` → `box_build` → `hybrid_md_ase` / `hybrid_md_jaxmd` / `hybrid_md_pycharmm`.
+
+Hybrid vacuum configs use `packmol_radius` for cluster placement (required for
+`free_nve` + JAX-MD, which omits `--box-size` from the subprocess argv). See
+[`mmml/mcp/examples/README.md`](examples/README.md) for direct `mmml md-system` usage
+and programmatic `setup_calculator` examples.
+
+| Stage | Command | Outputs |
+|-------|---------|---------|
+| `make_res` | `mmml make-res` | `residue/` |
+| `box_build` | `mmml liquid-box` | `boxes/liquid/` |
+| `hybrid_md_ase` | `mmml md-system` (ASE) | `results/hybrid_ase/` |
+| `hybrid_md_jaxmd` | `mmml md-system` (JAX-MD) | `results/hybrid_jaxmd/` |
+| `hybrid_md_pycharmm` | `mmml md-system` (PyCHARMM) | `results/hybrid_pycharmm/` |
+
 ## Layout
 
 ```
 artifacts/mcp_runs/<run_id>/
   manifest.json
   configs/
-    md_smoke.yaml
-    qm_pipeline/          # full mode
+    md_smoke.yaml           # dimer_smoke
+    build_box.yaml          # build_smoke
+    hybrid_ase.yaml         # build_smoke
+    hybrid_jaxmd.yaml
+    hybrid_pycharmm.yaml
+    qm_pipeline/            # full mode
+  residue/                  # build_smoke make_res
+  boxes/liquid/             # build_smoke box_build
+  results/hybrid_*/         # build_smoke hybrid MD
   md/
   spectra/
   logs/
