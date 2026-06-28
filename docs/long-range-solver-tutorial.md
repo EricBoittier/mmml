@@ -215,7 +215,7 @@ Log line at MLpot startup (verbose):
 Decomposed MLpot: lr_solver=jax_pme, scafacos=no, jax_pme=yes (jax-pme method=ewald, sr_cutoff=6.0 Å)
 ```
 
-The **Hybrid ML/MM setup** dashboard (always printed at calculator init) includes a **Long-range Coulomb** section with the resolved solver, availability flags, and method-specific settings (`jax_pme_method`, `jax_pme_sr_cutoff_Å`, or `scafacos_method`). When `--lr-solver auto` resolves differently (e.g. `auto` → `mic` because jax-pme is missing), `lr_solver_requested` is shown alongside the active backend.
+The **Hybrid ML/MM setup** dashboard (always printed at calculator init) includes a **Long-range Coulomb** section with `mm_nonbond_mode`, resolved `lr_solver`, **`lr_solver_active`** (what actually runs), and method-specific settings. In default **`jax_mic`** mode, `auto`→`scafacos` does **not** use ScaFaCoS — the active backend is **truncated MIC** unless you set `--lr-solver jax_pme`. ScaFaCoS and jax-pme full-box Coulomb require **`mm_nonbond_mode: periodic_external`**. The flag `--no-periodic-charmm-vdw` only applies in that mode.
 
 ---
 

@@ -490,26 +490,65 @@ def collect_lr_solver_mapping(
     jax_pme_method: str | None = None,
     jax_pme_sr_cutoff_A: float = DEFAULT_JAX_PME_SR_CUTOFF_A,
     scafacos_method: str | None = None,
+    mm_nonbond_mode: str = "jax_mic",
+    do_mm: bool = True,
+    periodic_charmm_vdw: bool = True,
 ) -> dict[str, str]:
     """Key/value rows for the Hybrid ML/MM setup long-range Coulomb section."""
     requested = resolve_lr_solver(lr_solver)
     chosen = pick_lr_solver(lr_solver)
+    mode = str(mm_nonbond_mode or "jax_mic").strip().lower()
+    if mode in ("mic", "jax"):
+        mode = "jax_mic"
+    periodic_external = mode == "periodic_external"
+
     mapping: dict[str, str] = {
+        "mm_nonbond_mode": mode,
         "lr_solver": chosen,
         "jax_pme_pkg": "yes" if have_jax_pme() else "no",
         "scafacos_lib": "yes" if have_scafacos() else "no",
     }
     if requested != chosen:
         mapping["lr_solver_requested"] = requested
-    if chosen == "mic":
-        mapping["coulomb_mode"] = "truncated MIC (pair loop)"
-    elif chosen == "jax_pme":
-        mapping["coulomb_mode"] = "jax-pme k-space + pair SR"
+
+    if periodic_external:
+        if chosen == "jax_pme":
+            active = "jax_pme"
+            mapping["lr_solver_active"] = active
+            mapping["coulomb_mode"] = "jax-pme full-box Coulomb (MLpot callback)"
+            mapping["jax_pme_method"] = resolve_jax_pme_method(jax_pme_method)
+            mapping["jax_pme_sr_cutoff_Å"] = f"{float(jax_pme_sr_cutoff_A):.1f}"
+        elif chosen == "scafacos":
+            active = "scafacos"
+            mapping["lr_solver_active"] = active
+            mapping["coulomb_mode"] = "ScaFaCoS full-box Coulomb (MLpot callback)"
+            mapping["scafacos_method"] = str(
+                scafacos_method or os.environ.get("SCAFACOS_METHOD", "ewald")
+            ).strip()
+        else:
+            active = chosen
+            mapping["lr_solver_active"] = active
+            mapping["coulomb_mode"] = f"{chosen} (unexpected for periodic_external)"
+        mapping["charmm_vdw"] = "CHARMM IMAGE" if periodic_charmm_vdw else "off"
+        return mapping
+
+    if not do_mm:
+        mapping["lr_solver_active"] = "—"
+        mapping["coulomb_mode"] = "none (ML only; LR settings inactive)"
+        if chosen not in ("mic", "jax_pme"):
+            mapping["note"] = (
+                f"lr_solver={chosen} applies only with periodic_external or doMM=true"
+            )
+        return mapping
+
+    active = "jax_pme" if chosen == "jax_pme" else "mic"
+    mapping["lr_solver_active"] = active
+    if chosen == "scafacos":
+        mapping["note"] = "scafacos not wired in jax_mic; using truncated MIC"
+    if active == "mic":
+        mapping["coulomb_mode"] = "truncated MIC (switched MM pair loop)"
+    else:
+        mapping["coulomb_mode"] = "jax-pme k-space + pair SR (switched MM)"
         mapping["jax_pme_method"] = resolve_jax_pme_method(jax_pme_method)
         mapping["jax_pme_sr_cutoff_Å"] = f"{float(jax_pme_sr_cutoff_A):.1f}"
-    elif chosen == "scafacos":
-        mapping["coulomb_mode"] = "ScaFaCoS full-box Coulomb"
-        mapping["scafacos_method"] = str(
-            scafacos_method or os.environ.get("SCAFACOS_METHOD", "ewald")
-        ).strip()
     return mapping

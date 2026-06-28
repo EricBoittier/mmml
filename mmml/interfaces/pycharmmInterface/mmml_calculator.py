@@ -375,6 +375,8 @@ def setup_calculator(
     lr_solver: str | None = None,
     jax_pme_method: str | None = None,
     jax_pme_sr_cutoff_A: float = 6.0,
+    mm_nonbond_mode: str = "jax_mic",
+    periodic_charmm_vdw: bool = True,
 ):
     """Create hybrid ML/MM calculator with outputs in eV/eV-A.
 
@@ -939,6 +941,9 @@ def setup_calculator(
             lr_solver=lr_solver,
             jax_pme_method=jax_pme_method,
             jax_pme_sr_cutoff_A=jax_pme_sr_cutoff_A,
+            mm_nonbond_mode=mm_nonbond_mode,
+            do_mm=doMM,
+            periodic_charmm_vdw=periodic_charmm_vdw,
         ),
     )
 

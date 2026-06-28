@@ -145,9 +145,11 @@ def test_collect_lr_solver_mapping_jax_pme():
             jax_pme_sr_cutoff_A=7.5,
         )
     assert mapping["lr_solver"] == "jax_pme"
+    assert mapping["lr_solver_active"] == "jax_pme"
+    assert mapping["mm_nonbond_mode"] == "jax_mic"
     assert mapping["jax_pme_method"] == "pme"
     assert mapping["jax_pme_sr_cutoff_Å"] == "7.5"
-    assert mapping["coulomb_mode"] == "jax-pme k-space + pair SR"
+    assert "switched MM" in mapping["coulomb_mode"]
     assert "lr_solver_requested" not in mapping
 
 
@@ -167,5 +169,44 @@ def test_collect_lr_solver_mapping_auto_fallback():
     ):
         mapping = collect_lr_solver_mapping(lr_solver="auto")
     assert mapping["lr_solver"] == "mic"
+    assert mapping["lr_solver_active"] == "mic"
     assert mapping["lr_solver_requested"] == "auto"
-    assert mapping["coulomb_mode"] == "truncated MIC (pair loop)"
+    assert "truncated MIC" in mapping["coulomb_mode"]
+
+
+def test_collect_lr_solver_mapping_scafacos_in_jax_mic_is_mic():
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
+        return_value="scafacos",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.resolve_lr_solver",
+        return_value="auto",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.have_scafacos",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
+        return_value=True,
+    ):
+        mapping = collect_lr_solver_mapping(lr_solver="auto", do_mm=True)
+    assert mapping["lr_solver"] == "scafacos"
+    assert mapping["lr_solver_active"] == "mic"
+    assert "not wired in jax_mic" in mapping["note"]
+
+
+def test_collect_lr_solver_mapping_periodic_external_jax_pme():
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
+        return_value="jax_pme",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.resolve_lr_solver",
+        return_value="jax_pme",
+    ):
+        mapping = collect_lr_solver_mapping(
+            lr_solver="jax_pme",
+            mm_nonbond_mode="periodic_external",
+            periodic_charmm_vdw=False,
+        )
+    assert mapping["lr_solver_active"] == "jax_pme"
+    assert "full-box" in mapping["coulomb_mode"]
+    assert mapping["charmm_vdw"] == "off"

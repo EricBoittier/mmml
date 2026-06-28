@@ -822,10 +822,12 @@ def build_decomposed_mlpot_model(
         build_periodic_mm_config,
         periodic_mm_status_line,
         resolve_mm_nonbond_mode,
+        resolve_periodic_charmm_vdw,
     )
 
     periodic_mm_config = build_periodic_mm_config(args)
     periodic_mode = resolve_mm_nonbond_mode(args) == "periodic_external"
+    mm_nonbond_mode = resolve_mm_nonbond_mode(args)
     do_ml = True
     include_mm = True if args is None else bool(getattr(args, "include_mm", True))
     do_mm = include_mm and not periodic_mode
@@ -892,6 +894,8 @@ def build_decomposed_mlpot_model(
         lr_solver=lr_solver,
         jax_pme_method=jax_pme_method,
         jax_pme_sr_cutoff_A=jax_pme_sr_cutoff,
+        mm_nonbond_mode=mm_nonbond_mode,
+        periodic_charmm_vdw=resolve_periodic_charmm_vdw(args),
     )
     if verbose:
         from mmml.interfaces.pycharmmInterface.mlpot.setup import report_charmm_topology_summary
