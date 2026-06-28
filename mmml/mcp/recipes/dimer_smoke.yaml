@@ -1,0 +1,61 @@
+name: dimer_smoke
+title: DCM dimer smoke — structures → QM → train → MD → IR
+description: >
+  Minimal end-to-end recipe for MCP testing. Smoke mode skips QM/training and uses
+  the bundled DESdimers checkpoint; full mode runs the qm-physnet-pipeline preset.
+
+modes:
+  smoke:
+    skip_stages: [structures, qm, train]
+    checkpoint: examples/ckpts_json/DESdimers_params.json
+    md_ps: 0.5
+    composition: "DCM:2"
+  full:
+    skip_stages: []
+    preset: qm-physnet-pipeline
+    md_ps: 2.0
+    composition: "DCM:20"
+
+stages:
+  configure:
+    description: Create run directory and QM/train YAML templates
+    preset: qm-physnet-pipeline
+
+  structures:
+    description: Generate or sample dimer conformers (normal-mode-sample / interpolate-xyz)
+    commands:
+      - normal-mode-sample
+    outputs:
+      - structures/sampled.npz
+
+  qm:
+    description: GPU DFT labeling (pyscf-evaluate batch)
+    commands:
+      - pyscf-evaluate
+    inputs:
+      - structures/sampled.npz
+    outputs:
+      - data/raw_evaluated.npz
+
+  train:
+    description: fix-and-split then physnet-train
+    commands:
+      - fix-and-split
+      - physnet-train
+    outputs:
+      - ckpts/
+
+  md:
+    description: Short ASE/JAX-MD production for IR (md-system)
+    commands:
+      - md-system
+    outputs:
+      - md/traj
+      - md/campaign.yaml
+
+  ir:
+    description: Dipole autocorrelation IR from MD trajectory
+    console_script: mmml-spectra-md
+    method: correlation
+    outputs:
+      - spectra/ir.png
