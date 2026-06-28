@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from unittest import mock
 
 import numpy as np
@@ -13,6 +14,7 @@ from mmml.interfaces.pycharmmInterface.long_range_backend import (
     create_lr_solver,
     jax_pme_host_device_name,
     jax_pme_host_eval_context,
+    jax_pme_pure_callback_host_context,
     pick_lr_solver,
     resolve_jax_pme_method,
 )
@@ -109,6 +111,29 @@ def test_jax_pme_host_eval_context_noop_when_gpu_requested(monkeypatch):
     monkeypatch.setenv("MMML_JAX_PME_DEVICE", "gpu")
     with jax_pme_host_eval_context():
         pass
+
+
+def test_jax_pme_pure_callback_host_context_disables_jit(monkeypatch):
+    monkeypatch.delenv("MMML_JAX_PME_DEVICE", raising=False)
+    import jax
+
+    calls: list[str] = []
+    real_disable = jax.disable_jit
+
+    @contextmanager
+    def _track_disable():
+        calls.append("disable_jit")
+        with real_disable():
+            yield
+
+    with mock.patch("jax.disable_jit", side_effect=_track_disable), mock.patch(
+        "jax.devices", return_value=[mock.Mock()]
+    ), mock.patch("jax.default_device") as dd:
+        dd.return_value.__enter__ = lambda self: None
+        dd.return_value.__exit__ = lambda self, *a: None
+        with jax_pme_pure_callback_host_context():
+            pass
+    assert calls == ["disable_jit"]
 
 
 def test_pick_lr_solver_jax_pme_when_scafacos_absent(monkeypatch):
