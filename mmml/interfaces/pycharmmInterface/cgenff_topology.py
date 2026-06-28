@@ -183,11 +183,255 @@ def _lookup_dihedral_params(
     dihedral_params: dict,
     types: tuple[str, str, str, str],
 ) -> tuple[float, int, float] | None:
+    terms = _lookup_all_dihedral_params(dihedral_params, types)
+    return terms[0] if terms else None
+
+
+def _lookup_all_dihedral_params(
+    dihedral_params: dict,
+    types: tuple[str, str, str, str],
+) -> list[tuple[float, int, float]]:
     key = types
-    if key in dihedral_params and dihedral_params[key]:
-        d = dihedral_params[key][0]
-        return float(d.k), int(d.n), float(np.radians(d.phase))
-    return None
+    if key not in dihedral_params or not dihedral_params[key]:
+        return []
+    out: list[tuple[float, int, float]] = []
+    for d in dihedral_params[key]:
+        out.append((float(d.k), int(d.n), float(np.radians(d.phase))))
+    return out
+
+
+@dataclass(frozen=True, slots=True)
+class PsfConnectivity:
+    """Bonded connectivity from a CHARMM PSF EXT file."""
+
+    n_atoms: int
+    atom_types: tuple[str, ...]
+    charges: Array
+    bonds: np.ndarray
+    angles: np.ndarray
+    torsions: np.ndarray
+    impropers: np.ndarray
+
+
+def _read_psf_section_ints(
+    lines: list[str],
+    start: int,
+    *,
+    n_per_entry: int,
+) -> tuple[list[int], int]:
+    """Read ``count * n_per_entry`` 1-based indices until the next ``!`` section."""
+    count = int(lines[start].split()[0])
+    needed = count * n_per_entry
+    values: list[int] = []
+    idx = start + 1
+    while len(values) < needed:
+        if idx >= len(lines):
+            raise ValueError(f"PSF section ended before {needed} integers were read")
+        stripped = lines[idx].strip()
+        if stripped.startswith("!"):
+            break
+        values.extend(int(x) for x in stripped.split())
+        idx += 1
+    if len(values) != needed:
+        raise ValueError(f"PSF section expected {needed} integers, found {len(values)}")
+    return values, idx
+
+
+def parse_psf_ext(psf_path: Path | str) -> PsfConnectivity:
+    """Parse bonds/angles/dihedrals/impropers from a CHARMM PSF EXT file."""
+    lines = Path(psf_path).read_text(encoding="utf-8", errors="replace").splitlines()
+    natom = None
+    atom_types: list[str] = []
+    charges: list[float] = []
+    bonds = angles = torsions = impropers = None
+
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        if "!NATOM" in line:
+            natom = int(line.split()[0])
+            for j in range(i + 1, i + 1 + natom):
+                parts = lines[j].split()
+                if len(parts) < 7:
+                    raise ValueError(f"Malformed PSF atom line: {lines[j]!r}")
+                atom_types.append(parts[5])
+                charges.append(float(parts[6]))
+            i = i + 1 + natom
+            continue
+        if "!NBOND" in line:
+            raw, i = _read_psf_section_ints(lines, i, n_per_entry=2)
+            bonds = np.asarray(raw, dtype=np.int32).reshape(-1, 2) - 1
+            continue
+        if "!NTHETA" in line:
+            raw, i = _read_psf_section_ints(lines, i, n_per_entry=3)
+            angles = np.asarray(raw, dtype=np.int32).reshape(-1, 3) - 1
+            continue
+        if "!NPHI" in line:
+            raw, i = _read_psf_section_ints(lines, i, n_per_entry=4)
+            torsions = np.asarray(raw, dtype=np.int32).reshape(-1, 4) - 1
+            continue
+        if "!NIMPHI" in line:
+            raw, i = _read_psf_section_ints(lines, i, n_per_entry=4)
+            impropers = np.asarray(raw, dtype=np.int32).reshape(-1, 4) - 1
+            continue
+        i += 1
+
+    if natom is None:
+        raise ValueError(f"No !NATOM section in {psf_path}")
+    bonds = bonds if bonds is not None else np.zeros((0, 2), dtype=np.int32)
+    angles = angles if angles is not None else np.zeros((0, 3), dtype=np.int32)
+    torsions = torsions if torsions is not None else np.zeros((0, 4), dtype=np.int32)
+    impropers = impropers if impropers is not None else np.zeros((0, 4), dtype=np.int32)
+    return PsfConnectivity(
+        n_atoms=natom,
+        atom_types=tuple(atom_types),
+        charges=jnp.asarray(charges, dtype=jnp.float64),
+        bonds=bonds,
+        angles=angles,
+        torsions=torsions,
+        impropers=impropers,
+    )
+
+
+def _build_bonded_parameters(
+    atom_types: Sequence[str],
+    bonds: np.ndarray,
+    angles: np.ndarray,
+    torsions: np.ndarray,
+    impropers: np.ndarray,
+    bond_params: dict,
+    angle_params: dict,
+    dihedral_params: dict,
+) -> BondedParameters:
+    bond_k = np.zeros(len(bonds), dtype=np.float64)
+    bond_r0 = np.zeros(len(bonds), dtype=np.float64)
+    for i, (idx1, idx2) in enumerate(bonds):
+        key = (atom_types[int(idx1)], atom_types[int(idx2)])
+        if key in bond_params:
+            bond_k[i] = bond_params[key].k
+            bond_r0[i] = bond_params[key].r0
+
+    angle_k = np.zeros(len(angles), dtype=np.float64)
+    angle_theta0 = np.zeros(len(angles), dtype=np.float64)
+    for i, (idx1, idx2, idx3) in enumerate(angles):
+        key = (atom_types[int(idx1)], atom_types[int(idx2)], atom_types[int(idx3)])
+        if key in angle_params:
+            angle_k[i] = angle_params[key].k
+            angle_theta0[i] = np.radians(angle_params[key].theta0)
+
+    torsion_rows: list[list[int]] = []
+    torsion_k: list[float] = []
+    torsion_n: list[int] = []
+    torsion_gamma: list[float] = []
+    for idx1, idx2, idx3, idx4 in torsions:
+        types = (
+            atom_types[int(idx1)],
+            atom_types[int(idx2)],
+            atom_types[int(idx3)],
+            atom_types[int(idx4)],
+        )
+        terms = _lookup_all_dihedral_params(dihedral_params, types)
+        if not terms:
+            torsion_rows.append([int(idx1), int(idx2), int(idx3), int(idx4)])
+            torsion_k.append(0.0)
+            torsion_n.append(0)
+            torsion_gamma.append(0.0)
+            continue
+        for k, n, gamma in terms:
+            torsion_rows.append([int(idx1), int(idx2), int(idx3), int(idx4)])
+            torsion_k.append(k)
+            torsion_n.append(n)
+            torsion_gamma.append(gamma)
+    torsion_idx = (
+        np.asarray(torsion_rows, dtype=np.int32)
+        if torsion_rows
+        else np.zeros((0, 4), dtype=np.int32)
+    )
+
+    improper_rows: list[list[int]] = []
+    improper_k: list[float] = []
+    improper_n: list[int] = []
+    improper_gamma: list[float] = []
+    for idx1, idx2, idx3, idx4 in impropers:
+        types = (
+            atom_types[int(idx1)],
+            atom_types[int(idx2)],
+            atom_types[int(idx3)],
+            atom_types[int(idx4)],
+        )
+        terms = _lookup_all_dihedral_params(dihedral_params, types)
+        if not terms:
+            improper_rows.append([int(idx1), int(idx2), int(idx3), int(idx4)])
+            improper_k.append(0.0)
+            improper_n.append(0)
+            improper_gamma.append(0.0)
+            continue
+        for k, n, gamma in terms:
+            improper_rows.append([int(idx1), int(idx2), int(idx3), int(idx4)])
+            improper_k.append(k)
+            improper_n.append(n)
+            improper_gamma.append(gamma)
+    improper_idx = (
+        np.asarray(improper_rows, dtype=np.int32)
+        if improper_rows
+        else np.zeros((0, 4), dtype=np.int32)
+    )
+
+    return BondedParameters(
+        bond_k=jnp.asarray(bond_k),
+        bond_r0=jnp.asarray(bond_r0),
+        angle_k=jnp.asarray(angle_k),
+        angle_theta0=jnp.asarray(angle_theta0),
+        torsion_k=jnp.asarray(torsion_k, dtype=jnp.float64),
+        torsion_n=jnp.asarray(torsion_n, dtype=np.int32),
+        torsion_gamma=jnp.asarray(torsion_gamma, dtype=jnp.float64),
+        improper_k=jnp.asarray(improper_k, dtype=jnp.float64),
+        improper_n=jnp.asarray(improper_n, dtype=np.int32),
+        improper_gamma=jnp.asarray(improper_gamma, dtype=jnp.float64),
+        cmap_maps=None,
+    ), torsion_idx, improper_idx
+
+
+def load_cgenff_bonded_from_psf(
+    psf_path: Path | str,
+    positions: Array | np.ndarray,
+    *,
+    prm_file: Path | str | None = None,
+    molecule_id: Array | None = None,
+) -> CgenffBondedSystem:
+    """Load CGENFF bonded topology/parameters from a CHARMM PSF EXT file."""
+    psf = parse_psf_ext(psf_path)
+    prm_path = Path(prm_file) if prm_file is not None else default_cgenff_paths()[1]
+    bond_params, angle_params, dihedral_params, _ = parse_prm(str(prm_path))
+
+    bonded, torsions, impropers = _build_bonded_parameters(
+        psf.atom_types,
+        psf.bonds,
+        psf.angles,
+        psf.torsions,
+        psf.impropers,
+        bond_params,
+        angle_params,
+        dihedral_params,
+    )
+    if molecule_id is None:
+        molecule_id = jnp.zeros(psf.n_atoms, dtype=jnp.int32)
+
+    topology = create_topology(
+        n_atoms=psf.n_atoms,
+        bonds=jnp.asarray(psf.bonds),
+        angles=jnp.asarray(psf.angles),
+        torsions=jnp.asarray(torsions),
+        impropers=jnp.asarray(impropers),
+        molecule_id=jnp.asarray(molecule_id),
+    )
+    return CgenffBondedSystem(
+        positions=jnp.asarray(positions, dtype=jnp.float64),
+        topology=topology,
+        bonded=bonded,
+        atom_types=psf.atom_types,
+        charges=psf.charges,
+    )
 
 
 def load_cgenff_bonded_from_charmm_files(

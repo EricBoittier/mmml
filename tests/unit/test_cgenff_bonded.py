@@ -16,6 +16,8 @@ from mmml.interfaces.pycharmmInterface.cgenff_bonded import (
 from mmml.interfaces.pycharmmInterface.cgenff_topology import (
     extract_residue_rtf,
     load_cgenff_bonded_from_charmm_files,
+    load_cgenff_bonded_from_psf,
+    parse_psf_ext,
     mm_atom_mask_complement,
     filter_bonded_topology_for_mm,
 )
@@ -27,6 +29,8 @@ from mmml.interfaces.pycharmmInterface.mixed_ml_mm import (
 )
 
 TIP3_PDB = Path("tests/functionality/pycharmmETC/pdb/initial.pdb")
+ACO_PSF = Path("tests/functionality/pycharmmETC/psf/aco-1.psf")
+ACO_PDB = Path("tests/functionality/pycharmmETC/pdb/aco.pdb")
 
 
 def _jaxmd_bonded_components(positions, topology, bonded):
@@ -178,3 +182,29 @@ def test_mixed_two_molecule_concat_placeholder() -> None:
     # Second water keeps 3 bonds + 3 inferred angles.
     assert topo.bonds.shape[0] == 3
     assert topo.angles.shape[0] == 3
+
+
+def test_parse_psf_ext_aco_fixture() -> None:
+    psf = parse_psf_ext(ACO_PSF)
+    assert psf.n_atoms == 10
+    assert psf.bonds.shape == (9, 2)
+    assert psf.angles.shape == (15, 3)
+    assert psf.torsions.shape == (12, 4)
+    assert psf.impropers.shape == (1, 4)
+    assert psf.atom_types[0] == "OG2D3"
+
+
+def test_load_cgenff_bonded_from_psf_aco_smoke() -> None:
+    from jax_md.mm_forcefields.io.charmm import parse_pdb_simple
+
+    _, positions = parse_pdb_simple(str(ACO_PDB))
+    system = load_cgenff_bonded_from_psf(ACO_PSF, positions)
+    components, forces = bonded_energy_and_forces(
+        jnp.asarray(positions),
+        system.topology,
+        system.bonded,
+        energy_unit="kcal/mol",
+    )
+    assert float(components["total"]) > 0.0
+    assert forces.shape == (10, 3)
+    assert jnp.all(jnp.isfinite(forces))
