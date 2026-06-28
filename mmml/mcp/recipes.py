@@ -234,7 +234,7 @@ def _write_md_smoke_config(
     composition = mode_cfg.get("composition", "DCM:2")
     ps = float(mode_cfg.get("md_ps", 20.0))
     dt_fs = float(mode_cfg.get("dt_fs", 0.1))
-    steps_per_recording = int(mode_cfg.get("steps_per_recording", 10))
+    steps_per_recording = int(mode_cfg.get("steps_per_recording", 1))
     body = {
         "defaults": {
             "composition": composition,
@@ -443,7 +443,7 @@ def _stage_ir(
 
     md_cfg_path = run_dir / "configs" / "md_smoke.yaml"
     dt_fs = 0.1
-    steps_per_recording = 10
+    steps_per_recording = 1
     composition = "DCM:2"
     if md_cfg_path.is_file():
         md_cfg = yaml.safe_load(md_cfg_path.read_text(encoding="utf-8")) or {}

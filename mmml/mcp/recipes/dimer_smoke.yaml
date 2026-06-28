@@ -10,7 +10,7 @@ modes:
     checkpoint: examples/ckpts_json/DESdimers_params.json
     md_ps: 20.0
     dt_fs: 0.1
-    steps_per_recording: 10
+    steps_per_recording: 1
     composition: "DCM:2"
   full:
     skip_stages: []
