@@ -96,10 +96,17 @@ def fully_excluded_pairs(iblo: Iterable[int], inb: Iterable[int], natom: int) ->
     inb_list = list(inb)
     if natom <= 0:
         return frozenset()
+    if not inb_list:
+        return frozenset()
     excluded: set[tuple[int, int]] = set()
     for i in range(natom):
+        if i >= len(iblo_list):
+            break
         start = int(iblo_list[i]) - 1
+        if start < 0:
+            continue
         end = int(iblo_list[i + 1]) - 1 if i + 1 < len(iblo_list) else len(inb_list)
+        end = min(end, len(inb_list))
         for idx in range(start, end):
             j = int(inb_list[idx]) - 1
             if j < 0 or j >= natom:
@@ -107,6 +114,18 @@ def fully_excluded_pairs(iblo: Iterable[int], inb: Iterable[int], natom: int) ->
             a, b = (i, j) if i < j else (j, i)
             excluded.add((a, b))
     return frozenset(excluded)
+
+
+def excluded_pairs_from_psf_bonds(bonds: np.ndarray) -> frozenset[tuple[int, int]]:
+    """Build CHARMM-style 1–2 and 1–3 exclusion pairs from PSF bonds (0-based)."""
+    from mmml.utils.geometry_checks import build_bond_exclusion_pairs
+
+    bonds = np.asarray(bonds, dtype=np.int32)
+    if bonds.size == 0:
+        return frozenset()
+    ib = bonds[:, 0] + 1
+    jb = bonds[:, 1] + 1
+    return build_bond_exclusion_pairs(ib, jb, exclude_1_3=True)
 
 
 def one_four_pairs_from_bonds(bonds: np.ndarray, natom: int) -> frozenset[tuple[int, int]]:
@@ -171,6 +190,8 @@ def load_nonbonded_system_from_charmm(
     at_codes = np.asarray(psf.get_iac(), dtype=np.int32) - 1
 
     excluded = fully_excluded_pairs(iblo, inb, natom)
+    if not excluded:
+        excluded = excluded_pairs_from_psf_bonds(psf_data.bonds)
     e14 = one_four_pairs_from_bonds(psf_data.bonds, natom) - excluded
 
     return NonbondedSystemData(

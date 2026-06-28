@@ -104,9 +104,12 @@ def bonded_energy_components(
             y = jnp.sum(jnp.cross(b1_norm, v) * w, axis=-1)
             return jnp.arctan2(y, x)
 
+        # CHARMM PSF impropers are I J K L with I the central atom (CGENFF PRM
+        # column 1).  The signed improper angle uses outer–central–outer–outer:
+        # J, I, K, L → indices (1, 0, 2, 3).
         psi = vmap(compute_dihedral_signed)(
-            positions[idx[:, 0]],
             positions[idx[:, 1]],
+            positions[idx[:, 0]],
             positions[idx[:, 2]],
             positions[idx[:, 3]],
         )

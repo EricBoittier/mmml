@@ -9,6 +9,7 @@ import pytest
 from mmml.interfaces.pycharmmInterface.mm_system_energy import (
     CharmmNbondSettings,
     charmm_switch_factor,
+    excluded_pairs_from_psf_bonds,
     fully_excluded_pairs,
     one_four_pairs_from_bonds,
 )
@@ -32,6 +33,20 @@ def test_fully_excluded_pairs_from_iblo_inb() -> None:
     inb = [2]
     pairs = fully_excluded_pairs(iblo, inb, natom=2)
     assert pairs == frozenset({(0, 1)})
+
+
+def test_fully_excluded_pairs_empty_inb() -> None:
+    assert fully_excluded_pairs([0, 0, 0], [], natom=3) == frozenset()
+
+
+def test_excluded_pairs_from_psf_bonds_chain() -> None:
+    bonds = np.asarray([[0, 1], [1, 2], [2, 3]], dtype=np.int32)
+    pairs = excluded_pairs_from_psf_bonds(bonds)
+    assert (0, 1) in pairs
+    assert (1, 2) in pairs
+    assert (0, 2) in pairs
+    assert (1, 3) in pairs
+    assert (0, 3) not in pairs
 
 
 def test_one_four_pairs_from_bonds_chain() -> None:
