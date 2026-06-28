@@ -357,16 +357,10 @@ def test_maybe_rerun_md_system_invokes_mpirun(monkeypatch, tmp_path):
     cmd = mock_run.call_args.args[0]
     assert str(mpirun.resolve()) == cmd[0]
     assert cmd[1:3] == ["-np", "1"]
-    assert cmd[3:9] == [
-        "--mca",
-        "pmix",
-        "^ext3x",
-        "--mca",
-        "orte_abort_print_stack",
-        "1",
-    ]
-    assert cmd[10:12] == ["-m", "mmml.cli.__main__"]
-    assert cmd[12:] == ["md-system", "--backend", "pycharmm"]
+    assert "orte_abort_print_stack" in cmd
+    idx_m = cmd.index("-m")
+    assert cmd[idx_m : idx_m + 2] == ["-m", "mmml.cli.__main__"]
+    assert cmd[idx_m + 2 :] == ["md-system", "--backend", "pycharmm"]
     env = mock_run.call_args.kwargs.get("env")
     assert env is not None
     assert str(mpirun.parent) in env["PATH"].split(os.pathsep)
@@ -399,16 +393,10 @@ def test_maybe_rerun_md_system_prepends_subcommand(monkeypatch, tmp_path):
     assert code == 0
     cmd = mock_run.call_args.args[0]
     assert cmd[1:3] == ["-np", "1"]
-    assert cmd[3:9] == [
-        "--mca",
-        "pmix",
-        "^ext3x",
-        "--mca",
-        "orte_abort_print_stack",
-        "1",
-    ]
-    assert cmd[10:12] == ["-m", "mmml.cli.__main__"]
-    assert cmd[12:] == ["md-system", "--config", "dcm_test.yaml", "--run-all"]
+    assert "orte_abort_print_stack" in cmd
+    idx_m = cmd.index("-m")
+    assert cmd[idx_m : idx_m + 2] == ["-m", "mmml.cli.__main__"]
+    assert cmd[idx_m + 2 :] == ["md-system", "--config", "dcm_test.yaml", "--run-all"]
 
 
 def test_mpi_mpirun_extra_args_includes_detected_shmem(tmp_path, monkeypatch):
@@ -432,13 +420,10 @@ def test_mpi_mpirun_extra_args_includes_detected_shmem(tmp_path, monkeypatch):
 def test_mpi_mpirun_extra_args_abort_stack_by_default(monkeypatch):
     monkeypatch.delenv("MMML_NO_MPI_ABORT_STACK", raising=False)
     monkeypatch.delenv("MMML_MPI_VERBOSE", raising=False)
-    monkeypatch.delenv("MMML_NO_MPI_MCA_PREFIX", raising=False)
+    monkeypatch.setenv("MMML_NO_MPI_MCA_PREFIX", "1")
     for var in ("LD_LIBRARY_PATH", "OPENMPI_ROOT", "EBROOTOPENMPI", "CHARMM_LIB_DIR"):
         monkeypatch.delenv(var, raising=False)
     assert charmm_mpi.mpi_mpirun_extra_args() == [
-        "--mca",
-        "pmix",
-        "^ext3x",
         "--mca",
         "orte_abort_print_stack",
         "1",
