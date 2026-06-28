@@ -16,6 +16,7 @@ _MPI_LDD_KEYWORDS = (
     "libopen-pal",
     "libpmix",
     "libmpi_mpifh",
+    "libmpi_usempif08",
     "libhwloc",
     "libevent",
 )
@@ -149,19 +150,53 @@ def _parse_ldd_library_paths(ldd_stdout: str, *, keyword: str) -> Path | None:
     return None
 
 
+def _openmpi_library_dirs_from_prefix(prefix: Path) -> tuple[str, ...]:
+    dirs: list[str] = []
+    for sub in ("lib", "lib64"):
+        candidate = prefix / sub
+        if candidate.is_dir():
+            resolved = str(candidate.resolve())
+            if resolved not in dirs:
+                dirs.append(resolved)
+    return tuple(dirs)
+
+
+def _fallback_openmpi_library_dirs() -> tuple[str, ...]:
+    """Lib dirs for the OpenMPI install matched to ``libcharmm.so`` / ``mpirun``."""
+    dirs: list[str] = []
+    prefix = openmpi_install_prefix()
+    if prefix is not None:
+        for path in _openmpi_library_dirs_from_prefix(prefix):
+            if path not in dirs:
+                dirs.append(path)
+    for env_key in ("OPENMPI_ROOT", "EBROOTOPENMPI"):
+        root = (os.environ.get(env_key) or "").strip()
+        if not root:
+            continue
+        for path in _openmpi_library_dirs_from_prefix(Path(root).expanduser()):
+            if path not in dirs:
+                dirs.append(path)
+    return tuple(dirs)
+
+
 @lru_cache(maxsize=1)
 def charmm_mpi_library_dirs() -> tuple[str, ...]:
     if _truthy("MMML_NO_CHARMM_MPI"):
         return ()
     lib = _charmm_lib_path()
-    if lib is None:
-        return ()
+    dirs: list[str] = []
+    if lib is not None:
+        dirs = list(_parse_ldd_mpi_library_dirs(_run_ldd(lib)))
+    # ldd may show ``libmpi.so.40 => not found`` when OpenMPI modules are unloaded;
+    # still prepend the matched mpirun prefix so libcharmm + libmpi_usempif08 resolve.
+    for path in _fallback_openmpi_library_dirs():
+        if path not in dirs:
+            dirs.insert(0, path)
     extra = [
         p.strip()
         for p in (os.environ.get("MMML_MPI_LD_PATH_EXTRA") or "").split(os.pathsep)
         if p.strip()
     ]
-    dirs = list(_parse_ldd_mpi_library_dirs(_run_ldd(lib)))
     for path in extra:
         if path not in dirs:
             dirs.append(path)

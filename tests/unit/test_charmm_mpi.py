@@ -570,6 +570,34 @@ def test_parse_otool_mpi_library_dirs():
     assert "open-mpi" in dirs[0] and dirs[0].endswith("/lib")
 
 
+def test_charmm_mpi_library_dirs_fallback_when_ldd_not_found(tmp_path, monkeypatch):
+    charmm_mpi.charmm_mpi_library_dirs.cache_clear()
+    charmm_mpi.openmpi_install_prefix.cache_clear()
+    charmm_mpi.charmm_mpirun_path.cache_clear()
+    lib = tmp_path / "libcharmm.so"
+    lib.write_bytes(b"x")
+    prefix = tmp_path / "openmpi"
+    (prefix / "lib").mkdir(parents=True)
+    (prefix / "lib" / "libmpi.so.40").write_bytes(b"x")
+    (prefix / "bin").mkdir()
+    (prefix / "bin" / "mpirun").write_bytes(b"#!/bin/sh\n")
+    (prefix / "bin" / "mpirun").chmod(0o755)
+    monkeypatch.setenv("CHARMM_LIB_DIR", str(tmp_path))
+    monkeypatch.delenv("MMML_NO_CHARMM_MPI", raising=False)
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._run_ldd",
+        return_value="libmpi.so.40 => not found\n",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_mpirun_path",
+        return_value=prefix / "bin" / "mpirun",
+    ):
+        dirs = charmm_mpi.charmm_mpi_library_dirs()
+    assert str((prefix / "lib").resolve()) in dirs
+    charmm_mpi.charmm_mpi_library_dirs.cache_clear()
+    charmm_mpi.openmpi_install_prefix.cache_clear()
+    charmm_mpi.charmm_mpirun_path.cache_clear()
+
+
 def test_mpi_library_path_export_uses_dyld_on_darwin(monkeypatch):
     monkeypatch.setattr(charmm_mpi, "_IS_DARWIN", True, raising=False)
     charmm_mpi.charmm_mpi_library_dirs.cache_clear()

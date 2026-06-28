@@ -127,6 +127,16 @@ source "$MMML_ROOT/scripts/setup_jax_cuda_env.sh"
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 export MMML_MPI_NP="${MMML_MPI_NP:-1}"
 
+# OpenMPI for MPI-linked libcharmm (ldd may show libmpi => not found without modules).
+if command -v module >/dev/null 2>&1; then
+  module load GCC/14.2.0 OpenMPI/5.0.7-GCC-14.2.0 CMake/3.31.3-GCCcore-14.2.0 2>/dev/null || true
+fi
+export OPENMPI_ROOT="${OPENMPI_ROOT:-${EBROOTOPENMPI:-}}"
+if [[ -n "$OPENMPI_ROOT" && -d "$OPENMPI_ROOT/lib" ]]; then
+  export PATH="$OPENMPI_ROOT/bin:$PATH"
+  export LD_LIBRARY_PATH="$OPENMPI_ROOT/lib:${LD_LIBRARY_PATH:-}"
+fi
+
 if [[ -z "${MMML_CKPT:-}" ]]; then
   DEFAULT_CKPT="$(
     find "$MMML_ROOT/mmml/models/physnetjax/defaults/hf_json" -maxdepth 1 -name '*_portable.json' 2>/dev/null | head -n 1
