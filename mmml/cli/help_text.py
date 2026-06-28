@@ -143,9 +143,9 @@ def format_examples_help() -> str:
 
 def format_top_level_help(prog: str = "mmml") -> str:
     """Short help for ``mmml -h`` (no giant epilog)."""
-    from mmml.cli.completion import MMML_COMMANDS
+    from mmml.cli.registry import _DISPATCH_COMMANDS
 
-    n_cmds = sum(1 for c in MMML_COMMANDS if c != "completion")
+    n_cmds = len(_DISPATCH_COMMANDS)
     lines = [
         f"usage: {prog} [-h] <command> ...",
         "",

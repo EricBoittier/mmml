@@ -139,8 +139,7 @@ def sample_normal_modes(
     return R_samples, Z
 
 
-def main() -> int:
-    """Run normal-mode-sample CLI."""
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Sample geometries along vibrational modes from pyscf-dft harmonic output.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -196,8 +195,16 @@ def main() -> int:
         metavar="N",
         help="Maximum number of structures to generate (default: no limit)",
     )
+    return parser
 
-    args = parser.parse_args()
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    return build_parser().parse_args(argv)
+
+
+def main() -> int:
+    """Run normal-mode-sample CLI."""
+    args = parse_args()
     t0 = time.perf_counter()
 
     if not args.input.exists():

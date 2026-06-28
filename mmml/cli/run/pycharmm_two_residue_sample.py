@@ -10,8 +10,7 @@ from pathlib import Path
 from mmml.cli.run.pycharmm_sampling_args import add_two_residue_sampling_args
 
 
-def parse_args() -> argparse.Namespace:
-    """Parse command line arguments."""
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Set up a two-residue CHARMM system and run restrained sampling.",
     )
@@ -47,7 +46,12 @@ def parse_args() -> argparse.Namespace:
     )
     add_two_residue_sampling_args(parser, include_toggle=False)
     parser.set_defaults(two_residue_sampling=True)
-    return parser.parse_args()
+    return parser
+
+
+def parse_args() -> argparse.Namespace:
+    """Parse command line arguments."""
+    return build_parser().parse_args()
 
 
 def run(args: argparse.Namespace):

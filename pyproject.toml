@@ -288,6 +288,9 @@ mmml = [
     "generate/sample/psf/*.psf",
     "models/physnetjax/defaults/*.json",
     "models/physnetjax/defaults/hf_json/*.json",
+    "cli/templates/workflows/**/*",
+    "cli/run/*.example.yaml",
+    "cli/run/presets/*.yaml",
 ]
 pycharmm = ["README.md", "LICENSE"]
 

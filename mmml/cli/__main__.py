@@ -8,10 +8,9 @@ Provides a unified interface for all MMML command-line tools.
 import sys
 import argparse
 
-from mmml.cli.completion import MMML_COMMANDS, completion_main, try_autocomplete
+from mmml.cli.completion import completion_main, try_autocomplete
 from mmml.cli.help_text import format_top_level_help, validate_command
-
-_DISPATCH_COMMANDS = tuple(c for c in MMML_COMMANDS if c not in ("completion",))
+from mmml.cli.registry import _DISPATCH_COMMANDS
 
 
 class _MMMLTopLevelParser(argparse.ArgumentParser):
@@ -136,20 +135,8 @@ def main():
         return xml2npz.main()
 
     elif command == "validate":
-        from ..data.npz_schema import validate_npz
-        if not args.args:
-            print("Error: Please provide an NPZ file to validate", file=sys.stderr)
-            print("Usage: mmml validate <npz_file>", file=sys.stderr)
-            return 1
-        all_valid = True
-        for npz_file in args.args:
-            print(f"\n{'=' * 60}")
-            print(f"Validating: {npz_file}")
-            print("=" * 60)
-            is_valid, _info = validate_npz(npz_file, verbose=True)
-            if not is_valid:
-                all_valid = False
-        return 0 if all_valid else 1
+        from .misc import validate_cli
+        return validate_cli.main(args.args or None)
 
     elif command == "train":
         from . import train

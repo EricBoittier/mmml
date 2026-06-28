@@ -236,8 +236,7 @@ def train_physnetjax(
         return False
 
 
-def main():
-    """Main training CLI entry point."""
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description='Train MMML models (DCMNet or PhysNetJAX)',
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -417,8 +416,16 @@ Examples:
         action='store_true',
         help='Prepare data but do not train'
     )
-    
-    args = parser.parse_args()
+    return parser
+
+
+def parse_args() -> argparse.Namespace:
+    return build_parser().parse_args()
+
+
+def main():
+    """Main training CLI entry point."""
+    args = parse_args()
     if args.list_physnet_transfer_models:
         print_bundled_physnet_models(args.physnet_transfer_category)
         return 0

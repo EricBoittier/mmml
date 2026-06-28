@@ -18,7 +18,7 @@ import time
 from pathlib import Path
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
             "Interpolate between two XYZ files via Z-matrix coordinates and "
@@ -51,8 +51,15 @@ def main() -> int:
         metavar="N",
         help="Number of interpolation segments (N+1 frames written; default: 1000)",
     )
+    return parser
 
-    args = parser.parse_args()
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    return build_parser().parse_args(argv)
+
+
+def main() -> int:
+    args = parse_args()
     t0 = time.perf_counter()
 
     if args.steps < 1:

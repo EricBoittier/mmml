@@ -747,7 +747,7 @@ def compute_interaction_energy(monomer_a, monomer_b, basis='cc-pVDZ', xc='PBE0')
     return output
 
 
-def parse_args():
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     # molecule
     parser.add_argument("--mol", type=str, required=True)
@@ -817,7 +817,11 @@ def parse_args():
     )
     parser.set_defaults(efield_include_nuclear_energy=True)
     parser.add_argument("--save_option", type=str, default="hdf5")
-    args = parser.parse_args()
+    return parser
+
+
+def parse_args(argv: list[str] | None = None):
+    args = build_parser().parse_args(argv)
 
     for key, value in vars(args).items():
         print(f"{key}: {value}")

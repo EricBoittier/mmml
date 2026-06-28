@@ -1,0 +1,50 @@
+configfile: "config.yaml"
+
+_JOB_IDS = list(config["jobs"].keys())
+_OPTIONAL_JOBS = set(config.get("optional_jobs") or [])
+_REQUIRED_JOB_IDS = [j for j in _JOB_IDS if j not in _OPTIONAL_JOBS and not config["jobs"][j].get("optional")]
+
+
+def _needs_mpi(wildcards) -> int:
+    return 1 if config["jobs"][wildcards.job]["backend"] == "pycharmm" else 0
+
+
+rule all:
+    input:
+        "results/benchmark_summary.csv",
+        "results/benchmark_report.md",
+
+
+rule run_benchmark:
+    output:
+        touch("results/{job}/done.txt"),
+    log:
+        stdout="results/{job}/stdout.log",
+    params:
+        job=lambda wildcards: wildcards.job,
+        workflow_dir=workflow.basedir,
+    resources:
+        gpu=1,
+        mpi=_needs_mpi,
+        runtime=30,
+    shell:
+        """
+        mkdir -p results/{wildcards.job}
+        bash {params.workflow_dir}/scripts/job_shell.sh {params.job} > {log.stdout} 2>&1
+        touch {output}
+        """
+
+
+rule collect:
+    input:
+        jobs=expand("results/{job}/done.txt", job=_REQUIRED_JOB_IDS),
+    output:
+        csv="results/benchmark_summary.csv",
+        md="results/benchmark_report.md",
+    params:
+        workflow_dir=workflow.basedir,
+    shell:
+        """
+        bash {params.workflow_dir}/scripts/collect_shell.sh \\
+            {params.workflow_dir} {output.csv} {output.md}
+        """

@@ -45,7 +45,16 @@ def test_examples_main(capsys):
 
 def test_configure_non_interactive(capsys):
     assert configure_main(["--non-interactive"]) == 0
-    assert "md-single" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "preset-menu" in out or "md-single" in out
+    assert "list-presets" in out or "Presets" in out
+
+
+def test_configure_list_presets(capsys):
+    assert configure_main(["--list-presets"]) == 0
+    out = capsys.readouterr().out
+    assert "cpu-spatial-mpi-mini" in out
+    assert "cpu-md-benchmark" in out
 
 
 def test_configure_md_single_writes_yaml(tmp_path: Path):

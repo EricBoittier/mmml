@@ -541,7 +541,7 @@ def _write_frames(output: Path, frames: Iterator[Any], fmt: str, fast: bool) -> 
     return n_frames
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Unwrap periodic ASE trajectories or HDF5 coordinate files.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -561,8 +561,15 @@ def main() -> int:
     parser.add_argument("--numbers-key", help="HDF5 atomic-number dataset key (default: Z/atomic_numbers/numbers)")
     parser.add_argument("--cell-key", help="HDF5 cell dataset key (default: cell/cells/lattice/lattices/box/boxes)")
     parser.add_argument("--quiet", action="store_true", help="Suppress summary output")
+    return parser
 
-    args = parser.parse_args()
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    return build_parser().parse_args(argv)
+
+
+def main() -> int:
+    args = parse_args()
     t0 = time.perf_counter()
 
     if not args.input.exists():

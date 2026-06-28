@@ -5,22 +5,18 @@ from __future__ import annotations
 import argparse
 
 from mmml.cli import __main__ as cli_main
-from mmml.cli.completion import (
-    MMML_COMMANDS,
-    completion_main,
-    get_subcommand_parser,
-    print_shell_completion,
-)
+from mmml.cli.completion import completion_main, get_subcommand_parser, print_shell_completion
+from mmml.cli.parser_utils import get_subcommand_parser as parser_for
+from mmml.cli.registry import _DISPATCH_COMMANDS
 
 
 def test_mmml_commands_match_dispatch():
     dispatch = set(cli_main._DISPATCH_COMMANDS)
-    listed = {c for c in MMML_COMMANDS if c != "completion"}
-    assert dispatch == listed
+    assert dispatch == set(_DISPATCH_COMMANDS)
 
 
 def test_md_system_subcommand_parser_builds():
-    parser = get_subcommand_parser("md-system")
+    parser = parser_for("md-system")
     assert parser is not None
     assert any(
         a.dest == "setup"

@@ -10,9 +10,22 @@ Usage:
 Requires: gpu4pyscf, pyscf (GPU/quantum environment)
 """
 
+import argparse
 import sys
 import time
 from pathlib import Path
+
+
+def build_parser() -> argparse.ArgumentParser:
+    from mmml.interfaces.pyscf4gpuInterface.calcs import build_parser as _build_parser
+
+    return _build_parser()
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    from mmml.interfaces.pyscf4gpuInterface.calcs import parse_args as _parse_args
+
+    return _parse_args(argv)
 
 
 def _normalize_output_base(path: Path) -> Path:
@@ -34,7 +47,6 @@ def main() -> int:
     t0 = time.perf_counter()
     try:
         from mmml.interfaces.pyscf4gpuInterface.calcs import (
-            parse_args,
             process_calcs,
             compute_dft,
             save_pyscf_results,

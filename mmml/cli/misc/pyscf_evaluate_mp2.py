@@ -23,7 +23,7 @@ def _parse_efield_vector(s: str) -> np.ndarray:
     return np.array(p, dtype=np.float64)
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
 
     parser.add_argument("-i", "--input", type=Path, required=True)
@@ -57,8 +57,15 @@ def main() -> int:
         action="store_false",
     )
     parser.set_defaults(efield_include_nuclear_energy=True)
+    return parser
 
-    args = parser.parse_args()
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    return build_parser().parse_args(argv)
+
+
+def main() -> int:
+    args = parse_args()
     t0 = time.perf_counter()
 
     # -------------------------

@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 
-def main():
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog='mmml gui',
         description='Start the MMML molecular viewer server',
@@ -96,12 +96,21 @@ Supported file formats:
         default=None,
         help='Optional path to model config JSON for hidden-state inspection'
     )
-    
-    args = parser.parse_args()
+    return parser
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    args = build_parser().parse_args(argv)
 
     # Default data_dir to cwd when neither --data-dir nor --file is given
     if args.data_dir is None and args.file is None:
         args.data_dir = Path.cwd()
+
+    return args
+
+
+def main():
+    args = parse_args()
 
     # Validate paths
     if args.data_dir and not args.data_dir.exists():

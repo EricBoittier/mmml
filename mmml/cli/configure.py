@@ -11,18 +11,38 @@ from typing import Any
 
 import yaml
 
+from mmml.cli.configure_presets import (
+    PRESET_BY_KEY,
+    PRESETS,
+    apply_preset,
+    list_presets_text,
+)
+
+
 def build_parser() -> argparse.ArgumentParser:
+    preset_keys = tuple(PRESET_BY_KEY.keys())
     parser = argparse.ArgumentParser(
         prog="mmml configure",
         description=(
             "Interactive, multiple-choice setup for md-system YAML, PhysNet training "
-            "configs, and Snakemake workflow scaffolding."
+            "configs, Snakemake workflow scaffolding, and bundled cpu_tests presets."
         ),
     )
     parser.add_argument(
         "--non-interactive",
         action="store_true",
         help="Print menu only (for tests); do not read stdin",
+    )
+    parser.add_argument(
+        "--list-presets",
+        action="store_true",
+        help="List bundled presets (cpu_tests / tutorial layouts) and exit",
+    )
+    parser.add_argument(
+        "--preset",
+        choices=preset_keys,
+        default=None,
+        help="Apply a bundled preset non-interactively (see --list-presets)",
     )
     parser.add_argument(
         "-o",
@@ -33,9 +53,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--workflow",
-        choices=("md-single", "md-campaign", "physnet-train", "snakemake-md"),
+        choices=(
+            "md-single",
+            "md-campaign",
+            "physnet-train",
+            "snakemake-md",
+            "preset-menu",
+        ),
         default=None,
-        help="Skip menu and run a specific wizard (still prompts for details)",
+        help="Skip menu and run a specific wizard (still prompts for details unless --preset)",
     )
     return parser
 
@@ -558,8 +584,24 @@ def configure_main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     out_dir = args.output_dir.expanduser().resolve()
 
+    if args.list_presets:
+        print(list_presets_text())
+        return 0
+
+    if args.preset:
+        preset = PRESET_BY_KEY[args.preset]
+        paths = apply_preset(preset, out_dir)
+        print(f"Applied preset {args.preset!r} → {out_dir}")
+        for p in paths[:12]:
+            print(f"  {p.relative_to(out_dir)}")
+        if len(paths) > 12:
+            print(f"  ... and {len(paths) - 12} more files")
+        print(f"\nNext: {preset.run_hint}")
+        return 0
+
     if args.non_interactive:
-        print("Workflows: md-single, md-campaign, physnet-train, snakemake-md")
+        print("Workflows: md-single, md-campaign, physnet-train, snakemake-md, preset-menu")
+        print("Presets:   mmml configure --list-presets")
         return 0
 
     workflow = args.workflow
@@ -567,13 +609,28 @@ def configure_main(argv: list[str] | None = None) -> int:
         workflow = _prompt_choice(
             "Configure what?",
             [
+                ("preset-menu", "Bundled preset (cpu_tests / tutorial)", "Copy example YAML or Snakemake workflow"),
                 ("md-single", "Single MD run", "One md-system YAML (liquid, vacuum, minimize, λ)"),
                 ("md-campaign", "MD campaign", "Multi-stage YAML with depends_on handoffs"),
                 ("physnet-train", "PhysNet training", "physnet-train YAML from NPZ splits"),
-                ("snakemake-md", "Snakemake MD workflow", "config.yaml + Snakefile + job scripts"),
+                ("snakemake-md", "Snakemake MD workflow (custom)", "config.yaml + Snakefile + job scripts"),
             ],
             default_index=0,
         )
+
+    if workflow == "preset-menu":
+        preset_key = _prompt_choice(
+            "Choose preset",
+            [(p.key, p.title, p.description) for p in PRESETS],
+            default_index=0,
+        )
+        preset = PRESET_BY_KEY[preset_key]
+        paths = apply_preset(preset, out_dir)
+        print(f"\nWrote preset {preset_key!r} under {out_dir}")
+        for p in paths[:8]:
+            print(f"  {p.relative_to(out_dir)}")
+        print(f"\nNext: {preset.run_hint}")
+        return 0
 
     run_wizard(workflow, out_dir)
     return 0

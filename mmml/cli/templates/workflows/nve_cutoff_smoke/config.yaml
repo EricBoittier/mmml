@@ -1,0 +1,15 @@
+# NVE cutoff sweep smoke — mmml configure template.
+composition: "DCM:5"
+checkpoint: "${MMML_CKPT}"
+output_root: artifacts/nve_cutoff_smoke
+legs:
+  - name: mid
+    mm_switch_on: 7.0
+    mm_switch_width: 5.0
+jobs:
+  mid_nve:
+    backend: pycharmm
+    setup: pbc_nve
+    leg: mid
+    ps: 1.0
+    md_stages: mini,nve

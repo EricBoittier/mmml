@@ -13,7 +13,7 @@ from mmml.cli.run import warmup_mlpot_jax as wm
 def test_warmup_mlpot_jax_refuses_under_mpirun(monkeypatch):
     monkeypatch.setenv("OMPI_COMM_WORLD_RANK", "0")
     monkeypatch.setenv("OMPI_COMM_WORLD_SIZE", "2")
-    args = wm._parse_args(["--checkpoint", "/tmp/ckpt.json"])
+    args = wm.parse_args(["--checkpoint", "/tmp/ckpt.json"])
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
         return_value=True,
@@ -25,7 +25,7 @@ def test_warmup_mlpot_jax_dry_run(tmp_path, monkeypatch):
     ckpt = tmp_path / "params.json"
     ckpt.write_text("{}", encoding="utf-8")
     monkeypatch.delenv("OMPI_COMM_WORLD_SIZE", raising=False)
-    args = wm._parse_args(
+    args = wm.parse_args(
         [
             "--checkpoint",
             str(ckpt),
@@ -74,7 +74,7 @@ def test_warmup_mlpot_jax_run_mocks_build_and_warmup(tmp_path, monkeypatch, caps
     def _warmup(m, pos, **kw):
         warmup_calls.append((m, pos, kw))
 
-    args = wm._parse_args(
+    args = wm.parse_args(
         [
             "--checkpoint",
             str(ckpt),

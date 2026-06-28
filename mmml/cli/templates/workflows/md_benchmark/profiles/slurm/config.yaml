@@ -1,0 +1,14 @@
+executor: slurm
+jobs: 4
+latency-wait: 120
+retries: 1
+envvars:
+  - MMML_CKPT
+default-resources:
+  - gpu=1
+  - mpi=1
+  - runtime=120
+  - slurm_partition=gpu
+  - mem_mb_per_cpu=3000
+  - cpus_per_task=4
+  - tasks=1

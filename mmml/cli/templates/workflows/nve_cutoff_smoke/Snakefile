@@ -1,0 +1,26 @@
+configfile: "config.yaml"
+
+_LEGS = [leg["name"] for leg in config.get("legs", [])]
+
+
+rule all:
+    input:
+        expand("results/{leg}/done.txt", leg=_LEGS),
+
+
+rule run_nve:
+    output:
+        touch("results/{leg}/done.txt"),
+    log:
+        "results/{leg}/stdout.log",
+    params:
+        workflow_dir=workflow.basedir,
+    resources:
+        gpu=1,
+        mpi=1,
+    shell:
+        """
+        mkdir -p results/{wildcards.leg}
+        bash {params.workflow_dir}/scripts/job_shell.sh {wildcards.leg} > {log} 2>&1
+        touch {output}
+        """
