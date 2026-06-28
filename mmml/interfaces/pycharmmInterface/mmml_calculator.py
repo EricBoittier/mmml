@@ -437,6 +437,9 @@ def setup_calculator(
 
     ml_jnp_dtype = resolve_ml_compute_dtype(ml_compute_dtype)
     ml_np_dtype = ml_numpy_dtype(ml_jnp_dtype)
+    from mmml.interfaces.pycharmmInterface.long_range_backend import pick_lr_solver
+
+    _use_jax_pme_lr = pick_lr_solver(lr_solver) == "jax_pme"
 
     ml_switch_width = _resolve_ml_switch_width(
         ml_switch_width,
@@ -1108,6 +1111,7 @@ def setup_calculator(
             mm_pair_idx=mm_pair_idx,
             mm_pair_mask=mm_pair_mask,
             box=box,
+            prefer_cpu=_use_jax_pme_lr,
         )
         _hybrid_jit_warmed[0] = True
         from mmml.utils.rich_report import emit_tagged

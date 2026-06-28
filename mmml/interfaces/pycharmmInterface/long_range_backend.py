@@ -66,6 +66,33 @@ def jax_pme_pure_callback_host_context() -> Iterator[None]:
         yield
 
 
+def jax_pme_mesh_method(method: str | None = None) -> bool:
+    """True for k-space mesh jax-pme methods (PME / P3M)."""
+    return resolve_jax_pme_method(method) in ("pme", "p3m")
+
+
+def materialize_jax_pme_host_numpy(
+    energy: object,
+    forces: object,
+) -> tuple[float, np.ndarray]:
+    """Block and copy jax-pme ``energy_forces`` outputs to host ``numpy``.
+
+    Hybrid MM returns these values from ``jax.pure_callback``; leaving pending
+    JAX arrays on GPU can deadlock the parent XLA executor under ``mpirun``.
+    """
+    import jax
+    import jax.numpy as jnp
+
+    with jax_pme_host_eval_context(disable_jit=True):
+        e_arr = jnp.asarray(energy)
+        f_arr = jnp.asarray(forces)
+        jax.block_until_ready(e_arr)
+        jax.block_until_ready(f_arr)
+        e_host = float(np.asarray(jax.device_get(e_arr), dtype=np.float64))
+        f_host = np.asarray(jax.device_get(f_arr), dtype=np.float64)
+    return e_host, f_host
+
+
 def warmup_jax_pme_coulomb_host(
     positions_A: np.ndarray,
     charges_e: np.ndarray,
@@ -260,11 +287,18 @@ def compute_jax_pme_power_law(
             mesh_spacing=mesh_spacing,
             smearing=smearing,
         )
-    with jax_pme_host_eval_context():
+    mesh = jax_pme_mesh_method(method_name)
+    host_ctx = (
+        jax_pme_pure_callback_host_context
+        if mesh
+        else jax_pme_host_eval_context
+    )
+    with host_ctx():
         energy, forces = calc.energy_forces(*inputs)
+    e_host, f_host = materialize_jax_pme_host_numpy(energy, forces)
     return LongRangeInteractionResult(
-        energy_kcalmol=float(energy),
-        forces_kcalmol_A=np.asarray(forces, dtype=np.float64),
+        energy_kcalmol=e_host,
+        forces_kcalmol_A=f_host,
     )
 
 

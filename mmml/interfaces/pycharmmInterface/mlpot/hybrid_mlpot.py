@@ -431,6 +431,18 @@ class DecomposedMlpotCalculator:
                         sync_jax_gpu_before_charmm(phase="after MLpot gete")
                 except Exception:
                     pass
+            parent = getattr(self, "_parent_model", None)
+            if parent is not None and parent._defer_jax_pme_gpu_promote():
+                parent._jax_pme_hybrid_first_ener_done = True
+                if parent._defer_jax_until_after_sd and not parent._jax_on_gpu:
+                    parent.promote_jax_factory_to_gpu()
+                    self._spherical_forward_fn = None
+                    self._forward_cache_key = None
+                    if parent._spherical_fn is not None:
+                        self.spherical_fn = parent._spherical_fn
+                    if parent._get_update_fn is not None:
+                        self._get_update_fn = parent._get_update_fn
+                        self._cached_update_fn = None
         forces, e_kcal = broadcast_mlpot_result(forces, e_kcal, n)
         self.last_ml_forces = np.asarray(forces, dtype=np.float64, copy=True)
         parent = getattr(self, "_parent_model", None)
@@ -521,6 +533,8 @@ class DecomposedMlpotModel:
         defer_jax_until_after_sd: bool = False,
         defer_jax_until_mlpot_registered: bool = False,
         periodic_mm_config: Any | None = None,
+        lr_solver: str | None = None,
+        jax_pme_method: str | None = None,
     ) -> None:
         self._spherical_fn = spherical_fn
         self._cutoff_params = cutoff_params
@@ -551,6 +565,31 @@ class DecomposedMlpotModel:
         self._pending_do_ml = bool(pending_do_ml)
         self._pending_do_ml_dimer = bool(pending_do_ml_dimer)
         self._verbose = bool(verbose)
+        self._lr_solver = lr_solver
+        self._jax_pme_method = jax_pme_method
+        self._jax_pme_hybrid_first_ener_done = not self._defer_jax_pme_gpu_promote_initial()
+
+    def _jax_pme_lr_active(self) -> bool:
+        if not self._do_mm:
+            return False
+        from mmml.interfaces.pycharmmInterface.long_range_backend import pick_lr_solver
+
+        return pick_lr_solver(self._lr_solver) == "jax_pme"
+
+    def _jax_pme_mesh_active(self) -> bool:
+        from mmml.interfaces.pycharmmInterface.long_range_backend import jax_pme_mesh_method
+
+        return self._jax_pme_lr_active() and jax_pme_mesh_method(self._jax_pme_method)
+
+    def _defer_jax_pme_gpu_promote_initial(self) -> bool:
+        """Keep hybrid on CPU through the first ENER when jax-pme uses a k-space mesh."""
+        return (
+            self._defer_jax_until_after_sd
+            and self._jax_pme_mesh_active()
+        )
+
+    def _defer_jax_pme_gpu_promote(self) -> bool:
+        return self._jax_pme_mesh_active() and not self._jax_pme_hybrid_first_ener_done
 
     def _finalize_jax_factory(self, *, gpu: bool = False) -> None:
         """Build ``spherical_fn`` after CHARMM MLpot ``upinb`` (``MLpot.__init__``)."""
@@ -611,6 +650,14 @@ class DecomposedMlpotModel:
     def promote_jax_factory_to_gpu(self) -> None:
         """Rebuild ``spherical_fn`` on GPU after MLpot SD (MPI defer path)."""
         if not self._defer_jax_until_after_sd or self._jax_on_gpu:
+            return
+        if self._defer_jax_pme_gpu_promote():
+            if self._verbose:
+                print(
+                    "Decomposed MLpot: deferring JAX GPU promote until after first "
+                    "hybrid ENER (jax-pme mesh)",
+                    flush=True,
+                )
             return
         self._spherical_fn = None
         self._spherical_forward_fn = None
@@ -870,6 +917,8 @@ def build_decomposed_mlpot_model(
             defer_jax_until_after_sd=defer_jax_until_after_sd,
             defer_jax_until_mlpot_registered=True,
             periodic_mm_config=periodic_mm_config,
+            lr_solver=lr_solver,
+            jax_pme_method=jax_pme_method,
         )
     r0 = np.zeros((len(z), 3), dtype=np.float64)
     from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_context
@@ -906,6 +955,8 @@ def build_decomposed_mlpot_model(
         spatial_mpi=spatial_mpi,
         atoms_per_monomer=per,
         periodic_mm_config=periodic_mm_config,
+        lr_solver=lr_solver,
+        jax_pme_method=jax_pme_method,
     )
     return model
 
@@ -1021,6 +1072,7 @@ def warmup_decomposed_mlpot(
         box=box,
         mm_pair_idx=mm_pair_idx,
         mm_pair_mask=mm_pair_mask,
+        prefer_cpu=model._jax_pme_lr_active() and not model._jax_on_gpu,
     )
     _warmup_value_and_grad_for_model(
         model,

@@ -363,6 +363,20 @@ def _hybrid_mlpot_ase_calculator_class():
 
 def _promote_mlpot_jax_for_calculator_mini(mlpot_ctx: Any, *, verbose: bool) -> None:
     pyCModel = getattr(mlpot_ctx, "pyCModel", None)
+    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotModel
+
+    defer_mesh = (
+        isinstance(pyCModel, DecomposedMlpotModel)
+        and pyCModel._defer_jax_pme_gpu_promote()
+    )
+    if defer_mesh:
+        if verbose:
+            print(
+                "Pre-SD hybrid calculator minimize: keeping JAX on CPU until first "
+                "hybrid ENER (jax-pme mesh)",
+                flush=True,
+            )
+        return
     promote = getattr(pyCModel, "promote_jax_factory_to_gpu", None)
     if callable(promote):
         promote()
