@@ -111,9 +111,17 @@ def test_emit_hybrid_ml_setup_plain(capsys) -> None:
         model=_Model(),
         checkpoint={"epoch": 1000},
         ml_flags={"doML": True, "doMM": True},
+        long_range={
+            "lr_solver": "jax_pme",
+            "jax_pme_method": "ewald",
+            "jax_pme_sr_cutoff_Å": "6.0",
+            "coulomb_mode": "jax-pme k-space + pair SR",
+        },
     )
     out = capsys.readouterr().out
     assert "Hybrid ML/MM setup" in out
+    assert "Long-range Coulomb" in out
+    assert "jax_pme_method" in out
     assert "n_monomers" in out
     assert "features" in out
 

@@ -290,15 +290,22 @@ def emit_hybrid_ml_setup(
     model: Any,
     checkpoint: Mapping[str, Any] | None = None,
     ml_flags: Mapping[str, Any] | None = None,
+    long_range: Mapping[str, Any] | None = None,
     quiet: bool = False,
 ) -> None:
     """Single dashboard for hybrid calculator setup (replaces duplicate setup/model panels)."""
     sections: list[tuple[str, Mapping[str, Any]]] = [
         ("System", system),
         ("Handoff & cutoffs", handoff),
-        ("Neighbor lists & ML batching", neighbor_lists),
-        ("Model", _model_attributes_mapping(model)),
     ]
+    if long_range:
+        sections.append(("Long-range Coulomb", long_range))
+    sections.extend(
+        [
+            ("Neighbor lists & ML batching", neighbor_lists),
+            ("Model", _model_attributes_mapping(model)),
+        ]
+    )
     if ml_flags:
         sections.append(("ML/MM flags", ml_flags))
     if checkpoint:

@@ -482,3 +482,34 @@ def describe_lr_solver(requested: str | None = None) -> str:
     parts.append(f"scafacos={'yes' if have_scafacos() else 'no'}")
     parts.append(f"jax_pme={'yes' if have_jax_pme() else 'no'}")
     return ", ".join(parts)
+
+
+def collect_lr_solver_mapping(
+    *,
+    lr_solver: str | None = None,
+    jax_pme_method: str | None = None,
+    jax_pme_sr_cutoff_A: float = DEFAULT_JAX_PME_SR_CUTOFF_A,
+    scafacos_method: str | None = None,
+) -> dict[str, str]:
+    """Key/value rows for the Hybrid ML/MM setup long-range Coulomb section."""
+    requested = resolve_lr_solver(lr_solver)
+    chosen = pick_lr_solver(lr_solver)
+    mapping: dict[str, str] = {
+        "lr_solver": chosen,
+        "jax_pme_pkg": "yes" if have_jax_pme() else "no",
+        "scafacos_lib": "yes" if have_scafacos() else "no",
+    }
+    if requested != chosen:
+        mapping["lr_solver_requested"] = requested
+    if chosen == "mic":
+        mapping["coulomb_mode"] = "truncated MIC (pair loop)"
+    elif chosen == "jax_pme":
+        mapping["coulomb_mode"] = "jax-pme k-space + pair SR"
+        mapping["jax_pme_method"] = resolve_jax_pme_method(jax_pme_method)
+        mapping["jax_pme_sr_cutoff_Å"] = f"{float(jax_pme_sr_cutoff_A):.1f}"
+    elif chosen == "scafacos":
+        mapping["coulomb_mode"] = "ScaFaCoS full-box Coulomb"
+        mapping["scafacos_method"] = str(
+            scafacos_method or os.environ.get("SCAFACOS_METHOD", "ewald")
+        ).strip()
+    return mapping

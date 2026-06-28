@@ -5,34 +5,42 @@ Coulomb backends in hybrid ML/MM workflows, using the DCM liquid box as a concre
 
 Related:
 
-- [`scripts/run_dcm_liquid_workflow.sh`](../scripts/run_dcm_liquid_workflow.sh) — baseline DCM liquid pipeline
-- [`scripts/run_dcm_long_range_workflow.sh`](../scripts/run_dcm_long_range_workflow.sh) — solver comparison sweep
-- [`tests/functionality/long_range/`](../tests/functionality/long_range/) — standalone validation
-- [`mmml/interfaces/pycharmmInterface/mlpot/LONG_RANGE_ELECTROSTATICS.md`](../mmml/interfaces/pycharmmInterface/mlpot/LONG_RANGE_ELECTROSTATICS.md) — architecture
+- `[scripts/run_dcm_liquid_workflow.sh](../scripts/run_dcm_liquid_workflow.sh)` — baseline DCM liquid pipeline
+- `[scripts/run_dcm_long_range_workflow.sh](../scripts/run_dcm_long_range_workflow.sh)` — solver comparison sweep
+- `[tests/functionality/long_range/](../tests/functionality/long_range/)` — standalone validation
+- `[mmml/interfaces/pycharmmInterface/mlpot/LONG_RANGE_ELECTROSTATICS.md](../mmml/interfaces/pycharmmInterface/mlpot/LONG_RANGE_ELECTROSTATICS.md)` — architecture
 
 ---
+
+
 
 ## 1. Two MM nonbond modes
 
-| Mode | LJ | Coulomb | When to use |
-|------|----|---------|-------------|
-| **`jax_mic`** (default) | Switched JAX pairs (~13 Å) | MIC in pair loop, or **jax-pme** with `--lr-solver jax_pme` | Standard hybrid MLpot; jax-pme Coulomb + r⁻⁶ LJ when enabled |
-| **`periodic_external`** | CHARMM IMAGE VDW | **jax-pme** or **ScaFaCoS** full-box Coulomb | Large boxes where JAX MM is off; requires `pbc_*` setup |
 
-In **`jax_mic`** + **`jax_pme`** mode: **r⁻¹²** repulsion stays on the switched pair list (exact Lorentz–Berthelot σ_ij, ε_ij, hybrid λ); **Coulomb** and the **r⁻⁶** LJ tail use jax-pme (Ewald/PME/P3M) with per-atom √C6 and geometric k-space combining (GROMACS-style LJ-PME reciprocal rule). Each jax-pme MM term is **`scale × (E_pme_full − E_intra)`** so intra-monomer electrostatics and dispersion remain in the ML region (same COM switching as the pair loop).
+| Mode                | LJ                         | Coulomb                                                     | When to use                                                  |
+| ------------------- | -------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------ |
+| `jax_mic` (default) | Switched JAX pairs (~13 Å) | MIC in pair loop, or **jax-pme** with `--lr-solver jax_pme` | Standard hybrid MLpot; jax-pme Coulomb + r⁻⁶ LJ when enabled |
+| `periodic_external` | CHARMM IMAGE VDW           | **jax-pme** or **ScaFaCoS** full-box Coulomb                | Large boxes where JAX MM is off; requires `pbc_`* setup      |
+
+
+In `jax_mic` + `jax_pme` mode: **r⁻¹²** repulsion stays on the switched pair list (exact Lorentz–Berthelot σ_ij, ε_ij, hybrid λ); **Coulomb** and the **r⁻⁶** LJ tail use jax-pme (Ewald/PME/P3M) with per-atom √C6 and geometric k-space combining (GROMACS-style LJ-PME reciprocal rule). Each jax-pme MM term is `scale × (E_pme_full − E_intra)` so intra-monomer electrostatics and dispersion remain in the ML region (same COM switching as the pair loop).
 
 ---
 
+
+
 ## 2. CLI flags (`md-system`, `mmml md-system`)
 
-| Flag | Values | Default | Meaning |
-|------|--------|---------|---------|
-| `--mm-nonbond-mode` | `jax_mic`, `periodic_external` | `jax_mic` | MM stack selection |
-| `--lr-solver` | `auto`, `mic`, `jax_pme`, `scafacos` | env / `auto` | Coulomb backend |
-| `--jax-pme-method` | `ewald`, `pme`, `p3m` | `ewald` | jax-pme variant |
-| `--jax-pme-sr-cutoff` | float (Å) | `6.0` | jax-pme real-space cutoff |
-| `--scafacos-method` | `ewald`, `p3m`, … | `ewald` | ScaFaCoS `fcs_init` string |
-| `--include-mm` / `--no-include-mm` | bool | on | JAX MM pair path (LJ ± Coulomb) |
+
+| Flag                               | Values                               | Default      | Meaning                         |
+| ---------------------------------- | ------------------------------------ | ------------ | ------------------------------- |
+| `--mm-nonbond-mode`                | `jax_mic`, `periodic_external`       | `jax_mic`    | MM stack selection              |
+| `--lr-solver`                      | `auto`, `mic`, `jax_pme`, `scafacos` | env / `auto` | Coulomb backend                 |
+| `--jax-pme-method`                 | `ewald`, `pme`, `p3m`                | `ewald`      | jax-pme variant                 |
+| `--jax-pme-sr-cutoff`              | float (Å)                            | `6.0`        | jax-pme real-space cutoff       |
+| `--scafacos-method`                | `ewald`, `p3m`, …                    | `ewald`      | ScaFaCoS `fcs_init` string      |
+| `--include-mm` / `--no-include-mm` | bool                                 | on           | JAX MM pair path (LJ ± Coulomb) |
+
 
 Environment mirrors:
 
@@ -46,9 +54,11 @@ export SCAFACOS_METHOD=ewald
 
 YAML keys use underscores: `lr_solver`, `jax_pme_method`, `jax_pme_sr_cutoff`, `mm_nonbond_mode`.
 
-Example config: [`mmml/cli/run/dcm_long_range_solvers.example.yaml`](../mmml/cli/run/dcm_long_range_solvers.example.yaml).
+Example config: `[mmml/cli/run/dcm_long_range_solvers.example.yaml](../mmml/cli/run/dcm_long_range_solvers.example.yaml)`.
 
 ---
+
+
 
 ## 3. Standalone validation (no PyCHARMM)
 
@@ -72,9 +82,11 @@ python tests/functionality/long_range/04_scafacos_methods.py
 
 ---
 
+
+
 ## 4. Example: jax-pme Ewald on a certified DCM box
 
-After [`run_dcm_liquid_workflow.sh`](../scripts/run_dcm_liquid_workflow.sh) produces `~/tests/boxes/dcm60_l32/`:
+After `[run_dcm_liquid_workflow.sh](../scripts/run_dcm_liquid_workflow.sh)` produces `~/tests/boxes/dcm60_l32/`:
 
 ```bash
 export MMML_CKPT=~/mmml/mmml/models/physnetjax/defaults/hf_json/<checkpoint>_portable.json
@@ -99,6 +111,8 @@ Compare with truncated MIC (default):
 Swap `--jax-pme-method` to `pme` or `p3m` to test mesh methods.
 
 ---
+
+
 
 ## 5. Example: periodic_external + jax-pme
 
@@ -127,9 +141,11 @@ ScaFaCoS variant (requires `libfcs`):
 
 ---
 
+
+
 ## 6. Automated solver sweep
 
-[`run_dcm_long_range_workflow.sh`](../scripts/run_dcm_long_range_workflow.sh) runs validation, optional liquid-box certification, then one short `md-system` mini per solver configuration.
+`[run_dcm_long_range_workflow.sh](../scripts/run_dcm_long_range_workflow.sh)` runs validation, optional liquid-box certification, then one short `md-system` mini per solver configuration.
 
 ```bash
 # Default: MIC + jax-pme (ewald, pme, p3m) in jax_mic mode
@@ -179,15 +195,19 @@ Expectations:
 
 ---
 
+
+
 ## 7. Expected behaviour
 
-| Comparison | Expectation |
-|------------|-------------|
-| **MIC vs jax-pme** on large periodic box | \|E_jax_pme\| ≥ \|E_mic\| (truncated MIC underestimates Coulomb) |
-| **ewald vs pme vs p3m** (jax-pme) | Energies agree to ~0.1–1% on neutral crystals; P3M may need tuning |
-| **LJ r^-12 (pair loop)** | Identical LB mixing with/without jax_pme; **total vdw** differs (r^-6 via k-space) |
-| **ScaFaCoS vs jax-pme** | Similar totals on CsCl / dimer tests (~0.1–0.7%) |
-| **Hybrid GRMS** (same certified box) | jax-pme methods within ~10% rtol; MIC may differ (see §6 force validation) |
+
+| Comparison                               | Expectation                                                                        |
+| ---------------------------------------- | ---------------------------------------------------------------------------------- |
+| **MIC vs jax-pme** on large periodic box | |E_jax_pme| ≥ |E_mic| (truncated MIC underestimates Coulomb)                       |
+| **ewald vs pme vs p3m** (jax-pme)        | Energies agree to ~0.1–1% on neutral crystals; P3M may need tuning                 |
+| **LJ r^-12 (pair loop)**                 | Identical LB mixing with/without jax_pme; **total vdw** differs (r^-6 via k-space) |
+| **ScaFaCoS vs jax-pme**                  | Similar totals on CsCl / dimer tests (~0.1–0.7%)                                   |
+| **Hybrid GRMS** (same certified box)     | jax-pme methods within ~10% rtol; MIC may differ (see §6 force validation)         |
+
 
 Log line at MLpot startup (verbose):
 
@@ -195,23 +215,32 @@ Log line at MLpot startup (verbose):
 Decomposed MLpot: lr_solver=jax_pme, scafacos=no, jax_pme=yes (jax-pme method=ewald, sr_cutoff=6.0 Å)
 ```
 
+The **Hybrid ML/MM setup** dashboard (always printed at calculator init) includes a **Long-range Coulomb** section with the resolved solver, availability flags, and method-specific settings (`jax_pme_method`, `jax_pme_sr_cutoff_Å`, or `scafacos_method`). When `--lr-solver auto` resolves differently (e.g. `auto` → `mic` because jax-pme is missing), `lr_solver_requested` is shown alongside the active backend.
+
 ---
+
+
 
 ## 8. Troubleshooting
 
-| Issue | Fix |
-|-------|-----|
-| `jax_pme` falls back to `mic` | Install jax-pme: `uv sync` (pinned in pyproject.toml) |
-| `scafacos` unavailable | Build to `~/.local/scafacos`, set `SCAFACOS_LIB` and `LD_LIBRARY_PATH` |
-| MIC box too small | Use L ≥ 28–32 Å for DCM; see `run_dcm_liquid_workflow.sh` header |
-| `periodic_external` fails | Need `--setup pbc_*`, positive `--box-size`, jax_pme or libfcs |
-| Segfault under MPI + ScaFaCoS | Ensure mpi4py uses `COMM_WORLD.handle` (fixed in recent MMML) |
-| `TracerArrayConversionError` under `jax_pme` | Upgrade MMML (hybrid jax-pme uses `jax.pure_callback` inside JIT) |
+
+| Issue                                        | Fix                                                                    |
+| -------------------------------------------- | ---------------------------------------------------------------------- |
+| `jax_pme` falls back to `mic`                | Install jax-pme: `uv sync` (pinned in pyproject.toml)                  |
+| `scafacos` unavailable                       | Build to `~/.local/scafacos`, set `SCAFACOS_LIB` and `LD_LIBRARY_PATH` |
+| MIC box too small                            | Use L ≥ 28–32 Å for DCM; see `run_dcm_liquid_workflow.sh` header       |
+| `periodic_external` fails                    | Need `--setup pbc_*`, positive `--box-size`, jax_pme or libfcs         |
+| Segfault under MPI + ScaFaCoS                | Ensure mpi4py uses `COMM_WORLD.handle` (fixed in recent MMML)          |
+| `TracerArrayConversionError` under `jax_pme` | Upgrade MMML (hybrid jax-pme uses `jax.pure_callback` inside JIT)      |
+
 
 ---
+
+
 
 ## 9. Next steps
 
 - Production NPT equilibration: extend `MD_STAGES=mini,equi` in the workflow script
-- Campaign YAML: `lr_solver` / `jax_pme_method` under `defaults` — see [`docs/md-system-configs.md`](md-system-configs.md)
+- Campaign YAML: `lr_solver` / `jax_pme_method` under `defaults` — see `[docs/md-system-configs.md](md-system-configs.md)`
 - Force validation: `07_hybrid_grms_lr_solver_compare.py` (also run automatically at end of `run_dcm_long_range_workflow.sh`)
+

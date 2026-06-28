@@ -895,6 +895,8 @@ def setup_calculator(
     _jax_md_skin_distance = float(jax_md_skin_distance)
 
     _density_est = cell_list_density_estimate if cell_list_density_estimate is not None else 0.03
+    from mmml.interfaces.pycharmmInterface.long_range_backend import collect_lr_solver_mapping
+
     emit_hybrid_ml_setup(
         system={
             "n_monomers": n_monomers,
@@ -933,6 +935,11 @@ def setup_calculator(
             "doML_dimer": doML_dimer,
             "defer_xla_warmup": defer_xla_gpu_warmup,
         },
+        long_range=collect_lr_solver_mapping(
+            lr_solver=lr_solver,
+            jax_pme_method=jax_pme_method,
+            jax_pme_sr_cutoff_A=jax_pme_sr_cutoff_A,
+        ),
     )
 
 

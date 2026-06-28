@@ -9,6 +9,7 @@ import pytest
 
 from mmml.interfaces.pycharmmInterface.long_range_backend import (
     LongRangeCoulombResult,
+    collect_lr_solver_mapping,
     create_lr_solver,
     describe_lr_solver,
     pick_lr_solver,
@@ -122,3 +123,49 @@ def test_describe_lr_solver_includes_flags():
     assert "lr_solver=mic" in text
     assert "scafacos=no" in text
     assert "jax_pme=yes" in text
+
+
+def test_collect_lr_solver_mapping_jax_pme():
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
+        return_value="jax_pme",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.resolve_lr_solver",
+        return_value="jax_pme",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.have_scafacos",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
+        return_value=True,
+    ):
+        mapping = collect_lr_solver_mapping(
+            lr_solver="jax_pme",
+            jax_pme_method="pme",
+            jax_pme_sr_cutoff_A=7.5,
+        )
+    assert mapping["lr_solver"] == "jax_pme"
+    assert mapping["jax_pme_method"] == "pme"
+    assert mapping["jax_pme_sr_cutoff_Å"] == "7.5"
+    assert mapping["coulomb_mode"] == "jax-pme k-space + pair SR"
+    assert "lr_solver_requested" not in mapping
+
+
+def test_collect_lr_solver_mapping_auto_fallback():
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
+        return_value="mic",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.resolve_lr_solver",
+        return_value="auto",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.have_scafacos",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
+        return_value=False,
+    ):
+        mapping = collect_lr_solver_mapping(lr_solver="auto")
+    assert mapping["lr_solver"] == "mic"
+    assert mapping["lr_solver_requested"] == "auto"
+    assert mapping["coulomb_mode"] == "truncated MIC (pair loop)"
