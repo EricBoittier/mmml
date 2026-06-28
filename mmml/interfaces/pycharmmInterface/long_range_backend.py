@@ -21,6 +21,7 @@ from __future__ import annotations
 import os
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Iterator, Literal, Protocol
 
 import numpy as np
@@ -173,6 +174,108 @@ LongRangeCoulombResult = LongRangeInteractionResult
 DEFAULT_JAX_PME_LJ_PREFACTOR = -1.0
 
 
+@dataclass(frozen=True)
+class _JaxPmePowerLawHostEvaluator:
+    method_name: JaxPmeMethod
+    exponent: int
+    prefactor: float
+    sr_cutoff_A: float
+    box_length_A: float
+    n_atoms: int
+
+    def compute(
+        self,
+        positions_A: np.ndarray,
+        coefficients: np.ndarray,
+    ) -> LongRangeInteractionResult:
+        """Evaluate one fixed-shape jax-pme power-law problem on the host."""
+        from ase import Atoms
+
+        pos = np.asarray(positions_A, dtype=np.float64)
+        coef = np.asarray(coefficients, dtype=np.float64).reshape(-1)
+        if pos.shape != (int(self.n_atoms), 3):
+            raise ValueError(
+                f"cached jax-pme evaluator expects positions "
+                f"({self.n_atoms}, 3); got {pos.shape}"
+            )
+        if coef.shape[0] != int(self.n_atoms):
+            raise ValueError(
+                f"cached jax-pme evaluator expects {self.n_atoms} coefficients; "
+                f"got {coef.shape[0]}"
+            )
+        atoms = Atoms(
+            positions=pos,
+            cell=np.eye(3, dtype=np.float64) * float(self.box_length_A),
+            pbc=True,
+        )
+        calc = _cached_jax_pme_calculator(
+            self.method_name,
+            int(self.exponent),
+            float(self.prefactor),
+        )
+        smearing = float(self.sr_cutoff_A) / 5.0
+        mesh_spacing = smearing / 8.0
+        lr_wavelength = smearing / 2.0
+        if self.method_name == "ewald":
+            inputs = calc.prepare(
+                atoms,
+                coef,
+                cutoff=float(self.sr_cutoff_A),
+                smearing=smearing,
+                lr_wavelength=lr_wavelength,
+            )
+        else:
+            inputs = calc.prepare(
+                atoms,
+                coef,
+                cutoff=float(self.sr_cutoff_A),
+                mesh_spacing=mesh_spacing,
+                smearing=smearing,
+            )
+        host_ctx = (
+            jax_pme_pure_callback_host_context
+            if jax_pme_mesh_method(self.method_name)
+            else jax_pme_host_eval_context
+        )
+        with host_ctx():
+            energy, forces = calc.energy_forces(*inputs)
+        e_host, f_host = materialize_jax_pme_host_numpy(energy, forces)
+        return LongRangeInteractionResult(
+            energy_kcalmol=e_host,
+            forces_kcalmol_A=f_host,
+        )
+
+
+@lru_cache(maxsize=32)
+def _cached_jax_pme_calculator(method_name: JaxPmeMethod, exponent: int, prefactor: float):
+    from jaxpme import Ewald, P3M, PME
+
+    calc_map = {"ewald": Ewald, "pme": PME, "p3m": P3M}
+    return calc_map[method_name](
+        exponent=int(exponent),
+        prefactor=float(prefactor),
+    )
+
+
+@lru_cache(maxsize=128)
+def _cached_jax_pme_power_law_evaluator(
+    method_name: JaxPmeMethod,
+    exponent: int,
+    prefactor: float,
+    sr_cutoff_A: float,
+    box_length_A: float,
+    n_atoms: int,
+) -> _JaxPmePowerLawHostEvaluator:
+    return _JaxPmePowerLawHostEvaluator(
+        method_name=method_name,
+        exponent=int(exponent),
+        prefactor=float(prefactor),
+        sr_cutoff_A=float(sr_cutoff_A),
+        box_length_A=float(box_length_A),
+        n_atoms=int(n_atoms),
+    )
+
+
 def per_atom_monomer_ids(
     total_atoms: int,
     monomer_offsets: np.ndarray,
@@ -247,8 +350,6 @@ def compute_jax_pme_power_law(
     ``coefficients`` are jax-pme "charges" (elementary charge for p=1, √C6 for
     attractive dispersion with ``prefactor=-1`` and p=6).
     """
-    from ase import Atoms
-    from jaxpme import Ewald, P3M, PME
     from jaxpme import prefactors as jpref
 
     if int(exponent) not in (1, 2, 3, 4, 5, 6):
@@ -264,44 +365,15 @@ def compute_jax_pme_power_law(
     if coef.shape[0] != pos.shape[0]:
         raise ValueError(f"coefficients length {coef.shape[0]} != n_atoms {pos.shape[0]}")
     L = float(box_length_A)
-    atoms = Atoms(positions=pos, cell=np.eye(3) * L, pbc=True)
-    calc_map = {"ewald": Ewald, "pme": PME, "p3m": P3M}
-    calc = calc_map[method_name](
-        exponent=int(exponent),
-        prefactor=float(prefactor),
+    evaluator = _cached_jax_pme_power_law_evaluator(
+        method_name,
+        int(exponent),
+        float(prefactor),
+        float(sr_cutoff_A),
+        L,
+        int(pos.shape[0]),
     )
-    smearing = float(sr_cutoff_A) / 5.0
-    mesh_spacing = smearing / 8.0
-    lr_wavelength = smearing / 2.0
-    if method_name == "ewald":
-        inputs = calc.prepare(
-            atoms,
-            coef,
-            cutoff=float(sr_cutoff_A),
-            smearing=smearing,
-            lr_wavelength=lr_wavelength,
-        )
-    else:
-        inputs = calc.prepare(
-            atoms,
-            coef,
-            cutoff=float(sr_cutoff_A),
-            mesh_spacing=mesh_spacing,
-            smearing=smearing,
-        )
-    mesh = jax_pme_mesh_method(method_name)
-    host_ctx = (
-        jax_pme_pure_callback_host_context
-        if mesh
-        else jax_pme_host_eval_context
-    )
-    with host_ctx():
-        energy, forces = calc.energy_forces(*inputs)
-    e_host, f_host = materialize_jax_pme_host_numpy(energy, forces)
-    return LongRangeInteractionResult(
-        energy_kcalmol=e_host,
-        forces_kcalmol_A=f_host,
-    )
+    return evaluator.compute(pos, coef)
 
 
 def compute_jax_pme_coulomb(

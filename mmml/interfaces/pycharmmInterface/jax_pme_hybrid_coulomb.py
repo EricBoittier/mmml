@@ -104,7 +104,11 @@ def _coefficients_are_zero(coefficients: np.ndarray) -> bool:
     return coef.size == 0 or not bool(np.any(coef != 0.0))
 
 
-def _zero_correction(positions_A: np.ndarray, *, switch_scale: float = 1.0) -> HybridJaxPmeCorrectionResult:
+def _zero_correction(
+    positions_A: np.ndarray,
+    *,
+    switch_scale: float = 1.0,
+) -> HybridJaxPmeCorrectionResult:
     return HybridJaxPmeCorrectionResult(
         energy_kcalmol=0.0,
         forces_kcalmol_A=np.zeros_like(np.asarray(positions_A, dtype=np.float64)),
@@ -112,6 +116,19 @@ def _zero_correction(positions_A: np.ndarray, *, switch_scale: float = 1.0) -> H
         energy_mic_cross_kcalmol=0.0,
         switch_scale=float(switch_scale),
     )
+
+
+def _monomer_slices_by_size(monomer_offsets: np.ndarray) -> dict[int, list[slice]]:
+    offsets = np.asarray(monomer_offsets, dtype=np.int64)
+    grouped: dict[int, list[slice]] = {}
+    for m in range(int(len(offsets) - 1)):
+        start = int(offsets[m])
+        stop = int(offsets[m + 1])
+        size = stop - start
+        if size <= 0:
+            continue
+        grouped.setdefault(size, []).append(slice(start, stop))
+    return grouped
 
 
 def _mic_displacement_np(ri: np.ndarray, rj: np.ndarray, cell: np.ndarray) -> np.ndarray:
@@ -229,24 +246,22 @@ def _intra_monomer_jax_pme_power_law(
     offsets = np.asarray(monomer_offsets, dtype=np.int64)
     if _coefficients_are_zero(coef):
         return _zero_correction(pos)
-    n_monomers = int(len(offsets) - 1)
     energy = 0.0
     forces = np.zeros_like(pos)
-    for m in range(n_monomers):
-        sl = slice(int(offsets[m]), int(offsets[m + 1]))
-        if sl.stop - sl.start == 0:
-            continue
-        sub = compute_jax_pme_power_law(
-            pos[sl],
-            coef[sl],
-            box_length_A=float(box_length_A),
-            method=method,
-            sr_cutoff_A=sr_cutoff_A,
-            exponent=int(exponent),
-            prefactor=prefactor,
-        )
-        energy += float(sub.energy_kcalmol)
-        forces[sl] += sub.forces_kcalmol_A
+    for _size, slices in _monomer_slices_by_size(offsets).items():
+        # Grouping identical monomer sizes keeps the cached host evaluator hot.
+        for sl in slices:
+            sub = compute_jax_pme_power_law(
+                pos[sl],
+                coef[sl],
+                box_length_A=float(box_length_A),
+                method=method,
+                sr_cutoff_A=sr_cutoff_A,
+                exponent=int(exponent),
+                prefactor=prefactor,
+            )
+            energy += float(sub.energy_kcalmol)
+            forces[sl] += sub.forces_kcalmol_A
     return HybridJaxPmeCorrectionResult(
         energy_kcalmol=energy,
         forces_kcalmol_A=forces,
