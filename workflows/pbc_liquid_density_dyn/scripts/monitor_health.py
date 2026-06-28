@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Hourly health monitor for pbc_liquid_density_dyn Snakemake campaigns.
 
-Scans production, profile, and large-box matrices; detects stale failures;
-optionally restarts Snakemake drivers and reruns failed cells.
+Classifies known failure modes and applies targeted mediations (tier prebuild,
+fresh rerun, resume rerun, driver restart). Tracks per-cell retry budgets.
 
 Usage:
   python scripts/monitor_health.py              # report only
@@ -20,10 +20,9 @@ import sys
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 _SCRIPTS = Path(__file__).resolve().parent
-_WORKFLOW = _SCRIPTS.parent
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
@@ -37,30 +36,17 @@ from campaign_lib import (  # noqa: E402
     workflow_root,
 )
 
-# Log signatures that are fixed in current main — safe to delete stdout and rerun.
-_STALE_FAILURE_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
-    (
-        "config_path",
-        re.compile(r"FileNotFoundError.*config\.yaml", re.I),
-    ),
-    (
-        "warmup_pmi",
-        re.compile(
-            r"refuse to run under mpirun/PMI launcher env|ERROR: warmup-mlpot-jax failed",
-            re.I,
-        ),
-    ),
+MediationAction = Literal[
+    "rerun_fresh",
+    "rerun_resume",
+    "prebuild_tier_rerun",
+    "submit_pending",
+    "skip_manual",
 ]
-
-_ERROR_MARKERS = re.compile(
-    r"Traceback|liquid-density dynamics campaign failed|Campaign summary reports failed|"
-    r"ERROR:|pycharmm_mlpot: error:|Segmentation fault|CANCELLED|Killed",
-    re.I,
-)
 
 _PROGRESS_MARKERS = re.compile(
     r"Campaign jobs|Packmol|warmup-mlpot-jax: done|MLpot profile:|DYNA>|"
-    r"density_prep_ladder|pycharmm_init",
+    r"density_prep_ladder|pycharmm_init|liquid-density dynamics campaign failed",
     re.I,
 )
 
@@ -86,6 +72,158 @@ CAMPAIGNS: list[dict[str, Any]] = [
 ]
 
 
+@dataclass(frozen=True)
+class FailureRule:
+    id: str
+    pattern: re.Pattern[str]
+    action: MediationAction
+    max_retries: int = 3
+    note: str = ""
+
+
+# Known errors → mediation. Order matters: first match wins per scan pass.
+FAILURE_RULES: tuple[FailureRule, ...] = (
+    FailureRule(
+        "config_path",
+        re.compile(r"FileNotFoundError.*config\.yaml", re.I),
+        "rerun_fresh",
+        max_retries=5,
+        note="fixed config path resolution",
+    ),
+    FailureRule(
+        "warmup_pmi",
+        re.compile(
+            r"refuse to run under mpirun/PMI launcher env|ERROR: warmup-mlpot-jax failed",
+            re.I,
+        ),
+        "rerun_fresh",
+        max_retries=5,
+        note="PMI scrub + allow-under-mpirun in job_shell",
+    ),
+    FailureRule(
+        "opencl_missing",
+        re.compile(r"libOpenCL\.so\.1 not found|libOpenCL\.so not found", re.I),
+        "skip_manual",
+        max_retries=0,
+        note="needs GPU compute node (Slurm gpu partition)",
+    ),
+    FailureRule(
+        "charmm_tier_exceeded",
+        re.compile(r"largest tier .* is insufficient|max_Npr>=\d+ pairs; largest tier", re.I),
+        "skip_manual",
+        max_retries=0,
+        note="reduce N or bulk fraction (largest NPR tier exceeded)",
+    ),
+    FailureRule(
+        "charmm_tier",
+        re.compile(
+            r"could not resolve CHARMM NPR tier|ERROR: could not resolve CHARMM NPR tier",
+            re.I,
+        ),
+        "prebuild_tier_rerun",
+        max_retries=2,
+        note="prebuild tier via ensure_charmm_mlpot_limits.sh",
+    ),
+    FailureRule(
+        "checkpoint_missing",
+        re.compile(
+            r"checkpoint not found|MMML_CKPT is not set|warmup-mlpot-jax: checkpoint not found",
+            re.I,
+        ),
+        "skip_manual",
+        max_retries=0,
+        note="set MMML_CKPT in cron / job env",
+    ),
+    FailureRule(
+        "echeck_abort",
+        re.compile(
+            r"dynamics incomplete.*echeck|ENERGY CHANGE TOLERANCE|"
+            r"integrated step \d+ < \d+.*expected",
+            re.I,
+        ),
+        "rerun_resume",
+        max_retries=3,
+        note="resume campaign from last handoff (--resume)",
+    ),
+    FailureRule(
+        "campaign_leg_fail",
+        re.compile(r"Campaign summary reports failed legs|liquid-density dynamics campaign failed", re.I),
+        "rerun_resume",
+        max_retries=3,
+        note="resume incomplete legs",
+    ),
+    FailureRule(
+        "overlap_abort",
+        re.compile(
+            r"intra-monomer close contact|dynamics aborted after chunk|"
+            r"dynamics_overlap_action|overlap_rescue",
+            re.I,
+        ),
+        "rerun_resume",
+        max_retries=2,
+        note="resume after overlap rescue ladder",
+    ),
+    FailureRule(
+        "oom",
+        re.compile(r"exit code -9|Out of memory|Killed\s*$|CANCELLED.*TIME", re.I),
+        "skip_manual",
+        max_retries=0,
+        note="reduce concurrency or request more mem",
+    ),
+    FailureRule(
+        "segfault",
+        re.compile(r"Segmentation fault|Signal: Segmentation|exit code -?11", re.I),
+        "rerun_fresh",
+        max_retries=1,
+        note="one fresh rerun after segfault",
+    ),
+)
+
+
+@dataclass
+class CellHealth:
+    tag: str
+    campaign: str
+    n_monomers: int
+    box_A: float
+    status: str
+    legs_done: str
+    log_kb: int
+    log_age_min: float | None
+    failure_ids: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+    actions: list[str] = field(default_factory=list)
+
+
+class RetryTracker:
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self._data: dict[str, dict[str, int]] = {}
+        if path.is_file():
+            try:
+                self._data = json.loads(path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                self._data = {}
+
+    def _key(self, campaign: str, tag: str) -> str:
+        return f"{campaign}:{tag}"
+
+    def count(self, campaign: str, tag: str, failure_id: str) -> int:
+        return int(self._data.get(self._key(campaign, tag), {}).get(failure_id, 0))
+
+    def record(self, campaign: str, tag: str, failure_id: str) -> None:
+        key = self._key(campaign, tag)
+        bucket = self._data.setdefault(key, {})
+        bucket[failure_id] = int(bucket.get(failure_id, 0)) + 1
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.write_text(json.dumps(self._data, indent=2) + "\n", encoding="utf-8")
+
+    def can_retry(self, campaign: str, tag: str, rule: FailureRule) -> bool:
+        if rule.max_retries <= 0:
+            return False
+        return self.count(campaign, tag, rule.id) < rule.max_retries
+
+
 def _utc_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
@@ -100,7 +238,7 @@ def _resolve_config(name: str) -> Path:
     raise FileNotFoundError(name)
 
 
-def _read_tail(path: Path, *, max_bytes: int = 256_000) -> str:
+def _read_tail(path: Path, *, max_bytes: int = 384_000) -> str:
     if not path.is_file():
         return ""
     try:
@@ -111,12 +249,17 @@ def _read_tail(path: Path, *, max_bytes: int = 256_000) -> str:
             raw = f.read()
     except OSError:
         return ""
-    if b"\x00" in raw[:2048]:
-        try:
-            return raw.decode("utf-8", errors="replace")
-        except Exception:
-            return ""
+    if b"\x00" in raw[:4096]:
+        return raw.decode("utf-8", errors="replace")
     return raw.decode("utf-8", errors="replace")
+
+
+def _classify_failures(text: str) -> list[FailureRule]:
+    hits: list[FailureRule] = []
+    for rule in FAILURE_RULES:
+        if rule.pattern.search(text):
+            hits.append(rule)
+    return hits
 
 
 def _snakemake_driver_running(config_path: Path) -> bool:
@@ -135,10 +278,9 @@ def _snakemake_driver_running(config_path: Path) -> bool:
             continue
         if cfg_name in line or str(config_path) in line:
             return True
-        if cfg_name == "config.yaml" and "--configfile" not in line and "config." not in line:
-            if "pbc_liquid_density_dyn/Snakefile" in line or "pbc_liquid_density_dyn" in line:
-                if "config.profile" not in line and "config.large" not in line:
-                    return True
+        if cfg_name == "config.yaml" and "config.profile" not in line and "config.large" not in line:
+            if "pbc_liquid_density_dyn" in line:
+                return True
     return False
 
 
@@ -155,19 +297,63 @@ def _slurm_jobs_for_user() -> list[str]:
     return [ln.strip() for ln in out.stdout.splitlines() if ln.strip()]
 
 
-@dataclass
-class CellHealth:
-    tag: str
-    campaign: str
-    n_monomers: int
-    box_A: float
-    status: str
-    legs_done: str
-    log_kb: int
-    log_age_min: float | None
-    stale_reason: str | None = None
-    errors: list[str] = field(default_factory=list)
-    actions: list[str] = field(default_factory=list)
+def _estimate_n_ml(cell) -> int:
+    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import estimate_ml_atoms
+
+    return int(estimate_ml_atoms(int(cell.n_monomers), solvent=cell.solvent))
+
+
+def _prebuild_charmm_tier(cell, *, dry_run: bool) -> str:
+    n_ml = _estimate_n_ml(cell)
+    cmd = [
+        "bash",
+        str(repo_root() / "scripts" / "ensure_charmm_mlpot_limits.sh"),
+        "--n-ml",
+        str(n_ml),
+        "--pbc",
+        "--box-size",
+        str(float(cell.box_size)),
+    ]
+    desc = " ".join(cmd)
+    if not dry_run:
+        subprocess.run(cmd, cwd=repo_root(), check=False)
+    return f"prebuild tier: {desc}"
+
+
+def _submit_snakemake_target(cfg_path: Path, cell, *, dry_run: bool) -> str:
+    paths = paths_for_run(load_config(cfg_path), cell)
+    target = f"../../{paths['done'].relative_to(repo_root())}"
+    cmd = f"MMML_WORKFLOW_CONFIG={cfg_path.name} bash scripts/snakemake_slurm.sh 1 {target}"
+    if not dry_run:
+        env = os.environ.copy()
+        env["MMML_WORKFLOW_CONFIG"] = str(cfg_path)
+        subprocess.Popen(  # noqa: S603
+            ["bash", "scripts/snakemake_slurm.sh", "1", target],
+            cwd=workflow_root(),
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    return cmd
+
+
+def _rerun_fresh(cfg_path: Path, cell, *, dry_run: bool) -> str:
+    paths = paths_for_run(load_config(cfg_path), cell)
+    stdout = paths["out_dir"] / "stdout.log"
+    actions: list[str] = []
+    if stdout.is_file():
+        actions.append(f"remove {stdout}")
+        if not dry_run:
+            stdout.unlink(missing_ok=True)
+    actions.append(_submit_snakemake_target(cfg_path, cell, dry_run=dry_run))
+    return "; ".join(actions)
+
+
+def _rerun_resume(cfg_path: Path, cell, *, dry_run: bool) -> str:
+    # Keep prep ladder / partial legs; md-system --resume inside run_job.py.
+    cmd = _submit_snakemake_target(cfg_path, cell, dry_run=dry_run)
+    return f"resume rerun: {cmd}"
 
 
 def _inspect_cell(cfg: dict[str, Any], cell, *, campaign: str) -> CellHealth:
@@ -187,33 +373,47 @@ def _inspect_cell(cfg: dict[str, Any], cell, *, campaign: str) -> CellHealth:
         age_s = datetime.now(timezone.utc).timestamp() - stdout.stat().st_mtime
         log_age_min = round(age_s / 60.0, 1)
 
-    stale_reason: str | None = None
-    if text and not paths["done"].is_file():
-        for label, pat in _STALE_FAILURE_PATTERNS:
-            if pat.search(text) and "Campaign jobs" not in text:
-                stale_reason = label
-                break
+    failure_rules = _classify_failures(text) if text else []
+    failure_ids = [r.id for r in failure_rules]
 
     errors: list[str] = []
-    if text and _ERROR_MARKERS.search(text) and not paths["done"].is_file():
-        for line in text.splitlines():
-            if _ERROR_MARKERS.search(line):
-                errors.append(line.strip()[:160])
-                if len(errors) >= 3:
-                    break
+    for line in text.splitlines():
+        if any(r.pattern.search(line) for r in failure_rules):
+            errors.append(line.strip()[:160])
+            if len(errors) >= 3:
+                break
 
     if paths["done"].is_file():
         status = "done"
-    elif stale_reason:
-        status = "stale_fail"
-    elif errors and log_age_min is not None and log_age_min > 20:
+    elif failure_rules and any(r.action != "skip_manual" for r in failure_rules):
         status = "failed"
+    elif failure_rules:
+        status = "manual"
     elif text and _PROGRESS_MARKERS.search(text):
         status = "running"
     elif stdout.is_file() and log_kb > 0:
         status = "started"
     else:
         status = "pending"
+
+    # Stuck: log exists but no leg progress for a long time.
+    if (
+        status in {"running", "started"}
+        and legs_done == 0
+        and log_age_min is not None
+        and log_age_min > 180
+        and "stuck_no_legs" not in failure_ids
+    ):
+        failure_ids.append("stuck_no_legs")
+        failure_rules = list(failure_rules) + [
+            FailureRule(
+                "stuck_no_legs",
+                re.compile(r"."),
+                "rerun_resume",
+                max_retries=2,
+                note="no leg handoff after 3h",
+            )
+        ]
 
     return CellHealth(
         tag=tag,
@@ -224,41 +424,73 @@ def _inspect_cell(cfg: dict[str, Any], cell, *, campaign: str) -> CellHealth:
         legs_done=f"{legs_done}/{len(order)}",
         log_kb=log_kb,
         log_age_min=log_age_min,
-        stale_reason=stale_reason,
+        failure_ids=failure_ids,
         errors=errors,
     )
 
 
-def _done_target(cfg: dict[str, Any], cell) -> Path:
-    paths = paths_for_run(cfg, cell)
-    return paths["done"]
-
-
-def _rerun_cell(cfg_path: Path, cell, *, dry_run: bool) -> str:
-    cfg = load_config(cfg_path)
-    tag = cell_run_tag(cell, cfg)
-    paths = paths_for_run(cfg, cell)
-    stdout = paths["out_dir"] / "stdout.log"
+def _mediate_cell(
+    health: CellHealth,
+    cell,
+    cfg_path: Path,
+    tracker: RetryTracker,
+    *,
+    driver_running: bool,
+    dry_run: bool,
+) -> list[str]:
     actions: list[str] = []
-    if stdout.is_file():
-        actions.append(f"remove {stdout}")
-        if not dry_run:
-            stdout.unlink(missing_ok=True)
-    target = f"../../{paths['done'].relative_to(repo_root())}"
-    cmd = f"MMML_WORKFLOW_CONFIG={cfg_path.name} bash scripts/snakemake_slurm.sh 1 {target}"
-    actions.append(cmd)
-    if not dry_run:
-        env = os.environ.copy()
-        env["MMML_WORKFLOW_CONFIG"] = str(cfg_path)
-        subprocess.Popen(  # noqa: S603
-            ["bash", "scripts/snakemake_slurm.sh", "1", target],
-            cwd=workflow_root(),
-            env=env,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
+    if health.status == "done":
+        return actions
+
+    text = _read_tail(paths_for_run(load_config(cfg_path), cell)["out_dir"] / "stdout.log")
+    rules = _classify_failures(text)
+    if health.failure_ids and "stuck_no_legs" in health.failure_ids:
+        rules.append(
+            FailureRule("stuck_no_legs", re.compile(r"."), "rerun_resume", max_retries=2)
         )
-    return "; ".join(actions)
+
+    for rule in rules:
+        if not tracker.can_retry(health.campaign, health.tag, rule):
+            actions.append(f"skip {rule.id} (retry budget exhausted)")
+            continue
+        if rule.action == "skip_manual":
+            actions.append(f"manual: {rule.id} — {rule.note}")
+            return actions
+        if rule.action == "rerun_fresh":
+            if "Campaign jobs" in text:
+                actions.append(f"skip fresh rerun for {rule.id} (campaign already started)")
+                continue
+            actions.append(f"{rule.id}: {_rerun_fresh(cfg_path, cell, dry_run=dry_run)}")
+            if not dry_run:
+                tracker.record(health.campaign, health.tag, rule.id)
+            continue
+        if rule.action == "rerun_resume":
+            actions.append(f"{rule.id}: {_rerun_resume(cfg_path, cell, dry_run=dry_run)}")
+            if not dry_run:
+                tracker.record(health.campaign, health.tag, rule.id)
+            continue
+        if rule.action == "prebuild_tier_rerun":
+            actions.append(f"{rule.id}: {_prebuild_charmm_tier(cell, dry_run=dry_run)}")
+            actions.append(f"{rule.id}: {_rerun_fresh(cfg_path, cell, dry_run=dry_run)}")
+            if not dry_run:
+                tracker.record(health.campaign, health.tag, rule.id)
+
+    # Pending cells with driver up but no stdout — nudge Snakemake for this target.
+    # When driver is down, _ensure_driver starts the batch driver instead.
+    if health.status == "pending" and health.log_kb == 0 and driver_running:
+        pending_rule = FailureRule(
+            "pending_submit",
+            re.compile(r"^$"),
+            "submit_pending",
+            max_retries=4,
+            note="submit cell to Slurm",
+        )
+        if tracker.can_retry(health.campaign, health.tag, pending_rule):
+            actions.append(f"pending: {_submit_snakemake_target(cfg_path, cell, dry_run=dry_run)}")
+            if not dry_run:
+                tracker.record(health.campaign, health.tag, pending_rule.id)
+
+    return actions
 
 
 def _ensure_driver(spec: dict[str, Any], cfg_path: Path, *, incomplete: int, dry_run: bool) -> list[str]:
@@ -287,6 +519,7 @@ def _ensure_driver(spec: dict[str, Any], cfg_path: Path, *, incomplete: int, dry
 
 def run_monitor(*, react: bool, dry_run: bool) -> dict[str, Any]:
     dry_run = dry_run or not react
+    tracker = RetryTracker(workflow_root() / "results" / "monitor_retries.json")
     report: dict[str, Any] = {
         "timestamp": _utc_now(),
         "hostname": os.uname().nodename,
@@ -298,10 +531,11 @@ def run_monitor(*, react: bool, dry_run: bool) -> dict[str, Any]:
     for spec in CAMPAIGNS:
         cfg_path = _resolve_config(str(spec["config"]))
         cfg = load_config(cfg_path)
+        driver_running = _snakemake_driver_running(cfg_path)
         camp_report: dict[str, Any] = {
             "name": spec["name"],
             "config": str(cfg_path),
-            "driver_running": _snakemake_driver_running(cfg_path),
+            "driver_running": driver_running,
             "cells": [],
             "actions": [],
         }
@@ -311,11 +545,17 @@ def run_monitor(*, react: bool, dry_run: bool) -> dict[str, Any]:
             all_cells.append(health)
             if health.status != "done":
                 incomplete += 1
-            cell_actions: list[str] = []
-            if react and health.stale_reason and health.status == "stale_fail":
-                cell_actions.append(_rerun_cell(cfg_path, cell, dry_run=dry_run))
-                health.actions.extend(cell_actions)
+            if react:
+                health.actions = _mediate_cell(
+                    health,
+                    cell,
+                    cfg_path,
+                    tracker,
+                    driver_running=driver_running,
+                    dry_run=dry_run,
+                )
             camp_report["cells"].append(asdict(health))
+        camp_report["driver_running"] = driver_running
         if react:
             camp_report["actions"] = _ensure_driver(
                 spec, cfg_path, incomplete=incomplete, dry_run=dry_run
@@ -323,32 +563,36 @@ def run_monitor(*, react: bool, dry_run: bool) -> dict[str, Any]:
         report["campaigns"].append(camp_report)
 
     n_done = sum(1 for c in all_cells if c.status == "done")
-    n_stale = sum(1 for c in all_cells if c.status == "stale_fail")
+    n_fail = sum(1 for c in all_cells if c.status == "failed")
     n_run = sum(1 for c in all_cells if c.status == "running")
+    n_pending = sum(1 for c in all_cells if c.status == "pending")
     report["summary"] = {
         "total": len(all_cells),
         "done": n_done,
         "running": n_run,
-        "stale_fail": n_stale,
-        "failed": sum(1 for c in all_cells if c.status == "failed"),
-        "pending": sum(1 for c in all_cells if c.status == "pending"),
+        "failed": n_fail,
+        "manual": sum(1 for c in all_cells if c.status == "manual"),
+        "pending": n_pending,
     }
 
     print(f"\n=== pbc_liquid_density_dyn monitor @ {_utc_now()} ===")
     print(
         f"Cells: {n_done}/{len(all_cells)} done | {n_run} running | "
-        f"{n_stale} stale (auto-rerun) | queue lines: {len(report['slurm_queue'])}"
+        f"{n_fail} failed (mediated) | {n_pending} pending | "
+        f"queue: {len(report['slurm_queue'])}"
     )
-    print(f"{'campaign':<14} {'tag':<22} {'N':>4} {'L':>4} {'legs':>8} {'status':<12} note")
+    print(f"{'campaign':<14} {'tag':<22} {'N':>4} {'L':>4} {'legs':>8} {'status':<10} failures")
     for camp in report["campaigns"]:
         for row in camp["cells"]:
-            note = row.get("stale_reason") or (row["errors"][0][:40] if row.get("errors") else "")
+            fails = ",".join(row.get("failure_ids") or []) or "-"
             print(
                 f"{camp['name']:<14} {row['tag']:<22} {row['n_monomers']:4d} "
-                f"{int(row['box_A']):4d} {row['legs_done']:>8} {row['status']:<12} {note}"
+                f"{int(row['box_A']):4d} {row['legs_done']:>8} {row['status']:<10} {fails}"
             )
+            for act in row.get("actions") or []:
+                print(f"    -> {act}")
         drv = "driver=UP" if camp["driver_running"] else "driver=DOWN"
-        print(f"  [{camp['name']}] {drv} incomplete={sum(1 for r in camp['cells'] if r['status'] != 'done')}")
+        print(f"  [{camp['name']}] {drv}")
         for act in camp.get("actions") or []:
             print(f"    ACTION: {act}")
 
@@ -361,10 +605,10 @@ def run_monitor(*, react: bool, dry_run: bool) -> dict[str, Any]:
     with log_path.open("a", encoding="utf-8") as f:
         f.write(
             f"{_utc_now()} done={n_done}/{len(all_cells)} run={n_run} "
-            f"stale={n_stale} react={react}\n"
+            f"fail={n_fail} pending={n_pending} react={react}\n"
         )
     print(f"\nWrote {json_path}")
-    print(f"Appended {log_path}")
+    print(f"Retry state: {tracker.path}")
     return report
 
 
@@ -373,12 +617,12 @@ def main() -> int:
     parser.add_argument(
         "--react",
         action="store_true",
-        help="Restart dead Snakemake drivers and rerun cells with stale known failures",
+        help="Apply mediations: driver restart, tier prebuild, reruns (fresh/resume)",
     )
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Show react actions without executing (implies no --react side effects)",
+        help="Show mediations without executing",
     )
     args = parser.parse_args()
     if not os.environ.get("MMML_CKPT", "").strip():
