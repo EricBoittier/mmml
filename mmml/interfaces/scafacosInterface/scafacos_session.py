@@ -48,6 +48,47 @@ _DEFAULT_LIB_NAMES = (
 _FCS_RESULT = ctypes.c_void_p  # FCSResult; NULL means success
 _MPI_INITIALIZED = False
 
+# Shared builds resolve solver symbols from plugin .so files in the same directory.
+_SCAFACOS_PLUGIN_ORDER = (
+    "common",
+    "near",
+    "gridsort",
+    "resort",
+    "redist",
+    "fftw3",
+    "ewald",
+    "direct",
+    "p3m",
+    "p2m",
+    "mmm",
+    "mmm1d",
+    "mmm2d",
+    "fmm",
+    "memd",
+    "pepc",
+    "pp3mg",
+    "vmg",
+    "wolf",
+    "p2nfft",
+)
+
+
+def _preload_scafacos_plugins(lib_dir: Path) -> None:
+    """Load ScaFaCoS plugin libraries before ``libfcs.so`` (shared builds only)."""
+    mode = getattr(ctypes, "RTLD_GLOBAL", 256) | getattr(ctypes, "RTLD_LAZY", 1)
+    for stem in _SCAFACOS_PLUGIN_ORDER:
+        for candidate in sorted(lib_dir.glob(f"libfcs_{stem}.so*")):
+            if not candidate.is_file():
+                continue
+            # Prefer versioned soname (libfcs_ewald.so.0.0.0) over symlink.
+            if candidate.suffix == ".so" and candidate.with_suffix(".so.0.0.0").is_file():
+                continue
+            try:
+                ctypes.CDLL(str(candidate), mode=mode)
+            except OSError:
+                continue
+            break
+
 
 def _ensure_mpi_initialized() -> None:
     """ScaFaCoS requires MPI_Init before fcs_init (see upstream test/c/test_direct.c)."""
@@ -164,8 +205,12 @@ def load_scafacos_library(path: Path | str | None = None) -> ctypes.CDLL:
             continue
         break
 
+    lib_path = Path(path).resolve()
+    if lib_path.suffix in (".so", ".dylib", ".dll") or ".so." in lib_path.name:
+        _preload_scafacos_plugins(lib_path.parent)
+
     # Shared ScaFaCoS defers solver symbols to plugin .so files loaded at runtime.
-    lib = ctypes.CDLL(str(path), mode=mode)
+    lib = ctypes.CDLL(str(lib_path), mode=mode)
 
     _FCS = _FCS_RESULT
 
