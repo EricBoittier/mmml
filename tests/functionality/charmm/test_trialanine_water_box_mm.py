@@ -12,6 +12,7 @@ from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
     compare_mm_system_to_charmm,
     compare_nonbonded_to_charmm,
     run_charmm_bonded_ener_force,
+    set_charmm_positions,
     setup_bonded_only_charmm,
     setup_nonbonded_only_charmm,
 )
@@ -57,21 +58,20 @@ def _nbond_settings_from_box(box) -> CharmmNbondSettings:
 
 
 @pytest.fixture(scope="module")
-def trialanine_water_box(pycharmm_workdir):
+def trialanine_water_box(tmp_path_factory):
+    workdir = tmp_path_factory.mktemp("trialanine_water")
     return build_trialanine_water_box_in_charmm(
         n_waters=10,
         box_side_A=28.0,
         seed=11,
-        workdir=pycharmm_workdir,
+        workdir=workdir,
     )
 
 
 def test_trialanine_water_bonded_matches_pycharmm(trialanine_water_box) -> None:
-    import pycharmm.coor as coor
-
     box = trialanine_water_box
     positions = _perturb_positions(box.positions, seed=23)
-    coor.set_positions(positions)
+    set_charmm_positions(positions)
 
     setup_bonded_only_charmm()
     run_charmm_bonded_ener_force(silent=True)
@@ -96,11 +96,9 @@ def test_trialanine_water_bonded_matches_pycharmm(trialanine_water_box) -> None:
 
 
 def test_trialanine_water_nonbonded_matches_pycharmm(trialanine_water_box) -> None:
-    import pycharmm.coor as coor
-
     box = trialanine_water_box
     positions = _perturb_positions(box.positions, seed=29)
-    coor.set_positions(positions)
+    set_charmm_positions(positions)
 
     setup_nonbonded_only_charmm()
     run_charmm_bonded_ener_force(silent=True)
@@ -127,13 +125,11 @@ def test_trialanine_water_total_mm_matches_pycharmm(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Full MM energy: bonded + truncated MIC Coulomb (``lr_solver=mic``)."""
-    import pycharmm.coor as coor
-
     monkeypatch.setenv("MMML_LR_SOLVER", lr_solver)
 
     box = trialanine_water_box
     positions = _perturb_positions(box.positions, seed=31)
-    coor.set_positions(positions)
+    set_charmm_positions(positions)
 
     apply_charmm_mm_block()
     run_charmm_bonded_ener_force(silent=True)

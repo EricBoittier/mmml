@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 
 from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM, CGENFF_RTF
 from mmml.interfaces.pycharmmInterface.nbonds_config import PbcNbondCutoffs
@@ -159,7 +160,7 @@ def build_trialanine_water_box_in_charmm(
     peptide = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
     peptide -= peptide.mean(axis=0)
     peptide += np.array([box_side_A / 2, box_side_A / 2, box_side_A / 2])
-    coor.set_positions(peptide)
+    coor.set_positions(pd.DataFrame(peptide, columns=["x", "y", "z"]))
 
     oxygen_sites = _grid_oxygen_sites(
         n_waters=n_waters,
@@ -179,7 +180,7 @@ def build_trialanine_water_box_in_charmm(
     read.sequence_string(" ".join(["TIP3"] * n_waters))
     generate.new_segment(seg_name="SOLV", setup_ic=False)
     all_pos = np.vstack([peptide, water_coords])
-    coor.set_positions(all_pos)
+    coor.set_positions(pd.DataFrame(all_pos, columns=["x", "y", "z"]))
 
     prepare_charmm_pbc(box_side_A)
     nbond_cutoffs = apply_pbc_nbonds(nbxmod=5, cubic_box_side_A=box_side_A)

@@ -5,8 +5,17 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
+import pandas as pd
 
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics import charmm_bonded_term_kcalmol
+
+
+def set_charmm_positions(positions: np.ndarray) -> None:
+    """Load ``(N, 3)`` coordinates into the active PyCHARMM session."""
+    import pycharmm.coor as coor
+
+    arr = np.asarray(positions, dtype=np.float64)
+    coor.set_positions(pd.DataFrame(arr, columns=["x", "y", "z"]))
 
 
 def setup_bonded_only_charmm() -> None:

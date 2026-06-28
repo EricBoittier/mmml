@@ -12,6 +12,7 @@ from mmml.interfaces.pycharmmInterface.cgenff_bonded import bonded_energy_and_fo
 from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
     compare_bonded_to_charmm,
     run_charmm_bonded_ener_force,
+    set_charmm_positions,
     setup_bonded_only_charmm,
 )
 from mmml.interfaces.pycharmmInterface.cgenff_topology import (
@@ -58,9 +59,8 @@ def _load_psf_and_positions_from_charmm(residue: str) -> tuple[Path, np.ndarray]
 
 def _compare_psf_bonded_to_charmm(psf_path: Path, positions: np.ndarray) -> None:
     setup_bonded_only_charmm()
-    import pycharmm.coor as coor
 
-    coor.set_positions(positions)
+    set_charmm_positions(positions)
     run_charmm_bonded_ener_force(silent=True)
 
     system = load_cgenff_bonded_from_psf(psf_path, positions)
