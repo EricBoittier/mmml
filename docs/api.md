@@ -82,23 +82,23 @@ Source: [`mmml/interfaces/pyscf4gpuInterface/calcs.py`](https://github.com/EricB
 
 ## Models
 
-### EF Model
+### External electric-field PhysNet (`EFieldPhysNet`)
 
-This module requires optional JAX dependencies at import time, so it is not auto-rendered by mkdocstrings in the default docs build environment.
+Field-dependent energy/force model for Raman/IR and related spectroscopy. Formerly under `mmml/models/EF/` (deprecated import path).
 
-Source: [`mmml/models/EF/model.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/models/EF/model.py).
+Source: [`mmml/models/efield/training.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/models/efield/training.py).
 
-### EF Training
+### E-field training CLI
 
-This module requires optional JAX dependencies at import time, so it is not auto-rendered by mkdocstrings in the default docs build environment.
+Canonical command: `mmml efield-train` (replaces deprecated `ef-train`).
 
-Source: [`mmml/models/EF/training.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/models/EF/training.py).
+Source: [`mmml/models/efield/training.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/models/efield/training.py).
 
-### EF Evaluation
+### E-field evaluation CLI
 
-This module requires optional JAX dependencies at import time, so it is not auto-rendered by mkdocstrings in the default docs build environment.
+Canonical command: `mmml efield-evaluate` (replaces deprecated `ef-evaluate`).
 
-Source: [`mmml/models/EF/evaluate.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/models/EF/evaluate.py).
+Source: [`mmml/models/efield/evaluate.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/models/efield/evaluate.py).
 
 ## CLI
 

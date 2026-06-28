@@ -92,7 +92,7 @@ try:
         _prepare_batches as prepare_batches,
     )
     from mmml.models.physnetjax.physnetjax.data.data import prepare_datasets
-    from mmml.models.physnetjax.physnetjax.models.model import EF
+    from mmml.models.physnetjax.physnetjax.models.model import PhysNet
     from mmml.models.physnetjax.physnetjax.restart.restart import get_files, get_last, get_params_model
     # Skip training import that requires lovely_jax
     # from mmml.models.physnetjax.physnetjax.training.training import train_model
@@ -106,8 +106,8 @@ except ModuleNotFoundError:  # pragma: no cover - ML stack optional for docs
     def prepare_datasets(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[override]
         raise ModuleNotFoundError("e3x and jax are required for prepare_datasets")
 
-    def EF(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[override]
-        raise ModuleNotFoundError("jax is required for EF model")
+    def PhysNet(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[override]
+        raise ModuleNotFoundError("jax is required for PhysNet model")
 
     # Keep restart helpers available whenever possible, even when model imports
     # fail due to optional extras such as e3x.
@@ -630,7 +630,7 @@ def setup_calculator(
             
             if params is None:
                 raise FileNotFoundError(f"params not found in JSON checkpoint at {restart_path}")
-            # Use default PhysNet EF config when config is missing (params-only checkpoint)
+            # Use default PhysNet config when config is missing (params-only checkpoint)
             if not config:
                 config = {
                     "features": 32,

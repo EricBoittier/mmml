@@ -1,4 +1,4 @@
-"""CLI entry for external electric-field PhysNet training (deprecated: use efield-train)."""
+"""CLI entry for external electric-field PhysNet training."""
 
 import sys
 

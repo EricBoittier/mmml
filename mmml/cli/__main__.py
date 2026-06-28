@@ -223,6 +223,21 @@ def main():
         sys.argv = ["mmml cross-check"] + args.args
         return cross_check.main()
 
+    elif command == "efield-train":
+        from .misc import efield_train
+        sys.argv = ["mmml efield-train"] + args.args
+        return efield_train.main()
+
+    elif command == "efield-evaluate":
+        from .misc import efield_evaluate
+        sys.argv = ["mmml efield-evaluate"] + args.args
+        return efield_evaluate.main()
+
+    elif command == "efield-md":
+        from .misc import efield_md
+        sys.argv = ["mmml efield-md"] + args.args
+        return efield_md.main()
+
     elif command == "ef-train":
         from .misc import ef_train
         sys.argv = ["mmml ef-train"] + args.args

@@ -5,6 +5,7 @@ from __future__ import annotations
 from mmml.utils.model_checkpoint import (
     canonicalize_physnet_config_for_save,
     normalize_physnet_config,
+    physnet_constructor_kwargs,
 )
 
 
@@ -30,3 +31,18 @@ def test_normalize_physnet_config_from_canonical_keys() -> None:
 def test_canonicalize_for_save_matches_normalize() -> None:
     legacy = {"n_res": 5, "natoms": 20}
     assert canonicalize_physnet_config_for_save(legacy) == normalize_physnet_config(legacy)
+
+
+def test_physnet_constructor_kwargs_prefers_canonical_fields() -> None:
+    class _PhysNet:
+        __dataclass_fields__ = {
+            "max_padded_atoms": None,
+            "n_refinement_blocks": None,
+            "features": None,
+        }
+
+    cfg = {"natoms": 34, "n_res": 3, "features": 32}
+    out = physnet_constructor_kwargs(cfg, _PhysNet)
+    assert out == {"max_padded_atoms": 34, "n_refinement_blocks": 3, "features": 32}
+    assert "natoms" not in out
+    assert "n_res" not in out

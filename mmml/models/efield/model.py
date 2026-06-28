@@ -8,7 +8,7 @@ import e3x
 # -------------------------
 HARTREE_TO_EV = 27.211386245988
 
-class MessagePassingModel(nn.Module):
+class EFieldPhysNet(nn.Module):
     features: int = 32
     max_degree: int = 2
     num_iterations: int = 3
@@ -229,3 +229,6 @@ def energy_and_forces(model_apply, params, atomic_numbers, positions, Ef, dst_id
     
     (_, (energy, dipole)), forces = jax.value_and_grad(energy_fn, has_aux=True)(positions)
     return energy, forces, dipole
+
+
+MessagePassingModel = EFieldPhysNet

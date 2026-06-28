@@ -1,6 +1,6 @@
 # MMML Units Summary
 
-This document summarizes the units used across MMML components (train_joint, fix_and_split, DCMNet, PhysNet, EF model, calculators) and the conversion factors applied.
+This document summarizes the units used across MMML components (train_joint, fix_and_split, DCMNet, PhysNet, external electric-field PhysNet, calculators) and the conversion factors applied.
 
 ## Central constants (`mmml.data.units`)
 
@@ -170,7 +170,7 @@ flowchart LR
 - `r_bohr = distances * ANGSTROM_TO_BOHR`
 - `esp_pred_phys = sum(charges / r_bohr)` → Hartree/e ✓
 
-### EF model (models/EF)
+### External electric-field PhysNet (`models/efield`)
 - Uses `HARTREE_TO_EV` for energy
 - Coulomb term: `pair_coulomb = (q_src * q_dst) / (r_ij + 1e-10)` — **r_ij units**: displacements from e3x gather; if positions are in Angstrom, r_ij is in Angstrom. The factor `7.199822675975274` may need verification (1/(4πε₀) in atomic units = 1).
 
@@ -226,7 +226,7 @@ If your splits were built with `--preserve-units` (Hartree/Ha/Bohr in `E`/`F`):
 
 ## Potential Sign/Unit Issues to Check
 
-1. **EF model Coulomb**: The factor 7.1998... in `energy = energy + coulomb_energy * 7.199822675975274` — verify r_ij units and whether this factor is correct.
+1. **E-field PhysNet Coulomb**: The factor 7.1998... in `energy = energy + coulomb_energy * 7.199822675975274` — verify r_ij units and whether this factor is correct.
 
 2. **Bohr→Angstrom for grid**: If grid comes from PySCF (Bohr), fix_and_split must convert before saving. The train_joint loads vdw_surface and assumes Angstrom.
 
