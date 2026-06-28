@@ -78,8 +78,8 @@ stages:
       - spectra/harmonic_ir.png
       - spectra/ir_ml_dipole.png
       - spectra/ir_comparison.png
-      - spectra/ir_comparison.pdf
       - spectra/ir_sticks_comparison.png
+      - spectra/ir_methods/
 
   train_dipole:
     description: >
