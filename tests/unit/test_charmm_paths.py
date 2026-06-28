@@ -171,3 +171,49 @@ def test_charmm_lib_available_without_explicit_env(tmp_path, monkeypatch):
     assert charmm_mpi.charmm_lib_available() is True
     assert os.environ["CHARMM_HOME"] == str(chm)
     assert os.environ["CHARMM_LIB_DIR"] == str(chm)
+
+
+def test_fortran_path_needs_alias_detects_uppercase(tmp_path):
+    upper = tmp_path / "DCM60_L32" / "pretreat" / "mini_box_equil.res"
+    lower = tmp_path / "dcm60_l32" / "pretreat" / "mini_box_equil.res"
+    assert charmm_paths.fortran_path_needs_alias(upper)
+    assert not charmm_paths.fortran_path_needs_alias(lower)
+
+
+def test_charmm_io_alias_read_symlink(tmp_path):
+    upper_dir = tmp_path / "boxes" / "dcm60_L32" / "pretreat"
+    upper_dir.mkdir(parents=True)
+    original = upper_dir / "mini_box_equil.res"
+    original.write_text("restart\n", encoding="ascii")
+
+    alias = charmm_paths.charmm_io_alias(original, for_write=False)
+    assert alias is not None
+    assert alias.alias.is_symlink()
+    assert alias.alias.resolve() == original.resolve()
+    assert alias.fortran_path == alias.fortran_path.lower()
+    assert alias.alias.read_text(encoding="ascii") == "restart\n"
+
+
+def test_charmm_io_alias_write_copy_back(tmp_path):
+    upper_dir = tmp_path / "boxes" / "dcm60_L32" / "pretreat"
+    target = upper_dir / "mini_box_equil.res"
+    staging = tmp_path / "staging"
+
+    alias = charmm_paths.charmm_io_alias(target, for_write=True, staging_root=staging)
+    assert alias is not None
+    alias.alias.write_text("written via alias\n", encoding="ascii")
+    assert not target.is_file()
+
+    alias.finalize()
+    assert target.is_file()
+    assert target.read_text(encoding="ascii") == "written via alias\n"
+
+
+def test_charmm_fortran_path_noop_for_lowercase(tmp_path):
+    path = tmp_path / "pretreat" / "mini_box_equil.res"
+    path.parent.mkdir()
+    path.write_text("x", encoding="ascii")
+
+    fortran_path, alias = charmm_paths.charmm_fortran_path(path, for_write=True)
+    assert alias is None
+    assert fortran_path == str(path.resolve())

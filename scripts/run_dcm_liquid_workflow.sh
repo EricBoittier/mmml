@@ -32,9 +32,11 @@
 #   N_DCM=90 BOX_SIZE=32 ~/mmml/scripts/run_dcm_liquid_workflow.sh
 #   N_DCM=20 BOX_SIZE=45 SKIP_HEALTH=1 ~/mmml/scripts/run_dcm_liquid_workflow.sh  # fast dilute smoke
 #   MD_STAGES=mini,equi PS_EQUI=10 ~/mmml/scripts/run_dcm_liquid_workflow.sh
-#   SKIP_HEALTH=1 SKIP_LIQUID_BOX=1 BOX_DIR=~/tests/boxes/dcm60_L32 ~/mmml/scripts/run_dcm_liquid_workflow.sh
-#   MINI_BOX_EQUIL_PS=0 ~/mmml/scripts/run_dcm_liquid_workflow.sh   # skip pretreat NVT if I/O fails
+#   SKIP_HEALTH=1 SKIP_LIQUID_BOX=1 BOX_DIR=~/tests/boxes/dcm60_l32 ~/mmml/scripts/run_dcm_liquid_workflow.sh
 #   LIQUID_BOX_VERBOSE=1 ~/mmml/scripts/run_dcm_liquid_workflow.sh  # drop --quiet on liquid-box
+#
+# Note: CHARMM Fortran I/O fails on paths with uppercase letters (e.g. dcm60_L32).
+# mmml stages I/O under $TMPDIR/mmml-charmm-io/ automatically; prefer lowercase box dirs.
 #
 set -euo pipefail
 
@@ -73,7 +75,7 @@ TEMPERATURE="${TEMPERATURE:-300.0}"
 PRESSURE="${PRESSURE:-1.0}"
 
 # --- paths ------------------------------------------------------------------
-TAG="dcm${N_DCM}_L${BOX_SIZE}"
+TAG="dcm${N_DCM}_l${BOX_SIZE}"
 BOX_DIR="${BOX_DIR:-$TESTS_ROOT/boxes/$TAG}"
 RUN_DIR="${RUN_DIR:-$TESTS_ROOT/runs/${TAG}_liquid}"
 BOX_JSON="$BOX_DIR/box.json"

@@ -9,7 +9,7 @@
 # Phase A — MM-only box certification:
 #   MMML_MPI_NP=1 ~/mmml/scripts/mmml-charmm-mpirun.sh liquid-box \
 #     --composition DCM:60 --box-size 32 --target-density-g-cm3 1.326 \
-#     --profile dense -o ~/tests/boxes/dcm60_L32
+#     --profile dense -o ~/tests/boxes/dcm60_l32
 #
 # Phase B — hybrid MLpot mini (this file):
 #   export MMML_CKPT=~/mmml/mmml/models/physnetjax/defaults/hf_json/<checkpoint>.json

@@ -59,12 +59,17 @@ def rewrite_dynamics_restart_from_current_state(
 
     path = Path(restart_path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
+
+    fortran_path, alias = charmm_fortran_path(path, for_write=True)
     with charmm_relaxed_bomlev():
         pycharmm.lingo.charmm_script(
-            f"open write form unit {int(write_unit)} name {path}\n"
+            f"open write form unit {int(write_unit)} name {fortran_path}\n"
             f"write restart unit {int(write_unit)}\n"
             f"close unit {int(write_unit)}\n"
         )
+    if alias is not None:
+        alias.finalize()
 
 
 def rewrite_dynamics_restart_validated(
@@ -189,14 +194,18 @@ def restore_charmm_state_from_restart(
     import pycharmm
 
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
 
+    fortran_path, alias = charmm_fortran_path(path, for_write=False)
     with charmm_relaxed_bomlev():
         pycharmm.lingo.charmm_script(
-            f"open read unit {int(read_unit)} name {path}\n"
+            f"open read unit {int(read_unit)} name {fortran_path}\n"
             f"read restart unit {int(read_unit)}\n"
             f"close unit {int(read_unit)}\n"
             "UPDATE\n"
         )
+    if alias is not None:
+        alias.finalize()
     n = _charmm_natom_count()
     live = get_charmm_positions_array()
     if (
