@@ -7,12 +7,14 @@ import sys
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.long_range_backend import CHARMM_COULOMB_KCAL
+from _common import (
+    ion_dimer_system,
     mic_coulomb_energy_forces,
     print_fail,
     print_header,
     print_pass,
 )
+from mmml.interfaces.pycharmmInterface.long_range_backend import CHARMM_COULOMB_KCAL
 
 
 def main() -> int:
