@@ -103,7 +103,10 @@ def pair_from_tag(cfg: dict[str, Any], tag: str) -> PairSpec:
 
 def output_dir(cfg: dict[str, Any], pair: PairSpec) -> Path:
     root = cfg.get("output_root", "artifacts/des_dimer_pair_scans")
-    return repo_root() / root / pair.tag
+    root_path = Path(str(root))
+    if root_path.is_absolute():
+        return root_path / pair.tag
+    return repo_root() / root_path / pair.tag
 
 
 def scan_grids(cfg: dict[str, Any]) -> tuple[Any, Any]:

@@ -48,16 +48,6 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
-def _setup_charmm_vacuum() -> None:
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import setup_default_nbonds
-
-    pycharmm_quiet()
-    setup_charmm_environment(use_pbc=False, cubic_box_side_A=50.0)
-    setup_default_nbonds()
-
-
 def _build_cluster(composition: str, spacing: float) -> tuple[np.ndarray, np.ndarray, list[int]]:
     from mmml.cli.run.md_pbc_suite.ase import _build_cluster_from_composition
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import parse_composition
@@ -65,7 +55,7 @@ def _build_cluster(composition: str, spacing: float) -> tuple[np.ndarray, np.nda
     return _build_cluster_from_composition(
         composition=parse_composition(composition),
         spacing=spacing,
-    )
+    )[:3]
 
 
 def _charmm_energy_kcal(positions: np.ndarray) -> dict[str, float]:
@@ -186,8 +176,13 @@ def run_pair_scan(args: argparse.Namespace) -> Path:
         store["orca_mp2_energy_hartree"] = np.full((n1, n2), np.nan, dtype=np.float64)
         store["orca_mp2_energy_kcal"] = np.full((n1, n2), np.nan, dtype=np.float64)
 
-    _setup_charmm_vacuum()
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import setup_default_nbonds
+
+    pycharmm_quiet()
     z, ref_pos, atoms_per = _build_cluster(pair.composition, spacing=spacing)
+    setup_default_nbonds()
     z = np.asarray(z, dtype=int)
     ref_pos = np.asarray(ref_pos, dtype=np.float64)
     atoms_per = [int(x) for x in atoms_per]

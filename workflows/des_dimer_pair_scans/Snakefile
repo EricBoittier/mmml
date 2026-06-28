@@ -1,5 +1,6 @@
 configfile: "config.yaml"
 
+import os
 import sys
 from pathlib import Path
 
@@ -9,7 +10,8 @@ if str(_SCRIPTS) not in sys.path:
 
 from scan_lib import iter_pairs, load_config  # noqa: E402
 
-_CFG = load_config(Path(workflow.basedir) / "config.yaml")
+_CFG_PATH = os.environ.get("MMML_WORKFLOW_CONFIG") or str(Path(workflow.basedir) / "config.yaml")
+_CFG = load_config(_CFG_PATH) if Path(_CFG_PATH).is_file() else dict(config)
 _PAIR_TAGS = [p.tag for p in iter_pairs(_CFG)]
 _OUTPUT_ROOT = str(_CFG.get("output_root", "artifacts/des_dimer_pair_scans"))
 _ARTIFACT_ROOT = f"../../{_OUTPUT_ROOT}"
@@ -17,8 +19,14 @@ _ARTIFACT_ROOT = f"../../{_OUTPUT_ROOT}"
 
 rule all:
     input:
-        "results/summary.csv",
-        "results/summary.md",
+        expand(f"{_ARTIFACT_ROOT}/{{pair}}/done.txt", pair=_PAIR_TAGS),
+        "results/report.html",
+
+
+rule all_scans:
+    input:
+        expand(f"{_ARTIFACT_ROOT}/{{pair}}/done.txt", pair=_PAIR_TAGS),
+        "results/report.html",
 
 
 rule scan_pair:
@@ -28,6 +36,7 @@ rule scan_pair:
         stdout=f"{_ARTIFACT_ROOT}/{{pair}}/stdout.log",
     params:
         workflow_dir=workflow.basedir,
+        cfg=_CFG_PATH,
     resources:
         cpu=1,
         mem_mb=8000,
@@ -36,6 +45,7 @@ rule scan_pair:
         """
         set -euo pipefail
         mkdir -p $(dirname {log.stdout})
+        export MMML_WORKFLOW_CONFIG={params.cfg}
         bash {params.workflow_dir}/scripts/job_shell.sh {wildcards.pair} \
           > {log.stdout} 2>&1
         test -s {output}
@@ -50,10 +60,33 @@ rule collect:
         md="results/summary.md",
     params:
         workflow_dir=workflow.basedir,
+        cfg=_CFG_PATH,
     shell:
         """
         python {params.workflow_dir}/scripts/collect_scans.py \
-          --config {params.workflow_dir}/config.yaml \
+          --config {params.cfg} \
           --output-csv {output.csv} \
           --output-md {output.md}
+        """
+
+
+rule report:
+    input:
+        expand(f"{_ARTIFACT_ROOT}/{{pair}}/done.txt", pair=_PAIR_TAGS),
+    output:
+        html="results/report.html",
+        csv="results/summary.csv",
+        md="results/summary.md",
+    params:
+        workflow_dir=workflow.basedir,
+        cfg=_CFG_PATH,
+    shell:
+        """
+        python {params.workflow_dir}/scripts/collect_scans.py \
+          --config {params.cfg} \
+          --output-csv {output.csv} \
+          --output-md {output.md}
+        python {params.workflow_dir}/scripts/build_report.py \
+          --config {params.cfg} \
+          --output-html {output.html}
         """

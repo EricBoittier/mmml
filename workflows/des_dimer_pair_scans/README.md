@@ -63,6 +63,30 @@ bash scripts/snakemake_slurm.sh 8
 bash scripts/job_shell.sh aco__meoh
 ```
 
+## Report with Matplotlib figures
+
+After scans (complete or partial):
+
+```bash
+# Summary table + HTML report with one PNG per pair (78 total)
+snakemake results/report.html --configfile config.yaml
+
+# Or directly:
+python scripts/collect_scans.py --output-csv results/summary.csv --output-md results/summary.md
+python scripts/build_report.py --output-html results/report.html
+```
+
+Open `results/report.html` in a browser. Figures live in `results/figures/<pair_tag>.png`.
+Pairs without `scan_2d.npz` get a grey **pending** placeholder panel.
+
+### Smoke test (CHARMM-only, 5×5 grid)
+
+```bash
+MMML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 4
+# Rebuild report only (after scans exist):
+MMML_WORKFLOW_CONFIG=config.smoke.yaml snakemake report --configfile config.smoke.yaml
+```
+
 ## Outputs
 
 ```
@@ -74,6 +98,11 @@ artifacts/des_dimer_pair_scans/<pair_tag>/
 results/
   summary.csv
   summary.md
+  report.html          # all pairs with embedded figure gallery
+  report_manifest.json
+  figures/             # one PNG per pair (ΔE heatmaps)
+    aco__meoh.png
+    ...
 ```
 
 NPZ arrays (when backend enabled): `charmm_ENER_kcal`, `xtb_energy_kcal`,
