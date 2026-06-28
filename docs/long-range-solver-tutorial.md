@@ -16,10 +16,10 @@ Related:
 
 | Mode | LJ | Coulomb | When to use |
 |------|----|---------|-------------|
-| **`jax_mic`** (default) | Switched JAX pairs (~13 Å) | MIC in pair loop, or **jax-pme** with `--lr-solver jax_pme` | Standard hybrid MLpot; jax-pme needs no MPI |
+| **`jax_mic`** (default) | Switched JAX pairs (~13 Å) | MIC in pair loop, or **jax-pme** with `--lr-solver jax_pme` | Standard hybrid MLpot; jax-pme Coulomb + r⁻⁶ LJ when enabled |
 | **`periodic_external`** | CHARMM IMAGE VDW | **jax-pme** or **ScaFaCoS** full-box Coulomb | Large boxes where JAX MM is off; requires `pbc_*` setup |
 
-In both modes, **Lennard-Jones is not computed by jax-pme** — jax-pme is Coulomb-only.
+In **`jax_mic`** + **`jax_pme`** mode: **r⁻¹²** repulsion stays on the switched pair list (exact Lorentz–Berthelot σ_ij, ε_ij, hybrid λ); **Coulomb** and the **r⁻⁶** LJ tail use jax-pme (Ewald/PME/P3M) with per-atom √C6 and geometric k-space combining (GROMACS-style LJ-PME reciprocal rule).
 
 ---
 
@@ -151,7 +151,31 @@ SCAFACOS_METHODS=ewald,p3m \
 ~/mmml/scripts/run_dcm_long_range_workflow.sh
 ```
 
-Results land in `~/tests/runs/dcm<N>_l<L>_lr_solvers/solver_comparison.tsv`.
+Results land in `~/tests/runs/dcm<N>_l<L>_lr_solvers/solver_comparison.tsv` (includes `hybrid_grms_kcalmol_A` per solver).
+
+### Force validation (same certified box)
+
+After the sweep, compare hybrid GRMS across solvers on the **same** certified PSF/CRD:
+
+```bash
+# Post-run: validate TSV from the workflow
+python tests/functionality/long_range/07_hybrid_grms_lr_solver_compare.py \
+  --summary-tsv ~/tests/runs/dcm60_l32_lr_solvers/solver_comparison.tsv
+
+# Live probe at fixed coordinates (PyCHARMM + checkpoint required)
+MMML_MPI_NP=1 ~/mmml/scripts/mmml-charmm-mpirun.sh \
+  python tests/functionality/long_range/07_hybrid_grms_lr_solver_compare.py \
+  --psf ~/tests/boxes/dcm60_l32/model.psf \
+  --crd ~/tests/boxes/dcm60_l32/model.crd \
+  --checkpoint "$MMML_CKPT" \
+  --box-size 32
+```
+
+Expectations:
+
+- All solvers return **finite** hybrid GRMS (no JAX tracer errors under `jax_pme`).
+- **jax-pme** methods (`ewald`, `pme`, `p3m`) agree within ~10% rtol on the same geometry.
+- **MIC** vs jax-pme may differ (truncated vs full Coulomb); both should be finite.
 
 ---
 
@@ -159,10 +183,11 @@ Results land in `~/tests/runs/dcm<N>_l<L>_lr_solvers/solver_comparison.tsv`.
 
 | Comparison | Expectation |
 |------------|-------------|
-| **MIC vs jax-pme** on large periodic box | \|E_jax_pme\| ≥ \|E_mic\| (truncated MIC underestimates) |
+| **MIC vs jax-pme** on large periodic box | \|E_jax_pme\| ≥ \|E_mic\| (truncated MIC underestimates Coulomb) |
 | **ewald vs pme vs p3m** (jax-pme) | Energies agree to ~0.1–1% on neutral crystals; P3M may need tuning |
-| **LJ component** | Identical between `mic` and `jax_pme` in `jax_mic` mode (Coulomb path differs only) |
+| **LJ r^-12 (pair loop)** | Identical LB mixing with/without jax_pme; **total vdw** differs (r^-6 via k-space) |
 | **ScaFaCoS vs jax-pme** | Similar totals on CsCl / dimer tests (~0.1–0.7%) |
+| **Hybrid GRMS** (same certified box) | jax-pme methods within ~10% rtol; MIC may differ (see §6 force validation) |
 
 Log line at MLpot startup (verbose):
 
@@ -181,11 +206,12 @@ Decomposed MLpot: lr_solver=jax_pme, scafacos=no, jax_pme=yes (jax-pme method=ew
 | MIC box too small | Use L ≥ 28–32 Å for DCM; see `run_dcm_liquid_workflow.sh` header |
 | `periodic_external` fails | Need `--setup pbc_*`, positive `--box-size`, jax_pme or libfcs |
 | Segfault under MPI + ScaFaCoS | Ensure mpi4py uses `COMM_WORLD.handle` (fixed in recent MMML) |
+| `TracerArrayConversionError` under `jax_pme` | Upgrade MMML (jax-pme Coulomb uses `jax.pure_callback` inside JIT) |
 
 ---
 
 ## 9. Next steps
 
 - Production NPT equilibration: extend `MD_STAGES=mini,equi` in the workflow script
-- Campaign YAML: add `lr_solver` / `jax_pme_method` under `defaults` in [`docs/md-system-configs.md`](md-system-configs.md)
-- Force validation: compare hybrid GRMS across solvers on the same certified box
+- Campaign YAML: `lr_solver` / `jax_pme_method` under `defaults` — see [`docs/md-system-configs.md`](md-system-configs.md)
+- Force validation: `07_hybrid_grms_lr_solver_compare.py` (also run automatically at end of `run_dcm_long_range_workflow.sh`)

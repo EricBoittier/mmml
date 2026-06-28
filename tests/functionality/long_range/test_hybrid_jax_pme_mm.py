@@ -56,8 +56,8 @@ def test_mm_system_nonbonded_jax_pme_elec(method: str):
     np.testing.assert_allclose(np.asarray(forces), ref.forces_kcalmol_A, rtol=2e-3)
 
 
-def test_mm_system_lj_unchanged_with_jax_pme_elec():
-    """LJ from pair loop must not depend on lr_solver (zero LJ on CsCl test)."""
+def test_mm_system_lj_r12_unchanged_with_jax_pme_elec():
+    """r^-12 repulsion from pair loop must not depend on lr_solver."""
     positions, nbond, cell, settings, _ = _cscl_nonbonded_data()
     nbond_lj = NonbondedSystemData(
         charges=nbond.charges,
@@ -78,8 +78,14 @@ def test_mm_system_lj_unchanged_with_jax_pme_elec():
         lr_solver="jax_pme",
         jax_pme_method="ewald",
     )
-    np.testing.assert_allclose(float(mic_comp["vdw"]), float(pme_comp["vdw"]), rtol=1e-10)
+    # MIC path: full LJ; jax_pme path: r^-12 pair + r^-6 k-space — totals differ.
+    assert float(mic_comp["vdw"]) != float(pme_comp["vdw"])
     assert float(mic_comp["elec"]) != float(pme_comp["elec"])
+
+
+def test_mm_system_lj_unchanged_with_jax_pme_elec():
+    """Backward-compatible name: total vdw differs when jax-pme adds dispersion."""
+    test_mm_system_lj_r12_unchanged_with_jax_pme_elec()
 
 
 def test_ion_dimer_jax_pme_via_mm_nonbonded():

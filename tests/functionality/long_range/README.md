@@ -55,6 +55,8 @@ export MMML_LR_SOLVER=jax_pme
 export JAX_PME_METHOD=ewald   # or pme, p3m
 pytest tests/functionality/long_range/test_hybrid_jax_pme_mm.py -v
 python tests/functionality/long_range/06_hybrid_jax_pme_mm.py  # PyCHARMM ACO:2 cluster
+python tests/functionality/long_range/07_hybrid_grms_lr_solver_compare.py \
+  --summary-tsv ~/tests/runs/dcm60_l32_lr_solvers/solver_comparison.tsv  # after workflow sweep
 ```
 
 ### Hybrid MM with jax-pme (LJ + electrostatics)
@@ -68,6 +70,8 @@ export MMML_LR_SOLVER=jax_pme
 export JAX_PME_METHOD=ewald   # or pme, p3m
 pytest tests/functionality/long_range/test_hybrid_jax_pme_mm.py -v
 python tests/functionality/long_range/06_hybrid_jax_pme_mm.py  # PyCHARMM ACO:2 cluster
+python tests/functionality/long_range/07_hybrid_grms_lr_solver_compare.py \
+  --summary-tsv ~/tests/runs/dcm60_l32_lr_solvers/solver_comparison.tsv  # after workflow sweep
 ```
 
 ## Test systems

@@ -8,16 +8,17 @@ import pytest
 jax = pytest.importorskip("jax")
 import jax.numpy as jnp
 
-from mmml.interfaces.pycharmmInterface.long_range_backend import LongRangeCoulombResult
+from mmml.interfaces.pycharmmInterface.long_range_backend import LongRangeInteractionResult
 from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
     _box_length_from_cell_jax,
     _wrap_mm_fn_with_jax_pme_coulomb,
 )
 
 
-def _fake_pme(pos, charges, *, box_length_A, method, sr_cutoff_A):
+def _fake_pme(pos, coefficients, *, box_length_A, method, sr_cutoff_A, exponent, prefactor):
+    del coefficients, box_length_A, method, sr_cutoff_A, exponent, prefactor
     n = pos.shape[0]
-    return LongRangeCoulombResult(
+    return LongRangeInteractionResult(
         energy_kcalmol=2.0,
         forces_kcalmol_A=np.full((n, 3), 0.5, dtype=np.float64),
     )
@@ -44,7 +45,7 @@ def test_box_length_from_cell_jax_handles_vector_and_matrix() -> None:
 
 def test_wrap_mm_fn_jax_pme_static_path_under_jit(monkeypatch) -> None:
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.compute_jax_pme_coulomb",
+        "mmml.interfaces.pycharmmInterface.long_range_backend.compute_jax_pme_power_law",
         _fake_pme,
     )
     wrapped = _wrap_mm_fn_with_jax_pme_coulomb(
@@ -63,7 +64,7 @@ def test_wrap_mm_fn_jax_pme_static_path_under_jit(monkeypatch) -> None:
 
 def test_wrap_mm_fn_jax_pme_dynamic_path_under_jit(monkeypatch) -> None:
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.compute_jax_pme_coulomb",
+        "mmml.interfaces.pycharmmInterface.long_range_backend.compute_jax_pme_power_law",
         _fake_pme,
     )
     wrapped = _wrap_mm_fn_with_jax_pme_coulomb(

@@ -810,7 +810,8 @@ def build_decomposed_mlpot_model(
 
         print(
             f"Decomposed MLpot: {describe_lr_solver(lr_solver)} "
-            f"(jax-pme method={jax_pme_method or 'ewald'}, sr_cutoff={jax_pme_sr_cutoff:.1f} Å)",
+            f"(jax-pme method={jax_pme_method or 'ewald'}, sr_cutoff={jax_pme_sr_cutoff:.1f} Å; "
+            f"Coulomb + r^-6 LJ via jax-pme when lr_solver=jax_pme)",
             flush=True,
         )
     factory = setup_calculator(
