@@ -30,10 +30,15 @@ else
   CFG_PATH="${WORKFLOW_ROOT}/${_cfg_raw}"
 fi
 export MMML_WORKFLOW_CONFIG="$CFG_PATH"
-CONFIG_ARGS=()
-if [[ "$CFG_PATH" != "$WORKFLOW_ROOT/config.yaml" ]]; then
-  CONFIG_ARGS=(--configfile "$CFG_PATH")
-fi
+CONFIG_ARGS=(--configfile "$CFG_PATH")
+
+_LOCK_DIR="${MMML_SNAKEMAKE_LOCK_DIR:-/tmp/mmml_snakemake_locks_${USER:-$(id -un)}}"
+mkdir -p "$_LOCK_DIR"
+_CFG_LOCK="${_LOCK_DIR}/$(basename "$CFG_PATH").driver.lock"
+if ! flock -n 9; then
+  echo "Snakemake driver already running for ${CFG_PATH} (lock ${_CFG_LOCK})" >&2
+  exit 0
+fi 9>"$_CFG_LOCK"
 
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 export MMML_LOCAL_GPU_PIN="${MMML_LOCAL_GPU_PIN:-1}"
