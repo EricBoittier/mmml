@@ -3,10 +3,29 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import importlib
+import importlib.util
+from pathlib import Path
 from typing import Any
 
 from mmml.cli.registry import COMMAND_REGISTRY, command_by_name
+
+
+def _module_defines_build_parser(module_path: str) -> bool:
+    """Fast static check (no import) — used by ``mmml commands --audit``."""
+    try:
+        spec = importlib.util.find_spec(module_path)
+        if spec is None or spec.origin is None or spec.origin.endswith("__init__.py"):
+            return False
+        source = Path(spec.origin).read_text(encoding="utf-8")
+        tree = ast.parse(source, filename=spec.origin)
+    except Exception:
+        return False
+    return any(
+        isinstance(node, ast.FunctionDef) and node.name == "build_parser"
+        for node in ast.walk(tree)
+    )
 
 
 def _import_parser_builder(module_path: str):
@@ -32,8 +51,15 @@ def get_subcommand_parser(command: str) -> argparse.ArgumentParser | None:
         return None
 
 
-def parser_available(command: str) -> bool:
-    return get_subcommand_parser(command) is not None
+def parser_available(command: str, *, import_module: bool = False) -> bool:
+    """Return True when ``mmml <command> --help`` is wired via ``build_parser()``."""
+    spec = command_by_name(command)
+    if spec is None:
+        return False
+    mod_path = spec.parser_module or spec.module
+    if import_module:
+        return get_subcommand_parser(command) is not None
+    return _module_defines_build_parser(mod_path)
 
 
 def parsers_with_flags() -> list[str]:

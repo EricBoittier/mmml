@@ -581,7 +581,7 @@ def run_wizard(workflow: str, out_dir: Path) -> list[Path]:
 
 
 def configure_main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    args = build_parser().parse_args(argv if argv is not None else [])
     out_dir = args.output_dir.expanduser().resolve()
 
     if args.list_presets:

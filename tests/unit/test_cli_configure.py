@@ -131,3 +131,31 @@ def test_main_help_no_args(capsys):
     assert rc == 0
     out = capsys.readouterr().out
     assert "mmml commands" in out
+
+
+def test_main_commands_dispatch(capsys):
+    with patch.object(cli_main.sys, "argv", ["mmml", "commands"]):
+        rc = cli_main.main()
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "md-system" in out
+    assert "Structure" in out or "MD & campaigns" in out
+
+
+def test_main_configure_dispatch(capsys):
+    with patch.object(cli_main.sys, "argv", ["mmml", "configure", "--non-interactive"]):
+        rc = cli_main.main()
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "preset-menu" in out or "md-single" in out
+
+
+def test_commands_audit_is_fast(capsys):
+    import time
+
+    t0 = time.perf_counter()
+    assert commands_main(["--audit"]) == 0
+    elapsed = time.perf_counter() - t0
+    out = capsys.readouterr().out
+    assert "Deprecated / legacy" in out
+    assert elapsed < 2.0, f"audit took {elapsed:.1f}s (should not import JAX/PySCF)"
