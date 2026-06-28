@@ -57,6 +57,19 @@ pytest tests/functionality/long_range/test_hybrid_jax_pme_mm.py -v
 python tests/functionality/long_range/06_hybrid_jax_pme_mm.py  # PyCHARMM ACO:2 cluster
 ```
 
+### Hybrid MM with jax-pme (LJ + electrostatics)
+
+Set ``MMML_LR_SOLVER=jax_pme`` (or ``lr_solver: jax_pme`` in YAML) to keep **switched
+Lennard-Jones** on the JAX pair path and evaluate **Coulomb** with jax-pme
+(Ewald / PME / P3M via ``JAX_PME_METHOD``):
+
+```bash
+export MMML_LR_SOLVER=jax_pme
+export JAX_PME_METHOD=ewald   # or pme, p3m
+pytest tests/functionality/long_range/test_hybrid_jax_pme_mm.py -v
+python tests/functionality/long_range/06_hybrid_jax_pme_mm.py  # PyCHARMM ACO:2 cluster
+```
+
 ## Test systems
 
 Defined in `_common.py` (mirroring jax-pme `tests/test_ewald.py`):
