@@ -66,9 +66,6 @@ def _slurm_extra(wildcards) -> str:
     if mail:
         parts.append(f"--mail-user={mail} --mail-type=END,FAIL")
     if _CPU_SCHEDULER:
-        # OpenMPI on pc-bach is not built with Slurm PMI; avoid srun MPI bootstrap
-        # during serial warmup-mlpot-jax inside each cell job.
-        parts.append("--mpi=none")
         nodes = [str(x).strip() for x in (config.get("slurm_cpu_nodes") or []) if str(x).strip()]
         if nodes:
             parts.append(f"--nodelist={','.join(nodes)}")

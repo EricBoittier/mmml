@@ -98,15 +98,6 @@ eval "$(
 
 if [[ "$WARMUP_ENABLED" == "1" ]]; then
   echo "=== warmup-mlpot-jax (serial, before mpirun) ==="
-  # Snakemake Slurm jobsteps export PMI/PMIX vars without a real mpirun launch.
-  # warmup-mlpot-jax must run serial with compile threads enabled.
-  while IFS= read -r _var; do
-    [[ -n "$_var" ]] && unset "$_var" 2>/dev/null || true
-  done < <(env | cut -d= -f1 | grep -E '^(OMPI_|PMI_|PMIX_|MPI_LOCALRANKID$|SLURM_MPI_TYPE$)' || true)
-  if [[ -n "${SLURM_JOB_ID:-}" ]]; then
-    export OMPI_MCA_ess=singleton
-    export OMPI_MCA_mpi_init_support=0
-  fi
   WARMUP_ARGS="$("$PY" -c "
 import sys
 from pathlib import Path
@@ -116,14 +107,23 @@ cfg = load_config(Path('${CFG}'))
 cell = cell_from_tag(cfg, '${RUN_TAG}')
 print(' '.join(warmup_mlpot_argv(cfg, cell)))
 ")"
-  # shellcheck disable=SC2086
-  _warmup_extra=()
   if [[ -n "${SLURM_JOB_ID:-}" ]]; then
-    _warmup_extra=(--allow-under-mpirun)
-  fi
-  if ! "$PY" -m mmml.cli.__main__ $WARMUP_ARGS "${_warmup_extra[@]}"; then
-    echo "ERROR: warmup-mlpot-jax failed" >&2
-    exit 1
+    # Slurm srun without PMI cannot run MPI-linked CHARMM/JAX warmup serially.
+    # Launch under the CHARMM-matched OpenMPI wrapper (np=1).
+    if ! "$REPO_ROOT/scripts/mmml-charmm-mpirun.sh" $WARMUP_ARGS; then
+      echo "ERROR: warmup-mlpot-jax failed (mpirun -np 1 under Slurm)" >&2
+      exit 1
+    fi
+  else
+    # Snakemake Slurm jobsteps export PMI/PMIX vars without a real mpirun launch.
+    while IFS= read -r _var; do
+      [[ -n "$_var" ]] && unset "$_var" 2>/dev/null || true
+    done < <(env | cut -d= -f1 | grep -E '^(OMPI_|PMI_|PMIX_|MPI_LOCALRANKID$|SLURM_MPI_TYPE$)' || true)
+    # shellcheck disable=SC2086
+    if ! "$PY" -m mmml.cli.__main__ $WARMUP_ARGS; then
+      echo "ERROR: warmup-mlpot-jax failed" >&2
+      exit 1
+    fi
   fi
 fi
 
