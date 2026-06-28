@@ -8,7 +8,9 @@ modes:
   smoke:
     skip_stages: [structures, qm, train]
     checkpoint: examples/ckpts_json/DESdimers_params.json
-    md_ps: 0.5
+    md_ps: 2.0
+    dt_fs: 0.25
+    steps_per_recording: 10
     composition: "DCM:2"
   full:
     skip_stages: []

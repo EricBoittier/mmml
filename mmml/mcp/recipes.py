@@ -226,13 +226,15 @@ def _write_md_smoke_config(
     if not ckpt.is_file():
         ckpt = default_checkpoint()
     composition = mode_cfg.get("composition", "DCM:2")
-    ps = float(mode_cfg.get("md_ps", 0.5))
+    ps = float(mode_cfg.get("md_ps", 2.0))
+    dt_fs = float(mode_cfg.get("dt_fs", 0.25))
+    steps_per_recording = int(mode_cfg.get("steps_per_recording", 10))
     body = {
         "defaults": {
             "composition": composition,
             "checkpoint": str(ckpt),
             "box_size": 28.0,
-            "dt_fs": 0.5,
+            "dt_fs": dt_fs,
             "temperature": 300.0,
             "seed": 42,
         },
@@ -244,7 +246,10 @@ def _write_md_smoke_config(
                 "setup": "pbc_nvt",
                 "ps": ps,
                 "output_dir": "results/jaxmd_smoke",
-                "extra_args": ["--steps-per-recording", "50"],
+                "extra_args": [
+                    "--steps-per-recording",
+                    str(steps_per_recording),
+                ],
             }
         },
     }
