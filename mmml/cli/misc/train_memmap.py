@@ -313,7 +313,7 @@ def main():
     parser.add_argument("--num_atoms", type=int, default=60,
                        help="Maximum number of atoms per molecule")
     parser.add_argument("--n_res", type=int, default=3,
-                       help="Number of residual blocks")
+                       help="Number of refinement residual blocks (not CHARMM residues)")
     
     # Training arguments
     parser.add_argument("--batch_size", type=int, default=32,

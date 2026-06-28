@@ -340,6 +340,12 @@ def load_bonded_system_from_psf(
     positions: Array | np.ndarray,
     *,
     prm_file: Path | str,
+    extra_prm_files: Sequence[Path | str] = (),
 ) -> CgenffBondedSystem:
-    """Load bonded topology/parameters using an explicit PRM path (protein or CGENFF)."""
-    return load_cgenff_bonded_from_psf(psf_path, positions, prm_file=prm_file)
+    """Load bonded topology/parameters using explicit PRM path(s)."""
+    return load_cgenff_bonded_from_psf(
+        psf_path,
+        positions,
+        prm_file=prm_file,
+        extra_prm_files=extra_prm_files,
+    )

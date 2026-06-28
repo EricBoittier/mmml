@@ -477,6 +477,18 @@ def emit_charmm_topology_summary(*, quiet: bool = False) -> bool:
     return True
 
 
+_MODEL_ATTR_LABELS: dict[str, str] = {
+    "natoms": "max_padded_atoms",
+    "n_res": "n_refinement_blocks",
+    "num_iterations": "message_passing_steps",
+    "runtime_natoms": "runtime_max_padded_atoms",
+}
+
+
+def _model_attr_label(name: str) -> str:
+    return _MODEL_ATTR_LABELS.get(name, name)
+
+
 def _model_attribute_rows(model: Any) -> list[tuple[str, Any]]:
     preferred = (
         "features",
@@ -487,8 +499,10 @@ def _model_attribute_rows(model: Any) -> list[tuple[str, Any]]:
         "max_atomic_number",
         "charges",
         "natoms",
+        "max_padded_atoms",
         "total_charge",
         "n_res",
+        "n_refinement_blocks",
         "zbl",
         "debug",
         "efa",
@@ -496,10 +510,16 @@ def _model_attribute_rows(model: Any) -> list[tuple[str, Any]]:
         "use_pbc",
         "include_electrostatics",
     )
+    seen_labels: set[str] = set()
     rows: list[tuple[str, Any]] = []
     for name in preferred:
-        if hasattr(model, name):
-            rows.append((name, getattr(model, name)))
+        if not hasattr(model, name):
+            continue
+        label = _model_attr_label(name)
+        if label in seen_labels:
+            continue
+        seen_labels.add(label)
+        rows.append((label, getattr(model, name)))
     if rows:
         rows.insert(0, ("class", type(model).__name__))
         return rows
@@ -510,15 +530,17 @@ def emit_model_loaded(
     model: Any,
     *,
     checkpoint: str | None = None,
+    runtime_max_padded_atoms: int | None = None,
     runtime_natoms: int | None = None,
     quiet: bool = False,
 ) -> None:
-    """Pretty-print a loaded EF/PhysNet model summary (horizontal table)."""
+    """Pretty-print a loaded PhysNet model summary (horizontal table)."""
     mapping = _model_attributes_mapping(model)
     if checkpoint is not None:
         mapping["checkpoint"] = checkpoint
-    if runtime_natoms is not None:
-        mapping["runtime_natoms"] = runtime_natoms
+    runtime = runtime_max_padded_atoms if runtime_max_padded_atoms is not None else runtime_natoms
+    if runtime is not None:
+        mapping["runtime_max_padded_atoms"] = runtime
     emit_horizontal_table("Model", mapping, quiet=quiet)
 
 

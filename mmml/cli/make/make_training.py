@@ -207,7 +207,14 @@ See mmml/cli/misc/physnet_train_transfer.example.yaml for transfer learning / di
         default=2,
         dest="num_iterations",
     )
-    parser.add_argument("--n-res", "--n_res", type=int, default=2, dest="n_res")
+    parser.add_argument(
+        "--n-res",
+        "--n_res",
+        type=int,
+        default=2,
+        dest="n_res",
+        help="Number of refinement residual blocks (not CHARMM residues)",
+    )
     parser.add_argument("--cutoff", type=float, default=8.0)
     parser.add_argument(
         "--max-atomic-number",

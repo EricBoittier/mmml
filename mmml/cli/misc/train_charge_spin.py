@@ -181,7 +181,12 @@ def main():
     parser.add_argument("--num_basis_functions", type=int, default=16)
     parser.add_argument("--cutoff", type=float, default=5.0)
     parser.add_argument("--num_atoms", type=int, default=60)
-    parser.add_argument("--n_res", type=int, default=3)
+    parser.add_argument(
+        "--n_res",
+        type=int,
+        default=3,
+        help="Number of refinement residual blocks (not CHARMM residues)",
+    )
     parser.add_argument("--charge_embed_dim", type=int, default=16,
                        help="Dimension of charge embedding")
     parser.add_argument("--spin_embed_dim", type=int, default=16,

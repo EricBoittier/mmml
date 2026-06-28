@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
+import tempfile
 
 import jax.numpy as jnp
 import numpy as np
@@ -44,6 +45,61 @@ class CgenffBondedSystem:
 
 def default_cgenff_paths() -> tuple[Path, Path]:
     return Path(CGENFF_RTF), Path(CGENFF_PRM)
+
+
+def _prm_text_without_cmap_blocks(prm_path: Path | str) -> str:
+    """Drop ``CMAP`` grids so jax-md ``parse_prm`` can read protein PRMs."""
+    lines_out: list[str] = []
+    in_cmap = False
+    for raw in Path(prm_path).read_text(encoding="utf-8", errors="replace").splitlines():
+        stripped = raw.strip()
+        if not stripped:
+            lines_out.append(raw)
+            continue
+        if stripped.startswith("CMAP"):
+            in_cmap = True
+            continue
+        if in_cmap:
+            if stripped.startswith(
+                ("BOND", "ANGLE", "DIHE", "IMPR", "NONB", "HBOND", "END")
+            ):
+                in_cmap = False
+            else:
+                continue
+        lines_out.append(raw)
+    return "\n".join(lines_out) + "\n"
+
+
+def _parse_prm_skip_cmap(prm_path: Path | str):
+    """Parse bond/angle/dihedral parameters, ignoring ``CMAP`` sections."""
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        suffix=".prm",
+        encoding="utf-8",
+        delete=False,
+    ) as tmp:
+        tmp.write(_prm_text_without_cmap_blocks(prm_path))
+        tmp_path = tmp.name
+    try:
+        return parse_prm(tmp_path)
+    finally:
+        Path(tmp_path).unlink(missing_ok=True)
+
+
+def _merge_charmm_prm_parameters(
+    *prm_paths: Path | str,
+) -> tuple[dict, dict, dict]:
+    """Merge bonded parameters from one or more CHARMM PRM files."""
+    bond_params: dict = {}
+    angle_params: dict = {}
+    dihedral_params: dict = {}
+    for path in prm_paths:
+        bonds, angles, dihedrals, _ = _parse_prm_skip_cmap(path)
+        bond_params.update(bonds)
+        angle_params.update(angles)
+        for key, terms in dihedrals.items():
+            dihedral_params.setdefault(key, []).extend(terms)
+    return bond_params, angle_params, dihedral_params
 
 
 def extract_residue_rtf(full_rtf: Path | str, residue_name: str) -> str:
@@ -416,7 +472,7 @@ def load_cgenff_bonded_from_psf(
     psf = parse_psf_ext(psf_path)
     prm_path = Path(prm_file) if prm_file is not None else default_cgenff_paths()[1]
     prm_paths = [prm_path, *extra_prm_files]
-    bond_params, angle_params, dihedral_params, _ = parse_prm(str(prm_path))
+    bond_params, angle_params, dihedral_params = _merge_charmm_prm_parameters(*prm_paths)
 
     bonded, torsions, impropers = _build_bonded_parameters(
         psf.atom_types,

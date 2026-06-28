@@ -77,6 +77,25 @@ def to_jsonable(obj: Any) -> Any:
     return obj
 
 
+def normalize_physnet_config(cfg: dict[str, Any]) -> dict[str, Any]:
+    """Map legacy PhysNet checkpoint keys to canonical names (both keys present)."""
+    out = dict(cfg)
+    if "n_refinement_blocks" not in out and "n_res" in out:
+        out["n_refinement_blocks"] = out["n_res"]
+    if "n_res" not in out and "n_refinement_blocks" in out:
+        out["n_res"] = out["n_refinement_blocks"]
+    if "max_padded_atoms" not in out and "natoms" in out:
+        out["max_padded_atoms"] = out["natoms"]
+    if "natoms" not in out and "max_padded_atoms" in out:
+        out["natoms"] = out["max_padded_atoms"]
+    return out
+
+
+def canonicalize_physnet_config_for_save(cfg: dict[str, Any]) -> dict[str, Any]:
+    """Ensure both legacy and canonical PhysNet config keys are written."""
+    return normalize_physnet_config(cfg)
+
+
 def extract_model_config(model: Any) -> Dict[str, Any]:
     """
     Extract configuration from a model object.
@@ -224,7 +243,7 @@ def save_model_checkpoint(
     # Save config as JSON
     config_path = save_dir / "model_config.json"
     with open(config_path, 'w') as f:
-        json.dump(to_jsonable(config_dict), f, indent=2)
+        json.dump(to_jsonable(canonicalize_physnet_config_for_save(config_dict)), f, indent=2)
     saved_paths['config'] = config_path
     
     # Save metadata if provided
@@ -392,6 +411,8 @@ def load_model_checkpoint(
         else checkpoint_dir
     )
     print(f"✓ Loaded checkpoint from {load_source}")
+    if "config" in result and isinstance(result["config"], dict):
+        result["config"] = normalize_physnet_config(result["config"])
     return result
 
 
@@ -429,8 +450,8 @@ def create_model_from_checkpoint(
     # Create model instance
     # Filter out non-model attributes
     model_attrs = ['features', 'max_degree', 'num_iterations', 'num_basis_functions',
-                   'cutoff', 'max_atomic_number', 'n_res', 'zbl', 'efa', 'charges',
-                   'natoms', 'total_charge', 'n_dcm', 'include_pseudotensors']
+                   'cutoff', 'max_atomic_number', 'n_res', 'n_refinement_blocks', 'zbl', 'efa', 'charges',
+                   'natoms', 'max_padded_atoms', 'total_charge', 'n_dcm', 'include_pseudotensors']
     
     filtered_config = {k: v for k, v in model_config.items() 
                       if k in model_attrs or k.endswith('_config')}

@@ -567,7 +567,7 @@ def setup_calculator(
     max_dimer_atoms = max(_dimer_atom_counts) if _dimer_atom_counts else 2 * max_monomer_atoms
     max_atoms = max(max_monomer_atoms, max_dimer_atoms)
     setup_rows.append(
-        ("max_atoms (model natoms)", f"{max_atoms} (max monomer/dimer size)")
+        ("max_fragment_atoms (ML padding)", f"{max_atoms} (largest monomer or dimer)")
     )
 
     # Precompute padded index arrays for vectorized gather (avoids Python loops in get_ML_energy_fn)
@@ -612,7 +612,7 @@ def setup_calculator(
         restart = restart_path
         # Load using JSON loader
         try:
-            from mmml.utils.model_checkpoint import load_model_checkpoint
+            from mmml.utils.model_checkpoint import load_model_checkpoint, normalize_physnet_config
             checkpoint = load_model_checkpoint(
                 restart,
                 use_orbax=False,
@@ -622,6 +622,7 @@ def setup_calculator(
             )
             params = checkpoint.get('params')
             config = checkpoint.get('config', {})
+            config = normalize_physnet_config(config) if config else {}
             
             if params is None:
                 raise FileNotFoundError(f"params not found in JSON checkpoint at {restart_path}")
@@ -755,12 +756,6 @@ def setup_calculator(
         ml_energy_conversion_factor = float(HARTREE_TO_EV)
         ml_force_conversion_factor = float(HARTREE_TO_EV)
     _calculator_unit_metadata = calculator_results_units()
-    if is_json_checkpoint:
-        emit_tagged(
-            "setup_calculator",
-            "Runtime natoms is the largest monomer/dimer in this system; "
-            "n_res is an EF architecture parameter, not the number of CHARMM residues.",
-        )
     apply_xla_cuda_timer_log_filter()
     if not defer_xla_gpu_warmup and ensure_xla_gpu_warmed():
         emit_tagged(

@@ -60,6 +60,32 @@ def test_emit_status_respects_quiet(capsys, monkeypatch: pytest.MonkeyPatch) -> 
     assert capsys.readouterr().out == ""
 
 
+def test_model_attribute_rows_uses_display_labels() -> None:
+    class _Model:
+        features = 32
+        natoms = 10
+        n_res = 3
+        num_iterations = 2
+        use_pbc = False
+
+    rows = dict(rich_report._model_attribute_rows(_Model()))
+    assert "max_padded_atoms" in rows
+    assert "n_refinement_blocks" in rows
+    assert "message_passing_steps" in rows
+    assert "natoms" not in rows
+    assert "n_res" not in rows
+
+
+def test_emit_model_loaded_runtime_max_padded_atoms(capsys) -> None:
+    class _Model:
+        features = 32
+        natoms = 10
+
+    rich_report.emit_model_loaded(_Model(), runtime_max_padded_atoms=34)
+    out = capsys.readouterr().out
+    assert "runtime_max_padded_atoms=34" in out
+
+
 def test_model_attribute_rows_from_object() -> None:
     class _Model:
         features = 32

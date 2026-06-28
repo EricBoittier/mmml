@@ -80,6 +80,7 @@ def test_trialanine_water_bonded_matches_pycharmm(trialanine_water_box) -> None:
         box.psf_path,
         positions,
         prm_file=box.protein_prm,
+        extra_prm_files=[CGENFF_PRM],
     )
     components, forces = bonded_energy_and_forces(
         jnp.asarray(positions),
@@ -138,6 +139,7 @@ def test_trialanine_water_total_mm_matches_pycharmm(
         box.psf_path,
         positions,
         prm_file=box.protein_prm,
+        extra_prm_files=[CGENFF_PRM],
     )
     nbond_data = load_nonbonded_system_from_charmm(
         box.psf_path,

@@ -54,3 +54,21 @@ def test_bicubic_patch_evaluates_finite() -> None:
     coeff = jnp.asarray(coeffs[0])
     val = _eval_bicubic(coeff, jnp.array(0.25), jnp.array(0.5))
     assert np.isfinite(float(val))
+
+
+def test_parse_protein_prm_skips_cmap_blocks() -> None:
+    from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
+        have_protein_toppar,
+        protein_toppar_paths,
+    )
+    from mmml.interfaces.pycharmmInterface.cgenff_topology import (
+        _merge_charmm_prm_parameters,
+    )
+
+    if not have_protein_toppar():
+        pytest.skip("protein toppar not available")
+    _, protein_prm = protein_toppar_paths()
+    bonds, angles, dihedrals = _merge_charmm_prm_parameters(protein_prm)
+    assert bonds
+    assert angles
+    assert dihedrals

@@ -373,6 +373,7 @@ def _build_physnet_ef_calculator(
     *,
     cutoff: float | None,
 ) -> Calculator:
+    from mmml.utils.model_checkpoint import normalize_physnet_config
     from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
     from mmml.models.physnetjax.physnetjax.models.model import EF as StandardEF
     from mmml.models.physnetjax.physnetjax.models.spooky_model import EF as SpookyEF
@@ -381,6 +382,7 @@ def _build_physnet_ef_calculator(
         model_config = dict(saved_config["physnet_config"])
     else:
         model_config = dict(saved_config)
+    model_config = normalize_physnet_config(model_config)
 
     model_attrs = {
         "features",
@@ -390,10 +392,12 @@ def _build_physnet_ef_calculator(
         "cutoff",
         "max_atomic_number",
         "n_res",
+        "n_refinement_blocks",
         "zbl",
         "efa",
         "charges",
         "natoms",
+        "max_padded_atoms",
         "total_charge",
         "n_dcm",
         "include_pseudotensors",
