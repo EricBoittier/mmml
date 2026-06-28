@@ -3,11 +3,13 @@
 # Paths use ~/... so this works from any cwd (not only the mmml repo root).
 # Edit the paths below or override on the CLI.
 #
-# Phase A — MM-only box certification (~few min):
+# Smallest *MIC-safe* liquid DCM smoke (not bulk-ρ N=20 @ L≈13 Å — too small for MIC).
+# Default workflow: ~/mmml/scripts/run_dcm_liquid_workflow.sh (DCM:60 @ L=32 Å).
+#
+# Phase A — MM-only box certification:
 #   MMML_MPI_NP=1 ~/mmml/scripts/mmml-charmm-mpirun.sh liquid-box \
-#     --composition DCM:20 --target-density-g-cm3 1.326 \
-#     --profile standard -o ~/tests/boxes/dcm20 \
-#     --charmm-sd-steps 50 --charmm-abnr-steps 50
+#     --composition DCM:60 --box-size 32 --target-density-g-cm3 1.326 \
+#     --profile dense -o ~/tests/boxes/dcm60_L32
 #
 # Phase B — hybrid MLpot mini (this file):
 #   export MMML_CKPT=~/mmml/mmml/models/physnetjax/defaults/hf_json/<checkpoint>.json

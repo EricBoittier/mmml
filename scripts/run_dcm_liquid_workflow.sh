@@ -2,30 +2,37 @@
 # End-to-end liquid DCM workflow on a GPU node (A100 / scicore-style).
 #
 # Phase 0 (optional): health-check --require-gpu --live
-# Phase A: mmml liquid-box  — MM-only certification at bulk ρ (Packmol → MC → SD/ABNR)
-# Phase B: mmml md-system   — hybrid MLpot mini (+ optional short heat) from certified box
+# Phase A: mmml liquid-box  — MM-only certification (Packmol → MC → SD/ABNR → optional mini-NPT)
+# Phase B: mmml md-system   — hybrid MLpot mini (+ optional heat/equi) from certified box
 #
-# Recommended size (default N_DCM=40):
-#   • 40 × DCM @ ρ=1.326 g/cm³ → L≈16.3 Å, 200 ML atoms
-#   • Fits default CHARMM MLpot tier (max_Npr≈4M); JAX compiles in minutes on one A100
-#   • Smaller / faster smoke: N_DCM=20 (L≈12.9 Å, 100 atoms)
-#   • Larger (still OK on 4M tier): N_DCM=60 (L≈18.6 Å, 300 atoms)
-#   • Avoid DCM:206+ without rebuilding xlarge lib (see docs/md-system-configs.md)
+# MIC + liquid density (read this before changing N_DCM):
+#   Bulk DCM @ ρ=1.326 g/cm³ gives L ≈ (N × 106 Å³)^(1/3).
+#   MLpot PBC needs L/2 > cutnb (≈12–18 Å) → use L ≥ 28 Å (conservative: 32 Å).
+#   At bulk ρ that means N ≳ 200 for L≥28 Å and N ≳ 310 for L≥32 Å — slow JAX / large tiers.
+#
+#   Practical compromise (default): DCM:60 in a fixed L=32 Å cube.
+#     • MIC-safe (L/2 = 16 Å > typical cutnb)
+#     • 300 ML atoms — fits default CHARMM tier (max_Npr≈4M)
+#     • Initial placement is sub-bulk ρ; MC + NPT equi (dense profile / ps_equi) densify toward liquid
+#   Documented in docs/md-system-configs.md (DCM:60 @ box_size 32).
+#
+#   Faster smoke (not production MIC): N_DCM=20 BOX_SIZE=45 (dilute, like long-range test configs)
+#   True bulk ρ + MIC: N_DCM=300 BOX_SIZE=32 (slow; may need ensure_charmm_mlpot_limits)
 #
 # Prerequisites:
 #   module load GCC/14.2.0 OpenMPI/5.0.7-GCC-14.2.0 CMake/3.31.3-GCCcore-14.2.0
 #   export OPENMPI_ROOT=$EBROOTOPENMPI
-#   ./scripts/rebuild_charmm_mlpot.sh   # once; lib auto-discovered under setup/charmm
+#   ./scripts/rebuild_charmm_mlpot.sh
 #   export MMML_CKPT=/path/to/checkpoint.json
 #   uv sync --extra gpu
 #
 # Examples (any cwd):
 #   export MMML_CKPT=~/mmml/mmml/models/physnetjax/defaults/hf_json/<ckpt>.json
 #   ~/mmml/scripts/run_dcm_liquid_workflow.sh
-#   N_DCM=20 ~/mmml/scripts/run_dcm_liquid_workflow.sh          # fastest liquid smoke
-#   MD_STAGES=mini,heat,equi PS_HEAT=5 PS_EQUI=5 ./scripts/run_dcm_liquid_workflow.sh
-#   SKIP_HEALTH=1 SKIP_LIQUID_BOX=1 ./scripts/run_dcm_liquid_workflow.sh  # md only
-#   EXTRA_MD_ARGS=(--quiet) ~/mmml/scripts/run_dcm_liquid_workflow.sh
+#   N_DCM=90 BOX_SIZE=32 ~/mmml/scripts/run_dcm_liquid_workflow.sh
+#   N_DCM=20 BOX_SIZE=45 SKIP_HEALTH=1 ~/mmml/scripts/run_dcm_liquid_workflow.sh  # fast dilute smoke
+#   MD_STAGES=mini,equi PS_EQUI=10 ~/mmml/scripts/run_dcm_liquid_workflow.sh
+#   SKIP_HEALTH=1 SKIP_LIQUID_BOX=1 BOX_DIR=~/tests/boxes/dcm60_L32 ~/mmml/scripts/run_dcm_liquid_workflow.sh
 #
 set -euo pipefail
 
@@ -38,29 +45,32 @@ source "$MMML_ROOT/scripts/resolve_mmml_env.sh"
 mmml_resolve_env "$MMML_ROOT"
 PY="${MMML_PYTHON}"
 
-# --- sizing (override with N_DCM=...) ---------------------------------------
-N_DCM="${N_DCM:-40}"
-DCM_RHO="${DCM_RHO:-1.326}"          # g/cm³, experimental bulk DCM ~298 K
-LIQUID_BOX_PROFILE="${LIQUID_BOX_PROFILE:-standard}"  # standard | dense | conservative
+# --- sizing (override with N_DCM=..., BOX_SIZE=...) -------------------------
+N_DCM="${N_DCM:-60}"
+BOX_SIZE="${BOX_SIZE:-32}"              # Å; MIC-safe default (not bulk-ρ L for N=60)
+DCM_RHO="${DCM_RHO:-1.326}"            # g/cm³ target for MC / NPT equilibration
+MIC_MIN_BOX="${MIC_MIN_BOX:-28}"         # Å; warn below this (L/2 vs ml_cutoff/cutnb)
+ML_CUTOFF="${ML_CUTOFF:-12.0}"
+LIQUID_BOX_PROFILE="${LIQUID_BOX_PROFILE:-dense}"  # dense → liquid_prep + mini-NPT toward ρ
 
 # --- phases -----------------------------------------------------------------
 SKIP_HEALTH="${SKIP_HEALTH:-0}"
 SKIP_LIQUID_BOX="${SKIP_LIQUID_BOX:-0}"
 SKIP_MD="${SKIP_MD:-0}"
-REBUILD_BOX="${REBUILD_BOX:-0}"      # 1 = remove BOX_DIR before liquid-box
+REBUILD_BOX="${REBUILD_BOX:-0}"
 
 # --- md-system (Phase B) ----------------------------------------------------
-MD_STAGES="${MD_STAGES:-mini,heat}"
+MD_STAGES="${MD_STAGES:-mini,equi}"
 MINI_NSTEP="${MINI_NSTEP:-50}"
 PS_HEAT="${PS_HEAT:-3.0}"
-PS_EQUI="${PS_EQUI:-0.0}"
+PS_EQUI="${PS_EQUI:-10.0}"
 ML_BATCH_SIZE="${ML_BATCH_SIZE:-64}"
 ML_GPU_COUNT="${ML_GPU_COUNT:-1}"
 TEMPERATURE="${TEMPERATURE:-300.0}"
 PRESSURE="${PRESSURE:-1.0}"
 
-# --- paths derived from N_DCM ------------------------------------------------
-TAG="dcm${N_DCM}"
+# --- paths ------------------------------------------------------------------
+TAG="dcm${N_DCM}_L${BOX_SIZE}"
 BOX_DIR="${BOX_DIR:-$TESTS_ROOT/boxes/$TAG}"
 RUN_DIR="${RUN_DIR:-$TESTS_ROOT/runs/${TAG}_liquid}"
 BOX_JSON="$BOX_DIR/box.json"
@@ -94,7 +104,7 @@ if [[ -z "${MMML_CKPT:-}" ]]; then
   fi
 fi
 
-read -r EXPECTED_SIDE N_ATOMS <<EOF
+read -r BULK_L N_ATOMS EFF_RHO MIC_OK <<EOF
 $(
   "$PY" - <<PY
 from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
@@ -102,30 +112,54 @@ from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
     total_mass_g_for_composition,
 )
 n = int(${N_DCM})
+L_bulk = float(${BOX_SIZE})
 comp = {"DCM": n}
 mass = total_mass_g_for_composition(comp)
-side = cubic_box_side_from_target_density(
+L_rho = cubic_box_side_from_target_density(
     n_molecules=n,
     total_mass_g=mass,
     target_density_g_cm3=float(${DCM_RHO}),
 )
-print(f"{side:.2f} {5 * n}")
+# effective ρ if N molecules are placed in BOX_SIZE cube
+import math
+vol_a3 = float(${BOX_SIZE}) ** 3
+mass_g = mass
+vol_cm3 = vol_a3 * 1e-24
+eff_rho = mass_g / vol_cm3 if vol_cm3 > 0 else 0.0
+mic_min = float(${MIC_MIN_BOX})
+ml_cut = float(${ML_CUTOFF})
+mic_floor = max(mic_min, 2.0 * ml_cut + 2.0)
+mic_ok = 1 if float(${BOX_SIZE}) >= mic_floor else 0
+print(f"{L_rho:.2f} {5 * n} {eff_rho:.3f} {mic_ok}")
 PY
 )
 EOF
 
 echo "================================================================"
-echo " DCM liquid workflow"
+echo " DCM liquid workflow (MIC-aware)"
 echo "================================================================"
 echo " MMML_ROOT:      $MMML_ROOT"
 echo " TESTS_ROOT:     $TESTS_ROOT"
 echo " Composition:    DCM:${N_DCM} (${N_ATOMS} ML atoms)"
-echo " Target rho:     ${DCM_RHO} g/cm³  (expected L≈${EXPECTED_SIDE} Å)"
+echo " Box side:       ${BOX_SIZE} Å  (bulk-ρ L would be ≈${BULK_L} Å only)"
+echo " Effective ρ₀:   ${EFF_RHO} g/cm³ in ${BOX_SIZE} Å cube (target ${DCM_RHO} via MC/NPT)"
+echo " MIC min L:      ${MIC_MIN_BOX} Å (2×ml_cutoff+2 ≈ $("$PY" -c "print(2*${ML_CUTOFF}+2)"))"
 echo " Box dir:        $BOX_DIR"
 echo " Run dir:        $RUN_DIR"
 echo " MD stages:      $MD_STAGES"
 echo " Checkpoint:     $MMML_CKPT"
 echo "================================================================"
+
+if [[ "$MIC_OK" != "1" ]]; then
+  echo "ERROR: BOX_SIZE=${BOX_SIZE} Å is below MIC-safe minimum (~${MIC_MIN_BOX} Å)." >&2
+  echo "  Use BOX_SIZE=32 (default) or N_DCM=20 BOX_SIZE=45 for dilute smoke." >&2
+  exit 1
+fi
+
+if awk -v bulk="$BULK_L" -v box="$BOX_SIZE" 'BEGIN { exit !(bulk < box - 0.5) }'; then
+  echo "NOTE: bulk-ρ cube (${BULK_L} Å) < BOX_SIZE (${BOX_SIZE} Å)."
+  echo "      Starting sub-bulk; MC + NPT equi (${LIQUID_BOX_PROFILE} profile) work toward ρ=${DCM_RHO}."
+fi
 
 if [[ "$SKIP_HEALTH" != "1" ]]; then
   echo "[phase 0] health-check (GPU + live MLpot DCM:2) ..."
@@ -141,10 +175,11 @@ if [[ "$SKIP_LIQUID_BOX" != "1" ]]; then
     status="$("$PY" -c "import json; print(json.load(open('$BOX_JSON')).get('status','?'))")"
     echo "[phase A] reusing certified box (status=$status): $BOX_DIR"
   else
-    echo "[phase A] liquid-box (MM only, profile=${LIQUID_BOX_PROFILE}) ..."
+    echo "[phase A] liquid-box (MM only, L=${BOX_SIZE} Å, profile=${LIQUID_BOX_PROFILE}) ..."
     mkdir -p "$(dirname "$BOX_DIR")"
     "$MPIRUN" liquid-box \
       --composition "DCM:${N_DCM}" \
+      --box-size "$BOX_SIZE" \
       --target-density-g-cm3 "$DCM_RHO" \
       --profile "$LIQUID_BOX_PROFILE" \
       --output-dir "$BOX_DIR" \
@@ -162,10 +197,16 @@ if [[ "$SKIP_LIQUID_BOX" != "1" ]]; then
 import json, sys
 p = "$BOX_JSON"
 data = json.load(open(p))
-print(f"  box.json: status={data.get('status')} L={data.get('box_side_A')} Å "
-      f"rho={data.get('density_g_cm3')} g/cm³ worst_contact={data.get('worst_intermonomer_A')} Å")
+print(
+    f"  box.json: status={data.get('status')} L={data.get('box_side_A')} Å "
+    f"rho={data.get('density_g_cm3')} g/cm³ "
+    f"worst_contact={data.get('worst_intermonomer_A')} Å"
+)
+side = float(data.get("box_side_A") or 0)
+if side > 0 and side < float(${MIC_MIN_BOX}) - 0.5:
+    print(f"  WARN: certified L={side} Å < MIC_MIN_BOX=${MIC_MIN_BOX}", file=sys.stderr)
 if data.get("status") != "pass":
-    print("  WARN: box certification status is not 'pass' — review $BOX_DIR/REPORT.md", file=sys.stderr)
+    print("  WARN: box certification status is not 'pass' — review REPORT.md", file=sys.stderr)
 PY
   fi
 fi
@@ -192,6 +233,7 @@ if [[ "$SKIP_MD" != "1" ]]; then
     --ml-batch-size "$ML_BATCH_SIZE"
     --ml-gpu-count "$ML_GPU_COUNT"
     --no-echeck
+    --no-bonded-mm-mini
     --no-charmm-pre-minimize
     --max-grms-before-dyn 80.0
     --mm-switch-on 9.0
