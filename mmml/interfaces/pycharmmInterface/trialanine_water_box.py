@@ -192,7 +192,16 @@ def build_trialanine_water_box_in_charmm(
     out_dir = Path(workdir or Path.cwd())
     out_dir.mkdir(parents=True, exist_ok=True)
     psf_path = out_dir / "trialanine-water.psf"
-    write.psf_card(str(psf_path))
+    import os
+
+    prev_cwd = os.getcwd()
+    try:
+        os.chdir(out_dir)
+        write.psf_card(psf_path.name)
+    finally:
+        os.chdir(prev_cwd)
+    if not psf_path.is_file():
+        raise RuntimeError(f"CHARMM did not write PSF to {psf_path}")
 
     positions = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
     return TrialanineWaterBox(
