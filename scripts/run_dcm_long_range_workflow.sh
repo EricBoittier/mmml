@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# DCM liquid workflow with long-range Coulomb solver comparison (MIC / jax-pme / ScaFaCoS).
+# DCM liquid workflow with long-range Coulomb solver comparison (MIC / jax-pme / nvalchemiops / ScaFaCoS).
 #
 # Extends run_dcm_liquid_workflow.sh with solver sweeps and validation hooks.
 #
@@ -11,7 +11,7 @@
 # Examples:
 #   ~/mmml/scripts/run_dcm_long_range_workflow.sh
 #   LR_SOLVERS=mic,jax_pme JAX_PME_METHODS=ewald,pme,p3m ~/mmml/scripts/run_dcm_long_range_workflow.sh
-#   MM_NONBOND_MODE=periodic_external LR_SOLVERS=jax_pme,scafacos SKIP_LIQUID_BOX=1 \
+#   MM_NONBOND_MODE=periodic_external LR_SOLVERS=jax_pme,nvalchemiops_pme,scafacos SKIP_LIQUID_BOX=1 \
 #     BOX_DIR=~/tests/boxes/dcm60_l32 ~/mmml/scripts/run_dcm_long_range_workflow.sh
 #   SKIP_MD=1 ~/mmml/scripts/run_dcm_long_range_workflow.sh   # validation only
 #
@@ -83,6 +83,10 @@ have_scafacos() {
   "$PY" -c "from mmml.interfaces.scafacosInterface import have_scafacos; raise SystemExit(0 if have_scafacos() else 1)" 2>/dev/null
 }
 
+have_nvalchemiops_pme() {
+  "$PY" -c "from mmml.interfaces.pycharmmInterface.long_range_backend import have_nvalchemiops_pme; raise SystemExit(0 if have_nvalchemiops_pme() else 1)" 2>/dev/null
+}
+
 if [[ "$SKIP_VALIDATION" != "1" ]]; then
   echo "[phase 0] long-range backend validation (pytest) ..."
   (cd "$MMML_ROOT" && JAX_PLATFORMS=cpu "$PY" -m pytest \
@@ -143,6 +147,10 @@ if [[ "$SKIP_MD" != "1" ]]; then
 
     if [[ "$lr" == "scafacos" ]] && ! have_scafacos; then
       echo "  SKIP lr_solver=scafacos (libfcs not found)"
+      continue
+    fi
+    if [[ "$lr" == "nvalchemiops_pme" ]] && ! have_nvalchemiops_pme; then
+      echo "  SKIP lr_solver=nvalchemiops_pme (nvalchemiops not found)"
       continue
     fi
 

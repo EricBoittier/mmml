@@ -1,7 +1,8 @@
 # Tutorial: long-range Coulomb solvers in MMML
 
-This guide shows how to run **MIC**, **jax-pme** (Ewald / PME / P3M), and **ScaFaCoS**
-Coulomb backends in hybrid ML/MM workflows, using the DCM liquid box as a concrete example.
+This guide shows how to run **MIC**, **jax-pme** (Ewald / PME / P3M),
+**nvalchemiops PME**, and **ScaFaCoS** Coulomb backends in hybrid ML/MM workflows,
+using the DCM liquid box as a concrete example.
 
 Related:
 
@@ -20,10 +21,15 @@ Related:
 | Mode                | LJ                         | Coulomb                                                     | When to use                                                  |
 | ------------------- | -------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------ |
 | `jax_mic` (default) | Switched JAX pairs (~13 Å) | MIC in pair loop, or **jax-pme** with `--lr-solver jax_pme` | Standard hybrid MLpot; jax-pme Coulomb + r⁻⁶ LJ when enabled |
-| `periodic_external` | CHARMM IMAGE VDW           | **jax-pme** or **ScaFaCoS** full-box Coulomb                | Large boxes where JAX MM is off; requires `pbc_`* setup      |
+| `periodic_external` | CHARMM IMAGE VDW           | **jax-pme**, **nvalchemiops PME**, or **ScaFaCoS** full-box Coulomb | Large boxes where JAX MM is off; requires `pbc_`* setup      |
 
 
 In `jax_mic` + `jax_pme` mode: **r⁻¹²** repulsion stays on the switched pair list (exact Lorentz–Berthelot σ_ij, ε_ij, hybrid λ); **Coulomb** and the **r⁻⁶** LJ tail use jax-pme (Ewald/PME/P3M) with per-atom √C6 and geometric k-space combining (GROMACS-style LJ-PME reciprocal rule). Each jax-pme MM term is `scale × (E_pme_full − E_intra)` so intra-monomer electrostatics and dispersion remain in the ML region (same COM switching as the pair loop).
+
+`nvalchemiops_pme` is currently wired as a full-box Coulomb solver for
+`periodic_external` and standalone backend comparisons. It does not replace the
+`jax_mic` Coulomb+r⁻⁶ handoff yet because MMML's existing switched-MM path also
+relies on jax-pme's r⁻⁶ dispersion support.
 
 ---
 
@@ -35,7 +41,7 @@ In `jax_mic` + `jax_pme` mode: **r⁻¹²** repulsion stays on the switched pair
 | Flag                               | Values                               | Default      | Meaning                         |
 | ---------------------------------- | ------------------------------------ | ------------ | ------------------------------- |
 | `--mm-nonbond-mode`                | `jax_mic`, `periodic_external`       | `jax_mic`    | MM stack selection              |
-| `--lr-solver`                      | `auto`, `mic`, `jax_pme`, `scafacos` | env / `auto` → **jax_pme** | Hybrid default: switched MM + jax-pme full−intra handoff |
+| `--lr-solver`                      | `auto`, `mic`, `jax_pme`, `nvalchemiops_pme`, `scafacos` | env / `auto` → **jax_pme** | Hybrid default: switched MM + jax-pme full−intra handoff |
 | `--jax-pme-method`                 | `ewald`, `pme`, `p3m`                | `ewald`      | jax-pme variant                 |
 | `--jax-pme-sr-cutoff`              | float (Å)                            | `6.0`        | jax-pme real-space cutoff       |
 | `--scafacos-method`                | `ewald`, `p3m`, …                    | `ewald`      | ScaFaCoS `fcs_init` string      |
@@ -45,9 +51,10 @@ In `jax_mic` + `jax_pme` mode: **r⁻¹²** repulsion stays on the switched pair
 Environment mirrors:
 
 ```bash
-export MMML_LR_SOLVER=jax_pme      # mic | jax_pme | scafacos | auto
+export MMML_LR_SOLVER=jax_pme      # mic | jax_pme | nvalchemiops_pme | scafacos | auto
 export JAX_PME_METHOD=pme          # ewald | pme | p3m
 export JAX_PME_SR_CUTOFF=6.0
+export MMML_NVALCHEMIOPS_PME_ACCURACY=1e-6
 export SCAFACOS_LIB=$HOME/.local/scafacos/lib/libfcs.so
 export SCAFACOS_METHOD=ewald
 ```
@@ -114,9 +121,10 @@ Swap `--jax-pme-method` to `pme` or `p3m` to test mesh methods.
 
 
 
-## 5. Example: periodic_external + jax-pme
+## 5. Example: periodic_external full-box Coulomb
 
-Turns off JAX real-space MM; Coulomb from jax-pme, LJ from CHARMM IMAGE:
+Turns off JAX real-space MM; Coulomb from jax-pme, nvalchemiops PME, or
+ScaFaCoS, LJ from CHARMM IMAGE:
 
 ```bash
 MMML_MPI_NP=1 ~/mmml/scripts/mmml-charmm-mpirun.sh md-system \
@@ -137,6 +145,13 @@ ScaFaCoS variant (requires `libfcs`):
 ```bash
   --lr-solver scafacos \
   --scafacos-method ewald
+```
+
+nvalchemiops PME variant (requires `mmml[nvalchemiops-pme]` and a suitable JAX
+runtime):
+
+```bash
+  --lr-solver nvalchemiops_pme
 ```
 
 ---
@@ -161,8 +176,8 @@ N_DCM=60 BOX_SIZE=32 \
 # Validation only (no MD)
 SKIP_MD=1 ~/mmml/scripts/run_dcm_long_range_workflow.sh
 
-# Include ScaFaCoS when installed
-LR_SOLVERS=mic,jax_pme,scafacos \
+# Include nvalchemiops PME / ScaFaCoS when installed
+LR_SOLVERS=mic,jax_pme,nvalchemiops_pme,scafacos \
 SCAFACOS_METHODS=ewald,p3m \
 ~/mmml/scripts/run_dcm_long_range_workflow.sh
 ```
@@ -205,7 +220,7 @@ Expectations:
 | **MIC vs jax-pme** on large periodic box | |E_jax_pme| ≥ |E_mic| (truncated MIC underestimates Coulomb)                       |
 | **ewald vs pme vs p3m** (jax-pme)        | Energies agree to ~0.1–1% on neutral crystals; P3M may need tuning                 |
 | **LJ r^-12 (pair loop)**                 | Identical LB mixing with/without jax_pme; **total vdw** differs (r^-6 via k-space) |
-| **ScaFaCoS vs jax-pme**                  | Similar totals on CsCl / dimer tests (~0.1–0.7%)                                   |
+| **nvalchemiops PME / ScaFaCoS vs jax-pme** | Similar full-box Coulomb totals on neutral periodic systems after unit conversion |
 | **Hybrid GRMS** (same certified box)     | jax-pme methods within ~10% rtol; MIC may differ (see §6 force validation)         |
 
 
@@ -227,9 +242,10 @@ The **Hybrid ML/MM setup** dashboard (always printed at calculator init) include
 | Issue                                        | Fix                                                                    |
 | -------------------------------------------- | ---------------------------------------------------------------------- |
 | `jax_pme` falls back to `mic`                | Install jax-pme: `uv sync` (pinned in pyproject.toml)                  |
+| `nvalchemiops_pme` falls back                | Install `mmml[nvalchemiops-pme]` and a compatible JAX runtime          |
 | `scafacos` unavailable                       | Build to `~/.local/scafacos`, set `SCAFACOS_LIB` and `LD_LIBRARY_PATH` |
 | MIC box too small                            | Use L ≥ 28–32 Å for DCM; see `run_dcm_liquid_workflow.sh` header       |
-| `periodic_external` fails                    | Need `--setup pbc_*`, positive `--box-size`, jax_pme or libfcs         |
+| `periodic_external` fails                    | Need `--setup pbc_*`, positive `--box-size`, and an installed external Coulomb backend |
 | Segfault under MPI + ScaFaCoS                | Ensure mpi4py uses `COMM_WORLD.handle` (fixed in recent MMML)          |
 | `TracerArrayConversionError` under `jax_pme` | Upgrade MMML (hybrid jax-pme uses `jax.pure_callback` inside JIT)      |
 

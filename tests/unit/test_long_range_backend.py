@@ -310,6 +310,20 @@ def test_collect_lr_solver_mapping_nvalchemiops_in_jax_mic_is_mic():
     assert "not wired in jax_mic" in mapping["note"]
 
 
+def test_collect_lr_solver_mapping_nvalchemiops_ml_only_is_inactive():
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
+        return_value="nvalchemiops_pme",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.resolve_lr_solver",
+        return_value="nvalchemiops_pme",
+    ):
+        mapping = collect_lr_solver_mapping(lr_solver="nvalchemiops_pme", do_mm=False)
+    assert mapping["lr_solver_active"] == "—"
+    assert "none" in mapping["coulomb_mode"]
+    assert mapping["note"] == "nvalchemiops_pme applies only with periodic_external"
+
+
 def test_collect_lr_solver_mapping_periodic_external_jax_pme():
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",

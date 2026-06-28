@@ -114,7 +114,7 @@ Tier 2 spatial MPI example YAML: `mmml/cli/run/md_system.spatial_mpi.example.yam
 
 For condensed phase, keep the template staged and explicit:
 
-1. Put shared physical settings in `defaults`: `composition`, `checkpoint`, `box_size` or density sizing, `dt_fs`, `temperature`, `pressure`, cutoffs, long-range Coulomb (`lr_solver`, `jax_pme_method`, `jax_pme_sr_cutoff` when using jax-pme), and seed.
+1. Put shared physical settings in `defaults`: `composition`, `checkpoint`, `box_size` or density sizing, `dt_fs`, `temperature`, `pressure`, cutoffs, long-range Coulomb (`lr_solver`, `jax_pme_method`, `jax_pme_sr_cutoff` when using jax-pme; `nvalchemiops_pme` is available for `periodic_external` full-box Coulomb), and seed.
 2. Use a short PyCHARMM leg first: `md_stages: "mini,heat,equi"` with overlap rescue and bonded MM repair enabled. This catches bad contacts before long JAX-MD runs.
 3. Use JAX-MD for fixed-cell production or NVE replicas after the PyCHARMM handoff. Keep neighbor-list capacity and refresh controls in the JAX-MD run block.
 4. Return to PyCHARMM only when you need CHARMM restart output, CPT/NPT behavior, or MLpot-specific diagnostics.
@@ -820,9 +820,9 @@ Hybrid ML/MM potentials use three COM-distance knobs (Å) plus optional long-ran
 | `mm_switch_width` | MM outer tail width past `mm_switch_on` (JAX pair list extends to `mm_switch_on + mm_switch_width`) | 5.0 |
 | `ml_switch_width` | Width of ML taper below `mm_switch_on` | 1.5 |
 | `mlpot_mm_internal_scale` | Scale CGENFF BOND/ANGL/DIHE on ML atoms during MLpot BLOCK (0=off) | 0.0 |
-| `mm_nonbond_mode` | `jax_mic` (JAX real-space MM) or `periodic_external` (ScaFaCoS + CHARMM) | `jax_mic` |
+| `mm_nonbond_mode` | `jax_mic` (JAX real-space MM) or `periodic_external` (external Coulomb + CHARMM) | `jax_mic` |
 | `include_mm` | JAX switched MM pairs (LJ + MIC Coulomb) in hybrid calculator | `true` |
-| `lr_solver` | Long-range Coulomb: `auto`, `mic`, `scafacos`, `jax_pme` (`jax_mic`: MIC or jax-pme elec + switched LJ; `periodic_external`: jax-pme or ScaFaCoS) | env / `auto` → **jax_pme** |
+| `lr_solver` | Long-range Coulomb: `auto`, `mic`, `scafacos`, `jax_pme`, `nvalchemiops_pme` (`jax_mic`: MIC or jax-pme elec + switched LJ; `periodic_external`: jax-pme, nvalchemiops PME, or ScaFaCoS) | env / `auto` → **jax_pme** |
 | `jax_pme_method` | jax-pme variant when `lr_solver: jax_pme`: `ewald`, `pme`, `p3m` | `ewald` |
 | `jax_pme_sr_cutoff` | jax-pme real-space cutoff (Å) | `6.0` |
 | `periodic_charmm_vdw` | With `periodic_external`: keep CHARMM IMAGE LJ (default true) | true |
@@ -855,7 +855,7 @@ There are several “MM off” levels — pick the one that matches your goal:
 | Goal | Config approach |
 |------|-----------------|
 | **ML only — no MM LJ or Coulomb pairs** | `include_mm: false` — PhysNet monomer/dimer terms only (`doMM=False`); no JAX switched LJ, no MIC Coulomb, no MM pair list |
-| **No JAX real-space LJ/Coulomb, but add long-range Coulomb** | `mm_nonbond_mode: periodic_external` + `lr_solver: scafacos` — replaces JAX MM with ScaFaCoS (+ optional CHARMM VDW) |
+| **No JAX real-space LJ/Coulomb, but add long-range Coulomb** | `mm_nonbond_mode: periodic_external` + `lr_solver: scafacos` or `nvalchemiops_pme` — replaces JAX MM with full-box Coulomb (+ optional CHARMM VDW) |
 | **ML + ScaFaCoS Coulomb only** (no LJ anywhere) | `periodic_external` + `periodic_charmm_vdw: false` |
 | **No scaled CGENFF internals on ML atoms** | `mlpot_mm_internal_scale: 0.0` (default) |
 | **Skip ML dimers, keep MM** | `extra_args: ["--skip-ml-dimers"]` |

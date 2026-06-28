@@ -167,7 +167,11 @@ def main() -> int:
     parser.add_argument("--atoms-per-monomer", type=int, default=5)
     parser.add_argument("--box-side", type=float, default=28.0)
     parser.add_argument("--spacing", type=float, default=4.0)
-    parser.add_argument("--methods", default="ewald,pme,p3m")
+    parser.add_argument(
+        "--methods",
+        default="ewald",
+        help="comma-separated jax-pme methods; mesh methods may abort on unsupported hosts",
+    )
     parser.add_argument("--repeat", type=int, default=10)
     parser.add_argument("--warmup", type=int, default=2)
     parser.add_argument("--sr-cutoff", type=float, default=6.0)

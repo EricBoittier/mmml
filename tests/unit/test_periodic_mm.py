@@ -58,7 +58,7 @@ def test_validate_periodic_mm_requires_box():
         )
 
 
-def test_build_periodic_mm_config_requires_scafacos():
+def test_build_periodic_mm_config_requires_external_coulomb_solver():
     args = argparse.Namespace(
         mm_nonbond_mode="periodic_external",
         lr_solver="mic",
@@ -67,7 +67,7 @@ def test_build_periodic_mm_config_requires_scafacos():
         "mmml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
         return_value="mic",
     ):
-        with pytest.raises(ValueError, match="jax_pme or ScaFaCoS"):
+        with pytest.raises(ValueError, match="nvalchemiops_pme"):
             build_periodic_mm_config(args)
 
 
@@ -85,6 +85,21 @@ def test_build_periodic_mm_config_jax_pme():
     assert cfg is not None
     assert cfg.uses_jax_pme
     assert cfg.jax_pme_method == "pme"
+
+
+def test_build_periodic_mm_config_nvalchemiops_pme():
+    args = argparse.Namespace(
+        mm_nonbond_mode="periodic_external",
+        lr_solver="nvalchemiops_pme",
+        jax_pme_method=None,
+    )
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
+        return_value="nvalchemiops_pme",
+    ):
+        cfg = build_periodic_mm_config(args)
+    assert cfg is not None
+    assert cfg.uses_nvalchemiops_pme
 
 
 def test_assert_periodic_mm_box_side_too_small():

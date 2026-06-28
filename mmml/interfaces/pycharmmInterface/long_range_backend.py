@@ -849,7 +849,9 @@ def collect_lr_solver_mapping(
     if not do_mm:
         mapping["lr_solver_active"] = "—"
         mapping["coulomb_mode"] = "none (ML only; LR settings inactive)"
-        if chosen not in ("mic", "jax_pme", "nvalchemiops_pme"):
+        if chosen == "nvalchemiops_pme":
+            mapping["note"] = "nvalchemiops_pme applies only with periodic_external"
+        elif chosen not in ("mic", "jax_pme"):
             mapping["note"] = (
                 f"lr_solver={chosen} applies only with periodic_external or doMM=true"
             )
