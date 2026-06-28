@@ -1,11 +1,10 @@
-# PBC clusters at liquid bulk density → persistent PyCHARMM dynamics (no JAX-MD bursts).
+# Local dual-RTX-5090 (gpu08) — DCM liquid-density at safe box sizes.
 #
-# Sibling: workflows/pbc_solvent_burst/ (heat + JAX-MD alternation).
-# This workflow targets equilibration + production MD at ρ ≈ bulk liquid using:
-#   liquid_prep + density_prep_ladder, cleanup ladder, mmml-charmm-mpirun, warmup-mlpot-jax
+# DCM-only, L=28/32 Å (N ≤ 308 @ 100% bulk). No ACO; no L≥36 (OOM risk).
 #
-# Matrix: solvents × bulk_density_fractions × temperatures × box_sizes
-# Output: artifacts/pbc_liquid_density_dyn/{solvent}_{n}_t{T}_l{L}/
+# Launch (both GPUs):
+#   MMML_WORKFLOW_CONFIG=config.gpu08.local.yaml \
+#     nohup bash scripts/snakemake_local.sh 2 >> snakemake_gpu08.log 2>&1 &
 
 solvents: [DCM]
 bulk_density_fractions: [0.9, 1.0]
@@ -13,10 +12,16 @@ bulk_density_n_min: 10
 temperatures: [300.0]
 box_sizes: [28.0, 32.0]
 checkpoint: ${MMML_CKPT}
-output_root: artifacts/pbc_liquid_density_dyn
-seed_base: 4242
+output_root: artifacts/pbc_liquid_density_gpu08
+seed_base: 7272
 
-# Dynamics extent (per cell, all PyCHARMM)
+# 5090 (32 GB): larger ML batches than cluster default.
+ml_batch_size: 4096
+ml_gpu_count: 1
+
+local_gpu_count: 2
+local_max_concurrent: 2
+
 ps_heat: 10.0
 n_heat_segments: 5
 heat_firstt: 50.0
@@ -32,7 +37,6 @@ pressure: 1.0
 spacing: 4.0
 packmol_tolerance: 1.5
 
-# Resilient liquid-density prep (maps to mmml liquid-prep-dense preset knobs)
 liquid_prep: true
 density_prep_ladder: true
 density_prep_ladder_max_rounds: 5
@@ -44,7 +48,7 @@ min_intermonomer_atom_distance: 1.0
 max_grms_before_dyn: 50.0
 
 cleanup_strategy:
-  name: pbc_liquid_density_default
+  name: pbc_liquid_density_gpu08
   charmm_mm:
     pretreat_on_pycharmm: true
     ps_heat: 2.0
@@ -76,33 +80,15 @@ cleanup_strategy:
 mm_switch_on: 8.0
 mm_switch_width: 5.0
 ml_switch_width: 1.5
-ml_gpu_count: 1
-ml_batch_size: 2048
 
-# Serial JAX warmup before mpirun md-system (populates compile cache).
 warmup_mlpot_jax: true
 warmup_do_mm: false
 
 mpirun_wrapper: ../../scripts/mmml-charmm-mpirun.sh
 MMML_MPI_NP: 1
 
-slurm_small_cluster_max_n: 30
-slurm_max_concurrent_fast: 10
-slurm_max_concurrent_slow: 8
-slurm_partition: gpu
-slurm_nodes: 1
-slurm_ntasks: 1
-slurm_cpus_per_task: 4
-slurm_mem_mb_per_cpu: 4000
-slurm_runtime_min: 4320
+# Local executor: single fast GPU pool (no slow-tier split).
+slurm_gpu_nodes_slow: []
+slurm_max_concurrent_fast: 2
 slurm_gpu_nodes_fast:
   - gpu08
-  - gpu09
-  - gpu10
-  - gpu11
-slurm_gpu_nodes_slow:
-  - gpu01
-  - gpu02
-  - gpu03
-
-optional_bulk_fractions: [1.0]

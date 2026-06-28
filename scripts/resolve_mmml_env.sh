@@ -81,9 +81,36 @@ if missing:
 PY
 }
 
+mmml_resolve_uv() {
+  if [[ -n "${MMML_UV:-}" && -x "${MMML_UV}" ]]; then
+    printf '%s\n' "${MMML_UV}"
+    return 0
+  fi
+
+  local candidate home
+  home="${HOME:-}"
+  for candidate in \
+    "${home}/.local/bin/uv" \
+    "${home}/.cargo/bin/uv"; do
+    if [[ -n "$candidate" && -x "$candidate" ]]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+
+  local uv_bin
+  uv_bin="$(command -v uv 2>/dev/null || true)"
+  if [[ -n "$uv_bin" && -x "$uv_bin" ]]; then
+    printf '%s\n' "$uv_bin"
+    return 0
+  fi
+
+  return 1
+}
+
 mmml_resolve_env() {
   local repo_root="${1:?repo root required}"
-  local py
+  local py uv_bin uv_dir
 
   if ! py="$(mmml_resolve_python "$repo_root")"; then
     echo "resolve_mmml_env: no Python interpreter found." >&2
@@ -98,6 +125,17 @@ mmml_resolve_env() {
     export MMML_BIN="$(mmml_resolve_bin "$py" "$repo_root")"
   else
     unset MMML_BIN
+  fi
+
+  if uv_bin="$(mmml_resolve_uv)"; then
+    export MMML_UV="$uv_bin"
+    uv_dir="$(dirname "$uv_bin")"
+    case ":${PATH}:" in
+      *":${uv_dir}:"*) ;;
+      *) export PATH="${uv_dir}:${PATH}" ;;
+    esac
+  else
+    unset MMML_UV
   fi
   return 0
 }

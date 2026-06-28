@@ -1,6 +1,9 @@
 executor: local
 jobs: 2
+latency-wait: 60
 default-resources:
+  - gpu_fast=1
+  - gpu_slow=0
   - gpu=1
   - charmm_slot=1
   - runtime=4320

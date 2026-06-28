@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
-# Campaign health dashboard (delegates to collect_diagnostics matrix).
+# Liquid-density diagnostics CLI (matrix, cell, collect, trajectory).
 #
 # Usage:
-#   bash scripts/status.sh
-#   MMML_WORKFLOW_CONFIG=config.gpu08.local.yaml bash scripts/status.sh -v
-#   bash scripts/status.sh --config config.yaml --tag dcm_277_t300_l32
-#   bash scripts/status.sh --plot-dir results/plots --json results/status.json
+#   bash scripts/diag_liquid.sh matrix
+#   bash scripts/diag_liquid.sh matrix --config config.gpu08.local.yaml -v
+#   bash scripts/diag_liquid.sh collect --config config.yaml --output-dir results/diagnostics
+#   bash scripts/diag_liquid.sh cell dcm_277_t300_l32 --config config.yaml
+#   bash scripts/diag_liquid.sh trajectory dcm_277_t300_l32 --config config.yaml
+#
+# Shorthand (production config):
+#   MMML_WORKFLOW_CONFIG=config.yaml bash scripts/diag_liquid.sh matrix -v --plot-dir results/plots
 set -euo pipefail
 
 WORKFLOW_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -39,7 +43,8 @@ fi
 source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
 mmml_resolve_env "$REPO_ROOT"
 
+export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
+
 exec "${MMML_PYTHON}" "$WORKFLOW_ROOT/scripts/collect_diagnostics.py" \
   --config "$CFG_PATH" \
-  matrix \
   "${EXTRA_ARGS[@]}"

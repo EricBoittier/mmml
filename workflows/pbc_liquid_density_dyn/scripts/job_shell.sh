@@ -30,6 +30,12 @@ else
 fi
 export MMML_WORKFLOW_CONFIG="$CFG"
 
+# Local Snakemake (no Slurm): pin one GPU per concurrent job.
+if [[ -z "${SLURM_JOB_ID:-}" && "${MMML_LOCAL_GPU_PIN:-0}" == 1 && -z "${MMML_LOCAL_GPU_ASSIGNED:-}" ]]; then
+  export MMML_LOCAL_GPU_ASSIGNED=1
+  exec bash "$WORKFLOW_ROOT/scripts/with_local_gpu.sh" bash "$0" "$RUN_TAG"
+fi
+
 read -r SCHEDULER MLPOT_DEV CFG_MPI_NP MLPOT_PROF JAX_TIMERS <<<"$("$PY" -c "
 import sys
 from pathlib import Path
