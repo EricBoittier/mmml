@@ -198,7 +198,10 @@ def test_inspect_run_from_stdout(tmp_path: Path):
     # Point config output to tmp if using synthetic dir
     if str(out).startswith(str(tmp_path)):
         cfg = dict(cfg)
-        cfg["output_root"] = str(tmp_path.relative_to(REPO))
+        try:
+            cfg["output_root"] = str(tmp_path.relative_to(REPO))
+        except ValueError:
+            cfg["output_root"] = str(tmp_path)
         import yaml
 
         alt = tmp_path / "cfg.yaml"
