@@ -1,0 +1,79 @@
+# 2D dimer–dimer interaction scans (DES dimers solvent panel + CGENFF alkanes).
+#
+# Reference ML checkpoint trained on this chemical space:
+#   examples/ckpts_json/DESdimers_params.json
+#
+# Each unordered species pair (A,B) is scanned on a COM-separation grid.
+# Homodimers use RES:2; heterodimers use RES_A:1,RES_B:1.
+#
+# CGENFF note: linear n-heptane and n-octane are not in top_all36_cgenff.rtf.
+# Butane/pentane stereoisomers and n-hexane are included below.
+
+reference_checkpoint: examples/ckpts_json/DESdimers_params.json
+output_root: artifacts/des_dimer_pair_scans
+
+scan:
+  d_min: 3.0
+  d_max: 10.0
+  steps: 12
+  angle_deg: 60.0
+  spacing: 5.0
+
+backends:
+  charmm: true
+  xtb: true
+  orca_mp2: true
+
+xtb:
+  method: GFN2-xTB
+
+orca_mp2:
+  method: MP2
+  basis: def2-SVP
+  pal: 4
+
+# Species tags must be unique. ``residue`` is the CGENFF RESI name.
+species:
+  - tag: water
+    residue: TIP3
+    label: water
+  - tag: dcm
+    residue: DCM
+    label: dichloromethane
+  - tag: aco
+    residue: ACO
+    label: acetone
+  - tag: etoh
+    residue: ETOH
+    label: ethanol
+  - tag: meoh
+    residue: MEOH
+    label: methanol
+  - tag: etha
+    residue: ETHA
+    label: ethane
+  - tag: benz
+    residue: BENZ
+    label: benzene
+  - tag: buta_n
+    residue: BUTA
+    label: n-butane
+  - tag: buta_i
+    residue: IBUT
+    label: iso-butane
+  - tag: pent_n
+    residue: PENT
+    label: n-pentane
+  - tag: pent_neo
+    residue: NEOP
+    label: neopentane
+  - tag: hexa_n
+    residue: HEXA
+    label: n-hexane
+
+# Slurm defaults (optional cluster launch)
+slurm_partition: gpu
+slurm_cpus_per_task: 4
+slurm_mem_mb_per_cpu: 4000
+slurm_runtime_min: 720
+slurm_max_concurrent: 8

@@ -1,0 +1,16 @@
+executor: slurm
+jobs: 8
+latency-wait: 60
+retries: 1
+envvars:
+  - MMML_WORKFLOW_CONFIG
+  - ORCA
+  - OMPI_MCA_orte_abort_print_stack
+default-resources:
+  - cpu=1
+  - mem_mb=8000
+  - runtime=720
+  - slurm_partition=cpu
+  - mem_mb_per_cpu=4000
+  - cpus_per_task=4
+  - tasks=1

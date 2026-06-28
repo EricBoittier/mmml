@@ -1,0 +1,59 @@
+configfile: "config.yaml"
+
+import sys
+from pathlib import Path
+
+_SCRIPTS = Path(workflow.basedir) / "scripts"
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+
+from scan_lib import iter_pairs, load_config  # noqa: E402
+
+_CFG = load_config(Path(workflow.basedir) / "config.yaml")
+_PAIR_TAGS = [p.tag for p in iter_pairs(_CFG)]
+_OUTPUT_ROOT = str(_CFG.get("output_root", "artifacts/des_dimer_pair_scans"))
+_ARTIFACT_ROOT = f"../../{_OUTPUT_ROOT}"
+
+
+rule all:
+    input:
+        "results/summary.csv",
+        "results/summary.md",
+
+
+rule scan_pair:
+    output:
+        touch(f"{_ARTIFACT_ROOT}/{{pair}}/done.txt"),
+    log:
+        stdout=f"{_ARTIFACT_ROOT}/{{pair}}/stdout.log",
+    params:
+        workflow_dir=workflow.basedir,
+    resources:
+        cpu=1,
+        mem_mb=8000,
+        runtime=int(config.get("slurm_runtime_min", 720)),
+    shell:
+        """
+        set -euo pipefail
+        mkdir -p $(dirname {log.stdout})
+        bash {params.workflow_dir}/scripts/job_shell.sh {wildcards.pair} \
+          > {log.stdout} 2>&1
+        test -s {output}
+        """
+
+
+rule collect:
+    input:
+        expand(f"{_ARTIFACT_ROOT}/{{pair}}/done.txt", pair=_PAIR_TAGS),
+    output:
+        csv="results/summary.csv",
+        md="results/summary.md",
+    params:
+        workflow_dir=workflow.basedir,
+    shell:
+        """
+        python {params.workflow_dir}/scripts/collect_scans.py \
+          --config {params.workflow_dir}/config.yaml \
+          --output-csv {output.csv} \
+          --output-md {output.md}
+        """
