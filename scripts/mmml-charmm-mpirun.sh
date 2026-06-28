@@ -12,6 +12,10 @@
 #   MMML_MPI_GDB=1                     — gdb batch backtrace (np must be 1)
 #   MMML_MPI_VERBOSE=1                 — verbose PRRTE/PLM launch
 #   MMML_NO_MPI_ABORT_STACK=1          — disable the above MCA flags
+#
+# Orphan cleanup (Ctrl+C / prterun exit can leave rank-0 Python running):
+#   ./scripts/mmml-kill-orphans.sh           # dry-run list
+#   ./scripts/mmml-kill-orphans.sh --kill    # reap orphans before a new launch
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -112,9 +116,68 @@ if [[ "$MPI_NP" -gt 1 && ( "${MMML_MLPOT_SPATIAL_MPI:-}" == 1 || "${MMML_MLPOT_S
   export MMML_MPI_PIN_GPU_PER_RANK="${MMML_MPI_PIN_GPU_PER_RANK:-1}"
 fi
 
+MMML_MPIRUN_PID=""
+MMML_MPIRUN_PGID=""
+MMML_MPIRUN_RC=0
+MMML_MPI_CLEANUP_DONE=0
+MMML_MPI_TRAP_INSTALLED=0
+
+mmml_kill_orphan_workers() {
+  local quiet_flag=()
+  if [[ "${MMML_MPI_ORPHAN_CLEANUP_QUIET:-}" == 1 ]]; then
+    quiet_flag=(--quiet)
+  fi
+  "$ROOT/scripts/mmml-kill-orphans.sh" --kill "${quiet_flag[@]}" || true
+}
+
+mmml_mpi_cleanup() {
+  local reason=${1:-EXIT}
+  if [[ "$MMML_MPI_CLEANUP_DONE" == 1 ]]; then
+    return 0
+  fi
+  MMML_MPI_CLEANUP_DONE=1
+
+  if [[ -n "$MMML_MPIRUN_PID" ]] && kill -0 "$MMML_MPIRUN_PID" 2>/dev/null; then
+    echo "mmml-charmm-mpirun: stopping MPI job (${reason})..." >&2
+    if [[ -n "$MMML_MPIRUN_PGID" ]]; then
+      kill -TERM "-${MMML_MPIRUN_PGID}" 2>/dev/null || true
+    fi
+    kill -TERM "$MMML_MPIRUN_PID" 2>/dev/null || true
+    local deadline=$((SECONDS + 10))
+    while [[ "$SECONDS" -lt "$deadline" ]]; do
+      kill -0 "$MMML_MPIRUN_PID" 2>/dev/null || break
+      sleep 0.5
+    done
+    if kill -0 "$MMML_MPIRUN_PID" 2>/dev/null; then
+      if [[ -n "$MMML_MPIRUN_PGID" ]]; then
+        kill -KILL "-${MMML_MPIRUN_PGID}" 2>/dev/null || true
+      fi
+      kill -KILL "$MMML_MPIRUN_PID" 2>/dev/null || true
+    fi
+    wait "$MMML_MPIRUN_PID" 2>/dev/null || true
+  fi
+  MMML_MPIRUN_PID=""
+  MMML_MPIRUN_PGID=""
+
+  if [[ "$reason" != "EXIT" || "$MMML_MPIRUN_RC" -ne 0 ]]; then
+    mmml_kill_orphan_workers
+  fi
+}
+
+mmml_mpi_install_trap() {
+  if [[ "$MMML_MPI_TRAP_INSTALLED" == 1 ]]; then
+    return 0
+  fi
+  MMML_MPI_TRAP_INSTALLED=1
+  trap 'mmml_mpi_cleanup INT; exit 130' INT
+  trap 'mmml_mpi_cleanup TERM; exit 143' TERM
+  trap 'mmml_mpi_cleanup EXIT' EXIT
+}
+
 mmml_mpi_finish() {
   local rc=$1
   local label=$2
+  MMML_MPIRUN_RC=$rc
   MMML_MPI_EXIT_CODE="$rc" MMML_MPI_CRASH_ARGV0="$label" "$PY" - <<'PY' || true
 import os
 
@@ -129,11 +192,19 @@ PY
 }
 
 mmml_mpi_run() {
+  mmml_mpi_install_trap
   local -a cmd=( "$MPIRUN" -np "$MPI_NP" "${MPIRUN_EXTRA[@]}" "$@" )
   echo "mmml-charmm-mpirun: ${cmd[*]}" >&2
   set +e
-  "${cmd[@]}"
+  # New session so Ctrl+C can signal the whole prterun + rank-0 tree.
+  setsid "${cmd[@]}" &
+  MMML_MPIRUN_PID=$!
+  MMML_MPIRUN_PGID=$MMML_MPIRUN_PID
+  wait "$MMML_MPIRUN_PID"
   local rc=$?
+  MMML_MPIRUN_PID=""
+  MMML_MPIRUN_PGID=""
+  MMML_MPIRUN_RC=$rc
   set -e
   return "$rc"
 }
