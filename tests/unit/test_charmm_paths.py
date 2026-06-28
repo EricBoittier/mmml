@@ -1,0 +1,132 @@
+"""Tests for CHARMM path discovery."""
+
+from __future__ import annotations
+
+import os
+
+from mmml.interfaces.pycharmmInterface import charmm_paths
+
+
+def test_discover_repo_default_charmm_home(tmp_path):
+    repo = tmp_path / "repo"
+    chm = repo / "setup" / "charmm"
+    chm.mkdir(parents=True)
+    (chm / "libcharmm.dylib").write_bytes(b"stub")
+
+    home, lib = charmm_paths.resolve_charmm_paths(repo_root=repo, env={})
+
+    assert home == str(chm)
+    assert lib == str(chm)
+
+
+def test_discover_lib_in_setup_charmm_lib_subdir(tmp_path):
+    repo = tmp_path / "repo"
+    chm = repo / "setup" / "charmm"
+    lib_dir = chm / "lib"
+    lib_dir.mkdir(parents=True)
+    (lib_dir / "libcharmm.so").write_bytes(b"stub")
+
+    home, lib = charmm_paths.resolve_charmm_paths(repo_root=repo, env={})
+
+    assert home == str(chm)
+    assert lib == str(chm)
+
+
+def test_explicit_env_overrides_repo_default(tmp_path):
+    repo = tmp_path / "repo"
+    chm = repo / "setup" / "charmm"
+    chm.mkdir(parents=True)
+    (chm / "libcharmm.dylib").write_bytes(b"stub")
+    tier_lib = tmp_path / "tier" / "lib"
+    tier_lib.mkdir(parents=True)
+    (tier_lib / "libcharmm.so").write_bytes(b"tier")
+
+    home, lib = charmm_paths.resolve_charmm_paths(
+        repo_root=repo,
+        env={"CHARMM_LIB_DIR": str(tier_lib)},
+    )
+
+    assert lib == str(tier_lib)
+    assert home == str(chm)
+
+
+def test_charmmsetup_legacy_export_format(tmp_path):
+    repo = tmp_path / "repo"
+    custom = tmp_path / "custom"
+    custom.mkdir()
+    (repo / "CHARMMSETUP").write_text(
+        f"export CHARMM_HOME={custom}\nexport CHARMM_LIB_DIR={custom}\n",
+        encoding="utf-8",
+    )
+
+    home, lib = charmm_paths.resolve_charmm_paths(repo_root=repo, env={})
+
+    assert home == str(custom)
+    assert lib == str(custom)
+
+
+def test_charmmsetup_legacy_plain_format(tmp_path):
+    repo = tmp_path / "repo"
+    custom = tmp_path / "custom"
+    custom.mkdir()
+    (repo / "CHARMMSETUP").write_text(
+        f"CHARMM_HOME={custom}\nCHARMM_LIB_DIR={custom}\n",
+        encoding="utf-8",
+    )
+
+    home, lib = charmm_paths.resolve_charmm_paths(repo_root=repo, env={})
+
+    assert home == str(custom)
+    assert lib == str(custom)
+
+
+def test_env_beats_charmmsetup(tmp_path):
+    repo = tmp_path / "repo"
+    setup_dir = tmp_path / "from-setup"
+    env_dir = tmp_path / "from-env"
+    setup_dir.mkdir()
+    env_dir.mkdir()
+    (repo / "CHARMMSETUP").write_text(
+        f"CHARMM_HOME={setup_dir}\nCHARMM_LIB_DIR={setup_dir}\n",
+        encoding="utf-8",
+    )
+
+    home, lib = charmm_paths.resolve_charmm_paths(
+        repo_root=repo,
+        env={"CHARMM_HOME": str(env_dir), "CHARMM_LIB_DIR": str(env_dir)},
+    )
+
+    assert home == str(env_dir)
+    assert lib == str(env_dir)
+
+
+def test_bootstrap_charmm_env_sets_os_environ(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    chm = repo / "setup" / "charmm"
+    chm.mkdir(parents=True)
+    (chm / "libcharmm.so").write_bytes(b"stub")
+    monkeypatch.delenv("CHARMM_HOME", raising=False)
+    monkeypatch.delenv("CHARMM_LIB_DIR", raising=False)
+
+    home, lib = charmm_paths.bootstrap_charmm_env(repo_root=repo)
+
+    assert home == str(chm)
+    assert lib == str(chm)
+    assert os.environ["CHARMM_HOME"] == str(chm)
+    assert os.environ["CHARMM_LIB_DIR"] == str(chm)
+
+
+def test_charmm_lib_available_without_explicit_env(tmp_path, monkeypatch):
+    from mmml.interfaces.pycharmmInterface import charmm_mpi
+
+    repo = tmp_path / "repo"
+    chm = repo / "setup" / "charmm"
+    chm.mkdir(parents=True)
+    (chm / "libcharmm.so").write_bytes(b"stub")
+    monkeypatch.delenv("CHARMM_HOME", raising=False)
+    monkeypatch.delenv("CHARMM_LIB_DIR", raising=False)
+    monkeypatch.setattr(charmm_paths, "mmml_repo_root", lambda start=None: repo)
+
+    assert charmm_mpi.charmm_lib_available() is True
+    assert os.environ["CHARMM_HOME"] == str(chm)
+    assert os.environ["CHARMM_LIB_DIR"] == str(chm)

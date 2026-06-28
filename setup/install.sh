@@ -17,13 +17,13 @@ if [ ! -f "charmm/CMakeLists.txt" ]; then
 	tar -xf charmm.tar.xz charmm/CMakeLists.txt charmm/tool/cmake
 fi
 
-# Set environment variables
+# Optional legacy override (mmml auto-discovers setup/charmm when libcharmm is built).
 chmhome="export CHARMM_HOME=$PWD/charmm"
 chmlib="export CHARMM_LIB_DIR=$PWD/charmm"
 echo "$chmhome" > "$MMML_ROOT/CHARMMSETUP"
 echo "$chmlib" >> "$MMML_ROOT/CHARMMSETUP"
+echo "Wrote optional $MMML_ROOT/CHARMMSETUP (not required for import or pytest)"
 cat "$MMML_ROOT/CHARMMSETUP"
-source "$MMML_ROOT/CHARMMSETUP"
 
 # uv must run from project root (where pyproject.toml lives)
 cd "$MMML_ROOT"
@@ -41,9 +41,7 @@ uv sync
 echo "venv activated"
 echo "venv path: $VIRTUAL_ENV"
 echo "venv python path: $(which python)"
-UV_ENV_FILE="$MMML_ROOT/CHARMMSETUP"
-echo "UV_ENV_FILE: $UV_ENV_FILE"
-source "$UV_ENV_FILE"
+echo "PyCHARMM paths auto-discover setup/charmm after libcharmm is built (see scripts/rebuild_charmm_mlpot.sh)"
 echo "Setup complete"
 
 cd "$original_wd"
