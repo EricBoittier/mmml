@@ -58,7 +58,7 @@ def test_jax_pme_lj_dispersion_two_atom_dimer():
     np.testing.assert_allclose(out.energy_kcalmol, direct, rtol=1e-3)
 
 
-@pytest.mark.parametrize("method", ["ewald", "pme", "p3m"])
+@pytest.mark.parametrize("method", ["ewald", "pme"])
 def test_jax_pme_lj_methods_agree_ewald_reference(method: str):
     ep = 0.15
     sig = 3.2

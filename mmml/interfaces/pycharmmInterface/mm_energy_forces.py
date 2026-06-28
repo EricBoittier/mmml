@@ -556,7 +556,7 @@ def _wrap_mm_fn_with_jax_pme(
         if box_override is not None:
             return _box_length_from_cell_jax(box_override)
         if static_box_L is not None:
-            return jnp.asarray(static_box_L, dtype=jnp.float32)
+            return jnp.asarray(static_box_L)
         raise ValueError("jax_pme requires pbc_cell or box_override")
 
     def _add_pme(
