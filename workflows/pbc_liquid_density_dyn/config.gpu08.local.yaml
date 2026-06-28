@@ -1,19 +1,16 @@
-# Local dual-RTX-5090 (gpu08) — dense liquid-density matrix.
+# Local dual-RTX-5090 (gpu08) — DCM liquid-density at safe box sizes.
 #
-# Targets larger boxes and 100% bulk where NPR tier allows. DCM L=40 @ 100%
-# (N=602) exceeds xxxlarge tier and is marked optional/skipped by monitor.
+# DCM-only, L=28/32 Å (N ≤ 308 @ 100% bulk). No ACO; no L≥36 (OOM risk).
 #
 # Launch (both GPUs):
-#   nohup bash scripts/snakemake_local.sh >> snakemake_gpu08.log 2>&1 &
-#
-# Or production matrix on-node while Slurm runs elsewhere:
-#   MMML_WORKFLOW_CONFIG=config.yaml bash scripts/snakemake_local.sh
+#   MMML_WORKFLOW_CONFIG=config.gpu08.local.yaml \
+#     nohup bash scripts/snakemake_local.sh 2 >> snakemake_gpu08.log 2>&1 &
 
-solvents: [DCM, ACO]
+solvents: [DCM]
 bulk_density_fractions: [0.9, 1.0]
 bulk_density_n_min: 10
 temperatures: [300.0]
-box_sizes: [32.0, 36.0, 40.0]
+box_sizes: [28.0, 32.0]
 checkpoint: ${MMML_CKPT}
 output_root: artifacts/pbc_liquid_density_gpu08
 seed_base: 7272
@@ -95,6 +92,3 @@ slurm_gpu_nodes_slow: []
 slurm_max_concurrent_fast: 2
 slurm_gpu_nodes_fast:
   - gpu08
-
-optional_bulk_fractions: [1.0]
-optional_sizes: [602]

@@ -55,10 +55,16 @@ fi
 JOBS="${1:-$DEFAULT_JOBS}"
 shift || true
 
+UV="${MMML_UV:-}"
+if [[ -z "$UV" || ! -x "$UV" ]]; then
+  echo "ERROR: uv not found (set MMML_UV or install uv in ~/.local/bin)" >&2
+  exit 1
+fi
+
 echo "Snakemake Slurm: profile=${PROFILE} config=${CFG_PATH} MMML_CKPT=${MMML_CKPT:-<unset>} -j${JOBS} --resources ${DEFAULT_RES}" >&2
 
 # shellcheck disable=SC2086
-exec uv run --with snakemake --with snakemake-executor-plugin-slurm snakemake \
+exec "$UV" run --with snakemake --with snakemake-executor-plugin-slurm snakemake \
   --profile "$PROFILE" \
   "${CONFIG_ARGS[@]}" \
   -j"$JOBS" \

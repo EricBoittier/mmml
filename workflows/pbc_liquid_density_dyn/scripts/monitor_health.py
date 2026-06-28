@@ -63,12 +63,7 @@ CAMPAIGNS: list[dict[str, Any]] = [
         "driver_log": "snakemake_profile.log",
         "max_jobs": 2,
     },
-    {
-        "name": "large_boxes",
-        "config": "config.large_boxes.yaml",
-        "driver_log": "snakemake_large_boxes.log",
-        "max_jobs": 2,
-    },
+    # large_boxes (L=36,40) paused — OOM / stuck warmup; config.large_boxes.yaml kept for later.
     {
         "name": "gpu08_local",
         "config": "config.gpu08.local.yaml",
@@ -90,6 +85,13 @@ class FailureRule:
 
 # Known errors → mediation. Order matters: first match wins per scan pass.
 FAILURE_RULES: tuple[FailureRule, ...] = (
+    FailureRule(
+        "oom_kill",
+        re.compile(r"OUT_OF_MEMORY|Killed process|CUDA out of memory|slurmstepd: error: Detected \d+ oom", re.I),
+        "skip_manual",
+        max_retries=0,
+        note="reduce N or box size (OOM)",
+    ),
     FailureRule(
         "config_path",
         re.compile(r"FileNotFoundError.*config\.yaml", re.I),
@@ -347,8 +349,7 @@ def _submit_snakemake_target(cfg_path: Path, cell, *, campaign: str, dry_run: bo
     launcher = _launcher_script(campaign)
     cmd = f"MMML_WORKFLOW_CONFIG={cfg_path.name} bash scripts/{launcher} 1 {target}"
     if not dry_run:
-        env = os.environ.copy()
-        env["MMML_WORKFLOW_CONFIG"] = str(cfg_path)
+        env = _driver_subprocess_env(cfg_path)
         if launcher == "snakemake_local.sh":
             env["MMML_LOCAL_GPU_PIN"] = "1"
         subprocess.Popen(  # noqa: S603
@@ -519,6 +520,33 @@ def _mediate_cell(
     return actions
 
 
+def _driver_subprocess_env(cfg_path: Path) -> dict[str, str]:
+    """Environment for Snakemake driver subprocesses (cron-safe PATH + uv)."""
+    env = os.environ.copy()
+    home = Path.home()
+    path_parts = [env.get("PATH", "")]
+    for bindir in (home / ".local" / "bin", home / ".cargo" / "bin", home / "bin"):
+        if bindir.is_dir():
+            path_parts.insert(0, str(bindir))
+    env["PATH"] = ":".join(p for p in path_parts if p)
+    env["MMML_WORKFLOW_CONFIG"] = str(cfg_path)
+    env.setdefault("JAX_ENABLE_X64", "1")
+    if not env.get("MMML_CKPT"):
+        default_ckpt = (
+            "/mmhome/boittier/home/mmml_tutorial/acodcm/ckpts/"
+            "dcm1-c137fb42-1f65-4748-880b-8f8184a20f70"
+        )
+        if Path(default_ckpt).is_dir():
+            env["MMML_CKPT"] = default_ckpt
+    if not env.get("MMML_UV"):
+        import shutil
+
+        uv_bin = shutil.which("uv", path=env["PATH"])
+        if uv_bin:
+            env["MMML_UV"] = uv_bin
+    return env
+
+
 def _ensure_driver(spec: dict[str, Any], cfg_path: Path, *, incomplete: int, dry_run: bool) -> list[str]:
     actions: list[str] = []
     if incomplete <= 0:
@@ -531,8 +559,7 @@ def _ensure_driver(spec: dict[str, Any], cfg_path: Path, *, incomplete: int, dry
     cmd = f"nohup bash scripts/{launcher} {int(spec['max_jobs'])} >> {log.name} 2>&1 &"
     actions.append(f"start driver: MMML_WORKFLOW_CONFIG={cfg_path.name} {cmd}")
     if not dry_run:
-        env = os.environ.copy()
-        env["MMML_WORKFLOW_CONFIG"] = str(cfg_path)
+        env = _driver_subprocess_env(cfg_path)
         if launcher == "snakemake_local.sh":
             env["MMML_LOCAL_GPU_PIN"] = "1"
         subprocess.Popen(  # noqa: S603

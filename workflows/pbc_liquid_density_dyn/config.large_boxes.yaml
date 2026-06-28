@@ -1,3 +1,6 @@
+# PAUSED — L≥36 cells OOM or stall during MLpot warmup. Re-enable via monitor CAMPAIGNS
+# once nodes/memory are sized for N≥395 (DCM) / N≥341 (ACO).
+#
 # Liquid-density production at larger PBC cubes (L=36, 40 Å).
 # Uses 90% bulk fraction — 100% DCM L=40 (N=602, 3010 ML atoms) exceeds the
 # largest CHARMM NPR tier (56M pairs) until a custom tier is built.

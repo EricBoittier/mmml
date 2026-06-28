@@ -7,7 +7,7 @@
 # Matrix: solvents × bulk_density_fractions × temperatures × box_sizes
 # Output: artifacts/pbc_liquid_density_dyn/{solvent}_{n}_t{T}_l{L}/
 
-solvents: [DCM, ACO]
+solvents: [DCM]
 bulk_density_fractions: [0.9, 1.0]
 bulk_density_n_min: 10
 temperatures: [300.0]

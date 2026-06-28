@@ -2,8 +2,8 @@
 # Short dynamics + --mlpot-profile to measure ML vs CHARMM wall time per N.
 # 90% bulk keeps all cells within the xxxlarge CHARMM NPR tier (max N_ML≈2710).
 #
-# Matrix: DCM × bulk 90% × L ∈ {28, 32, 36, 40}  → 4 cells
-#   N = 186, 277, 395, 542 monomers
+# Matrix: DCM × bulk 90% × L ∈ {28, 32}  → 2 cells (N = 186, 277)
+# Larger boxes (L=36,40) paused — OOM / stuck warmup on current nodes.
 #
 # Launch:
 #   MMML_WORKFLOW_CONFIG=config.profile.gpu.yaml \
@@ -19,7 +19,7 @@ solvents: [DCM]
 bulk_density_fractions: [0.9]
 bulk_density_n_min: 10
 temperatures: [300.0]
-box_sizes: [28.0, 32.0, 36.0, 40.0]
+box_sizes: [28.0, 32.0]
 checkpoint: ${MMML_CKPT}
 output_root: artifacts/pbc_liquid_density_profile
 seed_base: 6262
