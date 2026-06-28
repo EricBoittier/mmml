@@ -419,6 +419,62 @@ def _get_actual_psf_charges(total_atoms: int) -> np.ndarray:
     return recovered_charges
 
 
+def _box_length_from_cell_jax(cell: Array) -> Array:
+    """Cubic orthorhombic edge length (Å) from a traced 3-vector or 3×3 cell."""
+    arr = jnp.asarray(cell, dtype=jnp.float64)
+    if arr.ndim == 0:
+        return arr
+    if arr.ndim == 1:
+        return arr.reshape(-1)[0]
+    return arr[0, 0]
+
+
+def _jax_pme_coulomb_pure_callback(
+    positions: Array,
+    box_length_A: Array,
+    *,
+    charges_np: np.ndarray,
+    method: str,
+    sr_cutoff_A: float,
+) -> Tuple[Array, Array]:
+    """Host jax-pme Coulomb energy/forces callable from inside ``jax.jit``."""
+    from mmml.interfaces.pycharmmInterface.long_range_backend import (
+        compute_jax_pme_coulomb,
+    )
+
+    pos_shape = positions.shape
+    out_dtype = jnp.float64
+    charges_host = np.asarray(charges_np, dtype=np.float64)
+    method_host = str(method)
+    sr_host = float(sr_cutoff_A)
+
+    def _host_fn(pos_np: np.ndarray, box_len_np: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        lr = compute_jax_pme_coulomb(
+            np.asarray(pos_np, dtype=np.float64),
+            charges_host,
+            box_length_A=float(np.asarray(box_len_np, dtype=np.float64).reshape(-1)[0]),
+            method=method_host,
+            sr_cutoff_A=sr_host,
+        )
+        return (
+            np.asarray(lr.energy_kcalmol, dtype=np.float64),
+            np.asarray(lr.forces_kcalmol_A, dtype=np.float64),
+        )
+
+    box_scalar = jnp.asarray(box_length_A, dtype=out_dtype).reshape(())
+    energy, forces = jax.pure_callback(
+        _host_fn,
+        (
+            jax.ShapeDtypeStruct((), out_dtype),
+            jax.ShapeDtypeStruct(pos_shape, out_dtype),
+        ),
+        positions,
+        box_scalar,
+        vectorized=False,
+    )
+    return energy, forces
+
+
 def _wrap_mm_fn_with_jax_pme_coulomb(
     mm_fn: Callable[..., Tuple[Array, Array]],
     *,
@@ -429,19 +485,37 @@ def _wrap_mm_fn_with_jax_pme_coulomb(
     dynamic: bool,
 ) -> Callable[..., Tuple[Array, Array]]:
     """Add jax-pme periodic Coulomb to a switched-LJ MM function (hybrid path)."""
-    from mmml.interfaces.pycharmmInterface.long_range_backend import (
-        box_length_from_cell,
-        compute_jax_pme_coulomb,
-    )
+    from mmml.interfaces.pycharmmInterface.long_range_backend import box_length_from_cell
 
     charges_host = np.asarray(charges_np, dtype=np.float64)
+    static_box_L: float | None = None
+    if pbc_cell is not None:
+        static_box_L = box_length_from_cell(np.asarray(pbc_cell))
 
-    def _box_length(box_override: Array | np.ndarray | None) -> float:
+    def _resolve_box_length(box_override: Array | None) -> Array:
         if box_override is not None:
-            return box_length_from_cell(np.asarray(jax.device_get(box_override)))
-        if pbc_cell is None:
-            raise ValueError("jax_pme Coulomb requires pbc_cell or box_override")
-        return box_length_from_cell(np.asarray(pbc_cell))
+            return _box_length_from_cell_jax(box_override)
+        if static_box_L is not None:
+            return jnp.asarray(static_box_L, dtype=jnp.float64)
+        raise ValueError("jax_pme Coulomb requires pbc_cell or box_override")
+
+    def _add_pme(
+        positions: Array,
+        box_len: Array,
+        e_lj: Array,
+        f_lj: Array,
+    ) -> Tuple[Array, Array]:
+        e_pme, f_pme = _jax_pme_coulomb_pure_callback(
+            positions,
+            box_len,
+            charges_np=charges_host,
+            method=method,
+            sr_cutoff_A=sr_cutoff_A,
+        )
+        return (
+            e_lj + jnp.asarray(e_pme, dtype=e_lj.dtype),
+            f_lj + jnp.asarray(f_pme, dtype=f_lj.dtype),
+        )
 
     if dynamic:
 
@@ -452,35 +526,13 @@ def _wrap_mm_fn_with_jax_pme_coulomb(
             box_override: Optional[Array] = None,
         ) -> Tuple[Array, Array]:
             e_lj, f_lj = mm_fn(positions, pair_idx, pair_mask, box_override=box_override)
-            pos_np = np.asarray(jax.device_get(positions), dtype=np.float64)
-            lr = compute_jax_pme_coulomb(
-                pos_np,
-                charges_host,
-                box_length_A=_box_length(box_override),
-                method=method,
-                sr_cutoff_A=sr_cutoff_A,
-            )
-            return (
-                e_lj + jnp.asarray(lr.energy_kcalmol, dtype=e_lj.dtype),
-                f_lj + jnp.asarray(lr.forces_kcalmol_A, dtype=f_lj.dtype),
-            )
+            return _add_pme(positions, _resolve_box_length(box_override), e_lj, f_lj)
 
         return wrapped
 
     def wrapped(positions: Array) -> Tuple[Array, Array]:
         e_lj, f_lj = mm_fn(positions)
-        pos_np = np.asarray(jax.device_get(positions), dtype=np.float64)
-        lr = compute_jax_pme_coulomb(
-            pos_np,
-            charges_host,
-            box_length_A=_box_length(None),
-            method=method,
-            sr_cutoff_A=sr_cutoff_A,
-        )
-        return (
-            e_lj + jnp.asarray(lr.energy_kcalmol, dtype=e_lj.dtype),
-            f_lj + jnp.asarray(lr.forces_kcalmol_A, dtype=f_lj.dtype),
-        )
+        return _add_pme(positions, _resolve_box_length(None), e_lj, f_lj)
 
     return wrapped
 
