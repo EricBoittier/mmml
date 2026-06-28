@@ -41,6 +41,7 @@ def compute_periodic_coulomb_kcalmol(
             chg,
             box_length_A=float(box_side_A),
             method=cfg.jax_pme_method,
+            sr_cutoff_A=float(cfg.jax_pme_sr_cutoff_A),
         )
         return float(result.energy_kcalmol), np.asarray(result.forces_kcalmol_A, dtype=np.float64)
 

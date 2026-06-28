@@ -193,7 +193,10 @@ The cubic edge must satisfy:
 | `SCAFACOS_METHOD` | `fcs_init` method string |
 | `SCAFACOS_LIB` | `load_scafacos_library()` |
 | `--lr-solver` (future) | staged-workflow / `md-system` |
-| `lr_solver: scafacos` (future) | `docs/md-system-configs.md` YAML |
+| `lr_solver: scafacos` | `docs/md-system-configs.md` YAML |
+| `jax_pme_method`, `jax_pme_sr_cutoff` | CLI / YAML / `JAX_PME_METHOD` env |
+| Tutorial | `docs/long-range-solver-tutorial.md` |
+| Solver sweep script | `scripts/run_dcm_long_range_workflow.sh` |
 
 ---
 

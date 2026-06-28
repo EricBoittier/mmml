@@ -1,0 +1,46 @@
+# Hybrid DCM liquid mini-run for long-range Coulomb solver comparison.
+#
+# Used by ~/mmml/scripts/run_dcm_long_range_workflow.sh (Phase B).
+# Override solver flags on the CLI or via LR_SOLVERS / JAX_PME_METHODS env.
+#
+# Quick manual run (jax-pme Ewald, switched LJ pairs):
+#   export MMML_CKPT=~/mmml/mmml/models/physnetjax/defaults/hf_json/<ckpt>.json
+#   MMML_MPI_NP=1 ~/mmml/scripts/mmml-charmm-mpirun.sh md-system \
+#     --config ~/mmml/mmml/cli/run/dcm_long_range_solvers.example.yaml \
+#     --from-psf ~/tests/boxes/dcm60_l32/model.psf \
+#     --from-crd ~/tests/boxes/dcm60_l32/model.crd \
+#     --lr-solver jax_pme --jax-pme-method ewald \
+#     --checkpoint "$MMML_CKPT" -o ~/tests/runs/dcm60_jax_pme_ewald
+
+include:
+  - presets/certified-box-handoff.yaml
+
+setup: pbc_npt
+backend: pycharmm
+composition: "DCM:60"
+skip_cluster_build: true
+output_dir: ~/tests/runs/dcm60_lr_solver_smoke
+
+# MM nonbond stack (see docs/long-range-solver-tutorial.md)
+mm_nonbond_mode: jax_mic          # jax_mic | periodic_external
+lr_solver: jax_pme                # mic | jax_pme | scafacos | auto
+jax_pme_method: ewald             # ewald | pme | p3m
+jax_pme_sr_cutoff: 6.0
+# scafacos_method: ewald           # when lr_solver=scafacos
+
+md_stages: mini
+mini_nstep: 30
+temperature: 300.0
+pressure: 1.0
+ml_batch_size: 64
+ml_gpu_count: 1
+
+charmm_pre_minimize: false
+bonded_mm_mini: false
+no_echeck: true
+max_grms_before_dyn: 80.0
+
+mm_switch_on: 9.0
+mm_switch_width: 1.5
+ml_switch_width: 1.0
+include_mm: true

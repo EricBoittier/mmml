@@ -32,6 +32,7 @@ class PeriodicMmConfig:
     lr_solver: str
     scafacos_method: str
     jax_pme_method: str = "ewald"
+    jax_pme_sr_cutoff_A: float = 6.0
     charmm_vdw: bool = True
 
     @property
@@ -92,10 +93,14 @@ def build_periodic_mm_config(args: Any | None) -> PeriodicMmConfig | None:
     jax_pme_method = resolve_jax_pme_method(
         getattr(args, "jax_pme_method", None) or os.environ.get("JAX_PME_METHOD")
     )
+    jax_pme_sr = getattr(args, "jax_pme_sr_cutoff", None)
+    if jax_pme_sr is None:
+        jax_pme_sr = os.environ.get("JAX_PME_SR_CUTOFF", "6.0")
     return PeriodicMmConfig(
         lr_solver=lr,
         scafacos_method=scafacos_method,
         jax_pme_method=jax_pme_method,
+        jax_pme_sr_cutoff_A=float(jax_pme_sr),
         charmm_vdw=resolve_periodic_charmm_vdw(args),
     )
 

@@ -3391,8 +3391,8 @@ def add_staged_md_args(parser: argparse.ArgumentParser) -> None:
         default="jax_mic",
         help=(
             "MM nonbond backend for MLpot. jax_mic (default): switched JAX LJ+Coulomb "
-            "to ~13 Å. periodic_external: ScaFaCoS Coulomb + CHARMM IMAGE VDW; "
-            "requires --setup pbc_*, libfcs, and adequate --box-size."
+            "to ~13 Å; use --lr-solver jax_pme for jax-pme Coulomb instead of MIC. "
+            "periodic_external: external Coulomb (jax_pme or scafacos) + CHARMM IMAGE VDW."
         ),
     )
     group.add_argument(
@@ -3401,15 +3401,29 @@ def add_staged_md_args(parser: argparse.ArgumentParser) -> None:
         choices=("auto", "mic", "scafacos", "jax_pme"),
         default=None,
         help=(
-            "Long-range Coulomb solver for periodic_external (default: env MMML_LR_SOLVER "
-            "or auto). periodic_external requires scafacos."
+            "Long-range Coulomb solver (default: env MMML_LR_SOLVER or auto). "
+            "jax_mic: mic or jax_pme; periodic_external: scafacos or jax_pme."
         ),
+    )
+    group.add_argument(
+        "--jax-pme-method",
+        type=str,
+        choices=("ewald", "pme", "p3m"),
+        default=None,
+        help="jax-pme method when --lr-solver=jax_pme (default: env JAX_PME_METHOD or ewald).",
+    )
+    group.add_argument(
+        "--jax-pme-sr-cutoff",
+        type=float,
+        default=None,
+        metavar="A",
+        help="jax-pme real-space cutoff Å (default 6.0).",
     )
     group.add_argument(
         "--scafacos-method",
         type=str,
         default=None,
-        help="ScaFaCoS fcs_init method when --mm-nonbond-mode=periodic_external (default: p2nfft).",
+        help="ScaFaCoS fcs_init method when --lr-solver=scafacos (default: ewald).",
     )
     group.add_argument(
         "--periodic-charmm-vdw",

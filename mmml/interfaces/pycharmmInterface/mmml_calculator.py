@@ -371,6 +371,9 @@ def setup_calculator(
     jax_md_skin_distance: float = DEFAULT_JAX_MD_SKIN_DISTANCE_A,
     ml_compute_dtype: str | None = None,
     defer_xla_gpu_warmup: bool = False,
+    lr_solver: str | None = None,
+    jax_pme_method: str | None = None,
+    jax_pme_sr_cutoff_A: float = 6.0,
 ):
     """Create hybrid ML/MM calculator with outputs in eV/eV-A.
 
@@ -1015,6 +1018,9 @@ def setup_calculator(
             debug=debug,
             ml_compute_dtype=ml_compute_dtype,
             defer_xla_gpu_warmup=defer_xla_gpu_warmup,
+            lr_solver=lr_solver,
+            jax_pme_method=jax_pme_method,
+            jax_pme_sr_cutoff_A=jax_pme_sr_cutoff_A,
         )
         if isinstance(result_jaxmd, tuple):
             mm_fn_jaxmd, update_fn = result_jaxmd
@@ -1048,6 +1054,9 @@ def setup_calculator(
                 debug=debug,
                 ml_compute_dtype=ml_compute_dtype,
                 defer_xla_gpu_warmup=defer_xla_gpu_warmup,
+                lr_solver=lr_solver,
+                jax_pme_method=jax_pme_method,
+                jax_pme_sr_cutoff_A=jax_pme_sr_cutoff_A,
             )
             return (mm_fn_jaxmd, mm_fn_cell), update_fn
         return result_jaxmd, None
