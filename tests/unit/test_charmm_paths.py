@@ -217,3 +217,31 @@ def test_charmm_fortran_path_noop_for_lowercase(tmp_path):
     fortran_path, alias = charmm_paths.charmm_fortran_path(path, for_write=True)
     assert alias is None
     assert fortran_path == str(path.resolve())
+
+
+def test_fortran_path_needs_alias_for_long_paths(tmp_path):
+    deep = tmp_path
+    for part in ("a" * 20, "b" * 20, "c" * 20, "d" * 20):
+        deep = deep / part
+    deep.mkdir(parents=True)
+    target = deep / "002_pre_mlpot_monomer_repack.crd"
+    assert len(str(target.resolve())) > charmm_paths.charmm_fortran_max_path_length()
+    assert charmm_paths.fortran_path_needs_alias(target)
+
+
+def test_charmm_io_alias_long_write_copy_back(tmp_path):
+    deep = tmp_path / "runs" / ("dcm5_l25_electro_compare_slurm203158")
+    deep = deep / "energy_jax_pme_ewald_mm" / "prep_ladder"
+    target = deep / "002_pre_mlpot_monomer_repack.crd"
+    assert len(str(target.resolve())) > charmm_paths.charmm_fortran_max_path_length()
+    staging = tmp_path / "staging"
+
+    alias = charmm_paths.charmm_io_alias(target, for_write=True, staging_root=staging)
+    assert alias is not None
+    assert len(alias.fortran_path) <= charmm_paths.charmm_fortran_max_path_length()
+    alias.alias.write_text("crd via alias\n", encoding="ascii")
+    assert not target.is_file()
+
+    alias.finalize()
+    assert target.is_file()
+    assert target.read_text(encoding="ascii") == "crd via alias\n"
