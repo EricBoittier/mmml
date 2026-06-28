@@ -1,22 +1,24 @@
-# PBC clusters at liquid bulk density → persistent PyCHARMM dynamics (no JAX-MD bursts).
+# Liquid-density production at larger PBC cubes (L=36, 40 Å).
+# Uses 90% bulk fraction — 100% DCM L=40 (N=602, 3010 ML atoms) exceeds the
+# largest CHARMM NPR tier (56M pairs) until a custom tier is built.
 #
-# Sibling: workflows/pbc_solvent_burst/ (heat + JAX-MD alternation).
-# This workflow targets equilibration + production MD at ρ ≈ bulk liquid using:
-#   liquid_prep + density_prep_ladder, cleanup ladder, mmml-charmm-mpirun, warmup-mlpot-jax
+# N at 90% bulk (298 K):
+#   L=36  DCM:395  ACO:341
+#   L=40  DCM:542  ACO:468
 #
-# Matrix: solvents × bulk_density_fractions × temperatures × box_sizes
-# Output: artifacts/pbc_liquid_density_dyn/{solvent}_{n}_t{T}_l{L}/
+# Launch:
+#   MMML_WORKFLOW_CONFIG=config.large_boxes.yaml \
+#     nohup bash scripts/snakemake_slurm.sh 4 > snakemake_large_boxes.log 2>&1 &
 
 solvents: [DCM, ACO]
-bulk_density_fractions: [0.9, 1.0]
+bulk_density_fractions: [0.9]
 bulk_density_n_min: 10
 temperatures: [300.0]
-box_sizes: [28.0, 32.0]
+box_sizes: [36.0, 40.0]
 checkpoint: ${MMML_CKPT}
-output_root: artifacts/pbc_liquid_density_dyn
-seed_base: 4242
+output_root: artifacts/pbc_liquid_density_dyn_large
+seed_base: 5252
 
-# Dynamics extent (per cell, all PyCHARMM)
 ps_heat: 10.0
 n_heat_segments: 5
 heat_firstt: 50.0
@@ -32,7 +34,6 @@ pressure: 1.0
 spacing: 4.0
 packmol_tolerance: 1.5
 
-# Resilient liquid-density prep (maps to mmml liquid-prep-dense preset knobs)
 liquid_prep: true
 density_prep_ladder: true
 density_prep_ladder_max_rounds: 5
@@ -44,7 +45,7 @@ min_intermonomer_atom_distance: 1.0
 max_grms_before_dyn: 50.0
 
 cleanup_strategy:
-  name: pbc_liquid_density_default
+  name: pbc_liquid_density_large
   charmm_mm:
     pretreat_on_pycharmm: true
     ps_heat: 2.0
@@ -79,7 +80,6 @@ ml_switch_width: 1.5
 ml_gpu_count: 1
 ml_batch_size: 2048
 
-# Serial JAX warmup before mpirun md-system (populates compile cache).
 warmup_mlpot_jax: true
 warmup_do_mm: false
 
@@ -87,8 +87,8 @@ mpirun_wrapper: ../../scripts/mmml-charmm-mpirun.sh
 MMML_MPI_NP: 1
 
 slurm_small_cluster_max_n: 30
-slurm_max_concurrent_fast: 10
-slurm_max_concurrent_slow: 8
+slurm_max_concurrent_fast: 6
+slurm_max_concurrent_slow: 4
 slurm_partition: gpu
 slurm_nodes: 1
 slurm_ntasks: 1

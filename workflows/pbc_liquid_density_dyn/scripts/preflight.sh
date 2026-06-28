@@ -24,7 +24,6 @@ from pathlib import Path
 import sys
 _BURST = Path('${WORKFLOW_ROOT}').parent / 'pbc_solvent_burst' / 'scripts'
 sys.path.insert(0, str(_BURST))
-# Workflow scripts must win over pbc_solvent_burst (also has campaign_lib.py).
 sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
 from bulk_density import bulk_reference_table, matrix_uses_bulk_density
 from campaign_lib import (

@@ -14,11 +14,16 @@ mmml_resolve_env "$REPO_ROOT"
 PY="${MMML_PYTHON}"
 
 PROFILE="${MMML_SNAKEMAKE_PROFILE:-profiles/slurm}"
-CFG="${MMML_WORKFLOW_CONFIG:-config.yaml}"
-if [[ "$CFG" == */* ]]; then
-  CFG_PATH="$(cd "$(dirname "$CFG")" && pwd)/$(basename "$CFG")"
+_cfg_raw="${MMML_WORKFLOW_CONFIG:-config.yaml}"
+if [[ "$_cfg_raw" = /* ]]; then
+  CFG="$_cfg_raw"
 else
-  CFG_PATH="${WORKFLOW_ROOT}/${CFG}"
+  CFG="$WORKFLOW_ROOT/$_cfg_raw"
+fi
+export MMML_WORKFLOW_CONFIG="$CFG"
+CONFIG_ARGS=()
+if [[ "$CFG" != "$WORKFLOW_ROOT/config.yaml" ]]; then
+  CONFIG_ARGS=(--configfile "$CFG")
 fi
 CONFIG_ARGS=(--configfile "$CFG_PATH")
 

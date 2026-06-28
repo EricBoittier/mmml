@@ -759,6 +759,7 @@ def prepare_serial_charmm_mpi_env() -> None:
         )
 
         pin_cuda_for_spatial_mpi()
+        os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
     if not _under_mpirun():
         scrub_stale_openmpi_env()
 

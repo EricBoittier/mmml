@@ -16,7 +16,13 @@ PY="${MMML_PYTHON}"
 
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 
-CFG="${MMML_WORKFLOW_CONFIG:-$WORKFLOW_ROOT/config.yaml}"
+_cfg_raw="${MMML_WORKFLOW_CONFIG:-$WORKFLOW_ROOT/config.yaml}"
+if [[ "$_cfg_raw" = /* ]]; then
+  CFG="$_cfg_raw"
+else
+  CFG="$WORKFLOW_ROOT/$_cfg_raw"
+fi
+export MMML_WORKFLOW_CONFIG="$CFG"
 
 read -r SCHEDULER MLPOT_DEV CFG_MPI_NP MLPOT_PROF JAX_TIMERS <<<"$("$PY" -c "
 import sys
@@ -92,7 +98,11 @@ eval "$(
 
 if [[ "$WARMUP_ENABLED" == "1" ]]; then
   echo "=== warmup-mlpot-jax (serial, before mpirun) ==="
-  unset OMPI_COMM_WORLD_SIZE PMI_SIZE PMIX_SIZE OMPI_COMM_WORLD_RANK 2>/dev/null || true
+  # Snakemake Slurm jobsteps export PMI/PMIX vars without a real mpirun launch.
+  # warmup-mlpot-jax must run serial with compile threads enabled.
+  while IFS= read -r _var; do
+    [[ -n "$_var" ]] && unset "$_var" 2>/dev/null || true
+  done < <(env | cut -d= -f1 | grep -E '^(OMPI_|PMI_|PMIX_|MPI_LOCALRANKID$|SLURM_MPI_TYPE$)' || true)
   WARMUP_ARGS="$("$PY" -c "
 import sys
 from pathlib import Path
@@ -103,7 +113,11 @@ cell = cell_from_tag(cfg, '${RUN_TAG}')
 print(' '.join(warmup_mlpot_argv(cfg, cell)))
 ")"
   # shellcheck disable=SC2086
-  if ! "$PY" -m mmml.cli.__main__ $WARMUP_ARGS; then
+  _warmup_extra=()
+  if [[ -n "${SLURM_JOB_ID:-}" ]]; then
+    _warmup_extra=(--allow-under-mpirun)
+  fi
+  if ! "$PY" -m mmml.cli.__main__ $WARMUP_ARGS "${_warmup_extra[@]}"; then
     echo "ERROR: warmup-mlpot-jax failed" >&2
     exit 1
   fi

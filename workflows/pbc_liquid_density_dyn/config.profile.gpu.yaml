@@ -1,25 +1,37 @@
-# Quick GPU smoke: DCM:32 in 25 Å PBC cube (~bulk liquid density).
-# Full matrix uses bulk_density_fractions in config.yaml (N≈186–308).
+# GPU MLpot scaling profile: DCM at ~90% bulk liquid density across box sizes.
+# Short dynamics + --mlpot-profile to measure ML vs CHARMM wall time per N.
+# 90% bulk keeps all cells within the xxxlarge CHARMM NPR tier (max N_ML≈2710).
 #
-# Run (on gpu node):
-#   MMML_WORKFLOW_CONFIG=config.smoke.gpu.yaml \
-#     bash scripts/job_shell.sh dcm_32_t300_l25
+# Matrix: DCM × bulk 90% × L ∈ {28, 32, 36, 40}  → 4 cells
+#   N = 186, 277, 395, 542 monomers
+#
+# Launch:
+#   MMML_WORKFLOW_CONFIG=config.profile.gpu.yaml \
+#     bash scripts/preflight.sh
+#   MMML_WORKFLOW_CONFIG=config.profile.gpu.yaml \
+#     nohup bash scripts/snakemake_slurm.sh 2 > snakemake_profile.log 2>&1 &
+#
+# Collect:
+#   MMML_WORKFLOW_CONFIG=config.profile.gpu.yaml \
+#     python scripts/collect_mlpot_profile.py
 
 solvents: [DCM]
-cluster_sizes: [32]
+bulk_density_fractions: [0.9]
+bulk_density_n_min: 10
 temperatures: [300.0]
-box_sizes: [25.0]
+box_sizes: [28.0, 32.0, 36.0, 40.0]
 checkpoint: ${MMML_CKPT}
-output_root: artifacts/pbc_liquid_density_dyn_smoke
-seed_base: 4242
+output_root: artifacts/pbc_liquid_density_profile
+seed_base: 6262
 
+# Enough MD for meaningful MLpot callback samples; keep total wall time modest.
 ps_heat: 2.0
 n_heat_segments: 2
 heat_firstt: 50.0
 heat_thermostat: hoover
-pycharmm_equi_ps: 5.0
+pycharmm_equi_ps: 3.0
 pycharmm_equi_legs: 1
-pycharmm_prod_ps: 5.0
+pycharmm_prod_ps: 10.0
 pycharmm_prod_legs: 1
 prod_ensemble: pbc_npt
 
@@ -27,6 +39,8 @@ dt_fs: 0.25
 pressure: 1.0
 spacing: 4.0
 packmol_tolerance: 1.5
+dcd_nsavc: 50
+dyn_nprint: 50
 
 liquid_prep: true
 density_prep_ladder: true
@@ -38,8 +52,10 @@ mc_density_steps: 40
 min_intermonomer_atom_distance: 1.0
 max_grms_before_dyn: 50.0
 
+mlpot_profile: true
+
 cleanup_strategy:
-  name: pbc_liquid_density_smoke
+  name: pbc_liquid_density_profile
   charmm_mm:
     pretreat_on_pycharmm: true
     ps_heat: 1.0
@@ -50,6 +66,7 @@ cleanup_strategy:
   mlpot:
     cleanup: true
     no_echeck_heat: true
+    no_echeck: true
     dynamics_overlap_action: rescue
     dynamics_overlap_min_distance: 1.5
     dynamics_intra_min_distance: 0.5
@@ -65,7 +82,6 @@ cleanup_strategy:
     dcd_nsavc: 50
     dyn_nprint: 50
     save_run_state: true
-    overlap_run_state_every_chunks: 4
   jaxmd_pbc: {}
 
 mm_switch_on: 8.0
@@ -79,3 +95,16 @@ warmup_do_mm: false
 
 mpirun_wrapper: ../../scripts/mmml-charmm-mpirun.sh
 MMML_MPI_NP: 1
+
+slurm_partition: gpu
+slurm_nodes: 1
+slurm_ntasks: 1
+slurm_cpus_per_task: 4
+slurm_mem_mb_per_cpu: 4000
+slurm_runtime_min: 1440
+slurm_max_concurrent_fast: 4
+slurm_gpu_nodes_fast:
+  - gpu08
+  - gpu09
+  - gpu10
+  - gpu11
