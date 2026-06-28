@@ -2234,6 +2234,7 @@ def prepare_mlpot_hybrid_state_for_sd(
     grms_limit: float | None,
     energy_limit: float | None,
     bonded_recovery_nstep: int,
+    bonded_recovery_backend: str = "auto",
     bonded_recovery_verbose: bool = False,
     bonded_recovery_show_energy: bool = False,
     bonded_recovery_nprint: int = 10,
@@ -2462,9 +2463,17 @@ def prepare_mlpot_hybrid_state_for_sd(
                 f"GRMS={hybrid_grms:.1f} kcal/mol/Å > {float(grms_limit):.1f}"
             )
         if diag.kind == "geometry_stress":
-            recovery_note = "bonded-MM SD (MLpot detached; may not lower hybrid GRMS)"
+            recovery_note = (
+                "bonded-MM mini (JAX preferred; may not lower hybrid GRMS)"
+                if str(bonded_recovery_backend).lower() != "charmm"
+                else "bonded-MM SD (MLpot detached; may not lower hybrid GRMS)"
+            )
         else:
-            recovery_note = "bonded-MM SD (MLpot detached)"
+            recovery_note = (
+                "bonded-MM mini (JAX preferred)"
+                if str(bonded_recovery_backend).lower() != "charmm"
+                else "bonded-MM SD (MLpot detached)"
+            )
         from mmml.utils.prep_ladder_report import PrepMetrics, emit_prep_phase
 
         emit_prep_phase(
@@ -2488,6 +2497,7 @@ def prepare_mlpot_hybrid_state_for_sd(
                 tolgrd=float(bonded_recovery_tolgrd),
                 verbose=bonded_recovery_verbose,
                 show_energy=bonded_recovery_show_energy,
+                backend=str(bonded_recovery_backend),
             ),
         )
         ran_bonded_recovery = True
@@ -3391,8 +3401,8 @@ def add_staged_md_args(parser: argparse.ArgumentParser) -> None:
         default="jax_mic",
         help=(
             "MM nonbond backend for MLpot. jax_mic (default): switched JAX LJ+Coulomb "
-            "to ~13 Å. periodic_external: ScaFaCoS Coulomb + CHARMM IMAGE VDW; "
-            "requires --setup pbc_*, libfcs, and adequate --box-size."
+            "to ~13 Å; use --lr-solver jax_pme for jax-pme Coulomb instead of MIC. "
+            "periodic_external: external Coulomb (jax_pme or scafacos) + CHARMM IMAGE VDW."
         ),
     )
     group.add_argument(
@@ -3401,15 +3411,29 @@ def add_staged_md_args(parser: argparse.ArgumentParser) -> None:
         choices=("auto", "mic", "scafacos", "jax_pme"),
         default=None,
         help=(
-            "Long-range Coulomb solver for periodic_external (default: env MMML_LR_SOLVER "
-            "or auto). periodic_external requires scafacos."
+            "Long-range Coulomb solver (default: env MMML_LR_SOLVER or auto). "
+            "jax_mic: mic or jax_pme; periodic_external: scafacos or jax_pme."
         ),
+    )
+    group.add_argument(
+        "--jax-pme-method",
+        type=str,
+        choices=("ewald", "pme", "p3m"),
+        default=None,
+        help="jax-pme method when --lr-solver=jax_pme (default: env JAX_PME_METHOD or ewald).",
+    )
+    group.add_argument(
+        "--jax-pme-sr-cutoff",
+        type=float,
+        default=None,
+        metavar="A",
+        help="jax-pme real-space cutoff Å (default 6.0).",
     )
     group.add_argument(
         "--scafacos-method",
         type=str,
         default=None,
-        help="ScaFaCoS fcs_init method when --mm-nonbond-mode=periodic_external (default: p2nfft).",
+        help="ScaFaCoS fcs_init method when --lr-solver=scafacos (default: ewald).",
     )
     group.add_argument(
         "--periodic-charmm-vdw",
@@ -3486,7 +3510,16 @@ def add_bonded_mm_mini_args(parser: argparse.ArgumentParser) -> None:
         "--bonded-mm-mini-steps",
         type=int,
         default=50,
-        help="SD steps for bonded-only recovery mini (default: 50)",
+        help="Steps for bonded-only recovery mini (default: 50)",
+    )
+    group.add_argument(
+        "--bonded-recovery-backend",
+        choices=("auto", "jax", "charmm"),
+        default="auto",
+        help=(
+            "Bonded recovery minimizer: JAX FIRE without MLpot detach (auto tries JAX "
+            "first), CHARMM SD with MLpot detach, or auto (default: auto)"
+        ),
     )
     group.add_argument(
         "--bonded-mm-mini-always",

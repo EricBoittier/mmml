@@ -684,15 +684,15 @@ def run_density_prep_ladder(
         step_label = f"round{round_idx + 1}:bonded_mm"
         try:
             from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
-                BondedMmMiniConfig,
+                bonded_mm_mini_config_from_namespace,
                 minimize_bonded_mm_recovery,
             )
 
             minimize_bonded_mm_recovery(
                 mlpot_ctx,
-                BondedMmMiniConfig(
+                bonded_mm_mini_config_from_namespace(
+                    args,
                     nstep_sd=bonded_steps,
-                    nprint=max(1, mini_nprint),
                     tolenr=float(getattr(args, "charmm_tolenr", 1e-3)),
                     tolgrd=float(getattr(args, "charmm_tolgrd", 1e-3)),
                     verbose=not quiet,

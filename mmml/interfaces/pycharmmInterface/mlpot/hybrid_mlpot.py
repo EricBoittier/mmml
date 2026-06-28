@@ -798,6 +798,21 @@ def build_decomposed_mlpot_model(
             f"Decomposed MLpot: max_pairs={int(max_pairs)} (PBC cell-list buffer)",
             flush=True,
         )
+    lr_solver = getattr(args, "lr_solver", None) if args is not None else None
+    jax_pme_method = getattr(args, "jax_pme_method", None) if args is not None else None
+    jax_pme_sr_cutoff = (
+        float(getattr(args, "jax_pme_sr_cutoff", 6.0) or 6.0)
+        if args is not None
+        else 6.0
+    )
+    if verbose and do_mm and lr_solver:
+        from mmml.interfaces.pycharmmInterface.long_range_backend import describe_lr_solver
+
+        print(
+            f"Decomposed MLpot: {describe_lr_solver(lr_solver)} "
+            f"(jax-pme method={jax_pme_method or 'ewald'}, sr_cutoff={jax_pme_sr_cutoff:.1f} Å)",
+            flush=True,
+        )
     factory = setup_calculator(
         ATOMS_PER_MONOMER=per,
         N_MONOMERS=int(n_monomers),
@@ -825,6 +840,9 @@ def build_decomposed_mlpot_model(
         min_com_restraint_force_const=(
             getattr(args, "min_com_restraint_k", 1.0) if args is not None else 1.0
         ),
+        lr_solver=lr_solver,
+        jax_pme_method=jax_pme_method,
+        jax_pme_sr_cutoff_A=jax_pme_sr_cutoff,
     )
     if verbose:
         from mmml.interfaces.pycharmmInterface.mlpot.setup import report_charmm_topology_summary

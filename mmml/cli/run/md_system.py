@@ -775,7 +775,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--bonded-mm-mini-steps",
         type=int,
         default=50,
-        help="pycharmm: bonded recovery SD steps (default: 50)",
+        help="pycharmm: bonded recovery mini steps (default: 50)",
+    )
+    parser.add_argument(
+        "--bonded-recovery-backend",
+        choices=("auto", "jax", "charmm"),
+        default="auto",
+        help=(
+            "pycharmm: bonded recovery minimizer — JAX FIRE without MLpot detach "
+            "(auto tries JAX first), CHARMM SD, or auto (default: auto)"
+        ),
     )
     parser.add_argument(
         "--bonded-mm-mini-always",
@@ -1049,13 +1058,33 @@ def build_parser() -> argparse.ArgumentParser:
         type=str,
         choices=("auto", "mic", "scafacos", "jax_pme"),
         default=None,
-        help="Long-range Coulomb solver when --mm-nonbond-mode=periodic_external.",
+        help=(
+            "Long-range Coulomb backend. jax_mic (default): mic=truncated MIC in the "
+            "pair loop; jax_pme=jax-pme Ewald/PME/P3M for Coulomb + switched LJ pairs. "
+            "periodic_external: scafacos or jax_pme for full-box Coulomb (+ CHARMM VDW)."
+        ),
+    )
+    parser.add_argument(
+        "--jax-pme-method",
+        type=str,
+        choices=("ewald", "pme", "p3m"),
+        default=None,
+        help=(
+            "jax-pme method when --lr-solver=jax_pme (default: env JAX_PME_METHOD or ewald)."
+        ),
+    )
+    parser.add_argument(
+        "--jax-pme-sr-cutoff",
+        type=float,
+        default=None,
+        metavar="A",
+        help="jax-pme real-space cutoff in Å (default 6.0).",
     )
     parser.add_argument(
         "--scafacos-method",
         type=str,
         default=None,
-        help="ScaFaCoS method (default p2nfft) for periodic_external.",
+        help="ScaFaCoS fcs_init method when --lr-solver=scafacos (default: ewald).",
     )
     parser.add_argument(
         "--periodic-charmm-vdw",
@@ -2146,6 +2175,12 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         )
         cmd.extend(
             [
+                "--bonded-recovery-backend",
+                str(getattr(args, "bonded_recovery_backend", "auto")),
+            ]
+        )
+        cmd.extend(
+            [
                 "--bonded-mm-internal-margin",
                 str(getattr(args, "bonded_mm_internal_margin", 0.0)),
             ]
@@ -2252,6 +2287,8 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         ["--mm-nonbond-mode", str(getattr(args, "mm_nonbond_mode", "jax_mic"))]
     )
     _append_optional(cmd, "--lr-solver", getattr(args, "lr_solver", None))
+    _append_optional(cmd, "--jax-pme-method", getattr(args, "jax_pme_method", None))
+    _append_optional(cmd, "--jax-pme-sr-cutoff", getattr(args, "jax_pme_sr_cutoff", None))
     _append_optional(cmd, "--scafacos-method", getattr(args, "scafacos_method", None))
     _append_boolean_optional_flag(
         cmd,
