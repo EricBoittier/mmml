@@ -1,0 +1,55 @@
+# Fast smoke: CHARMM-only, coarse grid — for report / plot pipeline validation.
+# Usage: MMML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 4
+
+reference_checkpoint: examples/ckpts_json/DESdimers_params.json
+output_root: artifacts/des_dimer_pair_scans_smoke
+
+scan:
+  d_min: 3.0
+  d_max: 8.0
+  steps: 5
+  angle_deg: 60.0
+  spacing: 5.0
+
+backends:
+  charmm: true
+  xtb: false
+  orca_mp2: false
+
+species:
+  - tag: water
+    residue: TIP3
+    label: water
+  - tag: dcm
+    residue: DCM
+    label: dichloromethane
+  - tag: aco
+    residue: ACO
+    label: acetone
+  - tag: etoh
+    residue: ETOH
+    label: ethanol
+  - tag: meoh
+    residue: MEOH
+    label: methanol
+  - tag: etha
+    residue: ETHA
+    label: ethane
+  - tag: benz
+    residue: BENZ
+    label: benzene
+  - tag: buta_n
+    residue: BUTA
+    label: n-butane
+  - tag: buta_i
+    residue: IBUT
+    label: iso-butane
+  - tag: pent_n
+    residue: PENT
+    label: n-pentane
+  - tag: pent_neo
+    residue: NEOP
+    label: neopentane
+  - tag: hexa_n
+    residue: HEXA
+    label: n-hexane

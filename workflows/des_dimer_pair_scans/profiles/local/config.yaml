@@ -1,0 +1,7 @@
+executor: local
+jobs: 2
+latency-wait: 30
+default-resources:
+  - cpu=1
+  - mem_mb=8000
+  - runtime=720
