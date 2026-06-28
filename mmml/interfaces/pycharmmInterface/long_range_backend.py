@@ -114,6 +114,130 @@ def warmup_jax_pme_coulomb_host(
     )
 
 
+def warmup_jax_pme_power_law_host(
+    positions_A: np.ndarray,
+    coefficients: np.ndarray,
+    *,
+    box_length_A: float,
+    method: JaxPmeMethod | str = "ewald",
+    sr_cutoff_A: float = DEFAULT_JAX_PME_SR_CUTOFF_A,
+    exponent: int = 1,
+    prefactor: float | None = None,
+) -> LongRangeInteractionResult:
+    """Compile/evaluate one host jax-pme power-law shape before production use."""
+    return compute_jax_pme_power_law(
+        positions_A,
+        coefficients,
+        box_length_A=float(box_length_A),
+        method=method,
+        sr_cutoff_A=float(sr_cutoff_A),
+        exponent=int(exponent),
+        prefactor=prefactor,
+    )
+
+
+def warmup_jax_pme_hybrid_host(
+    positions_A: np.ndarray,
+    charges_e: np.ndarray,
+    monomer_offsets: np.ndarray,
+    *,
+    box_length_A: float,
+    method: JaxPmeMethod | str = "ewald",
+    sr_cutoff_A: float = DEFAULT_JAX_PME_SR_CUTOFF_A,
+    c6_sqrt: np.ndarray | None = None,
+) -> dict[str, int]:
+    """Pre-warm full-system and representative intra jax-pme hybrid shapes.
+
+    The hybrid correction repeatedly evaluates the full system plus one
+    monomer-slice shape per unique monomer size, separately for Coulomb and
+    r^-6 dispersion.  This helper exercises those shapes with the production
+    method/cutoff so the first MLpot callback is less likely to absorb compile
+    and cache setup time.
+    """
+    from jaxpme import prefactors as jpref
+
+    pos = np.asarray(positions_A, dtype=np.float64)
+    charges = np.asarray(charges_e, dtype=np.float64).reshape(-1)
+    offsets = np.asarray(monomer_offsets, dtype=np.int64)
+    counts = {
+        "coulomb_full": 0,
+        "coulomb_intra": 0,
+        "dispersion_full": 0,
+        "dispersion_intra": 0,
+    }
+
+    def _nonzero(values: np.ndarray) -> bool:
+        arr = np.asarray(values, dtype=np.float64)
+        return arr.size > 0 and bool(np.any(arr != 0.0))
+
+    def _representative_slices() -> list[slice]:
+        seen: set[int] = set()
+        reps: list[slice] = []
+        for m in range(int(len(offsets) - 1)):
+            start = int(offsets[m])
+            stop = int(offsets[m + 1])
+            size = stop - start
+            if size <= 0 or size in seen:
+                continue
+            seen.add(size)
+            reps.append(slice(start, stop))
+        return reps
+
+    reps = _representative_slices()
+    if _nonzero(charges):
+        warmup_jax_pme_power_law_host(
+            pos,
+            charges,
+            box_length_A=float(box_length_A),
+            method=method,
+            sr_cutoff_A=float(sr_cutoff_A),
+            exponent=1,
+            prefactor=float(jpref.kcalmol_A),
+        )
+        counts["coulomb_full"] += 1
+        for sl in reps:
+            if not _nonzero(charges[sl]):
+                continue
+            warmup_jax_pme_power_law_host(
+                pos[sl],
+                charges[sl],
+                box_length_A=float(box_length_A),
+                method=method,
+                sr_cutoff_A=float(sr_cutoff_A),
+                exponent=1,
+                prefactor=float(jpref.kcalmol_A),
+            )
+            counts["coulomb_intra"] += 1
+
+    if c6_sqrt is not None:
+        c6 = np.asarray(c6_sqrt, dtype=np.float64).reshape(-1)
+        if _nonzero(c6):
+            warmup_jax_pme_power_law_host(
+                pos,
+                c6,
+                box_length_A=float(box_length_A),
+                method=method,
+                sr_cutoff_A=float(sr_cutoff_A),
+                exponent=6,
+                prefactor=DEFAULT_JAX_PME_LJ_PREFACTOR,
+            )
+            counts["dispersion_full"] += 1
+            for sl in reps:
+                if not _nonzero(c6[sl]):
+                    continue
+                warmup_jax_pme_power_law_host(
+                    pos[sl],
+                    c6[sl],
+                    box_length_A=float(box_length_A),
+                    method=method,
+                    sr_cutoff_A=float(sr_cutoff_A),
+                    exponent=6,
+                    prefactor=DEFAULT_JAX_PME_LJ_PREFACTOR,
+                )
+                counts["dispersion_intra"] += 1
+    return counts
+
+
 def have_jax_pme() -> bool:
     try:
         from jaxpme import Ewald, P3M, PME  # noqa: F401

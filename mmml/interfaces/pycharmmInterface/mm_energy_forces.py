@@ -752,11 +752,13 @@ def build_mm_energy_forces_fn(
     maybe_sanitize_process_env_for_ptxas()
     ml_jnp_dtype = resolve_ml_compute_dtype(ml_compute_dtype)
     from mmml.interfaces.pycharmmInterface.long_range_backend import (
+        box_length_from_cell,
         per_atom_jax_pme_c6_sqrt_for_atoms,
         per_atom_monomer_ids,
         pick_lr_solver,
         resolve_jax_pme_method,
         scale_per_atom_coefficients_by_monomer_lambda,
+        warmup_jax_pme_hybrid_host,
     )
 
     _use_jax_pme_coulomb = pick_lr_solver(lr_solver) == "jax_pme"
@@ -1033,6 +1035,24 @@ def build_mm_energy_forces_fn(
             monomer_ids=_monomer_ids_np,
             lambda_monomer=np.asarray(lambda_monomer, dtype=np.float64),
         )
+    if (
+        _use_jax_pme_coulomb
+        and pbc_cell is not None
+        and os.environ.get("MMML_JAX_PME_PREWARM", "1").strip() != "0"
+    ):
+        try:
+            warmup_jax_pme_hybrid_host(
+                np.asarray(R, dtype=np.float64),
+                _jax_pme_charges_np,
+                np.asarray(monomer_offsets, dtype=np.int64),
+                box_length_A=box_length_from_cell(np.asarray(pbc_cell, dtype=np.float64)),
+                method=_jax_pme_method,
+                sr_cutoff_A=_jax_pme_sr_cutoff,
+                c6_sqrt=_jax_pme_c6_sqrt_np,
+            )
+        except Exception as exc:
+            if debug:
+                print(f"WARNING: jax-pme hybrid prewarm skipped: {exc}", flush=True)
 
     _n_static_pairs = int(pair_idx_atom_atom.shape[0])
     if not _use_dynamic_nbrs and (_n_static_pairs == 0 or int(q_per_system.shape[0]) == 0):

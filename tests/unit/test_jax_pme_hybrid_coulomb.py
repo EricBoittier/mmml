@@ -8,6 +8,7 @@ import pytest
 from mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
     _mm_switch_scales,
     hybrid_jax_pme_coulomb_correction,
+    hybrid_jax_pme_mm_lr_correction,
     intra_monomer_jax_pme_coulomb,
 )
 from mmml.interfaces.pycharmmInterface.long_range_backend import compute_jax_pme_coulomb
@@ -171,3 +172,62 @@ def test_full_box_differs_from_cross_monomer_only():
     )
     cross_only = full.energy_kcalmol - intra.energy_kcalmol
     assert cross_only != pytest.approx(full.energy_kcalmol, rel=1e-3)
+
+
+def test_zero_charges_skip_jax_pme_calls(monkeypatch):
+    """Zero scaled charges return zero correction without full or intra solves."""
+
+    def _raise(*args, **kwargs):
+        raise AssertionError("jax-pme should not be called for zero charges")
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb.compute_jax_pme_coulomb",
+        _raise,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb.intra_monomer_jax_pme_coulomb",
+        _raise,
+    )
+    system = ion_dimer_system(separation_A=6.0, box_length_A=40.0)
+    offsets = np.array([0, 1, 2], dtype=np.int64)
+    corr = hybrid_jax_pme_coulomb_correction(
+        system.positions_A,
+        np.zeros_like(system.charges_e),
+        offsets,
+        box_length_A=system.box_length_A,
+        method="ewald",
+        sr_cutoff_A=6.0,
+        pbc_cell=np.eye(3) * system.box_length_A,
+    )
+    assert corr.energy_kcalmol == pytest.approx(0.0)
+    np.testing.assert_allclose(corr.forces_kcalmol_A, 0.0)
+
+
+def test_zero_coulomb_still_reuses_switch_scale_for_dispersion(monkeypatch):
+    """The combined correction can skip Coulomb while retaining dispersion scale."""
+
+    def _raise(*args, **kwargs):
+        raise AssertionError("Coulomb jax-pme should not be called for zero charges")
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb.compute_jax_pme_coulomb",
+        _raise,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb.intra_monomer_jax_pme_coulomb",
+        _raise,
+    )
+    system = ion_dimer_system(separation_A=6.0, box_length_A=40.0)
+    offsets = np.array([0, 1, 2], dtype=np.int64)
+    out = hybrid_jax_pme_mm_lr_correction(
+        system.positions_A,
+        np.zeros_like(system.charges_e),
+        offsets,
+        box_length_A=system.box_length_A,
+        method="ewald",
+        sr_cutoff_A=6.0,
+        c6_sqrt=np.zeros_like(system.charges_e),
+        pbc_cell=np.eye(3) * system.box_length_A,
+    )
+    assert out.energy_kcalmol == pytest.approx(0.0)
+    np.testing.assert_allclose(out.forces_kcalmol_A, 0.0)

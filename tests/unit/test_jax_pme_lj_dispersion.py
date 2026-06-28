@@ -14,6 +14,7 @@ from mmml.interfaces.pycharmmInterface.long_range_backend import (
     per_atom_jax_pme_c6_sqrt,
     per_atom_jax_pme_c6_sqrt_for_atoms,
     scale_per_atom_coefficients_by_monomer_lambda,
+    warmup_jax_pme_hybrid_host,
 )
 from tests.functionality.long_range._common import have_jax_pme_package
 
@@ -160,4 +161,72 @@ def test_hybrid_lj_dispersion_is_full_minus_intra_scaled():
         switch_scale * expected_f,
         rtol=1e-8,
     )
+
+
+def test_zero_c6_skips_lj_jax_pme_calls(monkeypatch):
+    """Zero scaled C6 returns a zero dispersion correction without jax-pme."""
+
+    def _raise(*args, **kwargs):
+        raise AssertionError("LJ jax-pme should not be called for zero C6")
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb.compute_jax_pme_lj_dispersion",
+        _raise,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb.intra_monomer_jax_pme_lj_dispersion",
+        _raise,
+    )
+    pos = np.array([[0.0, 0.0, 0.0], [5.0, 0.0, 0.0]])
+    offsets = np.array([0, 1, 2], dtype=np.int64)
+    corr = hybrid_jax_pme_lj_dispersion_correction(
+        pos,
+        np.zeros(2, dtype=np.float64),
+        offsets,
+        box_length_A=40.0,
+        method="ewald",
+        sr_cutoff_A=6.0,
+        switch_scale=0.5,
+    )
+    assert corr.energy_kcalmol == pytest.approx(0.0)
+    assert corr.switch_scale == pytest.approx(0.5)
+    np.testing.assert_allclose(corr.forces_kcalmol_A, 0.0)
+
+
+def test_hybrid_warmup_counts_unique_intra_shapes(monkeypatch):
+    calls: list[tuple[int, int]] = []
+
+    def _fake(positions, coefficients, **kwargs):
+        calls.append((int(kwargs["exponent"]), int(np.asarray(positions).shape[0])))
+        from mmml.interfaces.pycharmmInterface.long_range_backend import LongRangeInteractionResult
+
+        return LongRangeInteractionResult(
+            energy_kcalmol=0.0,
+            forces_kcalmol_A=np.zeros_like(np.asarray(positions, dtype=np.float64)),
+        )
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.warmup_jax_pme_power_law_host",
+        _fake,
+    )
+    pos = np.zeros((5, 3), dtype=np.float64)
+    charges = np.ones(5, dtype=np.float64)
+    c6 = np.ones(5, dtype=np.float64)
+    offsets = np.array([0, 2, 5], dtype=np.int64)
+    counts = warmup_jax_pme_hybrid_host(
+        pos,
+        charges,
+        offsets,
+        box_length_A=30.0,
+        method="ewald",
+        sr_cutoff_A=6.0,
+        c6_sqrt=c6,
+    )
+    assert counts == {
+        "coulomb_full": 1,
+        "coulomb_intra": 2,
+        "dispersion_full": 1,
+        "dispersion_intra": 2,
+    }
+    assert calls == [(1, 5), (1, 2), (1, 3), (6, 5), (6, 2), (6, 3)]
 
