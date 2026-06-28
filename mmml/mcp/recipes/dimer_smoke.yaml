@@ -56,8 +56,7 @@ stages:
       - md/campaign.yaml
 
   ir:
-    description: Dipole autocorrelation IR from MD trajectory
-    console_script: mmml-spectra-md
-    method: correlation
+    description: Classical CGENFF dipole autocorrelation IR (PhysNet ckpt has charges=False; not EField)
+    method: classical_cgenff
     outputs:
       - spectra/ir.png
