@@ -31,6 +31,7 @@ COMMAND_GROUPS: tuple[tuple[str, tuple[CommandInfo, ...]], ...] = (
             CommandInfo("lambda-mbar", "MBAR post-processing for lambda TI"),
             CommandInfo("warmup-mlpot-jax", "Serial JAX JIT warmup for MLpot"),
             CommandInfo("mpi-check", "Validate OpenMPI/CHARMM/mpi4py for MLpot"),
+            CommandInfo("health-check", "Validate MMML/PyCHARMM/JAX interface health"),
         ),
     ),
     (
@@ -85,6 +86,7 @@ EXAMPLE_BLOCKS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "mmml make-res --res CYBZ",
             "mmml make-box --res CYBZ --n 50 --side_length 25.0",
             "mmml liquid-box --composition DCM:206 --target-density-g-cm3 1.326 -o boxes/dcm206",
+            "mmml health-check --require-gpu",
         ),
     ),
     (

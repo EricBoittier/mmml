@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import sys
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
@@ -14,16 +16,33 @@ SCRIPTS = (
     / "pbc_solvent_burst"
     / "scripts"
 )
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
 
-from campaign_lib import RunCell  # noqa: E402
-from monitor_lib import (  # noqa: E402
-    grep_errors,
-    inspect_run,
-    parse_dyna_lines,
-    summarize_dyna,
-)
+
+def _load_script_module(name: str, path: Path) -> ModuleType:
+    cached = sys.modules.get(name)
+    if cached is not None:
+        return cached
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[name] = mod
+    old_path = sys.path[:]
+    if str(SCRIPTS) not in sys.path:
+        sys.path.insert(0, str(SCRIPTS))
+    try:
+        spec.loader.exec_module(mod)
+    finally:
+        sys.path[:] = old_path
+    return mod
+
+
+cl = _load_script_module("pbc_solvent_burst_campaign_lib", SCRIPTS / "campaign_lib.py")
+ml = _load_script_module("pbc_solvent_burst_monitor_lib", SCRIPTS / "monitor_lib.py")
+RunCell = cl.RunCell
+grep_errors = ml.grep_errors
+inspect_run = ml.inspect_run
+parse_dyna_lines = ml.parse_dyna_lines
+summarize_dyna = ml.summarize_dyna
 
 
 def test_parse_dyna_lines_fixed_width():
@@ -69,7 +88,8 @@ def test_inspect_run_pending(tmp_path, monkeypatch):
     }
     cell = RunCell(solvent="DCM", n_monomers=10, temperature=300.0, box_size=32.0)
     monkeypatch.setattr(
-        "monitor_lib.paths_for_run",
+        ml,
+        "paths_for_run",
         lambda _c, _cell: {
             "out_dir": out_dir,
             "campaign_yaml": out_dir / "campaign.yaml",
@@ -116,7 +136,7 @@ def test_inspect_run_running_with_dyna(tmp_path, monkeypatch):
             "done": out_dir / "done.txt",
         }
 
-    monkeypatch.setattr("monitor_lib.paths_for_run", fake_paths)
+    monkeypatch.setattr(ml, "paths_for_run", fake_paths)
     m = inspect_run(cfg, cell)
     assert m.status in {"running", "partial", "started"}
     assert m.dyna["n_frames"] == 2
@@ -159,7 +179,8 @@ def test_inspect_run_failed_from_summary(tmp_path, monkeypatch):
     cell = RunCell(solvent="DCM", n_monomers=10, temperature=300.0, box_size=32.0)
 
     monkeypatch.setattr(
-        "monitor_lib.paths_for_run",
+        ml,
+        "paths_for_run",
         lambda _c, _cell: {
             "out_dir": out_dir,
             "campaign_yaml": out_dir / "campaign.yaml",

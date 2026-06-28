@@ -9,27 +9,9 @@ cwd = Path(__file__).parent
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
-def _load_charmm_paths_from_setup() -> tuple[str | None, str | None]:
-    chmh: str | None = None
-    chml: str | None = None
-    setup_file = _REPO_ROOT / "CHARMMSETUP"
-    if not setup_file.is_file():
-        return chmh, chml
-    for line in setup_file.read_text(encoding="utf-8").splitlines():
-        if "CHARMM_HOME" in line and "=" in line:
-            chmh = line.split("=", 1)[1].strip()
-        if "CHARMM_LIB_DIR" in line and "=" in line:
-            chml = line.split("=", 1)[1].strip()
-    return chmh, chml
+from mmml.interfaces.pycharmmInterface.charmm_paths import bootstrap_charmm_env
 
-
-_setup_home, _setup_lib = _load_charmm_paths_from_setup()
-CHARMM_HOME = os.environ.get("CHARMM_HOME") or _setup_home or ""
-CHARMM_LIB_DIR = os.environ.get("CHARMM_LIB_DIR") or _setup_lib or ""
-if CHARMM_HOME:
-    os.environ.setdefault("CHARMM_HOME", CHARMM_HOME)
-if CHARMM_LIB_DIR:
-    os.environ.setdefault("CHARMM_LIB_DIR", CHARMM_LIB_DIR)
+CHARMM_HOME, CHARMM_LIB_DIR = bootstrap_charmm_env(repo_root=_REPO_ROOT)
 
 
 def _ensure_vendored_pycharmm_on_path() -> None:

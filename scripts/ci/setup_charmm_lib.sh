@@ -62,5 +62,5 @@ fi
   echo "export CHARMM_LIB_DIR=$CHARMM_HOME"
 } >"$CHARMMSETUP"
 
-echo "Wrote $CHARMMSETUP"
+echo "Wrote optional $CHARMMSETUP (not required; mmml auto-discovers setup/charmm)"
 echo "libcharmm.so: $CHARMM_HOME/libcharmm.so ($(du -h "$CHARMM_HOME/libcharmm.so" | awk '{print $1}'))"

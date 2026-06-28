@@ -2,41 +2,63 @@
 
 from __future__ import annotations
 
+import importlib.util
 import sys
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 import yaml
 
 WORKFLOW = Path(__file__).resolve().parents[2] / "workflows" / "pbc_solvent_burst"
 SCRIPTS = WORKFLOW / "scripts"
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
+_CAMPAIGN_MOD = "pbc_solvent_burst_campaign_lib"
+_CLEANUP_MOD = "pbc_solvent_burst_cleanup_strategy"
 
-from campaign_lib import (  # noqa: E402
-    RunCell,
-    build_campaign,
-    build_md_system_campaign_argv,
-    campaign_job_order,
-    cell_from_cli,
-    cell_from_tag,
-    cell_run_tag,
-    cell_slurm_tier,
-    composition_string,
-    iter_matrix_cells,
-    load_config,
-    matrix_job_count,
-    slurm_launch_jobs,
-    slurm_max_concurrent,
-    slurm_nodelist_for_tier,
-    slurm_tier_enabled,
-    slurm_tier_resource_pools,
-    total_jaxmd_ps,
-    total_pycharmm_equi_ps,
-)
-from cleanup_strategy import resolve_cleanup_strategy  # noqa: E402
-from cleanup_strategy import resolve_pycharmm_heat_thermostat  # noqa: E402
-from cleanup_strategy import dense_cell_mlpot_overrides  # noqa: E402
+
+def _load_script_module(name: str, path: Path) -> ModuleType:
+    cached = sys.modules.get(name)
+    if cached is not None:
+        return cached
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[name] = mod
+    old_path = sys.path[:]
+    if str(SCRIPTS) not in sys.path:
+        sys.path.insert(0, str(SCRIPTS))
+    try:
+        spec.loader.exec_module(mod)
+    finally:
+        sys.path[:] = old_path
+    return mod
+
+
+cl = _load_script_module(_CAMPAIGN_MOD, SCRIPTS / "campaign_lib.py")
+cs = _load_script_module(_CLEANUP_MOD, SCRIPTS / "cleanup_strategy.py")
+
+RunCell = cl.RunCell
+build_campaign = cl.build_campaign
+build_md_system_campaign_argv = cl.build_md_system_campaign_argv
+campaign_job_order = cl.campaign_job_order
+cell_from_cli = cl.cell_from_cli
+cell_from_tag = cl.cell_from_tag
+cell_run_tag = cl.cell_run_tag
+cell_slurm_tier = cl.cell_slurm_tier
+composition_string = cl.composition_string
+iter_matrix_cells = cl.iter_matrix_cells
+load_config = cl.load_config
+matrix_job_count = cl.matrix_job_count
+slurm_launch_jobs = cl.slurm_launch_jobs
+slurm_max_concurrent = cl.slurm_max_concurrent
+slurm_nodelist_for_tier = cl.slurm_nodelist_for_tier
+slurm_tier_enabled = cl.slurm_tier_enabled
+slurm_tier_resource_pools = cl.slurm_tier_resource_pools
+total_jaxmd_ps = cl.total_jaxmd_ps
+total_pycharmm_equi_ps = cl.total_pycharmm_equi_ps
+resolve_cleanup_strategy = cs.resolve_cleanup_strategy
+resolve_pycharmm_heat_thermostat = cs.resolve_pycharmm_heat_thermostat
+dense_cell_mlpot_overrides = cs.dense_cell_mlpot_overrides
 
 
 @pytest.fixture

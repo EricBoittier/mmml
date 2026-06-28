@@ -21,38 +21,21 @@ def _repo_root() -> Path:
     return here.parents[4]
 
 
-def _read_charmmsetup() -> dict[str, str]:
-    out: dict[str, str] = {}
-    setup = _repo_root() / "CHARMMSETUP"
-    if not setup.is_file():
-        return out
-    for line in setup.read_text(encoding="utf-8").splitlines():
-        if "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        key = key.strip()
-        if key in ("CHARMM_HOME", "CHARMM_LIB_DIR"):
-            out[key] = value.strip()
-    return out
-
-
 def _charmm_home() -> Path | None:
-    home = (os.environ.get("CHARMM_HOME") or "").strip()
+    from mmml.interfaces.pycharmmInterface.charmm_paths import resolve_charmm_paths
+
+    home, _ = resolve_charmm_paths(repo_root=_repo_root())
     if home:
         return Path(home)
-    setup_home = _read_charmmsetup().get("CHARMM_HOME")
-    if setup_home:
-        return Path(setup_home)
     return None
 
 
 def _charmm_lib_dir() -> Path | None:
-    lib_dir = (os.environ.get("CHARMM_LIB_DIR") or "").strip()
+    from mmml.interfaces.pycharmmInterface.charmm_paths import resolve_charmm_paths
+
+    _, lib_dir = resolve_charmm_paths(repo_root=_repo_root())
     if lib_dir:
         return Path(lib_dir)
-    setup_lib = _read_charmmsetup().get("CHARMM_LIB_DIR")
-    if setup_lib:
-        return Path(setup_lib)
     return None
 
 
@@ -179,7 +162,7 @@ def mlpot_limits_status() -> MlpotLimitsStatus:
             *_CONSERVATIVE_LIMITS,
             source="conservative fallback (api_func.F90 not found)",
             note=(
-                "Set CHARMM_HOME or create CHARMMSETUP with CHARMM_HOME=...; "
+                "Build libcharmm under setup/charmm or set CHARMM_HOME; "
                 "expected setup/charmm/source/api/api_func.F90"
             ),
         )

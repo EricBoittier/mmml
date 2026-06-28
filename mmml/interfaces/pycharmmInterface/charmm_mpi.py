@@ -55,22 +55,10 @@ def _openmpi_env_without_launch() -> bool:
     return bool(os.environ.get("OMPI_COMM_WORLD_SIZE")) and not _under_mpirun()
 
 
-def _bootstrap_charmm_lib_dir_from_setup() -> None:
-    if os.environ.get("CHARMM_LIB_DIR"):
-        return
-    repo_root = Path(__file__).resolve().parents[3]
-    setup_file = repo_root / "CHARMMSETUP"
-    if not setup_file.is_file():
-        return
-    for line in setup_file.read_text(encoding="utf-8").splitlines():
-        if "CHARMM_LIB_DIR" in line and "=" in line:
-            os.environ.setdefault("CHARMM_LIB_DIR", line.split("=", 1)[1].strip())
-        if "CHARMM_HOME" in line and "=" in line:
-            os.environ.setdefault("CHARMM_HOME", line.split("=", 1)[1].strip())
-
-
 def _charmm_lib_path() -> Path | None:
-    _bootstrap_charmm_lib_dir_from_setup()
+    from mmml.interfaces.pycharmmInterface.charmm_paths import bootstrap_charmm_env
+
+    bootstrap_charmm_env()
     lib_dir = (os.environ.get("CHARMM_LIB_DIR") or "").strip()
     if not lib_dir:
         return None
