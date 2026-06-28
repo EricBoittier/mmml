@@ -122,9 +122,14 @@ def _resolve_checkpoint(path: Path | None) -> Path:
 
 def _default_atomic_numbers(n_monomers: int, atoms_per: int) -> list[int]:
     pattern = [6, 1, 1, 1, 8, 1, 1, 1, 1, 1]
-    if atoms_per != len(pattern):
-        return [6] + [1] * (atoms_per - 1)
-    return list(pattern) * int(n_monomers)
+    dcm_pattern = [6, 1, 1, 17, 1]
+    if atoms_per == len(dcm_pattern):
+        per = dcm_pattern
+    elif atoms_per != len(pattern):
+        per = [6] + [1] * (atoms_per - 1)
+    else:
+        per = pattern
+    return list(per) * int(n_monomers)
 
 
 class _WarmupBuildArgs:

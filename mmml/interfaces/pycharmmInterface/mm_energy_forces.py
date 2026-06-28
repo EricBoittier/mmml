@@ -342,6 +342,47 @@ def _build_cell_list_pairs_with_retry(
     raise RuntimeError("cell-list pair build failed without truncation error")
 
 
+def _warmup_jax_only() -> bool:
+    from mmml.interfaces.pycharmmInterface.mmml_calculator import _warmup_jax_only as _flag
+
+    return _flag()
+
+
+def _cgenff_type_for_atomic_number(z: int) -> str:
+    """Map element Z to a CGENFF type name for serial JAX warmup (no PSF)."""
+    return {
+        1: "HGA2",
+        6: "CG321",
+        7: "NG301",
+        8: "OT",
+        9: "FGA1",
+        17: "CLGA1",
+        35: "BRGA1",
+        53: "IGUA1",
+    }.get(int(z), "CG301")
+
+
+def warmup_synthetic_mm_atom_params(
+    atomic_numbers: np.ndarray,
+    *,
+    atc: Sequence[str],
+    cgenff_params_dict_q: dict[str, float],
+) -> tuple[np.ndarray, np.ndarray]:
+    """CGENFF charges and IAC indices for ``warmup-mlpot-jax --do-mm`` without a PSF."""
+    z = np.asarray(atomic_numbers, dtype=int).reshape(-1)
+    atc_list = list(atc)
+    type_names = [_cgenff_type_for_atomic_number(int(zi)) for zi in z]
+    at_codes = np.array(
+        [atc_list.index(name) if name in atc_list else 0 for name in type_names],
+        dtype=np.int32,
+    )
+    charges = np.array(
+        [float(cgenff_params_dict_q.get(name, 0.0)) for name in type_names],
+        dtype=np.float64,
+    )
+    return charges, at_codes
+
+
 def _get_actual_psf_charges(total_atoms: int) -> np.ndarray:
     """Fallback mechanism to recover original PSF charges when they have been zeroed.
 
@@ -659,6 +700,7 @@ def build_mm_energy_forces_fn(
     ep_scale: Optional[np.ndarray] = None,
     sig_scale: Optional[np.ndarray] = None,
     at_codes_override: Optional[np.ndarray] = None,
+    atomic_numbers: Optional[np.ndarray] = None,
     pbc_cell: Optional[np.ndarray] = None,
     max_pairs: Optional[int] = None,
     cell_list_safety_factor: float = 2.5,
@@ -913,17 +955,35 @@ def build_mm_energy_forces_fn(
     charges_full = _get_actual_psf_charges(total_atoms)
     at_codes_full = np.array(psf.get_iac(), dtype=np.int32)
     if charges_full.size == 0:
-        raise RuntimeError(
-            "PyCHARMM PSF has no atoms. Read or generate a PSF for this system before "
-            "building MM energy/forces (e.g. setupRes/setupBox or read.psf)."
-        )
-    if charges_full.size < total_atoms:
-        raise RuntimeError(
-            f"PyCHARMM PSF has {charges_full.size} atoms but the calculator expects "
-            f"{total_atoms}. Regenerate the PSF for the current system."
-        )
-    charges = charges_full[:total_atoms]
-    at_codes = at_codes_full[:total_atoms]
+        if _warmup_jax_only() and atomic_numbers is not None:
+            charges, at_codes = warmup_synthetic_mm_atom_params(
+                atomic_numbers,
+                atc=atc,
+                cgenff_params_dict_q=cgenff_params_dict_q,
+            )
+            if int(charges.shape[0]) != int(total_atoms):
+                raise RuntimeError(
+                    f"warmup synthetic MM params length {charges.shape[0]} != "
+                    f"expected {total_atoms} atoms"
+                )
+            if debug:
+                print(
+                    "warmup-mlpot-jax: synthetic CGENFF MM params (no PyCHARMM PSF)",
+                    flush=True,
+                )
+        else:
+            raise RuntimeError(
+                "PyCHARMM PSF has no atoms. Read or generate a PSF for this system before "
+                "building MM energy/forces (e.g. setupRes/setupBox or read.psf)."
+            )
+    else:
+        if charges_full.size < total_atoms:
+            raise RuntimeError(
+                f"PyCHARMM PSF has {charges_full.size} atoms but the calculator expects "
+                f"{total_atoms}. Regenerate the PSF for the current system."
+            )
+        charges = charges_full[:total_atoms]
+        at_codes = at_codes_full[:total_atoms]
     if at_codes_override is not None:
         at_codes_override_arr = np.array(at_codes_override)
         if at_codes_override_arr.shape[0] != at_codes.shape[0]:
