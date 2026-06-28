@@ -52,6 +52,7 @@ def test_explicit_env_overrides_repo_default(tmp_path):
 
 def test_charmmsetup_legacy_export_format(tmp_path):
     repo = tmp_path / "repo"
+    repo.mkdir()
     custom = tmp_path / "custom"
     custom.mkdir()
     (repo / "CHARMMSETUP").write_text(
@@ -67,6 +68,7 @@ def test_charmmsetup_legacy_export_format(tmp_path):
 
 def test_charmmsetup_legacy_plain_format(tmp_path):
     repo = tmp_path / "repo"
+    repo.mkdir()
     custom = tmp_path / "custom"
     custom.mkdir()
     (repo / "CHARMMSETUP").write_text(
@@ -82,6 +84,7 @@ def test_charmmsetup_legacy_plain_format(tmp_path):
 
 def test_env_beats_charmmsetup(tmp_path):
     repo = tmp_path / "repo"
+    repo.mkdir()
     setup_dir = tmp_path / "from-setup"
     env_dir = tmp_path / "from-env"
     setup_dir.mkdir()
