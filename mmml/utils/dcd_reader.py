@@ -111,16 +111,20 @@ def read_dcd_trajectory(
     path: PathLike,
     *,
     max_frames: int | None = None,
+    frame_stride: int = 1,
     require_complete: bool = True,
 ) -> tuple[np.ndarray, dict[str, int | float | bool]]:
     """Read frames from a CHARMM/NAMD DCD file.
 
     Parameters
     ----------
+    frame_stride
+        Keep every Nth frame while reading (1 = all readable frames).
     require_complete
         If True (default), raise when the file ends before the header frame count.
     """
     path = Path(path)
+    frame_stride = max(1, int(frame_stride))
     readable, header_frames, truncated = scan_dcd_frame_count(path)
     if readable == 0:
         raise ValueError(f"No frames read from DCD: {path}")
@@ -131,12 +135,13 @@ def read_dcd_trajectory(
         )
     limit = readable if require_complete else readable
     if max_frames is not None:
-        limit = min(limit, int(max_frames))
+        limit = min(limit, int(max_frames) * frame_stride)
 
     with path.open("rb") as f:
         n_frames, n_atoms, nsavc, dt, has_unitcell = _read_dcd_header(f)
         frames: list[np.ndarray] = []
         n_read = 0
+        n_kept = 0
         while n_read < limit:
             if has_unitcell:
                 rec = struct.unpack("<i", f.read(4))[0]
@@ -155,7 +160,11 @@ def read_dcd_trajectory(
             struct.unpack("<i", f.read(4))[0]
             if x.size != n_atoms:
                 break
-            frames.append(np.stack([x, y, z], axis=1).astype(np.float64))
+            if n_read % frame_stride == 0:
+                frames.append(np.stack([x, y, z], axis=1).astype(np.float64))
+                n_kept += 1
+                if max_frames is not None and n_kept >= int(max_frames):
+                    break
             n_read += 1
 
     if not frames:
@@ -168,4 +177,5 @@ def read_dcd_trajectory(
         "dt": float(dt),
         "header_n_frames": header_frames,
         "truncated": truncated,
+        "frame_stride": frame_stride,
     }

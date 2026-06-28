@@ -126,9 +126,9 @@ def cmd_cell(args: argparse.Namespace) -> int:
         out.mkdir(parents=True, exist_ok=True)
         write_trajectory_json(traj, out / "trajectory.json")
         _write_dyna_plot(monitor, out)
-        rdf = traj.get("trajectory", {}).get("rdf", {})
-        if plot_rdf_png(rdf, out / "rdf.png", title=f"{args.tag} g(r)"):
-            print(f"Wrote {out / 'rdf.png'}")
+        rdf = traj.get("trajectory", {}).get("pair_rdf", {})
+        if plot_rdf_png(rdf, out / "pair_rdf.png", title=f"{args.tag} pair g(r)"):
+            print(f"Wrote {out / 'pair_rdf.png'}")
         print(f"Wrote bundle under {out}")
     return 0
 
@@ -180,10 +180,10 @@ def cmd_collect(args: argparse.Namespace) -> int:
         traj = analyze_cell_trajectories(Path(m.out_dir), stride=args.stride, max_frames=args.max_frames)
         write_trajectory_json(traj, cell_dir / "trajectory.json")
         entry["trajectory"] = traj.get("trajectory", {})
-        rdf = entry["trajectory"].get("rdf", {})
-        if plot_rdf_png(rdf, cell_dir / "rdf.png", title=f"{m.run_tag} g(r)"):
+        rdf = entry["trajectory"].get("pair_rdf") or entry["trajectory"].get("rdf") or {}
+        if plot_rdf_png(rdf, cell_dir / "pair_rdf.png", title=f"{m.run_tag} pair g(r)"):
             n_rdf += 1
-            entry["rdf_plot"] = str(cell_dir / "rdf.png")
+            entry["rdf_plot"] = str(cell_dir / "pair_rdf.png")
 
         manifest.append(entry)
 
