@@ -71,13 +71,17 @@ echo "Snakemake Slurm: profile=${PROFILE} config=${CFG_PATH} MMML_CKPT=${MMML_CK
 # Stale lock after a killed driver or overlapping launch attempts.
 # --no-project: avoid broken namespace packages in .venv (e.g. pyarrow NFS stubs)
 # shadowing deps required by snakemake-executor-plugin-slurm/pandas.
-"$UV" run --no-project --with snakemake --with snakemake-executor-plugin-slurm snakemake \
+# --python 3.12: project .venv is 3.13; uv would otherwise reuse it and still
+# import the broken pyarrow namespace from site-packages.
+unset VIRTUAL_ENV
+_SNAKE_UV=(run --no-project --python 3.12 --with snakemake --with snakemake-executor-plugin-slurm)
+"$UV" "${_SNAKE_UV[@]}" snakemake \
   --profile "$PROFILE" \
   "${CONFIG_ARGS[@]}" \
   --unlock 2>/dev/null || true
 
 # shellcheck disable=SC2086
-exec "$UV" run --no-project --with snakemake --with snakemake-executor-plugin-slurm snakemake \
+exec "$UV" "${_SNAKE_UV[@]}" snakemake \
   --profile "$PROFILE" \
   "${CONFIG_ARGS[@]}" \
   -j"$JOBS" \
