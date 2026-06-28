@@ -1,0 +1,173 @@
+"""Unit tests for hybrid jax-pme Coulomb intra-monomer subtraction."""
+
+from __future__ import annotations
+
+import numpy as np
+import pytest
+
+from mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
+    _mm_switch_scales,
+    hybrid_jax_pme_coulomb_correction,
+    intra_monomer_jax_pme_coulomb,
+)
+from mmml.interfaces.pycharmmInterface.long_range_backend import compute_jax_pme_coulomb
+from tests.functionality.long_range._common import (
+    have_jax_pme_package,
+    ion_dimer_system,
+)
+
+pytestmark = pytest.mark.skipif(
+    not have_jax_pme_package(),
+    reason="jax-pme not installed",
+)
+
+
+def test_intra_monomer_jax_pme_sums_per_monomer():
+    """Intra term is the sum of single-monomer jax-pme evaluations."""
+    system = ion_dimer_system(separation_A=6.0, box_length_A=40.0)
+    offsets = np.array([0, 1, 2], dtype=np.int64)
+    intra = intra_monomer_jax_pme_coulomb(
+        system.positions_A,
+        system.charges_e,
+        offsets,
+        box_length_A=system.box_length_A,
+        method="ewald",
+        sr_cutoff_A=6.0,
+    )
+    e0 = compute_jax_pme_coulomb(
+        system.positions_A[0:1],
+        system.charges_e[0:1],
+        box_length_A=system.box_length_A,
+        method="ewald",
+        sr_cutoff_A=6.0,
+    )
+    e1 = compute_jax_pme_coulomb(
+        system.positions_A[1:2],
+        system.charges_e[1:2],
+        box_length_A=system.box_length_A,
+        method="ewald",
+        sr_cutoff_A=6.0,
+    )
+    np.testing.assert_allclose(
+        intra.energy_kcalmol,
+        e0.energy_kcalmol + e1.energy_kcalmol,
+        rtol=1e-10,
+    )
+
+
+def test_hybrid_correction_is_full_minus_intra_scaled():
+    """MM Coulomb uses scale * (E_pme - E_intra), not the full periodic sum."""
+    system = ion_dimer_system(separation_A=6.0, box_length_A=40.0)
+    offsets = np.array([0, 1, 2], dtype=np.int64)
+    cell = np.eye(3) * system.box_length_A
+
+    full = compute_jax_pme_coulomb(
+        system.positions_A,
+        system.charges_e,
+        box_length_A=system.box_length_A,
+        method="ewald",
+        sr_cutoff_A=6.0,
+    )
+    intra = intra_monomer_jax_pme_coulomb(
+        system.positions_A,
+        system.charges_e,
+        offsets,
+        box_length_A=system.box_length_A,
+        method="ewald",
+        sr_cutoff_A=6.0,
+    )
+    corr = hybrid_jax_pme_coulomb_correction(
+        system.positions_A,
+        system.charges_e,
+        offsets,
+        box_length_A=system.box_length_A,
+        method="ewald",
+        sr_cutoff_A=6.0,
+        pbc_cell=cell,
+        mm_switch_on=6.0,
+        mm_switch_width=2.0,
+        ml_switch_width=1.0,
+        complementary_handoff=True,
+    )
+    expected_unscaled = full.energy_kcalmol - intra.energy_kcalmol
+    np.testing.assert_allclose(
+        corr.energy_kcalmol,
+        corr.switch_scale * expected_unscaled,
+        rtol=1e-10,
+    )
+    expected_f = full.forces_kcalmol_A - intra.forces_kcalmol_A
+    np.testing.assert_allclose(
+        corr.forces_kcalmol_A,
+        corr.switch_scale * expected_f,
+        rtol=1e-8,
+    )
+
+
+def test_intra_is_nonzero_for_periodic_single_ions():
+    """Each monomer in PBC carries a non-zero self/image jax-pme energy."""
+    system = ion_dimer_system(separation_A=6.0, box_length_A=40.0)
+    offsets = np.array([0, 1, 2], dtype=np.int64)
+    intra = intra_monomer_jax_pme_coulomb(
+        system.positions_A,
+        system.charges_e,
+        offsets,
+        box_length_A=system.box_length_A,
+        method="ewald",
+        sr_cutoff_A=6.0,
+    )
+    assert abs(intra.energy_kcalmol) > 1e-6
+
+
+def test_switch_scale_vanishes_for_distant_monomers():
+    """COM switching zeros MM Coulomb when monomers are outside the MM window."""
+    system = ion_dimer_system(separation_A=20.0, box_length_A=40.0)
+    offsets = np.array([0, 1, 2], dtype=np.int64)
+    cell = np.eye(3) * system.box_length_A
+    scales = _mm_switch_scales(
+        system.positions_A,
+        offsets,
+        ml_switch_width=1.0,
+        mm_switch_on=12.0,
+        mm_switch_width=1.0,
+        complementary_handoff=True,
+        pbc_cell=cell,
+        mm_r_min=None,
+    )
+    assert float(np.max(scales)) < 1e-6
+    corr = hybrid_jax_pme_coulomb_correction(
+        system.positions_A,
+        system.charges_e,
+        offsets,
+        box_length_A=system.box_length_A,
+        method="ewald",
+        sr_cutoff_A=6.0,
+        pbc_cell=cell,
+        mm_switch_on=12.0,
+        mm_switch_width=1.0,
+        ml_switch_width=1.0,
+        complementary_handoff=True,
+    )
+    assert abs(corr.energy_kcalmol) < 1e-3
+
+
+def test_full_box_differs_from_cross_monomer_only():
+    """Full-box jax-pme differs from full minus intra (intra term is material)."""
+    system = ion_dimer_system(separation_A=6.0, box_length_A=40.0)
+    offsets = np.array([0, 1, 2], dtype=np.int64)
+    full = compute_jax_pme_coulomb(
+        system.positions_A,
+        system.charges_e,
+        box_length_A=system.box_length_A,
+        method="ewald",
+        sr_cutoff_A=6.0,
+    )
+    intra = intra_monomer_jax_pme_coulomb(
+        system.positions_A,
+        system.charges_e,
+        offsets,
+        box_length_A=system.box_length_A,
+        method="ewald",
+        sr_cutoff_A=6.0,
+    )
+    cross_only = full.energy_kcalmol - intra.energy_kcalmol
+    assert cross_only != pytest.approx(full.energy_kcalmol, rel=1e-3)

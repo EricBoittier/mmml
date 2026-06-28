@@ -427,14 +427,44 @@ def _wrap_mm_fn_with_jax_pme_coulomb(
     method: str,
     sr_cutoff_A: float,
     dynamic: bool,
+    monomer_offsets: np.ndarray,
+    monomer_id_np: np.ndarray,
+    lambda_monomer: np.ndarray,
+    ml_switch_width: float,
+    mm_switch_on: float,
+    mm_switch_width: float,
+    complementary_handoff: bool,
+    mm_r_min: float | None,
+    static_pair_i: np.ndarray | None = None,
+    static_pair_j: np.ndarray | None = None,
+    static_pair_mask: np.ndarray | None = None,
 ) -> Callable[..., Tuple[Array, Array]]:
-    """Add jax-pme periodic Coulomb to a switched-LJ MM function (hybrid path)."""
-    from mmml.interfaces.pycharmmInterface.long_range_backend import (
-        box_length_from_cell,
-        compute_jax_pme_coulomb,
+    """Add jax-pme Coulomb (minus intra-monomer) to switched-LJ MM (hybrid path).
+
+    Pair loop supplies cross-monomer LJ with COM switching; this wrapper adds
+    ``scale * (E_pme - E_intra)`` so intra-monomer electrostatics stay in ML.
+    """
+    from mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
+        hybrid_jax_pme_coulomb_correction,
     )
+    from mmml.interfaces.pycharmmInterface.long_range_backend import box_length_from_cell
 
     charges_host = np.asarray(charges_np, dtype=np.float64)
+    offsets_host = np.asarray(monomer_offsets, dtype=np.int64)
+    monomer_id_host = np.asarray(monomer_id_np, dtype=np.int64)
+    lambda_host = np.asarray(lambda_monomer, dtype=np.float64)
+    pbc_host = np.asarray(pbc_cell, dtype=np.float64) if pbc_cell is not None else None
+    static_pi = (
+        None if static_pair_i is None else np.asarray(static_pair_i, dtype=np.int64)
+    )
+    static_pj = (
+        None if static_pair_j is None else np.asarray(static_pair_j, dtype=np.int64)
+    )
+    static_mask = (
+        None
+        if static_pair_mask is None
+        else np.asarray(static_pair_mask, dtype=np.float64)
+    )
 
     def _box_length(box_override: Array | np.ndarray | None) -> float:
         if box_override is not None:
@@ -442,6 +472,39 @@ def _wrap_mm_fn_with_jax_pme_coulomb(
         if pbc_cell is None:
             raise ValueError("jax_pme Coulomb requires pbc_cell or box_override")
         return box_length_from_cell(np.asarray(pbc_cell))
+
+    def _pbc_cell(box_override: Array | np.ndarray | None) -> np.ndarray | None:
+        if box_override is not None:
+            box_np = np.asarray(jax.device_get(box_override), dtype=np.float64)
+            return np.diag(box_np) if box_np.ndim == 1 else box_np
+        return pbc_host
+
+    def _lr_correction(
+        pos_np: np.ndarray,
+        box_override: Array | np.ndarray | None,
+        pair_i: np.ndarray | None,
+        pair_j: np.ndarray | None,
+        pair_mask: np.ndarray | None,
+    ):
+        return hybrid_jax_pme_coulomb_correction(
+            pos_np,
+            charges_host,
+            offsets_host,
+            box_length_A=_box_length(box_override),
+            method=method,
+            sr_cutoff_A=sr_cutoff_A,
+            pair_i=pair_i,
+            pair_j=pair_j,
+            pair_mask=pair_mask,
+            monomer_id=monomer_id_host,
+            lambda_monomer=lambda_host,
+            pbc_cell=_pbc_cell(box_override),
+            ml_switch_width=ml_switch_width,
+            mm_switch_on=mm_switch_on,
+            mm_switch_width=mm_switch_width,
+            complementary_handoff=complementary_handoff,
+            mm_r_min=mm_r_min,
+        )
 
     if dynamic:
 
@@ -451,35 +514,26 @@ def _wrap_mm_fn_with_jax_pme_coulomb(
             pair_mask: Array,
             box_override: Optional[Array] = None,
         ) -> Tuple[Array, Array]:
-            e_lj, f_lj = mm_fn(positions, pair_idx, pair_mask, box_override=box_override)
+            e_sr, f_sr = mm_fn(positions, pair_idx, pair_mask, box_override=box_override)
             pos_np = np.asarray(jax.device_get(positions), dtype=np.float64)
-            lr = compute_jax_pme_coulomb(
-                pos_np,
-                charges_host,
-                box_length_A=_box_length(box_override),
-                method=method,
-                sr_cutoff_A=sr_cutoff_A,
-            )
+            pair_i = np.asarray(jax.device_get(pair_idx[:, 0]), dtype=np.int64)
+            pair_j = np.asarray(jax.device_get(pair_idx[:, 1]), dtype=np.int64)
+            mask = np.asarray(jax.device_get(pair_mask), dtype=np.float64)
+            lr = _lr_correction(pos_np, box_override, pair_i, pair_j, mask)
             return (
-                e_lj + jnp.asarray(lr.energy_kcalmol, dtype=e_lj.dtype),
-                f_lj + jnp.asarray(lr.forces_kcalmol_A, dtype=f_lj.dtype),
+                e_sr + jnp.asarray(lr.energy_kcalmol, dtype=e_sr.dtype),
+                f_sr + jnp.asarray(lr.forces_kcalmol_A, dtype=f_sr.dtype),
             )
 
         return wrapped
 
     def wrapped(positions: Array) -> Tuple[Array, Array]:
-        e_lj, f_lj = mm_fn(positions)
+        e_sr, f_sr = mm_fn(positions)
         pos_np = np.asarray(jax.device_get(positions), dtype=np.float64)
-        lr = compute_jax_pme_coulomb(
-            pos_np,
-            charges_host,
-            box_length_A=_box_length(None),
-            method=method,
-            sr_cutoff_A=sr_cutoff_A,
-        )
+        lr = _lr_correction(pos_np, None, static_pi, static_pj, static_mask)
         return (
-            e_lj + jnp.asarray(lr.energy_kcalmol, dtype=e_lj.dtype),
-            f_lj + jnp.asarray(lr.forces_kcalmol_A, dtype=f_lj.dtype),
+            e_sr + jnp.asarray(lr.energy_kcalmol, dtype=e_sr.dtype),
+            f_sr + jnp.asarray(lr.forces_kcalmol_A, dtype=f_sr.dtype),
         )
 
     return wrapped
@@ -616,6 +670,10 @@ def build_mm_energy_forces_fn(
     at_flat_rm = np.array(at_rm)
 
     _dp = _dimer_permutations(n_monomers)
+    _offsets_np = np.array([int(monomer_offsets[k]) for k in range(len(monomer_offsets))])
+    _monomer_id_np = np.empty(total_atoms, dtype=np.int32)
+    for mi in range(n_monomers):
+        _monomer_id_np[_offsets_np[mi] : _offsets_np[mi + 1]] = mi
     # Smooth MIC avoids discontinuities at cell boundaries during minimization
     _use_smooth_mic = use_smooth_mic if use_smooth_mic is not None else (pbc_cell is not None)
     _resolved_nl_backend = resolve_mm_nl_backend(mm_nl_backend)
@@ -662,7 +720,6 @@ def build_mm_energy_forces_fn(
 
     if _use_rebuild_nbrs:
         _mm_switch_width_dist = mm_switch_on + mm_switch_width
-        _offsets_np = np.array([int(monomer_offsets[k]) for k in range(len(monomer_offsets))])
         _static_backend = pick_static_rebuild_backend(
             mm_nl_backend,
             use_jax_md_neighbor_list=False,
@@ -692,9 +749,6 @@ def build_mm_energy_forces_fn(
         _pair_idx_cell[0] = pair_idx_atom_atom
         _pair_mask_cell[0] = _cl_mask_jnp
 
-        _monomer_id_np = np.empty(total_atoms, dtype=np.int32)
-        for mi in range(n_monomers):
-            _monomer_id_np[_offsets_np[mi]:_offsets_np[mi + 1]] = mi
         _monomer_id_jnp = jnp.array(_monomer_id_np)
         _dimer_lookup_arr = np.full((n_monomers, n_monomers), -1, dtype=np.int32)
         for di, (mi, mj) in enumerate(_dp):
@@ -704,7 +758,6 @@ def build_mm_energy_forces_fn(
         n_pairs_per_dimer_arr = np.zeros(len(_dp), dtype=np.int32)
     elif _use_jax_md_nbrs:
         _mm_switch_width_dist = mm_switch_on + mm_switch_width
-        _offsets_np = np.array([int(monomer_offsets[k]) for k in range(len(monomer_offsets))])
         nbrs_init = _neighbor_fn_cell[0].allocate(np.asarray(R))
         _nbrs[0] = nbrs_init
         idx = nbrs_init.idx
@@ -718,9 +771,6 @@ def build_mm_energy_forces_fn(
         _cl_mask_jnp = jnp.asarray(mask, dtype=ml_jnp_dtype)
         _pair_idx_cell[0] = pair_idx_atom_atom
         _pair_mask_cell[0] = _cl_mask_jnp
-        _monomer_id_np = np.empty(total_atoms, dtype=np.int32)
-        for mi in range(n_monomers):
-            _monomer_id_np[_offsets_np[mi]:_offsets_np[mi + 1]] = mi
         _monomer_id_jnp = jnp.array(_monomer_id_np)
         _dimer_lookup_arr = np.full((n_monomers, n_monomers), -1, dtype=np.int32)
         for di, (mi, mj) in enumerate(_dp):
@@ -1583,11 +1633,24 @@ def build_mm_energy_forces_fn(
                 method=_jax_pme_method,
                 sr_cutoff_A=_jax_pme_sr_cutoff,
                 dynamic=True,
+                monomer_offsets=_offsets_np,
+                monomer_id_np=_monomer_id_np,
+                lambda_monomer=np.asarray(lambda_monomer),
+                ml_switch_width=ml_switch_width,
+                mm_switch_on=mm_switch_on,
+                mm_switch_width=mm_switch_width,
+                complementary_handoff=complementary_handoff,
+                mm_r_min=mm_r_min,
             )
         return (mm_fn, update_mm_pairs)
 
     mm_fn = calculate_mm_energy_and_forces
     if _use_jax_pme_coulomb:
+        _static_mask = (
+            np.ones(_n_static_pairs, dtype=np.float64)
+            if _cl_mask_jnp is None
+            else np.asarray(jax.device_get(_cl_mask_jnp), dtype=np.float64)
+        )
         mm_fn = _wrap_mm_fn_with_jax_pme_coulomb(
             mm_fn,
             charges_np=charges,
@@ -1595,5 +1658,16 @@ def build_mm_energy_forces_fn(
             method=_jax_pme_method,
             sr_cutoff_A=_jax_pme_sr_cutoff,
             dynamic=False,
+            monomer_offsets=_offsets_np,
+            monomer_id_np=_monomer_id_np,
+            lambda_monomer=np.asarray(lambda_monomer),
+            ml_switch_width=ml_switch_width,
+            mm_switch_on=mm_switch_on,
+            mm_switch_width=mm_switch_width,
+            complementary_handoff=complementary_handoff,
+            mm_r_min=mm_r_min,
+            static_pair_i=np.asarray(jax.device_get(pair_idx_atom_atom[:, 0]), dtype=np.int64),
+            static_pair_j=np.asarray(jax.device_get(pair_idx_atom_atom[:, 1]), dtype=np.int64),
+            static_pair_mask=_static_mask,
         )
     return mm_fn
