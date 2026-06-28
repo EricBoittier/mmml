@@ -99,6 +99,31 @@ def test_dcm_liquid_workflow_resilient_merges_presets() -> None:
     assert d["density_prep_ladder"] is True
 
 
+def test_parse_md_system_args_resilient_workflow_config() -> None:
+    from mmml.cli.run.md_system import parse_md_system_args
+
+    repo = Path(__file__).resolve().parents[2]
+    cfg = repo / "mmml/cli/run/dcm_liquid_workflow.resilient.yaml"
+    args = parse_md_system_args(
+        [
+            "--config",
+            str(cfg),
+            "--output-dir",
+            "/tmp/dcm60_liquid",
+            "--checkpoint",
+            "/tmp/ckpt.json",
+            "--composition",
+            "DCM:60",
+        ]
+    )
+    assert args.calculator_pre_minimize is True
+    assert args.fire_min_steps == 200
+    assert args.fire_min_maxstep == pytest.approx(0.2)
+    assert args.rescue_fire_fmax == pytest.approx(0.05)
+    assert args.quiet_bfgs is False
+    assert args.md_stages == "mini,heat,equi"
+
+
 def test_dcm103_example_campaign_merges_presets() -> None:
     from mmml.cli.run.md_config import load_yaml_config
 

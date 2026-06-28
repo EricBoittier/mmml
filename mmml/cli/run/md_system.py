@@ -935,6 +935,30 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-fmax", type=float, default=None, help="lambda_ti: alias for --pre-min-fmax.")
     parser.add_argument("--bfgs-maxstep", type=float, default=0.05)
     parser.add_argument(
+        "--fire-min-steps",
+        type=int,
+        default=200,
+        help="ASE FIRE steps during calculator pre-minimize / rescue (default 200).",
+    )
+    parser.add_argument(
+        "--fire-min-maxstep",
+        type=float,
+        default=0.2,
+        help="ASE FIRE max atomic displacement per step in Å (default 0.2).",
+    )
+    parser.add_argument(
+        "--rescue-fire-fmax",
+        type=float,
+        default=0.05,
+        help="FIRE force convergence threshold in eV/Å for calculator rescue (default 0.05).",
+    )
+    parser.add_argument(
+        "--quiet-bfgs",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Suppress ASE BFGS/FIRE log output during calculator pre-minimize.",
+    )
+    parser.add_argument(
         "--charmm-pre-minimize",
         action=argparse.BooleanOptionalAction,
         default=True,
