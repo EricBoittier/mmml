@@ -73,7 +73,16 @@ def _scan_artifacts(run_dir: Path) -> dict[str, Any]:
     for rel in (
         "manifest.json",
         "configs/md_smoke.yaml",
+        "configs/build_box.yaml",
+        "configs/hybrid_ase.yaml",
+        "configs/hybrid_jaxmd.yaml",
+        "configs/hybrid_pycharmm.yaml",
+        "residue",
+        "boxes/liquid",
         "md/results/jaxmd_smoke",
+        "results/hybrid_ase",
+        "results/hybrid_jaxmd",
+        "results/hybrid_pycharmm",
         "spectra",
         "configs/qm_pipeline",
     ):

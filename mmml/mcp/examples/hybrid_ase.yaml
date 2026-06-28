@@ -1,0 +1,24 @@
+# Hybrid calculator smoke — ASE backend (vacuum NVE).
+# Generated pattern for MCP build_smoke; paths are relative to the run directory.
+defaults:
+  composition: "DCM:2"
+  checkpoint: examples/ckpts_json/DESdimers_params.json
+  spacing: 5.0
+  box_size: 28.0
+  packmol_radius: 6.9
+  packmol_tolerance: 2.0
+  dt_fs: 0.5
+  temperature: 300.0
+  seed: 42
+
+campaign_output: results
+runs:
+  hybrid_ase:
+    description: Vacuum NVE — ASE VelocityVerlet + setup_calculator hybrid ML/MM
+    backend: ase
+    setup: free_nve
+    ps: 0.05
+    output_dir: results/hybrid_ase
+    extra_args:
+      - --skip-jit-warmup
+      - --quiet

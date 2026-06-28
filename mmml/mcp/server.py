@@ -19,9 +19,11 @@ from mmml.mcp.status import get_run_status, list_runs, tail_log
 mcp = FastMCP(
     "mmml",
     instructions=(
-        "Orchestrate MMML molecular simulations: structure generation, QM labeling, "
+        "Orchestrate MMML molecular simulations: residue/box builds (make-res, liquid-box), "
+        "hybrid MD (ASE / JAX-MD / PyCHARMM via setup_calculator), QM labeling, "
         "PhysNet training, MD campaigns, and IR analysis. Prefer configure_run + "
         "run_recipe_stage for pipelines; use submit_mmml_command for individual steps. "
+        "Recipes: dimer_smoke (MD→IR), build_smoke (geometry + hybrid backends). "
         "All run artifacts live under artifacts/mcp_runs/<run_id>/."
     ),
 )
@@ -99,7 +101,7 @@ def run_recipe_stage_tool(
     dry_run: bool = False,
     background: bool = False,
 ) -> str:
-    """Execute one pipeline stage: configure, structures, qm, train, md, or ir."""
+    """Execute one pipeline stage (configure, make_res, box_build, hybrid_md_*, md, ir, …)."""
     result = run_recipe_stage(
         run_id,
         stage,

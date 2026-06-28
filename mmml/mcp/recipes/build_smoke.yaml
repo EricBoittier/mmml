@@ -1,0 +1,77 @@
+name: build_smoke
+title: Geometry, periodic box, and hybrid calculator (ASE / JAX-MD / PyCHARMM)
+description: >
+  MCP smoke for make-res, liquid-box periodic builds, and short hybrid MD with
+  each backend. Requires PyCHARMM + Packmol for box_build and hybrid stages.
+
+modes:
+  smoke:
+    skip_stages: []
+    residue: DCM
+    box_composition: "DCM:12"
+    box_size: 24.0
+    box_profile: standard
+    target_density_g_cm3: 1.326
+    composition: "DCM:2"
+    checkpoint: examples/ckpts_json/DESdimers_params.json
+    hybrid_box_size: 28.0
+    packmol_radius: 6.9
+    md_ps: 0.05
+    dt_fs: 0.5
+    hybrid_setup: free_nve
+  minimal:
+    skip_stages: [box_build, hybrid_md_pycharmm]
+    residue: DCM
+    composition: "DCM:2"
+    checkpoint: examples/ckpts_json/DESdimers_params.json
+    hybrid_box_size: 28.0
+    packmol_radius: 6.9
+    md_ps: 0.02
+    dt_fs: 0.5
+    hybrid_setup: free_nve
+
+stages:
+  configure:
+    description: Write hybrid MD YAML templates and build parameters
+    outputs:
+      - configs/build_box.yaml
+      - configs/hybrid_ase.yaml
+      - configs/hybrid_jaxmd.yaml
+      - configs/hybrid_pycharmm.yaml
+
+  make_res:
+    description: CGENFF residue via mmml make-res (PDB/PSF in run residue/)
+    commands:
+      - make-res
+    outputs:
+      - residue/
+
+  box_build:
+    description: Periodic liquid box via mmml liquid-box (MM-only certification)
+    commands:
+      - liquid-box
+    outputs:
+      - boxes/liquid/model.psf
+      - boxes/liquid/model.crd
+      - boxes/liquid/box.json
+
+  hybrid_md_ase:
+    description: Short hybrid MD — ASE backend (setup_calculator + VelocityVerlet)
+    commands:
+      - md-system
+    outputs:
+      - results/hybrid_ase/
+
+  hybrid_md_jaxmd:
+    description: Short hybrid MD — JAX-MD backend (spherical_cutoff_calculator)
+    commands:
+      - md-system
+    outputs:
+      - results/hybrid_jaxmd/
+
+  hybrid_md_pycharmm:
+    description: Short hybrid MD — PyCHARMM MLpot backend (CHARMM dynamics)
+    commands:
+      - md-system
+    outputs:
+      - results/hybrid_pycharmm/

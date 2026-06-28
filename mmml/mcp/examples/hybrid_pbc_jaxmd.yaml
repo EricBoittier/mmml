@@ -1,0 +1,24 @@
+# Hybrid PBC NVT from a certified liquid-box handoff (Phase B after liquid-box).
+defaults:
+  composition: "DCM:12"
+  checkpoint: examples/ckpts_json/DESdimers_params.json
+  dt_fs: 0.25
+  temperature: 300.0
+  seed: 42
+
+campaign_output: results
+runs:
+  hybrid_pbc_jaxmd:
+    description: PBC NVT from certified box — JAX-MD production
+    backend: jaxmd
+    setup: pbc_nvt
+    ps: 0.1
+    output_dir: results/hybrid_pbc_jaxmd
+    from_box: boxes/liquid
+    extra_args:
+      - --from-psf
+      - boxes/liquid/model.psf
+      - --from-crd
+      - boxes/liquid/model.crd
+      - --skip-cluster-build
+      - --skip-jit-warmup
