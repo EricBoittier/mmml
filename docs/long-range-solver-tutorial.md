@@ -19,7 +19,7 @@ Related:
 | **`jax_mic`** (default) | Switched JAX pairs (~13 Å) | MIC in pair loop, or **jax-pme** with `--lr-solver jax_pme` | Standard hybrid MLpot; jax-pme Coulomb + r⁻⁶ LJ when enabled |
 | **`periodic_external`** | CHARMM IMAGE VDW | **jax-pme** or **ScaFaCoS** full-box Coulomb | Large boxes where JAX MM is off; requires `pbc_*` setup |
 
-In **`jax_mic`** + **`jax_pme`** mode: **r⁻¹²** repulsion stays on the switched pair list (exact Lorentz–Berthelot σ_ij, ε_ij, hybrid λ); **Coulomb** and the **r⁻⁶** LJ tail use jax-pme (Ewald/PME/P3M) with per-atom √C6 and geometric k-space combining (GROMACS-style LJ-PME reciprocal rule).
+In **`jax_mic`** + **`jax_pme`** mode: **r⁻¹²** repulsion stays on the switched pair list (exact Lorentz–Berthelot σ_ij, ε_ij, hybrid λ); **Coulomb** and the **r⁻⁶** LJ tail use jax-pme (Ewald/PME/P3M) with per-atom √C6 and geometric k-space combining (GROMACS-style LJ-PME reciprocal rule). Each jax-pme MM term is **`scale × (E_pme_full − E_intra)`** so intra-monomer electrostatics and dispersion remain in the ML region (same COM switching as the pair loop).
 
 ---
 
@@ -206,7 +206,7 @@ Decomposed MLpot: lr_solver=jax_pme, scafacos=no, jax_pme=yes (jax-pme method=ew
 | MIC box too small | Use L ≥ 28–32 Å for DCM; see `run_dcm_liquid_workflow.sh` header |
 | `periodic_external` fails | Need `--setup pbc_*`, positive `--box-size`, jax_pme or libfcs |
 | Segfault under MPI + ScaFaCoS | Ensure mpi4py uses `COMM_WORLD.handle` (fixed in recent MMML) |
-| `TracerArrayConversionError` under `jax_pme` | Upgrade MMML (jax-pme Coulomb uses `jax.pure_callback` inside JIT) |
+| `TracerArrayConversionError` under `jax_pme` | Upgrade MMML (hybrid jax-pme uses host-side `device_get` + full−intra correction) |
 
 ---
 

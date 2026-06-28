@@ -8,10 +8,18 @@ import pytest
 jax = pytest.importorskip("jax")
 import jax.numpy as jnp
 
+from mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
+    HybridJaxPmeCorrectionResult,
+    HybridJaxPmeMmResult,
+)
 from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
     _box_length_from_cell_jax,
     _wrap_mm_fn_with_jax_pme_coulomb,
 )
+
+_OFFSETS = np.array([0, 3, 5], dtype=np.int64)
+_MONOMER_ID = np.array([0, 0, 0, 1, 1], dtype=np.int32)
+_LAMBDA = np.array([1.0, 1.0], dtype=np.float64)
 
 
 def _lj_only_mm_fn(positions: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
@@ -28,8 +36,43 @@ def _lj_only_mm_fn_dynamic(
     return jnp.asarray(1.0, dtype=positions.dtype), jnp.zeros_like(positions)
 
 
+def _wrap_kwargs(*, dynamic: bool) -> dict:
+    return dict(
+        charges_np=np.zeros(5, dtype=np.float64),
+        pbc_cell=np.array([32.0, 32.0, 32.0], dtype=np.float64),
+        method="ewald",
+        sr_cutoff_A=6.0,
+        dynamic=dynamic,
+        monomer_offsets=_OFFSETS,
+        monomer_id_np=_MONOMER_ID,
+        lambda_monomer=_LAMBDA,
+        ml_switch_width=1.0,
+        mm_switch_on=12.0,
+        mm_switch_width=1.0,
+        complementary_handoff=True,
+        mm_r_min=None,
+    )
+
+
+def _fake_hybrid_lr(pos_np: np.ndarray) -> HybridJaxPmeMmResult:
+    n = pos_np.shape[0]
+    coulomb = HybridJaxPmeCorrectionResult(
+        energy_kcalmol=2.0,
+        forces_kcalmol_A=np.full((n, 3), 0.5, dtype=np.float64),
+        energy_intra_kcalmol=0.0,
+        energy_mic_cross_kcalmol=0.0,
+        switch_scale=1.0,
+    )
+    return HybridJaxPmeMmResult(
+        energy_kcalmol=2.0,
+        forces_kcalmol_A=coulomb.forces_kcalmol_A,
+        coulomb=coulomb,
+        dispersion=None,
+    )
+
+
 def test_box_length_from_cell_jax_handles_vector_and_matrix() -> None:
-    assert float(_box_length_from_cell_jax(jnp.array([32.0, 32.0, 32.0]))) == 32.0
+    assert float(_box_length_from_cell_jax(jnp.array([32.0,  32.0, 32.0]))) == 32.0
     assert float(_box_length_from_cell_jax(jnp.eye(3) * 40.0)) == 40.0
 
 
@@ -41,80 +84,16 @@ def test_box_length_from_cell_jax_preserves_cell_dtype() -> None:
         assert _box_length_from_cell_jax(f64_cell).dtype == jnp.float64
 
 
-def _record_box_len_callback(box_len_dtype: list[jnp.dtype]):
-    def _callback(
-        positions: jnp.ndarray,
-        box_length_A: jnp.ndarray,
-        *,
-        charges_np: np.ndarray,
-        method: str,
-        sr_cutoff_A: float,
-    ) -> tuple[jnp.ndarray, jnp.ndarray]:
-        del charges_np, method, sr_cutoff_A
-        box_len_dtype.append(box_length_A.dtype)
-        n = positions.shape[0]
-        return (
-            jnp.asarray(2.0, dtype=positions.dtype),
-            jnp.full((n, 3), 0.5, dtype=positions.dtype),
-        )
-
-    return _callback
-
-
-@pytest.mark.parametrize("pos_dtype", [jnp.float32, jnp.float64])
-def test_wrap_mm_fn_static_box_length_matches_positions_dtype(
-    monkeypatch, pos_dtype: jnp.dtype
-) -> None:
-    if pos_dtype == jnp.float64 and not jax.config.read("jax_enable_x64"):
-        pytest.skip("float64 positions require jax_enable_x64")
-    recorded: list[jnp.dtype] = []
-    monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mm_energy_forces._jax_pme_coulomb_pure_callback",
-        _record_box_len_callback(recorded),
-    )
-    wrapped = _wrap_mm_fn_with_jax_pme_coulomb(
-        _lj_only_mm_fn,
-        charges_np=np.zeros(5, dtype=np.float64),
-        pbc_cell=np.array([32.0, 32.0, 32.0], dtype=np.float64),
-        method="ewald",
-        sr_cutoff_A=6.0,
-        dynamic=False,
-    )
-    pos = jnp.zeros((5, 3), dtype=pos_dtype)
-    energy, forces = jax.jit(wrapped)(pos)
-    assert float(energy) == pytest.approx(3.0)
-    assert recorded == [pos_dtype]
-
-
-def _fake_coulomb_callback(
-    positions: jnp.ndarray,
-    box_length_A: jnp.ndarray,
-    *,
-    charges_np: np.ndarray,
-    method: str,
-    sr_cutoff_A: float,
-) -> tuple[jnp.ndarray, jnp.ndarray]:
-    del charges_np, method, sr_cutoff_A, box_length_A
-    n = positions.shape[0]
-    return (
-        jnp.asarray(2.0, dtype=positions.dtype),
-        jnp.full((n, 3), 0.5, dtype=positions.dtype),
-    )
-
-
 def test_wrap_mm_fn_jax_pme_static_path_under_jit(monkeypatch) -> None:
+    def _fake(*args, **kwargs):
+        del kwargs
+        return _fake_hybrid_lr(np.asarray(args[0], dtype=np.float64))
+
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mm_energy_forces._jax_pme_coulomb_pure_callback",
-        _fake_coulomb_callback,
+        "mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb.hybrid_jax_pme_mm_lr_correction",
+        _fake,
     )
-    wrapped = _wrap_mm_fn_with_jax_pme_coulomb(
-        _lj_only_mm_fn,
-        charges_np=np.zeros(5, dtype=np.float64),
-        pbc_cell=np.array([32.0, 32.0, 32.0], dtype=np.float64),
-        method="ewald",
-        sr_cutoff_A=6.0,
-        dynamic=False,
-    )
+    wrapped = _wrap_mm_fn_with_jax_pme_coulomb(_lj_only_mm_fn, **_wrap_kwargs(dynamic=False))
     pos = jnp.zeros((5, 3), dtype=jnp.float32)
     energy, forces = jax.jit(wrapped)(pos)
     assert float(energy) == pytest.approx(3.0)
@@ -122,19 +101,18 @@ def test_wrap_mm_fn_jax_pme_static_path_under_jit(monkeypatch) -> None:
 
 
 def test_wrap_mm_fn_jax_pme_dynamic_path_under_jit(monkeypatch) -> None:
+    def _fake(*args, **kwargs):
+        del kwargs
+        return _fake_hybrid_lr(np.asarray(args[0], dtype=np.float64))
+
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mm_energy_forces._jax_pme_coulomb_pure_callback",
-        _fake_coulomb_callback,
+        "mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb.hybrid_jax_pme_mm_lr_correction",
+        _fake,
     )
     wrapped = _wrap_mm_fn_with_jax_pme_coulomb(
-        _lj_only_mm_fn_dynamic,
-        charges_np=np.zeros(4, dtype=np.float64),
-        pbc_cell=np.array([28.0, 28.0, 28.0], dtype=np.float64),
-        method="pme",
-        sr_cutoff_A=6.0,
-        dynamic=True,
+        _lj_only_mm_fn_dynamic, **_wrap_kwargs(dynamic=True)
     )
-    pos = jnp.zeros((4, 3), dtype=jnp.float32)
+    pos = jnp.zeros((5, 3), dtype=jnp.float32)
     pair_idx = jnp.zeros((2, 2), dtype=jnp.int32)
     pair_mask = jnp.ones((2,), dtype=jnp.bool_)
     box = jnp.array([30.0, 30.0, 30.0], dtype=jnp.float32)
