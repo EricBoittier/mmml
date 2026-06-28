@@ -17,7 +17,7 @@ import os
 import shutil
 import sys
 import time
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -28,6 +28,81 @@ logger = logging.getLogger(__name__)
 _xla_gpu_warmed = False
 _ptxas_path_configured = False
 _jax_cuda_runtime_libs_configured = False
+_ptxas_env_sanitized = False
+
+_MPI_LD_MARKERS = (
+    "openmpi",
+    "libopen-pal",
+    "libmpi",
+    "libpmix",
+    "prrte",
+    "/orte/",
+)
+
+
+def _path_looks_mpi_related(path: str) -> bool:
+    low = str(path).lower()
+    return any(marker in low for marker in _MPI_LD_MARKERS)
+
+
+def _process_env_needs_ptxas_sanitize() -> bool:
+    if os.environ.get("MMML_NO_PTXAS_LD_SANITIZE", "").strip().lower() in (
+        "1",
+        "yes",
+        "true",
+    ):
+        return False
+    preload = os.environ.get("LD_PRELOAD", "")
+    if preload and any(_path_looks_mpi_related(part) for part in preload.split(":")):
+        return True
+    ld = os.environ.get("LD_LIBRARY_PATH", "")
+    return any(_path_looks_mpi_related(part) for part in ld.split(os.pathsep) if part)
+
+
+def maybe_sanitize_process_env_for_ptxas(*, force: bool = False) -> bool:
+    """Drop OpenMPI from child-process env so ``ptxas`` does not load broken ``libopen-pal``.
+
+    Slurm PMI and ``mmml-charmm-mpirun.sh`` prepend OpenMPI to ``LD_LIBRARY_PATH`` /
+    ``LD_PRELOAD``. NVIDIA ``ptxas`` then fails with ``pmix_framework_names`` lookup
+    errors. MPI/CHARMM libraries are already mapped in the parent after ``mpirun`` start,
+    so clearing these for the remainder of the Python process is safe.
+    """
+    global _ptxas_env_sanitized
+    if _ptxas_env_sanitized and not force:
+        return False
+    if not force and not _process_env_needs_ptxas_sanitize():
+        return False
+
+    changed = False
+    for key in ("LD_PRELOAD", "DYLD_INSERT_LIBRARIES"):
+        if key in os.environ:
+            del os.environ[key]
+            changed = True
+
+    var = "LD_LIBRARY_PATH"
+    old_ld = os.environ.get(var, "")
+    if old_ld:
+        parts = [p for p in old_ld.split(os.pathsep) if p and not _path_looks_mpi_related(p)]
+        new_ld = os.pathsep.join(parts)
+        if new_ld != old_ld:
+            if new_ld:
+                os.environ[var] = new_ld
+            else:
+                del os.environ[var]
+            changed = True
+
+    if changed or force:
+        _ptxas_env_sanitized = True
+        if not os.environ.get("MMML_QUIET", "").strip().lower() in ("1", "yes", "true"):
+            logger.debug("Sanitized process env for JAX/ptxas (removed OpenMPI LD_PRELOAD/LD paths)")
+    return changed
+
+
+@contextmanager
+def jax_ptxas_safe_env():
+    """Context manager wrapper around :func:`maybe_sanitize_process_env_for_ptxas`."""
+    maybe_sanitize_process_env_for_ptxas()
+    yield
 
 
 @dataclass
@@ -133,7 +208,7 @@ def run_jax_warmup_passes(
     )
 
     block_fn = block or (lambda result: block_jax_values(result))
-    with jax_compile_threads_context():
+    with jax_compile_threads_context(), jax_ptxas_safe_env():
         if not jax_compile_timers_enabled():
             for _ in range(n_passes):
                 block_fn(run_once())
@@ -475,6 +550,7 @@ def ensure_jax_cuda_toolchain(*, required: bool = False) -> bool:
     Returns True when ``ptxas`` is available on ``PATH`` after this call.
     """
     global _ptxas_path_configured
+    maybe_sanitize_process_env_for_ptxas()
     ensure_jax_cuda_runtime_libs(quiet=True)
     if shutil.which("ptxas"):
         _ptxas_path_configured = True

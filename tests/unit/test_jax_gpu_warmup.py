@@ -132,6 +132,23 @@ def test_find_bundled_nvidia_lib_dirs_glob(tmp_path, monkeypatch):
     jax_gpu_warmup.find_bundled_ptxas_dir.cache_clear()
 
 
+def test_maybe_sanitize_process_env_for_ptxas_strips_openmpi(monkeypatch):
+    monkeypatch.setenv(
+        "LD_LIBRARY_PATH",
+        "/opt/gcc-14.2.0/openmpi-5.0.5/build/lib:/usr/lib/nvidia",
+    )
+    monkeypatch.setenv(
+        "LD_PRELOAD",
+        "/opt/gcc-14.2.0/openmpi-5.0.5/build/lib/libopen-pal.so",
+    )
+    changed = jax_gpu_warmup.maybe_sanitize_process_env_for_ptxas(force=True)
+    assert changed is True
+    assert "LD_PRELOAD" not in os.environ
+    parts = os.environ.get("LD_LIBRARY_PATH", "").split(os.pathsep)
+    assert "/opt/gcc-14.2.0/openmpi-5.0.5/build/lib" not in parts
+    assert "/usr/lib/nvidia" in parts
+
+
 def test_jax_compile_timers_log_passes(capsys, monkeypatch):
     monkeypatch.setenv("MMML_JAX_COMPILE_TIMERS", "1")
     jax_gpu_warmup.reset_jax_compile_timers()

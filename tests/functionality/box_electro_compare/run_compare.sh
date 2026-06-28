@@ -107,7 +107,10 @@ _warmup_mlpot_jax() {
   unset MMML_WARMUP_MLPOT_JAX_ONLY
 }
 
-_warmup_mlpot_jax || FAIL=1
+if ! _warmup_mlpot_jax; then
+  echo "FATAL: warmup-mlpot-jax failed; aborting compare run" >&2
+  exit 1
+fi
 
 _run_job() {
   local job_id="$1"
