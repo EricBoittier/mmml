@@ -443,16 +443,56 @@ def test_preload_openmpi_mpi_libraries_global(tmp_path, monkeypatch):
     lib_dir = tmp_path / "lib"
     lib_dir.mkdir()
     (lib_dir / "libmpi.so.40").write_bytes(b"x")
+    (lib_dir / "libmpi_usempi_ignore_tkr.so.40").write_bytes(b"x")
     (lib_dir / "libmpi_usempif08.so.40").write_bytes(b"x")
     monkeypatch.delenv("MMML_NO_MPI_LD_PATH", raising=False)
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi._openmpi_mpi_library_candidates",
-        return_value=(lib_dir / "libmpi.so.40", lib_dir / "libmpi_usempif08.so.40"),
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.openmpi_mpi_library_paths_for_preload",
+        return_value=(
+            lib_dir / "libmpi.so.40",
+            lib_dir / "libmpi_usempi_ignore_tkr.so.40",
+            lib_dir / "libmpi_usempif08.so.40",
+        ),
     ), mock.patch("mmml.interfaces.pycharmmInterface.charmm_mpi.ctypes.CDLL") as cdll:
         charmm_mpi._preload_openmpi_mpi_libraries_global()
-    assert cdll.call_count == 2
+    assert cdll.call_count == 3
     assert charmm_mpi._mpi_libs_preloaded is True
     charmm_mpi._mpi_libs_preloaded = False
+
+
+def test_openmpi_mpi_library_candidates_glob(tmp_path, monkeypatch):
+    charmm_mpi.charmm_mpi_library_dirs.cache_clear()
+    charmm_mpi.openmpi_install_prefix.cache_clear()
+    charmm_mpi.charmm_mpirun_path.cache_clear()
+    lib = tmp_path / "libcharmm.so"
+    lib.write_bytes(b"x")
+    prefix = tmp_path / "openmpi"
+    olib = prefix / "lib"
+    olib.mkdir(parents=True)
+    (olib / "libmpi.so.40").write_bytes(b"x")
+    (olib / "libmpi_usempi_ignore_tkr.so.40").write_bytes(b"x")
+    (olib / "libmpi_usempif08.so.40").write_bytes(b"x")
+    monkeypatch.setenv("CHARMM_LIB_DIR", str(tmp_path))
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._run_ldd",
+        return_value=(
+            "libmpi.so.40 => not found\n"
+            "libmpi_usempi_ignore_tkr.so.40 => not found\n"
+        ),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_mpirun_path",
+        return_value=prefix / "bin" / "mpirun",
+    ):
+        (prefix / "bin").mkdir(exist_ok=True)
+        (prefix / "bin" / "mpirun").write_bytes(b"")
+        paths = charmm_mpi.openmpi_mpi_library_paths_for_preload()
+    names = {p.name for p in paths}
+    assert "libmpi.so.40" in names
+    assert "libmpi_usempi_ignore_tkr.so.40" in names
+    assert "libmpi_usempif08.so.40" in names
+    charmm_mpi.charmm_mpi_library_dirs.cache_clear()
+    charmm_mpi.openmpi_install_prefix.cache_clear()
+    charmm_mpi.charmm_mpirun_path.cache_clear()
 
 
 def test_mpi_mpirun_extra_args_verbose(monkeypatch):

@@ -17,6 +17,7 @@ _MPI_LDD_KEYWORDS = (
     "libpmix",
     "libmpi_mpifh",
     "libmpi_usempif08",
+    "libmpi_usempi_ignore_tkr",
     "libhwloc",
     "libevent",
 )
@@ -440,6 +441,109 @@ def _export_openmpi_opal_ld_preload() -> None:
         os.environ[var] = os.pathsep.join([path, *parts])
 
 
+def _mpi_preload_sort_key(path: Path) -> tuple[int, str]:
+    """Load core ``libmpi`` and Fortran stubs before dependent ``libmpi_*`` shims."""
+    name = path.name
+    if name.startswith("libmpi.so"):
+        return (0, name)
+    if "usempi_ignore_tkr" in name:
+        return (1, name)
+    if "mpifh" in name:
+        return (2, name)
+    if "usempif08" in name:
+        return (3, name)
+    return (4, name)
+
+
+def _openmpi_lib_search_dirs() -> tuple[str, ...]:
+    dirs: list[str] = []
+    seen: set[str] = set()
+    for lib_dir in (*_fallback_openmpi_library_dirs(), *charmm_mpi_library_dirs()):
+        if lib_dir not in seen:
+            seen.add(lib_dir)
+            dirs.append(lib_dir)
+    return tuple(dirs)
+
+
+def _resolve_mpi_library_in_dir(lib_dir: Path, basename: str) -> Path | None:
+    direct = lib_dir / basename
+    if direct.is_file():
+        return direct.resolve()
+    stem = basename.split(".so", 1)[0]
+    hits = sorted(lib_dir.glob(f"{stem}.so*"))
+    return hits[0].resolve() if hits else None
+
+
+def _unresolved_ldd_library_names(lib: Path) -> tuple[str, ...]:
+    names: list[str] = []
+    seen: set[str] = set()
+    for line in _run_ldd(lib).splitlines():
+        if "=> not found" not in line:
+            continue
+        left = line.split("=>", 1)[0].strip()
+        if not left:
+            continue
+        name = left.split()[0]
+        if name not in seen:
+            seen.add(name)
+            names.append(name)
+    return tuple(names)
+
+
+def _openmpi_mpi_library_candidates() -> tuple[Path, ...]:
+    """All OpenMPI ``libmpi*.so*`` shims needed before ``libcharmm.so`` loads."""
+    found: list[Path] = []
+    seen: set[Path] = set()
+    lib_dirs = _openmpi_lib_search_dirs()
+
+    lib = _charmm_lib_path()
+    if lib is not None:
+        for basename in _unresolved_ldd_library_names(lib):
+            if "libmpi" not in basename.lower():
+                continue
+            for lib_dir in lib_dirs:
+                resolved = _resolve_mpi_library_in_dir(Path(lib_dir), basename)
+                if resolved is None or resolved in seen:
+                    continue
+                seen.add(resolved)
+                found.append(resolved)
+
+    for lib_dir in lib_dirs:
+        base = Path(lib_dir)
+        if not base.is_dir():
+            continue
+        for path in sorted(base.glob("libmpi*.so*")):
+            if not path.is_file():
+                continue
+            resolved = path.resolve()
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            found.append(resolved)
+
+    found.sort(key=_mpi_preload_sort_key)
+    return tuple(found)
+
+
+def openmpi_mpi_library_paths_for_preload() -> tuple[Path, ...]:
+    """Sorted ``libmpi*.so*`` paths for ``LD_PRELOAD`` / ``ctypes`` preload."""
+    return _openmpi_mpi_library_candidates()
+
+
+def _export_openmpi_mpi_ld_preload() -> None:
+    """``LD_PRELOAD`` all matched OpenMPI MPI shims (Fortran + C) for rank children."""
+    if _truthy("MMML_NO_MPI_LD_PATH") or _truthy("MMML_NO_MPI_MPI_PRELOAD"):
+        return
+    paths = openmpi_mpi_library_paths_for_preload()
+    if not paths:
+        return
+    var = "DYLD_INSERT_LIBRARIES" if _IS_DARWIN else "LD_PRELOAD"
+    parts = [p for p in os.environ.get(var, "").split(os.pathsep) if p]
+    prepend = [str(p) for p in paths if str(p) not in parts]
+    if prepend:
+        os.environ[var] = os.pathsep.join([*prepend, *parts])
+
+
 def mpi_openmpi_install_env_defaults() -> None:
     """Block distro MCA plugins; prefer CHARMM-linked OpenMPI shmem/pmix.
 
@@ -462,6 +566,7 @@ def mpi_openmpi_install_env_defaults() -> None:
     shmem = openmpi_shmem_mca_for_launch()
     if shmem is not None:
         os.environ.setdefault("OMPI_MCA_shmem", shmem)
+    _export_openmpi_mpi_ld_preload()
     _export_openmpi_opal_ld_preload()
     override = (os.environ.get("MMML_OPAL_PREFIX") or "").strip()
     if override:
@@ -498,7 +603,13 @@ def mpi_mpirun_extra_args() -> list[str]:
         if shmem is not None:
             args.extend(["--mca", "shmem", shmem])
     if not _truthy("MMML_NO_MPI_LD_PATH"):
-        for var in ("LD_LIBRARY_PATH", "OPENMPI_ROOT", "EBROOTOPENMPI", "CHARMM_LIB_DIR"):
+        for var in (
+            "LD_LIBRARY_PATH",
+            "LD_PRELOAD",
+            "OPENMPI_ROOT",
+            "EBROOTOPENMPI",
+            "CHARMM_LIB_DIR",
+        ):
             if (os.environ.get(var) or "").strip():
                 args.extend(["-x", var])
     if _truthy("MMML_NO_MPI_ABORT_STACK"):
@@ -640,10 +751,6 @@ def mpi_shell_setup_lines() -> list[str]:
         shmem = openmpi_shmem_mca_for_launch()
         if shmem is not None:
             lines.append(f"export OMPI_MCA_shmem={shmem}")
-        opal = openmpi_opal_library_path()
-        if opal is not None and not _truthy("MMML_NO_MPI_OPAL_PRELOAD"):
-            var = "DYLD_INSERT_LIBRARIES" if _IS_DARWIN else "LD_PRELOAD"
-            lines.append(f"export {var}={opal}${{{var}:+:${var}}}")
         opal = (os.environ.get("MMML_OPAL_PREFIX") or "").strip()
         if not opal:
             prefix = openmpi_install_prefix()
@@ -654,6 +761,11 @@ def mpi_shell_setup_lines() -> list[str]:
     ld = mpi_library_path_export()
     if ld:
         lines.append(ld)
+    if not _truthy("MMML_NO_MPI_LD_PATH"):
+        preload_var = "DYLD_INSERT_LIBRARIES" if _IS_DARWIN else "LD_PRELOAD"
+        preload = (os.environ.get(preload_var) or "").strip()
+        if preload:
+            lines.append(f"export {preload_var}={preload}")
     path_line = mpi_path_export()
     if path_line:
         lines.append(path_line)
@@ -714,45 +826,26 @@ def _preload_openmpi_opal_global() -> None:
         return
 
 
-def _openmpi_mpi_library_candidates() -> tuple[Path, ...]:
-    """Shared libraries to preload before ``libcharmm.so`` (Fortran + C MPI)."""
-    names = (
-        "libmpi_usempif08.so.40",
-        "libmpi_usempif08.so",
-        "libmpi_mpifh.so.40",
-        "libmpi.so.40",
-        "libmpi.so",
-    )
-    found: list[Path] = []
-    seen: set[Path] = set()
-    for lib_dir in (*_fallback_openmpi_library_dirs(), *charmm_mpi_library_dirs()):
-        base = Path(lib_dir)
-        if not base.is_dir():
-            continue
-        for name in names:
-            direct = base / name
-            candidates = [direct] if direct.is_file() else sorted(base.glob(f"{name}*"))
-            for path in candidates:
-                resolved = path.resolve()
-                if resolved in seen:
-                    continue
-                seen.add(resolved)
-                found.append(resolved)
-    return tuple(found)
-
-
 def _preload_openmpi_mpi_libraries_global() -> None:
     """``RTLD_GLOBAL`` preload so ``libcharmm.so`` resolves MPI without relying on late ``LD_LIBRARY_PATH``."""
     global _mpi_libs_preloaded
     if _mpi_libs_preloaded or _truthy("MMML_NO_MPI_LD_PATH"):
         return
-    loaded = 0
-    for path in _openmpi_mpi_library_candidates():
-        try:
-            ctypes.CDLL(str(path), mode=ctypes.RTLD_GLOBAL)
-            loaded += 1
-        except OSError:
-            continue
+    candidates = openmpi_mpi_library_paths_for_preload()
+    loaded: set[Path] = set()
+    for _ in range(max(1, len(candidates))):
+        progress = False
+        for path in candidates:
+            if path in loaded:
+                continue
+            try:
+                ctypes.CDLL(str(path), mode=ctypes.RTLD_GLOBAL)
+                loaded.add(path)
+                progress = True
+            except OSError:
+                continue
+        if not progress:
+            break
     if loaded:
         _mpi_libs_preloaded = True
 

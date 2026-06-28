@@ -41,6 +41,9 @@ bundled = ensure_jax_cuda_runtime_libs(quiet=True)
 ld = os.environ.get("LD_LIBRARY_PATH", "")
 if ld:
     print(f"export LD_LIBRARY_PATH={shlex.quote(ld)}")
+preload = os.environ.get("LD_PRELOAD", "")
+if preload:
+    print(f"export LD_PRELOAD={shlex.quote(preload)}")
 if not bundled:
     import sys
 
