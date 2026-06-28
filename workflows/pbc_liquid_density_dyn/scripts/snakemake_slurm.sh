@@ -16,16 +16,25 @@ PY="${MMML_PYTHON}"
 PROFILE="${MMML_SNAKEMAKE_PROFILE:-profiles/slurm}"
 _cfg_raw="${MMML_WORKFLOW_CONFIG:-config.yaml}"
 if [[ "$_cfg_raw" = /* ]]; then
-  CFG="$_cfg_raw"
+  CFG_PATH="$_cfg_raw"
+elif [[ "$_cfg_raw" == */* ]]; then
+  CFG_PATH="$(cd "$(dirname "$_cfg_raw")" && pwd)/$(basename "$_cfg_raw")"
 else
-  CFG="$WORKFLOW_ROOT/$_cfg_raw"
+  CFG_PATH="${WORKFLOW_ROOT}/${_cfg_raw}"
 fi
-export MMML_WORKFLOW_CONFIG="$CFG"
+export MMML_WORKFLOW_CONFIG="$CFG_PATH"
 CONFIG_ARGS=()
-if [[ "$CFG" != "$WORKFLOW_ROOT/config.yaml" ]]; then
-  CONFIG_ARGS=(--configfile "$CFG")
+if [[ "$CFG_PATH" != "$WORKFLOW_ROOT/config.yaml" ]]; then
+  CONFIG_ARGS=(--configfile "$CFG_PATH")
 fi
-CONFIG_ARGS=(--configfile "$CFG_PATH")
+
+export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
+if [[ -z "${MMML_CKPT:-}" ]]; then
+  _default_ckpt="/mmhome/boittier/home/mmml_tutorial/acodcm/ckpts/dcm1-c137fb42-1f65-4748-880b-8f8184a20f70"
+  if [[ -d "$_default_ckpt" ]]; then
+    export MMML_CKPT="$_default_ckpt"
+  fi
+fi
 
 IFS=$'\t' read -r DEFAULT_JOBS DEFAULT_RES <<EOF
 $("$PY" -c "
@@ -46,7 +55,7 @@ fi
 JOBS="${1:-$DEFAULT_JOBS}"
 shift || true
 
-echo "Snakemake Slurm: profile=${PROFILE} config=${CFG_PATH} -j${JOBS} --resources ${DEFAULT_RES}" >&2
+echo "Snakemake Slurm: profile=${PROFILE} config=${CFG_PATH} MMML_CKPT=${MMML_CKPT:-<unset>} -j${JOBS} --resources ${DEFAULT_RES}" >&2
 
 # shellcheck disable=SC2086
 exec uv run --with snakemake --with snakemake-executor-plugin-slurm snakemake \

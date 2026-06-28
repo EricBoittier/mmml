@@ -15,6 +15,12 @@ mmml_resolve_env "$REPO_ROOT"
 PY="${MMML_PYTHON}"
 
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
+if [[ -z "${MMML_CKPT:-}" ]]; then
+  _default_ckpt="/mmhome/boittier/home/mmml_tutorial/acodcm/ckpts/dcm1-c137fb42-1f65-4748-880b-8f8184a20f70"
+  if [[ -d "$_default_ckpt" ]]; then
+    export MMML_CKPT="$_default_ckpt"
+  fi
+fi
 
 _cfg_raw="${MMML_WORKFLOW_CONFIG:-$WORKFLOW_ROOT/config.yaml}"
 if [[ "$_cfg_raw" = /* ]]; then
