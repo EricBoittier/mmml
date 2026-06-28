@@ -9,7 +9,7 @@ if [[ $# -lt 1 ]]; then
 fi
 
 SLOTS="${MMML_LOCAL_GPU_SLOTS:-2}"
-DIR="${MMML_GPU_LOCK_DIR:-/tmp/mmml_gpu_slots_${USER}}"
+DIR="${MMML_GPU_LOCK_DIR:-/tmp/mmml_gpu_slots_${USER:-$(id -un)}}"
 mkdir -p "$DIR"
 
 if [[ "$SLOTS" -le 1 ]]; then
