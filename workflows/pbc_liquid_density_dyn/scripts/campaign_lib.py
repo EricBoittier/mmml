@@ -549,6 +549,37 @@ def slurm_resources_cli(cfg: dict[str, Any]) -> str:
     return " ".join(f"{key}={value}" for key, value in pools.items())
 
 
+def local_gpu_count(cfg: dict[str, Any]) -> int:
+    for key in ("local_gpu_count", "local_max_concurrent"):
+        val = int(cfg.get(key) or 0)
+        if val > 0:
+            return val
+    return 2
+
+
+def local_max_concurrent(cfg: dict[str, Any]) -> int:
+    val = int(cfg.get("local_max_concurrent") or 0)
+    if val > 0:
+        return val
+    return local_gpu_count(cfg)
+
+
+def local_resource_pools(cfg: dict[str, Any]) -> dict[str, int]:
+    n = local_max_concurrent(cfg)
+    if scheduler_mode(cfg) == "cpu":
+        return {"charmm_slot": n}
+    return {"gpu_fast": n, "gpu_slow": 0, "charmm_slot": n}
+
+
+def local_launch_jobs(cfg: dict[str, Any]) -> int:
+    return local_max_concurrent(cfg)
+
+
+def local_resources_cli(cfg: dict[str, Any]) -> str:
+    pools = local_resource_pools(cfg)
+    return " ".join(f"{key}={value}" for key, value in pools.items())
+
+
 def total_pycharmm_equi_ps(cfg: dict[str, Any]) -> float:
     return float(cfg.get("pycharmm_equi_ps", 20.0)) * int(cfg.get("pycharmm_equi_legs", 5))
 

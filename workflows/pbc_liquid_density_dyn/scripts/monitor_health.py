@@ -69,6 +69,13 @@ CAMPAIGNS: list[dict[str, Any]] = [
         "driver_log": "snakemake_large_boxes.log",
         "max_jobs": 2,
     },
+    {
+        "name": "gpu08_local",
+        "config": "config.gpu08.local.yaml",
+        "driver_log": "snakemake_gpu08.log",
+        "max_jobs": 2,
+        "local": True,
+    },
 ]
 
 
@@ -262,6 +269,20 @@ def _classify_failures(text: str) -> list[FailureRule]:
     return hits
 
 
+def _campaign_spec(name: str) -> dict[str, Any] | None:
+    for spec in CAMPAIGNS:
+        if spec["name"] == name:
+            return spec
+    return None
+
+
+def _launcher_script(campaign: str) -> str:
+    spec = _campaign_spec(campaign)
+    if spec and spec.get("local"):
+        return "snakemake_local.sh"
+    return "snakemake_slurm.sh"
+
+
 def _snakemake_driver_running(config_path: Path) -> bool:
     cfg_name = config_path.name
     try:
@@ -278,7 +299,7 @@ def _snakemake_driver_running(config_path: Path) -> bool:
             continue
         if cfg_name in line or str(config_path) in line:
             return True
-        if cfg_name == "config.yaml" and "config.profile" not in line and "config.large" not in line:
+        if cfg_name == "config.yaml" and "config.profile" not in line and "config.large" not in line and "config.gpu08" not in line:
             if "pbc_liquid_density_dyn" in line:
                 return True
     return False
@@ -320,15 +341,18 @@ def _prebuild_charmm_tier(cell, *, dry_run: bool) -> str:
     return f"prebuild tier: {desc}"
 
 
-def _submit_snakemake_target(cfg_path: Path, cell, *, dry_run: bool) -> str:
+def _submit_snakemake_target(cfg_path: Path, cell, *, campaign: str, dry_run: bool) -> str:
     paths = paths_for_run(load_config(cfg_path), cell)
     target = f"../../{paths['done'].relative_to(repo_root())}"
-    cmd = f"MMML_WORKFLOW_CONFIG={cfg_path.name} bash scripts/snakemake_slurm.sh 1 {target}"
+    launcher = _launcher_script(campaign)
+    cmd = f"MMML_WORKFLOW_CONFIG={cfg_path.name} bash scripts/{launcher} 1 {target}"
     if not dry_run:
         env = os.environ.copy()
         env["MMML_WORKFLOW_CONFIG"] = str(cfg_path)
+        if launcher == "snakemake_local.sh":
+            env["MMML_LOCAL_GPU_PIN"] = "1"
         subprocess.Popen(  # noqa: S603
-            ["bash", "scripts/snakemake_slurm.sh", "1", target],
+            ["bash", f"scripts/{launcher}", "1", target],
             cwd=workflow_root(),
             env=env,
             stdout=subprocess.DEVNULL,
@@ -338,7 +362,7 @@ def _submit_snakemake_target(cfg_path: Path, cell, *, dry_run: bool) -> str:
     return cmd
 
 
-def _rerun_fresh(cfg_path: Path, cell, *, dry_run: bool) -> str:
+def _rerun_fresh(cfg_path: Path, cell, *, campaign: str, dry_run: bool) -> str:
     paths = paths_for_run(load_config(cfg_path), cell)
     stdout = paths["out_dir"] / "stdout.log"
     actions: list[str] = []
@@ -346,13 +370,13 @@ def _rerun_fresh(cfg_path: Path, cell, *, dry_run: bool) -> str:
         actions.append(f"remove {stdout}")
         if not dry_run:
             stdout.unlink(missing_ok=True)
-    actions.append(_submit_snakemake_target(cfg_path, cell, dry_run=dry_run))
+    actions.append(_submit_snakemake_target(cfg_path, cell, campaign=campaign, dry_run=dry_run))
     return "; ".join(actions)
 
 
-def _rerun_resume(cfg_path: Path, cell, *, dry_run: bool) -> str:
+def _rerun_resume(cfg_path: Path, cell, *, campaign: str, dry_run: bool) -> str:
     # Keep prep ladder / partial legs; md-system --resume inside run_job.py.
-    cmd = _submit_snakemake_target(cfg_path, cell, dry_run=dry_run)
+    cmd = _submit_snakemake_target(cfg_path, cell, campaign=campaign, dry_run=dry_run)
     return f"resume rerun: {cmd}"
 
 
@@ -460,18 +484,18 @@ def _mediate_cell(
             if "Campaign jobs" in text:
                 actions.append(f"skip fresh rerun for {rule.id} (campaign already started)")
                 continue
-            actions.append(f"{rule.id}: {_rerun_fresh(cfg_path, cell, dry_run=dry_run)}")
+            actions.append(f"{rule.id}: {_rerun_fresh(cfg_path, cell, campaign=health.campaign, dry_run=dry_run)}")
             if not dry_run:
                 tracker.record(health.campaign, health.tag, rule.id)
             continue
         if rule.action == "rerun_resume":
-            actions.append(f"{rule.id}: {_rerun_resume(cfg_path, cell, dry_run=dry_run)}")
+            actions.append(f"{rule.id}: {_rerun_resume(cfg_path, cell, campaign=health.campaign, dry_run=dry_run)}")
             if not dry_run:
                 tracker.record(health.campaign, health.tag, rule.id)
             continue
         if rule.action == "prebuild_tier_rerun":
             actions.append(f"{rule.id}: {_prebuild_charmm_tier(cell, dry_run=dry_run)}")
-            actions.append(f"{rule.id}: {_rerun_fresh(cfg_path, cell, dry_run=dry_run)}")
+            actions.append(f"{rule.id}: {_rerun_fresh(cfg_path, cell, campaign=health.campaign, dry_run=dry_run)}")
             if not dry_run:
                 tracker.record(health.campaign, health.tag, rule.id)
 
@@ -486,7 +510,9 @@ def _mediate_cell(
             note="submit cell to Slurm",
         )
         if tracker.can_retry(health.campaign, health.tag, pending_rule):
-            actions.append(f"pending: {_submit_snakemake_target(cfg_path, cell, dry_run=dry_run)}")
+            actions.append(
+                f"pending: {_submit_snakemake_target(cfg_path, cell, campaign=health.campaign, dry_run=dry_run)}"
+            )
             if not dry_run:
                 tracker.record(health.campaign, health.tag, pending_rule.id)
 
@@ -501,13 +527,16 @@ def _ensure_driver(spec: dict[str, Any], cfg_path: Path, *, incomplete: int, dry
         actions.append(f"driver already running for {cfg_path.name}")
         return actions
     log = workflow_root() / str(spec["driver_log"])
-    cmd = f"nohup bash scripts/snakemake_slurm.sh {int(spec['max_jobs'])} >> {log.name} 2>&1 &"
+    launcher = _launcher_script(str(spec["name"]))
+    cmd = f"nohup bash scripts/{launcher} {int(spec['max_jobs'])} >> {log.name} 2>&1 &"
     actions.append(f"start driver: MMML_WORKFLOW_CONFIG={cfg_path.name} {cmd}")
     if not dry_run:
         env = os.environ.copy()
         env["MMML_WORKFLOW_CONFIG"] = str(cfg_path)
+        if launcher == "snakemake_local.sh":
+            env["MMML_LOCAL_GPU_PIN"] = "1"
         subprocess.Popen(  # noqa: S603
-            ["bash", "scripts/snakemake_slurm.sh", str(spec["max_jobs"])],
+            ["bash", f"scripts/{launcher}", str(spec["max_jobs"])],
             cwd=workflow_root(),
             env=env,
             stdout=open(log, "a", encoding="utf-8"),
