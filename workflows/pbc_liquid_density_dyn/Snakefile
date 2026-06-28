@@ -69,6 +69,12 @@ def _slurm_extra(wildcards) -> str:
         nodes = [str(x).strip() for x in (config.get("slurm_cpu_nodes") or []) if str(x).strip()]
         if nodes:
             parts.append(f"--nodelist={','.join(nodes)}")
+        exclude = [str(x).strip() for x in (config.get("slurm_exclude_nodes") or []) if str(x).strip()]
+        if exclude:
+            parts.append(f"--exclude={','.join(exclude)}")
+        extra = str(config.get("slurm_extra", "") or "").strip()
+        if extra:
+            parts.append(extra)
         return " ".join(parts)
     if _TIER_ENABLED:
         nodelist = slurm_nodelist_for_tier(_CFG, _burst_tier(wildcards))

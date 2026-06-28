@@ -91,6 +91,9 @@ mm_switch_width: 5.0
 ml_switch_width: 1.5
 ml_gpu_count: 1
 ml_batch_size: 512
+warmup_ml_batch_size: 128
+jax_compile_threads: 1
+warmup_compile_threads: 1
 
 warmup_mlpot_jax: true
 warmup_do_mm: true
@@ -100,12 +103,14 @@ mpirun_wrapper: ../../scripts/mmml-charmm-mpirun.sh
 MMML_MPI_NP: 1
 
 slurm_partition: long
-slurm_max_concurrent: 17
+slurm_max_concurrent: 2
 slurm_nodes: 1
 slurm_ntasks: 1
-slurm_cpus_per_task: 8
-slurm_mem_mb_per_cpu: 4000
+slurm_cpus_per_task: 16
+slurm_mem_mb_per_cpu: 8000
 slurm_runtime_min: 4320
+# Avoid node09 (long-running foreign job + MPI sweep); Snakemake jobs need RAM for JAX compile.
+slurm_exclude_nodes: [node09]
 # slurm_mail_user: you@example.com   # optional; omit = no Slurm mail
 # Omit nodelist to let Slurm pick idle nodes on ``long``.
 # slurm_cpu_nodes: []

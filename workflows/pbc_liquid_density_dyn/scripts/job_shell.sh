@@ -115,6 +115,17 @@ if [[ "$WARMUP_ENABLED" == "1" ]]; then
     [[ -n "$_var" ]] && unset "$_var" 2>/dev/null || true
   done < <(env | cut -d= -f1 | grep -E '^(OMPI_|PMI_|PMIX_|MPI_LOCALRANKID$|SLURM_MPI_TYPE$)' || true)
   export MMML_WARMUP_MLPOT_JAX_ONLY=1
+  export XLA_PYTHON_CLIENT_PREALLOCATE=false
+  _jax_threads="$("$PY" -c "
+import sys
+from pathlib import Path
+sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
+from campaign_lib import load_config
+cfg = load_config(Path('${CFG}'))
+print(int(cfg.get('jax_compile_threads', cfg.get('warmup_compile_threads', 1))))
+")"
+  export MMML_JAX_COMPILE_THREADS="${MMML_JAX_COMPILE_THREADS:-$_jax_threads}"
+  export OMP_NUM_THREADS="${OMP_NUM_THREADS:-$_jax_threads}"
   export OMPI_MCA_ess=singleton
   export OMPI_MCA_mpi_init_support=0
   export OMPI_MCA_plm=^slurm
