@@ -379,11 +379,41 @@ def run_bonded_recovery_inplace(
     )
 
     if config.verbose:
-        print(
-            f"bonded recovery: inplace {mode.value} "
-            "(BLOCK toggle, UPDATE-only lists; no DELETE ATOM PSF reload)",
-            flush=True,
+        backend = str(getattr(config, "backend", "auto")).lower()
+        if mode == BondedRecoveryMode.BONDED_ONLY and backend in ("auto", "jax"):
+            print(
+                f"bonded recovery: inplace {mode.value} "
+                "(JAX bonded mini preferred; MLpot stays attached)",
+                flush=True,
+            )
+        else:
+            print(
+                f"bonded recovery: inplace {mode.value} "
+                "(BLOCK toggle, UPDATE-only lists; no DELETE ATOM PSF reload)",
+                flush=True,
+            )
+
+    if mode == BondedRecoveryMode.BONDED_ONLY and str(
+        getattr(config, "backend", "auto")
+    ).lower() in ("auto", "jax"):
+        from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+            minimize_bonded_mm_recovery,
         )
+
+        try:
+            return minimize_bonded_mm_recovery(
+                ctx,
+                config,
+                topology_psf=topology_psf,
+            )
+        except Exception:
+            if str(getattr(config, "backend", "auto")).lower() == "jax":
+                raise
+            if config.verbose:
+                print(
+                    "inplace bonded JAX recovery failed; falling back to CHARMM SD",
+                    flush=True,
+                )
 
     def _work() -> float | None:
         _apply_recovery_block(mode)

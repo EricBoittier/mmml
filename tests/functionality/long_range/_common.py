@@ -69,7 +69,7 @@ def print_fail(msg: str) -> None:
 
 def have_jax_pme_package() -> bool:
     try:
-        from jaxpme import Ewald, P3M, PME  # noqa: F401
+        import jaxpme  # noqa: F401
 
         return True
     except ImportError:
@@ -83,12 +83,19 @@ def have_scafacos_library() -> bool:
 
 
 def scafacos_integration_enabled() -> bool:
-    """True when ScaFaCoS at ``~/.local/scafacos`` (or SCAFACOS_LIB) passes a smoke run."""
-    if os.environ.get("MMML_SCAFACOS_TESTS", "").strip().lower() in ("0", "no", "false"):
-        return False
-    from mmml.interfaces.scafacosInterface.scafacos_session import scafacos_runtime_ok
+    """Opt-in gate for ScaFaCoS integration tests (avoids MPI crashes in CI)."""
+    flag = os.environ.get("MMML_SCAFACOS_TESTS", "").strip().lower()
+    return flag in ("1", "yes", "true") and have_scafacos_library()
 
-    return scafacos_runtime_ok(method="ewald")
+
+def default_scafacos_method() -> str:
+    """Solver string for tests (env override, else first default-build method)."""
+    from mmml.interfaces.scafacosInterface.scafacos_session import SCAFACOS_DEFAULT_METHODS
+
+    env = os.environ.get("SCAFACOS_METHOD", "").strip()
+    if env:
+        return env
+    return SCAFACOS_DEFAULT_METHODS[0]
 
 
 def ion_dimer_system(
@@ -267,7 +274,7 @@ def jax_pme_coulomb_energy_forces(
 def scafacos_coulomb_energy_forces(
     system: CoulombSystem,
     *,
-    method: str = "ewald",
+    method: str | None = None,
     parameters: dict[str, str | float | int] | None = None,
 ) -> CoulombResult:
     """Full periodic Coulomb via ScaFaCoS libfcs."""
@@ -277,7 +284,7 @@ def scafacos_coulomb_energy_forces(
         system.positions_A,
         system.charges_e,
         box_length_A=system.box_length_A,
-        method=method,
+        method=method or default_scafacos_method(),
         parameters=parameters,
     )
     return CoulombResult(
@@ -291,7 +298,7 @@ def evaluate_backend(
     backend: BackendName,
     *,
     cutoff_A: float | None = DEFAULT_MM_COULOMB_CUTOFF_A,
-    scafacos_method: str = "ewald",
+    scafacos_method: str | None = None,
     sr_cutoff_A: float = 6.0,
 ) -> CoulombResult:
     if backend == "mic":
@@ -304,7 +311,9 @@ def evaluate_backend(
             system, method=method, sr_cutoff_A=sr_cutoff_A  # type: ignore[arg-type]
         )
     if backend == "scafacos":
-        return scafacos_coulomb_energy_forces(system, method=scafacos_method)
+        return scafacos_coulomb_energy_forces(
+            system, method=scafacos_method or default_scafacos_method()
+        )
     raise ValueError(f"unknown backend {backend!r}")
 
 
@@ -342,23 +351,31 @@ def compare_results(
 
 
 def available_scafacos_methods() -> list[str]:
-    from mmml.interfaces.scafacosInterface.scafacos_session import (
-        SCAFACOS_DEFAULT_METHODS,
-        scafacos_runtime_ok,
-    )
+    from mmml.interfaces.scafacosInterface import scafacos_runtime_ok
+    from mmml.interfaces.scafacosInterface.scafacos_session import SCAFACOS_DEFAULT_METHODS
 
-    if not have_scafacos_library():
+    if not scafacos_integration_enabled():
         return []
-    return [m for m in SCAFACOS_DEFAULT_METHODS if scafacos_runtime_ok(method=m)]
+    working: list[str] = []
+    for method in SCAFACOS_DEFAULT_METHODS:
+        if scafacos_runtime_ok(method=method):
+            working.append(method)
+    return working
 
 
 def describe_environment() -> str:
     from mmml.interfaces.pycharmmInterface.long_range_backend import describe_lr_solver
+    from mmml.interfaces.scafacosInterface import scafacos_runtime_ok
 
     lines = [describe_lr_solver()]
     lines.append(f"jaxpme={'yes' if have_jax_pme_package() else 'no'}")
     lines.append(f"scafacos_lib={'yes' if have_scafacos_library() else 'no'}")
-    if have_scafacos_library():
+    if scafacos_integration_enabled():
         methods = available_scafacos_methods()
-        lines.append(f"scafacos_methods={','.join(methods) if methods else 'none probed'}")
+        lines.append(f"scafacos_runtime={'yes' if methods else 'no'}")
+        lines.append(f"scafacos_methods={','.join(methods) if methods else 'none'}")
+    elif have_scafacos_library():
+        lines.append(
+            "scafacos_runtime=skipped (set MMML_SCAFACOS_TESTS=1 and run under mpiexec)"
+        )
     return "\n".join(lines)

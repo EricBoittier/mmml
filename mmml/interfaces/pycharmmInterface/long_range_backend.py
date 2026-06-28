@@ -78,9 +78,180 @@ def pick_lr_solver(requested: str | None = None) -> LrSolverName:
 
 
 @dataclass(frozen=True)
-class LongRangeCoulombResult:
+class LongRangeInteractionResult:
     energy_kcalmol: float
     forces_kcalmol_A: np.ndarray
+
+
+# Backward-compatible alias
+LongRangeCoulombResult = LongRangeInteractionResult
+
+DEFAULT_JAX_PME_LJ_PREFACTOR = -1.0
+
+
+def per_atom_monomer_ids(
+    total_atoms: int,
+    monomer_offsets: np.ndarray,
+    n_monomers: int,
+) -> np.ndarray:
+    """Map each atom index to its 0-based monomer id."""
+    out = np.empty(int(total_atoms), dtype=np.int32)
+    offsets = np.asarray(monomer_offsets, dtype=np.int64)
+    for mi in range(int(n_monomers)):
+        out[offsets[mi] : offsets[mi + 1]] = mi
+    return out
+
+
+def scale_per_atom_coefficients_by_monomer_lambda(
+    coeffs: np.ndarray,
+    monomer_ids: np.ndarray,
+    lambda_monomer: np.ndarray,
+) -> np.ndarray:
+    """Apply hybrid ``lambda_monomer`` as sqrt(λ) per atom (pair product λ_i λ_j)."""
+    lam = np.asarray(lambda_monomer, dtype=np.float64)
+    mid = np.asarray(monomer_ids, dtype=np.int32)
+    scaled = np.asarray(coeffs, dtype=np.float64).copy()
+    scaled *= np.sqrt(np.maximum(lam[mid], 0.0))
+    return scaled
+
+
+def per_atom_jax_pme_c6_sqrt(
+    epsilons_kcal: np.ndarray,
+    rmins_A: np.ndarray,
+) -> np.ndarray:
+    """Per-atom √C6 for jax-pme exponent=6 (geometric k-space combining).
+
+    Uses per-atom C6_i = 2 |ε_i| σ_i^6 with ε, σ already scaled (``ep_scale`` /
+    ``sig_scale`` in ``build_mm_energy_forces_fn``).  Reciprocal-space products
+    √C6_i √C6_j approximate Lorentz–Berthelot r⁻⁶ like GROMACS ``lj-pme-comb-rule
+    geometric``; direct-space r⁻¹² in the pair loop keeps exact LB σ_ij, ε_ij.
+    """
+    ep_abs = np.abs(np.asarray(epsilons_kcal, dtype=np.float64))
+    sig = np.asarray(rmins_A, dtype=np.float64)
+    c6 = 2.0 * ep_abs * np.power(sig, 6)
+    return np.sqrt(c6)
+
+
+def per_atom_jax_pme_c6_sqrt_for_atoms(
+    epsilons_per_atom: np.ndarray,
+    rmins_per_atom: np.ndarray,
+    *,
+    monomer_ids: np.ndarray | None = None,
+    lambda_monomer: np.ndarray | None = None,
+) -> np.ndarray:
+    """√C6 per atom, optionally scaled by hybrid monomer λ."""
+    out = per_atom_jax_pme_c6_sqrt(epsilons_per_atom, rmins_per_atom)
+    if monomer_ids is not None and lambda_monomer is not None:
+        out = scale_per_atom_coefficients_by_monomer_lambda(
+            out, monomer_ids, lambda_monomer
+        )
+    return out
+
+
+def compute_jax_pme_power_law(
+    positions_A: np.ndarray,
+    coefficients: np.ndarray,
+    *,
+    box_length_A: float,
+    method: JaxPmeMethod | str = "ewald",
+    sr_cutoff_A: float = DEFAULT_JAX_PME_SR_CUTOFF_A,
+    exponent: int = 1,
+    prefactor: float | None = None,
+) -> LongRangeInteractionResult:
+    """Periodic 1/r^p interaction via jax-pme (Ewald / PME / P3M).
+
+    ``coefficients`` are jax-pme "charges" (elementary charge for p=1, √C6 for
+    attractive dispersion with ``prefactor=-1`` and p=6).
+    """
+    from ase import Atoms
+    from jaxpme import Ewald, P3M, PME
+    from jaxpme import prefactors as jpref
+
+    if int(exponent) not in (1, 2, 3, 4, 5, 6):
+        raise ValueError(f"jax_pme exponent must be 1..6; got {exponent}")
+    if prefactor is None:
+        prefactor = float(jpref.kcalmol_A) if int(exponent) == 1 else DEFAULT_JAX_PME_LJ_PREFACTOR
+
+    method_name = resolve_jax_pme_method(str(method))
+    pos = np.asarray(positions_A, dtype=np.float64)
+    coef = np.asarray(coefficients, dtype=np.float64).reshape(-1)
+    if pos.ndim != 2 or pos.shape[1] != 3:
+        raise ValueError(f"positions must be (n_atoms, 3); got {pos.shape}")
+    if coef.shape[0] != pos.shape[0]:
+        raise ValueError(f"coefficients length {coef.shape[0]} != n_atoms {pos.shape[0]}")
+    L = float(box_length_A)
+    atoms = Atoms(positions=pos, cell=np.eye(3) * L, pbc=True)
+    calc_map = {"ewald": Ewald, "pme": PME, "p3m": P3M}
+    calc = calc_map[method_name](
+        exponent=int(exponent),
+        prefactor=float(prefactor),
+    )
+    smearing = float(sr_cutoff_A) / 5.0
+    mesh_spacing = smearing / 8.0
+    lr_wavelength = smearing / 2.0
+    if method_name == "ewald":
+        inputs = calc.prepare(
+            atoms,
+            coef,
+            cutoff=float(sr_cutoff_A),
+            smearing=smearing,
+            lr_wavelength=lr_wavelength,
+        )
+    else:
+        inputs = calc.prepare(
+            atoms,
+            coef,
+            cutoff=float(sr_cutoff_A),
+            mesh_spacing=mesh_spacing,
+            smearing=smearing,
+        )
+    energy, forces = calc.energy_forces(*inputs)
+    return LongRangeInteractionResult(
+        energy_kcalmol=float(energy),
+        forces_kcalmol_A=np.asarray(forces, dtype=np.float64),
+    )
+
+
+def compute_jax_pme_coulomb(
+    positions_A: np.ndarray,
+    charges_e: np.ndarray,
+    *,
+    box_length_A: float,
+    method: JaxPmeMethod | str = "ewald",
+    sr_cutoff_A: float = DEFAULT_JAX_PME_SR_CUTOFF_A,
+) -> LongRangeInteractionResult:
+    """Full periodic Coulomb via jax-pme (Ewald / PME / P3M)."""
+    from jaxpme import prefactors as jpref
+
+    return compute_jax_pme_power_law(
+        positions_A,
+        charges_e,
+        box_length_A=box_length_A,
+        method=method,
+        sr_cutoff_A=sr_cutoff_A,
+        exponent=1,
+        prefactor=float(jpref.kcalmol_A),
+    )
+
+
+def compute_jax_pme_lj_dispersion(
+    positions_A: np.ndarray,
+    c6_sqrt: np.ndarray,
+    *,
+    box_length_A: float,
+    method: JaxPmeMethod | str = "ewald",
+    sr_cutoff_A: float = DEFAULT_JAX_PME_SR_CUTOFF_A,
+) -> LongRangeInteractionResult:
+    """Attractive r⁻⁶ LJ tail via jax-pme (prefactor −1, exponent 6)."""
+    return compute_jax_pme_power_law(
+        positions_A,
+        c6_sqrt,
+        box_length_A=box_length_A,
+        method=method,
+        sr_cutoff_A=sr_cutoff_A,
+        exponent=6,
+        prefactor=DEFAULT_JAX_PME_LJ_PREFACTOR,
+    )
 
 
 class LongRangeCoulombSolver(Protocol):
@@ -94,7 +265,7 @@ class LongRangeCoulombSolver(Protocol):
         charges_e: np.ndarray,
         *,
         box_length_A: float,
-    ) -> LongRangeCoulombResult:
+    ) -> LongRangeInteractionResult:
         """Return total electrostatic energy and forces for all atoms."""
 
 
@@ -109,7 +280,7 @@ class MicOnlySolver:
         charges_e: np.ndarray,
         *,
         box_length_A: float,
-    ) -> LongRangeCoulombResult:
+    ) -> LongRangeInteractionResult:
         raise NotImplementedError(
             "mic backend evaluates Coulomb inside build_mm_energy_forces_fn; "
             "no separate long-range pass"
@@ -134,56 +305,6 @@ def box_length_from_cell(cell: np.ndarray) -> float:
             return float(arr[0])
         return float(arr.reshape(-1)[0])
     return float(arr[0, 0])
-
-
-def compute_jax_pme_coulomb(
-    positions_A: np.ndarray,
-    charges_e: np.ndarray,
-    *,
-    box_length_A: float,
-    method: JaxPmeMethod | str = "ewald",
-    sr_cutoff_A: float = DEFAULT_JAX_PME_SR_CUTOFF_A,
-) -> LongRangeCoulombResult:
-    """Full periodic Coulomb via jax-pme (Ewald / PME / P3M)."""
-    from ase import Atoms
-    from jaxpme import Ewald, P3M, PME
-    from jaxpme import prefactors as jpref
-
-    method_name = resolve_jax_pme_method(str(method))
-    pos = np.asarray(positions_A, dtype=np.float64)
-    chg = np.asarray(charges_e, dtype=np.float64).reshape(-1)
-    if pos.ndim != 2 or pos.shape[1] != 3:
-        raise ValueError(f"positions must be (n_atoms, 3); got {pos.shape}")
-    if chg.shape[0] != pos.shape[0]:
-        raise ValueError(f"charges length {chg.shape[0]} != n_atoms {pos.shape[0]}")
-    L = float(box_length_A)
-    atoms = Atoms(positions=pos, cell=np.eye(3) * L, pbc=True)
-    calc_map = {"ewald": Ewald, "pme": PME, "p3m": P3M}
-    calc = calc_map[method_name](prefactor=jpref.kcalmol_A)
-    smearing = float(sr_cutoff_A) / 5.0
-    mesh_spacing = smearing / 8.0
-    lr_wavelength = smearing / 2.0
-    if method_name == "ewald":
-        inputs = calc.prepare(
-            atoms,
-            chg,
-            cutoff=float(sr_cutoff_A),
-            smearing=smearing,
-            lr_wavelength=lr_wavelength,
-        )
-    else:
-        inputs = calc.prepare(
-            atoms,
-            chg,
-            cutoff=float(sr_cutoff_A),
-            mesh_spacing=mesh_spacing,
-            smearing=smearing,
-        )
-    energy, forces = calc.energy_forces(*inputs)
-    return LongRangeCoulombResult(
-        energy_kcalmol=float(energy),
-        forces_kcalmol_A=np.asarray(forces, dtype=np.float64),
-    )
 
 
 class JaxPmeLongRangeSolver:

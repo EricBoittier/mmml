@@ -1819,6 +1819,9 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     pre_sd_bonded_recovery_nstep=int(
                         getattr(args, "bonded_mm_mini_steps", 200) or 200
                     ),
+                    pre_sd_bonded_recovery_backend=str(
+                        getattr(args, "bonded_recovery_backend", "auto")
+                    ),
                     calculator_pre_minimize=bool(
                         getattr(args, "calculator_pre_minimize", True)
                     ),
@@ -2042,6 +2045,9 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     pre_sd_bonded_recovery_nstep=int(
                         getattr(args, "bonded_mm_mini_steps", 200) or 200
                     ),
+                    pre_sd_bonded_recovery_backend=str(
+                        getattr(args, "bonded_recovery_backend", "auto")
+                    ),
                     calculator_pre_minimize=bool(
                         getattr(args, "calculator_pre_minimize", True)
                     ),
@@ -2074,12 +2080,12 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 )
             from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import apply_charmm_position_noise
             from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
-                BondedMmMiniConfig,
+                bonded_mm_mini_config_from_namespace,
                 minimize_bonded_mm_recovery,
             )
-            recovery_config = BondedMmMiniConfig(
+            recovery_config = bonded_mm_mini_config_from_namespace(
+                args,
                 nstep_sd=mini_nstep,
-                nprint=max(1, int(getattr(args, "nprint", 100))),
                 tolenr=float(getattr(args, "charmm_tolenr", 1e-3)),
                 tolgrd=float(getattr(args, "charmm_tolgrd", 1e-3)),
                 verbose=not bool(args.quiet),

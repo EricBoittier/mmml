@@ -108,6 +108,7 @@ def _pycharmm_args(**overrides) -> argparse.Namespace:
         bonded_mm_mini=True,
         bonded_mm_mini_after="mini,heat",
         bonded_mm_mini_steps=50,
+        bonded_recovery_backend="jax",
         bonded_mm_internal_margin=0.0,
         bonded_mm_mini_always=False,
     )
@@ -166,6 +167,12 @@ def test_build_pycharmm_command_includes_ml_max_active_dimers_when_set():
     assert "--ml-max-active-dimers" in cmd
     idx = cmd.index("--ml-max-active-dimers")
     assert cmd[idx + 1] == "1200"
+
+
+def test_build_pycharmm_command_forwards_bonded_recovery_backend():
+    cmd = build_pycharmm_command(_pycharmm_args(bonded_recovery_backend="jax"))
+    idx = cmd.index("--bonded-recovery-backend")
+    assert cmd[idx + 1] == "jax"
 
 
 def test_build_pycharmm_command_forwards_intra_monomer_guard():

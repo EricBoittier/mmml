@@ -3,7 +3,7 @@
 #
 # Phase 0 (optional): health-check --require-gpu --live
 # Phase A: mmml liquid-box  — MM-only certification (Packmol → MC → SD/ABNR → optional mini-NPT)
-# Phase B: mmml md-system   — hybrid MLpot mini (+ optional heat/equi) from certified box
+# Phase B: mmml md-system   — hybrid MLpot mini → heat → equi from certified box
 #
 # MIC + liquid density (read this before changing N_DCM):
 #   Bulk DCM @ ρ=1.326 g/cm³ gives L ≈ (N × 106 Å³)^(1/3).
@@ -16,8 +16,12 @@
 #     • Initial placement is sub-bulk ρ; MC + NPT equi (dense profile / ps_equi) densify toward liquid
 #   Documented in docs/md-system-configs.md (DCM:60 @ box_size 32).
 #
-#   Faster smoke (not production MIC): N_DCM=20 BOX_SIZE=45 (dilute, like long-range test configs)
+#   Faster smoke (not production MIC): MD_PROFILE=smoke N_DCM=20 BOX_SIZE=45
 #   True bulk ρ + MIC: BOX_AUTO=count BOX_SIZE=32 (→ ~DCM:308; slow; ensure_charmm_mlpot_limits)
+#
+# MD profiles (Phase B):
+#   resilient (default) — full preset stack via dcm_liquid_workflow.resilient.yaml
+#   smoke             — stripped mini-only run (legacy fast path)
 #
 # Prerequisites:
 #   module load GCC/14.2.0 OpenMPI/5.0.7-GCC-14.2.0 CMake/3.31.3-GCCcore-14.2.0
@@ -30,8 +34,8 @@
 #   export MMML_CKPT=~/mmml/mmml/models/physnetjax/defaults/hf_json/<ckpt>.json
 #   ~/mmml/scripts/run_dcm_liquid_workflow.sh
 #   N_DCM=90 BOX_SIZE=32 ~/mmml/scripts/run_dcm_liquid_workflow.sh
-#   N_DCM=20 BOX_SIZE=45 SKIP_HEALTH=1 ~/mmml/scripts/run_dcm_liquid_workflow.sh  # fast dilute smoke
-#   MD_STAGES=mini,equi PS_EQUI=10 ~/mmml/scripts/run_dcm_liquid_workflow.sh
+#   MD_PROFILE=smoke N_DCM=20 BOX_SIZE=45 SKIP_HEALTH=1 ~/mmml/scripts/run_dcm_liquid_workflow.sh
+#   MINI_BOX_EQUIL_PS=10 REBUILD_BOX=1 ~/mmml/scripts/run_dcm_liquid_workflow.sh
 #   SKIP_HEALTH=1 SKIP_LIQUID_BOX=1 BOX_DIR=~/tests/boxes/dcm60_l32 ~/mmml/scripts/run_dcm_liquid_workflow.sh
 #   LIQUID_BOX_VERBOSE=1 ~/mmml/scripts/run_dcm_liquid_workflow.sh  # drop --quiet on liquid-box
 #
@@ -47,6 +51,7 @@ set -euo pipefail
 MMML_ROOT="${MMML_ROOT:-$HOME/mmml}"
 TESTS_ROOT="${TESTS_ROOT:-$HOME/tests}"
 MPIRUN="${MMML_MPIRUN_WRAPPER:-$MMML_ROOT/scripts/mmml-charmm-mpirun.sh}"
+RESILIENT_MD_CONFIG="$MMML_ROOT/mmml/cli/run/dcm_liquid_workflow.resilient.yaml"
 
 # shellcheck source=scripts/resolve_mmml_env.sh
 source "$MMML_ROOT/scripts/resolve_mmml_env.sh"
@@ -60,7 +65,6 @@ DCM_RHO="${DCM_RHO:-1.326}"            # g/cm³ target for MC / NPT equilibratio
 MIC_MIN_BOX="${MIC_MIN_BOX:-28}"         # Å; warn below this (L/2 vs ml_cutoff/cutnb)
 ML_CUTOFF="${ML_CUTOFF:-12.0}"
 LIQUID_BOX_PROFILE="${LIQUID_BOX_PROFILE:-dense}"  # dense → liquid_prep + mini-NPT toward ρ
-MINI_BOX_EQUIL_PS="${MINI_BOX_EQUIL_PS:-}"         # empty = liquid-box profile default (2 ps dense)
 
 # --- phases -----------------------------------------------------------------
 SKIP_HEALTH="${SKIP_HEALTH:-0}"
@@ -69,10 +73,29 @@ SKIP_MD="${SKIP_MD:-0}"
 REBUILD_BOX="${REBUILD_BOX:-0}"
 
 # --- md-system (Phase B) ----------------------------------------------------
-MD_STAGES="${MD_STAGES:-mini,equi}"
-MINI_NSTEP="${MINI_NSTEP:-50}"
-PS_HEAT="${PS_HEAT:-3.0}"
-PS_EQUI="${PS_EQUI:-10.0}"
+MD_PROFILE="${MD_PROFILE:-resilient}"  # resilient | smoke
+
+case "$MD_PROFILE" in
+  resilient)
+    MD_STAGES="${MD_STAGES:-mini,heat,equi}"
+    MINI_NSTEP="${MINI_NSTEP:-500}"
+    PS_HEAT="${PS_HEAT:-10.0}"
+    PS_EQUI="${PS_EQUI:-10.0}"
+    MINI_BOX_EQUIL_PS="${MINI_BOX_EQUIL_PS:-5.0}"
+    ;;
+  smoke)
+    MD_STAGES="${MD_STAGES:-mini}"
+    MINI_NSTEP="${MINI_NSTEP:-30}"
+    PS_HEAT="${PS_HEAT:-3.0}"
+    PS_EQUI="${PS_EQUI:-10.0}"
+    MINI_BOX_EQUIL_PS="${MINI_BOX_EQUIL_PS:-}"
+    ;;
+  *)
+    echo "Unknown MD_PROFILE=$MD_PROFILE (expected resilient or smoke)" >&2
+    exit 1
+    ;;
+esac
+
 ML_BATCH_SIZE="${ML_BATCH_SIZE:-64}"
 ML_GPU_COUNT="${ML_GPU_COUNT:-1}"
 TEMPERATURE="${TEMPERATURE:-300.0}"
@@ -92,6 +115,10 @@ if [[ ! -d "$MMML_ROOT" ]]; then
 fi
 if [[ ! -x "$MPIRUN" ]]; then
   echo "mpirun wrapper not found: $MPIRUN" >&2
+  exit 1
+fi
+if [[ "$MD_PROFILE" == "resilient" && ! -f "$RESILIENT_MD_CONFIG" ]]; then
+  echo "Resilient md-system config not found: $RESILIENT_MD_CONFIG" >&2
   exit 1
 fi
 
@@ -155,13 +182,14 @@ echo " Effective ρ₀:   ${EFF_RHO} g/cm³ in ${BOX_SIZE} Å cube (target ${DCM
 echo " MIC min L:      ${MIC_MIN_BOX} Å (2×ml_cutoff+2 ≈ $("$PY" -c "print(2*${ML_CUTOFF}+2)"))"
 echo " Box dir:        $BOX_DIR"
 echo " Run dir:        $RUN_DIR"
+echo " MD profile:     $MD_PROFILE"
 echo " MD stages:      $MD_STAGES"
 echo " Checkpoint:     $MMML_CKPT"
 echo "================================================================"
 
 if [[ "$MIC_OK" != "1" ]]; then
   echo "ERROR: BOX_SIZE=${BOX_SIZE} Å is below MIC-safe minimum (~${MIC_MIN_BOX} Å)." >&2
-  echo "  Use BOX_SIZE=32 (default) or N_DCM=20 BOX_SIZE=45 for dilute smoke." >&2
+  echo "  Use BOX_SIZE=32 (default) or MD_PROFILE=smoke N_DCM=20 BOX_SIZE=45." >&2
   exit 1
 fi
 
@@ -193,10 +221,22 @@ if [[ "$SKIP_LIQUID_BOX" != "1" ]]; then
       --target-density-g-cm3 "$DCM_RHO"
       --profile "$LIQUID_BOX_PROFILE"
       --output-dir "$BOX_DIR"
-      --charmm-sd-steps "${CHARMM_SD_STEPS:-100}"
-      --charmm-abnr-steps "${CHARMM_ABNR_STEPS:-200}"
       --temperature "$TEMPERATURE"
     )
+    # Do not pass low SD/ABNR defaults on resilient runs — dense profile bumps to ≥1000.
+    if [[ "$MD_PROFILE" == "smoke" ]]; then
+      LIQUID_BOX_ARGS+=(
+        --charmm-sd-steps "${CHARMM_SD_STEPS:-100}"
+        --charmm-abnr-steps "${CHARMM_ABNR_STEPS:-200}"
+      )
+    else
+      if [[ -n "${CHARMM_SD_STEPS:-}" ]]; then
+        LIQUID_BOX_ARGS+=(--charmm-sd-steps "$CHARMM_SD_STEPS")
+      fi
+      if [[ -n "${CHARMM_ABNR_STEPS:-}" ]]; then
+        LIQUID_BOX_ARGS+=(--charmm-abnr-steps "$CHARMM_ABNR_STEPS")
+      fi
+    fi
     if [[ -n "$MINI_BOX_EQUIL_PS" ]]; then
       LIQUID_BOX_ARGS+=(--mini-box-equil-ps "$MINI_BOX_EQUIL_PS")
     fi
@@ -229,39 +269,65 @@ PY
 fi
 
 if [[ "$SKIP_MD" != "1" ]]; then
-  echo "[phase B] md-system (hybrid MLpot, from certified box) ..."
+  echo "[phase B] md-system (profile=${MD_PROFILE}, from certified box) ..."
   mkdir -p "$RUN_DIR"
-  MD_ARGS=(
-    md-system
-    --setup pbc_npt
-    --backend pycharmm
-    --composition "DCM:${N_DCM}"
-    --from-psf "$PSF"
-    --from-crd "$CRD"
-    --skip-cluster-build
-    --checkpoint "$MMML_CKPT"
-    --output-dir "$RUN_DIR"
-    --md-stages "$MD_STAGES"
-    --mini-nstep "$MINI_NSTEP"
-    --ps-heat "$PS_HEAT"
-    --ps-equi "$PS_EQUI"
-    --temperature "$TEMPERATURE"
-    --pressure "$PRESSURE"
-    --ml-batch-size "$ML_BATCH_SIZE"
-    --ml-gpu-count "$ML_GPU_COUNT"
-    --no-echeck
-    --no-bonded-mm-mini
-    --no-charmm-pre-minimize
-    --max-grms-before-dyn 80.0
-    --mini-lattice-abnr-steps 0
-    --density-prep-lattice-abnr-steps 0
-    --mini-box-equil-ps 0
-    --mm-switch-on 9.0
-    --mm-switch-width 1.5
-    --ml-switch-width 1.0
-    --include-mm
-    --seed 123
-  )
+  if [[ "$MD_PROFILE" == "resilient" ]]; then
+    MD_ARGS=(
+      md-system
+      --config "$RESILIENT_MD_CONFIG"
+      --composition "DCM:${N_DCM}"
+      --from-psf "$PSF"
+      --from-crd "$CRD"
+      --box-size "$BOX_SIZE"
+      --skip-cluster-build
+      --checkpoint "$MMML_CKPT"
+      --output-dir "$RUN_DIR"
+      --md-stages "$MD_STAGES"
+      --mini-nstep "$MINI_NSTEP"
+      --ps-heat "$PS_HEAT"
+      --ps-equi "$PS_EQUI"
+      --temperature "$TEMPERATURE"
+      --pressure "$PRESSURE"
+      --ml-batch-size "$ML_BATCH_SIZE"
+      --ml-gpu-count "$ML_GPU_COUNT"
+    )
+    if [[ -n "$MINI_BOX_EQUIL_PS" ]]; then
+      MD_ARGS+=(--mini-box-equil-ps "$MINI_BOX_EQUIL_PS")
+    fi
+  else
+    MD_ARGS=(
+      md-system
+      --setup pbc_npt
+      --backend pycharmm
+      --composition "DCM:${N_DCM}"
+      --from-psf "$PSF"
+      --from-crd "$CRD"
+      --skip-cluster-build
+      --checkpoint "$MMML_CKPT"
+      --output-dir "$RUN_DIR"
+      --md-stages "$MD_STAGES"
+      --mini-nstep "$MINI_NSTEP"
+      --ps-heat "$PS_HEAT"
+      --ps-equi "$PS_EQUI"
+      --temperature "$TEMPERATURE"
+      --pressure "$PRESSURE"
+      --ml-batch-size "$ML_BATCH_SIZE"
+      --ml-gpu-count "$ML_GPU_COUNT"
+      --no-echeck
+      --no-bonded-mm-mini
+      --no-charmm-pre-minimize
+      --max-grms-before-dyn 80.0
+      --mini-lattice-abnr-steps 0
+      --density-prep-lattice-abnr-steps 0
+      --mini-box-equil-ps 0
+      --mm-switch-on 9.0
+      --mm-switch-width 1.5
+      --ml-switch-width 1.0
+      --include-mm
+      --seed 123
+      --quiet
+    )
+  fi
   "$MPIRUN" "${MD_ARGS[@]}" "$@"
 fi
 

@@ -384,7 +384,7 @@ def _with_mlpot_detached(ctx: "MlpotContext", fn):
 
 @dataclass
 class BondedMmMiniConfig:
-    """Short bonded-only SD with MLpot temporarily detached (pure CHARMM bonded)."""
+    """Short bonded-only recovery mini (JAX FIRE and/or CHARMM SD)."""
 
     nstep_sd: int = 50
     nprint: int = 10
@@ -392,6 +392,41 @@ class BondedMmMiniConfig:
     tolgrd: float = 1e-3
     verbose: bool = True
     show_energy: bool = False
+    backend: str = "auto"
+    nstep_jax: int | None = None
+
+
+def bonded_mm_mini_config_from_namespace(
+    args: Any,
+    *,
+    nstep_sd: int | None = None,
+    verbose: bool | None = None,
+    **overrides: Any,
+) -> BondedMmMiniConfig:
+    """Build :class:`BondedMmMiniConfig` from md-system / dynamics CLI namespace."""
+    nprint = max(
+        1,
+        int(
+            getattr(args, "nprint", None)
+            or getattr(args, "dyn_nprint", 10)
+            or 10
+        ),
+    )
+    kw: dict[str, Any] = dict(
+        nstep_sd=int(
+            nstep_sd
+            if nstep_sd is not None
+            else getattr(args, "bonded_mm_mini_steps", 50)
+        ),
+        nprint=nprint,
+        verbose=not bool(getattr(args, "quiet", False))
+        if verbose is None
+        else bool(verbose),
+        show_energy=bool(getattr(args, "show_energy", False)),
+        backend=str(getattr(args, "bonded_recovery_backend", "auto")),
+    )
+    kw.update(overrides)
+    return BondedMmMiniConfig(**kw)
 
 
 def _with_mlpot_block_restored(ctx: "MlpotContext", fn):
@@ -460,8 +495,45 @@ def _prepare_bonded_mm_rescue_environment(ctx: "MlpotContext") -> None:
 def minimize_bonded_mm_recovery(
     ctx: "MlpotContext",
     config: BondedMmMiniConfig,
+    *,
+    topology_psf: PathLike | None = None,
 ) -> float | None:
-    """Bonded-only rescue SD (BOND/ANGL/DIHE); MLpot detached for pure CHARMM minimization."""
+    """Bonded-only recovery mini (JAX FIRE when enabled, else CHARMM SD with MLpot detached)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+
+    if not isinstance(ctx, MlpotContext) and not hasattr(ctx, "mock_calls"):
+        raise TypeError("ctx must be MlpotContext")
+
+    backend = str(getattr(config, "backend", "auto")).lower()
+    if backend in ("auto", "jax"):
+        from mmml.interfaces.pycharmmInterface.mlpot.bonded_jax_recovery import (
+            minimize_bonded_jax_recovery,
+        )
+
+        try:
+            grms = minimize_bonded_jax_recovery(
+                ctx,
+                config,
+                topology_psf=topology_psf,
+            )
+            if grms is not None:
+                return grms
+        except Exception as exc:
+            if backend == "jax":
+                raise
+            if config.verbose:
+                print(
+                    f"Bonded JAX recovery skipped ({exc}); falling back to CHARMM SD",
+                    flush=True,
+                )
+    return _minimize_bonded_charmm_recovery(ctx, config)
+
+
+def _minimize_bonded_charmm_recovery(
+    ctx: "MlpotContext",
+    config: BondedMmMiniConfig,
+) -> float | None:
+    """Bonded-only CHARMM SD (BOND/ANGL/DIHE); MLpot detached for pure CHARMM minimization."""
     from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_bonded_mm_only_block
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         MlpotContext,
@@ -653,6 +725,7 @@ class MinimizeWithMlpotConfig:
     pre_sd_bonded_recovery_nstep: int = 200
     # Also run bonded-MM rescue when MLpot GRMS exceeds this (kcal/mol/Å).
     pre_sd_bonded_recovery_grms_kcalmol_A: Optional[float] = None
+    pre_sd_bonded_recovery_backend: str = "auto"
     # Chunk long SD/ABNR passes and CHARMM UPDATE between chunks (``inbfrq=0``).
     sd_chunk_nstep: Optional[int] = None
     # Stop SD/ABNR early when hybrid GRMS exceeds ``factor * initial`` or rises sharply.
@@ -5272,6 +5345,7 @@ def minimize_with_mlpot(
                 grms_limit=config.pre_sd_bonded_recovery_grms_kcalmol_A,
                 energy_limit=config.pre_sd_bonded_recovery_energy_kcalmol,
                 bonded_recovery_nstep=config.pre_sd_bonded_recovery_nstep,
+                bonded_recovery_backend=config.pre_sd_bonded_recovery_backend,
                 bonded_recovery_verbose=config.verbose,
                 bonded_recovery_show_energy=config.show_energy,
                 bonded_recovery_nprint=config.nprint,

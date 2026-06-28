@@ -775,7 +775,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--bonded-mm-mini-steps",
         type=int,
         default=50,
-        help="pycharmm: bonded recovery SD steps (default: 50)",
+        help="pycharmm: bonded recovery mini steps (default: 50)",
+    )
+    parser.add_argument(
+        "--bonded-recovery-backend",
+        choices=("auto", "jax", "charmm"),
+        default="auto",
+        help=(
+            "pycharmm: bonded recovery minimizer — JAX FIRE without MLpot detach "
+            "(auto tries JAX first), CHARMM SD, or auto (default: auto)"
+        ),
     )
     parser.add_argument(
         "--bonded-mm-mini-always",
@@ -925,6 +934,30 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-steps", type=int, default=None, help="lambda_ti: alias for --pre-min-steps.")
     parser.add_argument("--min-fmax", type=float, default=None, help="lambda_ti: alias for --pre-min-fmax.")
     parser.add_argument("--bfgs-maxstep", type=float, default=0.05)
+    parser.add_argument(
+        "--fire-min-steps",
+        type=int,
+        default=200,
+        help="ASE FIRE steps during calculator pre-minimize / rescue (default 200).",
+    )
+    parser.add_argument(
+        "--fire-min-maxstep",
+        type=float,
+        default=0.2,
+        help="ASE FIRE max atomic displacement per step in Å (default 0.2).",
+    )
+    parser.add_argument(
+        "--rescue-fire-fmax",
+        type=float,
+        default=0.05,
+        help="FIRE force convergence threshold in eV/Å for calculator rescue (default 0.05).",
+    )
+    parser.add_argument(
+        "--quiet-bfgs",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Suppress ASE BFGS/FIRE log output during calculator pre-minimize.",
+    )
     parser.add_argument(
         "--charmm-pre-minimize",
         action=argparse.BooleanOptionalAction,
@@ -2162,6 +2195,12 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
             [
                 "--bonded-mm-mini-steps",
                 str(getattr(args, "bonded_mm_mini_steps", 50)),
+            ]
+        )
+        cmd.extend(
+            [
+                "--bonded-recovery-backend",
+                str(getattr(args, "bonded_recovery_backend", "auto")),
             ]
         )
         cmd.extend(

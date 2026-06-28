@@ -66,6 +66,10 @@ defaults:
   mm_switch_on: 6.0
   mm_switch_width: 4.0
   ml_switch_width: 0.5
+  mm_nonbond_mode: jax_mic
+  lr_solver: jax_pme
+  jax_pme_method: ewald
+  jax_pme_sr_cutoff: 6.0
 
 campaign_output: artifacts/dcm_small
 
@@ -110,7 +114,7 @@ Tier 2 spatial MPI example YAML: `mmml/cli/run/md_system.spatial_mpi.example.yam
 
 For condensed phase, keep the template staged and explicit:
 
-1. Put shared physical settings in `defaults`: `composition`, `checkpoint`, `box_size` or density sizing, `dt_fs`, `temperature`, `pressure`, cutoffs, and seed.
+1. Put shared physical settings in `defaults`: `composition`, `checkpoint`, `box_size` or density sizing, `dt_fs`, `temperature`, `pressure`, cutoffs, long-range Coulomb (`lr_solver`, `jax_pme_method`, `jax_pme_sr_cutoff` when using jax-pme), and seed.
 2. Use a short PyCHARMM leg first: `md_stages: "mini,heat,equi"` with overlap rescue and bonded MM repair enabled. This catches bad contacts before long JAX-MD runs.
 3. Use JAX-MD for fixed-cell production or NVE replicas after the PyCHARMM handoff. Keep neighbor-list capacity and refresh controls in the JAX-MD run block.
 4. Return to PyCHARMM only when you need CHARMM restart output, CPT/NPT behavior, or MLpot-specific diagnostics.
@@ -642,6 +646,10 @@ defaults:
   mm_switch_on: 6.0
   mm_switch_width: 4.0
   ml_switch_width: 1.0
+  mm_nonbond_mode: jax_mic
+  lr_solver: jax_pme
+  jax_pme_method: ewald
+  jax_pme_sr_cutoff: 6.0
   box_auto: density
   bulk_density_fraction: 0.75
   target_density_g_cm3: 1.326
@@ -814,7 +822,9 @@ Hybrid ML/MM potentials use three COM-distance knobs (Å) plus optional long-ran
 | `mlpot_mm_internal_scale` | Scale CGENFF BOND/ANGL/DIHE on ML atoms during MLpot BLOCK (0=off) | 0.0 |
 | `mm_nonbond_mode` | `jax_mic` (JAX real-space MM) or `periodic_external` (ScaFaCoS + CHARMM) | `jax_mic` |
 | `include_mm` | JAX switched MM pairs (LJ + MIC Coulomb) in hybrid calculator | `true` |
-| `lr_solver` | Long-range Coulomb when `periodic_external`: `auto`, `mic`, `scafacos`, `jax_pme` | env / `auto` |
+| `lr_solver` | Long-range Coulomb: `auto`, `mic`, `scafacos`, `jax_pme` (`jax_mic`: MIC or jax-pme elec + switched LJ; `periodic_external`: jax-pme or ScaFaCoS) | env / `auto` |
+| `jax_pme_method` | jax-pme variant when `lr_solver: jax_pme`: `ewald`, `pme`, `p3m` | `ewald` |
+| `jax_pme_sr_cutoff` | jax-pme real-space cutoff (Å) | `6.0` |
 | `periodic_charmm_vdw` | With `periodic_external`: keep CHARMM IMAGE LJ (default true) | true |
 
 Legacy YAML aliases still work: `ml_cutoff` → `ml_switch_width`, `mm_cutoff` → `mm_switch_width`.
@@ -938,6 +948,9 @@ defaults:
   ml_switch_width: 1.0
   mlpot_mm_internal_scale: 0.0
   mm_nonbond_mode: jax_mic
+  lr_solver: jax_pme
+  jax_pme_method: ewald
+  jax_pme_sr_cutoff: 6.0
 ```
 
 #### Resilient density prep + explicit cutoffs
@@ -1068,6 +1081,8 @@ defaults:
   ml_switch_width: 1.0
   mlpot_mm_internal_scale: 0.0
   mm_nonbond_mode: jax_mic
+  lr_solver: jax_pme
+  jax_pme_method: ewald
 
 campaign_output: artifacts/dcm_cutoff_matched
 

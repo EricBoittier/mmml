@@ -119,7 +119,16 @@ fi
 
 SUMMARY_TSV="$RUN_ROOT/solver_comparison.tsv"
 mkdir -p "$RUN_ROOT"
-echo -e "lr_solver\tjax_pme_method\tscafacos_method\tmm_nonbond_mode\trun_dir\tstatus" > "$SUMMARY_TSV"
+echo -e "lr_solver\tjax_pme_method\tscafacos_method\tmm_nonbond_mode\trun_dir\tstatus\hybrid_grms_kcalmol_A" > "$SUMMARY_TSV"
+
+read_hybrid_grms() {
+  "$PY" -c "
+from pathlib import Path
+from mmml.interfaces.pycharmmInterface.lr_solver_grms_compare import read_hybrid_grms_from_output_dir
+val = read_hybrid_grms_from_output_dir(Path('$1'))
+print('' if val is None else f'{val:.6f}')
+"
+}
 
 if [[ "$SKIP_MD" != "1" ]]; then
   if [[ ! -f "$PSF" || ! -f "$CRD" ]]; then
@@ -182,10 +191,13 @@ if [[ "$SKIP_MD" != "1" ]]; then
         [[ -n "$scm" ]] && MD_ARGS+=(--scafacos-method "$scm")
 
         status="ok"
+        hybrid_grms=""
         if ! "$MPIRUN" "${MD_ARGS[@]}" "$@"; then
           status="fail"
+        else
+          hybrid_grms="$(read_hybrid_grms "$run_dir")"
         fi
-        echo -e "${lr}\t${jpm}\t${scm}\t${MM_NONBOND_MODE}\t${run_dir}\t${status}" >> "$SUMMARY_TSV"
+        echo -e "${lr}\t${jpm}\t${scm}\t${MM_NONBOND_MODE}\t${run_dir}\t${status}\t${hybrid_grms}" >> "$SUMMARY_TSV"
       done
     done
   done
@@ -193,4 +205,11 @@ fi
 
 echo "[phase C] summary: $SUMMARY_TSV"
 column -t -s $'\t' "$SUMMARY_TSV" 2>/dev/null || cat "$SUMMARY_TSV"
+if [[ "$SKIP_MD" != "1" && -f "$SUMMARY_TSV" ]]; then
+  echo "[phase C] hybrid GRMS validation ..."
+  if ! (cd "$MMML_ROOT/tests/functionality/long_range" && \
+    JAX_PLATFORMS=cpu "$PY" 07_hybrid_grms_lr_solver_compare.py --summary-tsv "$SUMMARY_TSV"); then
+    echo "WARN: hybrid GRMS cross-solver validation failed (see above)" >&2
+  fi
+fi
 echo "Done. See docs/long-range-solver-tutorial.md"

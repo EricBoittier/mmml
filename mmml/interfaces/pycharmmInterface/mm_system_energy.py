@@ -267,8 +267,9 @@ def nonbonded_energy_and_forces(
 ) -> tuple[dict[str, Array], Array]:
     """Switched VDW + Coulomb for all atom pairs within ``cutnb``.
 
-    When ``lr_solver`` resolves to ``jax_pme``, Lennard-Jones stays on the
-    switched pair list and Coulomb is evaluated with jax-pme (Ewald/PME/P3M).
+    When ``lr_solver`` resolves to ``jax_pme``, the pair list supplies switched
+    r⁻¹² repulsion (LB σ_ij, ε_ij) and Coulomb plus r⁻⁶ dispersion are evaluated
+    with jax-pme (Ewald/PME/P3M).
     """
     use_jax_pme = pick_lr_solver(lr_solver) == "jax_pme"
     pme_method = resolve_jax_pme_method(jax_pme_method)
@@ -317,7 +318,9 @@ def nonbonded_energy_and_forces(
 
         r_safe = jnp.maximum(r, 1e-10)
         sig_r6 = (sig / r_safe) ** 6
-        vdw = ep * (sig_r6 * sig_r6 - 2.0 * sig_r6)
+        vdw_r12 = ep * (sig_r6 * sig_r6)
+        vdw_full = ep * (sig_r6 * sig_r6 - 2.0 * sig_r6)
+        vdw = vdw_r12 if use_jax_pme else vdw_full
 
         qq = q[pi] * q[pj] * e14_scale / settings.eps
         elec = COULOMB_KCAL * qq / r_safe
@@ -344,8 +347,27 @@ def nonbonded_energy_and_forces(
             method=pme_method,
             sr_cutoff_A=float(jax_pme_sr_cutoff_A),
         )
+        from mmml.interfaces.pycharmmInterface.long_range_backend import (
+            compute_jax_pme_lj_dispersion,
+            per_atom_jax_pme_c6_sqrt,
+        )
+
+        c6_sqrt = per_atom_jax_pme_c6_sqrt(
+            np.abs(nbond_data.epsilon),
+            nbond_data.rmin,
+        )
+        disp = compute_jax_pme_lj_dispersion(
+            pos_np,
+            c6_sqrt,
+            box_length_A=box_length_from_cell(np.asarray(cell)),
+            method=pme_method,
+            sr_cutoff_A=float(jax_pme_sr_cutoff_A),
+        )
         elec_energy = jnp.asarray(pme.energy_kcalmol, dtype=pos.dtype)
+        vdw_disp = jnp.asarray(disp.energy_kcalmol, dtype=pos.dtype)
+        vdw_energy = vdw_energy + vdw_disp
         forces = forces + jnp.asarray(pme.forces_kcalmol_A, dtype=pos.dtype)
+        forces = forces + jnp.asarray(disp.forces_kcalmol_A, dtype=pos.dtype)
         energy = vdw_energy + elec_energy
     components = {
         "vdw": vdw_energy,
