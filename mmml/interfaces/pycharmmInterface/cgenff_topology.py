@@ -211,6 +211,7 @@ class PsfConnectivity:
     angles: np.ndarray
     torsions: np.ndarray
     impropers: np.ndarray
+    cmaps: np.ndarray
 
 
 def _read_psf_section_ints(
@@ -243,7 +244,7 @@ def parse_psf_ext(psf_path: Path | str) -> PsfConnectivity:
     natom = None
     atom_types: list[str] = []
     charges: list[float] = []
-    bonds = angles = torsions = impropers = None
+    bonds = angles = torsions = impropers = cmaps = None
 
     i = 0
     while i < len(lines):
@@ -270,9 +271,13 @@ def parse_psf_ext(psf_path: Path | str) -> PsfConnectivity:
             raw, i = _read_psf_section_ints(lines, i, n_per_entry=4)
             torsions = np.asarray(raw, dtype=np.int32).reshape(-1, 4) - 1
             continue
-        if "!NIMPHI" in line:
+        if "!NIMPHI" in line or "!NIMPH" in line:
             raw, i = _read_psf_section_ints(lines, i, n_per_entry=4)
             impropers = np.asarray(raw, dtype=np.int32).reshape(-1, 4) - 1
+            continue
+        if "!NCRTERM" in line or "!NCMAP" in line:
+            raw, i = _read_psf_section_ints(lines, i, n_per_entry=8)
+            cmaps = np.asarray(raw, dtype=np.int32).reshape(-1, 8) - 1
             continue
         i += 1
 
@@ -282,6 +287,7 @@ def parse_psf_ext(psf_path: Path | str) -> PsfConnectivity:
     angles = angles if angles is not None else np.zeros((0, 3), dtype=np.int32)
     torsions = torsions if torsions is not None else np.zeros((0, 4), dtype=np.int32)
     impropers = impropers if impropers is not None else np.zeros((0, 4), dtype=np.int32)
+    cmaps = cmaps if cmaps is not None else np.zeros((0, 8), dtype=np.int32)
     return PsfConnectivity(
         n_atoms=natom,
         atom_types=tuple(atom_types),
@@ -290,6 +296,7 @@ def parse_psf_ext(psf_path: Path | str) -> PsfConnectivity:
         angles=angles,
         torsions=torsions,
         impropers=impropers,
+        cmaps=cmaps,
     )
 
 
@@ -397,11 +404,18 @@ def load_cgenff_bonded_from_psf(
     positions: Array | np.ndarray,
     *,
     prm_file: Path | str | None = None,
+    extra_prm_files: Sequence[Path | str] = (),
     molecule_id: Array | None = None,
 ) -> CgenffBondedSystem:
     """Load CGENFF bonded topology/parameters from a CHARMM PSF EXT file."""
+    from mmml.interfaces.pycharmmInterface.cgenff_cmap import (
+        attach_cmap_to_bonded,
+        build_cmap_arrays,
+    )
+
     psf = parse_psf_ext(psf_path)
     prm_path = Path(prm_file) if prm_file is not None else default_cgenff_paths()[1]
+    prm_paths = [prm_path, *extra_prm_files]
     bond_params, angle_params, dihedral_params, _ = parse_prm(str(prm_path))
 
     bonded, torsions, impropers = _build_bonded_parameters(
@@ -414,16 +428,34 @@ def load_cgenff_bonded_from_psf(
         angle_params,
         dihedral_params,
     )
+    cmap_atoms, cmap_map_idx, cmap_coeffs = build_cmap_arrays(
+        psf.cmaps,
+        psf.atom_types,
+        prm_paths,
+    )
+    bonded = attach_cmap_to_bonded(bonded, cmap_coeffs)
     if molecule_id is None:
         molecule_id = jnp.zeros(psf.n_atoms, dtype=jnp.int32)
 
-    topology = create_topology(
+    topology = Topology(
         n_atoms=psf.n_atoms,
         bonds=jnp.asarray(psf.bonds),
         angles=jnp.asarray(psf.angles),
         torsions=jnp.asarray(torsions),
         impropers=jnp.asarray(impropers),
+        exclusion_mask=None,
+        pair_14_mask=None,
         molecule_id=jnp.asarray(molecule_id),
+        cmap_atoms=(
+            jnp.asarray(cmap_atoms, dtype=jnp.int32)
+            if cmap_atoms is not None
+            else None
+        ),
+        cmap_map_idx=(
+            jnp.asarray(cmap_map_idx, dtype=jnp.int32)
+            if cmap_map_idx is not None
+            else None
+        ),
     )
     return CgenffBondedSystem(
         positions=jnp.asarray(positions, dtype=jnp.float64),

@@ -29,6 +29,15 @@ Uses a single TIP3 water (`setupRes`) — CGENFF only:
 - Physical forces equal negative energy gradient from `coor.get_forces()`
 - Short Hoover CPT NVT segment (`pmass=0`, fixed volume) completes without NaN
 
+### Tri-alanine water box (protein toppar + CGENFF TIP3)
+
+See [`README_trialanine_water_box.md`](README_trialanine_water_box.md). Requires
+`CHARMM_HOME/toppar` protein files; grid-placed waters (no Packmol).
+
+```bash
+pytest tests/functionality/charmm/test_trialanine_water_box_mm.py -m pycharmm -v
+```
+
 ## Layer 2 — MPI workshop smoke (CHARMM node + OpenMPI)
 
 Port of [pyCHARMM Workshop 3SimpleMPIExample](https://github.com/BrooksResearchGroup-UM/pyCHARMM-Workshop/tree/main/3SimpleMPIExample): phi/psi grid sharded across mpi4py ranks.

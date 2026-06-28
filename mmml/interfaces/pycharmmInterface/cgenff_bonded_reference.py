@@ -60,16 +60,20 @@ def compare_bonded_to_charmm(
     energy_atol: float = 1e-5,
     force_rtol: float = 1e-3,
     force_atol: float = 1e-3,
+    ignore_charmm_terms: tuple[str, ...] = (),
 ) -> None:
     """Assert JAX bonded E/F match PyCHARMM bonded-only reference."""
     charmm = charmm_bonded_energy_components_kcalmol()
     charmm_forces = charmm_bonded_forces_kcalmol_A()
+
+    ignored = sum(float(charmm.get(term, 0.0)) for term in ignore_charmm_terms)
 
     mapping = {
         "bond": "bond",
         "angle": "angl",
         "torsion": "dihe",
         "improper": "impr",
+        "cmap": "cmap",
         "total": "total",
     }
     for jax_key, charmm_key in mapping.items():
@@ -77,6 +81,8 @@ def compare_bonded_to_charmm(
             continue
         jax_val = float(jax_components[jax_key])
         charmm_val = float(charmm.get(charmm_key, 0.0))
+        if jax_key == "total":
+            charmm_val -= ignored
         if charmm_key not in charmm and jax_key != "total":
             continue
         np.testing.assert_allclose(
@@ -93,4 +99,98 @@ def compare_bonded_to_charmm(
         rtol=force_rtol,
         atol=force_atol,
         err_msg="bonded forces mismatch vs PyCHARMM",
+    )
+
+
+def setup_nonbonded_only_charmm() -> None:
+    """Zero bonded terms so ``ENER FORCE`` reports VDW/ELEC only."""
+    from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
+
+    block = """BLOCK
+CALL 1 SELE ALL END
+COEFF 1 1 0.0 BOND 0.0 ANGL 0.0 DIHEdral 0.0 ELEC 1.0 VDW 1.0
+END
+"""
+    run_charmm_script_quiet(block)
+
+
+def charmm_nonbonded_energy_components_kcalmol() -> dict[str, float]:
+    """VDW/ELEC components (kcal/mol) after the last ``ENER``."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import charmm_bonded_term_kcalmol
+
+    vdw = charmm_bonded_term_kcalmol("VDW")
+    elec = charmm_bonded_term_kcalmol("ELEC")
+    vdw_f = 0.0 if vdw is None else float(vdw)
+    elec_f = 0.0 if elec is None else float(elec)
+    return {"vdw": vdw_f, "elec": elec_f, "total": vdw_f + elec_f}
+
+
+def run_charmm_nonbonded_ener_force(*, silent: bool = True) -> None:
+    """Evaluate nonbonded-only CHARMM energy and forces."""
+    run_charmm_bonded_ener_force(silent=silent)
+
+
+def compare_nonbonded_to_charmm(
+    jax_components: dict[str, Any],
+    jax_forces: np.ndarray,
+    *,
+    energy_rtol: float = 5e-4,
+    energy_atol: float = 1e-3,
+    force_rtol: float = 5e-3,
+    force_atol: float = 5e-3,
+) -> None:
+    """Assert JAX switched nonbonded E/F match PyCHARMM (nonbonded-only BLOCK)."""
+    charmm = charmm_nonbonded_energy_components_kcalmol()
+    charmm_forces = charmm_bonded_forces_kcalmol_A()
+
+    for key in ("vdw", "elec", "total"):
+        np.testing.assert_allclose(
+            float(jax_components[key]),
+            float(charmm[key]),
+            rtol=energy_rtol,
+            atol=energy_atol,
+            err_msg=f"nonbonded energy mismatch for {key}",
+        )
+    np.testing.assert_allclose(
+        np.asarray(jax_forces, dtype=np.float64),
+        charmm_forces,
+        rtol=force_rtol,
+        atol=force_atol,
+        err_msg="nonbonded forces mismatch vs PyCHARMM",
+    )
+
+
+def compare_mm_system_to_charmm(
+    result: Any,
+    *,
+    energy_rtol: float = 5e-4,
+    energy_atol: float = 2e-2,
+    force_rtol: float = 5e-3,
+    force_atol: float = 5e-2,
+    ignore_charmm_bonded_terms: tuple[str, ...] = ("cmap",),
+) -> None:
+    """Assert full JAX MM (bonded + nonbonded) matches PyCHARMM ``ENER FORCE``."""
+    import pycharmm.energy as energy
+
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_total_forces_kcalmol_A
+
+    charmm_bonded = charmm_bonded_energy_components_kcalmol()
+    charmm_nb = charmm_nonbonded_energy_components_kcalmol()
+    ignored = sum(float(charmm_bonded.get(t, 0.0)) for t in ignore_charmm_bonded_terms)
+    charmm_total = float(energy.get_total()) - ignored
+
+    np.testing.assert_allclose(
+        result.total_energy,
+        charmm_total,
+        rtol=energy_rtol,
+        atol=energy_atol,
+        err_msg="total MM energy mismatch vs PyCHARMM",
+    )
+    charmm_forces = charmm_total_forces_kcalmol_A()
+    np.testing.assert_allclose(
+        result.forces,
+        charmm_forces,
+        rtol=force_rtol,
+        atol=force_atol,
+        err_msg="total MM forces mismatch vs PyCHARMM",
     )
