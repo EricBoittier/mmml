@@ -83,9 +83,12 @@ def have_scafacos_library() -> bool:
 
 
 def scafacos_integration_enabled() -> bool:
-    """Opt-in gate for ScaFaCoS integration tests (avoids MPI crashes in CI)."""
-    flag = os.environ.get("MMML_SCAFACOS_TESTS", "").strip().lower()
-    return flag in ("1", "yes", "true") and have_scafacos_library()
+    """True when ScaFaCoS at ``~/.local/scafacos`` (or SCAFACOS_LIB) passes a smoke run."""
+    if os.environ.get("MMML_SCAFACOS_TESTS", "").strip().lower() in ("0", "no", "false"):
+        return False
+    from mmml.interfaces.scafacosInterface.scafacos_session import scafacos_runtime_ok
+
+    return scafacos_runtime_ok(method="ewald")
 
 
 def ion_dimer_system(
@@ -264,7 +267,7 @@ def jax_pme_coulomb_energy_forces(
 def scafacos_coulomb_energy_forces(
     system: CoulombSystem,
     *,
-    method: str = "p2nfft",
+    method: str = "ewald",
     parameters: dict[str, str | float | int] | None = None,
 ) -> CoulombResult:
     """Full periodic Coulomb via ScaFaCoS libfcs."""
@@ -288,7 +291,7 @@ def evaluate_backend(
     backend: BackendName,
     *,
     cutoff_A: float | None = DEFAULT_MM_COULOMB_CUTOFF_A,
-    scafacos_method: str = "p2nfft",
+    scafacos_method: str = "ewald",
     sr_cutoff_A: float = 6.0,
 ) -> CoulombResult:
     if backend == "mic":
@@ -339,19 +342,14 @@ def compare_results(
 
 
 def available_scafacos_methods() -> list[str]:
-    from mmml.interfaces.scafacosInterface.scafacos_session import SCAFACOS_METHODS
+    from mmml.interfaces.scafacosInterface.scafacos_session import (
+        SCAFACOS_DEFAULT_METHODS,
+        scafacos_runtime_ok,
+    )
 
     if not have_scafacos_library():
         return []
-    working: list[str] = []
-    system = ion_dimer_system(separation_A=4.0, box_length_A=25.0)
-    for method in SCAFACOS_METHODS:
-        try:
-            scafacos_coulomb_energy_forces(system, method=method)
-            working.append(method)
-        except Exception:
-            continue
-    return working
+    return [m for m in SCAFACOS_DEFAULT_METHODS if scafacos_runtime_ok(method=m)]
 
 
 def describe_environment() -> str:

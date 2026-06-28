@@ -67,7 +67,7 @@ Additional ScaFaCoS options:
 |----------|---------|---------|
 | `SCAFACOS_LIB` | (search path) | Absolute path to `libfcs.so` |
 | `SCAFACOS_ROOT` | — | Directory containing `lib/libfcs.so` |
-| `SCAFACOS_METHOD` | `p2nfft` | Solver string passed to `fcs_init` (`p3m`, `p2m`, `ewald`, …) |
+| `SCAFACOS_METHOD` | `ewald` | Solver string passed to `fcs_init` (`p3m`, `ewald`, `direct`, …) |
 
 Method availability depends on how ScaFaCoS was configured (`./configure --help`).
 
@@ -126,7 +126,7 @@ MMML’s `scafacos_session.py` wraps the public ScaFaCoS frontend (see upstream 
 
 **Units:** positions in Å, charges in \(e\), forces returned in kcal/mol/Å (CHARMM convention, \(k = 332.063711\) kcal·Å/e²).
 
-**Energy:** computed as \(-\frac{1}{2}\sum_i q_i \phi_i\) from ScaFaCoS potentials, scaled to kcal/mol.
+**Energy:** computed as \(\frac{1}{2}\sum_i q_i \phi_i\) from ScaFaCoS potentials, scaled to kcal/mol.
 
 ## Relationship to MLpot
 

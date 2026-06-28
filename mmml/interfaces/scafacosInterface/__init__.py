@@ -5,6 +5,8 @@ interface contract. Runtime selection is via ``long_range_backend.resolve_lr_sol
 """
 
 from mmml.interfaces.scafacosInterface.scafacos_session import (
+    SCAFACOS_DEFAULT_METHODS,
+    SCAFACOS_METHODS,
     CoulombFieldResult,
     ScaFaCoSSession,
     ScaFaCoSUnavailable,
@@ -12,9 +14,12 @@ from mmml.interfaces.scafacosInterface.scafacos_session import (
     have_scafacos,
     load_scafacos_library,
     resolve_scafacos_library_path,
+    scafacos_runtime_ok,
 )
 
 __all__ = [
+    "SCAFACOS_DEFAULT_METHODS",
+    "SCAFACOS_METHODS",
     "CoulombFieldResult",
     "ScaFaCoSSession",
     "ScaFaCoSUnavailable",
@@ -22,4 +27,5 @@ __all__ = [
     "have_scafacos",
     "load_scafacos_library",
     "resolve_scafacos_library_path",
+    "scafacos_runtime_ok",
 ]
