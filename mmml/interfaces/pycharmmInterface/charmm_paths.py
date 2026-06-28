@@ -158,12 +158,23 @@ def _charmm_io_aliases_disabled() -> bool:
     return raw in ("0", "false", "no", "off")
 
 
+def _path_component_has_uppercase(part: str) -> bool:
+    """True when a path segment contains uppercase (ignores single-letter tokens like ``T``)."""
+    if part in (".", ".."):
+        return False
+    if len(part) == 1 and part.isalpha():
+        return False
+    return any(ch.isupper() for ch in part)
+
+
 def fortran_path_needs_alias(path: str | Path) -> bool:
-    """True when CHARMM Fortran I/O may fail on *path* (uppercase in absolute path)."""
+    """True when CHARMM Fortran I/O may fail on *path* (uppercase in path segments)."""
     if _charmm_io_aliases_disabled():
         return False
-    resolved = str(Path(path).expanduser().resolve())
-    return any(ch.isupper() for ch in resolved)
+    p = Path(path).expanduser()
+    if not p.is_absolute():
+        p = Path.cwd() / p
+    return any(_path_component_has_uppercase(part) for part in p.parts)
 
 
 def charmm_io_staging_root() -> Path:

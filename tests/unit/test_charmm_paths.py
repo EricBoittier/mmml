@@ -190,7 +190,7 @@ def test_charmm_io_alias_read_symlink(tmp_path):
     assert alias is not None
     assert alias.alias.is_symlink()
     assert alias.alias.resolve() == original.resolve()
-    assert alias.fortran_path == alias.fortran_path.lower()
+    assert not any(ch.isupper() for ch in alias.alias.name)
     assert alias.alias.read_text(encoding="ascii") == "restart\n"
 
 
