@@ -589,8 +589,10 @@ def total_pycharmm_prod_ps(cfg: dict[str, Any]) -> float:
 
 
 def warmup_mlpot_argv(cfg: dict[str, Any], cell: RunCell) -> list[str]:
+    dense = dense_cell_mlpot_overrides(cell, cfg)
     batch = int(
-        dense_cell_mlpot_overrides(cell, cfg).get("ml_batch_size", cfg.get("ml_batch_size", 2048))
+        cfg.get("warmup_ml_batch_size")
+        or dense.get("ml_batch_size", cfg.get("ml_batch_size", 2048))
     )
     argv = [
         "warmup-mlpot-jax",
@@ -606,6 +608,9 @@ def warmup_mlpot_argv(cfg: dict[str, Any], cell: RunCell) -> list[str]:
         str(int(cfg.get("ml_gpu_count", 1))),
         "--quiet",
     ]
+    compile_threads = cfg.get("warmup_compile_threads", cfg.get("jax_compile_threads"))
+    if compile_threads is not None:
+        argv.extend(["--compile-threads", str(int(compile_threads))])
     if bool(cfg.get("warmup_do_mm", True)):
         argv.append("--do-mm")
     return argv
