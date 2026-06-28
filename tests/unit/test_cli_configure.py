@@ -11,7 +11,7 @@ import yaml
 from mmml.cli import __main__ as cli_main
 from mmml.cli.commands_help import commands_main, examples_main
 from mmml.cli.completion import MMML_COMMANDS, get_subcommand_parser
-from mmml.cli.configure import configure_main, run_wizard
+from mmml.cli.configure import ConfigureCancelled, configure_main, run_wizard
 from mmml.cli.help_text import format_top_level_help
 
 
@@ -55,6 +55,30 @@ def test_configure_list_presets(capsys):
     out = capsys.readouterr().out
     assert "cpu-spatial-mpi-mini" in out
     assert "cpu-md-benchmark" in out
+
+
+def test_configure_cancel_on_q(capsys):
+    with patch("builtins.input", side_effect=["q"]):
+        rc = configure_main([])
+    assert rc == 130
+    err = capsys.readouterr().err
+    assert "cancelled" in err.lower()
+    out = capsys.readouterr().out
+    assert "Wrote preset" not in out
+
+
+def test_configure_cancel_on_zero(capsys, tmp_path: Path):
+    with patch("builtins.input", side_effect=["1", "0"]):
+        rc = configure_main(["-o", str(tmp_path)])
+    assert rc == 130
+    assert not list(tmp_path.glob("*.yaml"))
+
+
+def test_configure_cancel_on_keyboard_interrupt(capsys):
+    with patch("builtins.input", side_effect=KeyboardInterrupt):
+        rc = configure_main([])
+    assert rc == 130
+    assert "cancelled" in capsys.readouterr().err.lower()
 
 
 def test_configure_md_single_writes_yaml(tmp_path: Path):

@@ -19,6 +19,17 @@ from mmml.cli.configure_presets import (
 )
 
 
+class ConfigureCancelled(Exception):
+    """User aborted the configure wizard (q, cancel, or Ctrl+C)."""
+
+
+_CANCEL_TOKENS = frozenset({"q", "quit", "cancel", "exit"})
+
+
+def _is_cancel(raw: str) -> bool:
+    return raw.strip().lower() in _CANCEL_TOKENS
+
+
 def build_parser() -> argparse.ArgumentParser:
     preset_keys = tuple(PRESET_BY_KEY.keys())
     parser = argparse.ArgumentParser(
@@ -74,7 +85,12 @@ def build_parser() -> argparse.ArgumentParser:
 def _prompt_line(prompt: str, default: str | None = None) -> str:
     suffix = f" [{default}]" if default else ""
     while True:
-        raw = input(f"{prompt}{suffix}: ").strip()
+        try:
+            raw = input(f"{prompt}{suffix} (q cancel): ").strip()
+        except (EOFError, KeyboardInterrupt) as exc:
+            raise ConfigureCancelled from exc
+        if _is_cancel(raw):
+            raise ConfigureCancelled
         if raw:
             return raw
         if default is not None:
@@ -87,10 +103,13 @@ def _prompt_choice(
     options: list[tuple[str, str, str]],
     *,
     default_index: int = 0,
+    allow_cancel: bool = True,
 ) -> str:
     """Return the key from ``options`` (key, label, hint)."""
     print()
     print(title)
+    if allow_cancel:
+        print("  [0] Cancel")
     for i, (_key, label, hint) in enumerate(options, start=1):
         mark = "*" if i - 1 == default_index else " "
         print(f"  {mark} [{i}] {label}")
@@ -98,21 +117,33 @@ def _prompt_choice(
             for line in textwrap.wrap(hint, width=70, initial_indent="        ", subsequent_indent="        "):
                 print(line)
     default_num = default_index + 1
+    hi = len(options)
+    prompt = f"Choice [0-{hi}]" if allow_cancel else f"Choice [1-{hi}]"
     while True:
-        raw = input(f"Choice [1-{len(options)}] (default {default_num}): ").strip()
+        try:
+            raw = input(f"{prompt} (default {default_num}, q cancel): ").strip()
+        except (EOFError, KeyboardInterrupt) as exc:
+            raise ConfigureCancelled from exc
+        if allow_cancel and (_is_cancel(raw) or raw == "0"):
+            raise ConfigureCancelled
         if not raw:
             return options[default_index][0]
         if raw.isdigit():
             idx = int(raw) - 1
             if 0 <= idx < len(options):
                 return options[idx][0]
-        print("  Invalid choice — enter a number from the list.")
+        print("  Invalid choice — enter a number from the list, or 0 / q to cancel.")
 
 
 def _prompt_yes_no(prompt: str, *, default: bool = True) -> bool:
     d = "Y/n" if default else "y/N"
     while True:
-        raw = input(f"{prompt} [{d}]: ").strip().lower()
+        try:
+            raw = input(f"{prompt} [{d}, q cancel]: ").strip().lower()
+        except (EOFError, KeyboardInterrupt) as exc:
+            raise ConfigureCancelled from exc
+        if _is_cancel(raw):
+            raise ConfigureCancelled
         if not raw:
             return default
         if raw in ("y", "yes"):
@@ -604,6 +635,14 @@ def configure_main(argv: list[str] | None = None) -> int:
         print("Presets:   mmml configure --list-presets")
         return 0
 
+    try:
+        return _configure_interactive(args, out_dir)
+    except ConfigureCancelled:
+        print("\nConfigure cancelled.", file=sys.stderr)
+        return 130
+
+
+def _configure_interactive(args: argparse.Namespace, out_dir: Path) -> int:
     workflow = args.workflow
     if workflow is None:
         workflow = _prompt_choice(
