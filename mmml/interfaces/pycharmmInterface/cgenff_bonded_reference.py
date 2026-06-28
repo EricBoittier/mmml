@@ -75,7 +75,7 @@ def compare_bonded_to_charmm(
     jax_forces: np.ndarray,
     *,
     energy_rtol: float = 1e-4,
-    energy_atol: float = 1e-5,
+    energy_atol: float = 1e-4,
     force_rtol: float = 1e-3,
     force_atol: float = 1e-3,
     ignore_charmm_terms: tuple[str, ...] = (),

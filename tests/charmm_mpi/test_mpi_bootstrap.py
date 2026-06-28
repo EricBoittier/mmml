@@ -26,6 +26,8 @@ def test_maybe_rerun_run_pycharmm_subcommand(monkeypatch, tmp_path):
         "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_mpirun_path",
         return_value=mpirun.resolve(),
     ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.prepare_serial_charmm_mpi_env",
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.subprocess.run",
         return_value=mock.Mock(returncode=0),
     ) as mock_run:
@@ -35,13 +37,13 @@ def test_maybe_rerun_run_pycharmm_subcommand(monkeypatch, tmp_path):
         )
     assert code == 0
     cmd = mock_run.call_args.args[0]
-    assert cmd[3:9] == [
-        "--mca",
-        "pmix",
-        "^ext3x",
-        "--mca",
-        "orte_abort_print_stack",
-        "1",
+    assert cmd[0:3] == [str(mpirun.resolve()), "-np", "1"]
+    assert "--mca" in cmd
+    assert "pmix" in cmd
+    assert "^ext3x" in cmd
+    assert "orte_abort_print_stack" in cmd
+    assert cmd[cmd.index("-m") : cmd.index("-m") + 2] == ["-m", "mmml.cli.__main__"]
+    assert cmd[cmd.index("run-pycharmm") : cmd.index("run-pycharmm") + 2] == [
+        "run-pycharmm",
+        "--pdbfile",
     ]
-    assert cmd[10:12] == ["-m", "mmml.cli.__main__"]
-    assert cmd[12:14] == ["run-pycharmm", "--pdbfile"]

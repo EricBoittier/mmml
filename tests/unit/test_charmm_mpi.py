@@ -193,6 +193,42 @@ def test_charmm_mpirun_path_from_openmpi_root(monkeypatch, tmp_path):
     charmm_mpi.charmm_mpirun_path.cache_clear()
 
 
+def test_charmm_mpirun_path_falls_back_to_path_mpirun_for_debian_layout(
+    monkeypatch, tmp_path
+):
+    """Ubuntu multiarch: libmpi in lib/x86_64-linux-gnu, mpirun only on PATH."""
+    lib = tmp_path / "libcharmm.so"
+    lib.write_bytes(b"stub")
+    on_path = tmp_path / "usr" / "bin" / "mpirun"
+    on_path.parent.mkdir(parents=True)
+    on_path.write_text("#!/bin/sh\n")
+    on_path.chmod(0o755)
+    libmpi = tmp_path / "usr" / "lib" / "x86_64-linux-gnu" / "libmpi.so.40"
+    libmpi.parent.mkdir(parents=True)
+    libmpi.symlink_to("/dev/null")
+
+    monkeypatch.setenv("CHARMM_LIB_DIR", str(tmp_path))
+    monkeypatch.delenv("OPENMPI_ROOT", raising=False)
+    monkeypatch.delenv("MMML_MPIRUN", raising=False)
+    charmm_mpi.charmm_mpirun_path.cache_clear()
+    charmm_mpi.charmm_lib_links_mpi.cache_clear()
+    ldd_out = f"libmpi.so.40 => {libmpi}\n"
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.subprocess.run",
+        return_value=mock.Mock(returncode=0, stdout=ldd_out),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.shutil.which",
+        return_value=str(on_path),
+    ):
+        found = charmm_mpi.charmm_mpirun_path()
+    assert found == on_path.resolve()
+    charmm_mpi.charmm_mpirun_path.cache_clear()
+    charmm_mpi.charmm_lib_links_mpi.cache_clear()
+
+
 def test_recover_mpi_never_finalizes(monkeypatch):
     monkeypatch.delenv("MMML_NO_MPI_INIT", raising=False)
     with mock.patch(

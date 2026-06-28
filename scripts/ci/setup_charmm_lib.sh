@@ -60,6 +60,7 @@ fi
 {
   echo "export CHARMM_HOME=$CHARMM_HOME"
   echo "export CHARMM_LIB_DIR=$CHARMM_HOME"
+  echo "export OPENMPI_ROOT=$OPENMPI_ROOT"
 } >"$CHARMMSETUP"
 
 echo "Wrote optional $CHARMMSETUP (not required; mmml auto-discovers setup/charmm)"

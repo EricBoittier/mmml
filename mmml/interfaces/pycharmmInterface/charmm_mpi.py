@@ -5,6 +5,7 @@ from __future__ import annotations
 import ctypes
 import os
 import platform
+import shutil
 import subprocess
 import sys
 from functools import lru_cache
@@ -273,6 +274,12 @@ def charmm_mpirun_path() -> Path | None:
     from_openmpi_root = _openmpi_root_mpirun()
     if from_openmpi_root is not None:
         return from_openmpi_root
+
+    # Debian/Ubuntu multiarch: libmpi under /usr/lib/x86_64-linux-gnu, mpirun in /usr/bin.
+    if charmm_lib_links_mpi():
+        on_path = shutil.which("mpirun")
+        if on_path:
+            return Path(on_path).resolve()
 
     return None
 

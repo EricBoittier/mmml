@@ -22,8 +22,10 @@ def test_mpi_rank_size_under_mpirun():
 
 
 def test_mpi_check_cli_under_mpirun():
-    from mmml.cli.run.mpi_check import main
+    from mmml.cli.run.mpi_check import main, run_mpi_check
 
+    report = run_mpi_check()
+    assert report.ok, report.errors + report.warnings
     assert main(["--json"]) == 0
 
 
