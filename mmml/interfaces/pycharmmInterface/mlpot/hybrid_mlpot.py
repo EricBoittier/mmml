@@ -773,7 +773,21 @@ def build_decomposed_mlpot_model(
     max_pairs = None
     if args is not None:
         max_pairs = getattr(args, "max_pairs", None)
-    if max_pairs is None and not free_space and cell:
+    periodic_mm_config = None
+    periodic_mode = False
+    mm_nonbond_mode = "jax_mic"
+    if args is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm import (
+            build_periodic_mm_config,
+            periodic_mm_status_line,
+            resolve_mm_nonbond_mode,
+            resolve_periodic_charmm_vdw,
+        )
+
+        periodic_mm_config = build_periodic_mm_config(args)
+        periodic_mode = resolve_mm_nonbond_mode(args) == "periodic_external"
+        mm_nonbond_mode = resolve_mm_nonbond_mode(args)
+    if max_pairs is None and not free_space and cell and not periodic_mode:
         from mmml.interfaces.pycharmmInterface.cell_list import estimate_max_pairs
 
         cutoff_a = float(cutoff_params.mm_switch_on) + float(cutoff_params.mm_switch_width)
@@ -818,16 +832,6 @@ def build_decomposed_mlpot_model(
             f"Decomposed MLpot: MIC PBC cubic cell={float(cell):.3f} Å",
             flush=True,
         )
-    from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm import (
-        build_periodic_mm_config,
-        periodic_mm_status_line,
-        resolve_mm_nonbond_mode,
-        resolve_periodic_charmm_vdw,
-    )
-
-    periodic_mm_config = build_periodic_mm_config(args)
-    periodic_mode = resolve_mm_nonbond_mode(args) == "periodic_external"
-    mm_nonbond_mode = resolve_mm_nonbond_mode(args)
     do_ml = True
     include_mm = True if args is None else bool(getattr(args, "include_mm", True))
     do_mm = include_mm and not periodic_mode
@@ -842,7 +846,7 @@ def build_decomposed_mlpot_model(
             "Decomposed MLpot: include_mm=False — ML potential only (no JAX MM LJ/Coulomb pairs)",
             flush=True,
         )
-    if verbose and max_pairs is not None:
+    if verbose and max_pairs is not None and not periodic_mode:
         print(
             f"Decomposed MLpot: max_pairs={int(max_pairs)} (PBC cell-list buffer)",
             flush=True,
@@ -895,7 +899,9 @@ def build_decomposed_mlpot_model(
         jax_pme_method=jax_pme_method,
         jax_pme_sr_cutoff_A=jax_pme_sr_cutoff,
         mm_nonbond_mode=mm_nonbond_mode,
-        periodic_charmm_vdw=resolve_periodic_charmm_vdw(args),
+        periodic_charmm_vdw=(
+            resolve_periodic_charmm_vdw(args) if args is not None else True
+        ),
     )
     if verbose:
         from mmml.interfaces.pycharmmInterface.mlpot.setup import report_charmm_topology_summary
