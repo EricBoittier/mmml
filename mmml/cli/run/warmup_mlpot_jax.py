@@ -172,6 +172,9 @@ def run_warmup_mlpot_jax(args: argparse.Namespace) -> int:
 
     apply_mlpot_jax_platform_env(quiet=args.quiet and not args.verbose)
     apply_jax_compile_xla_flags(quiet=args.quiet and not args.verbose)
+    from mmml.utils.jax_gpu_warmup import maybe_sanitize_process_env_for_ptxas
+
+    maybe_sanitize_process_env_for_ptxas()
 
     import numpy as np
 
