@@ -95,7 +95,7 @@ def test_committed_aco_psf_matches_pycharmm_after_charmm_load(pycharmm_workdir) 
     with charmm_relaxed_bomlev():
         read.rtf(CGENFF_RTF)
         read.prm(CGENFF_PRM)
-    read.psf(str(ACO_PSF.resolve()))
+    read.psf_card(str(ACO_PSF.resolve()))
     read.pdb(str(ACO_PDB.resolve()), resid=True)
 
     positions = coor.get_positions().to_numpy(dtype=float)

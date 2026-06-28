@@ -211,7 +211,7 @@ def test_load_cgenff_bonded_from_psf_aco_smoke() -> None:
 
 
 def test_improper_energy_matches_charmm_n0_formula_aco() -> None:
-    """ACO carbonyl improper: CHARMM n=0 uses k*(1+cos(psi)), not constant 2k."""
+    """ACO carbonyl improper: CHARMM n=0 uses 2k*(1+cos(psi)), not constant 2k."""
     from jax_md.mm_forcefields.io.charmm import parse_pdb_simple
 
     _, positions = parse_pdb_simple(str(ACO_PDB))
@@ -222,4 +222,4 @@ def test_improper_energy_matches_charmm_n0_formula_aco() -> None:
         system.bonded,
     )
     # Wrong n*psi formula gives 140 kcal/mol regardless of geometry.
-    assert float(components["improper"]) < 25.0
+    assert float(components["improper"]) < 60.0

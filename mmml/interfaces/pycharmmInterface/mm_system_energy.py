@@ -172,7 +172,6 @@ def load_nonbonded_system_from_charmm(
     *prm_paths: Path | str,
 ) -> NonbondedSystemData:
     """Load charges, LJ tables, and exclusions from the active PyCHARMM PSF."""
-    import pycharmm.param as param
     import pycharmm.psf as psf
 
     from mmml.interfaces.pycharmmInterface.cgenff_topology import parse_psf_ext
@@ -181,13 +180,23 @@ def load_nonbonded_system_from_charmm(
     natom = psf_data.n_atoms
     iblo, inb = psf.get_iblo_inb()
 
-    atc = list(param.get_atc())
     lj: dict[str, tuple[float, float]] = {}
     for prm_path in prm_paths:
         lj.update(parse_lj_tables_from_prm(prm_path))
-    epsilon = np.array([lj.get(name, (0.0, 0.0))[0] for name in atc], dtype=np.float64)
-    rmin = np.array([lj.get(name, (0.0, 0.0))[1] for name in atc], dtype=np.float64)
-    at_codes = np.asarray(psf.get_iac(), dtype=np.int32) - 1
+    iac = np.asarray(psf.get_iac(), dtype=np.int32)
+    atom_eps = np.array(
+        [lj.get(str(t), (0.0, 0.0))[0] for t in psf_data.atom_types],
+        dtype=np.float64,
+    )
+    atom_rmin = np.array(
+        [lj.get(str(t), (0.0, 0.0))[1] for t in psf_data.atom_types],
+        dtype=np.float64,
+    )
+    # TIP3 ``HT`` and other types with ``iac==0`` carry no CHARMM VDW term.
+    zero_lj = iac <= 0
+    atom_eps[zero_lj] = 0.0
+    atom_rmin[zero_lj] = 0.0
+    at_codes = np.zeros(natom, dtype=np.int32)
 
     excluded = fully_excluded_pairs(iblo, inb, natom)
     if not excluded:
@@ -197,8 +206,8 @@ def load_nonbonded_system_from_charmm(
     return NonbondedSystemData(
         charges=np.asarray(psf_data.charges, dtype=np.float64),
         at_codes=at_codes,
-        epsilon=-np.abs(epsilon),
-        rmin=rmin,
+        epsilon=-np.abs(atom_eps),
+        rmin=atom_rmin,
         excluded_pairs=excluded,
         e14_pairs=e14,
     )
@@ -274,7 +283,6 @@ def nonbonded_energy_and_forces(
     q = jnp.asarray(nbond_data.charges, dtype=jnp.float64)
     eps_tbl = jnp.asarray(nbond_data.epsilon, dtype=jnp.float64)
     rm_tbl = jnp.asarray(nbond_data.rmin, dtype=jnp.float64)
-    codes = jnp.asarray(nbond_data.at_codes, dtype=jnp.int32)
     e14_scale = jnp.asarray(e14_scale_np, dtype=jnp.float64)
 
     def _pair_terms(positions_arg: Array) -> tuple[Array, Array, Array]:
@@ -285,10 +293,10 @@ def nonbonded_energy_and_forces(
         r_sq = r * r
         switch = charmm_switch_factor(r_sq, settings)
 
-        ep_i = eps_tbl[codes[pi]]
-        ep_j = eps_tbl[codes[pj]]
-        rm_i = rm_tbl[codes[pi]]
-        rm_j = rm_tbl[codes[pj]]
+        ep_i = eps_tbl[pi]
+        ep_j = eps_tbl[pj]
+        rm_i = rm_tbl[pi]
+        rm_j = rm_tbl[pj]
         sig = rm_i + rm_j
         ep = jnp.sqrt(ep_i * ep_j)
 

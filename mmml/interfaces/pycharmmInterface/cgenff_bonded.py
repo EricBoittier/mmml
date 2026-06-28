@@ -117,7 +117,10 @@ def bonded_energy_components(
             psi - bonded.improper_gamma,
             improper_n * psi - bonded.improper_gamma,
         )
-        return jnp.sum(bonded.improper_k * (1.0 + jnp.cos(phase)))
+        prefactor = jnp.where(improper_n == 0, 2.0, 1.0)
+        return jnp.sum(
+            prefactor * bonded.improper_k * (1.0 + jnp.cos(phase))
+        )
 
     e_bond = bond_energy()
     e_angle = angle_energy()
