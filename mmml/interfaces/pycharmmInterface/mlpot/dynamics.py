@@ -3167,6 +3167,22 @@ def _overlap_chunk_io(
     )
 
 
+def _drop_trajectory_io(io: Optional[CharmmTrajectoryFiles]) -> Optional[CharmmTrajectoryFiles]:
+    """Return an equivalent I/O descriptor without opening a DCD trajectory."""
+    if io is None or io.trajectory is None:
+        return io
+    return CharmmTrajectoryFiles(
+        restart_read=io.restart_read,
+        restart_write=io.restart_write,
+        trajectory=None,
+        pressure_tensor_log=io.pressure_tensor_log,
+        restart_read_unit=io.restart_read_unit,
+        restart_write_unit=io.restart_write_unit,
+        trajectory_unit=io.trajectory_unit,
+        pressure_tensor_log_unit=io.pressure_tensor_log_unit,
+    )
+
+
 # Per-chunk DCDs at nsavc=1 and overlap interval 2 create O(nstep) tiny files.
 _OVERLAP_MAX_CHUNK_DCD_FILES = 64
 
@@ -4118,6 +4134,8 @@ def _run_cpt_stability_subchunked(
                     restart_read=read_path,
                 )
 
+        if "nsavc" not in sub_kw:
+            sub_io = _drop_trajectory_io(sub_io)
         sub_traj_iokw = (
             extra_iokw
             if (extra_iokw and steps_done == 0 and "nsavc" in sub_kw)
@@ -4502,12 +4520,6 @@ def run_dynamics_with_io(
                             )
                         ),
                     )
-                    if (
-                        split_trajectory
-                        and chunk_io is not None
-                        and chunk_io.trajectory is not None
-                    ):
-                        chunk_dcd_paths.append(Path(chunk_io.trajectory))
                 if early_abort_restart_handoff and chunk_io is not None:
                     chunk_io = _materialize_early_abort_restart_handoff(
                         chunk_io,
@@ -4705,6 +4717,14 @@ def run_dynamics_with_io(
                     loose_pbc=loose_pbc,
                     global_step_start=steps_before_chunk,
                 )
+                if "nsavc" not in chunk_kw:
+                    chunk_io = _drop_trajectory_io(chunk_io)
+                if (
+                    split_trajectory
+                    and chunk_io is not None
+                    and chunk_io.trajectory is not None
+                ):
+                    chunk_dcd_paths.append(Path(chunk_io.trajectory))
                 if has_restart_read:
                     _prepare_overlap_chunk_after_restart(
                         mlpot_ctx,

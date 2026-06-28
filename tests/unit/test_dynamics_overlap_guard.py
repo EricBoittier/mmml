@@ -2991,13 +2991,20 @@ def test_run_dynamics_with_io_cpt_overlap_subchunks(tmp_path):
         dtype=float,
     )
     res_path = tmp_path / "heat.res"
-    io = CharmmTrajectoryFiles(restart_write=res_path)
+    io = CharmmTrajectoryFiles(
+        restart_write=res_path,
+        trajectory=tmp_path / "heat.dcd",
+    )
     calls: list[int] = []
     restart_flags: list[bool] = []
+    trajectory_paths: list[Path | None] = []
+    nsavc_values: list[int | None] = []
 
     def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
         calls.append(int(kw["nstep"]))
         restart_flags.append(bool(kw.get("restart")))
+        trajectory_paths.append(_io.trajectory if _io is not None else None)
+        nsavc_values.append(int(kw["nsavc"]) if "nsavc" in kw else None)
         if _io is not None and _io.restart_write is not None:
             _write_test_restart(Path(_io.restart_write), sum(calls))
         return mock.Mock()
@@ -3033,6 +3040,8 @@ def test_run_dynamics_with_io_cpt_overlap_subchunks(tmp_path):
     # 2 overlap chunks of 500, each split into 2 CPT sub-chunks of 250 (in-memory).
     assert calls == [250, 250, 250, 250]
     assert restart_flags == [False, False, True, False]
+    assert trajectory_paths == [None, None, None, None]
+    assert nsavc_values == [None, None, None, None]
     materialize.assert_not_called()
     assert sum(calls) == 1000
 
