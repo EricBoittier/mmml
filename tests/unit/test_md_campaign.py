@@ -278,6 +278,30 @@ def test_apply_campaign_cli_overrides_lr_flags_skip_implicit_defaults() -> None:
     assert merged["lr_solver"] == "jax_pme"
 
 
+def test_namespace_from_merged_preserves_no_periodic_charmm_vdw() -> None:
+    from mmml.cli.run import md_system
+    from mmml.cli.run.md_campaign import namespace_from_merged
+
+    args = namespace_from_merged(
+        {
+            "backend": "pycharmm",
+            "setup": "pbc_npt",
+            "composition": "DCM:30",
+            "box_size": 28.0,
+            "mm_nonbond_mode": "periodic_external",
+            "lr_solver": "jax_pme",
+            "jax_pme_method": "ewald",
+            "periodic_charmm_vdw": False,
+            "checkpoint": "/tmp/ckpt.json",
+            "output_dir": "/tmp/out",
+        }
+    )
+    assert args.periodic_charmm_vdw is False
+    cmd = md_system.build_pycharmm_command(args)
+    assert "--no-periodic-charmm-vdw" in cmd
+    assert "--periodic-charmm-vdw" not in cmd
+
+
 def test_namespace_from_merged_defaults_bonded_mm_mini_on_pycharmm() -> None:
     from mmml.cli.run.md_campaign import namespace_from_merged
 
