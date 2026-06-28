@@ -96,6 +96,11 @@ scafacos-interface = [
     "mpi4py",
 ]
 
+# nvalchemiops JAX PME long-range Coulomb backend (CUDA-backed runtime recommended).
+nvalchemiops-pme = [
+    "nvalchemi-toolkit-ops[jax]",
+]
+
 # CPU MD smoke testing: neighbor-list parity (Vesin), trajectory I/O, no CUDA.
 # Uses bundled examples/ckpts_json/DESdimers_params.json (ACO dimer, natoms=20).
 md-cpu = [

@@ -1,9 +1,9 @@
-"""Periodic external MM nonbond mode (ScaFaCoS Coulomb + CHARMM IMAGE VDW).
+"""Periodic external MM nonbond mode (PME/ScaFaCoS Coulomb + CHARMM IMAGE VDW).
 
 ``periodic_external`` turns off JAX real-space LJ and Coulomb in the MLpot
 callback and instead uses:
 
-* **Coulomb** — ScaFaCoS ``libfcs`` (full periodic k-space + real-space split)
+* **Coulomb** — jax-pme, nvalchemiops PME, or ScaFaCoS full periodic Coulomb
 * **Lennard-Jones** — CHARMM switched VDW with IMAGE neighbor lists (not ScaFaCoS)
 
 ScaFaCoS does not implement LJ; CHARMM is the supported periodic VDW backend.
@@ -43,6 +43,10 @@ class PeriodicMmConfig:
     def uses_jax_pme(self) -> bool:
         return self.lr_solver == "jax_pme"
 
+    @property
+    def uses_nvalchemiops_pme(self) -> bool:
+        return self.lr_solver == "nvalchemiops_pme"
+
 
 def resolve_mm_nonbond_mode(args: Any | None) -> MmNonbondMode:
     raw = "jax_mic"
@@ -79,10 +83,11 @@ def build_periodic_mm_config(args: Any | None) -> PeriodicMmConfig | None:
     from mmml.interfaces.pycharmmInterface.long_range_backend import pick_lr_solver
 
     lr = pick_lr_solver(resolve_lr_solver_arg(args))
-    if lr not in ("scafacos", "jax_pme"):
+    if lr not in ("scafacos", "jax_pme", "nvalchemiops_pme"):
         raise ValueError(
-            f"periodic_external requires jax_pme or ScaFaCoS "
-            f"(lr_solver resolved to {lr!r}; set --lr-solver jax_pme or scafacos)"
+            f"periodic_external requires jax_pme, nvalchemiops_pme, or ScaFaCoS "
+            f"(lr_solver resolved to {lr!r}; set --lr-solver jax_pme, "
+            "nvalchemiops_pme, or scafacos)"
         )
     scafacos_method = str(
         getattr(args, "scafacos_method", None)
@@ -146,7 +151,10 @@ def validate_periodic_mm_args(
     assert cfg is not None
 
     from mmml.interfaces.scafacosInterface.scafacos_session import have_scafacos
-    from mmml.interfaces.pycharmmInterface.long_range_backend import have_jax_pme
+    from mmml.interfaces.pycharmmInterface.long_range_backend import (
+        have_jax_pme,
+        have_nvalchemiops_pme,
+    )
 
     if cfg.uses_scafacos and not have_scafacos():
         raise ValueError(
@@ -156,6 +164,11 @@ def validate_periodic_mm_args(
     if cfg.uses_jax_pme and not have_jax_pme():
         raise ValueError(
             "periodic_external with lr_solver=jax_pme requires the jax-pme package"
+        )
+    if cfg.uses_nvalchemiops_pme and not have_nvalchemiops_pme():
+        raise ValueError(
+            "periodic_external with lr_solver=nvalchemiops_pme requires "
+            "nvalchemi-toolkit-ops[jax]"
         )
     return cfg
 
@@ -213,6 +226,8 @@ def periodic_mm_status_line(cfg: PeriodicMmConfig, *, box_side_A: float) -> str:
     lj = "CHARMM IMAGE VDW" if cfg.charmm_vdw else "none (CHARMM VDW off)"
     if cfg.uses_jax_pme:
         coulomb = f"jax_pme ({cfg.jax_pme_method})"
+    elif cfg.uses_nvalchemiops_pme:
+        coulomb = "nvalchemiops_pme"
     elif cfg.uses_scafacos:
         coulomb = f"scafacos ({cfg.scafacos_method})"
     else:

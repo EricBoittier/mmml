@@ -5,12 +5,13 @@ outer radius (~13 Å by default).  Optional backends can supply k-space correcti
 
 * ``mic`` — truncated MIC Coulomb only (default)
 * ``jax_pme`` — JAX-native PME via the ``jax-pme`` dependency
+* ``nvalchemiops_pme`` — JAX PME via ``nvalchemiops`` electrostatics
 * ``scafacos`` — ScaFaCoS ``libfcs`` (PME / P³M / P²NFFT / …)
 
 Selection mirrors ``nl_backend.py``: CLI/YAML may pass an explicit name; otherwise
 ``MMML_LR_SOLVER`` and ``auto`` pick the first available backend.  ``auto`` prefers
-``jax_pme`` (hybrid switched-MM add-on with full−intra handoff), then ScaFaCoS
-(``periodic_external``), then truncated MIC.
+``jax_pme`` (hybrid switched-MM add-on with full−intra handoff), then
+``nvalchemiops_pme`` / ScaFaCoS for full-box Coulomb, then truncated MIC.
 
 See ``mlpot/LONG_RANGE_ELECTROSTATICS.md`` for how these layers interact with
 CHARMM IMAGE lists and MLpot BLOCK terms.
@@ -26,7 +27,7 @@ from typing import Iterator, Literal, Protocol
 
 import numpy as np
 
-LrSolverName = Literal["auto", "mic", "jax_pme", "scafacos"]
+LrSolverName = Literal["auto", "mic", "jax_pme", "nvalchemiops_pme", "scafacos"]
 JaxPmeMethod = Literal["ewald", "pme", "p3m"]
 
 CHARMM_COULOMB_KCAL = 332.063711
@@ -247,6 +248,16 @@ def have_jax_pme() -> bool:
         return False
 
 
+def have_nvalchemiops_pme() -> bool:
+    try:
+        from nvalchemiops.jax.interactions.electrostatics import particle_mesh_ewald  # noqa: F401
+        from nvalchemiops.jax.neighbors import neighbor_list  # noqa: F401
+
+        return True
+    except Exception:
+        return False
+
+
 def have_scafacos() -> bool:
     try:
         from mmml.interfaces.scafacosInterface.scafacos_session import have_scafacos as _have
@@ -259,10 +270,12 @@ def have_scafacos() -> bool:
 def resolve_lr_solver(name: str | None = None) -> LrSolverName:
     """Resolve solver from argument, ``MMML_LR_SOLVER`` env, or ``auto``."""
     raw = (name or os.environ.get("MMML_LR_SOLVER", "auto")).strip().lower()
-    if raw in ("auto", "mic", "jax_pme", "scafacos"):
+    if raw in ("nvalchemiops", "nvalchemiops_pme", "nval_pme"):
+        return "nvalchemiops_pme"
+    if raw in ("auto", "mic", "jax_pme", "nvalchemiops_pme", "scafacos"):
         return raw  # type: ignore[return-value]
     raise ValueError(
-        f"lr_solver must be auto|mic|jax_pme|scafacos; got {name!r}"
+        f"lr_solver must be auto|mic|jax_pme|nvalchemiops_pme|scafacos; got {name!r}"
     )
 
 
@@ -272,14 +285,26 @@ def pick_lr_solver(requested: str | None = None) -> LrSolverName:
     if name == "auto":
         if have_jax_pme():
             return "jax_pme"
+        if have_nvalchemiops_pme():
+            return "nvalchemiops_pme"
         if have_scafacos():
             return "scafacos"
         return "mic"
     if name == "scafacos" and not have_scafacos():
         if have_jax_pme():
             return "jax_pme"
+        if have_nvalchemiops_pme():
+            return "nvalchemiops_pme"
         return "mic"
     if name == "jax_pme" and not have_jax_pme():
+        if have_nvalchemiops_pme():
+            return "nvalchemiops_pme"
+        if have_scafacos():
+            return "scafacos"
+        return "mic"
+    if name == "nvalchemiops_pme" and not have_nvalchemiops_pme():
+        if have_jax_pme():
+            return "jax_pme"
         if have_scafacos():
             return "scafacos"
         return "mic"
@@ -512,6 +537,75 @@ def compute_jax_pme_coulomb(
     )
 
 
+def _nvalchemiops_pme_accuracy(accuracy: float | None = None) -> float:
+    if accuracy is not None:
+        return float(accuracy)
+    raw = os.environ.get("MMML_NVALCHEMIOPS_PME_ACCURACY", "1e-6").strip()
+    return float(raw)
+
+
+def compute_nvalchemiops_pme_coulomb(
+    positions_A: np.ndarray,
+    charges_e: np.ndarray,
+    *,
+    box_length_A: float,
+    accuracy: float | None = None,
+) -> LongRangeInteractionResult:
+    """Full periodic Coulomb via nvalchemiops JAX PME.
+
+    ``nvalchemiops`` returns electrostatic energies in e²/Å-like units for unit
+    charges and Å coordinates; MMML converts to CHARMM kcal/mol with
+    ``CHARMM_COULOMB_KCAL``.
+    """
+    import jax
+    import jax.numpy as jnp
+    from nvalchemiops.jax.interactions.electrostatics import (
+        estimate_pme_parameters,
+        particle_mesh_ewald,
+    )
+    from nvalchemiops.jax.neighbors import neighbor_list
+
+    pos = jnp.asarray(np.asarray(positions_A, dtype=np.float64), dtype=jnp.float64)
+    chg = jnp.asarray(np.asarray(charges_e, dtype=np.float64).reshape(-1), dtype=jnp.float64)
+    if pos.ndim != 2 or pos.shape[1] != 3:
+        raise ValueError(f"positions must be (n_atoms, 3); got {pos.shape}")
+    if chg.shape[0] != pos.shape[0]:
+        raise ValueError(f"charges length {chg.shape[0]} != n_atoms {pos.shape[0]}")
+
+    L = float(box_length_A)
+    acc = _nvalchemiops_pme_accuracy(accuracy)
+    cell = jnp.eye(3, dtype=jnp.float64) * L
+    cell = cell[None, ...]
+    pbc = jnp.array([[True, True, True]])
+    params = estimate_pme_parameters(pos, cell, accuracy=acc)
+    cutoff = float(np.asarray(jax.device_get(params.real_space_cutoff[0])))
+    nl, nptr, ns = neighbor_list(
+        pos,
+        cutoff,
+        cell=cell,
+        pbc=pbc,
+        return_neighbor_list=True,
+    )
+    energies, forces = particle_mesh_ewald(
+        positions=pos,
+        charges=chg,
+        cell=cell,
+        neighbor_list=nl,
+        neighbor_ptr=nptr,
+        neighbor_shifts=ns,
+        compute_forces=True,
+        accuracy=acc,
+    )
+    jax.block_until_ready(energies)
+    jax.block_until_ready(forces)
+    energy_host = float(np.asarray(jax.device_get(jnp.sum(energies)), dtype=np.float64))
+    forces_host = np.asarray(jax.device_get(forces), dtype=np.float64)
+    return LongRangeInteractionResult(
+        energy_kcalmol=CHARMM_COULOMB_KCAL * energy_host,
+        forces_kcalmol_A=CHARMM_COULOMB_KCAL * forces_host,
+    )
+
+
 def compute_jax_pme_lj_dispersion(
     positions_A: np.ndarray,
     c6_sqrt: np.ndarray,
@@ -653,11 +747,34 @@ class ScaFaCoSLongRangeSolver:
         )
 
 
+class NvalchemiopsPmeLongRangeSolver:
+    name = "nvalchemiops_pme"
+
+    def __init__(self, *, accuracy: float | None = None) -> None:
+        self._accuracy = None if accuracy is None else float(accuracy)
+
+    def compute(
+        self,
+        positions_A: np.ndarray,
+        charges_e: np.ndarray,
+        *,
+        box_length_A: float,
+    ) -> LongRangeCoulombResult:
+        return compute_nvalchemiops_pme_coulomb(
+            positions_A,
+            charges_e,
+            box_length_A=box_length_A,
+            accuracy=self._accuracy,
+        )
+
+
 def create_lr_solver(requested: str | None = None) -> LongRangeCoulombSolver:
     """Instantiate the resolved long-range Coulomb backend."""
     chosen = pick_lr_solver(requested)
     if chosen == "scafacos":
         return ScaFaCoSLongRangeSolver()
+    if chosen == "nvalchemiops_pme":
+        return NvalchemiopsPmeLongRangeSolver()
     if chosen == "jax_pme":
         return JaxPmeLongRangeSolver()
     return MicOnlySolver()
@@ -669,6 +786,7 @@ def describe_lr_solver(requested: str | None = None) -> str:
     parts = [f"lr_solver={chosen}"]
     parts.append(f"scafacos={'yes' if have_scafacos() else 'no'}")
     parts.append(f"jax_pme={'yes' if have_jax_pme() else 'no'}")
+    parts.append(f"nvalchemiops_pme={'yes' if have_nvalchemiops_pme() else 'no'}")
     return ", ".join(parts)
 
 
@@ -694,6 +812,7 @@ def collect_lr_solver_mapping(
         "mm_nonbond_mode": mode,
         "lr_solver": chosen,
         "jax_pme_pkg": "yes" if have_jax_pme() else "no",
+        "nvalchemiops_pme_pkg": "yes" if have_nvalchemiops_pme() else "no",
         "scafacos_lib": "yes" if have_scafacos() else "no",
     }
     if requested != chosen:
@@ -706,6 +825,13 @@ def collect_lr_solver_mapping(
             mapping["coulomb_mode"] = "jax-pme full-box Coulomb (MLpot callback)"
             mapping["jax_pme_method"] = resolve_jax_pme_method(jax_pme_method)
             mapping["jax_pme_sr_cutoff_Å"] = f"{float(jax_pme_sr_cutoff_A):.1f}"
+        elif chosen == "nvalchemiops_pme":
+            active = "nvalchemiops_pme"
+            mapping["lr_solver_active"] = active
+            mapping["coulomb_mode"] = "nvalchemiops PME full-box Coulomb (MLpot callback)"
+            mapping["nvalchemiops_pme_accuracy"] = (
+                f"{_nvalchemiops_pme_accuracy():.1e}"
+            )
         elif chosen == "scafacos":
             active = "scafacos"
             mapping["lr_solver_active"] = active
@@ -723,7 +849,7 @@ def collect_lr_solver_mapping(
     if not do_mm:
         mapping["lr_solver_active"] = "—"
         mapping["coulomb_mode"] = "none (ML only; LR settings inactive)"
-        if chosen not in ("mic", "jax_pme"):
+        if chosen not in ("mic", "jax_pme", "nvalchemiops_pme"):
             mapping["note"] = (
                 f"lr_solver={chosen} applies only with periodic_external or doMM=true"
             )
@@ -733,6 +859,8 @@ def collect_lr_solver_mapping(
     mapping["lr_solver_active"] = active
     if chosen == "scafacos":
         mapping["note"] = "scafacos not wired in jax_mic; using truncated MIC"
+    if chosen == "nvalchemiops_pme":
+        mapping["note"] = "nvalchemiops_pme not wired in jax_mic; using truncated MIC"
     if active == "mic":
         mapping["coulomb_mode"] = "truncated MIC (switched MM pair loop)"
     else:

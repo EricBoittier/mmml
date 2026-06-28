@@ -23,9 +23,10 @@ output_dir: ~/tests/runs/dcm60_lr_solver_smoke
 
 # MM nonbond stack (see docs/long-range-solver-tutorial.md)
 mm_nonbond_mode: jax_mic          # jax_mic | periodic_external
-lr_solver: jax_pme                # mic | jax_pme | scafacos | auto
+lr_solver: jax_pme                # mic | jax_pme | nvalchemiops_pme | scafacos | auto
 jax_pme_method: ewald             # ewald | pme | p3m
 jax_pme_sr_cutoff: 6.0
+# nvalchemiops_pme is currently full-box Coulomb for periodic_external.
 # scafacos_method: ewald           # when lr_solver=scafacos
 
 md_stages: mini

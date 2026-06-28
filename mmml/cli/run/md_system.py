@@ -1074,18 +1074,19 @@ def build_parser() -> argparse.ArgumentParser:
         default="jax_mic",
         help=(
             "pycharmm MLpot MM nonbonds: jax_mic (default) or periodic_external "
-            "(ScaFaCoS Coulomb + CHARMM IMAGE VDW; requires pbc_* and libfcs)."
+            "(external Coulomb + CHARMM IMAGE VDW; requires pbc_*)."
         ),
     )
     parser.add_argument(
         "--lr-solver",
         type=str,
-        choices=("auto", "mic", "scafacos", "jax_pme"),
+        choices=("auto", "mic", "scafacos", "jax_pme", "nvalchemiops_pme"),
         default=None,
         help=(
             "Long-range Coulomb backend. jax_mic (default): mic=truncated MIC in the "
             "pair loop; jax_pme=jax-pme Ewald/PME/P3M for Coulomb + switched LJ pairs. "
-            "periodic_external: scafacos or jax_pme for full-box Coulomb (+ CHARMM VDW)."
+            "periodic_external: scafacos, jax_pme, or nvalchemiops_pme for full-box "
+            "Coulomb (+ CHARMM VDW)."
         ),
     )
     parser.add_argument(

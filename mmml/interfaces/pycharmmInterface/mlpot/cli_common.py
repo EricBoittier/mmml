@@ -3402,17 +3402,19 @@ def add_staged_md_args(parser: argparse.ArgumentParser) -> None:
         help=(
             "MM nonbond backend for MLpot. jax_mic (default): switched JAX LJ+Coulomb "
             "to ~13 Å; use --lr-solver jax_pme for jax-pme Coulomb instead of MIC. "
-            "periodic_external: external Coulomb (jax_pme or scafacos) + CHARMM IMAGE VDW."
+            "periodic_external: external Coulomb (jax_pme, nvalchemiops_pme, or scafacos) "
+            "+ CHARMM IMAGE VDW."
         ),
     )
     group.add_argument(
         "--lr-solver",
         type=str,
-        choices=("auto", "mic", "scafacos", "jax_pme"),
+        choices=("auto", "mic", "scafacos", "jax_pme", "nvalchemiops_pme"),
         default=None,
         help=(
             "Long-range Coulomb solver (default: env MMML_LR_SOLVER or auto). "
-            "jax_mic: mic or jax_pme; periodic_external: scafacos or jax_pme."
+            "jax_mic: mic or jax_pme; periodic_external: scafacos, jax_pme, "
+            "or nvalchemiops_pme."
         ),
     )
     group.add_argument(
