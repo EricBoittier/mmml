@@ -21,6 +21,13 @@ from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
 )
 
 
+def _hybrid_compat_patch():
+    return patch(
+        "mmml.interfaces.energy_forces.ml.assert_hybrid_ml_compatible",
+        return_value=MagicMock(),
+    )
+
+
 def test_build_decomposed_mlpot_verbose_with_cell_does_not_crash():
     """Regression: periodic_mm_config was read before assignment (UnboundLocalError)."""
     z = np.array([6, 1, 1, 1, 6, 1, 1, 1], dtype=int)
@@ -31,7 +38,7 @@ def test_build_decomposed_mlpot_verbose_with_cell_does_not_crash():
         (),
         {"mm_nonbond_mode": "jax_mic", "ml_spatial_mpi": None, "max_pairs": None},
     )()
-    with patch(
+    with _hybrid_compat_patch(), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.setup_calculator",
         return_value=factory,
     ), patch(
@@ -63,7 +70,7 @@ def test_build_decomposed_mlpot_passes_cell_to_setup_calculator():
             None,
         )
     )
-    with patch(
+    with _hybrid_compat_patch(), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.setup_calculator",
         return_value=factory,
     ) as mock_setup, patch(
@@ -90,7 +97,7 @@ def test_build_decomposed_mlpot_vacuum_cell_false():
     per = [4, 4]
     get_update_fn = MagicMock()
     factory = MagicMock(return_value=(None, MagicMock(), None))
-    with patch(
+    with _hybrid_compat_patch(), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.setup_calculator",
         return_value=factory,
     ) as mock_setup, patch(
@@ -121,7 +128,7 @@ def test_decomposed_mlpot_defers_jax_factory_until_get_calculator():
             MagicMock(),
         )
     )
-    with patch(
+    with _hybrid_compat_patch(), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.setup_calculator",
         return_value=factory,
     ) as mock_setup, patch(
@@ -156,7 +163,7 @@ def test_decomposed_mlpot_sd_defer_uses_cpu_until_promote():
     factory = MagicMock(return_value=(None, MagicMock(), MagicMock()))
     cpu_ctx = MagicMock(__enter__=MagicMock(), __exit__=MagicMock())
     gpu_ctx = MagicMock(__enter__=MagicMock(), __exit__=MagicMock())
-    with patch(
+    with _hybrid_compat_patch(), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.setup_calculator",
         return_value=factory,
     ), patch(
@@ -920,7 +927,7 @@ def test_calculator_wrapping_translation_invariance():
     restart_path.resolve.return_value = restart_path
 
     with patch("mmml.utils.model_checkpoint.load_model_checkpoint", return_value=dummy_checkpoint), \
-         patch("mmml.models.physnetjax.physnetjax.models.model.EF", DummyModel):
+         patch("mmml.models.physnetjax.physnetjax.models.model.PhysNet", DummyModel):
         factory = setup_calculator(
             ATOMS_PER_MONOMER=[4, 4],
             N_MONOMERS=2,

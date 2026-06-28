@@ -28,7 +28,7 @@ dependencies = [
     "jax",
     "jaxlib",
     "jax-md",
-    "jax-pme",
+    "jax-pme @ git+https://github.com/EricBoittier/jax-pme.git@c5f82726840de0abe29e3074adfaac8c826ffb85",
     "flax",
     "optax",
     "jaxtyping",

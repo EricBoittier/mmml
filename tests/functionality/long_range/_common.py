@@ -69,7 +69,7 @@ def print_fail(msg: str) -> None:
 
 def have_jax_pme_package() -> bool:
     try:
-        import jaxpme  # noqa: F401
+        from jaxpme import Ewald, P3M, PME  # noqa: F401
 
         return True
     except ImportError:

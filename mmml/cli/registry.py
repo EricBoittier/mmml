@@ -93,7 +93,6 @@ COMMAND_REGISTRY: tuple[CommandSpec, ...] = (
         "Train EF equivariant model (deprecated)",
         status="deprecated",
         replacement="efield-train",
-        parser_module="mmml.models.EF.training",
     ),
     CommandSpec(
         "ef-evaluate",
@@ -101,7 +100,6 @@ COMMAND_REGISTRY: tuple[CommandSpec, ...] = (
         "Evaluate EF model (deprecated)",
         status="deprecated",
         replacement="efield-evaluate",
-        parser_module="mmml.models.EF.evaluate",
     ),
     CommandSpec(
         "ef-md",

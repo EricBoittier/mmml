@@ -25,6 +25,9 @@ from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
 def _mock_build_patches():
     factory = MagicMock(return_value=(None, MagicMock(), None))
     return patch(
+        "mmml.interfaces.energy_forces.ml.assert_hybrid_ml_compatible",
+        return_value=MagicMock(),
+    ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.setup_calculator",
         return_value=factory,
     ), patch(
@@ -39,8 +42,8 @@ def _mock_build_patches():
 def test_build_decomposed_mlpot_passes_ml_compute_dtype_to_setup_calculator():
     z = np.array([6, 1, 1, 1, 6, 1, 1, 1], dtype=int)
     per = [4, 4]
-    setup_patch, unpack_patch, ctx_patch, factory = _mock_build_patches()
-    with setup_patch as mock_setup, unpack_patch, ctx_patch:
+    compat_patch, setup_patch, unpack_patch, ctx_patch, factory = _mock_build_patches()
+    with compat_patch, setup_patch as mock_setup, unpack_patch, ctx_patch:
         build_decomposed_mlpot_model(
             "/tmp/fake_ckpt.json",
             z,
@@ -56,8 +59,8 @@ def test_build_decomposed_mlpot_reads_ml_compute_dtype_from_args():
     z = np.array([6, 1, 1, 1, 6, 1, 1, 1], dtype=int)
     per = [4, 4]
     args = argparse.Namespace(ml_compute_dtype="float32")
-    setup_patch, unpack_patch, ctx_patch, _factory = _mock_build_patches()
-    with setup_patch as mock_setup, unpack_patch, ctx_patch:
+    compat_patch, setup_patch, unpack_patch, ctx_patch, _factory = _mock_build_patches()
+    with compat_patch, setup_patch as mock_setup, unpack_patch, ctx_patch:
         model = build_decomposed_mlpot_model(
             "/tmp/fake_ckpt.json",
             z,

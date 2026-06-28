@@ -28,13 +28,12 @@ CHARMM_COULOMB_KCAL = 332.063711
 
 
 def have_jax_pme() -> bool:
-    for module in ("jaxpme", "jax_pme"):
-        try:
-            __import__(module)
-            return True
-        except ImportError:
-            continue
-    return False
+    try:
+        from jaxpme import Ewald, P3M, PME  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
 
 
 def have_scafacos() -> bool:
