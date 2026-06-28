@@ -212,6 +212,11 @@ def namespace_from_merged(merged: dict[str, Any]) -> Namespace:
     try:
         args = md_system.parse_md_system_args()
         md_system._apply_backend_setup_defaults(args)
+        for key, value in merged.items():
+            if key in _CAMPAIGN_ONLY_KEYS or key == "extra_args" or value is None:
+                continue
+            if key in parser_keys:
+                setattr(args, key, value)
         for key, value in passthrough.items():
             setattr(args, key, value)
         return args

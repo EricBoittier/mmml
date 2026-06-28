@@ -792,7 +792,11 @@ def build_decomposed_mlpot_model(
 
         cutoff_a = float(cutoff_params.mm_switch_on) + float(cutoff_params.mm_switch_width)
         n_atoms = int(sum(per))
-        safety = float(getattr(args, "cell_list_safety_factor", 3.0) or 3.0)
+        safety = float(
+            getattr(args, "cell_list_safety_factor", 3.0) or 3.0
+            if args is not None
+            else 3.0
+        )
         max_pairs = estimate_max_pairs(
             n_atoms,
             cutoff=cutoff_a,
