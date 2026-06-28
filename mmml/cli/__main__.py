@@ -114,6 +114,11 @@ def main():
         sys.argv = ["mmml health-check"] + args.args
         return health_check.main()
 
+    elif command == "env":
+        from . import env as env_cli
+        sys.argv = ["mmml env"] + args.args
+        return env_cli.main()
+
     elif command == "warmup-mlpot-jax":
         from .run import warmup_mlpot_jax
         sys.argv = ["mmml warmup-mlpot-jax"] + args.args

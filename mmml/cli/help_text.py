@@ -61,6 +61,7 @@ COMMAND_GROUPS: tuple[tuple[str, tuple[CommandInfo, ...]], ...] = (
         "Workflow helpers",
         (
             CommandInfo("configure", "Interactive wizard for YAML configs & Snakemake"),
+            CommandInfo("env", "Resolved MMML_CKPT / CHARMM paths and export hints"),
             CommandInfo("commands", "Browse all subcommands (grouped)"),
             CommandInfo("examples", "Copy-paste example invocations"),
             CommandInfo("completion", "Shell tab-completion setup"),
