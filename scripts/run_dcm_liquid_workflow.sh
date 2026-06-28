@@ -17,7 +17,7 @@
 #   Documented in docs/md-system-configs.md (DCM:60 @ box_size 32).
 #
 #   Faster smoke (not production MIC): N_DCM=20 BOX_SIZE=45 (dilute, like long-range test configs)
-#   True bulk ρ + MIC: N_DCM=300 BOX_SIZE=32 (slow; may need ensure_charmm_mlpot_limits)
+#   True bulk ρ + MIC: BOX_AUTO=count BOX_SIZE=32 (→ ~DCM:308; slow; ensure_charmm_mlpot_limits)
 #
 # Prerequisites:
 #   module load GCC/14.2.0 OpenMPI/5.0.7-GCC-14.2.0 CMake/3.31.3-GCCcore-14.2.0

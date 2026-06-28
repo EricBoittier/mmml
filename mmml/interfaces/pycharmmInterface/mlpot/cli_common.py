@@ -1303,6 +1303,13 @@ def build_cluster_from_args_with_tag(
 
     spacing = float(args.spacing)
     if getattr(args, "composition", None):
+        from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+            apply_box_auto_count_composition,
+            resolve_box_auto_mode,
+        )
+
+        if resolve_box_auto_mode(args) == "count":
+            apply_box_auto_count_composition(args)
         composition = _parse_composition(args.composition)
         if use_pyxtal_placement(args):
             import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401

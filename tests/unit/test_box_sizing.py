@@ -89,6 +89,61 @@ def test_resolve_packmol_cube_side_from_args_uses_density_auto():
     assert 20.0 < side < 30.0
 
 
+def test_n_molecules_for_target_density_in_fixed_box_dcm32():
+    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+        n_molecules_for_target_density_in_fixed_box,
+        total_mass_g_for_composition,
+    )
+
+    scaled = n_molecules_for_target_density_in_fixed_box(
+        composition={"DCM": 1},
+        box_side_A=32.0,
+        target_density_g_cm3=1.326,
+    )
+    assert scaled == {"DCM": 308}
+    mass = total_mass_g_for_composition(scaled)
+    vol_cm3 = (32.0 * 1.0e-8) ** 3
+    assert mass / vol_cm3 == pytest.approx(1.326, rel=0.01)
+
+
+def test_apply_box_auto_count_composition_mutates_args():
+    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+        apply_box_auto_count_composition,
+    )
+
+    args = argparse.Namespace(
+        box_auto="count",
+        box_size=32.0,
+        target_density_g_cm3=1.326,
+        bulk_density_fraction=None,
+        composition="DCM:60",
+        box_auto_count_min_molecules=1,
+        box_auto_count_max_molecules=None,
+        quiet=True,
+    )
+    scaled = apply_box_auto_count_composition(args)
+    assert scaled["DCM"] == 308
+    assert args.composition == "DCM:308"
+    assert args.n_molecules == 308
+
+
+def test_box_auto_count_mixed_stoichiometry():
+    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+        n_molecules_for_target_density_in_fixed_box,
+        total_mass_g_for_composition,
+    )
+
+    scaled = n_molecules_for_target_density_in_fixed_box(
+        composition={"DCM": 2, "ACO": 1},
+        box_side_A=28.0,
+        target_density_g_cm3=0.9,
+    )
+    assert scaled["DCM"] == 2 * scaled["ACO"]
+    mass = total_mass_g_for_composition(scaled)
+    vol_cm3 = (28.0 * 1.0e-8) ** 3
+    assert mass / vol_cm3 == pytest.approx(0.9, rel=0.02)
+
+
 def test_resolve_initial_pbc_box_side_explicit_box_size():
     from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
         resolve_initial_pbc_box_side,

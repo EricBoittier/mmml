@@ -23,7 +23,7 @@ SOLVENT_BULK_PROPS: dict[str, dict[str, float]] = {
     "WAT": {"rho_g_cm3": 1.000, "mw_g_mol": 18.015},
 }
 
-BoxAutoMode = Literal["geometry", "density"]
+BoxAutoMode = Literal["geometry", "density", "count"]
 
 
 def parse_composition_dict(spec: str | None) -> dict[str, int] | None:
@@ -92,7 +92,7 @@ def apply_certified_box_size_from_artifacts(args: argparse.Namespace) -> float |
 
 
 def resolve_box_auto_mode(args: argparse.Namespace) -> BoxAutoMode:
-    """Return ``geometry`` (default) or ``density`` when ``--box-size`` is unset."""
+    """Return ``geometry``, ``density``, or ``count``."""
     raw = getattr(args, "box_auto", None)
     if raw is None:
         if getattr(args, "target_density_g_cm3", None) is not None:
@@ -101,9 +101,11 @@ def resolve_box_auto_mode(args: argparse.Namespace) -> BoxAutoMode:
             return "density"
         return "geometry"
     mode = str(raw).strip().lower()
-    if mode in ("geometry", "density"):
+    if mode in ("geometry", "density", "count"):
         return mode  # type: ignore[return-value]
-    raise ValueError(f"--box-auto must be 'geometry' or 'density', got {raw!r}")
+    raise ValueError(
+        f"--box-auto must be 'geometry', 'density', or 'count', got {raw!r}"
+    )
 
 
 def total_mass_g_for_composition(composition: dict[str, int]) -> float:
@@ -125,6 +127,96 @@ def total_mass_g_for_composition(composition: dict[str, int]) -> float:
     if mass_g <= 0.0:
         raise ValueError("composition mass is zero; cannot compute density-based box")
     return mass_g
+
+
+def normalize_composition_stoichiometry(composition: dict[str, int]) -> dict[str, int]:
+    """Reduce composition counts to relative stoichiometry (gcd-normalized)."""
+    from math import gcd
+    from functools import reduce
+
+    if not composition:
+        raise ValueError("composition is empty")
+    counts = [int(v) for v in composition.values()]
+    if any(c <= 0 for c in counts):
+        raise ValueError(f"composition counts must be positive: {composition}")
+    g = reduce(gcd, counts)
+    return {str(k).strip().upper(): int(v) // g for k, v in composition.items()}
+
+
+def format_composition_dict(composition: dict[str, int]) -> str:
+    """Serialize ``RES:N`` tokens (insertion order preserved)."""
+    return ",".join(f"{res}:{int(count)}" for res, count in composition.items())
+
+
+def n_molecules_for_target_density_in_fixed_box(
+    *,
+    composition: dict[str, int],
+    box_side_A: float,
+    target_density_g_cm3: float,
+    min_total_molecules: int = 1,
+    max_total_molecules: int | None = None,
+) -> dict[str, int]:
+    """Scale stoichiometry to hit target ρ in a fixed cubic box (integer molecule counts)."""
+    side = float(box_side_A)
+    if side <= 0.0:
+        raise ValueError(f"box_side_A must be positive, got {side}")
+    rho = float(target_density_g_cm3)
+    if rho <= 0.0:
+        raise ValueError(f"target_density_g_cm3 must be positive, got {rho}")
+
+    stoich = normalize_composition_stoichiometry(composition)
+    unit_mass_g = total_mass_g_for_composition(stoich)
+    vol_cm3 = (side * 1.0e-8) ** 3
+    target_mass_g = rho * vol_cm3
+    n_units = int(round(target_mass_g / unit_mass_g))
+    n_units = max(1, n_units)
+    scaled = {res: int(stoich[res]) * n_units for res in stoich}
+    total = int(sum(scaled.values()))
+    min_total = max(int(min_total_molecules), int(sum(stoich.values())))
+    if total < min_total:
+        bump = (min_total + sum(stoich.values()) - 1) // sum(stoich.values())
+        scaled = {res: int(stoich[res]) * bump for res in stoich}
+        total = int(sum(scaled.values()))
+    if max_total_molecules is not None and total > int(max_total_molecules):
+        raise ValueError(
+            f"Fixed-box density sizing needs {total} molecules in L={side:.3f} Å at "
+            f"ρ={rho:.4f} g/cm³, above --box-auto-count-max-molecules={max_total_molecules}."
+        )
+    return scaled
+
+
+def apply_box_auto_count_composition(args: argparse.Namespace) -> dict[str, int]:
+    """Mutate ``args.composition`` from fixed ``--box-size`` + target density."""
+    if resolve_box_auto_mode(args) != "count":
+        raise ValueError("apply_box_auto_count_composition requires --box-auto count")
+    if getattr(args, "box_size", None) is None:
+        raise ValueError("--box-auto count requires --box-size (fixed cubic side in Å).")
+    comp = parse_composition_dict(getattr(args, "composition", None))
+    if comp is None:
+        raise ValueError(
+            "--box-auto count requires --composition stoichiometry (e.g. DCM:1 or DCM:2,ACO:1)."
+        )
+    rho = resolve_target_density_g_cm3(args, comp)
+    side = float(args.box_size)
+    max_n = getattr(args, "box_auto_count_max_molecules", None)
+    scaled = n_molecules_for_target_density_in_fixed_box(
+        composition=comp,
+        box_side_A=side,
+        target_density_g_cm3=rho,
+        min_total_molecules=int(getattr(args, "box_auto_count_min_molecules", 1) or 1),
+        max_total_molecules=int(max_n) if max_n is not None else None,
+    )
+    before = format_composition_dict(comp)
+    after = format_composition_dict(scaled)
+    args.composition = after
+    args.n_molecules = int(sum(scaled.values()))
+    if not getattr(args, "quiet", False):
+        print(
+            f"box-auto count: L={side:.3f} Å ρ={rho:.4f} g/cm³ → "
+            f"{before} → {after} ({args.n_molecules} molecules)",
+            flush=True,
+        )
+    return scaled
 
 
 def cubic_box_side_from_target_density(
@@ -325,12 +417,28 @@ def add_box_sizing_args(parser: argparse.ArgumentParser) -> None:
     group = parser.add_argument_group("PBC box sizing")
     group.add_argument(
         "--box-auto",
-        choices=("geometry", "density"),
+        choices=("geometry", "density", "count"),
         default=None,
         help=(
-            "How to choose the cubic box when --box-size is unset: "
-            "geometry=span+padding (default); density=from --composition and target ρ."
+            "How to choose the cubic box / molecule count: "
+            "geometry=span+padding (default); "
+            "density=box side from --composition counts and target ρ; "
+            "count=scale --composition stoichiometry to target ρ in fixed --box-size."
         ),
+    )
+    group.add_argument(
+        "--box-auto-count-min-molecules",
+        type=int,
+        default=1,
+        metavar="N",
+        help="Minimum total molecules for --box-auto count (default: 1).",
+    )
+    group.add_argument(
+        "--box-auto-count-max-molecules",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Optional cap on total molecules for --box-auto count.",
     )
     group.add_argument(
         "--target-density-g-cm3",
