@@ -46,8 +46,13 @@ def _under_mpirun() -> bool:
 
 
 def _mpi4py_available() -> bool:
-    """True when ``mpi4py.MPI`` can load (requires ``libmpi`` on ``LD_LIBRARY_PATH``)."""
-    return mpi4py_mpi_extension_path() is not None
+    """True when the ``mpi4py`` package is installed (does not import ``mpi4py.MPI``)."""
+    import importlib.util
+
+    try:
+        return importlib.util.find_spec("mpi4py") is not None
+    except (ImportError, ModuleNotFoundError, ValueError):
+        return False
 
 
 def _openmpi_env_without_launch() -> bool:
@@ -519,8 +524,6 @@ def charmm_libmpi_path() -> Path | None:
 
 def mpi4py_mpi_extension_path() -> Path | None:
     """Path to the compiled ``mpi4py.MPI`` extension module (no ``MPI_Init``)."""
-    if not _mpi4py_available():
-        return None
     import importlib.util
 
     try:
