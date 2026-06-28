@@ -18,6 +18,10 @@ the jax-pme screened real-space kernel within ``sr_cutoff_A``.
 
 from __future__ import annotations
 
+import atexit
+import os
+import sys
+import time
 from dataclasses import dataclass
 
 import numpy as np
@@ -52,6 +56,62 @@ class HybridJaxPmeMmResult:
     forces_kcalmol_A: np.ndarray
     coulomb: HybridJaxPmeCorrectionResult
     dispersion: HybridJaxPmeCorrectionResult | None
+
+
+_PROFILE_STATS: dict[str, list[float]] = {}
+_PROFILE_REGISTERED = False
+
+
+def _profile_enabled() -> bool:
+    raw = os.environ.get("MMML_JAX_PME_PROFILE", "").strip().lower()
+    return raw in ("1", "true", "yes", "on", "per_call")
+
+
+def _profile_start() -> float | None:
+    return time.perf_counter() if _profile_enabled() else None
+
+
+def _record_profile(label: str, start: float | None) -> None:
+    global _PROFILE_REGISTERED
+    if start is None:
+        return
+    if not _PROFILE_REGISTERED:
+        atexit.register(_emit_profile_summary)
+        _PROFILE_REGISTERED = True
+    elapsed_ms = (time.perf_counter() - start) * 1000.0
+    _PROFILE_STATS.setdefault(label, []).append(elapsed_ms)
+    if os.environ.get("MMML_JAX_PME_PROFILE", "").strip().lower() == "per_call":
+        print(f"jax-pme profile: {label}={elapsed_ms:.3f} ms", file=sys.stderr, flush=True)
+
+
+def _emit_profile_summary() -> None:
+    if not _PROFILE_STATS:
+        return
+    print("jax-pme profile summary:", file=sys.stderr, flush=True)
+    for label in sorted(_PROFILE_STATS):
+        samples = np.asarray(_PROFILE_STATS[label], dtype=np.float64)
+        total = float(np.sum(samples))
+        mean = float(np.mean(samples))
+        print(
+            f"  {label}: n={samples.size} total={total:.3f} ms mean={mean:.3f} ms",
+            file=sys.stderr,
+            flush=True,
+        )
+
+
+def _coefficients_are_zero(coefficients: np.ndarray) -> bool:
+    coef = np.asarray(coefficients, dtype=np.float64)
+    return coef.size == 0 or not bool(np.any(coef != 0.0))
+
+
+def _zero_correction(positions_A: np.ndarray, *, switch_scale: float = 1.0) -> HybridJaxPmeCorrectionResult:
+    return HybridJaxPmeCorrectionResult(
+        energy_kcalmol=0.0,
+        forces_kcalmol_A=np.zeros_like(np.asarray(positions_A, dtype=np.float64)),
+        energy_intra_kcalmol=0.0,
+        energy_mic_cross_kcalmol=0.0,
+        switch_scale=float(switch_scale),
+    )
 
 
 def _mic_displacement_np(ri: np.ndarray, rj: np.ndarray, cell: np.ndarray) -> np.ndarray:
@@ -167,6 +227,8 @@ def _intra_monomer_jax_pme_power_law(
     pos = np.asarray(positions_A, dtype=np.float64)
     coef = np.asarray(coefficients, dtype=np.float64).reshape(-1)
     offsets = np.asarray(monomer_offsets, dtype=np.int64)
+    if _coefficients_are_zero(coef):
+        return _zero_correction(pos)
     n_monomers = int(len(offsets) - 1)
     energy = 0.0
     forces = np.zeros_like(pos)
@@ -339,6 +401,7 @@ def hybrid_jax_pme_coulomb_correction(
     pos = np.asarray(positions_A, dtype=np.float64)
     chg = np.asarray(charges_e, dtype=np.float64)
     offsets = np.asarray(monomer_offsets, dtype=np.int64)
+    t0 = _profile_start()
     switch_scale = _mean_switch_scale(
         pos,
         offsets,
@@ -349,7 +412,11 @@ def hybrid_jax_pme_coulomb_correction(
         complementary_handoff=complementary_handoff,
         mm_r_min=mm_r_min,
     )
+    _record_profile("switch_scale", t0)
+    if _coefficients_are_zero(chg):
+        return _zero_correction(pos, switch_scale=switch_scale)
 
+    t0 = _profile_start()
     full = compute_jax_pme_coulomb(
         pos,
         chg,
@@ -357,6 +424,8 @@ def hybrid_jax_pme_coulomb_correction(
         method=method,
         sr_cutoff_A=sr_cutoff_A,
     )
+    _record_profile("coulomb_full", t0)
+    t0 = _profile_start()
     intra = intra_monomer_jax_pme_coulomb(
         pos,
         chg,
@@ -365,6 +434,7 @@ def hybrid_jax_pme_coulomb_correction(
         method=method,
         sr_cutoff_A=sr_cutoff_A,
     )
+    _record_profile("coulomb_intra", t0)
     mic_e = 0.0
     mic_f = np.zeros_like(pos)
     if subtract_pair_mic_sr and (
@@ -411,7 +481,10 @@ def hybrid_jax_pme_lj_dispersion_correction(
     pos = np.asarray(positions_A, dtype=np.float64)
     coef = np.asarray(c6_sqrt, dtype=np.float64).reshape(-1)
     offsets = np.asarray(monomer_offsets, dtype=np.int64)
+    if _coefficients_are_zero(coef):
+        return _zero_correction(pos, switch_scale=switch_scale)
 
+    t0 = _profile_start()
     full = compute_jax_pme_lj_dispersion(
         pos,
         coef,
@@ -419,6 +492,8 @@ def hybrid_jax_pme_lj_dispersion_correction(
         method=method,
         sr_cutoff_A=sr_cutoff_A,
     )
+    _record_profile("dispersion_full", t0)
+    t0 = _profile_start()
     intra = intra_monomer_jax_pme_lj_dispersion(
         pos,
         coef,
@@ -427,6 +502,7 @@ def hybrid_jax_pme_lj_dispersion_correction(
         method=method,
         sr_cutoff_A=sr_cutoff_A,
     )
+    _record_profile("dispersion_intra", t0)
     lr_e = float(full.energy_kcalmol) - intra.energy_kcalmol
     lr_f = np.asarray(full.forces_kcalmol_A - intra.forces_kcalmol_A, dtype=np.float64)
     return HybridJaxPmeCorrectionResult(
@@ -461,6 +537,7 @@ def hybrid_jax_pme_mm_lr_correction(
     subtract_pair_mic_sr: bool = False,
 ) -> HybridJaxPmeMmResult:
     """Combined hybrid Coulomb + r⁻⁶ dispersion (each full − intra, same COM scale)."""
+    t0 = _profile_start()
     coulomb = hybrid_jax_pme_coulomb_correction(
         positions_A,
         charges_e,
@@ -481,8 +558,10 @@ def hybrid_jax_pme_mm_lr_correction(
         mm_r_min=mm_r_min,
         subtract_pair_mic_sr=subtract_pair_mic_sr,
     )
+    _record_profile("hybrid_coulomb_total", t0)
     dispersion: HybridJaxPmeCorrectionResult | None = None
     if c6_sqrt is not None:
+        t0 = _profile_start()
         dispersion = hybrid_jax_pme_lj_dispersion_correction(
             positions_A,
             c6_sqrt,
@@ -492,6 +571,7 @@ def hybrid_jax_pme_mm_lr_correction(
             sr_cutoff_A=sr_cutoff_A,
             switch_scale=coulomb.switch_scale,
         )
+        _record_profile("hybrid_dispersion_total", t0)
     e = coulomb.energy_kcalmol
     f = np.asarray(coulomb.forces_kcalmol_A, dtype=np.float64)
     if dispersion is not None:

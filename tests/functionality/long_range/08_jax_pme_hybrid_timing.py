@@ -130,23 +130,11 @@ def main() -> int:
     method = str(args.method)
     sr = float(args.sr_cutoff)
 
+    # Dispersion timing uses uniform dummy LJ params (cost is weakly sensitive to c6).
     c6_sqrt = per_atom_jax_pme_c6_sqrt_for_atoms(
-        np.abs(np.asarray(psf.get_amass(), dtype=np.float64)[:n_atoms] * 0.0 + 0.1),
+        np.full(n_atoms, 0.05, dtype=np.float64),
         np.full(n_atoms, 2.0, dtype=np.float64),
     )
-    # Real LJ params from PSF nonbond if available (fallback above is timing-only).
-    try:
-        from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
-            _load_charmm_nbond_arrays_from_psf,
-        )
-
-        nb = _load_charmm_nbond_arrays_from_psf(n_atoms)
-        c6_sqrt = per_atom_jax_pme_c6_sqrt_for_atoms(
-            np.abs(nb.epsilon),
-            nb.rmin,
-        )
-    except Exception:
-        pass
 
     print(
         f"  system: {args.composition}  atoms={n_atoms}  monomers={n_monomers}  "
