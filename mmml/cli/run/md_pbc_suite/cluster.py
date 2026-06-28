@@ -235,6 +235,9 @@ def build_minimized_monomer_for_packmol(
     verbose: bool = True,
 ) -> tuple[np.ndarray, list[str], np.ndarray]:
     """Build and CHARMM-minimize an isolated monomer before Packmol (MM only, no MLpot)."""
+    from mmml.interfaces.pycharmmInterface.cluster_geometry import ensure_charmm_session_ready
+
+    ensure_charmm_session_ready()
     from mmml.cli.run.md_pbc_suite.ase import _generate_residue_with_make_res_recipe
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmMmMinimizeConfig,
