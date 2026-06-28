@@ -443,12 +443,16 @@ def _jax_pme_coulomb_pure_callback(
     )
 
     pos_shape = positions.shape
-    out_dtype = jnp.float64
+    out_dtype = positions.dtype
     charges_host = np.asarray(charges_np, dtype=np.float64)
     method_host = str(method)
     sr_host = float(sr_cutoff_A)
 
-    def _host_fn(pos_np: np.ndarray, box_len_np: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    def _host_fn(
+        pos_np: np.ndarray,
+        box_len_np: np.ndarray,
+        **_,
+    ) -> tuple[np.ndarray, np.ndarray]:
         lr = compute_jax_pme_coulomb(
             np.asarray(pos_np, dtype=np.float64),
             charges_host,
@@ -457,8 +461,8 @@ def _jax_pme_coulomb_pure_callback(
             sr_cutoff_A=sr_host,
         )
         return (
-            np.asarray(lr.energy_kcalmol, dtype=np.float64),
-            np.asarray(lr.forces_kcalmol_A, dtype=np.float64),
+            np.asarray(lr.energy_kcalmol, dtype=out_dtype),
+            np.asarray(lr.forces_kcalmol_A, dtype=out_dtype),
         )
 
     box_scalar = jnp.asarray(box_length_A, dtype=out_dtype).reshape(())
