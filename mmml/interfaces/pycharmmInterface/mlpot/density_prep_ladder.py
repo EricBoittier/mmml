@@ -121,9 +121,12 @@ def apply_density_prep_resilient_defaults(args: argparse.Namespace) -> None:
     _bump_int_attr(args, "mini_nstep", 500)
     _bump_int_attr(args, "bonded_mm_mini_steps", 500)
     skip_box_prep = certified_box_handoff(args)
-    if not skip_box_prep:
-        if int(getattr(args, "mini_lattice_abnr_steps", 0) or 0) <= 0:
-            args.mini_lattice_abnr_steps = 200
+    if skip_box_prep:
+        args.mini_lattice_abnr_steps = 0
+        args.density_prep_lattice_abnr_steps = 0
+        args.mini_box_equil_ps = 0.0
+    elif int(getattr(args, "mini_lattice_abnr_steps", 0) or 0) <= 0:
+        args.mini_lattice_abnr_steps = 200
         if float(getattr(args, "mini_box_equil_ps", 0.0) or 0.0) <= 0.0:
             args.mini_box_equil_ps = 2.0
 
@@ -156,6 +159,30 @@ def certified_box_handoff(args: argparse.Namespace) -> bool:
     return bool(getattr(args, "skip_cluster_build", False)) and bool(
         getattr(args, "from_psf", None) or getattr(args, "from_crd", None)
     )
+
+
+def resolve_density_prep_lattice_abnr_steps(args: argparse.Namespace) -> int:
+    """Lattice ABNR steps for pre-MLpot gate / density-prep ladder (0 = skip).
+
+    ``mini_lattice_abnr_steps=0`` must stay disabled — do not fall back to 100.
+    Certified liquid-box handoffs skip lattice work (box already optimized there).
+    """
+    if certified_box_handoff(args):
+        explicit = int(getattr(args, "density_prep_lattice_abnr_steps", 0) or 0)
+        if explicit > 0:
+            return explicit
+        mini = int(getattr(args, "mini_lattice_abnr_steps", 0) or 0)
+        if mini > 0:
+            return mini
+        return 0
+
+    steps = int(getattr(args, "density_prep_lattice_abnr_steps", 0) or 0)
+    if steps > 0:
+        return steps
+    steps = int(getattr(args, "mini_lattice_abnr_steps", 0) or 0)
+    if steps > 0:
+        return steps
+    return 100
 
 
 def apply_condensed_phase_md_defaults(args: argparse.Namespace) -> None:
@@ -505,9 +532,7 @@ def run_density_prep_ladder(
     min_overlap = resolve_pre_mlpot_overlap_min_distance(args)
     spacing = getattr(args, "spacing", None)
     seed = getattr(args, "seed", None)
-    lattice_steps = int(getattr(args, "density_prep_lattice_abnr_steps", 0) or 0)
-    if lattice_steps <= 0:
-        lattice_steps = int(getattr(args, "mini_lattice_abnr_steps", 100) or 100)
+    lattice_steps = resolve_density_prep_lattice_abnr_steps(args)
     bonded_steps = int(getattr(args, "bonded_mm_mini_steps", 200) or 200)
     quiet = bool(getattr(args, "quiet", False))
 
@@ -870,9 +895,7 @@ def run_pre_mlpot_geometry_gate(
     min_overlap = resolve_pre_mlpot_overlap_min_distance(args)
     spacing = getattr(args, "spacing", None)
     seed = getattr(args, "seed", None)
-    lattice_steps = int(getattr(args, "density_prep_lattice_abnr_steps", 0) or 0)
-    if lattice_steps <= 0:
-        lattice_steps = int(getattr(args, "mini_lattice_abnr_steps", 100) or 100)
+    lattice_steps = resolve_density_prep_lattice_abnr_steps(args)
     staged_fraction = float(getattr(args, "liquid_prep_staged_density_fraction", 0.70) or 0.70)
 
     result = PreMlpotGeometryGateResult(

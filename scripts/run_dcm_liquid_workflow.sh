@@ -250,6 +250,7 @@ if [[ "$SKIP_MD" != "1" ]]; then
     --no-charmm-pre-minimize
     --max-grms-before-dyn 80.0
     --mini-lattice-abnr-steps 0
+    --density-prep-lattice-abnr-steps 0
     --mini-box-equil-ps 0
     --mm-switch-on 9.0
     --mm-switch-width 1.5
