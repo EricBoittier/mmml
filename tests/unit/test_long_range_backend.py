@@ -76,6 +76,15 @@ def test_create_lr_solver_mic():
     assert solver.name == "mic"
 
 
+def test_create_lr_solver_jax_pme():
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
+        return_value="jax_pme",
+    ):
+        solver = create_lr_solver("jax_pme")
+    assert solver.name == "jax_pme"
+
+
 def test_create_lr_solver_scafacos_delegates():
     fake = LongRangeCoulombResult(
         energy_kcalmol=1.0,

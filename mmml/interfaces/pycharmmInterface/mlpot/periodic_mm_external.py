@@ -30,12 +30,25 @@ def compute_periodic_coulomb_kcalmol(
     box_side_A: float,
     cfg: PeriodicMmConfig,
 ) -> tuple[float, np.ndarray]:
-    """ScaFaCoS Coulomb energy (kcal/mol) and forces (kcal/mol/Å)."""
+    """Periodic Coulomb energy (kcal/mol) and forces (kcal/mol/Å)."""
+    pos = np.asarray(positions_A, dtype=np.float64)
+    chg = np.asarray(charges_e, dtype=np.float64)
+    if cfg.uses_jax_pme:
+        from mmml.interfaces.pycharmmInterface.long_range_backend import compute_jax_pme_coulomb
+
+        result = compute_jax_pme_coulomb(
+            pos,
+            chg,
+            box_length_A=float(box_side_A),
+            method=cfg.jax_pme_method,
+        )
+        return float(result.energy_kcalmol), np.asarray(result.forces_kcalmol_A, dtype=np.float64)
+
     from mmml.interfaces.scafacosInterface.scafacos_session import compute_scafacos_coulomb
 
     result = compute_scafacos_coulomb(
-        np.asarray(positions_A, dtype=np.float64),
-        np.asarray(charges_e, dtype=np.float64),
+        pos,
+        chg,
         box_length_A=float(box_side_A),
         method=cfg.scafacos_method,
     )
@@ -50,7 +63,7 @@ def add_periodic_coulomb_to_callback(
     energy_kcal: float,
     forces_kcal: np.ndarray,
 ) -> tuple[float, np.ndarray]:
-    """Add ScaFaCoS Coulomb to MLpot callback totals (kcal/mol, kcal/mol/Å)."""
+    """Add periodic Coulomb (jax-pme or ScaFaCoS) to MLpot callback totals."""
     n = int(positions_A.shape[0])
     charges = read_psf_charges(n)
     e_coul, f_coul = compute_periodic_coulomb_kcalmol(
