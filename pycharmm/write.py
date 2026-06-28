@@ -44,6 +44,14 @@ Write coordinates to a CHARMM coordinate file named out.crd
 import pycharmm.script
 
 
+def _resolve_write_path(filename: str) -> tuple[str, object | None]:
+    try:
+        from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
+    except ImportError:
+        return filename, None
+    return charmm_fortran_path(filename, for_write=True)
+
+
 def coor_pdb(filename, title='', **kwargs):
     """write a coordinate set to a pdb file
 
@@ -56,11 +64,18 @@ def coor_pdb(filename, title='', **kwargs):
     **kwargs: dict
         extra settings to pass to the CHARMM command
     """
-    write_command = pycharmm.script.WriteScript(filename,
-                                                title,
-                                                coor='pdb',
-                                                **kwargs)
-    write_command.run()
+    fortran_path, alias = _resolve_write_path(filename)
+    try:
+        write_command = pycharmm.script.WriteScript(
+            fortran_path,
+            title,
+            coor='pdb',
+            **kwargs,
+        )
+        write_command.run()
+    finally:
+        if alias is not None:
+            alias.finalize()
 
 
 def coor_card(filename, title='', **kwargs):
@@ -75,11 +90,18 @@ def coor_card(filename, title='', **kwargs):
     **kwargs: dict 
         extra settings to pass to the CHARMM command
     """
-    write_command = pycharmm.script.WriteScript(filename,
-                                                title,
-                                                coor='card',
-                                                **kwargs)
-    write_command.run()
+    fortran_path, alias = _resolve_write_path(filename)
+    try:
+        write_command = pycharmm.script.WriteScript(
+            fortran_path,
+            title,
+            coor='card',
+            **kwargs,
+        )
+        write_command.run()
+    finally:
+        if alias is not None:
+            alias.finalize()
 
 
 def psf_card(filename, title='', **kwargs):
@@ -94,11 +116,18 @@ def psf_card(filename, title='', **kwargs):
     **kwargs: dict
         extra settings to pass to the CHARMM command
     """
-    write_command = pycharmm.script.WriteScript(filename,
-                                                title,
-                                                psf='card',
-                                                **kwargs)
-    write_command.run()
+    fortran_path, alias = _resolve_write_path(filename)
+    try:
+        write_command = pycharmm.script.WriteScript(
+            fortran_path,
+            title,
+            psf='card',
+            **kwargs,
+        )
+        write_command.run()
+    finally:
+        if alias is not None:
+            alias.finalize()
 
 
 # def coor_pdb(filename, selection=None, comparison=False):

@@ -174,10 +174,18 @@ def coor_card(filename, **kwargs):
     filename : str
 
     """
-    read_script = pycharmm.script.CommandScript('read',
-                                                coor='card',
-                                                name=filename,
-                                                **kwargs)
+    try:
+        from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
+    except ImportError:
+        fortran_path = filename
+    else:
+        fortran_path, _alias = charmm_fortran_path(filename, for_write=False)
+    read_script = pycharmm.script.CommandScript(
+        'read',
+        coor='card',
+        name=fortran_path,
+        **kwargs,
+    )
     read_script.run()
 
 

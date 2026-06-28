@@ -167,14 +167,25 @@ def _path_component_has_uppercase(part: str) -> bool:
     return any(ch.isupper() for ch in part)
 
 
+def charmm_fortran_max_path_length() -> int:
+    """CHARMM Fortran ``OPEN``/``WRITE`` name buffer (typically 128 characters)."""
+    raw = (os.environ.get("MMML_CHARMM_MAX_PATH_LEN") or "").strip()
+    if raw:
+        return max(64, int(raw))
+    return 128
+
+
 def fortran_path_needs_alias(path: str | Path) -> bool:
-    """True when CHARMM Fortran I/O may fail on *path* (uppercase in path segments)."""
+    """True when CHARMM Fortran I/O may fail on *path* (uppercase or too long)."""
     if _charmm_io_aliases_disabled():
         return False
     p = Path(path).expanduser()
     if not p.is_absolute():
         p = Path.cwd() / p
-    return any(_path_component_has_uppercase(part) for part in p.parts)
+    resolved = p.resolve()
+    if len(str(resolved)) > charmm_fortran_max_path_length():
+        return True
+    return any(_path_component_has_uppercase(part) for part in resolved.parts)
 
 
 def charmm_io_staging_root() -> Path:
