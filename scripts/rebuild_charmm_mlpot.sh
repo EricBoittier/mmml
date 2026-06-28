@@ -161,6 +161,13 @@ print('\n'.join(mpi_shell_setup_lines()))
 " 2>/dev/null || true
   )
 fi
+# mpi_shell_setup_lines prepends /usr/lib64 before the appended gcc libstdc++ path;
+# cmake from /opt/gcc-12.2.0 then fails with GLIBCXX_3.4.30 not found.
+for _libdir in /opt/gcc-12.2.0/build/lib64 /opt/gcc-12.2.0/build/lib/gcc/x86_64-pc-linux-gnu/12.2.0; do
+  if [[ -d "$_libdir" ]]; then
+    export LD_LIBRARY_PATH="${_libdir}:${LD_LIBRARY_PATH:-}"
+  fi
+done
 
 BUILD_DIR="$LOCAL_BUILD"
 if [[ "$USE_NFS_BUILD" == 1 ]]; then
@@ -265,6 +272,10 @@ if [[ "$needs_configure" == 1 ]]; then
       -DCMAKE_SHARED_LINKER_FLAGS="$CODE_MODEL_FLAG"
     )
     echo "Using code model flags: $FFLAGS (linker: $CODE_MODEL_FLAG)"
+  fi
+  if [[ -n "${FFTW_ROOT:-}" && -d "${FFTW_ROOT}/lib" ]]; then
+    CMAKE_ARGS+=(-DFFTW_ROOT="$FFTW_ROOT")
+    echo "Using PIC FFTW from FFTW_ROOT=$FFTW_ROOT"
   fi
   cmake "${CMAKE_ARGS[@]}"
 fi

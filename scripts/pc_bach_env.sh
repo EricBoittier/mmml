@@ -18,6 +18,15 @@ export OPENMPI_ROOT="${OPENMPI_ROOT:-/opt/gcc-12.2.0/openmpi-4.1.4/build}"
 export PATH="/opt/gcc-12.2.0/cmake-3.25.1/bin:$OPENMPI_ROOT/bin:${PATH}"
 export LD_LIBRARY_PATH="/opt/gcc-12.2.0/build/lib64:$OPENMPI_ROOT/lib:${LD_LIBRARY_PATH:-}"
 
+# Cluster /opt FFTW is static-only; linking libcharmm.so needs -fPIC (user-local build).
+_MMML_FFTW_PIC="${MMML_FFTW_ROOT:-${HOME}/.local/fftw-3.3.10-pic}"
+if [[ -f "${_MMML_FFTW_PIC}/lib/libfftw3.so" ]]; then
+  export FFTW_ROOT="$_MMML_FFTW_PIC"
+  export CMAKE_PREFIX_PATH="${FFTW_ROOT}${CMAKE_PREFIX_PATH:+:${CMAKE_PREFIX_PATH}}"
+  export LD_LIBRARY_PATH="${FFTW_ROOT}/lib:${LD_LIBRARY_PATH}"
+fi
+unset _MMML_FFTW_PIC
+
 # gcc/openmpi modules on pc-bach may export MPI_CXX=.../mpixx (typo); use real wrappers.
 export MPI_CC="${OPENMPI_ROOT}/bin/mpicc"
 export MPI_CXX="${OPENMPI_ROOT}/bin/mpicxx"
