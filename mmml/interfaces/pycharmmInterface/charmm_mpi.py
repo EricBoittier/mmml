@@ -23,6 +23,7 @@ _MPI_LDD_KEYWORDS = (
 
 _pmix_preloaded = False
 _opal_preloaded = False
+_mpi_libs_preloaded = False
 _charmm_mpi_bootstrapped = False
 _mpi4py_charmm_configured = False
 _IS_DARWIN = platform.system() == "Darwin"
@@ -496,6 +497,10 @@ def mpi_mpirun_extra_args() -> list[str]:
         shmem = openmpi_shmem_mca_for_launch()
         if shmem is not None:
             args.extend(["--mca", "shmem", shmem])
+    if not _truthy("MMML_NO_MPI_LD_PATH"):
+        for var in ("LD_LIBRARY_PATH", "OPENMPI_ROOT", "EBROOTOPENMPI", "CHARMM_LIB_DIR"):
+            if (os.environ.get(var) or "").strip():
+                args.extend(["-x", var])
     if _truthy("MMML_NO_MPI_ABORT_STACK"):
         return args
     args.extend(["--mca", "orte_abort_print_stack", "1"])
@@ -709,6 +714,49 @@ def _preload_openmpi_opal_global() -> None:
         return
 
 
+def _openmpi_mpi_library_candidates() -> tuple[Path, ...]:
+    """Shared libraries to preload before ``libcharmm.so`` (Fortran + C MPI)."""
+    names = (
+        "libmpi_usempif08.so.40",
+        "libmpi_usempif08.so",
+        "libmpi_mpifh.so.40",
+        "libmpi.so.40",
+        "libmpi.so",
+    )
+    found: list[Path] = []
+    seen: set[Path] = set()
+    for lib_dir in (*_fallback_openmpi_library_dirs(), *charmm_mpi_library_dirs()):
+        base = Path(lib_dir)
+        if not base.is_dir():
+            continue
+        for name in names:
+            direct = base / name
+            candidates = [direct] if direct.is_file() else sorted(base.glob(f"{name}*"))
+            for path in candidates:
+                resolved = path.resolve()
+                if resolved in seen:
+                    continue
+                seen.add(resolved)
+                found.append(resolved)
+    return tuple(found)
+
+
+def _preload_openmpi_mpi_libraries_global() -> None:
+    """``RTLD_GLOBAL`` preload so ``libcharmm.so`` resolves MPI without relying on late ``LD_LIBRARY_PATH``."""
+    global _mpi_libs_preloaded
+    if _mpi_libs_preloaded or _truthy("MMML_NO_MPI_LD_PATH"):
+        return
+    loaded = 0
+    for path in _openmpi_mpi_library_candidates():
+        try:
+            ctypes.CDLL(str(path), mode=ctypes.RTLD_GLOBAL)
+            loaded += 1
+        except OSError:
+            continue
+    if loaded:
+        _mpi_libs_preloaded = True
+
+
 def prepare_charmm_mpi_runtime() -> None:
     """Apply MPI/PMIx library path and preload before ``import pycharmm``."""
     _apply_cuda_mpi_env_defaults()
@@ -716,6 +764,7 @@ def prepare_charmm_mpi_runtime() -> None:
     if not charmm_lib_links_mpi():
         return
     ensure_charmm_mpi_library_path()
+    _preload_openmpi_mpi_libraries_global()
     _preload_openmpi_opal_global()
     _preload_pmix_global()
     try:
