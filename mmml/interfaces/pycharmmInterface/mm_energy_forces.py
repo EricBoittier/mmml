@@ -511,7 +511,6 @@ def _jax_pme_hybrid_mm_pure_callback(
             np.asarray(lr.forces_kcalmol_A, dtype=out_dtype),
         )
 
-    empty_f = jnp.zeros((), dtype=out_dtype)
     if box_override is None:
         box_arg = jnp.zeros((0,), dtype=out_dtype)
     else:

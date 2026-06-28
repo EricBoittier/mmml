@@ -206,7 +206,7 @@ Decomposed MLpot: lr_solver=jax_pme, scafacos=no, jax_pme=yes (jax-pme method=ew
 | MIC box too small | Use L ≥ 28–32 Å for DCM; see `run_dcm_liquid_workflow.sh` header |
 | `periodic_external` fails | Need `--setup pbc_*`, positive `--box-size`, jax_pme or libfcs |
 | Segfault under MPI + ScaFaCoS | Ensure mpi4py uses `COMM_WORLD.handle` (fixed in recent MMML) |
-| `TracerArrayConversionError` under `jax_pme` | Upgrade MMML (hybrid jax-pme uses host-side `device_get` + full−intra correction) |
+| `TracerArrayConversionError` under `jax_pme` | Upgrade MMML (hybrid jax-pme uses `jax.pure_callback` inside JIT) |
 
 ---
 
