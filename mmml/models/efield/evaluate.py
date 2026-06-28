@@ -9,7 +9,7 @@ Note: Expects input data in eV/angstrom units. All errors are reported in kcal/m
 Usage:
     mmml ef-evaluate --params params.json --data test.npz --output-dir results/ --output-h5 eval_gui.h5
     mmml ef-evaluate --params params.json --test-npz splits/test.npz --save-output-npz --rot-augment --rot-perturbation 1.0
-    python -m mmml.models.EF.evaluate --params params.json --data test.npz --output-dir results/
+    python -m mmml.models.efield.evaluate --params params.json --data test.npz --output-dir results/
 """
 
 import os
@@ -37,8 +37,8 @@ import seaborn as sns
 import functools
 
 from mmml.utils.cli_args import exit_if_unknown_long_options
-from mmml.models.EF.eval_paths import resolve_evaluation_output_dir
-from mmml.models.EF.training import (
+from mmml.models.efield.eval_paths import resolve_evaluation_output_dir
+from mmml.models.efield.training import (
     MessagePassingModel,
     mean_absolute_error_forces,
     prepare_batches,

@@ -25,8 +25,8 @@ DTYPE = jnp.float32
 HARTREE_TO_KCAL_MOL = 627.509
 
 
-class EF_ChargeSpinConditioned(nn.Module):
-    """PhysNet Energy and Forces model with charge and spin conditioning.
+class PhysNetChargeSpin(nn.Module):
+    """PhysNet with total charge and total spin conditioning.
     
     This model extends the standard PhysNet to accept total molecular charge
     and total spin as additional inputs. These properties are embedded and
@@ -87,15 +87,31 @@ class EF_ChargeSpinConditioned(nn.Module):
     cutoff: float = 6.0
     max_atomic_number: int = 118
     charges: bool = False
-    natoms: int = 60
+    max_padded_atoms: int = 60
     total_charge: float = 0
-    n_res: int = 3
+    n_refinement_blocks: int = 3
     zbl: bool = True
     debug: bool | List[str] = False
     efa: bool = False
     use_energy_bias: bool = True
+
+    @property
+    def natoms(self) -> int:
+        return self.max_padded_atoms
+
+    @natoms.setter
+    def natoms(self, value: int) -> None:
+        object.__setattr__(self, "max_padded_atoms", value)
+
+    @property
+    def n_res(self) -> int:
+        return self.n_refinement_blocks
+
+    @n_res.setter
+    def n_res(self, value: int) -> None:
+        object.__setattr__(self, "n_refinement_blocks", value)
     
-    # New: Charge and spin conditioning parameters
+    # Charge and spin conditioning parameters
     charge_embed_dim: int = 16
     spin_embed_dim: int = 16
     charge_range: Tuple[int, int] = (-5, 5)  # Support charges from -5 to +5
@@ -134,9 +150,11 @@ class EF_ChargeSpinConditioned(nn.Module):
             "cutoff": self.cutoff,
             "max_atomic_number": self.max_atomic_number,
             "charges": self.charges,
-            "natoms": self.natoms,
+            "natoms": self.max_padded_atoms,
+            "max_padded_atoms": self.max_padded_atoms,
             "total_charge": self.total_charge,
-            "n_res": self.n_res,
+            "n_res": self.n_refinement_blocks,
+            "n_refinement_blocks": self.n_refinement_blocks,
             "zbl": self.zbl,
             "debug": self.debug,
             "efa": self.efa,
@@ -344,7 +362,7 @@ class EF_ChargeSpinConditioned(nn.Module):
             x, max_degree=0, include_pseudotensors=False
         )
         
-        if self.n_res <= -1:
+        if self.n_refinement_blocks <= -1:
             for i in range(self.num_iterations):
                 x = self._attention(
                     x, basis, dst_idx, src_idx, num_heads=self.features // 8
@@ -381,7 +399,7 @@ class EF_ChargeSpinConditioned(nn.Module):
     
     def _refinement_iteration(self, x: jnp.ndarray) -> jnp.ndarray:
         """Refinement with residual blocks."""
-        for _ in range(self.n_res):
+        for _ in range(self.n_refinement_blocks):
             y = nn.Dense(self.features, dtype=DTYPE)(x)
             y = e3x.nn.silu(y)
             y = nn.Dense(self.features, dtype=DTYPE)(y)
@@ -740,4 +758,9 @@ class EF_ChargeSpinConditioned(nn.Module):
             "repulsion": repulsion if self.zbl else None,
             "state": state,
         }
+
+
+EF_ChargeSpinConditioned = PhysNetChargeSpin  # deprecated alias
+
+__all__ = ["PhysNetChargeSpin", "EF_ChargeSpinConditioned"]
 

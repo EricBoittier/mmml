@@ -33,24 +33,11 @@ DTYPE = jnp.float32
 HARTREE_TO_KCAL_MOL = 627.509  # Conversion factor for energy units
 
 
-class EF(nn.Module):
-    """Energy and Forces Neural Network Model.
+class SpookyPhysNet(nn.Module):
+    """SpookyNet-style PhysNet with charge and spin conditioning inputs.
 
-    A neural network model that predicts molecular energies and forces using message passing
-    and equivariant transformations.
-
-    Attributes:
-        features: Number of features in the neural network layers
-        max_degree: Maximum degree for spherical harmonics
-        num_iterations: Number of message passing iterations
-        num_basis_functions: Number of radial basis functions
-        cutoff: Cutoff distance for interactions
-        max_atomic_number: Maximum atomic number supported
-        charges: Whether to predict atomic charges
-        natoms: Maximum number of atoms in a molecule
-        total_charge: Total molecular charge constraint
-        n_res: Number of residual blocks
-        debug: Debug flags (False or list of debug areas)
+    Trained on positions R, atomic numbers Z, forces F, energies E,
+    charge Q, and spin multiplicity S.
     """
 
     features: int = 64
@@ -60,14 +47,30 @@ class EF(nn.Module):
     cutoff: float = 6.0
     max_atomic_number: int = 87
     charges: bool = False
-    natoms: int = 35
+    max_padded_atoms: int = 35
     total_charge: float = 0
-    n_res: int = 2
+    n_refinement_blocks: int = 2
     zbl: bool = True
     debug: bool | List[str] = False
     efa: bool = False
     use_energy_bias: bool = False
     use_pbc: bool = False
+
+    @property
+    def natoms(self) -> int:
+        return self.max_padded_atoms
+
+    @natoms.setter
+    def natoms(self, value: int) -> None:
+        object.__setattr__(self, "max_padded_atoms", value)
+
+    @property
+    def n_res(self) -> int:
+        return self.n_refinement_blocks
+
+    @n_res.setter
+    def n_res(self, value: int) -> None:
+        object.__setattr__(self, "n_refinement_blocks", value)
 
     def setup(self) -> None:
         """
@@ -113,9 +116,11 @@ class EF(nn.Module):
             "cutoff": self.cutoff,
             "max_atomic_number": self.max_atomic_number,
             "charges": self.charges,
-            "natoms": self.natoms,
+            "natoms": self.max_padded_atoms,
+            "max_padded_atoms": self.max_padded_atoms,
             "total_charge": self.total_charge,
-            "n_res": self.n_res,
+            "n_res": self.n_refinement_blocks,
+            "n_refinement_blocks": self.n_refinement_blocks,
             "zbl": self.zbl,
             "debug": self.debug,
             "efa": self.efa,
@@ -331,7 +336,7 @@ class EF(nn.Module):
         x = e3x.nn.change_max_degree_or_type(
             x, max_degree=0, include_pseudotensors=False
         )
-        if self.n_res <= -1:
+        if self.n_refinement_blocks <= -1:
             for i in range(self.num_iterations):
                 x = self._attention(
                     x, basis, dst_idx, src_idx, num_heads=self.features // 8
@@ -470,7 +475,7 @@ class EF(nn.Module):
             Refined features
         """
         e3x.nn.silu(x)
-        for _ in range(abs(self.n_res)):
+        for _ in range(abs(self.n_refinement_blocks)):
             y = e3x.nn.silu(x)
             y = e3x.nn.add(x, y)
             y = e3x.nn.Dense(
@@ -844,7 +849,7 @@ class EF(nn.Module):
         atomic_electrostatics = jax.ops.segment_sum(
             electrostatics,
             segment_ids=dst_idx,
-            num_segments=batch_size * self.natoms,
+            num_segments=batch_size * self.max_padded_atoms,
         )
         # Truncate to match atomic_energies shape
         atomic_electrostatics = atomic_electrostatics[:num_atoms_actual]
@@ -1077,3 +1082,8 @@ class EF(nn.Module):
         }
 
         return output
+
+
+EF = SpookyPhysNet  # deprecated alias; prefer SpookyPhysNet
+
+__all__ = ["SpookyPhysNet", "EF"]

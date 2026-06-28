@@ -373,10 +373,10 @@ def _build_physnet_ef_calculator(
     *,
     cutoff: float | None,
 ) -> Calculator:
-    from mmml.utils.model_checkpoint import normalize_physnet_config
+    from mmml.utils.model_checkpoint import normalize_physnet_config, physnet_constructor_kwargs
     from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
-    from mmml.models.physnetjax.physnetjax.models.model import EF as StandardEF
-    from mmml.models.physnetjax.physnetjax.models.spooky_model import EF as SpookyEF
+    from mmml.models.physnetjax.physnetjax.models.model import PhysNet
+    from mmml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
 
     if "physnet_config" in saved_config:
         model_config = dict(saved_config["physnet_config"])
@@ -384,38 +384,19 @@ def _build_physnet_ef_calculator(
         model_config = dict(saved_config)
     model_config = normalize_physnet_config(model_config)
 
-    model_attrs = {
-        "features",
-        "max_degree",
-        "num_iterations",
-        "num_basis_functions",
-        "cutoff",
-        "max_atomic_number",
-        "n_res",
-        "n_refinement_blocks",
-        "zbl",
-        "efa",
-        "charges",
-        "natoms",
-        "max_padded_atoms",
-        "total_charge",
-        "n_dcm",
-        "include_pseudotensors",
-        "use_energy_bias",
-        "use_pbc",
-        "debug",
-        "include_electrostatics",
-    }
-    filtered_config = {key: value for key, value in model_config.items() if key in model_attrs}
-    if "natoms" not in filtered_config:
-        raise ValueError("PhysNet checkpoint config is missing required field 'natoms'.")
-
     is_spooky = str(saved_config.get("model_type", model_config.get("model_type", ""))).lower() == "spooky"
-    model_cls = SpookyEF if is_spooky else StandardEF
-    model = model_cls(**filtered_config)
-    model.natoms = int(filtered_config["natoms"])
+    model_cls = SpookyPhysNet if is_spooky else PhysNet
+    filtered_config = physnet_constructor_kwargs(model_config, model_cls)
+    if "max_padded_atoms" not in filtered_config:
+        raise ValueError(
+            "PhysNet checkpoint config is missing required field "
+            "'max_padded_atoms' (or legacy 'natoms')."
+        )
 
-    natoms = int(model.natoms)
+    model = model_cls(**filtered_config)
+    model.max_padded_atoms = int(filtered_config["max_padded_atoms"])
+
+    natoms = int(model.max_padded_atoms)
     template = Atoms(numbers=[1] * natoms, positions=np.zeros((natoms, 3), dtype=float))
     effective_cutoff = cutoff if cutoff is not None else float(filtered_config.get("cutoff", 6.0))
     _ = effective_cutoff

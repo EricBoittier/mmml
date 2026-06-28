@@ -63,7 +63,7 @@ try:
 except ImportError:
     _HAS_H5PY = False
 
-from mmml.models.EF.ase_calc_EF import AseCalculatorEF
+from mmml.models.efield.ase_calc_EF import AseCalculatorEF
 
 # =====================================================================
 # Constants
@@ -1246,8 +1246,8 @@ def main(args=None):
     # For Raman, we also need the raw model & params
     raman_model = raman_params = None
     if getattr(args, 'raman', False):
-        from mmml.models.EF.ase_calc_EF import load_params, load_config
-        from mmml.models.EF.training import MessagePassingModel
+        from mmml.models.efield.ase_calc_EF import load_params, load_config
+        from mmml.models.efield.training import MessagePassingModel
 
         params_path = Path(args.params)
         raman_params = load_params(params_path)
@@ -1566,7 +1566,7 @@ def main(args=None):
     # ================================================================
     traj_frames = first_traj_frames
     if args.method in ('harmonic', 'both'):
-        from mmml.models.EF.calc_spectra import (
+        from mmml.models.efield.calc_spectra import (
             compute_normal_modes,
             compute_ir,
             compute_vcd,

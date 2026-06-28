@@ -186,8 +186,21 @@ def calc_map_derivatives(size: int, energy_flat: Sequence[float]) -> np.ndarray:
 
 
 def cmap_type_key(atom_types: Sequence[str], atom_indices: Sequence[int]) -> tuple[str, ...]:
-    types = tuple(atom_types[int(i)] for i in atom_indices)
-    return min(types, tuple(reversed(types)))
+    return tuple(atom_types[int(i)] for i in atom_indices)
+
+
+def _resolve_cmap_type_key(
+    atom_types: Sequence[str],
+    atom_indices: Sequence[int],
+    cmap_types: dict[tuple[str, ...], CmapType],
+) -> tuple[str, ...] | None:
+    key = cmap_type_key(atom_types, atom_indices)
+    if key in cmap_types:
+        return key
+    rev = tuple(reversed(key))
+    if rev in cmap_types:
+        return rev
+    return None
 
 
 def build_cmap_arrays(
@@ -206,11 +219,14 @@ def build_cmap_arrays(
     unique_coeffs: list[np.ndarray] = []
     key_to_idx: dict[tuple[str, ...], int] = {}
     map_idx: list[int] = []
+    kept_rows: list[np.ndarray] = []
 
     for row in cmap_atoms:
-        key = cmap_type_key(atom_types, row)
-        if key not in cmap_types:
-            raise ValueError(f"No CMAP parameters for atom types {key}")
+        key = _resolve_cmap_type_key(atom_types, row, cmap_types)
+        if key is None:
+            # CHARMM leaves PSF CMAP rows without PRM grids at zero energy.
+            continue
+        kept_rows.append(row)
         if key not in key_to_idx:
             cmap = cmap_types[key]
             key_to_idx[key] = len(unique_coeffs)
@@ -219,9 +235,12 @@ def build_cmap_arrays(
             )
         map_idx.append(key_to_idx[key])
 
+    if not kept_rows:
+        return None, None, None
+
     stacked = np.stack(unique_coeffs, axis=0)
     return (
-        np.asarray(cmap_atoms, dtype=np.int32),
+        np.asarray(kept_rows, dtype=np.int32),
         np.asarray(map_idx, dtype=np.int32),
         stacked,
     )

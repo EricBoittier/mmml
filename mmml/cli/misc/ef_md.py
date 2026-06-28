@@ -1,6 +1,6 @@
 """CLI entry for molecular dynamics with the trained EF (electric-field) model.
 
-Dispatches to :mod:`mmml.models.EF.ase_md` (default) or :mod:`mmml.models.EF.jax_md`.
+Dispatches to :mod:`mmml.models.efield.ase_md` (default) or :mod:`mmml.models.efield.jax_md`.
 All arguments after optional ``--backend`` / ``-b`` are forwarded unchanged.
 
 Examples:
@@ -11,8 +11,8 @@ Examples:
         --n-replicas 4 --output run.traj
 
 For full backend-specific flags (replicas, field ramp, save intervals, etc.):
-    python -m mmml.models.EF.ase_md --help
-    python -m mmml.models.EF.jax_md --help
+    python -m mmml.models.efield.ase_md --help
+    python -m mmml.models.efield.jax_md --help
 """
 
 from __future__ import annotations
@@ -72,11 +72,11 @@ def main() -> int:
     sys.argv = [sys.argv[0]] + rest
 
     if args.backend == "jax":
-        from mmml.models.EF.jax_md import main as md_main
+        from mmml.models.efield.jax_md import main as md_main
 
         md_main()
     else:
-        from mmml.models.EF.ase_md import main as md_main
+        from mmml.models.efield.ase_md import main as md_main
 
         md_main()
     return 0

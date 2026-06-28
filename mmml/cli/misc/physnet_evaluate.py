@@ -111,7 +111,7 @@ def _load_physnet_checkpoint(checkpoint: Path, natoms: int):
     """Load (checkpoint_path, params, model) from Orbax or portable/legacy JSON."""
     import json
 
-    from mmml.models.physnetjax.physnetjax.models.model import EF as StandardEF
+    from mmml.models.physnetjax.physnetjax.models.model import PhysNet as StandardEF
     from mmml.utils.model_checkpoint import (
         assert_flax_variables_for_apply,
         json_to_params,

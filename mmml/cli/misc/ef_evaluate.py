@@ -2,13 +2,13 @@
 
 
 def build_parser():
-    from mmml.models.EF.evaluate import build_parser as _bp
+    from mmml.models.efield.evaluate import build_parser as _bp
 
     return _bp()
 
 
 def main() -> int:
-    from mmml.models.EF import evaluate
+    from mmml.models.efield import evaluate
 
     evaluate.main()
     return 0

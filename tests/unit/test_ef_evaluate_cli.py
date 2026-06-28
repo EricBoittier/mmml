@@ -3,7 +3,7 @@ from __future__ import annotations
 import subprocess
 import sys
 
-from mmml.models.EF.eval_paths import resolve_evaluation_output_dir
+from mmml.models.efield.eval_paths import resolve_evaluation_output_dir
 
 
 def test_resolve_evaluation_output_dir_rotaug_subdirs() -> None:
@@ -18,7 +18,7 @@ def test_resolve_evaluation_output_dir_rotaug_subdirs() -> None:
 
 def test_ef_evaluate_help_lists_rot_and_test_npz_flags() -> None:
     proc = subprocess.run(
-        [sys.executable, "-m", "mmml.models.EF.evaluate", "--help"],
+        [sys.executable, "-m", "mmml.models.efield.evaluate", "--help"],
         capture_output=True,
         text=True,
         check=False,

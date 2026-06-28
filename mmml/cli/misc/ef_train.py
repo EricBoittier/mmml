@@ -4,13 +4,13 @@ import sys
 
 
 def build_parser():
-    from mmml.models.EF.training import build_parser as _bp
+    from mmml.models.efield.training import build_parser as _bp
 
     return _bp()
 
 
 def main() -> int:
-    from mmml.models.EF import training
+    from mmml.models.efield import training
 
     args = training.get_args()
     return 0 if training.main(args) is not None else 1

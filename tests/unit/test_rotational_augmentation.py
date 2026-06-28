@@ -4,7 +4,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from mmml.models.EF.training import prepare_batches as prepare_ef_batches
+from mmml.models.efield.training import prepare_batches as prepare_ef_batches
 from mmml.models.dcmnet.dcmnet.data import prepare_batches as prepare_dcmnet_batches
 from mmml.utils.rotations import sample_random_rotations
 

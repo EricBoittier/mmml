@@ -13,8 +13,8 @@ import numpy as np
 import json
 from pathlib import Path
 
-from mmml.models.EF.training import MessagePassingModel, sanitize_flax_variables_dict
-from mmml.models.EF.model_functions import energy_and_forces, dipole_derivative_field
+from mmml.models.efield.training import EFieldPhysNet, sanitize_flax_variables_dict
+from mmml.models.efield.model_functions import energy_and_forces, dipole_derivative_field
 
 
 def load_params(params_path):
@@ -82,8 +82,8 @@ def ef_sparse_pairwise_indices_active(N: int, z_ref):
     return dst_idx[ok], src_idx[ok], n_full, n_kept
 
 
-class AseCalculatorEF(ase_calc.Calculator):
-    """ASE calculator for electric field model."""
+class EFieldCalculator(ase_calc.Calculator):
+    """ASE calculator for external electric-field response models."""
     
     implemented_properties = ["energy", "forces", "dipole", "polarizability"]
     
@@ -178,7 +178,7 @@ class AseCalculatorEF(ase_calc.Calculator):
             model_config['dipole_field_coupling'] = dipole_field_coupling
 
         # Create model
-        self.model = MessagePassingModel(**model_config)
+        self.model = EFieldPhysNet(**model_config)
         
         # Store default electric field
         if electric_field is not None:
@@ -413,7 +413,7 @@ class AseCalculatorEF(ase_calc.Calculator):
             apt[a, s, b] = d(mu_a) / d(R_{s,b}).
             Units: au_dipole / Angstrom.
         """
-        from mmml.models.EF.model_functions import dipole_derivative_positions
+        from mmml.models.efield.model_functions import dipole_derivative_positions
         raw = self._call_model_fn(dipole_derivative_positions, atoms)
         # raw shape: (1, 3, 1, N, 3) -> (3, N, 3)
         return np.asarray(raw)[0, :, 0, :, :]
@@ -429,7 +429,7 @@ class AseCalculatorEF(ase_calc.Calculator):
         hess : np.ndarray, shape (N, 3, N, 3)
             Units: eV / Angstrom².
         """
-        from mmml.models.EF.model_functions import hessian_matrix
+        from mmml.models.efield.model_functions import hessian_matrix
         raw = self._call_model_fn(hessian_matrix, atoms)
         # raw shape: (1, N, 3, 1, N, 3) -> (N, 3, N, 3)
         return np.asarray(raw)[0, :, :, 0, :, :]
@@ -448,7 +448,7 @@ class AseCalculatorEF(ase_calc.Calculator):
         charges : np.ndarray, shape (N,)
         atomic_dipoles : np.ndarray, shape (N, 3)
         """
-        from mmml.models.EF.model_functions import get_atomic_properties
+        from mmml.models.efield.model_functions import get_atomic_properties
 
         if atoms is None:
             atoms = self.atoms
@@ -483,7 +483,7 @@ class AseCalculatorEF(ase_calc.Calculator):
         -------
         aat : np.ndarray, shape (N, 3, 3)
         """
-        from mmml.models.EF.model_functions import aat_nuclear
+        from mmml.models.efield.model_functions import aat_nuclear
 
         if atoms is None:
             atoms = self.atoms
@@ -507,7 +507,7 @@ class AseCalculatorEF(ase_calc.Calculator):
         aat : np.ndarray, shape (N, 3, 3)
         q_eff : np.ndarray, shape (N,)
         """
-        from mmml.models.EF.model_functions import aat_born
+        from mmml.models.efield.model_functions import aat_born
 
         apt = self.get_atomic_polar_tensor(atoms)
         if atoms is None:
@@ -529,7 +529,7 @@ class AseCalculatorEF(ase_calc.Calculator):
         aat : np.ndarray, shape (N, 3, 3)
         charges : np.ndarray, shape (N,)  — the ML charges used.
         """
-        from mmml.models.EF.model_functions import aat_ml_charges
+        from mmml.models.efield.model_functions import aat_ml_charges
 
         charges, _atomic_dipoles = self.get_atomic_charges(atoms)
         if atoms is None:
@@ -558,7 +558,7 @@ class AseCalculatorEF(ase_calc.Calculator):
         -------
         dEdEf : np.ndarray, shape (3,)
         """
-        from mmml.models.EF.model_functions import energy_and_dipole_from_field_derivative
+        from mmml.models.efield.model_functions import energy_and_dipole_from_field_derivative
         _, dEdEf = self._call_model_fn(
             energy_and_dipole_from_field_derivative, atoms
         )
@@ -574,7 +574,7 @@ class AseCalculatorEF(ase_calc.Calculator):
         -------
         hess : np.ndarray, shape (3, 3)
         """
-        from mmml.models.EF.model_functions import polarizability_from_energy_hessian
+        from mmml.models.efield.model_functions import polarizability_from_energy_hessian
         raw = self._call_model_fn(polarizability_from_energy_hessian, atoms)
         return np.asarray(raw).squeeze()
 
@@ -789,3 +789,7 @@ if __name__ == "__main__":
     args = get_args()
     main(args)
 
+
+AseCalculatorEF = EFieldCalculator  # deprecated alias
+
+__all__ = ["EFieldCalculator", "AseCalculatorEF", "load_params", "load_config"]

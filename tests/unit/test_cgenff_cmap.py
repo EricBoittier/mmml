@@ -56,6 +56,26 @@ def test_bicubic_patch_evaluates_finite() -> None:
     assert np.isfinite(float(val))
 
 
+def test_resolve_cmap_key_forward_and_reverse() -> None:
+    from mmml.interfaces.pycharmmInterface.cgenff_cmap import (
+        CmapType,
+        _resolve_cmap_type_key,
+    )
+
+    cmap_types = {
+        ("C", "NH1", "CT1", "C", "NH1", "CT1", "C", "NH1"): CmapType(
+            2, (0.0, 1.0, 2.0, 3.0)
+        )
+    }
+    row = (0, 1, 2, 3, 4, 5, 6, 7)
+    atom_types = ["C", "NH1", "CT1", "C", "NH1", "CT1", "C", "NH1"]
+    assert _resolve_cmap_type_key(atom_types, row, cmap_types) is not None
+    assert (
+        _resolve_cmap_type_key(list(reversed(atom_types)), row, cmap_types) is not None
+    )
+    assert _resolve_cmap_type_key(atom_types, row, {}) is None
+
+
 def test_parse_protein_prm_skips_cmap_blocks() -> None:
     from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
         have_protein_toppar,

@@ -612,7 +612,11 @@ def setup_calculator(
         restart = restart_path
         # Load using JSON loader
         try:
-            from mmml.utils.model_checkpoint import load_model_checkpoint, normalize_physnet_config
+            from mmml.utils.model_checkpoint import (
+                load_model_checkpoint,
+                normalize_physnet_config,
+                physnet_constructor_kwargs,
+            )
             checkpoint = load_model_checkpoint(
                 restart,
                 use_orbax=False,
@@ -648,8 +652,8 @@ def setup_calculator(
                 }
 
             # Reconstruct model from config
-            from mmml.models.physnetjax.physnetjax.models.model import EF as StandardEF
-            from mmml.models.physnetjax.physnetjax.models.spooky_model import EF as SpookyEF
+            from mmml.models.physnetjax.physnetjax.models.model import PhysNet
+            from mmml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
 
             # Convert JSON arrays back to JAX arrays for model config
             def json_to_jax_config(obj):
@@ -673,12 +677,12 @@ def setup_calculator(
                 str(config.get("model_type", "")).lower() == "spooky"
                 or "spooky" in str(restart_path).lower()
             )
-            model_cls = SpookyEF if is_spooky_model else StandardEF
+            model_cls = SpookyPhysNet if is_spooky_model else PhysNet
             model_fields = getattr(model_cls, "__dataclass_fields__", None)
             if model_fields:
-                model_config = {k: v for k, v in model_config.items() if k in model_fields}
+                model_config = physnet_constructor_kwargs(model_config, model_cls)
             MODEL = model_cls(**model_config)
-            MODEL.natoms = max_atoms
+            MODEL.max_padded_atoms = max_atoms
             
             params = json_tree_to_jax_params(params, dtype=ml_jnp_dtype)
             
@@ -719,7 +723,7 @@ def setup_calculator(
             restart, natoms=max_atoms, quiet=True, return_meta=True
         )
         params = cast_pytree_to_ml_dtype(params, dtype=ml_jnp_dtype)
-    MODEL.natoms = max_atoms
+    MODEL.max_padded_atoms = max_atoms
 
     from mmml.utils.rich_report import emit_hybrid_ml_setup, emit_tagged
     from mmml.data.units import HARTREE_TO_EV, calculator_results_units

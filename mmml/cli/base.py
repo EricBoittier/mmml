@@ -373,12 +373,12 @@ def load_model_parameters(epoch_dir: Path, natoms: int):
 
     if is_json:
         try:
-            from mmml.models.physnetjax.physnetjax.models.model import EF as StandardEF
-            from mmml.models.physnetjax.physnetjax.models.spooky_model import EF as SpookyEF
+            from mmml.models.physnetjax.physnetjax.models.model import PhysNet
+            from mmml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
         except ModuleNotFoundError:
-            from mmml.models.physnetjax.physnetjax.models.model import EF as StandardEF
-            from mmml.models.physnetjax.physnetjax.models.spooky_model import EF as SpookyEF
-        from mmml.utils.model_checkpoint import load_model_checkpoint
+            from mmml.models.physnetjax.physnetjax.models.model import PhysNet
+            from mmml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
+        from mmml.utils.model_checkpoint import load_model_checkpoint, physnet_constructor_kwargs
 
         checkpoint = load_model_checkpoint(
             epoch_path, use_orbax=False, load_params=True, load_config=True
@@ -408,22 +408,16 @@ def load_model_parameters(epoch_dir: Path, natoms: int):
         if isinstance(params, dict) and "params" not in params:
             params = {"params": params}
 
-        model_attrs = [
-            "features", "max_degree", "num_iterations", "num_basis_functions",
-            "cutoff", "max_atomic_number", "n_res", "zbl", "efa", "charges",
-            "natoms", "total_charge", "n_dcm", "include_pseudotensors",
-            "use_energy_bias", "use_pbc", "debug",
-        ]
-        model_config = {k: v for k, v in config.items() if k in model_attrs}
-        model_config["natoms"] = natoms
         epoch_path_str = str(epoch_path).lower()
         is_spooky = (
             str(config.get("model_type", "")).lower() == "spooky"
             or "spooky" in epoch_path_str
         )
-        model_cls = SpookyEF if is_spooky else StandardEF
+        model_cls = SpookyPhysNet if is_spooky else PhysNet
+        model_config = physnet_constructor_kwargs(config, model_cls)
+        model_config["max_padded_atoms"] = natoms
         model = model_cls(**model_config)
-        model.natoms = natoms
+        model.max_padded_atoms = natoms
         return params, model
 
     try:
@@ -436,7 +430,7 @@ def load_model_parameters(epoch_dir: Path, natoms: int):
         sys.exit(
             "Checkpoint does not contain model attributes; cannot construct PhysNetJax model."
         )
-    model.natoms = natoms
+    model.max_padded_atoms = natoms
     return params, model
 
 
