@@ -971,6 +971,9 @@ def warmup_decomposed_mlpot(
     verbose: bool = False,
 ) -> None:
     """JIT-compile hybrid ML/MM on GPU (after MLpot SD when MPI defers JAX)."""
+    from mmml.utils.jax_gpu_warmup import maybe_sanitize_process_env_for_ptxas
+
+    maybe_sanitize_process_env_for_ptxas()
     if model._defer_jax_until_after_sd and not model._jax_on_gpu:
         model.promote_jax_factory_to_gpu()
     else:

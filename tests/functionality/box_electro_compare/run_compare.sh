@@ -93,14 +93,12 @@ _warmup_mlpot_jax() {
   export XLA_PYTHON_CLIENT_PREALLOCATE=false
   export MMML_JAX_COMPILE_THREADS="${MMML_JAX_COMPILE_THREADS:-1}"
   export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
-  if ! "$PY" -m mmml.cli.__main__ warmup-mlpot-jax \
-      --checkpoint "$MMML_CKPT" \
-      --n-monomers 5 \
-      --box-side 25 \
-      --spacing 5 \
-      --ml-batch-size 64 \
-      --ml-gpu-count 1 \
-      --do-mm; then
+  _warmup_extra=(--checkpoint "$MMML_CKPT" --n-monomers 5 --box-side 25 --spacing 5 --ml-batch-size 64 --ml-gpu-count 1)
+  # --do-mm needs a loaded PSF; skip on Slurm (hybrid compile happens under mpirun jobs).
+  if [[ -z "${SLURM_JOB_ID:-}" ]]; then
+    _warmup_extra+=(--do-mm)
+  fi
+  if ! "$PY" -m mmml.cli.__main__ warmup-mlpot-jax "${_warmup_extra[@]}"; then
     echo "ERROR: warmup-mlpot-jax failed" >&2
     return 1
   fi
