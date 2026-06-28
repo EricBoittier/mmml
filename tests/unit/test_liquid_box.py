@@ -192,6 +192,28 @@ def test_liquid_box_cli_parser_requires_composition():
     assert ns.profile == "standard"
 
 
+def test_liquid_box_cli_parser_accepts_box_size_and_box_auto_count():
+    from mmml.cli.run.liquid_box import build_parser
+
+    parser = build_parser()
+    ns = parser.parse_args(
+        [
+            "--composition",
+            "DCM:1",
+            "--output-dir",
+            "/tmp/x",
+            "--box-size",
+            "32",
+            "--box-auto",
+            "count",
+            "--target-density-g-cm3",
+            "1.326",
+        ]
+    )
+    assert ns.box_size == pytest.approx(32.0)
+    assert ns.box_auto == "count"
+
+
 def test_composition_tag_from_liquid_box_args_without_residue():
     """liquid-box uses --composition only; cluster tag must not require --residue."""
     from mmml.cli.run.liquid_box import build_parser

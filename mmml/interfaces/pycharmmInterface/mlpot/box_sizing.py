@@ -416,6 +416,16 @@ def add_box_sizing_args(parser: argparse.ArgumentParser) -> None:
     """CLI flags for automatic box sizing and mini-stage box equilibration."""
     group = parser.add_argument_group("PBC box sizing")
     group.add_argument(
+        "--box-size",
+        type=float,
+        default=None,
+        metavar="ANG",
+        help=(
+            "Fixed cubic box side (Å) for Packmol cube and PBC cell. "
+            "With --box-auto count, scales --composition to target ρ at this side."
+        ),
+    )
+    group.add_argument(
         "--box-auto",
         choices=("geometry", "density", "count"),
         default=None,
