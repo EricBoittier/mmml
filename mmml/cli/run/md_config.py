@@ -147,6 +147,33 @@ def campaign_resume_enabled(
     return False
 
 
+def collect_explicit_cli_dests(
+    argv: list[str],
+    parser: argparse.ArgumentParser,
+) -> set[str]:
+    """Return argparse ``dest`` names set explicitly on ``argv`` (for campaign overrides)."""
+    option_dests: dict[str, str] = {}
+    for action in parser._actions:
+        if not action.option_strings or action.dest == "help":
+            continue
+        for opt in action.option_strings:
+            if opt.startswith("--"):
+                option_dests[opt.split("=", 1)[0]] = action.dest
+    explicit: set[str] = set()
+    i = 0
+    while i < len(argv):
+        tok = str(argv[i])
+        if tok.startswith("--"):
+            flag = tok.split("=", 1)[0]
+            dest = option_dests.get(flag)
+            if dest is not None:
+                explicit.add(dest)
+            if "=" not in tok and i + 1 < len(argv) and not str(argv[i + 1]).startswith("-"):
+                i += 1
+        i += 1
+    return explicit
+
+
 def apply_mapping_to_namespace(
     args: argparse.Namespace,
     mapping: Mapping[str, Any],

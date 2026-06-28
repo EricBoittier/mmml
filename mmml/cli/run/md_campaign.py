@@ -138,9 +138,21 @@ _CAMPAIGN_CLI_OVERRIDE_KEYS: tuple[str, ...] = (
     "handoff_pre_minimize",
 )
 
+# Long-range / MM-stack flags: only override job YAML when present on the parent CLI.
+_CAMPAIGN_CLI_EXPLICIT_OVERRIDE_KEYS: tuple[str, ...] = (
+    "lr_solver",
+    "jax_pme_method",
+    "jax_pme_sr_cutoff",
+    "scafacos_method",
+    "mm_nonbond_mode",
+    "periodic_charmm_vdw",
+    "include_mm",
+)
+
 
 def apply_campaign_cli_overrides(merged: dict[str, Any], parent: Namespace) -> None:
     """Merge top-level CLI flags into each campaign job before ``namespace_from_merged``."""
+    explicit = getattr(parent, "_cli_explicit", None) or set()
     for key in _CAMPAIGN_CLI_OVERRIDE_KEYS:
         val = getattr(parent, key, None)
         if val is None:
@@ -150,6 +162,10 @@ def apply_campaign_cli_overrides(merged: dict[str, Any], parent: Namespace) -> N
                 merged[key] = val
         else:
             merged[key] = val
+    for key in _CAMPAIGN_CLI_EXPLICIT_OVERRIDE_KEYS:
+        if key not in explicit:
+            continue
+        merged[key] = getattr(parent, key)
     if getattr(parent, "ml_spatial_mpi", False):
         merged["ml_spatial_mpi"] = True
 

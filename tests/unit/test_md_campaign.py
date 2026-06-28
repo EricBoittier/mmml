@@ -120,6 +120,26 @@ def test_parse_md_system_resume_syncs_campaign_flag() -> None:
     assert args2.resume_campaign is True
 
 
+def test_parse_md_system_tracks_explicit_lr_cli_flags() -> None:
+    from mmml.cli.run.md_system import parse_md_system_args
+
+    args = parse_md_system_args(
+        [
+            "--lr-solver",
+            "jax_pme",
+            "--mm-nonbond-mode",
+            "periodic_external",
+            "--no-periodic-charmm-vdw",
+        ]
+    )
+    assert args.lr_solver == "jax_pme"
+    assert args.mm_nonbond_mode == "periodic_external"
+    assert args.periodic_charmm_vdw is False
+    assert "lr_solver" in args._cli_explicit
+    assert "mm_nonbond_mode" in args._cli_explicit
+    assert "periodic_charmm_vdw" in args._cli_explicit
+
+
 def test_lookup_resolved_output_dir_prefers_in_run_path(tmp_path) -> None:
     from mmml.cli.run.md_campaign import _lookup_resolved_output_dir
 
@@ -165,6 +185,7 @@ def test_apply_campaign_cli_overrides_ml_flags() -> None:
         ml_spatial_mpi=False,
         skip_jit_warmup=True,
         handoff_pre_minimize=False,
+        _cli_explicit=set(),
     )
     apply_campaign_cli_overrides(merged, parent)
     assert merged["ml_batch_size"] == 128
@@ -180,11 +201,81 @@ def test_apply_campaign_cli_overrides_ml_flags() -> None:
         ml_spatial_mpi=True,
         skip_jit_warmup=False,
         handoff_pre_minimize=True,
+        _cli_explicit=set(),
     )
     apply_campaign_cli_overrides(merged2, parent2)
     assert merged2["ml_max_active_dimers"] == 900
     assert merged2["ml_spatial_mpi"] is True
     assert "ml_gpu_count" not in merged2
+
+
+def test_apply_campaign_cli_overrides_lr_flags_when_explicit() -> None:
+    from argparse import Namespace
+
+    from mmml.cli.run.md_campaign import apply_campaign_cli_overrides
+
+    merged = {
+        "backend": "pycharmm",
+        "lr_solver": "auto",
+        "mm_nonbond_mode": "jax_mic",
+    }
+    parent = Namespace(
+        lr_solver="jax_pme",
+        jax_pme_method="ewald",
+        jax_pme_sr_cutoff=6.0,
+        scafacos_method=None,
+        mm_nonbond_mode="periodic_external",
+        periodic_charmm_vdw=False,
+        include_mm=True,
+        ml_batch_size=None,
+        ml_gpu_count=None,
+        ml_max_active_dimers=None,
+        ml_spatial_mpi=False,
+        skip_jit_warmup=False,
+        handoff_pre_minimize=False,
+        _cli_explicit={
+            "lr_solver",
+            "jax_pme_method",
+            "mm_nonbond_mode",
+            "periodic_charmm_vdw",
+        },
+    )
+    apply_campaign_cli_overrides(merged, parent)
+    assert merged["lr_solver"] == "jax_pme"
+    assert merged["jax_pme_method"] == "ewald"
+    assert merged["mm_nonbond_mode"] == "periodic_external"
+    assert merged["periodic_charmm_vdw"] is False
+
+
+def test_apply_campaign_cli_overrides_lr_flags_skip_implicit_defaults() -> None:
+    from argparse import Namespace
+
+    from mmml.cli.run.md_campaign import apply_campaign_cli_overrides
+
+    merged = {
+        "backend": "pycharmm",
+        "mm_nonbond_mode": "periodic_external",
+        "lr_solver": "jax_pme",
+    }
+    parent = Namespace(
+        lr_solver=None,
+        jax_pme_method=None,
+        jax_pme_sr_cutoff=None,
+        scafacos_method=None,
+        mm_nonbond_mode="jax_mic",
+        periodic_charmm_vdw=True,
+        include_mm=True,
+        ml_batch_size=None,
+        ml_gpu_count=None,
+        ml_max_active_dimers=None,
+        ml_spatial_mpi=False,
+        skip_jit_warmup=False,
+        handoff_pre_minimize=False,
+        _cli_explicit=set(),
+    )
+    apply_campaign_cli_overrides(merged, parent)
+    assert merged["mm_nonbond_mode"] == "periodic_external"
+    assert merged["lr_solver"] == "jax_pme"
 
 
 def test_namespace_from_merged_defaults_bonded_mm_mini_on_pycharmm() -> None:

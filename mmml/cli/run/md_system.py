@@ -1491,8 +1491,9 @@ def parse_md_system_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = build_parser()
     parser.set_defaults(**defaults)
     args = parser.parse_args(remaining)
-    from mmml.cli.run.md_config import normalize_resume_flags
+    from mmml.cli.run.md_config import collect_explicit_cli_dests, normalize_resume_flags
 
+    args._cli_explicit = collect_explicit_cli_dests(remaining, parser)
     normalize_resume_flags(args)
     from mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
         sync_spatial_mpi_env_from_args,
