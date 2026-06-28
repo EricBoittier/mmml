@@ -742,6 +742,9 @@ def build_mm_energy_forces_fn(
         ``update_fn(positions, box=None) -> (pair_idx, pair_mask)``.
         Otherwise: ``mm_fn(positions) -> (energy, forces)`` (single callable).
     """
+    from mmml.utils.jax_gpu_warmup import maybe_sanitize_process_env_for_ptxas
+
+    maybe_sanitize_process_env_for_ptxas()
     ml_jnp_dtype = resolve_ml_compute_dtype(ml_compute_dtype)
     from mmml.interfaces.pycharmmInterface.long_range_backend import (
         per_atom_jax_pme_c6_sqrt_for_atoms,

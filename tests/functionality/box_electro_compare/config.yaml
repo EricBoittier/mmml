@@ -1,0 +1,208 @@
+# DCM:5 reference box — energy + short NVE across backends and electrostatics.
+# Certified box: ~/tests/boxes/dcm5_l25_ref (built by run_compare.sh if missing).
+# Checkpoint: export MMML_CKPT (DCM PhysNet directory).
+
+composition: "DCM:5"
+ps: 2.0
+dt_fs: 0.25
+temperature: 300.0
+pressure: 1.0
+seed: 42
+spacing: 5.0
+packmol_radius: 6.9
+packmol_tolerance: 1.0
+box_size: 25.0
+checkpoint: "${MMML_CKPT}"
+output_root: "results"
+mpirun_wrapper: "../../../scripts/mmml-charmm-mpirun.sh"
+
+from_psf: "~/tests/boxes/dcm5_l25_ref/model.psf"
+from_crd: "~/tests/boxes/dcm5_l25_ref/model.crd"
+skip_cluster_build: true
+
+mm_switch_on: 7.0
+mm_switch_width: 5.0
+ml_switch_width: 0.1
+mini_nstep: 500
+bonded_mm_mini: false
+dyn_nprint: 500
+dcd_nsavc: 500
+nsteps_target: 8000
+dynamics_overlap_check_interval: 8000
+echeck: 500.0
+no_echeck: true
+heat_firstt: 10.0
+heat_finalt: 240.0
+
+jobs:
+  # --- Energy after mini (PyCHARMM hybrid path) ---
+  energy_mic_mm:
+    backend: pycharmm
+    setup: pbc_npt
+    pbc: true
+    md_stages: mini
+    extra_args:
+      - "--lr-solver"
+      - "mic"
+      - "--include-mm"
+      - "--no-bonded-mm-mini"
+      - "--no-charmm-pre-minimize"
+      - "--max-grms-before-dyn"
+      - "80"
+
+  energy_jax_pme_ewald_mm:
+    backend: pycharmm
+    setup: pbc_npt
+    pbc: true
+    md_stages: mini
+    extra_args:
+      - "--lr-solver"
+      - "jax_pme"
+      - "--jax-pme-method"
+      - "ewald"
+      - "--include-mm"
+      - "--no-bonded-mm-mini"
+      - "--no-charmm-pre-minimize"
+      - "--max-grms-before-dyn"
+      - "80"
+
+  energy_jax_pme_pme_mm:
+    backend: pycharmm
+    setup: pbc_npt
+    pbc: true
+    md_stages: mini
+    extra_args:
+      - "--lr-solver"
+      - "jax_pme"
+      - "--jax-pme-method"
+      - "pme"
+      - "--include-mm"
+      - "--no-bonded-mm-mini"
+      - "--no-charmm-pre-minimize"
+      - "--max-grms-before-dyn"
+      - "80"
+
+  energy_jax_pme_p3m_mm:
+    backend: pycharmm
+    setup: pbc_npt
+    pbc: true
+    md_stages: mini
+    extra_args:
+      - "--lr-solver"
+      - "jax_pme"
+      - "--jax-pme-method"
+      - "p3m"
+      - "--include-mm"
+      - "--no-bonded-mm-mini"
+      - "--no-charmm-pre-minimize"
+      - "--max-grms-before-dyn"
+      - "80"
+
+  energy_ml_only:
+    backend: pycharmm
+    setup: pbc_npt
+    pbc: true
+    md_stages: mini
+    extra_args:
+      - "--no-include-mm"
+      - "--no-bonded-mm-mini"
+      - "--no-charmm-pre-minimize"
+      - "--max-grms-before-dyn"
+      - "80"
+
+  # --- 2 ps PBC NVE (ASE / JAX-MD / PyCHARMM) ---
+  nve_ase_mic_mm:
+    backend: ase
+    setup: pbc_nve
+    pbc: true
+    integrator: nve
+    extra_args:
+      - "--include-mm"
+      - "--nve-temp-K"
+      - "300"
+      - "--log-every"
+      - "500"
+      - "--traj-every"
+      - "500"
+
+  nve_ase_jax_pme_ewald_mm:
+    backend: ase
+    setup: pbc_nve
+    pbc: true
+    integrator: nve
+    # ASE has no --lr-solver; runs default MIC (job id kept for matrix symmetry).
+    extra_args:
+      - "--include-mm"
+      - "--nve-temp-K"
+      - "300"
+      - "--log-every"
+      - "500"
+      - "--traj-every"
+      - "500"
+
+  nve_ase_ml_only:
+    backend: ase
+    setup: pbc_nve
+    pbc: true
+    integrator: nve
+    extra_args:
+      - "--no-include-mm"
+      - "--nve-temp-K"
+      - "300"
+      - "--log-every"
+      - "500"
+      - "--traj-every"
+      - "500"
+
+  nve_jaxmd_mic_mm:
+    backend: jaxmd
+    setup: pbc_nve
+    pbc: true
+    integrator: nve
+    extra_args:
+      - "--include-mm"
+      - "--steps-per-recording"
+      - "500"
+
+  nve_jaxmd_jax_pme_ewald_mm:
+    backend: jaxmd
+    setup: pbc_nve
+    pbc: true
+    integrator: nve
+    # JAX-MD has no --lr-solver; runs default MIC (job id kept for matrix symmetry).
+    extra_args:
+      - "--include-mm"
+      - "--steps-per-recording"
+      - "500"
+
+  nve_pycharmm_mic_mm:
+    backend: pycharmm
+    setup: pbc_nve
+    pbc: true
+    integrator: nve
+    md_stages: "mini,nve"
+    ps_nve: 2.0
+    extra_args:
+      - "--lr-solver"
+      - "mic"
+      - "--include-mm"
+      - "--no-bonded-mm-mini"
+      - "--no-charmm-pre-minimize"
+      - "--no-echeck"
+
+  nve_pycharmm_jax_pme_ewald_mm:
+    backend: pycharmm
+    setup: pbc_nve
+    pbc: true
+    integrator: nve
+    md_stages: "mini,nve"
+    ps_nve: 2.0
+    extra_args:
+      - "--lr-solver"
+      - "jax_pme"
+      - "--jax-pme-method"
+      - "ewald"
+      - "--include-mm"
+      - "--no-bonded-mm-mini"
+      - "--no-charmm-pre-minimize"
+      - "--no-echeck"

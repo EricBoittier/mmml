@@ -683,6 +683,12 @@ def prepare_charmm_mpi_runtime() -> None:
     ensure_charmm_mpi_library_path()
     _preload_openmpi_opal_global()
     _preload_pmix_global()
+    try:
+        from mmml.utils.jax_gpu_warmup import maybe_sanitize_process_env_for_ptxas
+
+        maybe_sanitize_process_env_for_ptxas(force=True)
+    except ImportError:
+        pass
 
 
 def _pin_charmm_openmp_for_serial_mlpot() -> None:

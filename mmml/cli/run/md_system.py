@@ -1637,26 +1637,27 @@ def _append_boolean_optional_flag(cmd: list[str], flag: str, value: bool) -> Non
         cmd.append(f"--no-{flag.removeprefix('--')}")
 
 
-def _append_suite_mmml_handoff_args(cmd: list[str], args: argparse.Namespace) -> None:
+def _append_suite_mmml_handoff_args(
+    cmd: list[str], args: argparse.Namespace, *, backend: str
+) -> None:
     """Forward MMML cutoffs and handoff/minimize flags to ASE/JAX-MD suite CLIs."""
+    mm_width = str(
+        getattr(
+            args,
+            "mm_switch_width",
+            getattr(args, "mm_cutoff", DEFAULT_MM_SWITCH_WIDTH),
+        )
+    )
+    ml_width = str(getattr(args, "ml_switch_width", DEFAULT_ML_SWITCH_WIDTH))
     cmd.extend(
         ["--mm-switch-on", str(getattr(args, "mm_switch_on", DEFAULT_MM_SWITCH_ON))]
     )
-    cmd.extend(
-        [
-            "--mm-switch-width",
-            str(
-                getattr(
-                    args,
-                    "mm_switch_width",
-                    getattr(args, "mm_cutoff", DEFAULT_MM_SWITCH_WIDTH),
-                )
-            ),
-        ]
-    )
-    cmd.extend(
-        ["--ml-switch-width", str(getattr(args, "ml_switch_width", DEFAULT_ML_SWITCH_WIDTH))]
-    )
+    if backend == "ase":
+        cmd.extend(["--mm-cutoff", mm_width])
+        cmd.extend(["--ml-cutoff", ml_width])
+    else:
+        cmd.extend(["--mm-switch-width", mm_width])
+        cmd.extend(["--ml-switch-width", ml_width])
     if getattr(args, "handoff_pre_minimize", False):
         cmd.append("--handoff-pre-minimize")
     _append_boolean_optional_flag(
@@ -1681,20 +1682,24 @@ def _append_suite_mmml_handoff_args(cmd: list[str], args: argparse.Namespace) ->
         "--handoff-require-cell",
         bool(getattr(args, "handoff_require_cell", False)),
     )
-    cmd.extend(["--jaxmd-minimize-steps", str(getattr(args, "jaxmd_minimize_steps", 200))])
-    cmd.extend(
-        ["--jaxmd-pbc-minimize-steps", str(getattr(args, "jaxmd_pbc_minimize_steps", 2000))]
-    )
+    if backend == "jaxmd":
+        cmd.extend(["--jaxmd-minimize-steps", str(getattr(args, "jaxmd_minimize_steps", 200))])
+        cmd.extend(
+            [
+                "--jaxmd-pbc-minimize-steps",
+                str(getattr(args, "jaxmd_pbc_minimize_steps", 2000)),
+            ]
+        )
+        _append_boolean_optional_flag(
+            cmd,
+            "--calculator-pre-minimize",
+            bool(getattr(args, "calculator_pre_minimize", True)),
+        )
     cmd.extend(
         ["--jax-md-update-interval", str(getattr(args, "jax_md_update_interval", 1))]
     )
     cmd.extend(
         ["--jax-md-skin-distance", str(getattr(args, "jax_md_skin_distance", 0.25))]
-    )
-    _append_boolean_optional_flag(
-        cmd,
-        "--calculator-pre-minimize",
-        bool(getattr(args, "calculator_pre_minimize", True)),
     )
     _append_boolean_optional_flag(
         cmd,
@@ -2470,7 +2475,7 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     if getattr(args, "flat_bottom_radius", None) is not None:
         cmd.extend(["--flat-bottom-radius", str(args.flat_bottom_radius)])
     if args.extra_args:
-        cmd.extend(_filter_campaign_flags_from_argv(list(args.extra_args)))
+        cmd.extend(_suite_extra_argv(args, "pycharmm"))
     return cmd
 
 
@@ -2497,6 +2502,44 @@ def _filter_campaign_flags_from_argv(argv: list[str]) -> list[str]:
         out.append(tok)
         i += 1
     return out
+
+
+def _filter_pycharmm_only_extra_argv(argv: list[str]) -> list[str]:
+    """Drop PyCHARMM-only flags accidentally forwarded via ``--extra-args``."""
+    skip = {
+        "--lr-solver",
+        "--jax-pme-method",
+        "--no-bonded-mm-mini",
+        "--bonded-mm-mini",
+        "--bonded-mm-mini-after",
+        "--bonded-mm-mini-steps",
+        "--bonded-mm-mini-always",
+        "--no-charmm-pre-minimize",
+        "--max-grms-before-dyn",
+        "--no-echeck",
+        "--from-psf",
+        "--from-crd",
+        "--skip-cluster-build",
+    }
+    out: list[str] = []
+    i = 0
+    while i < len(argv):
+        tok = argv[i]
+        if tok in skip:
+            i += 2 if i + 1 < len(argv) and not str(argv[i + 1]).startswith("-") else 1
+            continue
+        out.append(tok)
+        i += 1
+    return out
+
+
+def _suite_extra_argv(args: argparse.Namespace, backend: str) -> list[str]:
+    if not args.extra_args:
+        return []
+    extra = _filter_campaign_flags_from_argv(list(args.extra_args))
+    if backend != "pycharmm":
+        extra = _filter_pycharmm_only_extra_argv(extra)
+    return extra
 
 
 def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
@@ -2611,9 +2654,9 @@ def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
     cmd.extend(["--min-com-restraint-k", str(getattr(args, "min_com_restraint_k", 1.0))])
     if getattr(args, "skip_jit_warmup", False):
         cmd.append("--skip-jit-warmup")
-    _append_suite_mmml_handoff_args(cmd, args)
+    _append_suite_mmml_handoff_args(cmd, args, backend=backend)
     if args.extra_args:
-        cmd.extend(_filter_campaign_flags_from_argv(list(args.extra_args)))
+        cmd.extend(_suite_extra_argv(args, backend))
     return backend, cmd
 
 
