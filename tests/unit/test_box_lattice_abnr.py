@@ -123,8 +123,8 @@ def test_run_charmm_lattice_abnr_uses_fallback_when_pbound_inactive():
             return_value=False,
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.sync_charmm_crystal_after_mm_pretreat",
-        ) as sync_crystal,
+            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
+        ) as ensure_crystal,
         patch(
             "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
             return_value=(35.0, "restart"),
@@ -145,7 +145,7 @@ def test_run_charmm_lattice_abnr_uses_fallback_when_pbound_inactive():
             verbose=False,
         )
     assert side == pytest.approx(35.0)
-    sync_crystal.assert_called_once_with(35.0, quiet=True)
+    ensure_crystal.assert_called_once_with(35.0, quiet=True)
     resolve_side.assert_called_once_with(
         fallback_side_A=35.0,
         restart_path="/tmp/prod.res",
@@ -168,8 +168,8 @@ def test_run_charmm_lattice_abnr_skips_restart_when_crystal_active():
             return_value=True,
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.sync_charmm_crystal_after_mm_pretreat",
-        ) as sync_crystal,
+            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
+        ) as ensure_crystal,
         patch(
             "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
             return_value=(36.0, "pbound"),
@@ -190,7 +190,7 @@ def test_run_charmm_lattice_abnr_skips_restart_when_crystal_active():
             verbose=False,
         )
     assert side == pytest.approx(36.0)
-    sync_crystal.assert_not_called()
+    ensure_crystal.assert_not_called()
     resolve_side.assert_called_once_with(
         fallback_side_A=35.0,
         restart_path=None,

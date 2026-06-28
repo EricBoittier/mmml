@@ -120,10 +120,12 @@ def apply_density_prep_resilient_defaults(args: argparse.Namespace) -> None:
     _bump_int_attr(args, "charmm_abnr_steps", 1000)
     _bump_int_attr(args, "mini_nstep", 500)
     _bump_int_attr(args, "bonded_mm_mini_steps", 500)
-    if int(getattr(args, "mini_lattice_abnr_steps", 0) or 0) <= 0:
-        args.mini_lattice_abnr_steps = 200
-    if float(getattr(args, "mini_box_equil_ps", 0.0) or 0.0) <= 0.0:
-        args.mini_box_equil_ps = 2.0
+    skip_box_prep = certified_box_handoff(args)
+    if not skip_box_prep:
+        if int(getattr(args, "mini_lattice_abnr_steps", 0) or 0) <= 0:
+            args.mini_lattice_abnr_steps = 200
+        if float(getattr(args, "mini_box_equil_ps", 0.0) or 0.0) <= 0.0:
+            args.mini_box_equil_ps = 2.0
 
     if getattr(args, "min_intermonomer_atom_distance", None) is None:
         from mmml.utils.intermonomer_geometry import DEFAULT_PRE_MLPOT_OVERLAP_MIN_A
@@ -147,6 +149,13 @@ def condensed_phase_md_prep_recommended(args: argparse.Namespace) -> bool:
         return True
     n_mol = _composition_monomer_count(args)
     return n_mol is not None and int(n_mol) >= 15
+
+
+def certified_box_handoff(args: argparse.Namespace) -> bool:
+    """True when md-system loads a pre-built liquid-box artifact (skip Packmol rebuild)."""
+    return bool(getattr(args, "skip_cluster_build", False)) and bool(
+        getattr(args, "from_psf", None) or getattr(args, "from_crd", None)
+    )
 
 
 def apply_condensed_phase_md_defaults(args: argparse.Namespace) -> None:

@@ -63,14 +63,17 @@ def run_charmm_lattice_abnr(
         apply_pbc_nbonds,
         charmm_crystal_is_active,
         resolve_charmm_cubic_box_side_A,
-        sync_charmm_crystal_after_mm_pretreat,
     )
     if (
         fallback_side_A is not None
         and float(fallback_side_A) > 0.0
         and not charmm_crystal_is_active()
     ):
-        sync_charmm_crystal_after_mm_pretreat(
+        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+            ensure_charmm_crystal_for_cpt,
+        )
+
+        ensure_charmm_crystal_for_cpt(
             float(fallback_side_A),
             quiet=not verbose,
         )

@@ -83,7 +83,8 @@ def test_condensed_phase_defaults_from_certified_box():
     apply_condensed_phase_md_defaults(args)
     assert liquid_prep_enabled(args)
     assert density_prep_ladder_enabled(args)
-    assert args.mini_box_equil_ps == 2.0
+    assert args.mini_box_equil_ps == 0.0
+    assert args.mini_lattice_abnr_steps == 0
     assert args.calculator_pre_minimize is True
     assert int(args.fire_min_steps) >= 200
     assert int(args.pre_min_steps) >= 200
