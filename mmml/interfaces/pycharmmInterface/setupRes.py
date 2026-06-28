@@ -127,6 +127,23 @@ def _has_resolved_geometry(atoms: Atoms, *, min_axis_span_A: float = 0.2) -> boo
     return True
 
 
+def _charmm_xyz_array() -> np.ndarray:
+    return coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=np.float64)
+
+
+def _set_charmm_xyz(positions: np.ndarray) -> None:
+    import pandas as pd
+
+    arr = np.asarray(positions, dtype=np.float64)
+    coor.set_positions(pd.DataFrame(arr, columns=["x", "y", "z"]))
+
+
+def _needs_coordinate_seed(positions: np.ndarray) -> bool:
+    if positions.size == 0 or not np.all(np.isfinite(positions)):
+        return True
+    return bool(np.any(np.abs(positions) > 9000.0))
+
+
 def generate_coordinates(skip_energy_show: bool = False, validate: bool = True) -> Atoms:
     print("*" * 5, "Generating coordinates", "*" * 5)
 
@@ -135,9 +152,19 @@ def generate_coordinates(skip_energy_show: bool = False, validate: bool = True) 
     ic.build()
     pycharmm_quiet()
 
-    # Build from IC, then minimize — do not overwrite with random coords (collapses
-    # methyl groups and can leave y≈z artifacts in written PDBs).
+    pos = _charmm_xyz_array()
+    if _needs_coordinate_seed(pos):
+        # ``ic.build()`` can leave CHARMM's 9999 placeholder coords; seed finite
+        # values before minimization (use numpy — not in-place DataFrame ops).
+        pos = np.random.default_rng().uniform(0.5, 2.5, size=pos.shape)
+        _set_charmm_xyz(pos)
+
     mini(nbxmod=1, skip_energy_show=skip_energy_show)
+
+    # Light jitter breaks symmetric IC seeds before the production exclusion list.
+    pos = _charmm_xyz_array().copy()
+    pos *= np.random.default_rng().uniform(0.85, 1.15, size=pos.shape)
+    _set_charmm_xyz(pos)
     mini(nbxmod=5, skip_energy_show=skip_energy_show)
     # end_energy = pycharmm.lingo.get_energy_value("ENER")
     # energy_diff = end_energy - start_energy
