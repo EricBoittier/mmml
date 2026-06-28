@@ -107,8 +107,48 @@ _warmup_mlpot_jax() {
   unset MMML_WARMUP_MLPOT_JAX_ONLY
 }
 
+_warmup_jax_pme_mesh() {
+  if [[ "${SKIP_WARMUP:-0}" == "1" ]]; then
+    return 0
+  fi
+  echo "[warmup] jax-pme mesh (pme/p3m, serial CPU) $(date -Iseconds)"
+  while IFS= read -r _var; do
+    [[ -n "$_var" ]] && unset "$_var" 2>/dev/null || true
+  done < <(env | cut -d= -f1 | grep -E '^(OMPI_|PMI_|PMIX_|MPI_LOCALRANKID$|SLURM_MPI_TYPE$)' || true)
+  export MMML_JAX_PME_DEVICE=cpu
+  export JAX_ENABLE_X64=true
+  if ! "$PY" - <<'PY'
+import os
+import time
+import numpy as np
+
+from mmml.interfaces.pycharmmInterface.long_range_backend import warmup_jax_pme_coulomb_host
+
+rng = np.random.default_rng(42)
+n = 50
+pos = rng.normal(12.5, 3.0, size=(n, 3))
+chg = rng.normal(0.0, 0.05, size=n)
+L = float(os.environ.get("BOX_SIDE_A", "25.0"))
+t0 = time.time()
+for method in ("pme", "p3m"):
+    t1 = time.time()
+    out = warmup_jax_pme_coulomb_host(pos, chg, box_length_A=L, method=method)
+    print(f"warmup jax-pme {method}: E={out.energy_kcalmol:.4f} kcal/mol in {time.time()-t1:.1f}s", flush=True)
+print(f"warmup jax-pme mesh: done in {time.time()-t0:.1f}s", flush=True)
+PY
+  then
+    echo "ERROR: jax-pme mesh warmup failed" >&2
+    return 1
+  fi
+}
+
 if ! _warmup_mlpot_jax; then
   echo "FATAL: warmup-mlpot-jax failed; aborting compare run" >&2
+  exit 1
+fi
+
+if ! _warmup_jax_pme_mesh; then
+  echo "FATAL: jax-pme mesh warmup failed; aborting compare run" >&2
   exit 1
 fi
 

@@ -528,26 +528,31 @@ def _jax_pme_hybrid_mm_pure_callback(
         pi = None if pi_np.size == 0 else np.asarray(pi_np, dtype=np.int64)
         pj = None if pj_np.size == 0 else np.asarray(pj_np, dtype=np.int64)
         mask = None if mask_np.size == 0 else np.asarray(mask_np, dtype=np.float64)
-        lr = hybrid_jax_pme_mm_lr_correction(
-            np.asarray(pos_np, dtype=np.float64),
-            charges_host,
-            offsets_host,
-            box_length_A=_box_length_from_host(box_np),
-            method=method_host,
-            sr_cutoff_A=sr_host,
-            c6_sqrt=c6_host,
-            pair_i=pi,
-            pair_j=pj,
-            pair_mask=mask,
-            monomer_id=monomer_id_host,
-            lambda_monomer=lambda_host,
-            pbc_cell=pbc,
-            ml_switch_width=ml_switch_width,
-            mm_switch_on=mm_switch_on,
-            mm_switch_width=mm_switch_width,
-            complementary_handoff=complementary_handoff,
-            mm_r_min=mm_r_min,
+        from mmml.interfaces.pycharmmInterface.long_range_backend import (
+            jax_pme_pure_callback_host_context,
         )
+
+        with jax_pme_pure_callback_host_context():
+            lr = hybrid_jax_pme_mm_lr_correction(
+                np.asarray(pos_np, dtype=np.float64),
+                charges_host,
+                offsets_host,
+                box_length_A=_box_length_from_host(box_np),
+                method=method_host,
+                sr_cutoff_A=sr_host,
+                c6_sqrt=c6_host,
+                pair_i=pi,
+                pair_j=pj,
+                pair_mask=mask,
+                monomer_id=monomer_id_host,
+                lambda_monomer=lambda_host,
+                pbc_cell=pbc,
+                ml_switch_width=ml_switch_width,
+                mm_switch_on=mm_switch_on,
+                mm_switch_width=mm_switch_width,
+                complementary_handoff=complementary_handoff,
+                mm_r_min=mm_r_min,
+            )
         return (
             np.asarray(lr.energy_kcalmol, dtype=out_dtype),
             np.asarray(lr.forces_kcalmol_A, dtype=out_dtype),

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 import numpy as np
 import pytest
 
@@ -124,3 +126,33 @@ def test_wrap_mm_fn_jax_pme_dynamic_path_under_jit(monkeypatch) -> None:
     energy, forces = eval_mm(pos, box)
     assert float(energy) == pytest.approx(3.0)
     np.testing.assert_allclose(np.asarray(forces), 0.5, rtol=0, atol=1e-6)
+
+
+def test_wrap_mm_fn_pme_pure_callback_enters_host_context(monkeypatch) -> None:
+    entered: list[str] = []
+
+    @contextmanager
+    def _track_ctx():
+        entered.append("host_ctx")
+        yield
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.jax_pme_pure_callback_host_context",
+        _track_ctx,
+    )
+
+    def _fake(*args, **kwargs):
+        del kwargs
+        return _fake_hybrid_lr(np.asarray(args[0], dtype=np.float64))
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb.hybrid_jax_pme_mm_lr_correction",
+        _fake,
+    )
+    kw = _wrap_kwargs(dynamic=False)
+    kw["method"] = "pme"
+    wrapped = _wrap_mm_fn_with_jax_pme_coulomb(_lj_only_mm_fn, **kw)
+    pos = jnp.zeros((5, 3), dtype=jnp.float32)
+    energy, forces = jax.jit(wrapped)(pos)
+    assert entered == ["host_ctx"]
+    assert float(energy) == pytest.approx(3.0)

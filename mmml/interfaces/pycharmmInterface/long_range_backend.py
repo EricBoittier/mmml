@@ -17,7 +17,7 @@ CHARMM IMAGE lists and MLpot BLOCK terms.
 from __future__ import annotations
 
 import os
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from typing import Iterator, Literal, Protocol
 
@@ -36,21 +36,33 @@ def jax_pme_host_device_name() -> str:
 
 
 @contextmanager
-def jax_pme_host_eval_context() -> Iterator[None]:
+def jax_pme_host_eval_context(*, disable_jit: bool = False) -> Iterator[None]:
     """Run jax-pme ``energy_forces`` on a stable host device.
 
     Hybrid MM calls jax-pme from CHARMM MLpot ``pure_callback`` while the outer
     MLpot JAX graph may still be on CPU (MPI defer path) or sharing one GPU.
     Nested jax-pme on GPU in that window can stall indefinitely for mesh methods
     (PME/P3M) under ``mpirun``; host evaluation defaults to CPU.
+
+    Set ``disable_jit=True`` inside ``pure_callback`` host code so nested jax-pme
+  does not re-enter the parent XLA executor (deadlock on ``BlockUntilReady``).
     """
-    prefer = jax_pme_host_device_name()
-    if prefer == "gpu":
-        yield
-        return
     import jax
 
-    with jax.default_device(jax.devices("cpu")[0]):
+    prefer = jax_pme_host_device_name()
+    jit_ctx = jax.disable_jit() if disable_jit else nullcontext()
+    if prefer == "gpu":
+        with jit_ctx:
+            yield
+        return
+    with jit_ctx, jax.default_device(jax.devices("cpu")[0]):
+        yield
+
+
+@contextmanager
+def jax_pme_pure_callback_host_context() -> Iterator[None]:
+    """jax-pme from ``jax.pure_callback`` (CPU + no nested JIT)."""
+    with jax_pme_host_eval_context(disable_jit=True):
         yield
 
 
