@@ -207,3 +207,24 @@ def test_build_pycharmm_command_omits_ml_compute_dtype_when_unset():
 
     cmd = build_pycharmm_command(_pycharmm_args())
     assert "--ml-compute-dtype" not in cmd
+
+
+def test_decomposed_mlpot_defers_gpu_promote_until_first_ener_for_jax_pme_mesh():
+    z = np.zeros(8, dtype=int)
+    model = DecomposedMlpotModel(
+        None,
+        CutoffParameters(),
+        2,
+        z,
+        defer_jax_until_after_sd=True,
+        lr_solver="jax_pme",
+        jax_pme_method="pme",
+    )
+    assert model._jax_pme_hybrid_first_ener_done is False
+    with patch.object(model, "_finalize_jax_factory") as mock_finalize:
+        model.promote_jax_factory_to_gpu()
+    mock_finalize.assert_not_called()
+    model._jax_pme_hybrid_first_ener_done = True
+    with patch.object(model, "_finalize_jax_factory") as mock_finalize:
+        model.promote_jax_factory_to_gpu()
+    mock_finalize.assert_called_once()

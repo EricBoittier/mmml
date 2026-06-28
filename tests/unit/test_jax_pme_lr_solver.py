@@ -14,7 +14,9 @@ from mmml.interfaces.pycharmmInterface.long_range_backend import (
     create_lr_solver,
     jax_pme_host_device_name,
     jax_pme_host_eval_context,
+    jax_pme_mesh_method,
     jax_pme_pure_callback_host_context,
+    materialize_jax_pme_host_numpy,
     pick_lr_solver,
     resolve_jax_pme_method,
 )
@@ -134,6 +136,24 @@ def test_jax_pme_pure_callback_host_context_disables_jit(monkeypatch):
         with jax_pme_pure_callback_host_context():
             pass
     assert calls == ["disable_jit"]
+
+
+def test_jax_pme_mesh_method_flags():
+    assert jax_pme_mesh_method("pme") is True
+    assert jax_pme_mesh_method("p3m") is True
+    assert jax_pme_mesh_method("ewald") is False
+
+
+def test_materialize_jax_pme_host_numpy_returns_host_arrays():
+    import jax.numpy as jnp
+
+    e, f = materialize_jax_pme_host_numpy(
+        jnp.asarray(1.5, dtype=jnp.float64),
+        jnp.ones((2, 3), dtype=jnp.float64),
+    )
+    assert isinstance(e, float)
+    assert e == pytest.approx(1.5)
+    np.testing.assert_allclose(f, np.ones((2, 3)), rtol=0, atol=1e-12)
 
 
 def test_pick_lr_solver_jax_pme_when_scafacos_absent(monkeypatch):
