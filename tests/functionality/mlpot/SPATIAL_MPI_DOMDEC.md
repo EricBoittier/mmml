@@ -5,19 +5,30 @@ Manual smoke for aligning CHARMM domain decomposition with spatial MLpot.
 
 ## Goal
 
-Mode C from [Spatial ML MPI](../../docs/mlpot-spatial-mpi.md): `np>1`, domdec **on**, spatial ML per rank, one GPU per rank. Both CHARMM integration and PhysNet should scale.
+Mode C from [Spatial ML MPI](../../../docs/mlpot-spatial-mpi.md): `np>1`, domdec **on**, spatial ML per rank, one GPU per rank. Both CHARMM integration and PhysNet should scale.
 
 ## Current blockers (June 2026)
 
-1. MLpot paths call `disable_charmm_domdec()` before SD/dynamics ([`import_pycharmm.py`](../../mmml/interfaces/pycharmmInterface/import_pycharmm.py)).
-2. JAX GPU warmup + domdec can segfault (`send_coord_to_recip` / `PMPI_Free_mem`).
-3. PyCHARMM exposes no per-rank local/ghost atom API ([`domdec_info.py`](../../mmml/interfaces/pycharmmInterface/mlpot/mpi_spatial/domdec_info.py)).
+1. PyCHARMM exposes no per-rank local/ghost atom API ([`domdec_info.py`](../../../mmml/interfaces/pycharmmInterface/mlpot/mpi_spatial/domdec_info.py)).
+2. JAX GPU warmup + active DOMDEC can segfault (`send_coord_to_recip` / `PMPI_Free_mem`).
+3. `domdec off` is opt-in via `MMML_FORCE_DOMDEC_OFF=1` for streams that enabled DOMDEC; it is not a Tier 3 integration path ([`import_pycharmm.py`](../../../mmml/interfaces/pycharmmInterface/import_pycharmm.py)).
 
 Tier 2 (`--ml-spatial-mpi`) parallelizes **ML only** with domdec still off; CHARMM integration remains replicated per rank.
 
 ## Spike procedure (user-run)
 
-### A. Baseline Tier 2 (spatial ML, domdec off)
+### A. Capture Tier 3 survey
+
+Record the current survey output before the live spike:
+
+```bash
+mmml mpi-check --tier3 --json | tee tier3_domdec_survey.json
+mmml mpi-check --tier3 --strict
+```
+
+Expected while blocked: the JSON report has `tier3.blocked=true`, and the strict command exits non-zero.
+
+### B. Baseline Tier 2 (spatial ML, no DOMDEC metadata)
 
 ```bash
 export MMML_MLPOT_SPATIAL_MPI=1
@@ -29,7 +40,7 @@ MMML_MPI_NP=2 ./scripts/mmml-charmm-mpirun.sh md-system \
 
 **Pass:** minimization completes; energies finite on all ranks.
 
-### B. Domdec on (MLpot ENER smoke)
+### C. Domdec on (MLpot ENER smoke)
 
 Start with the smallest possible active-DOMDEC check before any SD/dynamics:
 
@@ -59,7 +70,7 @@ MMML_MPI_NP=1 MMML_DOMDEC_MLPOT_SMOKE=1 \
 
 Record: pass/fail, traceback/segfault yes/no, and whether `send_coord_to_recip` appears in any backtrace.
 
-### C. ctypes / PyCHARMM survey
+### D. ctypes / PyCHARMM survey
 
 - Inspect `ldd libcharmm.so` for `domdec_common` symbols.
 - Check whether `pycharmm` exposes atom group / domain queries (none found in June 2026 survey).
@@ -72,7 +83,7 @@ Record: pass/fail, traceback/segfault yes/no, and whether `send_coord_to_recip` 
 
 ## Fallback
 
-Until Tier 3 passes, use **Tier 1** for one-node 2-GPU production:
+Until Tier 3 passes, use Tier 2 spatial MPI for ML decomposition or **Tier 1** for one-node 2-GPU production:
 
 ```bash
 export CUDA_VISIBLE_DEVICES=0,1

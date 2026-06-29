@@ -29,4 +29,6 @@ mmml mpi-check --tier2 --tier3
 MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh pytest tests/charmm_mpi/ -q
 ```
 
+`mmml mpi-check --tier3` is informational: it can exit 0 while reporting Tier 3 production as blocked. Use `mmml mpi-check --tier3 --strict` when a script should fail until PyCHARMM exposes local/ghost atom metadata.
+
 See [`docs/pycharmm-mpi.md`](../../docs/pycharmm-mpi.md).
