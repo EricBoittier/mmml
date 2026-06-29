@@ -1478,16 +1478,8 @@ def setup_calculator(
         When ml_sparse_dimers=True, only evaluates dimers within mm_switch_on. """
         batch_data: Dict[str, Array] = {}
 
-        # max_atoms must accommodate the largest single system (dimer).
-        _dimer_atom_counts = [
-            atoms_per_monomer_list[a] + atoms_per_monomer_list[b]
-            for a, b in dimer_perms
-        ]
         dimer_n_a = dimer_n_atoms_a_jnp
         dimer_n_b = dimer_n_atoms_b_jnp
-        max_monomer_atoms = max(atoms_per_monomer_list)
-        max_dimer_atoms = max(_dimer_atom_counts) if _dimer_atom_counts else 2 * max_monomer_atoms
-        max_atoms = max(max_monomer_atoms, max_dimer_atoms)
         pad_axis = jnp.arange(max_atoms, dtype=positions.dtype)
         pad_positions = jnp.stack(
             [100.0 + pad_axis, 200.0 + pad_axis, 300.0 + pad_axis],
@@ -1529,7 +1521,7 @@ def setup_calculator(
             )
 
         dimer_atomic = atomic_numbers[dimer_idx_arr_jnp]
-        dimer_N_arr = jnp.array(_dimer_atom_counts)
+        dimer_N_arr = dimer_n_a + dimer_n_b
         dimer_mask = jnp.arange(max_atoms)[None, :] < dimer_N_arr[:, None]
         dimer_positions = jnp.where(dimer_mask[:, :, None], dimer_positions, pad_positions[None, :, :])
         dimer_atomic = jnp.where(dimer_mask, dimer_atomic, 0)
@@ -1605,7 +1597,7 @@ def setup_calculator(
         else:
             batch_data["R"] = jnp.concatenate([monomer_positions, dimer_positions])
             batch_data["Z"] = jnp.concatenate([monomer_atomic, dimer_atomic])
-            dimer_N = jnp.array(_dimer_atom_counts) if _dimer_atom_counts else jnp.zeros((0,), dtype=jnp.int32)
+            dimer_N = dimer_n_a + dimer_n_b
             batch_data["N"] = jnp.concatenate([monomer_N_arr, dimer_N])
             _effective_batch_size = n_monomers + n_dimers
             cached = _cached_batch_structure if (_cached_batch_structure is not None and _effective_batch_size == full_batch_size) else None
@@ -1740,15 +1732,6 @@ def setup_calculator(
         spatial_dimer_indices: Optional[Array] = None,
     ) -> Dict[str, Array]:
         """Calculate ML energy and force contributions (heterogeneous-safe)."""
-        # Calculate max atoms for consistent array shapes (heterogeneous)
-        _dimer_atom_counts = [
-            atoms_per_monomer_list[a] + atoms_per_monomer_list[b]
-            for a, b in dimer_perms
-        ]
-        max_monomer_atoms = max(atoms_per_monomer_list)
-        max_dimer_atoms = max(_dimer_atom_counts) if _dimer_atom_counts else 2 * max_monomer_atoms
-        max_atoms = max(max_monomer_atoms, max_dimer_atoms)
-
         # Get model predictions
         apply_model, batches = get_ML_energy_fn(
             atomic_numbers,
@@ -2599,15 +2582,6 @@ def setup_calculator(
         mic_pbc_cell: Optional[Array] = None,
     ) -> Dict[str, Array]:
         """Calculate energy and force contributions from dimers (heterogeneous-safe)."""
-        # Compute max_atoms (padded batch dimension) -- heterogeneous
-        _dimer_atom_counts = [
-            atoms_per_monomer_list[a] + atoms_per_monomer_list[b]
-            for a, b in dimer_perms
-        ]
-        max_monomer_atoms = max(atoms_per_monomer_list)
-        max_dimer_atoms = max(_dimer_atom_counts) if _dimer_atom_counts else 2 * max_monomer_atoms
-        max_atoms = max(max_monomer_atoms, max_dimer_atoms)
-
         # Get dimer energies and forces
         ml_dimer_energy = jnp.array(e[n_monomers:]).flatten()
         monomer_batch_atoms = n_monomers * max_atoms
@@ -2697,7 +2671,9 @@ def setup_calculator(
         # dimer_forces shape: (n_dimers * max_atoms, 3)
         dimer_forces_2d = dimer_forces.reshape(n_dimers, max_atoms, 3)
 
-        forces_flat = (dimer_forces_2d * dimer_atom_mask_jnp[:, :, None]).reshape(-1, 3)
+        forces_flat = (
+            dimer_forces_2d * dimer_atom_mask_jnp[:n_dimers, :, None]
+        ).reshape(-1, 3)
 
         # optimization_barrier discourages XLA constant folding of segment_ids.
         seg_ids = jax.lax.optimization_barrier(force_segments)
