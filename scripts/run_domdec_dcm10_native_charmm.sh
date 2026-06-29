@@ -244,8 +244,7 @@ energy"
 elif [[ -n "${DOMDEC_ENERGY:-}" ]]; then
   _domdec_energy_block="$DOMDEC_ENERGY"
 else
-  _domdec_energy_block="domdec on ndir ${DOMDEC_NDIR}
-energy"
+  _domdec_energy_block="energy domdec ndir ${DOMDEC_NDIR}"
 fi
 
 cat > "$INP" <<EOF
@@ -295,6 +294,7 @@ echo "OUT:        $OUT"
 export CHARMM_HOME CHARMM_LIB_DIR
 export LD_LIBRARY_PATH="$CHARMM_LIB_DIR:${LD_LIBRARY_PATH:-}"
 
+rm -f "$OUT"
 "$MPIRUN" "$CHARMM_EXE" -i "$INP" -o "$OUT"
 _rc=$?
 
@@ -322,9 +322,16 @@ EOF
   exit "${_rc:-1}"
 fi
 
-if grep -q 'extraneous characters' "$OUT" 2>/dev/null && grep -qi 'domdec' "$OUT" 2>/dev/null; then
-  echo "DOMDEC command was not parsed (extraneous-characters warning in $OUT)." >&2
-  echo "Expected: domdec on ndir ${DOMDEC_NDIR} / energy — not 'energy domdec ndir ...'" >&2
+if grep -q 'extraneous characters' "$OUT" 2>/dev/null; then
+  echo "DOMDEC/ENERGY command was not parsed cleanly (extraneous-characters warning in $OUT)." >&2
+  echo "Expected a single line: energy domdec ndir ${DOMDEC_NDIR}" >&2
+  echo "See domdec.doc: DOMDEC NDIR is an ENERGY subcommand, not 'domdec on ndir ...'." >&2
+  exit 1
+fi
+
+if [[ "$MMML_MPI_NP" -gt 1 ]] && ! grep -qiE 'NDIR\s*=' "$OUT" 2>/dev/null; then
+  echo "DOMDEC did not activate at np=${MMML_MPI_NP} (no NDIR= line in $OUT)." >&2
+  echo "Check ${INP} contains: energy domdec ndir ${DOMDEC_NDIR}" >&2
   exit 1
 fi
 

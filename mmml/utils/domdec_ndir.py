@@ -22,7 +22,7 @@ def min_domdec_mpi_ranks(*, allow_serial: bool = True, strict_c47_axis_rule: boo
 
 
 def suggest_domdec_ndir(n_ranks: int, *, strict_c47_axis_rule: bool = False) -> tuple[int, int, int]:
-    """Return ``(nx, ny, nz)`` for ``domdec on ndir nx ny nz``.
+    """Return ``(nx, ny, nz)`` for ``energy domdec ndir nx ny nz``.
 
     Default (MMML tier3): allow ``NDIR 2 1 1`` etc. for small dense boxes at ``np=2``.
 
@@ -73,9 +73,9 @@ def format_domdec_ndir(n_ranks: int, *, strict_c47_axis_rule: bool = False) -> s
 
 
 def format_domdec_charmm_commands(n_ranks: int, *, strict_c47_axis_rule: bool = False) -> str:
-    """CHARMM stream block: ``domdec on ndir …`` then ``energy`` (not ``energy domdec …``)."""
+    """CHARMM stream line: ``energy domdec ndir …`` (DOMDEC is an ENERGY subcommand)."""
     ndir = format_domdec_ndir(n_ranks, strict_c47_axis_rule=strict_c47_axis_rule)
-    return f"domdec on ndir {ndir}\nenergy"
+    return f"energy domdec ndir {ndir}"
 
 
 def min_domdec_crystal_side_A(
