@@ -5,6 +5,11 @@ This is a manual cluster smoke, not a production workflow and not CI. It answers
 one narrow question: can a DOMDEC-enabled CHARMM build run MLpot registration and
 one ``ENER`` after an explicit DOMDEC stream command?
 
+Observed limitation: ``np>1`` PyCHARMM topology construction / RTF loading hangs
+or aborts before DOMDEC/MLpot on current cluster builds. Treat multi-rank options
+in this script as diagnostics only; true DOMDEC testing should start from a
+CHARMM-native/prebuilt state.
+
 Safety:
   - Live mode requires ``MMML_DOMDEC_MLPOT_SMOKE=1``.
   - The default live command is ``domdec on``; pass ``--no-domdec-command`` for a

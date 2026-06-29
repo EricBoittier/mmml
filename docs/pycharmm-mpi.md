@@ -321,6 +321,22 @@ MMML_MPI_NP=1 MMML_DOMDEC_MLPOT_SMOKE=1 \
 
 Pass: the script exits 0 and prints finite `ENER` / `USER` terms. Failures to record: Python traceback, hard segfault, MPI abort, or `send_coord_to_recip` in a backtrace.
 
+Observed on `pc-bach` (June 2026):
+
+- `MMML_MPI_NP=1`, `domdec on`, `OCOH:1`, MLpot registration, and `ENER` pass.
+- The same `OCOH:1` smoke without explicit `domdec on` also passes with matching energies.
+- `MMML_MPI_NP=2` does not reach DOMDEC or MLpot when topology is constructed from PyCHARMM. It hangs or aborts during CHARMM setup (`crystal free`, `DELETE ATOM`, `read rtf`, or minimal `MASS` RTF loading depending on which earlier step is skipped).
+- `ACO` / `MEOH` are not valid active-DOMDEC probes in their current generated PSF order because DOMDEC `groupxfast` requires hydrogens to be adjacent to their bonded heavy atoms.
+
+Conclusion: true multi-rank DOMDEC testing must start from a CHARMM-native/prebuilt state. Do not use simultaneous PyCHARMM `read.rtf()` / topology generation on all ranks as the Tier 3 entry point.
+
+Next Tier 3 path:
+
+1. Prepare PSF/CRD/restart with CHARMM-native tooling or `np=1` setup.
+2. Start `np>1` from that already valid CHARMM state, using the same MPI/DOMDEC build.
+3. Attach/register MLpot only after CHARMM topology, coordinates, image/PBC state, and DOMDEC setup are established.
+4. Keep DOMDEC-order validation for residue templates before attempting `ACO`, `MEOH`, or `DCM`.
+
 ### DLPack loose coupling — where it applies
 
 DLPack (`__dlpack__` / `from_dlpack`) gives **zero-copy GPU array interchange** between JAX and CuPy. It is implemented in [`nl_gpu.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/nl_gpu.py) for the **MM neighbor-list rebuild** path, not for CHARMM↔MLpot force handoff.
