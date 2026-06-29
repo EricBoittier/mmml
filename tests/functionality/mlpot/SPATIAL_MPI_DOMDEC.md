@@ -103,10 +103,8 @@ bash scripts/run_domdec_dcm10_smoke.sh prep
 # Offline DOMDEC hydrogen-order validation on the generated PSF.
 bash scripts/run_domdec_dcm10_smoke.sh validate
 
-# Tier 3 requires a native/prebuilt CHARMM state loader; PyCHARMM np>1 RTF setup
-# is intentionally not used. Fill in NATIVE_STATE_CMD once that loader exists.
-NATIVE_STATE_CMD='<native CHARMM-state launch command>' \
-  bash scripts/run_domdec_dcm10_smoke.sh tier3
+# Native CHARMM np>1 DOMDEC ENER from the prebuilt PSF/CRD.
+bash scripts/run_domdec_dcm10_smoke.sh tier3
 ```
 
 ### F. ctypes / PyCHARMM survey

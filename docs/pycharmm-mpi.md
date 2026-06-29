@@ -342,8 +342,7 @@ For the DCM:10 scaffold:
 ```bash
 bash scripts/run_domdec_dcm10_smoke.sh prep
 bash scripts/run_domdec_dcm10_smoke.sh validate
-NATIVE_STATE_CMD='<native CHARMM-state launch command>' \
-  bash scripts/run_domdec_dcm10_smoke.sh tier3
+bash scripts/run_domdec_dcm10_smoke.sh tier3
 ```
 
 ### DLPack loose coupling — where it applies

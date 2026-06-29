@@ -10,7 +10,7 @@
 # Usage:
 #   ./scripts/run_domdec_dcm10_smoke.sh prep
 #   ./scripts/run_domdec_dcm10_smoke.sh validate
-#   NATIVE_STATE_CMD='...' ./scripts/run_domdec_dcm10_smoke.sh tier3
+#   ./scripts/run_domdec_dcm10_smoke.sh tier3
 #   ./scripts/run_domdec_dcm10_smoke.sh all
 #
 # Environment overrides:
@@ -19,7 +19,8 @@
 #   N_DCM=10
 #   BOX_SIZE=32
 #   BOX_DIR=$TESTS_ROOT/boxes/domdec_dcm10_l32
-#   NATIVE_STATE_CMD='MMML_MPI_NP=2 ...'
+#   CHARMM_EXE=/path/to/charmm
+#   NATIVE_STATE_CMD='...'  # optional override
 
 set -euo pipefail
 
@@ -81,24 +82,7 @@ tier3() {
     exit 1
   }
   if [[ -z "${NATIVE_STATE_CMD:-}" ]]; then
-    cat >&2 <<EOF
-NATIVE_STATE_CMD is required for the next Tier 3 step.
-
-Reason:
-  np>1 PyCHARMM topology setup is unsupported on this stack. Start from a
-  CHARMM-native/prebuilt state that loads ${PSF} and ${CRD}, establishes PBC and
-  DOMDEC, then attaches MLpot.
-
-Suggested placeholders:
-  PSF=$PSF
-  CRD=$CRD
-  BOX_SIZE=$BOX_SIZE
-  MMML_MPI_NP=2
-
-Once a native loader exists, run:
-  NATIVE_STATE_CMD='<your command>' $0 tier3
-EOF
-    exit 2
+    NATIVE_STATE_CMD="MMML_MPI_NP=2 PSF='$PSF' CRD='$CRD' BOX_SIZE='$BOX_SIZE' N_DCM='$N_DCM' bash '$MMML_ROOT/scripts/run_domdec_dcm10_native_charmm.sh'"
   fi
   echo "$NATIVE_STATE_CMD"
   eval "$NATIVE_STATE_CMD"
