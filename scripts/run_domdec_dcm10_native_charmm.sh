@@ -321,13 +321,37 @@ EOF
   exit "${_rc:-1}"
 fi
 
+# --- Distinguish the two DOMDEC failure modes ---
+#
+# Mode A: "extraneous characters" on DOMD NDIR → KEY_DOMDEC==0 (not compiled in)
+#   Fix: rebuild with COLFFT/FFTW enabled.
+#
+# Mode B: "DOMDEC node number limitation" / "must have (a) 1 node or (b) at least 8"
+#   → KEY_DOMDEC==1 (compiled in and activating!) but np<8 violates c47 axis rule.
+#   Fix: use np>=8 with a >=152 Å box, or use MMML spatial MPI for liquid-density scaling.
+
 if grep -q 'extraneous characters' "$OUT" 2>/dev/null; then
-  echo "DOMDEC/ENERGY command was not parsed cleanly (extraneous-characters warning in $OUT)." >&2
-  echo "Usually domdec=OFF in the build (CMake disables DOMDEC when colfft/FFTW is missing)." >&2
-  echo "Check input block in ${INP} — then:" >&2
-  echo "  bash scripts/verify_charmm_domdec_build.sh $CHARMM_EXE" >&2
-  echo "  module load FFTW; export FFTW_ROOT=\${EBROOTFFTW}; bash scripts/rebuild_charmm_native_exec.sh --clean" >&2
+  echo "" >&2
+  echo "FAIL: DOMD NDIR was 'extraneous' — KEY_DOMDEC==0 (DOMDEC not compiled in)." >&2
+  echo "  COLFFT/FFTW was not linked → eutil.F90 compiled without #if KEY_DOMDEC==1 block." >&2
+  echo "  Verify with:" >&2
+  echo "    bash scripts/verify_charmm_domdec_build.sh $CHARMM_EXE" >&2
+  echo "  Rebuild: export FFTW_ROOT=...; bash scripts/rebuild_charmm_native_exec.sh --clean" >&2
   exit 1
+fi
+
+if grep -qiE 'DOMDEC node number limitation|must have.*1 node.*at least.*8 node' "$OUT" 2>/dev/null; then
+  echo "" >&2
+  echo "PARTIAL PASS: KEY_DOMDEC==1 confirmed (DOMDEC compiled in and activating)." >&2
+  echo "  CHARMM correctly rejected np=${MMML_MPI_NP} NDIR ${DOMDEC_NDIR}:" >&2
+  echo "  c47 domdec.F90 requires each NDIR axis to be 1 or >=8 nodes." >&2
+  echo "  Minimum for real DOMDEC: np=8 with NDIR 8 1 1 and a >=152 Å box." >&2
+  echo "" >&2
+  echo "  For MLPot at liquid density: use MMML spatial MPI instead of DOMDEC." >&2
+  echo "  DOMDEC parallelises MM nonbonds; MLPot evaluates as a user-energy term" >&2
+  echo "  (serial inside DOMDEC). Spatial MPI parallelises the MLPot evaluation itself." >&2
+  echo "  See docs/pycharmm-mpi.md for the spatial-MPI tier-2 workflow." >&2
+  exit 2
 fi
 
 if [[ "$MMML_MPI_NP" -gt 1 ]] && ! grep -qiE 'NDIR\s*=' "$OUT" 2>/dev/null; then
