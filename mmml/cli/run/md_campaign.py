@@ -467,6 +467,8 @@ def build_benchmark_md_system_argv(
         str(job["backend"]),
         "--composition",
         str(cfg["composition"]),
+        "--builder",
+        "liquid",
         "--checkpoint",
         str(resolve_checkpoint(str(cfg["checkpoint"]))),
         "--output-dir",
@@ -508,17 +510,6 @@ def build_benchmark_md_system_argv(
         if box_size is not None:
             argv.extend(["--box-size", str(box_size)])
         argv.append("--free-space")
-
-    argv.extend(
-        [
-            "--packmol-placement",
-            "cube",
-            "--packmol-tolerance",
-            str(cfg["packmol_tolerance"]),
-        ]
-    )
-    if cfg.get("packmol_radius") is not None:
-        argv.extend(["--packmol-radius", str(cfg["packmol_radius"])])
 
     if job.get("nvt_integrator"):
         argv.extend(["--nvt-integrator", str(job["nvt_integrator"])])

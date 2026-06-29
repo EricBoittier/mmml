@@ -666,7 +666,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "pycharmm: run CHARMM MM pretreat even when jaxmd/PyCHARMM handoff coords "
-            "are already in memory (default: pretreat only on cold Packmol starts)"
+            "are already in memory (default: pretreat only on cold composition starts)"
         ),
     )
     parser.add_argument(

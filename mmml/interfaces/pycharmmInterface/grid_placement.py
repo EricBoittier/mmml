@@ -63,7 +63,13 @@ def grid_centers_cube(
         n_axis = int(np.ceil(n ** (1.0 / 3.0)))
         step = float(side) / float(n_axis)
         origin = np.asarray(center, dtype=float) - 0.5 * float(side)
-        values = origin + (np.arange(n_axis, dtype=float) + 0.5) * step
+        axis_values = [
+            float(axis_origin) + (np.arange(n_axis, dtype=float) + 0.5) * step
+            for axis_origin in origin
+        ]
+        mesh = np.meshgrid(*axis_values, indexing="ij")
+        pts = np.column_stack([m.reshape(-1) for m in mesh])
+        return _select_centers(pts, n, seed=seed)
     else:
         n_axis = int(np.ceil(n ** (1.0 / 3.0)))
         step = max(float(spacing), 1.0e-6)
@@ -76,9 +82,6 @@ def grid_centers_cube(
         mesh = np.meshgrid(*axis_values, indexing="ij")
         pts = np.column_stack([m.reshape(-1) for m in mesh])
         return _select_centers(pts, n, seed=seed)
-    mesh = np.meshgrid(values, values, values, indexing="ij")
-    pts = np.column_stack([m.reshape(-1) for m in mesh])
-    return _select_centers(pts, n, seed=seed)
 
 
 def grid_centers_sphere(

@@ -109,7 +109,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=float,
         default=None,
         metavar="ANG",
-        help="MMFP droff (Å); also enables Packmol when --composition is set (legacy)",
+        help="MMFP droff (Å); legacy radius hint for spherical composition placement.",
     )
     parser.add_argument(
         "--flat-bottom-selection",
@@ -122,7 +122,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--packmol-placement",
         choices=("cube", "sphere"),
         default=None,
-        help="Packmol constraint: cube (default) or sphere (--packmol-radius).",
+        help="Initial placement constraint: cube (default) or sphere (--packmol-radius).",
     )
     parser.add_argument(
         "--packmol-sphere",
@@ -136,7 +136,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=float,
         default=None,
         metavar="ANG",
-        help="Packmol sphere radius (overrides --flat-bottom-radius for packing only)",
+        help="Sphere radius for initial placement (overrides --flat-bottom-radius).",
     )
     parser.add_argument(
         "--packmol-center",
@@ -144,15 +144,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         nargs=3,
         metavar=("CX", "CY", "CZ"),
         default=None,
-        help="Packmol sphere center in Å (default: 0 0 0)",
+        help="Initial placement center in Å (default: 0 0 0)",
     )
     parser.add_argument(
         "--packmol-tolerance",
         type=float,
         default=2.0,
-        help="Packmol distance tolerance in Å (default: 2.0)",
+        help="Legacy Packmol distance tolerance in Å for explicit --packmol runs.",
     )
-    parser.add_argument("--seed", type=int, default=123, help="Random seed for Packmol placement")
+    parser.add_argument("--seed", type=int, default=123, help="Random seed for initial placement")
     parser.add_argument(
         "--no-scale-mini-nstep",
         action="store_true",

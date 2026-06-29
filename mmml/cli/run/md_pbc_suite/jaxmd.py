@@ -185,7 +185,7 @@ def main(argv: list[str] | None = None) -> int:
         "--packmol-placement",
         choices=("cube", "sphere"),
         default=None,
-        help="Packmol constraint: cube (default) or sphere (--packmol-radius).",
+        help="Initial placement constraint: cube (default) or sphere (--packmol-radius).",
     )
     p.add_argument(
         "--packmol-sphere",
@@ -200,7 +200,7 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         metavar="Å",
         dest="packmol_radius",
-        help="Packmol inside-sphere radius in Angstrom (independent of --flat-bottom-radius).",
+        help="Initial inside-sphere radius in Angstrom (independent of --flat-bottom-radius).",
     )
     p.add_argument(
         "--packmol-center",
@@ -208,13 +208,13 @@ def main(argv: list[str] | None = None) -> int:
         nargs=3,
         metavar=("CX", "CY", "CZ"),
         default=None,
-        help="Packmol sphere center in Angstrom (default: 0 0 0).",
+        help="Initial placement center in Angstrom (default: 0 0 0).",
     )
     p.add_argument(
         "--packmol-tolerance",
         type=float,
         default=2.0,
-        help="Packmol distance tolerance in Å (default: 2.0).",
+        help="Legacy Packmol distance tolerance in Å for explicit --packmol runs.",
     )
     from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import add_box_sizing_args
 

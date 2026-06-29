@@ -57,7 +57,7 @@ atoms = result.atoms  # ase.Atoms with cell + PBC
 | Quick gas-phase / unit-cell test opt | ASE + EMT (`--optimize --emt`) |
 | Production relaxation | ASE + MMML hybrid calculator (`calculator_minimize.py` patterns) |
 | CHARMM topology + MD | `mmml make-res` per species, then `md-system` with NPZ/PDB handoff |
-| Disordered liquid boxes | Packmol (`md-system --packmol`) — not PyXtal |
+| Disordered liquid boxes | Grid liquid builder (`md-system --builder liquid`) plus CHARMM refinement — not PyXtal |
 
 Existing research code in `mmml/generate/dimers.py` also uses PyXtal for symmetry-scanned dimers; the new `pyxtal_placement` module is the supported path for crystal → ASE export.
 

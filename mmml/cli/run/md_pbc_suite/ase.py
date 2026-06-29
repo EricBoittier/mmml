@@ -1474,7 +1474,7 @@ def main(argv: list[str] | None = None) -> int:
         "--packmol-placement",
         choices=("cube", "sphere"),
         default=None,
-        help="Packmol constraint: cube (default) or sphere (--packmol-radius).",
+        help="Initial placement constraint: cube (default) or sphere (--packmol-radius).",
     )
     parser.add_argument(
         "--packmol-sphere",
@@ -1489,7 +1489,7 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         metavar="Å",
         dest="packmol_radius",
-        help="Packmol inside-sphere radius in Angstrom (independent of --flat-bottom-radius).",
+        help="Initial inside-sphere radius in Angstrom (independent of --flat-bottom-radius).",
     )
     parser.add_argument(
         "--packmol-center",
@@ -1497,13 +1497,13 @@ def main(argv: list[str] | None = None) -> int:
         nargs=3,
         metavar=("CX", "CY", "CZ"),
         default=None,
-        help="Packmol sphere center in Angstrom (default: 0 0 0; vacuum COM is re-centered later).",
+        help="Initial placement center in Angstrom (default: 0 0 0; vacuum COM is re-centered later).",
     )
     parser.add_argument(
         "--packmol-tolerance",
         type=float,
         default=2.0,
-        help="Packmol distance tolerance in Angstrom when using --packmol-sphere (default: 2.0).",
+        help="Legacy Packmol distance tolerance in Angstrom for explicit --packmol runs.",
     )
     from mmml.interfaces.pyxtal_placement import add_pyxtal_cluster_args
 

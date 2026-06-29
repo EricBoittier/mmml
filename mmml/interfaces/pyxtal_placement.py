@@ -254,10 +254,10 @@ def resolve_pyxtal_use(
     builder: str | None = None,
 ) -> bool:
     """Return True when the crystal builder is selected for ``--composition``."""
-    if pyxtal is False:
-        return False
     if builder is not None:
         return str(builder).strip().lower() == "crystal" and composition is not None
+    if pyxtal is False:
+        return False
     return bool(pyxtal) and composition is not None
 
 
