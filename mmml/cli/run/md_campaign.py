@@ -134,6 +134,7 @@ _CAMPAIGN_CLI_OVERRIDE_KEYS: tuple[str, ...] = (
     "ml_batch_size",
     "ml_gpu_count",
     "ml_max_active_dimers",
+    "charmm_omp_threads",
     "skip_jit_warmup",
     "handoff_pre_minimize",
 )
@@ -273,6 +274,7 @@ def run_campaign(args: Namespace) -> int:
         raise ValueError("Campaign config requires --job-id or --run-all")
 
     if _campaign_needs_pycharmm(campaign):
+        md_system._apply_charmm_omp_threads_env(args)
         from mmml.interfaces.pycharmmInterface.charmm_mpi import (
             maybe_rerun_md_system_under_mpirun,
             prepare_serial_charmm_mpi_env,

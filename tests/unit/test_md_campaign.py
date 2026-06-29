@@ -182,6 +182,7 @@ def test_apply_campaign_cli_overrides_ml_flags() -> None:
         ml_batch_size=128,
         ml_gpu_count=2,
         ml_max_active_dimers=None,
+        charmm_omp_threads=16,
         ml_spatial_mpi=False,
         skip_jit_warmup=True,
         handoff_pre_minimize=False,
@@ -190,6 +191,7 @@ def test_apply_campaign_cli_overrides_ml_flags() -> None:
     apply_campaign_cli_overrides(merged, parent)
     assert merged["ml_batch_size"] == 128
     assert merged["ml_gpu_count"] == 2
+    assert merged["charmm_omp_threads"] == 16
     assert merged["skip_jit_warmup"] is True
     assert merged["handoff_pre_minimize"] is False
 
@@ -198,6 +200,7 @@ def test_apply_campaign_cli_overrides_ml_flags() -> None:
         ml_batch_size=None,
         ml_gpu_count=None,
         ml_max_active_dimers=900,
+        charmm_omp_threads=None,
         ml_spatial_mpi=True,
         skip_jit_warmup=False,
         handoff_pre_minimize=True,
