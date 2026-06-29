@@ -177,6 +177,64 @@ def test_run_hybrid_calculator_bfgs_stops_on_spike_without_stopiteration():
     assert opt.get_number_of_steps() == 2
 
 
+def test_run_hybrid_calculator_bfgs_stops_on_soft_region_plateau():
+    atoms = MagicMock()
+    force_calls = iter(
+        [
+            np.array([[0.40, 0.0, 0.0]]),
+            np.array([[0.30, 0.0, 0.0]]),
+        ]
+    )
+
+    def _forces():
+        try:
+            return next(force_calls)
+        except StopIteration:
+            return np.array([[0.30, 0.0, 0.0]])
+
+    atoms.get_forces.side_effect = _forces
+    atoms.get_positions.return_value = np.zeros((1, 3))
+
+    class FakeOpt:
+        def __init__(self, *args, **kwargs) -> None:
+            self._n = 0
+            self._callbacks = []
+
+        def attach(self, fn, interval=1):
+            self._callbacks.append(fn)
+
+        def get_number_of_steps(self):
+            return self._n
+
+        def irun(self, fmax, steps):
+            for _ in range(steps):
+                self._n += 1
+                for fn in self._callbacks:
+                    fn()
+                yield False
+
+    config = HybridCalculatorMinimizeConfig(
+        max_steps=300,
+        fmax_ev_a=0.05,
+        quiet_bfgs=True,
+        use_bfgs_line_search=False,
+        verbose=False,
+        stall_patience_soft_steps=3,
+    )
+
+    with patch("ase.optimize.BFGS", FakeOpt):
+        opt, best_frame, stopped = _run_hybrid_calculator_bfgs(
+            atoms,
+            config,
+            context_prefix="Test",
+            initial_fmax_ev_a=0.40,
+        )
+
+    assert stopped is True
+    assert best_frame.best_force_fmax == pytest.approx(0.30)
+    assert opt.get_number_of_steps() == 4
+
+
 def test_should_abort_fire_step_on_energy_spike():
     assert should_abort_fire_step(
         current_fmax_ev_a=2.0,

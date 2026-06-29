@@ -319,6 +319,74 @@ def test_run_geometry_packing_recovery_rolls_back_repack_grms_regression(monkeyp
     assert np.allclose(sync_log[-1], pos)
 
 
+def test_run_geometry_packing_recovery_skips_bfgs_when_grms_already_low(monkeypatch):
+    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+        run_geometry_packing_recovery,
+    )
+
+    args = _args(quiet=True)
+    args.geometry_packing_skip_bfgs_grms = 5.0
+    pos = np.arange(12, dtype=float).reshape(4, 3)
+
+    class _Diag:
+        hybrid = 1.5
+        charmm = 0.2
+        kind = "geometry_stress"
+
+    class _Ctx:
+        use_pbc = False
+
+    bfgs_calls: list[str] = []
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        lambda: pos.copy(),
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._step_monomer_repack",
+        lambda *_a, **_kw: pos,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        lambda *_a, **_kw: 1.5,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.measure_hybrid_charmm_grms",
+        lambda *_a, **_kw: _Diag(),
+    )
+
+    def _fire(*_a, **kw):
+        return (1.5, True)
+
+    def _bfgs(*_a, **kw):
+        bfgs_calls.append(str(kw.get("context_prefix", "")))
+        return (1.4, True)
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.minimize_hybrid_calculator_fire_before_sd",
+        _fire,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.minimize_hybrid_calculator_before_sd",
+        _bfgs,
+    )
+
+    final_grms = run_geometry_packing_recovery(
+        _Ctx(),
+        args=args,
+        atoms_per_list=[2, 2],
+        composition={"DCM": 2},
+        box_side=None,
+        charmm_pbc=False,
+        context_prefix="Pre-SD packing",
+        calculator_minimize=True,
+        verbose=False,
+        grms_limit=50.0,
+    )
+    assert final_grms == pytest.approx(1.5)
+    assert bfgs_calls == []
+
+
 def test_build_pycharmm_command_forwards_liquid_prep():
     from mmml.cli.run.md_system import build_pycharmm_command
     from tests.unit.test_md_system_pycharmm_cmd import _pycharmm_args
