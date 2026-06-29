@@ -340,12 +340,12 @@ Next Tier 3 path:
 For the DCM:10 scaffold:
 
 ```bash
-bash scripts/run_domdec_dcm10_smoke.sh prep-tier3   # ~152 Å box for np=8 DOMDEC
+bash scripts/run_domdec_dcm10_smoke.sh prep      # dense ~40 Å DCM:10 (PBC images within cutnb)
 bash scripts/run_domdec_dcm10_smoke.sh validate
-bash scripts/run_domdec_dcm10_smoke.sh tier3
+bash scripts/run_domdec_dcm10_smoke.sh tier3     # MMML_MPI_NP=2, NDIR 2 1 1
 ```
 
-Tier 3 native CHARMM on **site c47** needs **`MMML_MPI_NP=8`** (each NDIR axis must be 1 or ≥8; `np=2..7` fail) and a **prep box ≥ ~152 Å** so each domain is wide enough for `cutnb=15`. Do **not** inflate the crystal in the input deck without re-prepping — a 40 Å cluster in a 152 Å cube yields zero PBC images and `IMAGES NEED TO BE PRESENT`. Use `bash scripts/run_domdec_dcm10_smoke.sh prep-tier3` (or `BOX_SIZE=152 ... prep`) before `tier3`. CGENFF `NBFIX` warnings on older c47 are harmless at `bomlev -2`.
+Tier 3 uses the **prep lattice as-is** (~40 Å dense box). Inflating `crystal define` without re-prepping removes PBC images. Site **c47** (`/opt/charmm/c47*`) rejects `np=2` NDIR; use a **MMML native CHARMM** executable for the small-box gate. CGENFF `NBFIX` warnings on older c47 are harmless at `bomlev -2`.
 
 ### DLPack loose coupling — where it applies
 
