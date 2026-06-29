@@ -174,6 +174,106 @@ def _skip_vacuum_crystal_free_for_mpi_cluster_build() -> None:
     mlpot_setup.prepare_charmm_vacuum = _skip
 
 
+def _load_template_pdb_coords(template_pdb: Path) -> dict[str, "np.ndarray"]:
+    import numpy as np
+
+    coords: dict[str, np.ndarray] = {}
+    for line in template_pdb.read_text(encoding="utf-8").splitlines():
+        if not (line.startswith("ATOM") or line.startswith("HETATM")):
+            continue
+        atom_name = line[12:16].strip()
+        coords[atom_name] = np.array(
+            [
+                float(line[30:38]),
+                float(line[38:46]),
+                float(line[46:54]),
+            ],
+            dtype=float,
+        )
+    if not coords:
+        raise ValueError(f"No ATOM/HETATM coordinates found in template PDB: {template_pdb}")
+    return coords
+
+
+def _build_ocoh_cluster_traced(n_molecules: int, spacing: float) -> tuple["np.ndarray", "np.ndarray"]:
+    """Tiny traced OCOH cluster builder for np>1 DOMDEC diagnostics."""
+    import numpy as np
+    import pandas as pd
+    import pycharmm.coor as coor
+    import pycharmm.generate as gen
+    import pycharmm.ic as ic
+    import pycharmm.lingo as lingo
+    import pycharmm.psf as psf
+    import pycharmm.read as read
+
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+    from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
+    from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+
+    residue = "OCOH"
+    sequence = " ".join([residue] * int(n_molecules))
+    template_pdb = REPO_ROOT / "mmml" / "data" / "charmm" / "ocoh.pdb"
+
+    _rank_log("traced cluster: DELETE ATOM begin")
+    lingo.charmm_script("DELETE ATOM SELE ALL END")
+    _rank_log("traced cluster: DELETE ATOM done")
+
+    _rank_log("traced cluster: read CGENFF toppar begin")
+    read_cgenff_toppar(enable_drude=False)
+    _rank_log("traced cluster: read CGENFF toppar done")
+
+    _rank_log("traced cluster: read sequence begin")
+    read.sequence_string(sequence)
+    _rank_log("traced cluster: read sequence done")
+
+    _rank_log("traced cluster: generate segment begin")
+    gen.new_segment(seg_name="CLST", setup_ic=True)
+    _rank_log("traced cluster: generate segment done")
+
+    _rank_log("traced cluster: IC prm_fill begin")
+    ic.prm_fill(replace_all=True)
+    _rank_log("traced cluster: IC prm_fill done")
+
+    _rank_log("traced cluster: IC build begin")
+    ic.build()
+    _rank_log("traced cluster: IC build done")
+
+    _rank_log("traced cluster: PSF atom names begin")
+    atom_names = np.asarray(psf.get_atype(), dtype=str)
+    n_atoms = int(len(atom_names))
+    _rank_log(f"traced cluster: PSF atom names done n_atoms={n_atoms}")
+    if n_atoms % int(n_molecules) != 0:
+        raise RuntimeError(f"Atom count {n_atoms} not divisible by n_molecules={n_molecules}")
+    atoms_per_res = n_atoms // int(n_molecules)
+
+    tmpl = _load_template_pdb_coords(template_pdb)
+    shifted = np.zeros((n_atoms, 3), dtype=float)
+    n_side = int(np.ceil(np.sqrt(int(n_molecules))))
+    for i in range(int(n_molecules)):
+        start = i * atoms_per_res
+        end = (i + 1) * atoms_per_res
+        local_names = atom_names[start:end]
+        local = []
+        for nm in local_names:
+            if nm not in tmpl:
+                raise KeyError(f"Template {template_pdb} missing atom {nm!r}")
+            local.append(tmpl[nm])
+        arr = np.asarray(local, dtype=float)
+        com = arr.mean(axis=0)
+        shift = np.array([(i % n_side) * spacing, (i // n_side) * spacing, 0.0], dtype=float)
+        shifted[start:end] = arr - com + shift
+
+    _rank_log("traced cluster: set CHARMM positions begin")
+    coor.set_positions(pd.DataFrame(shifted, columns=["x", "y", "z"]))
+    sync_charmm_positions(shifted)
+    _rank_log("traced cluster: set CHARMM positions done")
+
+    _rank_log("traced cluster: get Z begin")
+    z = np.asarray(get_Z_from_psf(), dtype=int)
+    _rank_log("traced cluster: get Z done")
+    return z, shifted
+
+
 def main() -> int:
     args = _parse_args()
     if args.dry_run:
@@ -248,7 +348,13 @@ def main() -> int:
     _rank_log("resolving checkpoint")
     ckpt = resolve_checkpoint(args.checkpoint)
     _rank_log("building CHARMM/ASE cluster begin")
-    z, r = build_ase_cluster(args.residue, args.n_molecules, args.spacing)
+    if size > 1:
+        if str(args.residue).upper() != "OCOH":
+            print("np>1 traced diagnostic currently supports only --residue OCOH.", file=sys.stderr)
+            return 5
+        z, r = _build_ocoh_cluster_traced(args.n_molecules, args.spacing)
+    else:
+        z, r = build_ase_cluster(args.residue, args.n_molecules, args.spacing)
     _rank_log("building CHARMM/ASE cluster done")
     n_atoms = len(z)
     if rank == 0:
