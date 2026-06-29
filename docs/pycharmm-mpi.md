@@ -340,12 +340,12 @@ Next Tier 3 path:
 For the DCM:10 scaffold:
 
 ```bash
-bash scripts/run_domdec_dcm10_smoke.sh prep
+bash scripts/run_domdec_dcm10_smoke.sh prep-tier3   # ~152 Å box for np=8 DOMDEC
 bash scripts/run_domdec_dcm10_smoke.sh validate
 bash scripts/run_domdec_dcm10_smoke.sh tier3
 ```
 
-Tier 3 native CHARMM auto-expands the crystal if the prep box is too small for `MMML_MPI_NP` and `cutnb` (minimum side ≈ `np × (cutnb + 4)` Å). **Site c47 DOMDEC rejects 2–7 nodes on any axis** — use `MMML_MPI_NP=8` (default), not 2. The smoke script sets `ENERGY DOMDEC NDIR 8 1 1` explicitly. A 40 Å prep box is fine: tier3 expands the crystal to ~152 Å for `np=8` without re-prep. CGENFF `NBFIX` warnings from older site CHARMM builds are harmless at `bomlev -2`.
+Tier 3 native CHARMM on **site c47** needs **`MMML_MPI_NP=8`** (each NDIR axis must be 1 or ≥8; `np=2..7` fail) and a **prep box ≥ ~152 Å** so each domain is wide enough for `cutnb=15`. Do **not** inflate the crystal in the input deck without re-prepping — a 40 Å cluster in a 152 Å cube yields zero PBC images and `IMAGES NEED TO BE PRESENT`. Use `bash scripts/run_domdec_dcm10_smoke.sh prep-tier3` (or `BOX_SIZE=152 ... prep`) before `tier3`. CGENFF `NBFIX` warnings on older c47 are harmless at `bomlev -2`.
 
 ### DLPack loose coupling — where it applies
 

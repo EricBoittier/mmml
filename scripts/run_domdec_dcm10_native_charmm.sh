@@ -117,11 +117,6 @@ test -s "$RTF" || { echo "Missing RTF: $RTF" >&2; exit 1; }
 test -s "$PRM" || { echo "Missing PRM: $PRM" >&2; exit 1; }
 test -x "$MPIRUN" || { echo "Missing mpirun wrapper: $MPIRUN" >&2; exit 1; }
 
-domdec_min_box_size() {
-  local np="$1" cutnb="$2" halo="$3"
-  echo $(( np * (cutnb + halo) ))
-}
-
 _resolve_python() {
   if [[ -n "${MMML_PYTHON:-}" && -x "${MMML_PYTHON}" ]]; then
     echo "$MMML_PYTHON"
@@ -182,36 +177,32 @@ EOF
   fi
 fi
 
-_min_box="$(domdec_min_box_size "$MMML_MPI_NP" "$DOMDEC_CUTNB" "$DOMDEC_GROUP_HALO")"
+_min_box="$("$PY" -c "
+from mmml.utils.domdec_ndir import min_domdec_crystal_side_A
+print(min_domdec_crystal_side_A(${MMML_MPI_NP}, ${DOMDEC_CUTNB}, ${DOMDEC_GROUP_HALO}))
+")"
 DOMDEC_BOX_SIZE="${DOMDEC_BOX_SIZE:-$CRYSTAL_SIDE}"
-DOMDEC_BOX_SIZE="$("$PY" - <<PY
-import math
-side = float("${DOMDEC_BOX_SIZE}")
-min_box = float("${_min_box}")
-print(max(side, min_box))
-PY
-)"
-if "$PY" - <<PY
-import sys
-side = float("${CRYSTAL_SIDE}")
-min_box = float("${_min_box}")
-sys.exit(0 if side >= min_box else 1)
-PY
-then
-  :
-else
-  echo "DOMDEC crystal side ${CRYSTAL_SIDE}Å too small for MMML_MPI_NP=${MMML_MPI_NP} and cutnb=${DOMDEC_CUTNB} (need >= ${_min_box}Å); using ${DOMDEC_BOX_SIZE}Å." >&2
-fi
-if "$PY" - <<PY
+if ! "$PY" - <<PY
 import sys
 side = float("${DOMDEC_BOX_SIZE}")
-prep = float("${CRYSTAL_SIDE}")
-sys.exit(0 if abs(side - prep) < 0.01 else 1)
+min_box = float("${_min_box}")
+sys.exit(0 if side + 1e-6 >= min_box else 1)
 PY
 then
-  :
-else
-  echo "Note: crystal uses ${DOMDEC_BOX_SIZE}Å but prep lattice was ${CRYSTAL_SIDE}Å (expanded for DOMDEC)." >&2
+  cat >&2 <<EOF
+Prep lattice ${DOMDEC_BOX_SIZE}Å is too small for MMML_MPI_NP=${MMML_MPI_NP} DOMDEC (need >= ${_min_box}Å).
+
+Do not inflate the crystal in the input deck — coordinates stay packed in the prep box,
+crystal build finds no images within cutnb, and CHARMM stops with "IMAGES NEED TO BE PRESENT".
+
+Re-prep at a large enough box (DCM:10 will be dilute; that is OK for this MPI gate):
+
+  BOX_SIZE=${_min_box%%.*} bash scripts/run_domdec_dcm10_smoke.sh prep
+  bash scripts/run_domdec_dcm10_smoke.sh tier3
+
+Or set MMML_MPI_NP=1 for a serial DOMDEC ENER smoke only (not a true np>1 gate).
+EOF
+  exit 1
 fi
 
 mkdir -p "$RUN_DIR"

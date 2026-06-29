@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from mmml.utils.domdec_ndir import format_domdec_ndir, min_domdec_mpi_ranks, suggest_domdec_ndir
+from mmml.utils.domdec_ndir import (
+    format_domdec_ndir,
+    min_domdec_crystal_side_A,
+    min_domdec_mpi_ranks,
+    suggest_domdec_ndir,
+)
 
 
 @pytest.mark.parametrize(
@@ -27,6 +32,10 @@ def test_suggest_domdec_ndir_c47_axis_rule(n_ranks: int, expected: tuple[int, in
 def test_suggest_domdec_ndir_rejects_small_np(n_ranks: int) -> None:
     with pytest.raises(ValueError, match="n_ranks"):
         suggest_domdec_ndir(n_ranks)
+
+
+def test_min_domdec_crystal_side_for_np8() -> None:
+    assert min_domdec_crystal_side_A(8) == 152.0
 
 
 def test_min_domdec_mpi_ranks() -> None:

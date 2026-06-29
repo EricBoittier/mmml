@@ -60,3 +60,18 @@ def suggest_domdec_ndir(n_ranks: int) -> tuple[int, int, int]:
 def format_domdec_ndir(n_ranks: int) -> str:
     nx, ny, nz = suggest_domdec_ndir(n_ranks)
     return f"{nx} {ny} {nz}"
+
+
+def min_domdec_crystal_side_A(
+    n_ranks: int,
+    cutnb: float = 15.0,
+    group_halo: float = 4.0,
+) -> float:
+    """Minimum cubic lattice side (Å) for DOMDEC with the chosen NDIR."""
+    n = int(n_ranks)
+    per_domain = float(cutnb) + float(group_halo)
+    if n <= 1:
+        return per_domain
+    nx, ny, nz = suggest_domdec_ndir(n)
+    n_split = max(nx, ny, nz)
+    return float(n_split * per_domain)

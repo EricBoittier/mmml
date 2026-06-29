@@ -10,6 +10,7 @@
 # Usage:
 #   ./scripts/run_domdec_dcm10_smoke.sh prep
 #   ./scripts/run_domdec_dcm10_smoke.sh validate
+#   ./scripts/run_domdec_dcm10_smoke.sh prep-tier3
 #   ./scripts/run_domdec_dcm10_smoke.sh tier3
 #   ./scripts/run_domdec_dcm10_smoke.sh all
 #
@@ -17,9 +18,8 @@
 #   MMML_ROOT=$HOME/mmml
 #   TESTS_ROOT=$HOME/tests
 #   N_DCM=10
-#   BOX_SIZE=40          # prep box side (Å); auto-discovered from newest domdec_dcm*_l* prep
-#   DOMDEC_BOX_SIZE=     # override crystal side for tier3 (default: max(BOX_SIZE, np*(cutnb+4)))
-#   MMML_MPI_NP=8         # c47 DOMDEC: each NDIR axis must be 1 or >=8 (np=2..7 fail)
+#   BOX_SIZE=40          # dense prep (validate only); tier3 needs prep-tier3 (~152Å)
+#   MMML_MPI_NP=8        # c47 DOMDEC: each NDIR axis must be 1 or >=8
 #   BOX_DIR=$TESTS_ROOT/boxes/domdec_dcm10_l32
 #   CHARMM_EXE=/path/to/charmm
 #   NATIVE_STATE_CMD='...'  # optional override
@@ -141,6 +141,24 @@ prep_target_dir() {
   CRD="$BOX_DIR/model.crd"
 }
 
+tier3_prep_box_size() {
+  local np="${MMML_MPI_NP:-8}"
+  "$PY" -c "
+from mmml.utils.domdec_ndir import min_domdec_crystal_side_A
+import math
+side = min_domdec_crystal_side_A(${np}, 15, 4)
+print(int(math.ceil(side)))
+"
+}
+
+prep_tier3() {
+  local side
+  side="$(tier3_prep_box_size)"
+  echo "== DOMDEC DCM:${N_DCM} tier3 prep (box >= ${side}Å for MMML_MPI_NP=${MMML_MPI_NP:-8}) =="
+  BOX_SIZE="$side" prep_target_dir
+  prep
+}
+
 require_domdec_box_artifacts() {
   resolve_domdec_box_artifacts || {
     echo "No DOMDEC prep box found under $TESTS_ROOT/boxes/domdec_dcm${N_DCM}_l*" >&2
@@ -192,15 +210,16 @@ tier3() {
 
 case "$PHASE" in
   prep) prep ;;
+  prep-tier3) prep_tier3 ;;
   validate) validate ;;
   tier3) tier3 ;;
   all)
-    prep
+    prep_tier3
     validate
     tier3
     ;;
   *)
-    echo "Usage: $0 [prep|validate|tier3|all]" >&2
+    echo "Usage: $0 [prep|prep-tier3|validate|tier3|all]" >&2
     exit 2
     ;;
 esac
