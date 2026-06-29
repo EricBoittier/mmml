@@ -153,7 +153,7 @@ class MlpotContext:
             clear_mlpot_energy_block(self.ml_selection, block_tag=self.block_tag)
         apply_charmm_mm_block()
 
-    def reregister_mlpot(self, *, verbose: bool = False) -> None:
+    def reregister_mlpot(self, *, verbose: bool = False, force: bool = False) -> None:
         """Re-attach MLpot + ML BLOCK after temporary MM-only work."""
         from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
             apply_mlpot_energy_block,
@@ -170,6 +170,8 @@ class MlpotContext:
         if callable(reattach):
             # Do not construct a new MLpot(): __init__ rebuilds iblo/inb via update_bnbnd
             # (upinb), which segfaults after long MD. Re-enable the existing callback.
+            if force and hasattr(self.mlpot, "is_set"):
+                self.mlpot.is_set = False
             reattach()
             return
 
@@ -237,7 +239,7 @@ def assert_mlpot_user_active(
                 f"WARN: MLpot USER term missing before {context}; attempting reattach",
                 flush=True,
             )
-        ctx.reregister_mlpot()
+        ctx.reregister_mlpot(force=missing)
         user = _read_user()
         missing = user is None or not math.isfinite(user) or abs(user) <= zero_tol_kcalmol
 

@@ -712,3 +712,61 @@ def test_mpi_library_path_export_uses_dyld_on_darwin(monkeypatch):
         export = charmm_mpi.mpi_library_path_export()
     assert export.startswith("export DYLD_LIBRARY_PATH=")
     charmm_mpi.charmm_mpi_library_dirs.cache_clear()
+
+
+def test_mmml_charmm_mpirun_dispatches_native_executable(tmp_path):
+    """Native CHARMM must not be routed through the mmml CLI (MMML_BIN is always set)."""
+    import subprocess
+    import textwrap
+
+    repo = Path(__file__).resolve().parents[2]
+    mpirun_sh = repo / "scripts" / "mmml-charmm-mpirun.sh"
+    if not mpirun_sh.is_file():
+        pytest.skip("scripts/mmml-charmm-mpirun.sh missing")
+
+    fake_charmm = tmp_path / "charmm"
+    fake_charmm.write_text(
+        textwrap.dedent(
+            """\
+            #!/usr/bin/env bash
+            echo "native-charmm-ok $*"
+            """
+        )
+    )
+    fake_charmm.chmod(0o755)
+
+    fake_mpirun = tmp_path / "fake-mpirun"
+    fake_mpirun.write_text(
+        textwrap.dedent(
+            """\
+            #!/usr/bin/env bash
+            while [[ $# -gt 0 ]]; do
+              case "$1" in
+                -np|--mca|-x) shift; shift; continue ;;
+              esac
+              break
+            done
+            exec "$@"
+            """
+        )
+    )
+    fake_mpirun.chmod(0o755)
+
+    env = os.environ.copy()
+    env["MMML_MPIRUN"] = str(fake_mpirun)
+    env["MMML_MPI_NP"] = "1"
+    env["MMML_MPI_ORPHAN_CLEANUP_QUIET"] = "1"
+    env.pop("MMML_BIN", None)
+
+    proc = subprocess.run(
+        ["bash", str(mpirun_sh), str(fake_charmm), "-i", "run.inp", "-o", "run.out"],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    combined = proc.stdout + proc.stderr
+    assert "Unknown command" not in combined
+    assert "native-charmm-ok" in combined
+    assert f"{fake_charmm} -i run.inp -o run.out" in combined

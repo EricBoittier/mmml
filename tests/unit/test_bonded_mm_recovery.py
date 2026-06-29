@@ -631,6 +631,59 @@ def test_assert_mlpot_user_active_reattaches_when_user_missing():
     assert user == pytest.approx(-123.4)
 
 
+def test_assert_mlpot_user_active_forces_stale_python_is_set():
+    import sys
+    import types
+
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        MlpotContext,
+        assert_mlpot_user_active,
+    )
+
+    mlpot = MagicMock()
+    mlpot.is_set = True
+    ctx = MlpotContext(
+        mlpot=mlpot,
+        pyCModel=MagicMock(),
+        params=None,
+        model=None,
+        ml_selection=MagicMock(),
+        ml_Z=np.array([6, 1], dtype=int),
+    )
+    mock_py = types.ModuleType("pycharmm")
+    mock_py.lingo = MagicMock()
+    mock_settings = MagicMock()
+    mock_settings.set_verbosity.return_value = 0
+    mock_settings.set_warn_level.return_value = 0
+    mock_settings.set_bomb_level.return_value = 0
+    mock_py.settings = mock_settings
+    mock_energy = types.ModuleType("pycharmm.energy")
+    mock_energy.get_term_by_name = MagicMock(side_effect=[0.0, -123.4])
+
+    def _reattach() -> None:
+        assert mlpot.is_set is False
+        mlpot.is_set = True
+
+    mlpot.reattach_mlpot.side_effect = _reattach
+    with patch.dict(
+        sys.modules,
+        {
+            "pycharmm": mock_py,
+            "pycharmm.energy": mock_energy,
+            "pycharmm.settings": mock_settings,
+            "mmml.interfaces.pycharmmInterface.import_pycharmm": MagicMock(),
+        },
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_mlpot_energy_block",
+        return_value="all",
+    ):
+        user = assert_mlpot_user_active(ctx, context="test", quiet=True)
+
+    ctx.mlpot.reattach_mlpot.assert_called_once()
+    assert mlpot.is_set is True
+    assert user == pytest.approx(-123.4)
+
+
 def test_restore_workflow_nbonds_skips_nbond_rebuild():
     from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext, restore_workflow_nbonds
 

@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Launch mmml pycharmm / MLpot under the OpenMPI build linked to libcharmm.so.
 #
+# Also runs a native CHARMM executable directly under the same MPI bootstrap when
+# the first argument is an executable file path (Tier 3 DOMDEC smoke):
+#   MMML_MPI_NP=2 ./scripts/mmml-charmm-mpirun.sh /opt/charmm/c47a1/charmm -i run.inp -o run.out
+#
 # MPI ranks: default 1 (recommended). Override for experiments:
 #   MMML_MPI_NP=4 ./scripts/mmml-charmm-mpirun.sh md-system ...
 # MLpot disables CHARMM domdec and runs the Python callback on every rank — np>1
@@ -83,8 +87,23 @@ if ! [[ "$MPI_NP" =~ ^[1-9][0-9]*$ ]]; then
   echo "mmml-charmm-mpirun: MMML_MPI_NP must be a positive integer (got: ${MMML_MPI_NP:-<unset>})" >&2
   exit 1
 fi
+
+# Native CHARMM binary (Tier 3 DOMDEC smoke): run executable directly under MPI, not via mmml CLI.
+mmml_is_native_executable() {
+  local arg="${1:-}"
+  [[ -n "$arg" && -x "$arg" ]] || return 1
+  case "$arg" in
+    *.py) return 1 ;;
+    "$PY") return 1 ;;
+    */python|*/python3) return 1 ;;
+  esac
+  return 0
+}
+
 if [[ "$MPI_NP" -gt 1 ]]; then
-  if [[ "${MMML_MLPOT_SPATIAL_MPI:-}" == 1 || "${MMML_MLPOT_SPATIAL_MPI:-}" == true || "${MMML_MLPOT_SPATIAL_MPI:-}" == yes ]]; then
+  if mmml_is_native_executable "${1:-}"; then
+    echo "mmml-charmm-mpirun: MMML_MPI_NP=${MPI_NP} (native executable ${1##*/})" >&2
+  elif [[ "${MMML_MLPOT_SPATIAL_MPI:-}" == 1 || "${MMML_MLPOT_SPATIAL_MPI:-}" == true || "${MMML_MLPOT_SPATIAL_MPI:-}" == yes ]]; then
     echo "mmml-charmm-mpirun: MMML_MPI_NP=${MPI_NP} spatial ML (MMML_MLPOT_SPATIAL_MPI=1; 1 GPU per rank)" >&2
   else
     echo "mmml-charmm-mpirun: warning: MMML_MPI_NP=${MPI_NP} (experimental; domdec off; rank-0 MLpot bridge)" >&2
@@ -248,6 +267,14 @@ if [[ "${1:-}" == python || "${1:-}" == python3 ]]; then
   fi
   mmml_mpi_run "$PY" "$@"
   mmml_mpi_finish "$?" "python $*"
+fi
+
+if mmml_is_native_executable "${1:-}"; then
+  if [[ "${MMML_MPI_GDB:-}" == 1 ]]; then
+    mmml_gdb_run "${1##*/} $*" "$@"
+  fi
+  mmml_mpi_run "$@"
+  mmml_mpi_finish "$?" "${1##*/} $*"
 fi
 
 if [[ -n "${MMML_BIN:-}" && -x "${MMML_BIN}" ]]; then
