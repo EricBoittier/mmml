@@ -28,9 +28,10 @@ Prebuilt PSF/CRD for the live path (run once at ``MMML_MPI_NP=1``)::
       tests/functionality/mlpot/10_domdec_spatial_mpi_smoke.py \\
       --prepare-prebuilt-only --residue DCM --n-molecules 20 --box-side 40
 
-Callback-only (np=2, no checkpoint)::
+Callback-only (np=2, no checkpoint; CPU node: add JAX_PLATFORM_NAME=cpu)::
 
     MMML_MPI_NP=2 MMML_MLPOT_SPATIAL_MPI=1 \\
+      CUDA_VISIBLE_DEVICES="" JAX_PLATFORM_NAME=cpu \\
       ./scripts/mmml-charmm-mpirun.sh python \\
       tests/functionality/mlpot/10_domdec_spatial_mpi_smoke.py
 
@@ -145,6 +146,7 @@ def _print_dry_run(args: argparse.Namespace) -> None:
     np_cb = max(2, int(os.environ.get("MMML_MPI_NP", "2")))
     print(
         f"MMML_MPI_NP={np_cb} MMML_MLPOT_SPATIAL_MPI=1 \\\n"
+        f"  CUDA_VISIBLE_DEVICES=\"\" JAX_PLATFORM_NAME=cpu \\\n"
         f"  ./scripts/mmml-charmm-mpirun.sh python \\\n"
         f"  tests/functionality/mlpot/10_domdec_spatial_mpi_smoke.py"
     )
@@ -236,15 +238,9 @@ def _callback_smoke(args: argparse.Namespace) -> int:
     x, y, zc = pos[:, 0], pos[:, 1], pos[:, 2]
     dx = dy = dz = np.zeros(n, dtype=np.float64)
 
-    # Barrier 1 — two purposes:
-    # 1. Synchronise all ranks after heavy imports (JAX JIT, pycharmm init).
-    # 2. THIS IS THE FIRST "from mpi4py import MPI" call in the process.
-    #    The heavy-import chain (hybrid_mlpot → mmml_calculator →
-    #    mm_energy_forces → import_pycharmm → import pycharmm) already fired
-    #    CHARMM's Fortran MPI_Init, giving MPI_COMM_WORLD a real np-rank world.
-    #    mpi4py (rc initialize=False, set by prepare_serial_charmm_mpi_env)
-    #    loads its extension here, wraps that fully-initialised MPI_COMM_WORLD,
-    #    and sees size=np — so Barrier and Allreduce work correctly.
+    # Barrier 1: synchronise all ranks after heavy imports (JAX, etc.).
+    # Callback-only runs with MMML_WARMUP_MLPOT_JAX_ONLY (no pycharmm) and
+    # mpi4py already initialised MPI in main().
     _mpi_barrier()
     _log("callback", "running calculate_charmm with mocked DOMDEC ctypes")
     with (
@@ -532,20 +528,19 @@ def _charmm_domdec_ener_smoke(args: argparse.Namespace) -> int:
 
 def main() -> int:
     args = _parse_args()
+    callback_only = not args.prepare_prebuilt_only and not args.charmm_ener
 
-    # CHARMM owns MPI_Init (via Fortran, called when pycharmm is first
-    # imported).  We must NOT call mpi4py's MPI_Init before that, because
-    # mpi4py would wrap an uninitialised MPI_COMM_WORLD (size=1) and cache it
-    # permanently — making every later Barrier/Allreduce a silent no-op.
+    # Callback-only: no real CHARMM topology/ENER — skip PyCHARMM import entirely.
+    # Without this, hybrid_mlpot → mm_energy_forces → import_pycharmm loads
+    # libcharmm on every rank; non-root ranks enter CHARMM's Fortran receive loop
+    # (100% CPU spin) while rank 0 continues in Python → Barrier deadlock.
     #
-    # prepare_serial_charmm_mpi_env() sets mpi4py.rc(initialize=False) so
-    # mpi4py never auto-inits.  The first "from mpi4py import MPI" then happens
-    # inside _mpi_barrier() (Barrier 1), AFTER pycharmm has been imported and
-    # CHARMM has called MPI_Init with the full np-rank world.  At that point
-    # mpi4py wraps the real MPI_COMM_WORLD correctly (size=np).
-    #
-    # CHARMM-enabled paths (--prepare-prebuilt-only, --charmm-ener): same
-    # design; ensure_charmm_mpi_initialized() bootstraps CHARMM's vacuum state.
+    # mpi4py owns MPI instead (MMML_MPI_PY_INIT=1).  Safe here because pycharmm
+    # is never loaded, so there is no second Fortran MPI_Init.
+    if callback_only:
+        os.environ["MMML_WARMUP_MLPOT_JAX_ONLY"] = "1"
+        os.environ["MMML_MPI_PY_INIT"] = "1"
+
     from mmml.interfaces.pycharmmInterface.charmm_mpi import (
         mpi4py_openmpi_mismatch,
         prepare_serial_charmm_mpi_env,
@@ -557,7 +552,13 @@ def main() -> int:
         print(f"FAIL: {msg}", file=sys.stderr)
         return 1
 
-    if args.charmm_ener or args.prepare_prebuilt_only:
+    if callback_only:
+        # First mpi4py import with MMML_MPI_PY_INIT=1: auto MPI_Init under mpirun.
+        try:
+            from mpi4py import MPI as _MPI  # noqa: N812, F401
+        except Exception:
+            pass
+    elif args.charmm_ener or args.prepare_prebuilt_only:
         from mmml.interfaces.pycharmmInterface.charmm_mpi import ensure_charmm_mpi_initialized
         ensure_charmm_mpi_initialized()
 
