@@ -55,11 +55,12 @@ DEBUG=0
 SYNC_PATCHES=1
 NO_DOMDEC=0
 SKIP_PACKMOL=0
+NATIVE_EXEC=0
 CHARMM_BUILD_TYPE="${CHARMM_BUILD_TYPE:-Release}"
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") [--clean] [--use-nfs-build] [--debug] [--no-sync-patches] [--no-domdec] [--skip-packmol]
+Usage: $(basename "$0") [--clean] [--use-nfs-build] [--debug] [--no-sync-patches] [--no-domdec] [--skip-packmol] [--native-exec]
 
   --clean             Remove the cmake build directory and reconfigure from scratch.
   --use-nfs-build     Build in setup/charmm/build/cmake (default: \$HOME/.cache/mmml-charmm-build/<platform>).
@@ -67,11 +68,13 @@ Usage: $(basename "$0") [--clean] [--use-nfs-build] [--debug] [--no-sync-patches
   --no-sync-patches   Skip copying setup/api/api_func.F90 into the CHARMM tree.
   --no-domdec         CMake -Ddomdec=OFF (no DOMDEC send_coord_to_recip path; MPI MLpot SD).
   --skip-packmol      Skip rebuilding mmml/generate/packmol/packmol for this platform.
+  --native-exec       Build charmm executable (as_library=OFF) for DOMDEC tier3 smoke; skips Packmol.
 
 Build profile (default): MPI + DOMDEC + COLFFT + KEY_LIBRARY (as_library=ON), domdec_gpu=OFF.
-Also builds Packmol (mmml/generate/packmol/packmol) unless --skip-packmol.
+Also builds Packmol (mmml/generate/packmol/packmol) unless --skip-packmol or --native-exec.
 MLpot workflows run with DOMDEC compiled in but disabled at runtime (domdec off, mpirun -np 1).
 Use --no-domdec when MLpot SD still segfaults in send_coord_to_recip after JAX warmup.
+Use --native-exec (or scripts/rebuild_charmm_native_exec.sh) for Tier 3 DOMDEC np>1 smoke.
 
 Environment:
   CHARMM_HOME       CHARMM source tree (default: $ROOT/setup/charmm)
@@ -90,6 +93,7 @@ while [[ $# -gt 0 ]]; do
     --no-sync-patches) SYNC_PATCHES=0; shift ;;
     --no-domdec) NO_DOMDEC=1; shift ;;
     --skip-packmol) SKIP_PACKMOL=1; shift ;;
+    --native-exec) NATIVE_EXEC=1; SKIP_PACKMOL=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -172,8 +176,14 @@ for _libdir in /opt/gcc-12.2.0/build/lib64 /opt/gcc-12.2.0/build/lib/gcc/x86_64-
 done
 
 BUILD_DIR="$LOCAL_BUILD"
+if [[ "$NATIVE_EXEC" == 1 && -z "${CHARMM_BUILD_DIR:-}" ]]; then
+  BUILD_DIR="${LOCAL_BUILD}-exec"
+fi
 if [[ "$USE_NFS_BUILD" == 1 ]]; then
   BUILD_DIR="$NFS_BUILD"
+  if [[ "$NATIVE_EXEC" == 1 && -z "${CHARMM_BUILD_DIR:-}" ]]; then
+    BUILD_DIR="${NFS_BUILD}-exec"
+  fi
 fi
 
 # Drop stale NFS cmake cache from an old repo path (e.g. studixh -> mmhome).
@@ -236,13 +246,15 @@ fi
 
 if [[ "$needs_configure" == 1 ]]; then
   mkdir -p "$BUILD_DIR"
-  echo "Configuring CHARMM library in $BUILD_DIR (OpenMPI: $OPENMPI_ROOT, build: $CHARMM_BUILD_TYPE) ..."
+  _as_library=ON
+  [[ "$NATIVE_EXEC" == 1 ]] && _as_library=OFF
+  echo "Configuring CHARMM in $BUILD_DIR (OpenMPI: $OPENMPI_ROOT, build: $CHARMM_BUILD_TYPE, as_library=${_as_library}) ..."
   CMAKE_ARGS=(
     -S "$CHARMM_HOME"
     -B "$BUILD_DIR"
     -DCMAKE_INSTALL_PREFIX="$CHARMM_HOME"
     -DCMAKE_BUILD_TYPE="$CHARMM_BUILD_TYPE"
-    -Das_library=ON
+    -Das_library="${_as_library}"
     -Din_place_install=ON
     -Dopenmm=OFF
     -Ddomdec="$([[ "$NO_DOMDEC" == 1 ]] && echo OFF || echo ON)"
@@ -326,7 +338,6 @@ if [[ "$needs_configure" == 1 ]]; then
   cmake "${CMAKE_ARGS[@]}"
 fi
 
-echo "Building $LIB_BASENAME in $BUILD_DIR ..."
 _build_jobs() {
   if command -v nproc >/dev/null 2>&1; then
     nproc
@@ -336,6 +347,56 @@ _build_jobs() {
     echo 4
   fi
 }
+
+if [[ "$NATIVE_EXEC" == 1 ]]; then
+  EXE_OUT="$CHARMM_HOME/charmm"
+  echo "Building charmm executable in $BUILD_DIR ..."
+  cmake --build "$BUILD_DIR" -j "$(_build_jobs)"
+  cmake --install "$BUILD_DIR" || true
+
+  BUILT=""
+  for candidate in \
+    "$CHARMM_HOME/charmm" \
+    "$CHARMM_HOME/bin/charmm" \
+    "$CHARMM_HOME/exec/charmm" \
+    "$BUILD_DIR/charmm" \
+    "$BUILD_DIR/bin/charmm" \
+    "$BUILD_DIR/exec/charmm"; do
+    if [[ -f "$candidate" && -x "$candidate" ]]; then
+      BUILT="$candidate"
+      break
+    fi
+  done
+  if [[ -z "$BUILT" ]]; then
+    BUILT="$(find "$BUILD_DIR" -type f -name charmm -perm -111 -print -quit 2>/dev/null || true)"
+  fi
+  if [[ -z "$BUILT" ]]; then
+    echo "rebuild_charmm_mlpot: build finished but charmm executable not found under $BUILD_DIR" >&2
+    exit 1
+  fi
+
+  cp -f "$BUILT" "$EXE_OUT"
+  chmod +x "$EXE_OUT"
+  echo "Installed $EXE_OUT (from $BUILT)"
+  if [[ "$DEBUG" == 1 ]]; then
+    if command -v readelf >/dev/null 2>&1 && readelf -S "$EXE_OUT" 2>/dev/null | grep -q '\.debug'; then
+      echo "Debug symbols: present in $EXE_OUT"
+    elif [[ "$(uname -s)" == "Darwin" ]] && dsymutil "$EXE_OUT" >/dev/null 2>&1; then
+      echo "Debug symbols: present in $EXE_OUT (Darwin dSYM)"
+    else
+      echo "rebuild_charmm_mlpot: warning: no debug sections in $EXE_OUT (gdb backtraces may lack line numbers)" >&2
+    fi
+  fi
+  cat <<EOF
+Verify Tier 3 DOMDEC smoke (dense ~40Å prep, np=2):
+  CHARMM_EXE=$EXE_OUT bash scripts/run_domdec_dcm10_smoke.sh tier3
+
+Expect NORMAL TERMINATION in domdec_dcm10.out (site c47 /opt/charmm/c47* rejects np=2 NDIR).
+EOF
+  exit 0
+fi
+
+echo "Building $LIB_BASENAME in $BUILD_DIR ..."
 cmake --build "$BUILD_DIR" -j "$(_build_jobs)"
 cmake --install "$BUILD_DIR" || true
 

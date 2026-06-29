@@ -64,6 +64,9 @@ find_charmm_exe() {
     "$CHARMM_HOME/bin/charmm" \
     "$CHARMM_HOME/exec/charmm" \
     "$CHARMM_HOME/exec/gnu/charmm" \
+    "$HOME/.cache/mmml-charmm-build/$(platform_tag)-exec/charmm" \
+    "$HOME/.cache/mmml-charmm-build/$(platform_tag)-exec/bin/charmm" \
+    "$HOME/.cache/mmml-charmm-build/$(platform_tag)-exec/exec/charmm" \
     "$HOME/.cache/mmml-charmm-build/$(platform_tag)/charmm" \
     "$HOME/.cache/mmml-charmm-build/$(platform_tag)/bin/charmm" \
     "$HOME/.cache/mmml-charmm-build/$(platform_tag)/exec/charmm"
@@ -75,6 +78,7 @@ find_charmm_exe() {
   done
   for build_root in \
     "$CHARMM_BUILD_DIR" \
+    "$HOME/.cache/mmml-charmm-build/$(platform_tag)-exec" \
     "$HOME/.cache/mmml-charmm-build/$(platform_tag)" \
     "$CHARMM_HOME/build/cmake"
   do
@@ -104,9 +108,10 @@ Tried common paths under:
 Quick locate:
   command find "$HOME/.cache/mmml-charmm-build" "$CHARMM_HOME" -type f -name charmm -perm -111 2>/dev/null
 
-If no executable exists, this CHARMM build may be library-only. Reconfigure/build a
-native CHARMM executable with the same MPI/DOMDEC stack, then rerun:
-  CHARMM_EXE=/path/to/charmm bash scripts/run_domdec_dcm10_smoke.sh tier3
+If no executable exists, this CHARMM build may be library-only. Build one with:
+  bash scripts/rebuild_charmm_native_exec.sh
+Then rerun:
+  CHARMM_EXE=$MMML_ROOT/setup/charmm/charmm bash scripts/run_domdec_dcm10_smoke.sh tier3
 EOF
   exit 1
 fi
@@ -295,6 +300,22 @@ tail -n 80 "$OUT" || true
 
 if [[ "$_rc" -ne 0 ]] || grep -qE 'ABNORMAL TERMINATION|BOMLEV \( -2\) IS REACHED' "$OUT" 2>/dev/null; then
   echo "DOMDEC smoke failed (rc=${_rc}): see $OUT" >&2
+  if grep -qiE 'must have 1 or >=8|number of nodes|invalid.*ndir|domdec.*error' "$OUT" 2>/dev/null; then
+    cat >&2 <<EOF
+Likely c47 DOMDEC axis rule: site CHARMM rejects np=2 NDIR 2 1 1.
+Build MMML native CHARMM (as_library=OFF) and rerun tier3:
+
+  bash scripts/rebuild_charmm_native_exec.sh
+  CHARMM_EXE=$CHARMM_HOME/charmm bash scripts/run_domdec_dcm10_smoke.sh tier3
+EOF
+  elif [[ "$SITE_C47" == 1 && "$MMML_MPI_NP" -gt 1 && "$MMML_MPI_NP" -lt 8 ]]; then
+    cat >&2 <<EOF
+Site c47 ($CHARMM_EXE) often fails np=${MMML_MPI_NP} DOMDEC. Try MMML native CHARMM:
+
+  bash scripts/rebuild_charmm_native_exec.sh
+  CHARMM_EXE=$CHARMM_HOME/charmm bash scripts/run_domdec_dcm10_smoke.sh tier3
+EOF
+  fi
   exit "${_rc:-1}"
 fi
 exit "$_rc"

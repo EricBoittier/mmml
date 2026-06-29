@@ -345,7 +345,14 @@ bash scripts/run_domdec_dcm10_smoke.sh validate
 bash scripts/run_domdec_dcm10_smoke.sh tier3     # MMML_MPI_NP=2, NDIR 2 1 1
 ```
 
-Tier 3 uses the **prep lattice as-is** (~40 Å dense box). Inflating `crystal define` without re-prepping removes PBC images. Site **c47** (`/opt/charmm/c47*`) rejects `np=2` NDIR; use a **MMML native CHARMM** executable for the small-box gate. CGENFF `NBFIX` warnings on older c47 are harmless at `bomlev -2`.
+Tier 3 uses the **prep lattice as-is** (~40 Å dense box). Inflating `crystal define` without re-prepping removes PBC images. Site **c47** (`/opt/charmm/c47*`) rejects `np=2` NDIR; use a **MMML native CHARMM** executable for the small-box gate:
+
+```bash
+bash scripts/rebuild_charmm_native_exec.sh   # as_library=OFF; installs setup/charmm/charmm
+CHARMM_EXE=$MMML_ROOT/setup/charmm/charmm bash scripts/run_domdec_dcm10_smoke.sh tier3
+```
+
+CGENFF `NBFIX` warnings on older c47 are harmless at `bomlev -2`.
 
 ### DLPack loose coupling — where it applies
 
