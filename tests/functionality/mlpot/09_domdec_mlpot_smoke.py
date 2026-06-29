@@ -28,23 +28,18 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from _common import (
-    add_cluster_args,
-    all_atom_selection,
-    build_ase_cluster,
-    charmm_energy_row,
-    check_mlpot_symbols,
-    load_physnet_for_cluster,
-    print_header,
-    resolve_checkpoint,
-    setup_charmm_nbonds,
-)
-
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    add_cluster_args(parser)
-    parser.set_defaults(residue="ACO", n_molecules=2, spacing=5.0)
+    parser.add_argument("--residue", default="ACO")
+    parser.add_argument("--n-molecules", type=int, default=2)
+    parser.add_argument("--spacing", type=float, default=5.0)
+    parser.add_argument(
+        "--checkpoint",
+        type=Path,
+        default=None,
+        help="PhysNet checkpoint (.json or Orbax root). Default: MMML_CKPT or repo ckpts.",
+    )
     parser.add_argument("--box-side", type=float, default=28.0)
     parser.add_argument(
         "--domdec-command",
@@ -132,6 +127,17 @@ def main() -> int:
 
     if not args.allow_domdec_off_hook:
         os.environ["MMML_NO_CHARMM_DOMDEC_OFF"] = "1"
+
+    from _common import (
+        all_atom_selection,
+        build_ase_cluster,
+        charmm_energy_row,
+        check_mlpot_symbols,
+        load_physnet_for_cluster,
+        print_header,
+        resolve_checkpoint,
+        setup_charmm_nbonds,
+    )
 
     rank, size = _mpi_info()
     print_header("Tier 3 DOMDEC + MLpot ENER smoke")

@@ -92,6 +92,12 @@ mmml mpi-check --tier3        # survey Tier 3 DOMDEC blockers (informational)
 
 Reports: `CHARMM_LIB_DIR`, MPI-linked detection, `mpirun` path, rank/size under launch, mpi4py, JAX device, recommended launch line. With `--tier2`, adds MLpot spatial-MPI GPU footgun checks via `spatial_mpi_validate.py`. With `--tier3`, reports DOMDEC API blockers via `tier3_domdec_validate.py`.
 
+Tier 3 is intentionally split into check status and production status:
+
+- `mmml mpi-check --tier3` exits 0 when the DOMDEC survey completes, but still reports `blocked: true` while PyCHARMM local/ghost atom metadata is unavailable.
+- `mmml mpi-check --tier3 --strict` exits non-zero while Tier 3 production remains blocked.
+- Use Tier 2 spatial MPI for ML decomposition until the PyCHARMM API blocker and DOMDEC+MLpot coexistence spike are resolved.
+
 ### CHARMM MPI test suite (CI)
 
 ```bash
@@ -214,7 +220,7 @@ Each rank:
 3. Evaluates PhysNet on owned + canonical halo dimers only
 4. **Allreduces** forces and energy (`force_exchange.py`)
 
-CHARMM integration still runs on all ranks (DOMDEC off); only ML is decomposed.
+CHARMM integration still runs on all ranks without DOMDEC ownership metadata; only ML is decomposed.
 
 ### I/O policy (Phase 2)
 
@@ -283,7 +289,7 @@ MMML_MPI_NP=2 MMML_MLPOT_SPATIAL_MPI=1 ./scripts/mmml-charmm-mpirun.sh mpi-check
 | `np>1` + `--ml-gpu-count > 1` | GPU oversubscription / OOM | `--ml-gpu-count 1` + `MMML_MPI_PIN_GPU_PER_RANK=1` |
 | `np>1` without `--ml-spatial-mpi` | Correct but no ML speedup (rank-0 bridge) | Set `MMML_MLPOT_SPATIAL_MPI=1` and pass `--ml-spatial-mpi` |
 | `MMML_MLPOT_RANK0_BRIDGE=0` without spatial MPI | Every rank runs full MLpot incorrectly | Keep default `1`; only disable with spatial MPI for debug |
-| DOMDEC on + MLpot + JAX | Segfault | DOMDEC forced off during MLpot (`disable_charmm_domdec`) |
+| DOMDEC on + MLpot + JAX | Segfault | Do not enable DOMDEC for production MLpot; if a stream enabled it, `MMML_FORCE_DOMDEC_OFF=1` can send one guarded `domdec off` |
 | Mismatched OpenMPI vs `libcharmm.so` | `mpirun` launch failures | `mmml mpi-check`, set `MMML_MPIRUN` |
 | `mpi_size >` visible JAX GPUs | Ranks share one GPU | SLURM `CUDA_VISIBLE_DEVICES` per task or lower `MMML_MPI_NP` |
 
@@ -330,7 +336,7 @@ DLPack (`__dlpack__` / `from_dlpack`) gives **zero-copy GPU array interchange** 
 
 ### Known limitations (Phase 2)
 
-- DOMDEC remains **off** during MLpot
+- DOMDEC ownership metadata is not used during MLpot
 - `np>1` without `--ml-spatial-mpi` uses rank-0 bridge (correct but slow)
 - PyCHARMM does not expose Fortran DOMDEC atom maps (blocks Tier 3)
 - Live Tier 2 MLpot not exercised in CI (cluster smoke required)
