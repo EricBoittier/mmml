@@ -10,15 +10,28 @@ set -euo pipefail
 MMML_ROOT="${MMML_ROOT:-$HOME/mmml}"
 TESTS_ROOT="${TESTS_ROOT:-$HOME/tests}"
 N_DCM="${N_DCM:-10}"
-BOX_SIZE="${BOX_SIZE:-32}"
+BOX_SIZE="${BOX_SIZE:-40}"
 # Effective nonbond cutoff for DOMDEC domain sizing (cutnb + 2*max_group_radius).
 DOMDEC_CUTNB="${DOMDEC_CUTNB:-15}"
 DOMDEC_GROUP_HALO="${DOMDEC_GROUP_HALO:-4}"
 DOMDEC_CMD="${DOMDEC_CMD:-domdec}"
-BOX_DIR="${BOX_DIR:-$TESTS_ROOT/boxes/domdec_dcm${N_DCM}_l${BOX_SIZE}}"
-PSF="${PSF:-$BOX_DIR/model.psf}"
-CRD="${CRD:-$BOX_DIR/model.crd}"
-RUN_DIR="${RUN_DIR:-$TESTS_ROOT/runs/domdec_dcm${N_DCM}_native_l${BOX_SIZE}}"
+BOX_DIR="${BOX_DIR:-}"
+PSF="${PSF:-}"
+CRD="${CRD:-}"
+if [[ -z "$BOX_DIR" && -n "$PSF" ]]; then
+  BOX_DIR="$(dirname "$PSF")"
+fi
+if [[ -z "$PSF" && -n "$BOX_DIR" ]]; then
+  PSF="$BOX_DIR/model.psf"
+  CRD="${CRD:-$BOX_DIR/model.crd}"
+fi
+if [[ -z "$PSF" ]]; then
+  BOX_DIR="${BOX_DIR:-$TESTS_ROOT/boxes/domdec_dcm${N_DCM}_l${BOX_SIZE}}"
+  PSF="$BOX_DIR/model.psf"
+  CRD="${CRD:-$BOX_DIR/model.crd}"
+fi
+_box_tag="$(basename "${BOX_DIR:-domdec_dcm${N_DCM}_l${BOX_SIZE}}")"
+RUN_DIR="${RUN_DIR:-$TESTS_ROOT/runs/${_box_tag}_native}"
 MPIRUN="${MMML_MPIRUN_WRAPPER:-$MMML_ROOT/scripts/mmml-charmm-mpirun.sh}"
 CHARMM_HOME="${CHARMM_HOME:-$MMML_ROOT/setup/charmm}"
 CHARMM_LIB_DIR="${CHARMM_LIB_DIR:-$CHARMM_HOME}"
@@ -106,9 +119,42 @@ test -x "$MPIRUN" || { echo "Missing mpirun wrapper: $MPIRUN" >&2; exit 1; }
 
 domdec_min_box_size() {
   local np="$1" cutnb="$2" halo="$3"
-  # Worst case: 1-D decomposition along one axis (box/np per domain).
   echo $(( np * (cutnb + halo) ))
 }
+
+_resolve_python() {
+  if [[ -n "${MMML_PYTHON:-}" && -x "${MMML_PYTHON}" ]]; then
+    echo "$MMML_PYTHON"
+  elif [[ -x "${MMML_ROOT}/.venv/bin/python" ]]; then
+    echo "${MMML_ROOT}/.venv/bin/python"
+  else
+    command -v python3 || command -v python
+  fi
+}
+
+PY="$(_resolve_python)"
+
+_read_crystal_side() {
+  local box_json="${1:-}"
+  if [[ -z "$box_json" || ! -f "$box_json" ]]; then
+    return 1
+  fi
+  "$PY" - <<PY
+import json
+from pathlib import Path
+data = json.loads(Path(${box_json@Q}).read_text())
+side = data.get("box_side_A")
+if side is not None:
+    print(float(side))
+PY
+}
+
+CRYSTAL_SIDE="${CRYSTAL_SIDE:-}"
+if [[ -z "$CRYSTAL_SIDE" ]]; then
+  _box_json="${BOX_DIR:-$(dirname "$PSF")}/box.json"
+  CRYSTAL_SIDE="$(_read_crystal_side "$_box_json" 2>/dev/null || true)"
+fi
+CRYSTAL_SIDE="${CRYSTAL_SIDE:-$BOX_SIZE}"
 
 MMML_MPI_NP="${MMML_MPI_NP:-2}"
 if ! [[ "$MMML_MPI_NP" =~ ^[1-9][0-9]*$ ]]; then
@@ -117,13 +163,35 @@ if ! [[ "$MMML_MPI_NP" =~ ^[1-9][0-9]*$ ]]; then
 fi
 
 _min_box="$(domdec_min_box_size "$MMML_MPI_NP" "$DOMDEC_CUTNB" "$DOMDEC_GROUP_HALO")"
-DOMDEC_BOX_SIZE="${DOMDEC_BOX_SIZE:-$BOX_SIZE}"
-if [[ "$DOMDEC_BOX_SIZE" -lt "$_min_box" ]]; then
-  echo "DOMDEC box size ${DOMDEC_BOX_SIZE}Å too small for MMML_MPI_NP=${MMML_MPI_NP} and cutnb=${DOMDEC_CUTNB} (need >= ${_min_box}Å per domain); using ${_min_box}Å for crystal define." >&2
-  DOMDEC_BOX_SIZE="$_min_box"
+DOMDEC_BOX_SIZE="${DOMDEC_BOX_SIZE:-$CRYSTAL_SIDE}"
+DOMDEC_BOX_SIZE="$("$PY" - <<PY
+import math
+side = float("${DOMDEC_BOX_SIZE}")
+min_box = float("${_min_box}")
+print(max(side, min_box))
+PY
+)"
+if "$PY" - <<PY
+import sys
+side = float("${CRYSTAL_SIDE}")
+min_box = float("${_min_box}")
+sys.exit(0 if side >= min_box else 1)
+PY
+then
+  :
+else
+  echo "DOMDEC crystal side ${CRYSTAL_SIDE}Å too small for MMML_MPI_NP=${MMML_MPI_NP} and cutnb=${DOMDEC_CUTNB} (need >= ${_min_box}Å); using ${DOMDEC_BOX_SIZE}Å." >&2
 fi
-if [[ "$DOMDEC_BOX_SIZE" != "$BOX_SIZE" ]]; then
-  echo "Note: crystal uses ${DOMDEC_BOX_SIZE}Å but prep PSF/CRD were built for ${BOX_SIZE}Å (OK for DOMDEC mechanics smoke)." >&2
+if "$PY" - <<PY
+import sys
+side = float("${DOMDEC_BOX_SIZE}")
+prep = float("${CRYSTAL_SIDE}")
+sys.exit(0 if abs(side - prep) < 0.01 else 1)
+PY
+then
+  :
+else
+  echo "Note: crystal uses ${DOMDEC_BOX_SIZE}Å but prep lattice was ${CRYSTAL_SIDE}Å (expanded for DOMDEC)." >&2
 fi
 
 mkdir -p "$RUN_DIR"
@@ -184,8 +252,8 @@ _rc=$?
 echo "== native CHARMM output tail =="
 tail -n 80 "$OUT" || true
 
-if grep -q 'ABNORMAL TERMINATION' "$OUT" 2>/dev/null; then
-  echo "DOMDEC smoke failed: see $OUT" >&2
+if [[ "$_rc" -ne 0 ]] || grep -qE 'ABNORMAL TERMINATION|BOMLEV \( -2\) IS REACHED' "$OUT" 2>/dev/null; then
+  echo "DOMDEC smoke failed (rc=${_rc}): see $OUT" >&2
   exit "${_rc:-1}"
 fi
 exit "$_rc"
