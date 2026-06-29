@@ -136,7 +136,6 @@ def main() -> int:
         load_physnet_for_cluster,
         print_header,
         resolve_checkpoint,
-        setup_charmm_nbonds,
     )
 
     rank, size = _mpi_info()
@@ -167,7 +166,8 @@ def main() -> int:
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
 
     setup_charmm_environment(use_pbc=True, cubic_box_side_A=float(args.box_side))
-    setup_charmm_nbonds()
+    # Do not call the vacuum nbonds helper here: it runs ``crystal free`` and
+    # leaves DOMDEC with a zero/NaN box.
     _run_domdec_command(None if args.no_domdec_command else args.domdec_command)
 
     params, model = load_physnet_for_cluster(ckpt, n_atoms)
