@@ -384,6 +384,8 @@ def test_maybe_rerun_md_system_prepends_subcommand(monkeypatch, tmp_path):
         "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_mpirun_path",
         return_value=mpirun.resolve(),
     ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.prepare_serial_charmm_mpi_env",
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.subprocess.run",
         return_value=mock.Mock(returncode=0),
     ) as mock_run:

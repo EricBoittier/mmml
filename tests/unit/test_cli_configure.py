@@ -26,6 +26,7 @@ def test_top_level_help_is_compact():
     assert "MMML: Machine Learning" in text
     assert "mmml commands" in text
     assert "mmml configure" in text
+    assert "env            find resolved/bundled checkpoints" in text
     assert "make-res    Generate residue" not in text
     assert len(text.splitlines()) < 25
 
@@ -34,6 +35,7 @@ def test_commands_main_lists_md_system(capsys):
     assert commands_main([]) == 0
     out = capsys.readouterr().out
     assert "md-system" in out
+    assert "Find checkpoints / env paths: mmml env" in out
     assert "configure" in out
 
 

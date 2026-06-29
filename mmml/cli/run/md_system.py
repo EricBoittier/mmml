@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shlex
 import sys
@@ -593,6 +594,16 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "pycharmm: per-rank spatial ML decomposition when MPI size>1 (PBC only; "
             "or MMML_MLPOT_SPATIAL_MPI=1). Use with MMML_MPI_NP>1 and --ml-gpu-count 1."
+        ),
+    )
+    parser.add_argument(
+        "--charmm-omp-threads",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "pycharmm: set MMML_CHARMM_OMP_THREADS before MPI-linked CHARMM bootstrap "
+            "(default 1; CPU performance experiment knob)."
         ),
     )
     add_ml_compute_dtype_args(parser)
@@ -2052,6 +2063,20 @@ def _apply_backend_setup_defaults(args: argparse.Namespace) -> None:
     )
 
 
+def _apply_charmm_omp_threads_env(args: argparse.Namespace) -> str | None:
+    """Apply the md-system CHARMM OpenMP override before PyCHARMM bootstrap."""
+    raw = getattr(args, "charmm_omp_threads", None)
+    if raw is None:
+        return None
+    threads = int(raw)
+    if threads < 1:
+        raise ValueError("--charmm-omp-threads / charmm_omp_threads must be >= 1")
+    value = str(threads)
+    os.environ["MMML_CHARMM_OMP_THREADS"] = value
+    os.environ["OMP_NUM_THREADS"] = value
+    return value
+
+
 def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     _phase_for_setup = {
         "pycharmm_minimize": "minimize",
@@ -2736,6 +2761,7 @@ def run_backend(backend: str, argv: list[str], args: argparse.Namespace) -> int:
             mpirun_launch_hint,
         )
 
+        _apply_charmm_omp_threads_env(args)
         prepare_serial_charmm_mpi_env()
         campaign_active = False
         if getattr(args, "config", None):

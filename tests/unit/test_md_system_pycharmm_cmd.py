@@ -4,12 +4,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 
+import pytest
+
 from mmml.cli.run.md_system import (
+    _apply_charmm_omp_threads_env,
     _pycharmm_run_summary,
     build_pycharmm_command,
     build_run_manifest,
+    parse_md_system_args,
     resolve_job_name,
     save_job_run_manifest,
 )
@@ -66,6 +71,7 @@ def _pycharmm_args(**overrides) -> argparse.Namespace:
         ml_batch_size=None,
         ml_gpu_count=None,
         ml_spatial_mpi=False,
+        charmm_omp_threads=None,
         ml_max_active_dimers=None,
         no_echeck=False,
         skip_energy_show=False,
@@ -215,6 +221,41 @@ def test_build_pycharmm_command_includes_ml_gpu_count_when_set():
 def test_build_pycharmm_command_includes_ml_spatial_mpi_when_set():
     cmd = build_pycharmm_command(_pycharmm_args(ml_spatial_mpi=True))
     assert "--ml-spatial-mpi" in cmd
+
+
+def test_parse_md_system_config_accepts_charmm_omp_threads(tmp_path):
+    cfg = tmp_path / "md_system.yaml"
+    cfg.write_text(
+        "\n".join(
+            [
+                "backend: pycharmm",
+                "setup: pbc_npt",
+                "composition: DCM:20",
+                "charmm_omp_threads: 4",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    args = parse_md_system_args(["--config", str(cfg)])
+
+    assert args.charmm_omp_threads == 4
+
+
+def test_apply_charmm_omp_threads_env_sets_bootstrap_env(monkeypatch):
+    monkeypatch.delenv("MMML_CHARMM_OMP_THREADS", raising=False)
+    monkeypatch.delenv("OMP_NUM_THREADS", raising=False)
+
+    applied = _apply_charmm_omp_threads_env(_pycharmm_args(charmm_omp_threads=8))
+
+    assert applied == "8"
+    assert os.environ["MMML_CHARMM_OMP_THREADS"] == "8"
+    assert os.environ["OMP_NUM_THREADS"] == "8"
+
+
+def test_apply_charmm_omp_threads_env_rejects_nonpositive():
+    with pytest.raises(ValueError, match="charmm_omp_threads"):
+        _apply_charmm_omp_threads_env(_pycharmm_args(charmm_omp_threads=0))
 
 
 def test_build_pycharmm_command_forwards_ml_compute_dtype_when_set():

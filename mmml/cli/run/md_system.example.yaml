@@ -33,6 +33,8 @@ defaults:
   mm_switch_on: 9.0
   mm_switch_width: 1.5
   ml_switch_width: 1.0
+  # PyCHARMM/MLpot CPU experiment knob: default is 1 for MPI-linked safety.
+  # charmm_omp_threads: 4
 
 campaign_output: artifacts/dcm20_pipeline
 

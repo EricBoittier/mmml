@@ -161,7 +161,7 @@ MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh md-system \
 | `MMML_MPI_NP` | `1` | `mpirun -np` count |
 | `MMML_NO_MPI_RERUN` | off | Disable auto re-exec under mpirun |
 | `MMML_MPIRUN` | auto | Override `mpirun` path |
-| `MMML_CHARMM_OMP_THREADS` | `1` | Pin OpenMP in `upinb` |
+| `MMML_CHARMM_OMP_THREADS` | `1` | Pin OpenMP in `upinb`; set via `mmml md-system --charmm-omp-threads N` or YAML `charmm_omp_threads: N` |
 | `MMML_DEFER_JAX_WARMUP_UNTIL_AFTER_SD` | on (MPI) | JAX after MLpot SD |
 | `MMML_MLPOT_RANK0_BRIDGE` | `1` | Rank 0 runs MLpot when `np>1` |
 

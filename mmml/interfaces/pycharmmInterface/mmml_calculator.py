@@ -908,6 +908,8 @@ def setup_calculator(
             "max_atoms": max_atoms,
             "ml_compute_dtype": str(ml_jnp_dtype),
             "checkpoint_dir": str(restart_path.resolve()),
+            "OMP_NUM_THREADS": os.environ.get("OMP_NUM_THREADS", "unset"),
+            "MMML_CHARMM_OMP_THREADS": os.environ.get("MMML_CHARMM_OMP_THREADS", "unset"),
         },
         handoff={
             "ml_switch_width_Å": f"{ml_switch_width:.4f}",

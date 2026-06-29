@@ -61,7 +61,7 @@ COMMAND_GROUPS: tuple[tuple[str, tuple[CommandInfo, ...]], ...] = (
         "Workflow helpers",
         (
             CommandInfo("configure", "Interactive wizard for YAML configs & Snakemake"),
-            CommandInfo("env", "Resolved MMML_CKPT / CHARMM paths and export hints"),
+            CommandInfo("env", "Find resolved/bundled checkpoints and CHARMM paths"),
             CommandInfo("commands", "Browse all subcommands (grouped)"),
             CommandInfo("examples", "Copy-paste example invocations"),
             CommandInfo("completion", "Shell tab-completion setup"),
@@ -128,6 +128,7 @@ def format_commands_help(*, width: int = 78) -> str:
             pad = max(1, 22 - len(cmd.name))
             lines.append(f"  {cmd.name}{' ' * pad}{cmd.summary}")
         lines.append("")
+    lines.append("Find checkpoints / env paths: mmml env")
     lines.append("Setup wizard:  mmml configure")
     lines.append("More examples: mmml examples")
     return "\n".join(lines).rstrip()
@@ -158,6 +159,7 @@ def format_top_level_help(prog: str = "mmml") -> str:
         "  md-system      mixed-composition MD (YAML + campaigns)",
         "  physnet-train  train PhysNetJAX from NPZ",
         "  configure      interactive config / Snakemake wizard",
+        "  env            find resolved/bundled checkpoints and CHARMM paths",
         "  liquid-box     build periodic liquid boxes",
         "",
         "Browse:   mmml commands",
