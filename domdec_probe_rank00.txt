@@ -1,0 +1,5 @@
+=== rank 0/1  NDIR 1 1 1 ===
+RTF : /cluster/home/boittier/mmml/mmml/data/charmm/top_all36_cgenff.rtf
+PRM : /cluster/home/boittier/mmml/mmml/data/charmm/par_all36_cgenff.prm
+PSF : /cluster/home/boittier/mmml/model.psf
+CRD : /cluster/home/boittier/mmml/model.crd
