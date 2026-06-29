@@ -251,10 +251,13 @@ def resolve_pyxtal_use(
     *,
     composition: str | None,
     pyxtal: bool | None = None,
+    builder: str | None = None,
 ) -> bool:
-    """Return True when ``--pyxtal`` is set with ``--composition``."""
+    """Return True when the crystal builder is selected for ``--composition``."""
     if pyxtal is False:
         return False
+    if builder is not None:
+        return str(builder).strip().lower() == "crystal" and composition is not None
     return bool(pyxtal) and composition is not None
 
 
@@ -296,9 +299,10 @@ def validate_pyxtal_cluster_args(
     composition: str | None,
     pyxtal: bool | None = None,
     packmol: bool | None = None,
+    builder: str | None = None,
 ) -> None:
     """Raise ``ValueError`` when PyXtal placement flags are inconsistent."""
-    if not resolve_pyxtal_use(composition=composition, pyxtal=pyxtal):
+    if not resolve_pyxtal_use(composition=composition, pyxtal=pyxtal, builder=builder):
         return
     if not composition:
         raise ValueError("PyXtal placement requires --composition (e.g. MEOH:8).")

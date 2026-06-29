@@ -78,13 +78,18 @@ def resolve_packmol_use(
     composition: str | None,
     packmol: bool | None = None,
     pyxtal: bool | None = None,
+    builder: str | None = None,
 ) -> bool:
-    """Use Packmol for ``--composition`` unless PyXtal or ``--no-packmol`` is set."""
+    """Use Packmol only when explicitly requested for ``--composition``."""
     if pyxtal is True and composition is not None:
         return False
+    if builder is not None and str(builder).strip().lower() == "crystal":
+        return False
+    if packmol is True:
+        return composition is not None
     if packmol is False:
         return False
-    return composition is not None
+    return False
 
 
 def resolve_packmol_placement_mode(

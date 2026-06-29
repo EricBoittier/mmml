@@ -515,6 +515,7 @@ def resolve_cluster_packmol(args: argparse.Namespace) -> bool:
         composition=getattr(args, "composition", None),
         packmol=getattr(args, "packmol", None),
         pyxtal=getattr(args, "pyxtal", None),
+        builder=getattr(args, "builder", None),
     )
 
 
@@ -524,6 +525,7 @@ def resolve_cluster_pyxtal(args: argparse.Namespace) -> bool:
     return resolve_pyxtal_use(
         composition=getattr(args, "composition", None),
         pyxtal=getattr(args, "pyxtal", None),
+        builder=getattr(args, "builder", None),
     )
 
 
@@ -677,9 +679,28 @@ def build_initial_cluster_from_args(
                     f"side={cube_side:.3f} Å, tol={tolerance:.1f} Å"
                 )
         else:
+            placement = resolve_packmol_placement_mode(
+                packmol_placement=getattr(args, "packmol_placement", None),
+                packmol_sphere=getattr(args, "packmol_sphere", None),
+            )
+            center = packmol_sphere_center_from_args(args)
+            cube_side: float | None = None
+            radius: float | None = None
+            if placement == "sphere":
+                radius = resolve_packmol_sphere_radius(
+                    getattr(args, "packmol_radius", None),
+                    getattr(args, "flat_bottom_radius", None),
+                )
+            elif getattr(args, "builder", None) != "gas":
+                cube_side = resolve_packmol_cube_side_from_args(args)
             z, r0, atoms_per_list, residue_labels = _build_cluster_from_composition(
                 composition=composition,
                 spacing=args.spacing,
+                placement=placement,
+                center=center,
+                cube_side=cube_side,
+                radius=radius,
+                seed=int(getattr(args, "seed", 0)),
             )
         return z, r0, atoms_per_list, residue_labels, composition_summary
 
@@ -701,6 +722,11 @@ def _build_cluster_from_composition(
     *,
     composition: list[tuple[str, int]],
     spacing: float,
+    placement: str = "cube",
+    center: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    cube_side: float | None = None,
+    radius: float | None = None,
+    seed: int | None = None,
 ) -> tuple[np.ndarray, np.ndarray, list[int], list[str]]:
     # Build monomer templates once; do not call make-res again after the cluster PSF
     # (_generate_residue_with_make_res_recipe resets CHARMM and deletes the cluster).
@@ -711,7 +737,6 @@ def _build_cluster_from_composition(
     )
 
     n_molecules = len(atoms_per_list)
-    n_side = int(np.ceil(np.sqrt(n_molecules)))
     offsets = np.zeros(n_molecules + 1, dtype=int)
     offsets[1:] = np.cumsum(np.asarray(atoms_per_list, dtype=int))
     expected_atoms = int(offsets[-1])
@@ -721,6 +746,31 @@ def _build_cluster_from_composition(
             f"CHARMM coordinate count ({shifted.shape[0]}) != cluster PSF atom count "
             f"({expected_atoms}). The cluster PSF may have been cleared after build."
         )
+    from mmml.interfaces.pycharmmInterface.grid_placement import (
+        grid_centers_cube,
+        grid_centers_sphere,
+        resolve_grid_placement_mode,
+    )
+
+    grid_mode = resolve_grid_placement_mode(placement=placement)
+    if grid_mode == "sphere":
+        if radius is None:
+            raise ValueError("Spherical grid placement requires a positive radius.")
+        centers = grid_centers_sphere(
+            n_molecules,
+            center=center,
+            radius=float(radius),
+            seed=seed,
+        )
+    else:
+        centers = grid_centers_cube(
+            n_molecules,
+            center=center,
+            side=cube_side,
+            spacing=spacing,
+            seed=seed,
+        )
+
     for i in range(n_molecules):
         s = int(offsets[i])
         e = int(offsets[i + 1])
@@ -728,8 +778,7 @@ def _build_cluster_from_composition(
         residue_coords, _residue_atom_names, _residue_z = residue_geometries[residue]
         shifted[s:e] = residue_coords
         com = shifted[s:e].mean(axis=0)
-        shift = np.array([(i % n_side) * spacing, (i // n_side) * spacing, 0.0], dtype=float)
-        shifted[s:e] = shifted[s:e] - com + shift
+        shifted[s:e] = shifted[s:e] - com + centers[i]
     coor.set_positions(pd.DataFrame(shifted, columns=["x", "y", "z"]))
     return z, shifted, atoms_per_list, ordered_residue_names
 

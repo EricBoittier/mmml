@@ -134,6 +134,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--seed", type=int, default=123, help="Random seed for initial placement and velocities.")
     parser.add_argument(
+        "--builder",
+        choices=("gas", "liquid", "crystal"),
+        default=None,
+        help=(
+            "Starting-coordinate builder: gas=open grid, liquid=cube/sphere grid plus "
+            "CHARMM refinement, crystal=PyXtal plus CHARMM refinement. "
+            "Default: liquid for --composition, gas otherwise."
+        ),
+    )
+    parser.add_argument(
         "--min-intermonomer-atom-distance",
         type=float,
         default=0.1,
@@ -144,15 +154,15 @@ def build_parser() -> argparse.ArgumentParser:
         action=argparse.BooleanOptionalAction,
         default=None,
         help=(
-            "Pack --composition with Packmol (default: inside cube from --box-size). "
-            "Use --no-packmol for legacy grid placement."
+            "Explicitly pack --composition with Packmol. "
+            "Default uses grid placement plus CHARMM refinement."
         ),
     )
     parser.add_argument(
         "--packmol-placement",
         choices=("cube", "sphere"),
         default=None,
-        help="Packmol constraint: cube (default) or sphere (--packmol-radius).",
+        help="Initial placement constraint: cube (default) or sphere (--packmol-radius).",
     )
     parser.add_argument(
         "--packmol-sphere",
@@ -165,7 +175,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=None,
         metavar="Å",
-        help="Packmol sphere radius in Angstrom (required for --packmol-placement sphere).",
+        help="Sphere radius in Angstrom (required for --packmol-placement sphere).",
     )
     parser.add_argument(
         "--packmol-center",
@@ -173,13 +183,13 @@ def build_parser() -> argparse.ArgumentParser:
         nargs=3,
         metavar=("CX", "CY", "CZ"),
         default=None,
-        help="Packmol constraint center in Angstrom (default: 0 0 0).",
+        help="Initial placement center in Angstrom (default: 0 0 0).",
     )
     parser.add_argument(
         "--packmol-tolerance",
         type=float,
         default=2.0,
-        help="Packmol distance tolerance (Å) for composition packing (default: 2.0).",
+        help="Legacy Packmol distance tolerance (Å) for explicit --packmol runs.",
     )
     parser.add_argument(
         "--reuse-packmol-cache",
@@ -1800,6 +1810,7 @@ def _validate_packmol_args(args: argparse.Namespace) -> None:
         composition=args.composition,
         packmol=getattr(args, "packmol", None),
         pyxtal=getattr(args, "pyxtal", None),
+        builder=getattr(args, "builder", None),
     ):
         return
     if getattr(args, "from_psf", None) or getattr(args, "skip_cluster_build", False):
@@ -1927,6 +1938,7 @@ def _validate_pyxtal_args(args: argparse.Namespace) -> None:
         composition=args.composition,
         pyxtal=getattr(args, "pyxtal", None),
         packmol=getattr(args, "packmol", None),
+        builder=getattr(args, "builder", None),
     )
 
 
@@ -1936,6 +1948,7 @@ def _append_pyxtal_args(cmd: list[str], args: argparse.Namespace) -> None:
     if not resolve_pyxtal_use(
         composition=args.composition,
         pyxtal=getattr(args, "pyxtal", None),
+        builder=getattr(args, "builder", None),
     ):
         return
     cmd.append("--pyxtal")
@@ -1968,6 +1981,7 @@ def _append_packmol_args(cmd: list[str], args: argparse.Namespace) -> None:
         composition=args.composition,
         packmol=getattr(args, "packmol", None),
         pyxtal=getattr(args, "pyxtal", None),
+        builder=getattr(args, "builder", None),
     ):
         return
     placement = resolve_packmol_placement_mode(

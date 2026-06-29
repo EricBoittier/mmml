@@ -794,6 +794,16 @@ def resolve_dynamics_print_kwargs(
 
 def add_cluster_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
+        "--builder",
+        choices=("gas", "liquid", "crystal"),
+        default=None,
+        help=(
+            "Starting-coordinate builder: gas=open grid, liquid=cube/sphere grid plus "
+            "CHARMM refinement, crystal=PyXtal plus CHARMM refinement. "
+            "Default: liquid for --composition, gas otherwise."
+        ),
+    )
+    parser.add_argument(
         "--residue",
         default=DEFAULT_RESIDUE,
         help="CHARMM residue name when --composition is not set (default: ACO)",
@@ -1266,6 +1276,7 @@ def use_packmol_placement(args: argparse.Namespace) -> bool:
         composition=getattr(args, "composition", None),
         packmol=getattr(args, "packmol", None),
         pyxtal=getattr(args, "pyxtal", None),
+        builder=getattr(args, "builder", None),
     )
 
 
@@ -1275,6 +1286,7 @@ def use_pyxtal_placement(args: argparse.Namespace) -> bool:
     return resolve_pyxtal_use(
         composition=getattr(args, "composition", None),
         pyxtal=getattr(args, "pyxtal", None),
+        builder=getattr(args, "builder", None),
     )
 
 
@@ -1395,9 +1407,35 @@ def build_cluster_from_args_with_tag(
                     f"Packmol cube: center={center} side={cube_side:.1f} Å tol={tolerance:.1f} Å"
                 )
         else:
+            from mmml.interfaces.pycharmmInterface.grid_placement import resolve_system_builder
+
+            builder = resolve_system_builder(
+                builder=getattr(args, "builder", None),
+                composition=getattr(args, "composition", None),
+                pyxtal=getattr(args, "pyxtal", None),
+            )
+            placement = resolve_packmol_placement_mode(
+                packmol_placement=getattr(args, "packmol_placement", None),
+                packmol_sphere=getattr(args, "packmol_sphere", None),
+            )
+            center = packmol_sphere_center_from_args(args)
+            cube_side: float | None = None
+            radius: float | None = None
+            if placement == "sphere":
+                radius = resolve_packmol_sphere_radius(
+                    getattr(args, "packmol_radius", None),
+                    getattr(args, "flat_bottom_radius", None),
+                )
+            elif builder == "liquid":
+                cube_side = resolve_packmol_cube_side_from_args(args)
             z, r, atoms_per_list, residue_labels = _build_cluster_from_composition(
                 composition=composition,
                 spacing=spacing,
+                placement=placement,
+                center=center,
+                cube_side=cube_side,
+                radius=radius,
+                seed=int(getattr(args, "seed", 123)),
             )
         n_mol = sum(count for _, count in composition)
         composition_summary = {str(res): int(count) for res, count in composition}
