@@ -235,11 +235,20 @@ class TestDomdecCompiledOut:
 
 
 class TestDomdecActive:
-    """Simulate an active DOMDEC run with 8 local atoms and 3 ghost atoms."""
+    """Simulate an active DOMDEC run with 8 local atoms and 3 ghost atoms.
+
+    Symbol mapping after nm probe (June 2026):
+      _SYM_NDOMX/Y/Z  = domdec_common::nx/ny/nz
+      _SYM_NATOML     = domdec_common::natoml  (local count)
+      _SYM_NATOM_FOREIGN = domdec_common::natoml_tot (total = local + ghost)
+      _SYM_IIML       = domdec_local::loc2glo_ind  (local atom global indices)
+      _SYM_ATOML      = domdec_common::atoml  (all-zones atom list, ghost at [nlocal:ntot])
+    """
 
     N_LOCAL = 8
     N_GHOST = 3
-    # 1-based atom indices that CHARMM stores
+    N_TOT   = N_LOCAL + N_GHOST   # natoml_tot value
+    # 1-based atom indices stored by CHARMM
     LOCAL_1BASED = np.array([1, 2, 3, 4, 5, 6, 7, 8], dtype=np.int32)
     GHOST_1BASED = np.array([9, 10, 11], dtype=np.int32)
 
@@ -248,19 +257,21 @@ class TestDomdecActive:
         from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial import domdec_atoms
 
         scalar_map = {
-            domdec_atoms._SYM_Q_DOMDEC: 1,
-            domdec_atoms._SYM_NDOMX: 8,
-            domdec_atoms._SYM_NDOMY: 1,
-            domdec_atoms._SYM_NDOMZ: 1,
-            domdec_atoms._SYM_NATOML: self.N_LOCAL,
-            domdec_atoms._SYM_NATOM_FOREIGN: self.N_GHOST,
+            domdec_atoms._SYM_Q_DOMDEC:       1,
+            domdec_atoms._SYM_NDOMX:          8,
+            domdec_atoms._SYM_NDOMY:          1,
+            domdec_atoms._SYM_NDOMZ:          1,
+            domdec_atoms._SYM_NATOML:         self.N_LOCAL,
+            domdec_atoms._SYM_NATOM_FOREIGN:  self.N_TOT,   # natoml_tot
         }
 
-        # Build real ctypes buffers for the arrays so from_address works
+        # loc2glo_ind: local atom global indices (1-based)
         local_buf = (ctypes.c_int32 * self.N_LOCAL)(*self.LOCAL_1BASED.tolist())
-        ghost_buf = (ctypes.c_int32 * self.N_GHOST)(*self.GHOST_1BASED.tolist())
+        # atoml: full zone list — local atoms followed by ghost atoms (1-based)
+        all_1based = np.concatenate([self.LOCAL_1BASED, self.GHOST_1BASED])
+        atoml_buf = (ctypes.c_int32 * self.N_TOT)(*all_1based.tolist())
         local_addr = ctypes.addressof(local_buf)
-        ghost_addr = ctypes.addressof(ghost_buf)
+        atoml_addr = ctypes.addressof(atoml_buf)
 
         fake_lib = MagicMock()
 
@@ -270,18 +281,18 @@ class TestDomdecActive:
             raise OSError(f"symbol not found: {sym}")
 
         def _in_dll_desc(lib_handle, sym):
-            if sym == domdec_atoms._SYM_IIML:
+            if sym == domdec_atoms._SYM_IIML:       # loc2glo_ind
                 desc = domdec_atoms._GF1DArrayDescriptor()
                 desc.base_addr = local_addr
                 desc.dim0_lbound = 1
                 desc.dim0_ubound = self.N_LOCAL
                 desc.span = 4
                 return desc
-            if sym == domdec_atoms._SYM_IIMF:
+            if sym == domdec_atoms._SYM_ATOML:       # full atoml array
                 desc = domdec_atoms._GF1DArrayDescriptor()
-                desc.base_addr = ghost_addr
+                desc.base_addr = atoml_addr
                 desc.dim0_lbound = 1
-                desc.dim0_ubound = self.N_GHOST
+                desc.dim0_ubound = self.N_TOT
                 desc.span = 4
                 return desc
             raise OSError(f"descriptor not found: {sym}")
@@ -300,7 +311,7 @@ class TestDomdecActive:
         ):
             # Keep buffers alive for the duration of the test
             self._local_buf = local_buf
-            self._ghost_buf = ghost_buf
+            self._atoml_buf = atoml_buf
             yield
 
     def test_is_domdec_active(self, lib_domdec_active):
@@ -329,6 +340,7 @@ class TestDomdecActive:
             get_ghost_atom_count,
         )
 
+        # ghost = natoml_tot - natoml = N_TOT - N_LOCAL
         assert get_ghost_atom_count() == self.N_GHOST
 
     def test_local_atom_indices_0based(self, lib_domdec_active):
@@ -346,7 +358,8 @@ class TestDomdecActive:
         )
 
         arr = get_ghost_atom_indices()
-        expected = self.GHOST_1BASED - 1  # 0-based
+        # Ghost atoms are atoml[nlocal:ntot] - 1 (0-based)
+        expected = self.GHOST_1BASED - 1
         np.testing.assert_array_equal(arr, expected)
 
 

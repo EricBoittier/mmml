@@ -67,27 +67,37 @@ log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Module-variable symbol names (gfortran name mangling)
+#
+# Confirmed by nm -D on libcharmm.so (c47, June 2026):
+#   domdec_common  : q_domdec, nx, ny, nz, natoml, natoml_tot, atoml,
+#                    boxx/y/z, homeix/y/z, ndirect, nneigh, ...
+#   domdec_local   : loc2glo_ind (local→global atom index array),
+#                    glo2loc_ind, xyzq_loc, sforce, ...
+#   domdec_dr_common: ndir_set, q_recip_node, q_direct_node, ...
 # ---------------------------------------------------------------------------
 
-_MODULE = "domdec_common"
+def _sym(module: str, variable: str) -> str:
+    """Return the gfortran-mangled symbol for a Fortran module variable."""
+    return f"__{module.lower()}_MOD_{variable.lower()}"
 
 
-def _sym(variable: str) -> str:
-    """Return the gfortran-mangled symbol for a ``domdec_common`` module variable."""
-    return f"__{_MODULE.lower()}_MOD_{variable.lower()}"
+_MOD_COMMON = "domdec_common"
+_MOD_LOCAL  = "domdec_local"
 
+# Scalars — domdec_common
+_SYM_Q_DOMDEC      = _sym(_MOD_COMMON, "q_domdec")
+_SYM_NDOMX         = _sym(_MOD_COMMON, "nx")        # confirmed: 'nx' not 'ndomx'
+_SYM_NDOMY         = _sym(_MOD_COMMON, "ny")
+_SYM_NDOMZ         = _sym(_MOD_COMMON, "nz")
+_SYM_NATOML        = _sym(_MOD_COMMON, "natoml")    # number of local atoms
+_SYM_NATOM_FOREIGN = _sym(_MOD_COMMON, "natoml_tot") # total atoms incl. ghost zones
 
-# Scalars we know about
-_SYM_Q_DOMDEC = _sym("q_domdec")
-_SYM_NDOMX = _sym("ndomx")
-_SYM_NDOMY = _sym("ndomy")
-_SYM_NDOMZ = _sym("ndomz")
-_SYM_NATOML = _sym("natoml")
-_SYM_NATOM_FOREIGN = _sym("natom_foreign")
-
-# 1-D allocatable INTEGER(4) arrays
-_SYM_IIML = _sym("iiml")
-_SYM_IIMF = _sym("iimf")
+# 1-D allocatable INTEGER arrays
+# domdec_local::loc2glo_ind — local index → global 1-based atom index
+_SYM_IIML = _sym(_MOD_LOCAL, "loc2glo_ind")
+# No direct ghost-index array found; ghost atoms are zones 1..nneigh of atoml.
+# Use natoml_tot - natoml to derive ghost count; indices via atoml[natoml:natoml_tot].
+_SYM_ATOML = _sym(_MOD_COMMON, "atoml")   # full atom list (local + ghost zones)
 
 
 # ---------------------------------------------------------------------------
@@ -249,7 +259,7 @@ def get_ndir() -> tuple[int, int, int]:
 
 
 def get_local_atom_count() -> int:
-    """Number of atoms owned by this MPI rank under DOMDEC.
+    """Number of atoms owned by this MPI rank under DOMDEC (``natoml``).
 
     Returns ``0`` when DOMDEC is inactive or symbol absent.
     """
@@ -258,40 +268,57 @@ def get_local_atom_count() -> int:
 
 
 def get_ghost_atom_count() -> int:
-    """Number of ghost (foreign) atoms visible to this rank under DOMDEC.
+    """Number of ghost atoms visible to this rank under DOMDEC.
 
-    Returns ``0`` when DOMDEC is inactive or symbol absent.
+    Computed as ``natoml_tot - natoml`` (total atoms in all zones minus local).
+    Returns ``0`` when DOMDEC is inactive or symbols absent.
     """
-    val = _read_int32(_SYM_NATOM_FOREIGN)
-    return max(0, int(val)) if val is not None else 0
+    tot = _read_int32(_SYM_NATOM_FOREIGN)   # natoml_tot
+    loc = _read_int32(_SYM_NATOML)
+    if tot is None or loc is None:
+        return 0
+    return max(0, int(tot) - int(loc))
 
 
 def get_local_atom_indices() -> np.ndarray:
     """0-based global atom indices owned by this MPI rank under DOMDEC.
 
-    These are the atoms whose forces this rank is responsible for.
+    Reads ``domdec_local::loc2glo_ind`` (local-index → global 1-based).
+    Only the first ``natoml`` entries are local; the array may be larger.
 
     Returns an empty ``np.int32`` array when DOMDEC is inactive, the symbol is
     absent, or the array is not yet allocated (called before dynamics starts).
     """
+    nlocal = get_local_atom_count()
+    if nlocal == 0:
+        return np.empty(0, dtype=np.int32)
     raw = _read_int32_1d_array(_SYM_IIML)
     if raw is None or raw.size == 0:
         return np.empty(0, dtype=np.int32)
-    return (raw - 1).astype(np.int32)  # Fortran 1-based → Python 0-based
+    # Trim to nlocal entries (array may be allocated larger) and convert to 0-based
+    return (raw[:nlocal] - 1).astype(np.int32)
 
 
 def get_ghost_atom_indices() -> np.ndarray:
     """0-based global atom indices of ghost atoms visible to this rank.
 
-    These are atoms in the nonbond halo (owned by neighbouring ranks) needed
-    to compute forces on local atoms.
+    Reads ``domdec_common::atoml`` (full zone list) and returns entries
+    from ``natoml`` to ``natoml_tot - 1`` (the imported ghost zones).
 
     Returns an empty ``np.int32`` array when DOMDEC is inactive or absent.
     """
-    raw = _read_int32_1d_array(_SYM_IIMF)
-    if raw is None or raw.size == 0:
+    nlocal = get_local_atom_count()
+    ntot_val = _read_int32(_SYM_NATOM_FOREIGN)   # natoml_tot
+    if ntot_val is None:
         return np.empty(0, dtype=np.int32)
-    return (raw - 1).astype(np.int32)
+    ntot = int(ntot_val)
+    nghost = ntot - nlocal
+    if nghost <= 0:
+        return np.empty(0, dtype=np.int32)
+    raw = _read_int32_1d_array(_SYM_ATOML)
+    if raw is None or raw.size < ntot:
+        return np.empty(0, dtype=np.int32)
+    return (raw[nlocal:ntot] - 1).astype(np.int32)
 
 
 # ---------------------------------------------------------------------------
@@ -322,7 +349,7 @@ def discover_domdec_symbols() -> dict[str, bool]:
         _SYM_NATOML,
         _SYM_NATOM_FOREIGN,
         _SYM_IIML,
-        _SYM_IIMF,
+        _SYM_ATOML,
     ]
     result: dict[str, bool] = {}
     for sym in symbols:
