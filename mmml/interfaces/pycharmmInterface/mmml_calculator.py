@@ -2553,12 +2553,7 @@ def setup_calculator(
         # Reshape to (n_monomers, atoms_per_system, 3)
         monomer_forces = ml_monomer_forces.reshape(_n_mono, atoms_per_system, 3)
 
-        # Extract valid atoms per monomer (variable count) and flatten
-        valid_forces_parts = []
-        for mi in range(_n_mono):
-            n_i = atoms_per_monomer_list[mi]
-            valid_forces_parts.append(monomer_forces[mi, :n_i, :])
-        forces_flat = jnp.concatenate(valid_forces_parts, axis=0)  # (sum(n_i), 3)
+        forces_flat = (monomer_forces * monomer_atom_mask_jnp[:, :, None]).reshape(-1, 3)
 
         # Scatter to global positions. indices_are_sorted=True since monomer
         # segment indices are [0..n0-1, n0..n0+n1-1, ...] (sorted).
@@ -2618,19 +2613,17 @@ def setup_calculator(
         monomer_batch_atoms = n_monomers * max_atoms
         ml_dimer_forces = f[monomer_batch_atoms:]
 
-        # Calculate force segments for dimers
-        force_segments = calculate_dimer_force_segments(n_dimers)
-
         # Calculate interaction energies (E_dimer - E_mono_a - E_mono_b)
         monomer_contrib = calculate_monomer_contribution_to_dimers(
-            monomer_energies, jnp.array(dimer_perms)
+            monomer_energies, dimer_pair_arr_jnp
         )
         dimer_int_energies = ml_dimer_energy - monomer_contrib
 
         # Apply lambda scaling: dimer interaction scaled by lambda_i * lambda_j
-        dimer_lambda = jnp.array([
-            lambda_monomer[a] * lambda_monomer[b] for a, b in dimer_perms
-        ])
+        dimer_lambda = (
+            lambda_monomer[dimer_pair_arr_jnp[:, 0]]
+            * lambda_monomer[dimer_pair_arr_jnp[:, 1]]
+        )
         dimer_int_energies = dimer_int_energies * dimer_lambda
 
         debug_print(debug, "Dimer int energies:",
@@ -2642,20 +2635,12 @@ def setup_calculator(
         # Convert model dimer forces into interaction forces matching
         # E_int = E_dimer - E_monomer_a - E_monomer_b before switching.
         ml_dimer_forces_2d = ml_dimer_forces.reshape(n_dimers, max_atoms, 3)
-        interaction_force_parts = []
-        for di, (mi, mj) in enumerate(dimer_perms):
-            n_i = atoms_per_monomer_list[mi]
-            n_j = atoms_per_monomer_list[mj]
-            n_d = n_i + n_j
-            off_i = int(monomer_offsets[mi])
-            off_j = int(monomer_offsets[mj])
-            monomer_pair_forces = jnp.concatenate([
-                monomer_forces[off_i:off_i + n_i],
-                monomer_forces[off_j:off_j + n_j],
-            ], axis=0)
-            force_int = ml_dimer_forces_2d[di, :n_d, :] - monomer_pair_forces
-            interaction_force_parts.append(force_int * dimer_lambda[di])
-        dimer_interaction_forces_flat = jnp.concatenate(interaction_force_parts, axis=0)
+        monomer_pair_forces = monomer_forces[dimer_idx_arr_jnp]
+        dimer_interaction_forces_flat = (
+            (ml_dimer_forces_2d - monomer_pair_forces)
+            * dimer_lambda[:, None, None]
+            * dimer_atom_mask_jnp[:, :, None]
+        ).reshape(-1, 3)
 
         # Apply switching functions
         switched_results = apply_dimer_switching(
@@ -2687,19 +2672,7 @@ def setup_calculator(
         For each dimer (i, j), the segment indices map the dimer's atoms back
         to their global positions using ``monomer_offsets``.
         """
-        parts = []
-        for di, (mi, mj) in enumerate(dimer_perms):
-            n_i = atoms_per_monomer_list[mi]
-            n_j = atoms_per_monomer_list[mj]
-            off_i = int(monomer_offsets[mi])
-            off_j = int(monomer_offsets[mj])
-            # First monomer atoms, then second monomer atoms
-            seg = np.concatenate([
-                np.arange(off_i, off_i + n_i),
-                np.arange(off_j, off_j + n_j),
-            ])
-            parts.append(seg)
-        return jnp.array(np.concatenate(parts))
+        return dimer_idx_arr_jnp[:n_dimers].reshape(-1)
 
     def calculate_monomer_contribution_to_dimers(
         monomer_energies: Array,
@@ -2724,12 +2697,7 @@ def setup_calculator(
         # dimer_forces shape: (n_dimers * max_atoms, 3)
         dimer_forces_2d = dimer_forces.reshape(n_dimers, max_atoms, 3)
 
-        # Extract valid atoms per dimer (variable) and flatten
-        valid_parts = []
-        for di, (mi, mj) in enumerate(dimer_perms):
-            n_d = atoms_per_monomer_list[mi] + atoms_per_monomer_list[mj]
-            valid_parts.append(dimer_forces_2d[di, :n_d, :])
-        forces_flat = jnp.concatenate(valid_parts, axis=0)
+        forces_flat = (dimer_forces_2d * dimer_atom_mask_jnp[:, :, None]).reshape(-1, 3)
 
         # optimization_barrier discourages XLA constant folding of segment_ids.
         seg_ids = jax.lax.optimization_barrier(force_segments)
@@ -2761,10 +2729,6 @@ def setup_calculator(
         n_dimers = len(all_dimer_idxs)
         force_segments = calculate_dimer_force_segments(n_dimers)
 
-        # Per-dimer atom counts for switch_ML calls
-        dimer_n_atoms_a = [atoms_per_monomer_list[a] for a, b in dimer_perms]
-        dimer_n_atoms_b = [atoms_per_monomer_list[b] for a, b in dimer_perms]
-
         # Gather dimer positions: (n_dimers, max_atoms, 3)
         dimer_pos_padded = positions[padded_dimer_idx_arr_jnp]
 
@@ -2786,12 +2750,12 @@ def setup_calculator(
                 return pos_di + shift_b * mask_b[:, None]
 
             dimer_pos_padded = jax.vmap(_wrap_dimer_coords, in_axes=(0, 0, 0))(
-                dimer_pos_padded, jnp.array(dimer_n_atoms_a), jnp.array(dimer_n_atoms_b)
+                dimer_pos_padded, dimer_n_atoms_a_jnp, dimer_n_atoms_b_jnp
             )
 
         # vmap switch_ML over dimers (avoids Python loop)
-        na_arr = jnp.array(dimer_n_atoms_a)
-        nb_arr = jnp.array(dimer_n_atoms_b)
+        na_arr = dimer_n_atoms_a_jnp
+        nb_arr = dimer_n_atoms_b_jnp
 
         def _switch_ml_vmapped(x, e, na, nb):
             return switch_ML(
@@ -2831,12 +2795,9 @@ def setup_calculator(
         switched_grad = jax.vmap(_switch_ml_grad_vmapped, in_axes=(0, 0, 0, 0))(
             dimer_pos_padded, dimer_energies, na_arr, nb_arr)  # (n_dimers, max_atoms, 3)
 
-        # Extract valid atoms per dimer from switched_grad and flatten for segment_sum
-        grad_parts = []
-        for di, (mi, mj) in enumerate(dimer_perms):
-            n_d = atoms_per_monomer_list[mi] + atoms_per_monomer_list[mj]
-            grad_parts.append(switched_grad[di, :n_d, :])
-        dimer_switching_grads_flat = jnp.concatenate(grad_parts, axis=0)
+        dimer_switching_grads_flat = (
+            switched_grad * dimer_atom_mask_jnp[:, :, None]
+        ).reshape(-1, 3)
 
         # optimization_barrier discourages XLA constant folding of segment_ids.
         seg_ids = jax.lax.optimization_barrier(force_segments)
@@ -2846,13 +2807,11 @@ def setup_calculator(
             num_segments=total_atoms
         )
 
-        # Per-dimer-entry switching scale: expand per-dimer scale to each
-        # valid atom entry before scattering forces back to global atoms.
-        scale_parts = []
-        for di, (mi, mj) in enumerate(dimer_perms):
-            n_d = atoms_per_monomer_list[mi] + atoms_per_monomer_list[mj]
-            scale_parts.append(jnp.full((n_d,), switching_scales[di]))
-        switching_scales_per_atom = jnp.concatenate(scale_parts)
+        # Per-dimer-entry switching scale: expand per-dimer scale to each padded
+        # atom entry and zero padded slots before scattering forces back.
+        switching_scales_per_atom = (
+            switching_scales[:, None] * dimer_atom_mask_jnp
+        ).reshape(-1)
 
         dimer_forces_safe = jnp.where(jnp.isfinite(dimer_forces_flat), dimer_forces_flat, 0.0)
         scaled_dimer_forces_flat = dimer_forces_safe * switching_scales_per_atom[:, None]
