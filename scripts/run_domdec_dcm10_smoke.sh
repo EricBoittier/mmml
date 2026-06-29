@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # DCM:10 DOMDEC Tier 3 smoke scaffold.
 #
-# This intentionally avoids Python-side topology construction for np>1. The supported
-# direction is:
-#   1. prep:     build/certify DCM:10 PSF/CRD with np=1
-#   2. validate: offline DOMDEC hydrogen-order check on the PSF
-#   3. tier3:    launch a user-provided CHARMM-native/prebuilt-state command
+# Tier 3 uses a **dense ~40 Å liquid-box prep** so PBC images exist within cutnb.
+# Do not use huge dilute boxes — molecules stay in the center and crystal build finds
+# zero images ("IMAGES NEED TO BE PRESENT").
+#
+# Default: MMML_MPI_NP=2, ENERGY DOMDEC NDIR 2 1 1 (MMML / non-c47 CHARMM).
+# Site c47 (/opt/charmm/c47*) rejects np=2; use a MMML native CHARMM executable instead.
 #
 # Usage:
 #   ./scripts/run_domdec_dcm10_smoke.sh prep
 #   ./scripts/run_domdec_dcm10_smoke.sh validate
-#   ./scripts/run_domdec_dcm10_smoke.sh prep-tier3
 #   ./scripts/run_domdec_dcm10_smoke.sh tier3
 #   ./scripts/run_domdec_dcm10_smoke.sh all
 #
@@ -18,10 +18,11 @@
 #   MMML_ROOT=$HOME/mmml
 #   TESTS_ROOT=$HOME/tests
 #   N_DCM=10
-#   BOX_SIZE=40          # dense prep (validate only); tier3 needs prep-tier3 (~152Å)
-#   MMML_MPI_NP=8        # c47 DOMDEC: each NDIR axis must be 1 or >=8
-#   BOX_DIR=$TESTS_ROOT/boxes/domdec_dcm10_l32
+#   BOX_SIZE=40
+#   MMML_MPI_NP=2
+#   BOX_DIR=$TESTS_ROOT/boxes/domdec_dcm10_l40
 #   CHARMM_EXE=/path/to/charmm
+#   DOMDEC_C47_NDIR_RULE=auto|0|1
 #   NATIVE_STATE_CMD='...'  # optional override
 
 set -euo pipefail
@@ -34,6 +35,7 @@ BOX_SIZE="${BOX_SIZE:-40}"
 BOX_DIR="${BOX_DIR:-}"
 PSF="${PSF:-}"
 CRD="${CRD:-}"
+MMML_MPI_NP="${MMML_MPI_NP:-2}"
 MPIRUN="${MMML_MPIRUN_WRAPPER:-$MMML_ROOT/scripts/mmml-charmm-mpirun.sh}"
 PY="${MMML_PYTHON:-$MMML_ROOT/.venv/bin/python}"
 
@@ -106,6 +108,7 @@ picked = pick_domdec_prep_dir(
     Path(${boxes_root@Q}),
     n_dcm=${N_DCM},
     min_side_A=float("${min_side}"),
+    prefer_smallest=True,
 )
 if picked is None:
     raise SystemExit(1)
@@ -119,7 +122,7 @@ PY
       BOX_SIZE="$(sed -n '2p' <<< "$picked")"
       PSF="$BOX_DIR/model.psf"
       CRD="$BOX_DIR/model.crd"
-      echo "Using tier3 prep box: $BOX_DIR (BOX_SIZE=${BOX_SIZE}Å, min=${min_side}Å)" >&2
+      echo "Using tier3 prep box: $BOX_DIR (BOX_SIZE=${BOX_SIZE}Å)" >&2
       return 0
     fi
     BOX_DIR="${BOX_DIR:-$boxes_root/${pattern}${BOX_SIZE}}"
@@ -176,29 +179,10 @@ prep_target_dir() {
   CRD="$BOX_DIR/model.crd"
 }
 
-tier3_prep_box_size() {
-  local np="${MMML_MPI_NP:-8}"
-  "$PY" -c "
-from mmml.utils.domdec_ndir import min_domdec_crystal_side_A
-import math
-side = min_domdec_crystal_side_A(${np}, 15, 4)
-print(int(math.ceil(side)))
-"
-}
-
-prep_tier3() {
-  local side
-  side="$(tier3_prep_box_size)"
-  echo "== DOMDEC DCM:${N_DCM} tier3 prep (box >= ${side}Å for MMML_MPI_NP=${MMML_MPI_NP:-8}) =="
-  BOX_SIZE="$side" prep_target_dir
-  prep
-}
-
 tier3_min_crystal_side() {
-  local np="${MMML_MPI_NP:-8}"
   "$PY" -c "
 from mmml.utils.domdec_ndir import min_domdec_crystal_side_A
-print(min_domdec_crystal_side_A(${np}, 15, 4))
+print(min_domdec_crystal_side_A(${MMML_MPI_NP}, 15, 4, strict_c47_axis_rule=False))
 "
 }
 
@@ -207,7 +191,7 @@ require_tier3_box_artifacts() {
   min_side="$(tier3_min_crystal_side)"
   resolve_domdec_box_artifacts "$min_side" || {
     echo "No tier3 prep box >= ${min_side}Å under $TESTS_ROOT/boxes/domdec_dcm${N_DCM}_l*" >&2
-    echo "Run: bash $0 prep-tier3" >&2
+    echo "Run: bash $0 prep   # dense BOX_SIZE=40 default" >&2
     exit 1
   }
 }
@@ -258,7 +242,7 @@ tier3() {
     exit 1
   }
   if [[ -z "${NATIVE_STATE_CMD:-}" ]]; then
-    NATIVE_STATE_CMD="MMML_MPI_NP=${MMML_MPI_NP:-8} PSF='$PSF' CRD='$CRD' BOX_SIZE='$BOX_SIZE' BOX_DIR='$BOX_DIR' N_DCM='$N_DCM' bash '$MMML_ROOT/scripts/run_domdec_dcm10_native_charmm.sh'"
+    NATIVE_STATE_CMD="MMML_MPI_NP=${MMML_MPI_NP} PSF='$PSF' CRD='$CRD' BOX_SIZE='$BOX_SIZE' BOX_DIR='$BOX_DIR' N_DCM='$N_DCM' bash '$MMML_ROOT/scripts/run_domdec_dcm10_native_charmm.sh'"
   fi
   echo "$NATIVE_STATE_CMD"
   eval "$NATIVE_STATE_CMD"
@@ -266,16 +250,19 @@ tier3() {
 
 case "$PHASE" in
   prep) prep ;;
-  prep-tier3) prep_tier3 ;;
+  prep-tier3)
+    echo "prep-tier3 is deprecated (huge dilute boxes break PBC images). Use: $0 prep" >&2
+    prep
+    ;;
   validate) validate ;;
   tier3) tier3 ;;
   all)
-    prep_tier3
+    prep
     validate
     tier3
     ;;
   *)
-    echo "Usage: $0 [prep|prep-tier3|validate|tier3|all]" >&2
+    echo "Usage: $0 [prep|validate|tier3|all]" >&2
     exit 2
     ;;
 esac

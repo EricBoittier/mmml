@@ -151,27 +151,46 @@ if [[ -z "$CRYSTAL_SIDE" ]]; then
 fi
 CRYSTAL_SIDE="${CRYSTAL_SIDE:-$BOX_SIZE}"
 
-MMML_MPI_NP="${MMML_MPI_NP:-8}"
+_domdec_strict_c47() {
+  case "${DOMDEC_C47_NDIR_RULE:-auto}" in
+    1|yes|true|on) echo 1 ;;
+    0|no|false|off) echo 0 ;;
+    auto)
+      if [[ "$CHARMM_EXE" == *c47* ]]; then
+        echo 1
+      else
+        echo 0
+      fi
+      ;;
+    *) echo 0 ;;
+  esac
+}
+DOMDEC_STRICT_C47="$(_domdec_strict_c47)"
+
+MMML_MPI_NP="${MMML_MPI_NP:-2}"
 if ! [[ "$MMML_MPI_NP" =~ ^[1-9][0-9]*$ ]]; then
   echo "MMML_MPI_NP must be a positive integer (got: ${MMML_MPI_NP})" >&2
   exit 1
 fi
 
+if [[ "$DOMDEC_STRICT_C47" == 1 && "$MMML_MPI_NP" -gt 1 && "$MMML_MPI_NP" -lt 8 ]]; then
+  cat >&2 <<EOF
+Warning: CHARMM_EXE looks like site c47 ($CHARMM_EXE).
+c47 rejects DOMDEC NDIR axes of 2–7; np=${MMML_MPI_NP} usually fails on c47.
+
+Use MMML native CHARMM (as_library=OFF build) for np=2 on a dense ~40Å prep box, or:
+  DOMDEC_C47_NDIR_RULE=0 MMML_MPI_NP=2 ...   # if your binary is not c47-strict
+  MMML_MPI_NP=8 ...                          # c47-only path (large dilute box; poor images)
+EOF
+fi
+
 if [[ -z "${DOMDEC_NDIR:-}" ]]; then
   if ! DOMDEC_NDIR="$("$PY" -c "
 from mmml.utils.domdec_ndir import format_domdec_ndir
-print(format_domdec_ndir(${MMML_MPI_NP}))
+print(format_domdec_ndir(${MMML_MPI_NP}, strict_c47_axis_rule=bool(int('${DOMDEC_STRICT_C47}'))))
 " 2>&1)"; then
     cat >&2 <<EOF
 ${DOMDEC_NDIR}
-
-c47 DOMDEC rejects 2–7 MPI nodes per axis (each NDIR axis must be 1 or >= 8).
-For np>1 Tier 3 smoke on site c47, use at least MMML_MPI_NP=8:
-
-  MMML_MPI_NP=8 bash scripts/run_domdec_dcm10_smoke.sh tier3
-
-With cutnb=${DOMDEC_CUTNB}, the crystal side must be >= MMML_MPI_NP * (cutnb + ${DOMDEC_GROUP_HALO}) Å
-(≈ $(( MMML_MPI_NP * (DOMDEC_CUTNB + DOMDEC_GROUP_HALO) ))Å for np=${MMML_MPI_NP}).
 EOF
     exit 1
   fi
@@ -179,7 +198,7 @@ fi
 
 _min_box="$("$PY" -c "
 from mmml.utils.domdec_ndir import min_domdec_crystal_side_A
-print(min_domdec_crystal_side_A(${MMML_MPI_NP}, ${DOMDEC_CUTNB}, ${DOMDEC_GROUP_HALO}))
+print(min_domdec_crystal_side_A(${MMML_MPI_NP}, ${DOMDEC_CUTNB}, ${DOMDEC_GROUP_HALO}, strict_c47_axis_rule=bool(int('${DOMDEC_STRICT_C47}'))))
 ")"
 DOMDEC_BOX_SIZE="${DOMDEC_BOX_SIZE:-$CRYSTAL_SIDE}"
 if ! "$PY" - <<PY
@@ -190,17 +209,13 @@ sys.exit(0 if side + 1e-6 >= min_box else 1)
 PY
 then
   cat >&2 <<EOF
-Prep lattice ${DOMDEC_BOX_SIZE}Å is too small for MMML_MPI_NP=${MMML_MPI_NP} DOMDEC (need >= ${_min_box}Å).
+Prep lattice ${DOMDEC_BOX_SIZE}Å is too small for MMML_MPI_NP=${MMML_MPI_NP} DOMDEC domains (need >= ${_min_box}Å per-axis split).
 
-Do not inflate the crystal in the input deck — coordinates stay packed in the prep box,
-crystal build finds no images within cutnb, and CHARMM stops with "IMAGES NEED TO BE PRESENT".
+Use a dense liquid-box prep large enough for the domain split (typically BOX_SIZE=40 for np=2).
+Do not inflate crystal without re-prepping — that removes PBC images ("IMAGES NEED TO BE PRESENT").
 
-Re-prep at a large enough box (DCM:10 will be dilute; that is OK for this MPI gate):
-
-  bash scripts/run_domdec_dcm10_smoke.sh prep-tier3
+  bash scripts/run_domdec_dcm10_smoke.sh prep
   bash scripts/run_domdec_dcm10_smoke.sh tier3
-
-Or set MMML_MPI_NP=1 for a serial DOMDEC ENER smoke only (not a true np>1 gate).
 EOF
   exit 1
 fi
