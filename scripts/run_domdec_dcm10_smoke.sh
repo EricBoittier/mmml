@@ -188,6 +188,18 @@ print(min_domdec_crystal_side_A(${MMML_MPI_NP}, 15, 4, strict_c47_axis_rule=Fals
 
 require_tier3_box_artifacts() {
   local min_side
+  if [[ "${MMML_MPI_NP:-2}" -ge 8 ]]; then
+    cat >&2 <<EOF
+MMML_MPI_NP=${MMML_MPI_NP} is the c47-only path (~152Å prep; poor PBC images).
+Reset and use the dense l40 gate:
+
+  unset MMML_MPI_NP
+  bash scripts/run_domdec_dcm10_smoke.sh tier3
+
+Or build MMML native CHARMM and run np=2 on domdec_dcm10_l40.
+EOF
+    exit 1
+  fi
   min_side="$(tier3_min_crystal_side)"
   resolve_domdec_box_artifacts "$min_side" || {
     echo "No tier3 prep box >= ${min_side}Å under $TESTS_ROOT/boxes/domdec_dcm${N_DCM}_l*" >&2

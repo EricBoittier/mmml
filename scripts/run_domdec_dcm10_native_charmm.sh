@@ -152,20 +152,17 @@ fi
 CRYSTAL_SIDE="${CRYSTAL_SIDE:-$BOX_SIZE}"
 
 _domdec_strict_c47() {
+  # Strict c47 NDIR (1 or >=8 per axis) is opt-in only. Default/auto use NDIR 2 1 1 for np=2.
   case "${DOMDEC_C47_NDIR_RULE:-auto}" in
     1|yes|true|on) echo 1 ;;
-    0|no|false|off) echo 0 ;;
-    auto)
-      if [[ "$CHARMM_EXE" == *c47* ]]; then
-        echo 1
-      else
-        echo 0
-      fi
-      ;;
     *) echo 0 ;;
   esac
 }
 DOMDEC_STRICT_C47="$(_domdec_strict_c47)"
+SITE_C47=0
+if [[ "$CHARMM_EXE" == *c47* ]]; then
+  SITE_C47=1
+fi
 
 MMML_MPI_NP="${MMML_MPI_NP:-2}"
 if ! [[ "$MMML_MPI_NP" =~ ^[1-9][0-9]*$ ]]; then
@@ -173,14 +170,19 @@ if ! [[ "$MMML_MPI_NP" =~ ^[1-9][0-9]*$ ]]; then
   exit 1
 fi
 
-if [[ "$DOMDEC_STRICT_C47" == 1 && "$MMML_MPI_NP" -gt 1 && "$MMML_MPI_NP" -lt 8 ]]; then
+if [[ "$SITE_C47" == 1 && "$MMML_MPI_NP" -gt 1 && "$MMML_MPI_NP" -lt 8 ]]; then
   cat >&2 <<EOF
-Warning: CHARMM_EXE looks like site c47 ($CHARMM_EXE).
-c47 rejects DOMDEC NDIR axes of 2–7; np=${MMML_MPI_NP} usually fails on c47.
+Note: site c47 ($CHARMM_EXE) often rejects DOMDEC NDIR 2 1 1 at runtime.
+Tier 3 will still attempt np=${MMML_MPI_NP} on the dense l40 prep; for a clean gate use MMML native CHARMM:
 
-Use MMML native CHARMM (as_library=OFF build) for np=2 on a dense ~40Å prep box, or:
-  DOMDEC_C47_NDIR_RULE=0 MMML_MPI_NP=2 ...   # if your binary is not c47-strict
-  MMML_MPI_NP=8 ...                          # c47-only path (large dilute box; poor images)
+  CHARMM_EXE=/path/to/mmml/native/charmm bash scripts/run_domdec_dcm10_smoke.sh tier3
+EOF
+fi
+
+if [[ "$MMML_MPI_NP" -ge 8 && "$DOMDEC_STRICT_C47" != 1 ]]; then
+  cat >&2 <<EOF
+Note: MMML_MPI_NP=${MMML_MPI_NP} needs a ~152Å prep (c47 np=8 path; dilute, poor PBC images).
+Prefer MMML_MPI_NP=2 with MMML native CHARMM on domdec_dcm10_l40 instead.
 EOF
 fi
 
@@ -191,6 +193,9 @@ print(format_domdec_ndir(${MMML_MPI_NP}, strict_c47_axis_rule=bool(int('${DOMDEC
 " 2>&1)"; then
     cat >&2 <<EOF
 ${DOMDEC_NDIR}
+
+Could not choose DOMDEC NDIR for MMML_MPI_NP=${MMML_MPI_NP}.
+For dense l40 tier3 use MMML_MPI_NP=2 (default). c47 np=8 needs DOMDEC_C47_NDIR_RULE=1 and ~152Å prep.
 EOF
     exit 1
   fi
@@ -198,7 +203,10 @@ fi
 
 _min_box="$("$PY" -c "
 from mmml.utils.domdec_ndir import min_domdec_crystal_side_A
-print(min_domdec_crystal_side_A(${MMML_MPI_NP}, ${DOMDEC_CUTNB}, ${DOMDEC_GROUP_HALO}, strict_c47_axis_rule=bool(int('${DOMDEC_STRICT_C47}'))))
+print(min_domdec_crystal_side_A(
+    ${MMML_MPI_NP}, ${DOMDEC_CUTNB}, ${DOMDEC_GROUP_HALO},
+    strict_c47_axis_rule=bool(int('${DOMDEC_STRICT_C47}')),
+))
 ")"
 DOMDEC_BOX_SIZE="${DOMDEC_BOX_SIZE:-$CRYSTAL_SIDE}"
 if ! "$PY" - <<PY

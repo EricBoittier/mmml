@@ -49,6 +49,14 @@ def resolve_geometry_checkpoint_ladder(
     if baseline is not None:
         candidates.append(Path(baseline))
 
+    mlpot_crd = paths.get("mlpot_mmml_crd") or paths.get("mini_crd")
+    if mlpot_crd is not None:
+        candidates.append(Path(mlpot_crd))
+
+    legacy_mini_crd = paths.get("mini_crd")
+    if legacy_mini_crd is not None:
+        candidates.append(Path(legacy_mini_crd))
+
     bonded_crd = paths.get("bonded_mm_after_mini_crd")
     if bonded_crd is not None:
         candidates.append(Path(bonded_crd))
@@ -593,7 +601,7 @@ def restore_geometry_from_ladder(
         )
         return Path("<in-memory>")
 
-    raise RuntimeError(f"{label}: no valid restart in geometry checkpoint ladder")
+    raise RuntimeError(f"{label}: no valid restart/CRD in geometry checkpoint ladder")
 
 
 def attach_geometry_checkpoints_to_overlap(

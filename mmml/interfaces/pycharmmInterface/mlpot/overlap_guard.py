@@ -60,6 +60,7 @@ class DynamicsOverlapConfig:
     mlpot_rescue_mini_nstep: int = 25
     pyCModel: Any = field(default=None, compare=False, hash=False)
     artifact_registry: Any = field(default=None, compare=False, hash=False)
+    bonded_recovery_backend: str = "auto"
     # When False (default), overlap chunks hand off via alternating scratch ``.res``
     # files and ``dyna restart``.  True keeps coords/vel in RAM (legacy MLpot path).
     memory_handoff: bool = False
@@ -324,6 +325,9 @@ def resolve_dynamics_overlap_config(
             else None
         ),
         rescue=rescue,
+        bonded_recovery_backend=str(
+            getattr(args, "bonded_recovery_backend", "auto") or "auto"
+        ),
         separate_on_rescue_fail=not bool(
             getattr(args, "no_dynamics_overlap_separate", False)
         ),
@@ -1108,9 +1112,11 @@ def _handle_extent_rescue(
     sd_steps = config.intra_rescue_sd_steps
     if sd_steps is None:
         sd_steps = config.rescue.nstep_sd
+    backend = str(getattr(config, "bonded_recovery_backend", "auto") or "auto").lower()
+    recovery_method = "JAX bonded FIRE" if backend in ("auto", "jax") else "CHARMM bonded SD"
     print(
         f"{exc}\nAttempting fly-off recovery from "
-        f"{recovery_path.name} (bonded-MM SD={sd_steps})...",
+        f"{recovery_path.name} ({recovery_method}, steps={sd_steps})...",
         flush=True,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (

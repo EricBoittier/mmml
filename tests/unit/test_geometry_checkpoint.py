@@ -52,6 +52,26 @@ def test_geometry_ladder_prefers_baseline_over_pretreat_prod(tmp_path):
     assert found == paths["geometry_baseline_res"].resolve()
 
 
+def test_geometry_ladder_includes_mlpot_mini_crd_fallbacks(tmp_path):
+    tag = "dcm_20"
+    baseline = tmp_path / "baseline.res"
+    mlpot_crd = tmp_path / "02_mini.crd"
+    legacy_crd = tmp_path / "mini.crd"
+    bonded_crd = tmp_path / "03_bmm.crd"
+    heat = tmp_path / "heat.res"
+    paths = {
+        "geometry_baseline_res": baseline,
+        "mlpot_mmml_crd": mlpot_crd,
+        "mini_crd": legacy_crd,
+        "bonded_mm_after_mini_crd": bonded_crd,
+        "heat_res": heat,
+    }
+
+    ladder = resolve_geometry_checkpoint_ladder(paths, tag, n_heat_segments=1)
+
+    assert ladder[:5] == [baseline, mlpot_crd, legacy_crd, bonded_crd, heat]
+
+
 def test_discover_resume_restart_prefers_heat_segment(tmp_path):
     tag = "dcm_10"
     heat_seg = tmp_path / "heat.1.res"

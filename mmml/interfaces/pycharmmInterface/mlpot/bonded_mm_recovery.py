@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -261,6 +261,7 @@ def _bonded_cfg_from_overlap_config(config: Any) -> BondedMmMiniConfig:
         tolenr=float(config.rescue.tolenr),
         tolgrd=float(config.rescue.tolgrd),
         verbose=config.rescue.verbose,
+        backend=str(getattr(config, "bonded_recovery_backend", "auto") or "auto"),
     )
 
 
@@ -374,7 +375,7 @@ def _run_all_ml_extent_recovery(
     *,
     positions: np.ndarray,
 ) -> None:
-    """Fly-off recovery: restore prior coords, then CHARMM bonded SD + MLpot polish."""
+    """Fly-off recovery: restore prior coords, then bonded recovery + MLpot polish."""
     from mmml.interfaces.pycharmmInterface.mlpot.restraints import clear_mmfp_restraints
     from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
@@ -386,7 +387,7 @@ def _run_all_ml_extent_recovery(
         )
     if bonded_cfg.verbose:
         print(
-            f"Fly-off recovery: restoring coords from prior restart "
+            f"Fly-off recovery: restoring coords from checkpoint "
             f"(topology {Path(topo).name})",
             flush=True,
         )
@@ -437,6 +438,8 @@ def run_extent_recovery_from_prior_restart(
             f"({names}): {exc}"
         ) from exc
     bonded_cfg = _bonded_cfg_from_overlap_config(config)
+    if str(bonded_cfg.backend).lower() == "auto":
+        bonded_cfg = replace(bonded_cfg, backend="jax")
     pos = get_charmm_positions_array()
     if pos is None or not np.all(np.isfinite(pos)):
         raise RuntimeError(
