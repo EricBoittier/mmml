@@ -81,6 +81,14 @@ def _parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--no-skip-delete-atom-on-mpi",
+        action="store_true",
+        help=(
+            "For np>1 diagnostics, do not skip the initial DELETE ATOM command. "
+            "This reproduces the observed rank-dependent hang."
+        ),
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Print the recommended cluster command and exit without importing PyCHARMM.",
@@ -195,7 +203,12 @@ def _load_template_pdb_coords(template_pdb: Path) -> dict[str, "np.ndarray"]:
     return coords
 
 
-def _build_ocoh_cluster_traced(n_molecules: int, spacing: float) -> tuple["np.ndarray", "np.ndarray"]:
+def _build_ocoh_cluster_traced(
+    n_molecules: int,
+    spacing: float,
+    *,
+    skip_delete_atom: bool,
+) -> tuple["np.ndarray", "np.ndarray"]:
     """Tiny traced OCOH cluster builder for np>1 DOMDEC diagnostics."""
     import numpy as np
     import pandas as pd
@@ -214,9 +227,12 @@ def _build_ocoh_cluster_traced(n_molecules: int, spacing: float) -> tuple["np.nd
     sequence = " ".join([residue] * int(n_molecules))
     template_pdb = REPO_ROOT / "mmml" / "data" / "charmm" / "ocoh.pdb"
 
-    _rank_log("traced cluster: DELETE ATOM begin")
-    lingo.charmm_script("DELETE ATOM SELE ALL END")
-    _rank_log("traced cluster: DELETE ATOM done")
+    if skip_delete_atom:
+        _rank_log("traced cluster: DELETE ATOM skipped for fresh np>1 diagnostic")
+    else:
+        _rank_log("traced cluster: DELETE ATOM begin")
+        lingo.charmm_script("DELETE ATOM SELE ALL END")
+        _rank_log("traced cluster: DELETE ATOM done")
 
     _rank_log("traced cluster: read CGENFF toppar begin")
     read_cgenff_toppar(enable_drude=False)
@@ -352,7 +368,11 @@ def main() -> int:
         if str(args.residue).upper() != "OCOH":
             print("np>1 traced diagnostic currently supports only --residue OCOH.", file=sys.stderr)
             return 5
-        z, r = _build_ocoh_cluster_traced(args.n_molecules, args.spacing)
+        z, r = _build_ocoh_cluster_traced(
+            args.n_molecules,
+            args.spacing,
+            skip_delete_atom=not args.no_skip_delete_atom_on_mpi,
+        )
     else:
         z, r = build_ase_cluster(args.residue, args.n_molecules, args.spacing)
     _rank_log("building CHARMM/ASE cluster done")
