@@ -28,11 +28,15 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--psf",  required=True)
     p.add_argument("--crd",  required=True)
     p.add_argument("--box",  type=float, required=True, help="Cubic box side (Å)")
+    p.add_argument("--rtf",  default="", help="RTF file (default: MMML CGenFF)")
+    p.add_argument("--prm",  default="", help="PRM file (default: MMML CGenFF)")
     p.add_argument("--ndir", type=int,   default=0,
                    help="NDIR along x (0 = auto from n_ranks)")
-    p.add_argument("--cutnb", type=float, default=14.0, help="Nonbond cutoff (Å)")
+    p.add_argument("--cutnb",  type=float, default=14.0, help="Nonbond cutoff (Å)")
     p.add_argument("--ctofnb", type=float, default=12.0)
     p.add_argument("--ctonnb", type=float, default=10.0)
+    p.add_argument("--no-ewald", action="store_true",
+                   help="Use cutoff-only energy (skip Ewald); sufficient for ndir=1 probe")
     return p.parse_args()
 
 
@@ -82,13 +86,14 @@ def main() -> None:
 
     pr(f"=== rank {rank}/{nranks}  NDIR {ndir} 1 1 ===")
 
-    # ------------------------------------------------------------------ locate RTF/PRM via MMML data dir
+    # ------------------------------------------------------------------ locate RTF/PRM
+    # Priority: --rtf/--prm CLI args > env vars > MMML data dir
     import pathlib
     import mmml as _mmml
 
     _data = pathlib.Path(_mmml.__file__).parent / "data" / "charmm"
-    rtf = os.environ.get("MMML_RTF") or str(_data / "top_all36_cgenff.rtf")
-    prm = os.environ.get("MMML_PRM") or str(_data / "par_all36_cgenff.prm")
+    rtf = args.rtf or os.environ.get("MMML_RTF") or str(_data / "top_all36_cgenff.rtf")
+    prm = args.prm or os.environ.get("MMML_PRM") or str(_data / "par_all36_cgenff.prm")
 
     pr(f"RTF : {rtf}")
     pr(f"PRM : {prm}")
@@ -111,21 +116,23 @@ crystal build cutoff {args.cutnb} noper 0
 """)
 
     # ------------------------------------------------------------------ energy
-    # fftx/y/z: even integer >= box/grid_spacing (use ~0.8 Å spacing)
-    fft = max(32, int(args.box / 0.8 / 2) * 2)
-    base = (
-        f"energy cutnb {args.cutnb} ctofnb {args.ctofnb} ctonnb {args.ctonnb} -\n"
-        f"    vfswitch atom fswitch -\n"
-        f"    ewald kappa 0.32 order 6 fftx {fft} ffty {fft} fftz {fft}"
-    )
-    if ndir > 1:
-        base = (
-            f"energy cutnb {args.cutnb} ctofnb {args.ctofnb} ctonnb {args.ctonnb} -\n"
-            f"    vfswitch atom fswitch -\n"
-            f"    domd ndir {ndir} 1 1 -\n"
-            f"    ewald kappa 0.32 order 6 fftx {fft} ffty {fft} fftz {fft}"
-        )
-    lingo.charmm_script(f"faster on\n{base}")
+    nb = f"cutnb {args.cutnb} ctofnb {args.ctofnb} ctonnb {args.ctonnb} vfswitch atom fswitch"
+    use_ewald = (ndir > 1) and not args.no_ewald
+    if not use_ewald and ndir == 1:
+        # Cutoff-only: sufficient for symbol probe when DOMDEC is inactive
+        pr("Using cutoff-only energy (no Ewald) — adequate for ndir=1 atom-symbol probe.")
+        lingo.charmm_script(f"faster on\nenergy {nb}")
+    else:
+        # PME Ewald: required for DOMDEC
+        # fftx/y/z: even int; use nearest power-of-2 >= box/0.8 Å
+        import math
+        fft = int(2 ** math.ceil(math.log2(args.box / 0.8)))
+        fft = max(32, fft)
+        ewald = f"ewald kappa 0.32 order 4 fftx {fft} ffty {fft} fftz {fft}"
+        if ndir > 1:
+            lingo.charmm_script(f"faster on\nenergy {nb} -\n    domd ndir {ndir} 1 1 -\n    {ewald}")
+        else:
+            lingo.charmm_script(f"faster on\nenergy {nb} -\n    {ewald}")
 
     # ------------------------------------------------------------------ probe
     from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
