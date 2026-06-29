@@ -156,10 +156,30 @@ if [[ -z "$CRYSTAL_SIDE" ]]; then
 fi
 CRYSTAL_SIDE="${CRYSTAL_SIDE:-$BOX_SIZE}"
 
-MMML_MPI_NP="${MMML_MPI_NP:-2}"
+MMML_MPI_NP="${MMML_MPI_NP:-8}"
 if ! [[ "$MMML_MPI_NP" =~ ^[1-9][0-9]*$ ]]; then
   echo "MMML_MPI_NP must be a positive integer (got: ${MMML_MPI_NP})" >&2
   exit 1
+fi
+
+if [[ -z "${DOMDEC_NDIR:-}" ]]; then
+  if ! DOMDEC_NDIR="$("$PY" -c "
+from mmml.utils.domdec_ndir import format_domdec_ndir
+print(format_domdec_ndir(${MMML_MPI_NP}))
+" 2>&1)"; then
+    cat >&2 <<EOF
+${DOMDEC_NDIR}
+
+c47 DOMDEC rejects 2–7 MPI nodes per axis (each NDIR axis must be 1 or >= 8).
+For np>1 Tier 3 smoke on site c47, use at least MMML_MPI_NP=8:
+
+  MMML_MPI_NP=8 bash scripts/run_domdec_dcm10_smoke.sh tier3
+
+With cutnb=${DOMDEC_CUTNB}, the crystal side must be >= MMML_MPI_NP * (cutnb + ${DOMDEC_GROUP_HALO}) Å
+(≈ $(( MMML_MPI_NP * (DOMDEC_CUTNB + DOMDEC_GROUP_HALO) ))Å for np=${MMML_MPI_NP}).
+EOF
+    exit 1
+  fi
 fi
 
 _min_box="$(domdec_min_box_size "$MMML_MPI_NP" "$DOMDEC_CUTNB" "$DOMDEC_GROUP_HALO")"
@@ -198,7 +218,6 @@ mkdir -p "$RUN_DIR"
 INP="$RUN_DIR/domdec_dcm${N_DCM}.inp"
 OUT="$RUN_DIR/domdec_dcm${N_DCM}.out"
 
-DOMDEC_NDIR="${DOMDEC_NDIR:-$("$PY" -c "from mmml.utils.domdec_ndir import format_domdec_ndir; print(format_domdec_ndir(${MMML_MPI_NP}))")}"
 if [[ -n "$DOMDEC_CMD" ]]; then
   _domdec_energy_block="${DOMDEC_CMD}
 energy"

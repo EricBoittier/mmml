@@ -19,8 +19,7 @@
 #   N_DCM=10
 #   BOX_SIZE=40          # prep box side (Å); auto-discovered from newest domdec_dcm*_l* prep
 #   DOMDEC_BOX_SIZE=     # override crystal side for tier3 (default: max(BOX_SIZE, np*(cutnb+4)))
-#   DOMDEC_NDIR=2 1 1   # override; default avoids c47 Y=2..7 auto-NDIR trap
-#   DOMDEC_ENERGY='energy domdec ndir 2 1 1'  # full ENER line override
+#   MMML_MPI_NP=8         # c47 DOMDEC: each NDIR axis must be 1 or >=8 (np=2..7 fail)
 #   BOX_DIR=$TESTS_ROOT/boxes/domdec_dcm10_l32
 #   CHARMM_EXE=/path/to/charmm
 #   NATIVE_STATE_CMD='...'  # optional override
@@ -185,7 +184,7 @@ tier3() {
     exit 1
   }
   if [[ -z "${NATIVE_STATE_CMD:-}" ]]; then
-    NATIVE_STATE_CMD="MMML_MPI_NP=2 PSF='$PSF' CRD='$CRD' BOX_SIZE='$BOX_SIZE' BOX_DIR='$BOX_DIR' N_DCM='$N_DCM' bash '$MMML_ROOT/scripts/run_domdec_dcm10_native_charmm.sh'"
+    NATIVE_STATE_CMD="MMML_MPI_NP=${MMML_MPI_NP:-8} PSF='$PSF' CRD='$CRD' BOX_SIZE='$BOX_SIZE' BOX_DIR='$BOX_DIR' N_DCM='$N_DCM' bash '$MMML_ROOT/scripts/run_domdec_dcm10_native_charmm.sh'"
   fi
   echo "$NATIVE_STATE_CMD"
   eval "$NATIVE_STATE_CMD"

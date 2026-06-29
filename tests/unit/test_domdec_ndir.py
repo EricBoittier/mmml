@@ -4,20 +4,31 @@ from __future__ import annotations
 
 import pytest
 
-from mmml.utils.domdec_ndir import format_domdec_ndir, suggest_domdec_ndir
+from mmml.utils.domdec_ndir import format_domdec_ndir, min_domdec_mpi_ranks, suggest_domdec_ndir
 
 
 @pytest.mark.parametrize(
     ("n_ranks", "expected"),
     [
         (1, (1, 1, 1)),
-        (2, (2, 1, 1)),
-        (4, (4, 1, 1)),
         (8, (8, 1, 1)),
+        (16, (16, 1, 1)),
     ],
 )
-def test_suggest_domdec_ndir_avoids_y_split_2_to_7(n_ranks: int, expected: tuple[int, int, int]) -> None:
+def test_suggest_domdec_ndir_c47_axis_rule(n_ranks: int, expected: tuple[int, int, int]) -> None:
     assert suggest_domdec_ndir(n_ranks) == expected
-    parts = [int(x) for x in format_domdec_ndir(n_ranks).split()]
-    assert parts[1] in (1, 8) or parts[1] >= 8
-    assert parts[0] * parts[1] * parts[2] == n_ranks
+    nx, ny, nz = (int(x) for x in format_domdec_ndir(n_ranks).split())
+    for axis in (nx, ny, nz):
+        assert axis == 1 or axis >= 8
+    assert nx * ny * nz == n_ranks
+
+
+@pytest.mark.parametrize("n_ranks", [2, 3, 4, 5, 6, 7])
+def test_suggest_domdec_ndir_rejects_small_np(n_ranks: int) -> None:
+    with pytest.raises(ValueError, match="n_ranks"):
+        suggest_domdec_ndir(n_ranks)
+
+
+def test_min_domdec_mpi_ranks() -> None:
+    assert min_domdec_mpi_ranks() == 1
+    assert min_domdec_mpi_ranks(allow_serial=False) == 8
