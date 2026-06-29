@@ -704,18 +704,18 @@ def plot_learning_curve_scaling(
     plot_style: str | PlotStyle | None = DEFAULT_PLOT_STYLE,
     verbose: bool = True,
 ) -> None:
-    """Plot log10(final metrics) versus 1/√n_train for sweep summary."""
+    """Plot ln(final metrics) versus 1/√n_train for sweep summary."""
     style = _apply_training_plot_style(plot_style)
     points = collect_scaling_points(runs)
     if not points:
         raise ValueError("No scaling points available for plot")
 
     metric_panels = (
-        ("valid_loss", "log10 validation loss"),
-        ("valid_energy_mae", "log10 valid energy MAE (kcal/mol)"),
-        ("valid_forces_mae", "log10 valid forces MAE (kcal/mol/Å)"),
-        ("test_energy_mae", "log10 test energy MAE (kcal/mol)"),
-        ("test_forces_mae", "log10 test forces MAE (kcal/mol/Å)"),
+        ("valid_loss", "ln validation loss"),
+        ("valid_energy_mae", "ln valid energy MAE (kcal/mol)"),
+        ("valid_forces_mae", "ln valid forces MAE (kcal/mol/Å)"),
+        ("test_energy_mae", "ln test energy MAE (kcal/mol)"),
+        ("test_forces_mae", "ln test forces MAE (kcal/mol/Å)"),
     )
 
     ncols = 3
@@ -736,7 +736,7 @@ def plot_learning_curve_scaling(
         for point in metric_points:
             ax.scatter(
                 point.inv_sqrt_n,
-                np.log10(point.values[metric_key]),
+                np.log(point.values[metric_key]),
                 color=repeat_color.get(point.repeat, "#333333"),
                 s=42,
                 alpha=0.9,
@@ -748,7 +748,7 @@ def plot_learning_curve_scaling(
         by_n: dict[int, list[float]] = defaultdict(list)
         inv_sqrt_by_n: dict[int, float] = {}
         for point in metric_points:
-            by_n[point.n_train].append(np.log10(point.values[metric_key]))
+            by_n[point.n_train].append(np.log(point.values[metric_key]))
             inv_sqrt_by_n[point.n_train] = point.inv_sqrt_n
 
         n_sorted = sorted(by_n)
@@ -770,7 +770,7 @@ def plot_learning_curve_scaling(
 
         ax.set_xlabel("1/√n_train")
         ax.set_ylabel(ylabel)
-        ax.set_title(ylabel.replace("log10 ", ""), fontsize=9)
+        ax.set_title(ylabel.replace("ln ", ""), fontsize=9)
         ax.invert_xaxis()
         if ax is axes_flat[0]:
             handles = [
