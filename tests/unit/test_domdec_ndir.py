@@ -63,17 +63,31 @@ def test_suggest_domdec_ndir_non_strict_small_np(n_ranks: int, expected: tuple[i
 
 
 # ---------------------------------------------------------------------------
-# Crystal side minimums
+# Crystal side minimums  (formula: L >= 2*RCUT*N/(N-1), RCUT = cutnb+halo)
 # ---------------------------------------------------------------------------
 
 def test_min_domdec_crystal_side_np2_non_strict() -> None:
-    # Non-strict: np=2 → NDIR 2 1 1, domain = cutnb(15) + halo(4) = 19 Å per domain
-    assert min_domdec_crystal_side_A(2, strict_c47_axis_rule=False) == 38.0
+    # Non-strict: np=2 → NDIR 2 1 1, N=2 along x.
+    # L >= 2*19*2/(2-1) = 4*19 = 76.0 Å  (images would overlap below 76 Å)
+    assert min_domdec_crystal_side_A(2, strict_c47_axis_rule=False) == 76.0
 
 
 def test_min_domdec_crystal_side_np8_default() -> None:
-    # Default strict: np=8 → NDIR 8 1 1, min box = 8 × 19 = 152 Å
-    assert min_domdec_crystal_side_A(8) == 152.0
+    # Default strict: np=8 → NDIR 8 1 1, N=8 along x.
+    # L >= 2*19*8/(8-1) = 304/7 ≈ 43.43 Å
+    import math
+    result = min_domdec_crystal_side_A(8)
+    assert math.isclose(result, 2 * 19 * 8 / 7, rel_tol=1e-9)
+
+
+def test_min_domdec_crystal_side_formula_values() -> None:
+    """Spot-check the 2·RCUT·N/(N−1) formula for several N with RCUT=19."""
+    import math
+    rcut = 19.0
+    for n_ranks, ndir_max in ((8, 8), (16, 16)):
+        expected = 2 * rcut * ndir_max / (ndir_max - 1)
+        result = min_domdec_crystal_side_A(n_ranks)
+        assert math.isclose(result, expected, rel_tol=1e-9), f"N={ndir_max}: {result} != {expected}"
 
 
 # ---------------------------------------------------------------------------

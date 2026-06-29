@@ -186,12 +186,7 @@ Tier 3 will still attempt np=${MMML_MPI_NP} on the dense l40 prep; for a clean g
 EOF
 fi
 
-if [[ "$MMML_MPI_NP" -ge 8 && "$DOMDEC_STRICT_C47" != 1 ]]; then
-  cat >&2 <<EOF
-Note: MMML_MPI_NP=${MMML_MPI_NP} needs a ~152Å prep (c47 np=8 path; dilute, poor PBC images).
-Prefer MMML_MPI_NP=2 with MMML native CHARMM on domdec_dcm10_l40 instead.
-EOF
-fi
+# np>=8 is the MINIMUM for c47 DOMDEC; no additional check needed here.
 
 if [[ -z "${DOMDEC_NDIR:-}" ]]; then
   if ! DOMDEC_NDIR="$("$PY" -c "
@@ -202,7 +197,8 @@ print(format_domdec_ndir(${MMML_MPI_NP}, strict_c47_axis_rule=bool(int('${DOMDEC
 ${DOMDEC_NDIR}
 
 Could not choose DOMDEC NDIR for MMML_MPI_NP=${MMML_MPI_NP}.
-For dense l40 tier3 use MMML_MPI_NP=2 (default). c47 np=8 needs DOMDEC_C47_NDIR_RULE=1 and ~152Å prep.
+c47 requires each NDIR axis to be 1 or >=8; minimum MPI count is 8.
+Box constraint: L >= 2·RCUT·N/(N-1) ≈ 43 Å for N=8, RCUT=19 Å.
 EOF
     exit 1
   fi
@@ -328,7 +324,8 @@ fi
 #
 # Mode B: "DOMDEC node number limitation" / "must have (a) 1 node or (b) at least 8"
 #   → KEY_DOMDEC==1 (compiled in and activating!) but np<8 violates c47 axis rule.
-#   Fix: use np>=8 with a >=152 Å box, or use MMML spatial MPI for liquid-density scaling.
+#   Fix: use np>=8 — box constraint L >= 2·RCUT·8/7 ≈ 43 Å (a ~45 Å box suffices).
+#   Or use MMML spatial MPI for liquid-density MLPot scaling.
 
 if grep -q 'extraneous characters' "$OUT" 2>/dev/null; then
   echo "" >&2
@@ -345,7 +342,9 @@ if grep -qiE 'DOMDEC node number limitation|must have.*1 node.*at least.*8 node'
   echo "PARTIAL PASS: KEY_DOMDEC==1 confirmed (DOMDEC compiled in and activating)." >&2
   echo "  CHARMM correctly rejected np=${MMML_MPI_NP} NDIR ${DOMDEC_NDIR}:" >&2
   echo "  c47 domdec.F90 requires each NDIR axis to be 1 or >=8 nodes." >&2
-  echo "  Minimum for real DOMDEC: np=8 with NDIR 8 1 1 and a >=152 Å box." >&2
+  echo "  Minimum for real DOMDEC: np=8 with NDIR 8 1 1." >&2
+  echo "  Box constraint: L >= 2·RCUT·8/7 ≈ 43 Å (RCUT=cutnb+group_radius≈19 Å)." >&2
+  echo "  A ~45 Å liquid-density DCM box (~700 molecules) is sufficient." >&2
   echo "" >&2
   echo "  For MLPot at liquid density: use MMML spatial MPI instead of DOMDEC." >&2
   echo "  DOMDEC parallelises MM nonbonds; MLPot evaluates as a user-energy term" >&2

@@ -259,7 +259,8 @@ tier3() {
     # This IS the expected outcome for np=2 build-smoke; the binary is correct.
     echo ""
     echo "== Tier 3 result: DOMDEC build CONFIRMED (KEY_DOMDEC==1) =="
-    echo "   np=${MMML_MPI_NP} is below the c47 minimum (need np>=8 with a >=152 Å box)."
+    echo "   np=${MMML_MPI_NP} is below the c47 minimum (need np>=8)."
+    echo "   Box constraint: L >= 2·RCUT·8/7 ≈ 43 Å (RCUT=cutnb+group_radius≈19 Å)."
     echo "   For MLPot liquid-density scaling use MMML spatial MPI (docs/pycharmm-mpi.md)."
     exit 0
   fi

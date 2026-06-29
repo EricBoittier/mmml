@@ -18,7 +18,8 @@ CHARMM_ENERGY_DOC = "setup/charmm/doc/energy.info"
 
 _DOMDEC_NP_HINT = (
     "CHARMM c47 domdec.F90 requires each NDIR axis to be 1 or >=8. "
-    "Minimum useful MPI count is 8 (NDIR 8 1 1) with a >=152 Å box. "
+    "Minimum useful MPI count is 8 (NDIR 8 1 1). "
+    "Required box: L >= 2·RCUT·8/7 ≈ 43 Å for RCUT≈19 Å (cutnb=15 + group_radius≈4). "
     "For liquid-density MLPot scaling use MMML spatial MPI instead of DOMDEC."
 )
 
