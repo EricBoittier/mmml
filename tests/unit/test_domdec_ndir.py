@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from mmml.utils.domdec_ndir import (
+    format_domdec_charmm_commands,
     format_domdec_ndir,
     min_domdec_crystal_side_A,
     min_domdec_mpi_ranks,
@@ -68,3 +69,7 @@ def test_min_domdec_mpi_ranks() -> None:
     assert min_domdec_mpi_ranks() == 1
     assert min_domdec_mpi_ranks(allow_serial=False) == 2
     assert min_domdec_mpi_ranks(allow_serial=False, strict_c47_axis_rule=True) == 8
+
+
+def test_format_domdec_charmm_commands_np2() -> None:
+    assert format_domdec_charmm_commands(2) == "domdec on ndir 2 1 1\nenergy"

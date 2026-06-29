@@ -62,6 +62,7 @@ find_charmm_exe() {
     "$CHARMM_HOME/build/cmake/bin/charmm" \
     "$CHARMM_HOME/charmm" \
     "$CHARMM_HOME/bin/charmm" \
+    "$CHARMM_HOME/bin/charmm" \
     "$CHARMM_HOME/exec/charmm" \
     "$CHARMM_HOME/exec/gnu/charmm" \
     "$HOME/.cache/mmml-charmm-build/$(platform_tag)-exec/charmm" \
@@ -240,9 +241,11 @@ OUT="$RUN_DIR/domdec_dcm${N_DCM}.out"
 if [[ -n "$DOMDEC_CMD" ]]; then
   _domdec_energy_block="${DOMDEC_CMD}
 energy"
-else
-  DOMDEC_ENERGY="${DOMDEC_ENERGY:-energy domdec ndir ${DOMDEC_NDIR}}"
+elif [[ -n "${DOMDEC_ENERGY:-}" ]]; then
   _domdec_energy_block="$DOMDEC_ENERGY"
+else
+  _domdec_energy_block="domdec on ndir ${DOMDEC_NDIR}
+energy"
 fi
 
 cat > "$INP" <<EOF
@@ -318,4 +321,11 @@ EOF
   fi
   exit "${_rc:-1}"
 fi
+
+if grep -q 'extraneous characters' "$OUT" 2>/dev/null && grep -qi 'domdec' "$OUT" 2>/dev/null; then
+  echo "DOMDEC command was not parsed (extraneous-characters warning in $OUT)." >&2
+  echo "Expected: domdec on ndir ${DOMDEC_NDIR} / energy — not 'energy domdec ndir ...'" >&2
+  exit 1
+fi
+
 exit "$_rc"
