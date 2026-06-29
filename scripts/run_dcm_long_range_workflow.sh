@@ -42,6 +42,7 @@ JAX_PME_METHODS="${JAX_PME_METHODS:-ewald,pme,p3m}"
 SCAFACOS_METHODS="${SCAFACOS_METHODS:-ewald,p3m}"
 MM_NONBOND_MODE="${MM_NONBOND_MODE:-jax_mic}"   # jax_mic | periodic_external
 JAX_PME_SR_CUTOFF="${JAX_PME_SR_CUTOFF:-6.0}"
+JAX_PME_DISPERSION="${JAX_PME_DISPERSION:-1}"   # 0 = Coulomb-only jax-pme LR
 
 # --- phases -------------------------------------------------------------------
 SKIP_VALIDATION="${SKIP_VALIDATION:-0}"
@@ -76,6 +77,7 @@ echo " Run root:         $RUN_ROOT"
 echo " mm_nonbond_mode:  $MM_NONBOND_MODE"
 echo " lr_solvers:       ${LR_SOLVERS}"
 echo " jax_pme_methods:  ${JAX_PME_METHODS}"
+echo " jax_pme_disp:     ${JAX_PME_DISPERSION}"
 echo " scafacos_methods: ${SCAFACOS_METHODS}"
 echo "================================================================"
 
@@ -196,6 +198,13 @@ if [[ "$SKIP_MD" != "1" ]]; then
           --seed 123
         )
         [[ -n "$jpm" ]] && MD_ARGS+=(--jax-pme-method "$jpm")
+        if [[ "$lr" == "jax_pme" ]]; then
+          if [[ "$JAX_PME_DISPERSION" == "0" || "$JAX_PME_DISPERSION" == "false" || "$JAX_PME_DISPERSION" == "False" ]]; then
+            MD_ARGS+=(--no-jax-pme-dispersion)
+          else
+            MD_ARGS+=(--jax-pme-dispersion)
+          fi
+        fi
         [[ -n "$scm" ]] && MD_ARGS+=(--scafacos-method "$scm")
 
         status="ok"

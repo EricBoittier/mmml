@@ -862,13 +862,21 @@ def build_decomposed_mlpot_model(
         if args is not None
         else 6.0
     )
+    jax_pme_dispersion = (
+        getattr(args, "jax_pme_dispersion", None) if args is not None else None
+    )
     if verbose and do_mm and lr_solver:
         from mmml.interfaces.pycharmmInterface.long_range_backend import describe_lr_solver
 
+        disp_text = (
+            "env/default"
+            if jax_pme_dispersion is None
+            else ("on" if bool(jax_pme_dispersion) else "off")
+        )
         print(
             f"Decomposed MLpot: {describe_lr_solver(lr_solver)} "
             f"(jax-pme method={jax_pme_method or 'ewald'}, sr_cutoff={jax_pme_sr_cutoff:.1f} Å; "
-            f"Coulomb + r^-6 LJ via jax-pme when lr_solver=jax_pme)",
+            f"r^-6 dispersion={disp_text} when lr_solver=jax_pme)",
             flush=True,
         )
     factory = setup_calculator(
@@ -902,6 +910,7 @@ def build_decomposed_mlpot_model(
         lr_solver=lr_solver,
         jax_pme_method=jax_pme_method,
         jax_pme_sr_cutoff_A=jax_pme_sr_cutoff,
+        jax_pme_dispersion=jax_pme_dispersion,
         mm_nonbond_mode=mm_nonbond_mode,
         periodic_charmm_vdw=(
             resolve_periodic_charmm_vdw(args) if args is not None else True

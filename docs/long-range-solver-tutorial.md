@@ -44,6 +44,7 @@ relies on jax-pme's r⁻⁶ dispersion support.
 | `--lr-solver`                      | `auto`, `mic`, `jax_pme`, `nvalchemiops_pme`, `scafacos` | env / `auto` → **jax_pme** | Hybrid default: switched MM + jax-pme full−intra handoff |
 | `--jax-pme-method`                 | `ewald`, `pme`, `p3m`                | `ewald`      | jax-pme variant                 |
 | `--jax-pme-sr-cutoff`              | float (Å)                            | `6.0`        | jax-pme real-space cutoff       |
+| `--jax-pme-dispersion` / `--no-jax-pme-dispersion` | bool                 | env / on     | Include r⁻⁶ LJ-PME tail; off = Coulomb-only LR |
 | `--scafacos-method`                | `ewald`, `p3m`, …                    | `ewald`      | ScaFaCoS `fcs_init` string      |
 | `--include-mm` / `--no-include-mm` | bool                                 | on           | JAX MM pair path (LJ ± Coulomb) |
 
@@ -54,6 +55,7 @@ Environment mirrors:
 export MMML_LR_SOLVER=jax_pme      # mic | jax_pme | nvalchemiops_pme | scafacos | auto
 export JAX_PME_METHOD=pme          # ewald | pme | p3m
 export JAX_PME_SR_CUTOFF=6.0
+export MMML_JAX_PME_DISPERSION=1  # set 0 for Coulomb-only timing/smokes
 export MMML_NVALCHEMIOPS_PME_ACCURACY=1e-6
 export SCAFACOS_LIB=$HOME/.local/scafacos/lib/libfcs.so
 export SCAFACOS_METHOD=ewald
@@ -116,6 +118,8 @@ Compare with truncated MIC (default):
 ```
 
 Swap `--jax-pme-method` to `pme` or `p3m` to test mesh methods.
+For Coulomb-only timing or smoke tests, add `--no-jax-pme-dispersion`; this
+keeps full switched LJ pairs and skips the r⁻⁶ PME full/intra calls.
 
 ---
 
@@ -173,6 +177,12 @@ JAX_PME_METHODS=ewald,p3m \
 N_DCM=60 BOX_SIZE=32 \
 ~/mmml/scripts/run_dcm_long_range_workflow.sh
 
+# Coulomb-only jax-pme sweep (skips r^-6 LJ-PME full/intra calls)
+LR_SOLVERS=jax_pme \
+JAX_PME_METHODS=ewald,pme,p3m \
+JAX_PME_DISPERSION=0 \
+~/mmml/scripts/run_dcm_long_range_workflow.sh
+
 # Validation only (no MD)
 SKIP_MD=1 ~/mmml/scripts/run_dcm_long_range_workflow.sh
 
@@ -183,6 +193,16 @@ SCAFACOS_METHODS=ewald,p3m \
 ```
 
 Results land in `~/tests/runs/dcm<N>_l<L>_lr_solvers/solver_comparison.tsv` (includes `hybrid_grms_kcalmol_A` per solver).
+
+For a fast force-eval microbenchmark without MD:
+
+```bash
+uv run python tests/functionality/long_range/08_benchmark_jax_pme_hybrid.py \
+  --methods ewald,pme,p3m --repeat 10
+
+uv run python tests/functionality/long_range/08_benchmark_jax_pme_hybrid.py \
+  --methods ewald,pme,p3m --coulomb-only --profile
+```
 
 ### Force validation (same certified box)
 

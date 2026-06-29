@@ -231,3 +231,43 @@ def test_zero_coulomb_still_reuses_switch_scale_for_dispersion(monkeypatch):
     )
     assert out.energy_kcalmol == pytest.approx(0.0)
     np.testing.assert_allclose(out.forces_kcalmol_A, 0.0)
+
+
+def test_hybrid_coulomb_only_skips_dispersion(monkeypatch):
+    """Coulomb-only mode avoids the r^-6 full and intra jax-pme calls."""
+
+    def _fake_coulomb(*args, **kwargs):
+        positions = np.asarray(args[0], dtype=np.float64)
+        from mmml.interfaces.pycharmmInterface.long_range_backend import LongRangeInteractionResult
+
+        return LongRangeInteractionResult(
+            energy_kcalmol=1.0,
+            forces_kcalmol_A=np.ones_like(positions),
+        )
+
+    def _raise_dispersion(*args, **kwargs):
+        raise AssertionError("dispersion jax-pme should be skipped")
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb.hybrid_jax_pme_coulomb_correction",
+        _fake_coulomb,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb.hybrid_jax_pme_lj_dispersion_correction",
+        _raise_dispersion,
+    )
+    system = ion_dimer_system(separation_A=6.0, box_length_A=40.0)
+    offsets = np.array([0, 1, 2], dtype=np.int64)
+    out = hybrid_jax_pme_mm_lr_correction(
+        system.positions_A,
+        system.charges_e,
+        offsets,
+        box_length_A=system.box_length_A,
+        method="ewald",
+        sr_cutoff_A=6.0,
+        c6_sqrt=np.ones_like(system.charges_e),
+        pbc_cell=np.eye(3) * system.box_length_A,
+        include_dispersion=False,
+    )
+    assert out.energy_kcalmol == pytest.approx(1.0)
+    assert out.dispersion is None

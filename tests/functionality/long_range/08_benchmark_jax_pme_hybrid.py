@@ -12,12 +12,15 @@ Examples
   uv run python tests/functionality/long_range/08_benchmark_jax_pme_hybrid.py \
       --n-monomers 25 --atoms-per-monomer 5 --methods ewald,pme,p3m
   uv run python tests/functionality/long_range/08_benchmark_jax_pme_hybrid.py \
+      --methods ewald,pme,p3m --coulomb-only --profile
+  uv run python tests/functionality/long_range/08_benchmark_jax_pme_hybrid.py \
       --wrapped-mm --repeat 10
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 import statistics
 import time
 from collections.abc import Callable
@@ -93,6 +96,7 @@ def _direct_hybrid_fn(
     box_side: float,
     method: str,
     sr_cutoff: float,
+    include_dispersion: bool,
 ) -> Callable[[], None]:
     cell = np.eye(3, dtype=np.float64) * float(box_side)
 
@@ -104,13 +108,14 @@ def _direct_hybrid_fn(
             box_length_A=float(box_side),
             method=method,
             sr_cutoff_A=float(sr_cutoff),
-            c6_sqrt=c6_sqrt,
+            c6_sqrt=c6_sqrt if include_dispersion else None,
             monomer_id=monomer_id,
             lambda_monomer=np.ones(len(offsets) - 1, dtype=np.float64),
             pbc_cell=cell,
             ml_switch_width=1.0,
             mm_switch_on=6.0,
             mm_switch_width=4.0,
+            include_dispersion=include_dispersion,
         )
 
     return eval_once
@@ -123,6 +128,7 @@ def _wrapped_mm_fn(
     box_side: float,
     method: str,
     sr_cutoff: float,
+    include_dispersion: bool,
 ) -> Callable[[], None]:
     from mmml.interfaces.pycharmmInterface.mm_energy_forces import build_mm_energy_forces_fn
 
@@ -145,6 +151,7 @@ def _wrapped_mm_fn(
         lr_solver="jax_pme",
         jax_pme_method=method,
         jax_pme_sr_cutoff_A=float(sr_cutoff),
+        jax_pme_dispersion=include_dispersion,
     )
     if isinstance(result, tuple):
         mm_fn, update_fn = result
@@ -169,13 +176,23 @@ def main() -> int:
     parser.add_argument("--spacing", type=float, default=4.0)
     parser.add_argument(
         "--methods",
-        default="ewald",
+        default="ewald,pme,p3m",
         help="comma-separated jax-pme methods; mesh methods may abort on unsupported hosts",
     )
     parser.add_argument("--repeat", type=int, default=10)
     parser.add_argument("--warmup", type=int, default=2)
     parser.add_argument("--sr-cutoff", type=float, default=6.0)
     parser.add_argument("--seed", type=int, default=7)
+    parser.add_argument(
+        "--coulomb-only",
+        action="store_true",
+        help="skip r^-6 LJ-PME dispersion to measure Coulomb-only long range",
+    )
+    parser.add_argument(
+        "--profile",
+        action="store_true",
+        help="set MMML_JAX_PME_PROFILE=per_call for component-level timings",
+    )
     parser.add_argument(
         "--wrapped-mm",
         action="store_true",
@@ -186,6 +203,8 @@ def main() -> int:
     if not have_jax_pme_package():
         print("SKIP: jax-pme is not installed")
         return 0
+    if args.profile:
+        os.environ["MMML_JAX_PME_PROFILE"] = "per_call"
 
     positions, charges, c6_sqrt, offsets, monomer_id = _synthetic_cluster(
         n_monomers=args.n_monomers,
@@ -195,10 +214,12 @@ def main() -> int:
         seed=args.seed,
     )
     mode = "wrapped-mm" if args.wrapped_mm else "direct-hybrid"
+    long_range_mode = "coulomb-only" if args.coulomb_only else "coulomb+r^-6"
     print_header(f"jax-pme hybrid benchmark ({mode})")
     print(
         f"n_monomers={args.n_monomers} atoms_per={args.atoms_per_monomer} "
-        f"n_atoms={positions.shape[0]} box={args.box_side:.1f} Å repeat={args.repeat}"
+        f"n_atoms={positions.shape[0]} box={args.box_side:.1f} Å repeat={args.repeat} "
+        f"long_range={long_range_mode}"
     )
     print("method        median_ms/eval   mean_ms/eval   note")
 
@@ -211,6 +232,7 @@ def main() -> int:
                     box_side=args.box_side,
                     method=method,
                     sr_cutoff=args.sr_cutoff,
+                    include_dispersion=not args.coulomb_only,
                 )
             else:
                 fn = _direct_hybrid_fn(
@@ -222,6 +244,7 @@ def main() -> int:
                     box_side=args.box_side,
                     method=method,
                     sr_cutoff=args.sr_cutoff,
+                    include_dispersion=not args.coulomb_only,
                 )
             median_ms, mean_ms = _median_ms(fn, repeat=args.repeat, warmup=args.warmup)
             print(f"{method:10s} {median_ms:15.2f} {mean_ms:14.2f}   ok")

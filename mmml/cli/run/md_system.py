@@ -1106,6 +1106,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="jax-pme real-space cutoff in Å (default 6.0).",
     )
     parser.add_argument(
+        "--jax-pme-dispersion",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "pycharmm jax_mic + jax_pme: include reciprocal r^-6 LJ dispersion "
+            "(default: env MMML_JAX_PME_DISPERSION or on). Use "
+            "--no-jax-pme-dispersion for Coulomb-only long range."
+        ),
+    )
+    parser.add_argument(
         "--scafacos-method",
         type=str,
         default=None,
@@ -2320,6 +2330,13 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     _append_optional(cmd, "--lr-solver", getattr(args, "lr_solver", None))
     _append_optional(cmd, "--jax-pme-method", getattr(args, "jax_pme_method", None))
     _append_optional(cmd, "--jax-pme-sr-cutoff", getattr(args, "jax_pme_sr_cutoff", None))
+    jax_pme_dispersion = getattr(args, "jax_pme_dispersion", None)
+    if jax_pme_dispersion is not None:
+        _append_boolean_optional_flag(
+            cmd,
+            "--jax-pme-dispersion",
+            bool(jax_pme_dispersion),
+        )
     _append_optional(cmd, "--scafacos-method", getattr(args, "scafacos_method", None))
     _append_boolean_optional_flag(
         cmd,

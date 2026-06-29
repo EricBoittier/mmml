@@ -3432,6 +3432,16 @@ def add_staged_md_args(parser: argparse.ArgumentParser) -> None:
         help="jax-pme real-space cutoff Å (default 6.0).",
     )
     group.add_argument(
+        "--jax-pme-dispersion",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "When --lr-solver=jax_pme in jax_mic mode, include reciprocal r^-6 "
+            "LJ dispersion via jax-pme (default: env MMML_JAX_PME_DISPERSION or on). "
+            "Use --no-jax-pme-dispersion for Coulomb-only long range."
+        ),
+    )
+    group.add_argument(
         "--scafacos-method",
         type=str,
         default=None,

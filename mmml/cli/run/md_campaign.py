@@ -143,6 +143,7 @@ _CAMPAIGN_CLI_EXPLICIT_OVERRIDE_KEYS: tuple[str, ...] = (
     "lr_solver",
     "jax_pme_method",
     "jax_pme_sr_cutoff",
+    "jax_pme_dispersion",
     "scafacos_method",
     "mm_nonbond_mode",
     "periodic_charmm_vdw",

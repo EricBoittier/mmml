@@ -34,6 +34,14 @@ CHARMM_COULOMB_KCAL = 332.063711
 DEFAULT_JAX_PME_SR_CUTOFF_A = 6.0
 
 
+def resolve_jax_pme_dispersion(enabled: bool | None = None) -> bool:
+    """Whether jax-pme supplies the r^-6 LJ tail in hybrid MM (default on)."""
+    if enabled is not None:
+        return bool(enabled)
+    raw = os.environ.get("MMML_JAX_PME_DISPERSION", "1").strip().lower()
+    return raw not in ("0", "false", "no", "off")
+
+
 def jax_pme_host_device_name() -> str:
     """Device for jax-pme work invoked from host ``pure_callback`` (default CPU)."""
     return (os.environ.get("MMML_JAX_PME_DEVICE") or "cpu").strip().lower()
@@ -146,6 +154,7 @@ def warmup_jax_pme_hybrid_host(
     method: JaxPmeMethod | str = "ewald",
     sr_cutoff_A: float = DEFAULT_JAX_PME_SR_CUTOFF_A,
     c6_sqrt: np.ndarray | None = None,
+    include_dispersion: bool | None = None,
 ) -> dict[str, int]:
     """Pre-warm full-system and representative intra jax-pme hybrid shapes.
 
@@ -210,7 +219,7 @@ def warmup_jax_pme_hybrid_host(
             )
             counts["coulomb_intra"] += 1
 
-    if c6_sqrt is not None:
+    if c6_sqrt is not None and resolve_jax_pme_dispersion(include_dispersion):
         c6 = np.asarray(c6_sqrt, dtype=np.float64).reshape(-1)
         if _nonzero(c6):
             warmup_jax_pme_power_law_host(
@@ -323,6 +332,21 @@ LongRangeCoulombResult = LongRangeInteractionResult
 DEFAULT_JAX_PME_LJ_PREFACTOR = -1.0
 
 
+@lru_cache(maxsize=32)
+def _cached_jax_pme_calculator(
+    method_name: JaxPmeMethod,
+    exponent: int,
+    prefactor: float,
+):
+    from jaxpme import Ewald, P3M, PME
+
+    calc_map = {"ewald": Ewald, "pme": PME, "p3m": P3M}
+    return calc_map[method_name](
+        exponent=int(exponent),
+        prefactor=float(prefactor),
+    )
+
+
 @dataclass(frozen=True)
 class _JaxPmePowerLawHostEvaluator:
     method_name: JaxPmeMethod
@@ -339,7 +363,7 @@ class _JaxPmePowerLawHostEvaluator:
     ) -> LongRangeInteractionResult:
         """Evaluate one fixed-shape jax-pme power-law problem on the host."""
         from ase import Atoms
-        from jaxpme import Ewald, P3M, PME
+        from jaxpme import Ewald, P3M, PME  # noqa: F401
 
         pos = np.asarray(positions_A, dtype=np.float64)
         coef = np.asarray(coefficients, dtype=np.float64).reshape(-1)
@@ -358,10 +382,10 @@ class _JaxPmePowerLawHostEvaluator:
             cell=np.eye(3, dtype=np.float64) * float(self.box_length_A),
             pbc=True,
         )
-        calc_map = {"ewald": Ewald, "pme": PME, "p3m": P3M}
-        calc = calc_map[self.method_name](
-            exponent=int(self.exponent),
-            prefactor=float(self.prefactor),
+        calc = _cached_jax_pme_calculator(
+            self.method_name,
+            int(self.exponent),
+            float(self.prefactor),
         )
         smearing = float(self.sr_cutoff_A) / 5.0
         mesh_spacing = smearing / 8.0
@@ -795,6 +819,7 @@ def collect_lr_solver_mapping(
     lr_solver: str | None = None,
     jax_pme_method: str | None = None,
     jax_pme_sr_cutoff_A: float = DEFAULT_JAX_PME_SR_CUTOFF_A,
+    jax_pme_dispersion: bool | None = None,
     scafacos_method: str | None = None,
     mm_nonbond_mode: str = "jax_mic",
     do_mm: bool = True,
@@ -869,4 +894,7 @@ def collect_lr_solver_mapping(
         mapping["coulomb_mode"] = "jax-pme k-space + pair SR (switched MM)"
         mapping["jax_pme_method"] = resolve_jax_pme_method(jax_pme_method)
         mapping["jax_pme_sr_cutoff_Å"] = f"{float(jax_pme_sr_cutoff_A):.1f}"
+        mapping["jax_pme_dispersion"] = (
+            "on" if resolve_jax_pme_dispersion(jax_pme_dispersion) else "off"
+        )
     return mapping

@@ -825,6 +825,7 @@ Hybrid ML/MM potentials use three COM-distance knobs (Å) plus optional long-ran
 | `lr_solver` | Long-range Coulomb: `auto`, `mic`, `scafacos`, `jax_pme`, `nvalchemiops_pme` (`jax_mic`: MIC or jax-pme elec + switched LJ; `periodic_external`: jax-pme, nvalchemiops PME, or ScaFaCoS) | env / `auto` → **jax_pme** |
 | `jax_pme_method` | jax-pme variant when `lr_solver: jax_pme`: `ewald`, `pme`, `p3m` | `ewald` |
 | `jax_pme_sr_cutoff` | jax-pme real-space cutoff (Å) | `6.0` |
+| `jax_pme_dispersion` | Include reciprocal r⁻⁶ LJ-PME tail when `lr_solver: jax_pme`; set false for Coulomb-only long range | env / true |
 | `periodic_charmm_vdw` | With `periodic_external`: keep CHARMM IMAGE LJ (default true) | true |
 
 Legacy YAML aliases still work: `ml_cutoff` → `ml_switch_width`, `mm_cutoff` → `mm_switch_width`.

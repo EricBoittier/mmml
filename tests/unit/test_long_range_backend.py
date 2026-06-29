@@ -13,6 +13,7 @@ from mmml.interfaces.pycharmmInterface.long_range_backend import (
     create_lr_solver,
     describe_lr_solver,
     pick_lr_solver,
+    resolve_jax_pme_dispersion,
     resolve_lr_solver,
 )
 
@@ -28,6 +29,14 @@ def test_resolve_lr_solver_accepts_known_names():
 def test_resolve_lr_solver_rejects_unknown():
     with pytest.raises(ValueError, match="lr_solver must be"):
         resolve_lr_solver("ewald")
+
+
+def test_resolve_jax_pme_dispersion_env(monkeypatch):
+    monkeypatch.delenv("MMML_JAX_PME_DISPERSION", raising=False)
+    assert resolve_jax_pme_dispersion() is True
+    monkeypatch.setenv("MMML_JAX_PME_DISPERSION", "0")
+    assert resolve_jax_pme_dispersion() is False
+    assert resolve_jax_pme_dispersion(True) is True
 
 
 def test_pick_lr_solver_auto_prefers_jax_pme():
@@ -214,12 +223,14 @@ def test_collect_lr_solver_mapping_jax_pme():
             lr_solver="jax_pme",
             jax_pme_method="pme",
             jax_pme_sr_cutoff_A=7.5,
+            jax_pme_dispersion=False,
         )
     assert mapping["lr_solver"] == "jax_pme"
     assert mapping["lr_solver_active"] == "jax_pme"
     assert mapping["mm_nonbond_mode"] == "jax_mic"
     assert mapping["jax_pme_method"] == "pme"
     assert mapping["jax_pme_sr_cutoff_Å"] == "7.5"
+    assert mapping["jax_pme_dispersion"] == "off"
     assert "switched MM" in mapping["coulomb_mode"]
     assert "lr_solver_requested" not in mapping
 

@@ -375,6 +375,7 @@ def setup_calculator(
     lr_solver: str | None = None,
     jax_pme_method: str | None = None,
     jax_pme_sr_cutoff_A: float = 6.0,
+    jax_pme_dispersion: bool | None = None,
     mm_nonbond_mode: str = "jax_mic",
     periodic_charmm_vdw: bool = True,
 ):
@@ -941,6 +942,7 @@ def setup_calculator(
             lr_solver=lr_solver,
             jax_pme_method=jax_pme_method,
             jax_pme_sr_cutoff_A=jax_pme_sr_cutoff_A,
+            jax_pme_dispersion=jax_pme_dispersion,
             mm_nonbond_mode=mm_nonbond_mode,
             do_mm=doMM,
             periodic_charmm_vdw=periodic_charmm_vdw,
@@ -1048,6 +1050,7 @@ def setup_calculator(
             lr_solver=lr_solver,
             jax_pme_method=jax_pme_method,
             jax_pme_sr_cutoff_A=jax_pme_sr_cutoff_A,
+            jax_pme_dispersion=jax_pme_dispersion,
         )
         if isinstance(result_jaxmd, tuple):
             mm_fn_jaxmd, update_fn = result_jaxmd
@@ -1085,6 +1088,7 @@ def setup_calculator(
                 lr_solver=lr_solver,
                 jax_pme_method=jax_pme_method,
                 jax_pme_sr_cutoff_A=jax_pme_sr_cutoff_A,
+                jax_pme_dispersion=jax_pme_dispersion,
             )
             return (mm_fn_jaxmd, mm_fn_cell), update_fn
         return result_jaxmd, None

@@ -353,11 +353,13 @@ def test_build_pycharmm_command_forwards_jax_pme_flags():
             lr_solver="jax_pme",
             jax_pme_method="pme",
             jax_pme_sr_cutoff=7.5,
+            jax_pme_dispersion=False,
         )
     )
     assert cmd[cmd.index("--lr-solver") + 1] == "jax_pme"
     assert cmd[cmd.index("--jax-pme-method") + 1] == "pme"
     assert cmd[cmd.index("--jax-pme-sr-cutoff") + 1] == "7.5"
+    assert "--no-jax-pme-dispersion" in cmd
 
 
 def test_build_pycharmm_command_forwards_no_periodic_charmm_vdw():

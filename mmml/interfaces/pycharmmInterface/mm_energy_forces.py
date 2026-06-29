@@ -491,6 +491,7 @@ def _jax_pme_hybrid_mm_pure_callback(
     mm_switch_width: float,
     complementary_handoff: bool,
     mm_r_min: float | None,
+    jax_pme_dispersion: bool | None = None,
 ) -> Tuple[Array, Array]:
     """Host hybrid jax-pme (full − intra) callable from inside ``jax.jit``."""
     from mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
@@ -552,6 +553,7 @@ def _jax_pme_hybrid_mm_pure_callback(
                 mm_switch_width=mm_switch_width,
                 complementary_handoff=complementary_handoff,
                 mm_r_min=mm_r_min,
+                include_dispersion=jax_pme_dispersion,
             )
         return (
             np.asarray(lr.energy_kcalmol, dtype=out_dtype),
@@ -607,6 +609,7 @@ def _wrap_mm_fn_with_jax_pme_coulomb(
     static_pair_i: np.ndarray | None = None,
     static_pair_j: np.ndarray | None = None,
     static_pair_mask: np.ndarray | None = None,
+    jax_pme_dispersion: bool | None = None,
 ) -> Callable[..., Tuple[Array, Array]]:
     """Add hybrid jax-pme Coulomb (+ optional r⁻⁶ LJ) to switched cross-monomer MM.
 
@@ -645,6 +648,7 @@ def _wrap_mm_fn_with_jax_pme_coulomb(
         static_box_L=static_box_L,
         method=method,
         sr_cutoff_A=sr_cutoff_A,
+        jax_pme_dispersion=jax_pme_dispersion,
         ml_switch_width=ml_switch_width,
         mm_switch_on=mm_switch_on,
         mm_switch_width=mm_switch_width,
@@ -727,6 +731,7 @@ def build_mm_energy_forces_fn(
     lr_solver: str | None = None,
     jax_pme_method: str | None = None,
     jax_pme_sr_cutoff_A: float = 6.0,
+    jax_pme_dispersion: bool | None = None,
 ) -> Any:
     """Build MM energy/forces function with switching.
 
@@ -756,13 +761,17 @@ def build_mm_energy_forces_fn(
         per_atom_jax_pme_c6_sqrt_for_atoms,
         per_atom_monomer_ids,
         pick_lr_solver,
+        resolve_jax_pme_dispersion,
         resolve_jax_pme_method,
         scale_per_atom_coefficients_by_monomer_lambda,
         warmup_jax_pme_hybrid_host,
     )
 
     _use_jax_pme_coulomb = pick_lr_solver(lr_solver) == "jax_pme"
-    _use_jax_pme_dispersion = _use_jax_pme_coulomb and pbc_cell is not None
+    _jax_pme_include_dispersion = resolve_jax_pme_dispersion(jax_pme_dispersion)
+    _use_jax_pme_dispersion = (
+        _use_jax_pme_coulomb and pbc_cell is not None and _jax_pme_include_dispersion
+    )
     _jax_pme_method = resolve_jax_pme_method(jax_pme_method)
     _jax_pme_sr_cutoff = float(jax_pme_sr_cutoff_A)
     if ml_cutoff_distance is not None:
@@ -1049,6 +1058,7 @@ def build_mm_energy_forces_fn(
                 method=_jax_pme_method,
                 sr_cutoff_A=_jax_pme_sr_cutoff,
                 c6_sqrt=_jax_pme_c6_sqrt_np,
+                include_dispersion=_jax_pme_include_dispersion,
             )
         except Exception as exc:
             if debug:
@@ -1861,6 +1871,7 @@ def build_mm_energy_forces_fn(
                 pbc_cell=np.asarray(pbc_cell) if pbc_cell is not None else None,
                 method=_jax_pme_method,
                 sr_cutoff_A=_jax_pme_sr_cutoff,
+                jax_pme_dispersion=_jax_pme_include_dispersion,
                 dynamic=True,
                 monomer_offsets=_offsets_np,
                 monomer_id_np=_monomer_id_np,
@@ -1887,6 +1898,7 @@ def build_mm_energy_forces_fn(
             pbc_cell=np.asarray(pbc_cell) if pbc_cell is not None else None,
             method=_jax_pme_method,
             sr_cutoff_A=_jax_pme_sr_cutoff,
+            jax_pme_dispersion=_jax_pme_include_dispersion,
             dynamic=False,
             monomer_offsets=_offsets_np,
             monomer_id_np=_monomer_id_np,

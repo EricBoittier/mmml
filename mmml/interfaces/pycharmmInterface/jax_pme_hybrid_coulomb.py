@@ -23,6 +23,7 @@ import os
 import sys
 import time
 from dataclasses import dataclass
+from functools import lru_cache
 
 import numpy as np
 
@@ -118,17 +119,22 @@ def _zero_correction(
     )
 
 
-def _monomer_slices_by_size(monomer_offsets: np.ndarray) -> dict[int, list[slice]]:
-    offsets = np.asarray(monomer_offsets, dtype=np.int64)
-    grouped: dict[int, list[slice]] = {}
-    for m in range(int(len(offsets) - 1)):
-        start = int(offsets[m])
-        stop = int(offsets[m + 1])
+@lru_cache(maxsize=128)
+def _monomer_ranges_by_size(offsets_key: tuple[int, ...]) -> tuple[tuple[int, tuple[tuple[int, int], ...]], ...]:
+    grouped: dict[int, list[tuple[int, int]]] = {}
+    for m in range(int(len(offsets_key) - 1)):
+        start = int(offsets_key[m])
+        stop = int(offsets_key[m + 1])
         size = stop - start
         if size <= 0:
             continue
-        grouped.setdefault(size, []).append(slice(start, stop))
-    return grouped
+        grouped.setdefault(size, []).append((start, stop))
+    return tuple((size, tuple(ranges)) for size, ranges in sorted(grouped.items()))
+
+
+def _monomer_slices_by_size(monomer_offsets: np.ndarray) -> tuple[tuple[int, tuple[tuple[int, int], ...]], ...]:
+    offsets = tuple(int(v) for v in np.asarray(monomer_offsets, dtype=np.int64).reshape(-1))
+    return _monomer_ranges_by_size(offsets)
 
 
 def _mic_displacement_np(ri: np.ndarray, rj: np.ndarray, cell: np.ndarray) -> np.ndarray:
@@ -248,9 +254,14 @@ def _intra_monomer_jax_pme_power_law(
         return _zero_correction(pos)
     energy = 0.0
     forces = np.zeros_like(pos)
-    for _size, slices in _monomer_slices_by_size(offsets).items():
+    for _size, ranges in _monomer_slices_by_size(offsets):
+        if not any(np.any(coef[start:stop] != 0.0) for start, stop in ranges):
+            continue
         # Grouping identical monomer sizes keeps the cached host evaluator hot.
-        for sl in slices:
+        for start, stop in ranges:
+            if not bool(np.any(coef[start:stop] != 0.0)):
+                continue
+            sl = slice(start, stop)
             sub = compute_jax_pme_power_law(
                 pos[sl],
                 coef[sl],
@@ -550,8 +561,13 @@ def hybrid_jax_pme_mm_lr_correction(
     complementary_handoff: bool = True,
     mm_r_min: float | None = None,
     subtract_pair_mic_sr: bool = False,
+    include_dispersion: bool | None = None,
 ) -> HybridJaxPmeMmResult:
     """Combined hybrid Coulomb + r⁻⁶ dispersion (each full − intra, same COM scale)."""
+    from mmml.interfaces.pycharmmInterface.long_range_backend import (
+        resolve_jax_pme_dispersion,
+    )
+
     t0 = _profile_start()
     coulomb = hybrid_jax_pme_coulomb_correction(
         positions_A,
@@ -575,7 +591,7 @@ def hybrid_jax_pme_mm_lr_correction(
     )
     _record_profile("hybrid_coulomb_total", t0)
     dispersion: HybridJaxPmeCorrectionResult | None = None
-    if c6_sqrt is not None:
+    if c6_sqrt is not None and resolve_jax_pme_dispersion(include_dispersion):
         t0 = _profile_start()
         dispersion = hybrid_jax_pme_lj_dispersion_correction(
             positions_A,

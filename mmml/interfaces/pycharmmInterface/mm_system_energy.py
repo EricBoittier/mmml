@@ -24,6 +24,7 @@ from mmml.interfaces.pycharmmInterface.long_range_backend import (
     box_length_from_cell,
     compute_jax_pme_coulomb,
     pick_lr_solver,
+    resolve_jax_pme_dispersion,
     resolve_jax_pme_method,
 )
 from mmml.interfaces.pycharmmInterface.pbc_utils_jax import mic_displacement
@@ -264,6 +265,7 @@ def nonbonded_energy_and_forces(
     lr_solver: str | None = None,
     jax_pme_method: str | None = None,
     jax_pme_sr_cutoff_A: float = 6.0,
+    jax_pme_dispersion: bool | None = None,
 ) -> tuple[dict[str, Array], Array]:
     """Switched VDW + Coulomb for all atom pairs within ``cutnb``.
 
@@ -272,6 +274,7 @@ def nonbonded_energy_and_forces(
     with jax-pme (Ewald/PME/P3M).
     """
     use_jax_pme = pick_lr_solver(lr_solver) == "jax_pme"
+    use_jax_pme_dispersion = use_jax_pme and resolve_jax_pme_dispersion(jax_pme_dispersion)
     pme_method = resolve_jax_pme_method(jax_pme_method)
     pos = jnp.asarray(positions, dtype=jnp.float64)
     cell_j = jnp.asarray(cell, dtype=jnp.float64)
@@ -320,7 +323,7 @@ def nonbonded_energy_and_forces(
         sig_r6 = (sig / r_safe) ** 6
         vdw_r12 = ep * (sig_r6 * sig_r6)
         vdw_full = ep * (sig_r6 * sig_r6 - 2.0 * sig_r6)
-        vdw = vdw_r12 if use_jax_pme else vdw_full
+        vdw = vdw_r12 if use_jax_pme_dispersion else vdw_full
 
         qq = q[pi] * q[pj] * e14_scale / settings.eps
         elec = COULOMB_KCAL * qq / r_safe
@@ -347,27 +350,28 @@ def nonbonded_energy_and_forces(
             method=pme_method,
             sr_cutoff_A=float(jax_pme_sr_cutoff_A),
         )
-        from mmml.interfaces.pycharmmInterface.long_range_backend import (
-            compute_jax_pme_lj_dispersion,
-            per_atom_jax_pme_c6_sqrt,
-        )
-
-        c6_sqrt = per_atom_jax_pme_c6_sqrt(
-            np.abs(nbond_data.epsilon),
-            nbond_data.rmin,
-        )
-        disp = compute_jax_pme_lj_dispersion(
-            pos_np,
-            c6_sqrt,
-            box_length_A=box_length_from_cell(np.asarray(cell)),
-            method=pme_method,
-            sr_cutoff_A=float(jax_pme_sr_cutoff_A),
-        )
         elec_energy = jnp.asarray(pme.energy_kcalmol, dtype=pos.dtype)
-        vdw_disp = jnp.asarray(disp.energy_kcalmol, dtype=pos.dtype)
-        vdw_energy = vdw_energy + vdw_disp
         forces = forces + jnp.asarray(pme.forces_kcalmol_A, dtype=pos.dtype)
-        forces = forces + jnp.asarray(disp.forces_kcalmol_A, dtype=pos.dtype)
+        if use_jax_pme_dispersion:
+            from mmml.interfaces.pycharmmInterface.long_range_backend import (
+                compute_jax_pme_lj_dispersion,
+                per_atom_jax_pme_c6_sqrt,
+            )
+
+            c6_sqrt = per_atom_jax_pme_c6_sqrt(
+                np.abs(nbond_data.epsilon),
+                nbond_data.rmin,
+            )
+            disp = compute_jax_pme_lj_dispersion(
+                pos_np,
+                c6_sqrt,
+                box_length_A=box_length_from_cell(np.asarray(cell)),
+                method=pme_method,
+                sr_cutoff_A=float(jax_pme_sr_cutoff_A),
+            )
+            vdw_disp = jnp.asarray(disp.energy_kcalmol, dtype=pos.dtype)
+            vdw_energy = vdw_energy + vdw_disp
+            forces = forces + jnp.asarray(disp.forces_kcalmol_A, dtype=pos.dtype)
         energy = vdw_energy + elec_energy
     components = {
         "vdw": vdw_energy,
@@ -388,6 +392,7 @@ def mm_system_energy_and_forces(
     lr_solver: str | None = None,
     jax_pme_method: str | None = None,
     jax_pme_sr_cutoff_A: float = 6.0,
+    jax_pme_dispersion: bool | None = None,
 ) -> MmSystemEnergyResult:
     """Bonded + switched nonbonded MM energy and forces (kcal/mol, kcal/mol/Å)."""
     _ = prm_file
@@ -405,6 +410,7 @@ def mm_system_energy_and_forces(
         lr_solver=lr_solver,
         jax_pme_method=jax_pme_method,
         jax_pme_sr_cutoff_A=jax_pme_sr_cutoff_A,
+        jax_pme_dispersion=jax_pme_dispersion,
     )
     forces = np.asarray(bonded_forces + nb_forces, dtype=np.float64)
     bonded = {k: float(v) for k, v in bonded_comp.items()}
