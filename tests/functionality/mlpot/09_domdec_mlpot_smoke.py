@@ -247,12 +247,21 @@ def _load_prebuilt_topology(psf_path: Path, crd_path: Path) -> tuple["np.ndarray
     import pycharmm.coor as coor
     import pycharmm.read as read
 
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
     from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
     if not psf_path.is_file():
         raise FileNotFoundError(f"Prebuilt PSF not found: {psf_path}")
     if not crd_path.is_file():
         raise FileNotFoundError(f"Prebuilt CRD not found: {crd_path}")
+
+    _rank_log(f"load CGENFF PRM before PSF begin {CGENFF_PRM}")
+    with charmm_relaxed_bomlev():
+        # The prebuilt PSF references CGenFF atom-type names (e.g. CG321).
+        # Loading the PRM first provides MASS/type records without the MPI-unsafe RTF read.
+        read.prm(CGENFF_PRM)
+    _rank_log("load CGENFF PRM before PSF done")
 
     _rank_log(f"load prebuilt PSF begin {psf_path}")
     read.psf_card(str(psf_path))
