@@ -290,6 +290,7 @@ def emit_hybrid_ml_setup(
     model: Any,
     checkpoint: Mapping[str, Any] | None = None,
     ml_flags: Mapping[str, Any] | None = None,
+    runtime: Mapping[str, Any] | None = None,
     long_range: Mapping[str, Any] | None = None,
     quiet: bool = False,
 ) -> None:
@@ -306,6 +307,8 @@ def emit_hybrid_ml_setup(
             ("Model", _model_attributes_mapping(model)),
         ]
     )
+    if runtime:
+        sections.append(("Runtime threads", runtime))
     if ml_flags:
         sections.append(("ML/MM flags", ml_flags))
     if checkpoint:

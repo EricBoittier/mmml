@@ -12,12 +12,12 @@ Related:
 
 ## Problem statement
 
-GPU-cluster `libcharmm.so` builds are **MPI-linked**. Serial `python -m mmml md-system` **may** segfault in Fortran `upinb` or MLpot `send_coord_to_recip` on some stacks (historically DCM clusters with `OMP_NUM_THREADS>1` and JAX/CUDA before MLpot SD). Mitigations:
+GPU-cluster `libcharmm.so` builds are **MPI-linked**. Serial `python -m mmml md-system` **may** segfault in Fortran `upinb` or MLpot `send_coord_to_recip` on some stacks (historically DCM clusters where high thread counts, JAX/CUDA warmup, MPI bootstrap, and module-library choices were correlated). Treat `OMP_NUM_THREADS>1` as a performance/stability variable to validate on each stack, not as a proven root cause. Mitigations:
 
 1. Launch under the **same OpenMPI** as `libcharmm.so` (`./scripts/mmml-charmm-mpirun.sh`)
 2. Defer JAX GPU warmup until after MLpot SD on MPI builds (launcher default)
 3. Keep DOMDEC **off** during MLpot (stability stopgap)
-4. Pin `OMP_NUM_THREADS=1` during CHARMM neighbor-list updates
+4. Default to `OMP_NUM_THREADS=1` for conservative startup; opt into higher values with `--charmm-omp-threads N`
 
 **Node validation:** the serial-vs-mpirun probe (`08_serial_vs_mpirun_md_system.py`) passed on **gpu09** (June 2026): serial `python md-system` and `MMML_MPI_NP=1` mpirun both completed the ACO:2 hybrid mini with matching outcomes. The blanket segfault claim is **environment-dependent** — re-run the probe after OpenMPI / module / `libcharmm.so` changes or on a new node.
 
@@ -161,7 +161,7 @@ MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh md-system \
 | `MMML_MPI_NP` | `1` | `mpirun -np` count |
 | `MMML_NO_MPI_RERUN` | off | Disable auto re-exec under mpirun |
 | `MMML_MPIRUN` | auto | Override `mpirun` path |
-| `MMML_CHARMM_OMP_THREADS` | `1` | Pin OpenMP in `upinb`; set via `mmml md-system --charmm-omp-threads N` or YAML `charmm_omp_threads: N` |
+| `MMML_CHARMM_OMP_THREADS` | `1` | Pin CHARMM OpenMP threads; set via `mmml md-system --charmm-omp-threads N` or YAML `charmm_omp_threads: N`. When explicit, MMML also uses `N` as the default MKL/OpenBLAS/NumExpr/JAX compile thread budget unless those env vars are already exported. |
 | `MMML_DEFER_JAX_WARMUP_UNTIL_AFTER_SD` | on (MPI) | JAX after MLpot SD |
 | `MMML_MLPOT_RANK0_BRIDGE` | `1` | Rank 0 runs MLpot when `np>1` |
 

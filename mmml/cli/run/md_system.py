@@ -2064,7 +2064,7 @@ def _apply_backend_setup_defaults(args: argparse.Namespace) -> None:
 
 
 def _apply_charmm_omp_threads_env(args: argparse.Namespace) -> str | None:
-    """Apply the md-system CHARMM OpenMP override before PyCHARMM bootstrap."""
+    """Apply the md-system CPU thread override before PyCHARMM/JAX bootstrap."""
     raw = getattr(args, "charmm_omp_threads", None)
     if raw is None:
         return None
@@ -2074,6 +2074,14 @@ def _apply_charmm_omp_threads_env(args: argparse.Namespace) -> str | None:
     value = str(threads)
     os.environ["MMML_CHARMM_OMP_THREADS"] = value
     os.environ["OMP_NUM_THREADS"] = value
+    os.environ.setdefault("MKL_NUM_THREADS", value)
+    os.environ.setdefault("OPENBLAS_NUM_THREADS", value)
+    os.environ.setdefault("NUMEXPR_NUM_THREADS", value)
+    os.environ.setdefault("MMML_JAX_COMPILE_THREADS", value)
+    # The MPI wrapper historically disables compile threading by default. An
+    # explicit CPU thread request should opt back in unless a caller later
+    # overrides MMML_JAX_COMPILE_THREADS.
+    os.environ["MMML_NO_JAX_COMPILE_THREADS"] = "0"
     return value
 
 

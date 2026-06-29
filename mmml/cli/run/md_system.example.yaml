@@ -34,6 +34,8 @@ defaults:
   mm_switch_width: 1.5
   ml_switch_width: 1.0
   # PyCHARMM/MLpot CPU experiment knob: default is 1 for MPI-linked safety.
+  # When set, this also becomes the default MKL/OpenBLAS/NumExpr/JAX compile
+  # thread budget unless those env vars are already exported.
   # charmm_omp_threads: 4
 
 campaign_output: artifacts/dcm20_pipeline

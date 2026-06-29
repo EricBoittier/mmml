@@ -869,20 +869,26 @@ def prepare_charmm_mpi_runtime() -> None:
 
 
 def _pin_charmm_openmp_for_serial_mlpot() -> None:
-    """Serial MLpot + MPI-linked ``libcharmm.so``: OpenMP in ``upinb`` must stay single-threaded.
+    """Serial MLpot + MPI-linked ``libcharmm.so``: choose OpenMP thread caps.
 
-    Module stacks often export ``OMP_NUM_THREADS`` > 1; combined with JAX/CUDA that
-    intermittently segfaults in ``__nbexcl_MOD_upinb``.  Override with
-    ``MMML_CHARMM_OMP_THREADS`` or disable via ``MMML_NO_CHARMM_OMP_PIN=1``.
+    Default to one CHARMM/OpenMP thread for conservative MPI-linked MLpot runs.
+    When ``MMML_CHARMM_OMP_THREADS`` is explicit, use that same value as the
+    default CPU thread budget for BLAS/NumExpr too, unless those variables were
+    already set by the caller.
     """
     if _truthy("MMML_NO_CHARMM_OMP_PIN") or not charmm_lib_links_mpi():
         return
-    threads = (os.environ.get("MMML_CHARMM_OMP_THREADS") or "1").strip() or "1"
+    explicit = (os.environ.get("MMML_CHARMM_OMP_THREADS") or "").strip()
+    threads = explicit or "1"
     os.environ["OMP_NUM_THREADS"] = threads
     os.environ.setdefault("OMP_PROC_BIND", "true")
-    os.environ.setdefault("MKL_NUM_THREADS", "1")
-    os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
-    os.environ.setdefault("NUMEXPR_NUM_THREADS", "1")
+    cpu_threads = threads if explicit else "1"
+    os.environ.setdefault("MKL_NUM_THREADS", cpu_threads)
+    os.environ.setdefault("OPENBLAS_NUM_THREADS", cpu_threads)
+    os.environ.setdefault("NUMEXPR_NUM_THREADS", cpu_threads)
+    if explicit:
+        os.environ.setdefault("MMML_JAX_COMPILE_THREADS", cpu_threads)
+        os.environ["MMML_NO_JAX_COMPILE_THREADS"] = "0"
 
 
 def configure_mpi4py_charmm_owned_init() -> None:

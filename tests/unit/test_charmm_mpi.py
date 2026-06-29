@@ -267,6 +267,56 @@ def test_prepare_serial_charmm_mpi_env_pins_omp_threads(monkeypatch):
     assert os.environ["OMP_NUM_THREADS"] == "1"
 
 
+def test_prepare_serial_charmm_mpi_env_uses_explicit_thread_budget(monkeypatch):
+    monkeypatch.delenv("MMML_NO_CHARMM_OMP_PIN", raising=False)
+    monkeypatch.setenv("MMML_CHARMM_OMP_THREADS", "8")
+    monkeypatch.delenv("MKL_NUM_THREADS", raising=False)
+    monkeypatch.delenv("OPENBLAS_NUM_THREADS", raising=False)
+    monkeypatch.delenv("NUMEXPR_NUM_THREADS", raising=False)
+    monkeypatch.delenv("MMML_JAX_COMPILE_THREADS", raising=False)
+    monkeypatch.setenv("MMML_NO_JAX_COMPILE_THREADS", "1")
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.prepare_charmm_mpi_runtime",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.scrub_stale_openmpi_env",
+        return_value=0,
+    ):
+        charmm_mpi.prepare_serial_charmm_mpi_env()
+    assert os.environ["OMP_NUM_THREADS"] == "8"
+    assert os.environ["MKL_NUM_THREADS"] == "8"
+    assert os.environ["OPENBLAS_NUM_THREADS"] == "8"
+    assert os.environ["NUMEXPR_NUM_THREADS"] == "8"
+    assert os.environ["MMML_JAX_COMPILE_THREADS"] == "8"
+    assert os.environ["MMML_NO_JAX_COMPILE_THREADS"] == "0"
+
+
+def test_prepare_serial_charmm_mpi_env_preserves_explicit_blas_threads(monkeypatch):
+    monkeypatch.delenv("MMML_NO_CHARMM_OMP_PIN", raising=False)
+    monkeypatch.setenv("MMML_CHARMM_OMP_THREADS", "8")
+    monkeypatch.setenv("MKL_NUM_THREADS", "2")
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.prepare_charmm_mpi_runtime",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.scrub_stale_openmpi_env",
+        return_value=0,
+    ):
+        charmm_mpi.prepare_serial_charmm_mpi_env()
+    assert os.environ["OMP_NUM_THREADS"] == "8"
+    assert os.environ["MKL_NUM_THREADS"] == "2"
+
+
 def test_configure_mpi4py_charmm_owned_init(monkeypatch):
     pytest.importorskip("mpi4py")
     monkeypatch.delenv("MMML_MPI_PY_INIT", raising=False)

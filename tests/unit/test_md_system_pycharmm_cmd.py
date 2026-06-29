@@ -245,12 +245,36 @@ def test_parse_md_system_config_accepts_charmm_omp_threads(tmp_path):
 def test_apply_charmm_omp_threads_env_sets_bootstrap_env(monkeypatch):
     monkeypatch.delenv("MMML_CHARMM_OMP_THREADS", raising=False)
     monkeypatch.delenv("OMP_NUM_THREADS", raising=False)
+    monkeypatch.delenv("MKL_NUM_THREADS", raising=False)
+    monkeypatch.delenv("OPENBLAS_NUM_THREADS", raising=False)
+    monkeypatch.delenv("NUMEXPR_NUM_THREADS", raising=False)
+    monkeypatch.delenv("MMML_JAX_COMPILE_THREADS", raising=False)
+    monkeypatch.setenv("MMML_NO_JAX_COMPILE_THREADS", "1")
 
     applied = _apply_charmm_omp_threads_env(_pycharmm_args(charmm_omp_threads=8))
 
     assert applied == "8"
     assert os.environ["MMML_CHARMM_OMP_THREADS"] == "8"
     assert os.environ["OMP_NUM_THREADS"] == "8"
+    assert os.environ["MKL_NUM_THREADS"] == "8"
+    assert os.environ["OPENBLAS_NUM_THREADS"] == "8"
+    assert os.environ["NUMEXPR_NUM_THREADS"] == "8"
+    assert os.environ["MMML_JAX_COMPILE_THREADS"] == "8"
+    assert os.environ["MMML_NO_JAX_COMPILE_THREADS"] == "0"
+
+
+def test_apply_charmm_omp_threads_env_preserves_explicit_library_threads(monkeypatch):
+    monkeypatch.setenv("MKL_NUM_THREADS", "2")
+    monkeypatch.setenv("OPENBLAS_NUM_THREADS", "3")
+    monkeypatch.setenv("NUMEXPR_NUM_THREADS", "4")
+    monkeypatch.setenv("MMML_JAX_COMPILE_THREADS", "5")
+
+    _apply_charmm_omp_threads_env(_pycharmm_args(charmm_omp_threads=8))
+
+    assert os.environ["MKL_NUM_THREADS"] == "2"
+    assert os.environ["OPENBLAS_NUM_THREADS"] == "3"
+    assert os.environ["NUMEXPR_NUM_THREADS"] == "4"
+    assert os.environ["MMML_JAX_COMPILE_THREADS"] == "5"
 
 
 def test_apply_charmm_omp_threads_env_rejects_nonpositive():

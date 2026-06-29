@@ -908,8 +908,6 @@ def setup_calculator(
             "max_atoms": max_atoms,
             "ml_compute_dtype": str(ml_jnp_dtype),
             "checkpoint_dir": str(restart_path.resolve()),
-            "OMP_NUM_THREADS": os.environ.get("OMP_NUM_THREADS", "unset"),
-            "MMML_CHARMM_OMP_THREADS": os.environ.get("MMML_CHARMM_OMP_THREADS", "unset"),
         },
         handoff={
             "ml_switch_width_Å": f"{ml_switch_width:.4f}",
@@ -934,6 +932,15 @@ def setup_calculator(
         },
         model=MODEL,
         checkpoint=checkpoint_meta,
+        runtime={
+            "OMP_NUM_THREADS": os.environ.get("OMP_NUM_THREADS", "unset"),
+            "MMML_CHARMM_OMP_THREADS": os.environ.get("MMML_CHARMM_OMP_THREADS", "unset"),
+            "MKL_NUM_THREADS": os.environ.get("MKL_NUM_THREADS", "unset"),
+            "OPENBLAS_NUM_THREADS": os.environ.get("OPENBLAS_NUM_THREADS", "unset"),
+            "NUMEXPR_NUM_THREADS": os.environ.get("NUMEXPR_NUM_THREADS", "unset"),
+            "MMML_JAX_COMPILE_THREADS": os.environ.get("MMML_JAX_COMPILE_THREADS", "unset"),
+            "MMML_NO_JAX_COMPILE_THREADS": os.environ.get("MMML_NO_JAX_COMPILE_THREADS", "unset"),
+        },
         ml_flags={
             "doML": doML,
             "doMM": doMM,
