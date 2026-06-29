@@ -14,19 +14,21 @@ Two independent sub-tests:
    counts are rank-correct.
 
 2. **Live CHARMM ENER** (``--charmm-ener``, cluster only, requires
-   ``--checkpoint`` and prebuilt PSF/CRD):
-   Loads a DCM PSF/CRD, issues ``domdec ndir N 1 1`` + ``faster on``,
-   registers ``DecomposedMlpotCalculator`` (multi-monomer), enables spatial
-   MPI, and runs ``energy.show()``.  Reports ``domdec_summary()`` for each
-   rank after the ENER call.
+   ``--checkpoint`` and prebuilt PSF/CRD/**RES**):
+   At ``np>1``, loads a CHARMM restart written at ``np=1`` (multi-step
+   ``read rtf/psf`` hangs under MPI on current builds).  Then issues
+   ``domdec ndir N 1 1`` + ``faster on``, registers spatial MLpot, ENER.
 
 Prerequisites
 -------------
-Prebuilt PSF/CRD for the live path (run once at ``MMML_MPI_NP=1``)::
+Prebuilt PSF/CRD/**RES** for the live path (run once at ``MMML_MPI_NP=1``)::
 
     MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh python \\
       tests/functionality/mlpot/10_domdec_spatial_mpi_smoke.py \\
       --prepare-prebuilt-only --residue DCM --n-molecules 20 --box-side 40
+
+The prepare step writes ``artifacts/domdec_spatial_smoke/dcm_20mer.{psf,crd,res}``.
+``np>1`` live ENER loads the ``.res`` restart (not the RTF/PSF chain).
 
 Callback-only (np=2, no checkpoint; CPU node: add JAX_PLATFORM_NAME=cpu)::
 
@@ -169,11 +171,55 @@ def _sync_import_pycharmm(*, tag: str = "sync") -> None:
     _mpi_barrier(tag=tag)
 
 
-def _prebuilt_paths(args: argparse.Namespace) -> tuple[Path, Path]:
+def _prebuilt_paths(args: argparse.Namespace) -> tuple[Path, Path, Path]:
     stem = f"{args.residue.lower()}_{args.n_molecules}mer"
-    psf = args.prebuilt_psf or (Path(args.prebuilt_dir) / f"{stem}.psf")
-    crd = args.prebuilt_crd or (Path(args.prebuilt_dir) / f"{stem}.crd")
-    return Path(psf), Path(crd)
+    base = Path(args.prebuilt_dir)
+    psf = args.prebuilt_psf or (base / f"{stem}.psf")
+    crd = args.prebuilt_crd or (base / f"{stem}.crd")
+    res = base / f"{stem}.res"
+    return Path(psf), Path(crd), Path(res)
+
+
+def _write_prebuilt_restart(res_path: Path, *, write_unit: int = 20) -> None:
+    """Write CHARMM restart from in-memory state (np=1 prepare phase)."""
+    import pycharmm.lingo as lingo
+
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
+
+    res_path.parent.mkdir(parents=True, exist_ok=True)
+    fortran_path, alias = charmm_fortran_path(res_path, for_write=True)
+    with charmm_relaxed_bomlev():
+        lingo.charmm_script(
+            f"open write form unit {write_unit} name {fortran_path}\n"
+            f"write restart unit {write_unit}\n"
+            f"close unit {write_unit}\n"
+        )
+    if alias is not None:
+        alias.finalize()
+
+
+def _load_prebuilt_restart_mpi(res_path: Path, *, read_unit: int = 20) -> None:
+    """Load prebuilt state via ``read restart`` (np>1 MPI-safe bootstrap)."""
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import mpi_charmm_script
+    from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
+
+    if not res_path.is_file():
+        raise FileNotFoundError(
+            f"Prebuilt restart not found: {res_path}\n"
+            "Re-run --prepare-prebuilt-only with MMML_MPI_NP=1 (writes .res)."
+        )
+    fortran_path, alias = charmm_fortran_path(res_path, for_write=False)
+    script = (
+        f"open read unit {read_unit} form name {fortran_path}\n"
+        f"read restart unit {read_unit}\n"
+        f"close unit {read_unit}\n"
+    )
+    try:
+        mpi_charmm_script(script, relaxed_bomlev=True)
+    finally:
+        if alias is not None:
+            alias.finalize()
 
 
 def _print_dry_run(args: argparse.Namespace) -> None:
@@ -383,13 +429,15 @@ def _prepare_prebuilt(args: argparse.Namespace) -> int:
 
     import pycharmm.write as write
 
-    psf_path, crd_path = _prebuilt_paths(args)
+    psf_path, crd_path, res_path = _prebuilt_paths(args)
     psf_path.parent.mkdir(parents=True, exist_ok=True)
     _log("prepare", f"writing PSF → {psf_path}")
     write.psf_card(str(psf_path), title=f"DOMDEC spatial MPI smoke {args.residue}:{args.n_molecules}")
     _log("prepare", f"writing CRD → {crd_path}")
     write.coor_card(str(crd_path), title="coords")
-    print(f"\nPASS prepare: PSF={psf_path}  CRD={crd_path}")
+    _log("prepare", f"writing RES → {res_path}")
+    _write_prebuilt_restart(res_path)
+    print(f"\nPASS prepare: PSF={psf_path}  CRD={crd_path}  RES={res_path}")
     return 0
 
 
@@ -463,33 +511,34 @@ def _load_prebuilt(args: argparse.Namespace) -> tuple["np.ndarray", "np.ndarray"
     from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
     from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
-    psf_path, crd_path = _prebuilt_paths(args)
-    if not psf_path.is_file():
-        raise FileNotFoundError(
-            f"Prebuilt PSF not found: {psf_path}\n"
-            "Run with --prepare-prebuilt-only first (MMML_MPI_NP=1)."
-        )
-    if not crd_path.is_file():
-        raise FileNotFoundError(f"Prebuilt CRD not found: {crd_path}")
-
     rank, size = _mpi_info()
-    # Full CGENFF RTF stream (read_cgenff_toppar) deadlocks under mpirun np>1.
-    # Load only MASS records required by the prebuilt PSF, then PRM + PSF/CRD.
-    minimal_rtf = _ensure_shared_minimal_rtf(psf_path, Path(CGENFF_PRM)).resolve()
-    psf_abs = psf_path.resolve()
-    crd_abs = crd_path.resolve()
-    prm_abs = Path(CGENFF_PRM).resolve()
-    n_types = len(_psf_atom_types(psf_path))
-    _mpi_barrier(tag="load")
-    _log("load", f"READ begin ({n_types} MASS types) rtf={minimal_rtf.name}")
-    read_script = (
-        f"read rtf card name {minimal_rtf}\n"
-        f"read param card name {prm_abs} flex\n"
-        f"read psf card name {psf_abs}\n"
-        f"read coor card name {crd_abs}\n"
-    )
-    mpi_charmm_script(read_script, relaxed_bomlev=True)
-    _log("load", "read topology done")
+    psf_path, crd_path, res_path = _prebuilt_paths(args)
+    if size > 1:
+        _log("load", f"MPI read restart begin: {res_path.resolve()}")
+        _load_prebuilt_restart_mpi(res_path.resolve())
+        _log("load", "MPI read restart done")
+    else:
+        if not psf_path.is_file():
+            raise FileNotFoundError(
+                f"Prebuilt PSF not found: {psf_path}\n"
+                "Run with --prepare-prebuilt-only first (MMML_MPI_NP=1)."
+            )
+        if not crd_path.is_file():
+            raise FileNotFoundError(f"Prebuilt CRD not found: {crd_path}")
+        minimal_rtf = _ensure_shared_minimal_rtf(psf_path, Path(CGENFF_PRM)).resolve()
+        psf_abs = psf_path.resolve()
+        crd_abs = crd_path.resolve()
+        prm_abs = Path(CGENFF_PRM).resolve()
+        n_types = len(_psf_atom_types(psf_path))
+        _log("load", f"serial READ begin ({n_types} MASS types)")
+        read_script = (
+            f"read rtf card name {minimal_rtf}\n"
+            f"read param card name {prm_abs} flex\n"
+            f"read psf card name {psf_abs}\n"
+            f"read coor card name {crd_abs}\n"
+        )
+        mpi_charmm_script(read_script, relaxed_bomlev=True)
+        _log("load", "serial READ done")
     _log("load", f"loaded PSF/CRD on rank {rank}/{size}")
 
     z = np.asarray(get_Z_from_psf(), dtype=int)
@@ -497,8 +546,8 @@ def _load_prebuilt(args: argparse.Namespace) -> tuple["np.ndarray", "np.ndarray"
     n_atoms = len(z)
     if n_atoms <= 0:
         raise RuntimeError(
-            f"rank {rank}/{size}: CHARMM PSF has n_atoms={n_atoms} after prebuilt load. "
-            "Under MPI, all ranks must enter READ together (rank 0 disk I/O + Fortran broadcast)."
+            f"rank {rank}/{size}: empty CHARMM state after prebuilt load. "
+            "At np>1 use read restart (.res from --prepare-prebuilt-only)."
         )
     n_monomers = int(args.n_molecules)
     apm_cli = args.atoms_per_monomer
@@ -525,9 +574,15 @@ def _charmm_domdec_ener_smoke(args: argparse.Namespace) -> int:
 
     from _common import check_mlpot_symbols, resolve_checkpoint
 
-    # Match 09_domdec_mlpot_smoke: load topology before ASE / heavy JAX imports.
-    # First PyCHARMM touch is pycharmm.lib via check_mlpot_symbols; import_pycharmm
-    # loads during _load_prebuilt (CGENFF_PRM). main() already set MPI skip guards.
+    _log("ener", "loading prebuilt topology")
+    os.environ["MMML_NO_CHARMM_DOMDEC_OFF"] = "1"
+    _sync_import_pycharmm(tag="ener")
+
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import mpi_charmm_script
+
+    _log("ener", "crystal free (MPI bootstrap)")
+    mpi_charmm_script("crystal free\n", quiet=True)
+
     _log("ener", "checking MLpot symbols")
     missing = check_mlpot_symbols()
     if missing:
@@ -553,11 +608,6 @@ def _charmm_domdec_ener_smoke(args: argparse.Namespace) -> int:
         )
         ndir = max(1, int(float(args.box_side) / float(args.cutnb)))
         _log("ener", f"ndir reduced to {ndir}")
-
-    _log("ener", "loading prebuilt topology")
-    # Guard: disable the automatic domdec-off hook so active DOMDEC survives MLpot registration
-    os.environ["MMML_NO_CHARMM_DOMDEC_OFF"] = "1"
-    _sync_import_pycharmm(tag="ener")
 
     z, r, n_monomers, atoms_per_monomer = _load_prebuilt(args)
     n_atoms = len(z)
