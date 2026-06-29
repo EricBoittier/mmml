@@ -199,7 +199,7 @@ def _read_int32_1d_array(sym: str) -> Optional[np.ndarray]:
         return None
     try:
         desc = _GF1DArrayDescriptor.in_dll(lib, sym)
-    except (OSError, ValueError, AttributeError):
+    except (OSError, ValueError, AttributeError, TypeError):
         return None
 
     if not desc.base_addr:

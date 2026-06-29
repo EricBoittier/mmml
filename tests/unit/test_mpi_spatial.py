@@ -50,10 +50,12 @@ def test_resolve_halo_radius_default():
     assert r < 20.0
 
 
-def test_survey_domdec_api_no_pycharmm_ghost_api():
+def test_survey_domdec_api_capabilities():
     survey = survey_domdec_api()
     assert survey.charmm_fortran_domdec is True
-    assert survey.pycharmm_ghost_atom_api is False
+    # Both atom-map APIs are now implemented via domdec_atoms.py ctypes reader
+    assert survey.pycharmm_local_atom_api is True
+    assert survey.pycharmm_ghost_atom_api is True
     assert survey.mmml_disable_domdec_for_mlpot is True
 
 
