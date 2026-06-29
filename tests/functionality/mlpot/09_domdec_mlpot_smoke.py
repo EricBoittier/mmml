@@ -73,6 +73,14 @@ def _parse_args() -> argparse.Namespace:
         help="Allow np>1. Default refuses because this Tier 3 smoke can hang in CHARMM setup.",
     )
     parser.add_argument(
+        "--no-skip-vacuum-crystal-free-on-mpi",
+        action="store_true",
+        help=(
+            "For np>1 diagnostics, do not monkeypatch the pre-cluster vacuum "
+            "crystal-free helper. This reproduces the known hang."
+        ),
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Print the recommended cluster command and exit without importing PyCHARMM.",
@@ -156,6 +164,16 @@ def _known_domdec_order_issue(residue: str) -> str | None:
     return None
 
 
+def _skip_vacuum_crystal_free_for_mpi_cluster_build() -> None:
+    """Avoid the known np>1 hang in the fresh-process cluster-build reset."""
+    import mmml.interfaces.pycharmmInterface.mlpot.setup as mlpot_setup
+
+    def _skip() -> None:
+        _rank_log("skipping pre-cluster prepare_charmm_vacuum/crystal free for np>1")
+
+    mlpot_setup.prepare_charmm_vacuum = _skip
+
+
 def main() -> int:
     args = _parse_args()
     if args.dry_run:
@@ -182,6 +200,8 @@ def main() -> int:
             flush=True,
         )
         return 4
+    if size > 1 and not args.no_skip_vacuum_crystal_free_on_mpi:
+        _skip_vacuum_crystal_free_for_mpi_cluster_build()
 
     domdec_command = None if args.no_domdec_command else args.domdec_command
     if _domdec_command_turns_on(domdec_command) and not args.allow_domdec_order_risk:
