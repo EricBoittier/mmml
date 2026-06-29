@@ -395,10 +395,18 @@ def _psf_atom_types(psf_path: Path) -> set[str]:
     return types
 
 
-def _minimal_rtf_for_psf_types(psf_path: Path, prm_path: Path) -> Path:
-    """Minimal MASS-only RTF for MPI-safe prebuilt PSF load (see 09_domdec_mlpot_smoke)."""
-    import tempfile
+def _shared_minimal_rtf_path(psf_path: Path) -> Path:
+    """Deterministic sidecar path — all MPI ranks must read the same RTF file."""
+    return psf_path.with_name(f"{psf_path.stem}.minimal_mass.rtf")
 
+
+def _ensure_shared_minimal_rtf(psf_path: Path, prm_path: Path) -> Path:
+    """Build minimal MASS-only RTF beside the PSF (shared path for MPI read.rtf).
+
+    Per-rank ``tempfile.mkstemp`` paths deadlock under ``mpirun``: CHARMM MPI
+    expects every rank to pass the same filename to ``read rtf`` (rank 0 reads,
+    others receive the broadcast topology).
+    """
     needed = _psf_atom_types(psf_path)
     mass_lines: list[str] = []
     seen: set[str] = set()
@@ -411,22 +419,26 @@ def _minimal_rtf_for_psf_types(psf_path: Path, prm_path: Path) -> Path:
     if missing:
         raise ValueError(f"Missing MASS records in {prm_path}: {missing}")
 
-    fd, name = tempfile.mkstemp(suffix=".rtf", prefix="mmml_domdec_mass_")
-    path = Path(name)
-    with os.fdopen(fd, "w", encoding="utf-8") as handle:
-        handle.write("* MMML DOMDEC spatial smoke minimal MASS topology\n")
-        handle.write("*\n")
-        for line in mass_lines:
-            handle.write(f"{line}\n")
-        handle.write("END\n")
-    return path
+    out = _shared_minimal_rtf_path(psf_path)
+    lines = [
+        "* MMML DOMDEC spatial smoke minimal MASS topology",
+        "*",
+        *mass_lines,
+        "END",
+    ]
+    rank, size = _mpi_info()
+    if rank == 0 or (size <= 1 and not out.is_file()):
+        out.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    if size > 1:
+        _mpi_barrier(tag="load")
+    return out
 
 
 def _load_prebuilt(args: argparse.Namespace) -> tuple["np.ndarray", "np.ndarray", int, list[int]]:
     """Load prebuilt PSF/CRD and return (z, r, n_monomers, atoms_per_monomer)."""
     import numpy as np
     import pycharmm.coor as coor
-    import pycharmm.read as read
+    import pycharmm.lingo as lingo
 
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
     from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
@@ -444,26 +456,19 @@ def _load_prebuilt(args: argparse.Namespace) -> tuple["np.ndarray", "np.ndarray"
     rank, size = _mpi_info()
     # Full CGENFF RTF stream (read_cgenff_toppar) deadlocks under mpirun np>1.
     # Load only MASS records required by the prebuilt PSF, then PRM + PSF/CRD.
-    minimal_rtf = _minimal_rtf_for_psf_types(psf_path, Path(CGENFF_PRM))
+    minimal_rtf = _ensure_shared_minimal_rtf(psf_path, Path(CGENFF_PRM))
     n_types = len(_psf_atom_types(psf_path))
     _mpi_barrier(tag="load")
-    _log("load", f"minimal MASS RTF ({n_types} types) begin")
+    _log("load", f"read topology ({n_types} MASS types) begin: {minimal_rtf}")
+    read_script = (
+        f"read rtf card name {minimal_rtf}\n"
+        f"read param card name {CGENFF_PRM} flex\n"
+        f"read psf card name {psf_path}\n"
+        f"read coor card name {crd_path}\n"
+    )
     with charmm_relaxed_bomlev():
-        read.rtf(str(minimal_rtf))
-    _log("load", "minimal MASS RTF done")
-    _mpi_barrier(tag="load")
-    _log("load", f"reading PRM: {CGENFF_PRM}")
-    with charmm_relaxed_bomlev():
-        read.prm(CGENFF_PRM)
-    _log("load", "PRM done")
-    _mpi_barrier(tag="load")
-    _log("load", f"reading PSF: {psf_path}")
-    with charmm_relaxed_bomlev():
-        read.psf_card(str(psf_path))
-    _mpi_barrier(tag="load")
-    _log("load", f"reading CRD: {crd_path}")
-    with charmm_relaxed_bomlev():
-        read.coor_card(str(crd_path))
+        lingo.charmm_script(read_script)
+    _log("load", "read topology done")
     _mpi_barrier(tag="load")
     _log("load", f"loaded PSF/CRD on rank {rank}/{size}")
 
@@ -491,37 +496,13 @@ def _load_prebuilt(args: argparse.Namespace) -> tuple["np.ndarray", "np.ndarray"
 def _charmm_domdec_ener_smoke(args: argparse.Namespace) -> int:
     """Live CHARMM ENER: prebuilt DCM + DOMDEC + spatial MPI."""
     rank, size = _mpi_info()
-
-    # import_pycharmm must load before any other mmml path that transitively
-    # imports it; on np>1, main() already set MMML_SKIP_CHARMM_RESET_BLOCK.
-    _log("ener", "importing import_pycharmm")
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-    _log("ener", "import_pycharmm done")
-    _mpi_barrier(tag="ener")
-
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import ensure_mpi4py_after_charmm_init
-
-    if not ensure_mpi4py_after_charmm_init(phase="before ASE import in live ENER"):
-        print("FAIL: mpi4py.MPI not available after PyCHARMM import", file=sys.stderr)
-        return 1
-    _mpi_barrier(tag="ener")
-
-    import ase
-    import pycharmm
-    import pycharmm.energy as energy
-    import pycharmm.lingo as lingo
-
-    from _common import check_mlpot_symbols, resolve_checkpoint
-    from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import domdec_summary
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
-        load_physnet_mlpot_bundle,
-        register_mlpot,
-        select_all_atoms,
-    )
-
     ndir = args.ndir or size  # default: one domain per rank along x
 
+    from _common import check_mlpot_symbols, resolve_checkpoint
+
+    # Match 09_domdec_mlpot_smoke: load topology before ASE / heavy JAX imports.
+    # First PyCHARMM touch is pycharmm.lib via check_mlpot_symbols; import_pycharmm
+    # loads during _load_prebuilt (CGENFF_PRM). main() already set MPI skip guards.
     _log("ener", "checking MLpot symbols")
     missing = check_mlpot_symbols()
     if missing:
@@ -556,6 +537,25 @@ def _charmm_domdec_ener_smoke(args: argparse.Namespace) -> int:
     z, r, n_monomers, atoms_per_monomer = _load_prebuilt(args)
     n_atoms = len(z)
     _mpi_barrier(tag="ener")
+
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import ensure_mpi4py_after_charmm_init
+
+    if not ensure_mpi4py_after_charmm_init(phase="after prebuilt load in live ENER"):
+        print("FAIL: mpi4py.MPI not available after PyCHARMM import", file=sys.stderr)
+        return 1
+    _mpi_barrier(tag="ener")
+
+    import ase
+    import pycharmm.energy as energy
+    import pycharmm.lingo as lingo
+
+    from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import domdec_summary
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        load_physnet_mlpot_bundle,
+        register_mlpot,
+        select_all_atoms,
+    )
 
     _log("ener", f"PBC setup: box={args.box_side:.1f}Å")
     setup_charmm_environment(use_pbc=True, cubic_box_side_A=float(args.box_side))
