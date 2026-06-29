@@ -48,12 +48,35 @@ def test_plot_training_metrics_ef_only(tmp_path: Path) -> None:
 
 def test_plot_training_comparison(tmp_path: Path) -> None:
     runs = [
-        ("dcm1-aaaa-bbbb", _synthetic_metrics(30)),
-        ("dcm1-cccc-dddd", _synthetic_metrics(35)),
+        ("n800/r1", _synthetic_metrics(30)),
+        ("n800/r2", _synthetic_metrics(35)),
+        ("n1600/r1", _synthetic_metrics(32)),
     ]
     out = tmp_path / "compare.png"
     plot_training_comparison(runs, out, ef_only=True, verbose=False)
     assert out.is_file()
+
+
+def test_plot_training_comparison_with_table(tmp_path: Path) -> None:
+    runs = [
+        ("n800/r1", _synthetic_metrics(30)),
+        ("n800/r2", _synthetic_metrics(35)),
+    ]
+    table = [
+        ["n_train", "r1 E", "r2 E", "r1 F", "r2 F"],
+        ["800", "0.50", "0.62", "0.10", "0.11"],
+    ]
+    out = tmp_path / "compare_table.png"
+    plot_training_comparison(
+        runs,
+        out,
+        ef_only=True,
+        verbose=False,
+        summary_table=table,
+        plot_style="nature",
+    )
+    assert out.is_file()
+    assert out.stat().st_size > 10_000
 
 
 def test_warmup_trim_allows_plot_with_spikes(tmp_path: Path) -> None:
