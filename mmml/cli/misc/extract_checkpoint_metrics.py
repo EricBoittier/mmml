@@ -14,10 +14,13 @@ Usage:
 
 import argparse
 import sys
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Sequence, Union
 import numpy as np
 import re
+
+from matplotlib.lines import Line2D
 
 from mmml.utils.plotting.styles import (
     DEFAULT_PLOT_STYLE,
@@ -195,6 +198,111 @@ def _short_run_label(name: str, max_len: int = 14) -> str:
     if len(label) > max_len:
         return label[: max_len - 1] + "…"
     return label
+
+
+_REPEAT_LINESTYLES = ("-", "--", "-.", ":")
+
+
+@dataclass(frozen=True)
+class ComparisonRunSpec:
+    name: str
+    metrics: Dict[str, np.ndarray]
+    group: str | None = None
+    repeat: int | None = None
+
+
+def _parse_run_group_repeat(run_name: str) -> tuple[str | None, int | None]:
+    match = re.match(r"^(n\d+)/r(\d+)$", run_name.strip(), flags=re.IGNORECASE)
+    if not match:
+        return None, None
+    return match.group(1).lower(), int(match.group(2))
+
+
+def _normalize_comparison_runs(
+    runs: Sequence[Union[tuple[str, Dict[str, np.ndarray]], ComparisonRunSpec]],
+) -> list[ComparisonRunSpec]:
+    normalized: list[ComparisonRunSpec] = []
+    for item in runs:
+        if isinstance(item, ComparisonRunSpec):
+            normalized.append(item)
+            continue
+        name, metrics = item
+        group, repeat = _parse_run_group_repeat(name)
+        normalized.append(ComparisonRunSpec(name=name, metrics=metrics, group=group, repeat=repeat))
+    return normalized
+
+
+def _group_sort_key(group: str) -> tuple[int, str]:
+    match = re.match(r"^n(\d+)$", group, flags=re.IGNORECASE)
+    if match:
+        return int(match.group(1)), group
+    return 10**9, group
+
+
+def _comparison_group_styles(
+    specs: Sequence[ComparisonRunSpec],
+    style: PlotStyle,
+) -> tuple[dict[str, str], dict[str, str], list[str]]:
+    groups = sorted({spec.group or spec.name for spec in specs}, key=_group_sort_key)
+    palette = comparison_colors(style, max(len(groups), 1))
+    group_colors = {group: palette[i % len(palette)] for i, group in enumerate(groups)}
+
+    linestyles: dict[str, str] = {}
+    for spec in specs:
+        repeat = spec.repeat or 1
+        linestyles[spec.name] = _REPEAT_LINESTYLES[(repeat - 1) % len(_REPEAT_LINESTYLES)]
+    return group_colors, linestyles, groups
+
+
+def _render_summary_table(
+    ax,
+    summary_table: Sequence[Sequence[str]],
+    *,
+    title: str,
+    style: PlotStyle,
+) -> None:
+    ax.axis("off")
+    if not summary_table:
+        return
+    headers = list(summary_table[0])
+    rows = [list(row) for row in summary_table[1:]]
+    table = ax.table(
+        cellText=rows,
+        colLabels=headers,
+        loc="center",
+        cellLoc="center",
+        bbox=[0.02, 0.20, 0.96, 0.72],
+    )
+    table.auto_set_font_size(False)
+    table.set_fontsize(7)
+    table.scale(1.0, 1.15)
+    for (row, col), cell in table.get_celld().items():
+        if row == 0:
+            cell.set_facecolor("#F2F2F2")
+            cell.set_text_props(fontweight="bold")
+        elif col == 0:
+            cell.set_text_props(fontweight="bold")
+    ax.set_title(title, fontsize=9, fontweight="bold", pad=8)
+
+
+def _add_group_repeat_legend(ax, group_colors: dict[str, str], groups: Sequence[str]) -> None:
+    handles: list[Line2D] = []
+    for group in groups:
+        handles.append(
+            Line2D([0], [0], color=group_colors[group], lw=2.2, linestyle="-", label=group)
+        )
+    for repeat_idx, linestyle in enumerate(_REPEAT_LINESTYLES[:3], start=1):
+        handles.append(
+            Line2D(
+                [0],
+                [0],
+                color="#333333",
+                lw=1.8,
+                linestyle=linestyle,
+                label=f"repeat {repeat_idx}",
+            )
+        )
+    ax.legend(handles=handles, loc="lower center", bbox_to_anchor=(0.5, 0.0), ncol=4, fontsize=7, frameon=True)
 
 
 def _plot_train_valid_series(
@@ -423,7 +531,7 @@ def plot_training_metrics(
 
 
 def plot_training_comparison(
-    runs: List[tuple[str, Dict[str, np.ndarray]]],
+    runs: Sequence[Union[tuple[str, Dict[str, np.ndarray]], ComparisonRunSpec]],
     output_path: Path,
     *,
     log_scale: bool = True,
@@ -431,10 +539,15 @@ def plot_training_comparison(
     title: str = "Training comparison",
     verbose: bool = True,
     plot_style: str | PlotStyle | None = DEFAULT_PLOT_STYLE,
+    summary_table: Sequence[Sequence[str]] | None = None,
+    summary_table_title: str = "Hold-out test MAE (kcal/mol)",
+    color_by_group: bool = True,
+    linestyle_by_repeat: bool = True,
 ) -> None:
     """Overlay valid metrics from multiple checkpoint runs."""
     style = _apply_training_plot_style(plot_style)
-    if not runs:
+    specs = _normalize_comparison_runs(runs)
+    if not specs:
         raise ValueError("No runs provided for comparison plot")
 
     panels = (
@@ -445,15 +558,30 @@ def plot_training_comparison(
     if not ef_only:
         panels = panels + (("valid_dipole_mae", "Valid dipole MAE (e·Å)", 1.0),)
 
+    use_table_panel = summary_table is not None
     ncols = 2
-    nrows = int(np.ceil(len(panels) / ncols))
-    fig, axes = plt.subplots(nrows, ncols, figsize=(6.5 * ncols, 4.5 * nrows), constrained_layout=True)
-    axes_flat = np.atleast_1d(axes).ravel()
-    colors = comparison_colors(style, len(runs))
+    if use_table_panel:
+        nrows = 2
+        fig, axes = plt.subplots(nrows, ncols, figsize=(6.8 * ncols, 4.8 * nrows), constrained_layout=True)
+        axes_flat = np.atleast_1d(axes).ravel()
+        curve_axes = axes_flat[: len(panels)]
+        table_ax = axes_flat[len(panels)]
+        for ax in axes_flat[len(panels) + 1 :]:
+            ax.axis("off")
+    else:
+        nrows = int(np.ceil(len(panels) / ncols))
+        fig, axes = plt.subplots(nrows, ncols, figsize=(6.5 * ncols, 4.5 * nrows), constrained_layout=True)
+        axes_flat = np.atleast_1d(axes).ravel()
+        curve_axes = axes_flat
+        table_ax = None
 
-    for ax, (key, panel_title, scale) in zip(axes_flat, panels):
+    group_colors, linestyles, groups = _comparison_group_styles(specs, style)
+    fallback_colors = comparison_colors(style, len(specs))
+
+    for ax, (key, panel_title, scale) in zip(curve_axes, panels):
         panel_arrays: List[np.ndarray] = []
-        for color, (run_name, metrics) in zip(colors, runs):
+        for idx, spec in enumerate(specs):
+            metrics = spec.metrics
             mask = _valid_metric_mask(metrics)
             if not mask.any():
                 continue
@@ -466,21 +594,37 @@ def plot_training_comparison(
             if y.size == 0:
                 continue
             panel_arrays.append(y)
+            group = spec.group or spec.name
+            color = group_colors.get(group, fallback_colors[idx]) if color_by_group else fallback_colors[idx]
+            linestyle = linestyles.get(spec.name, "-") if linestyle_by_repeat else "-"
             ax.plot(
                 epochs,
                 y,
                 color=color,
+                linestyle=linestyle,
                 linewidth=2.1,
-                label=_short_run_label(run_name),
+                label=_short_run_label(spec.name),
             )
         ax.set_xlabel("Epoch")
         ax.set_title(panel_title)
         if log_scale and panel_arrays:
             _set_positive_log_ylim(ax, panel_arrays)
-        ax.legend(fontsize=8, loc="best")
 
-    for ax in axes_flat[len(panels) :]:
-        ax.axis("off")
+    if not use_table_panel:
+        for ax in axes_flat[len(panels) :]:
+            ax.axis("off")
+        if specs:
+            curve_axes[0].legend(fontsize=8, loc="best")
+    else:
+        assert table_ax is not None
+        _render_summary_table(
+            table_ax,
+            summary_table or [],
+            title=summary_table_title,
+            style=style,
+        )
+        if color_by_group or linestyle_by_repeat:
+            _add_group_repeat_legend(table_ax, group_colors, groups)
 
     suptitle_kw: dict = {"fontsize": 14, "fontweight": "bold"}
     if style.suptitle_color:
