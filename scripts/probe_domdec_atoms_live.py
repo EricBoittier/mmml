@@ -61,10 +61,23 @@ def main() -> None:
 
     pr(f"=== rank {rank}/{nranks}  NDIR {ndir} 1 1 ===")
 
+    # ------------------------------------------------------------------ locate RTF/PRM via MMML data dir
+    import pathlib
+    import mmml as _mmml
+
+    _data = pathlib.Path(_mmml.__file__).parent / "data" / "charmm"
+    rtf = os.environ.get("MMML_RTF") or str(_data / "top_all36_cgenff.rtf")
+    prm = os.environ.get("MMML_PRM") or str(_data / "par_all36_cgenff.prm")
+
+    pr(f"RTF : {rtf}")
+    pr(f"PRM : {prm}")
+    pr(f"PSF : {args.psf}")
+    pr(f"CRD : {args.crd}")
+
     # ------------------------------------------------------------------ load
     lingo.charmm_script(f"""
-read rtf  card name {os.environ.get('MMML_RTF',  'top_all36_cgenff.rtf')}
-read param card name {os.environ.get('MMML_PRM', 'par_all36_cgenff.prm')}
+read rtf  card name {rtf}
+read param card name {prm} flex
 read psf  card name {args.psf}
 read coor card name {args.crd}
 """)
@@ -78,12 +91,14 @@ image byres xcen 0 ycen 0 zcen 0
 """)
 
     # ------------------------------------------------------------------ DOMDEC energy
+    # fftx/y/z must be >= box/spacing; use 32 for boxes ~40 Å, 64 for ~80 Å
+    fft = max(32, int(args.box / 1.2 / 2) * 2)   # even integer, ~box/1.2
     lingo.charmm_script(f"""
 faster on
-energy cutnb {args.cutnb} ctofnb {args.ctofnb} ctonnb {args.ctonnb} \\
-    vfswitch atom fswitch \\
-    domd ndir {ndir} 1 1 \\
-    ewald kappa 0.32 order 6 fftx 32 ffty 32 fftz 32
+energy cutnb {args.cutnb} ctofnb {args.ctofnb} ctonnb {args.ctonnb} -
+    vfswitch atom fswitch -
+    domd ndir {ndir} 1 1 -
+    ewald kappa 0.32 order 6 fftx {fft} ffty {fft} fftz {fft}
 """)
 
     # ------------------------------------------------------------------ probe
