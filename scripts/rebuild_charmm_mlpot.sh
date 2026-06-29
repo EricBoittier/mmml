@@ -502,14 +502,17 @@ if [[ "$NATIVE_EXEC" == 1 ]]; then
   cmake --build "$BUILD_DIR" -j "$(_build_jobs)"
   cmake --install "$BUILD_DIR" || true
 
+  # Find the newly-installed binary.
+  # cmake --install copies to $CHARMM_HOME/bin/charmm; check that FIRST so a stale
+  # $CHARMM_HOME/charmm from a previous build doesn't shadow it.
   BUILT=""
   for candidate in \
-    "$CHARMM_HOME/charmm" \
     "$CHARMM_HOME/bin/charmm" \
     "$CHARMM_HOME/exec/charmm" \
     "$BUILD_DIR/charmm" \
     "$BUILD_DIR/bin/charmm" \
-    "$BUILD_DIR/exec/charmm"; do
+    "$BUILD_DIR/exec/charmm" \
+    "$CHARMM_HOME/charmm"; do
     if [[ -f "$candidate" && -x "$candidate" ]]; then
       BUILT="$candidate"
       break
