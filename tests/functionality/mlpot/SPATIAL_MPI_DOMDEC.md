@@ -88,41 +88,68 @@ On `pc-bach` with DOMDEC-enabled `libcharmm.so`:
 
 Conclusion: the next Tier 3 test must start from a CHARMM-native/prebuilt state, not simultaneous Python-side RTF/PSF construction on every rank.
 
-### E. Next path: prebuilt/native CHARMM state
+### E. Tier 3 spatial MPI + DOMDEC smoke (`10_domdec_spatial_mpi_smoke.py`)
 
-Use the classic DOMDEC model:
-
-1. Build and validate PSF/CRD/restart outside the `np>1` PyCHARMM topology path.
-2. Launch `np>1` with a CHARMM-native input/state load that DOMDEC supports.
-3. Establish PBC/image state and `domdec on`.
-4. Attach MLpot only after CHARMM state exists on all ranks.
-5. Then test `ENER`, short SD, and only later dynamics.
-
-Residue/template requirement: PSF atom order must be DOMDEC-compatible (hydrogens adjacent to bonded heavy atoms) and must remain the canonical atom order for MLpot, ASE/JAX helpers, selections, monomer slices, and checkpoint comparisons.
-
-DCM:10 scaffold:
+The canonical two-step procedure for testing the `build_domdec_spatial_batch_indices`
+path with a live DCM cluster:
 
 ```bash
-# Build/certify a DCM:10 PSF/CRD with np=1.
-bash scripts/run_domdec_dcm10_smoke.sh prep
+# Step 1 — build prebuilt PSF/CRD (np=1, once per system size)
+MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh python \
+  tests/functionality/mlpot/10_domdec_spatial_mpi_smoke.py \
+  --prepare-prebuilt-only --residue DCM --n-molecules 20 --box-side 40
 
-# Offline DOMDEC hydrogen-order validation on the generated PSF.
-bash scripts/run_domdec_dcm10_smoke.sh validate
+# Step 2 — callback-only DOMDEC path check (no checkpoint, no segfault risk)
+MMML_MPI_NP=4 MMML_MLPOT_SPATIAL_MPI=1 \
+  ./scripts/mmml-charmm-mpirun.sh python \
+  tests/functionality/mlpot/10_domdec_spatial_mpi_smoke.py
 
-# Native CHARMM np>1 DOMDEC ENER from the prebuilt PSF/CRD.
-bash scripts/run_domdec_dcm10_smoke.sh tier3
+# Step 3 — live CHARMM ENER with DOMDEC + spatial MLpot (checkpoint required)
+MMML_MPI_NP=4 MMML_MLPOT_SPATIAL_MPI=1 \
+  ./scripts/mmml-charmm-mpirun.sh python \
+  tests/functionality/mlpot/10_domdec_spatial_mpi_smoke.py \
+  --charmm-ener --checkpoint "$MMML_CKPT" \
+  --residue DCM --n-molecules 20 --box-side 40
 ```
+
+Or run all three steps via the wrapper:
+
+```bash
+# Callback-only (no checkpoint):
+bash scripts/run_domdec_spatial_mpi_smoke.sh
+
+# Full live ENER:
+MMML_CKPT=/path/to/checkpoint.json \
+  bash scripts/run_domdec_spatial_mpi_smoke.sh --live
+```
+
+**Pass criteria (callback sub-test):** `use_spatial=True`, `domdec_path=True`,
+owned monomers partition the system over all ranks, allreduced energy finite.
+
+**Pass criteria (live ENER sub-test):** `energy.show()` completes, TOTE is
+finite, `domdec_summary` reports `DOMDEC active: True` and `Symbols found: 8/8`.
 
 ### F. ctypes / PyCHARMM survey
 
-- Inspect `ldd libcharmm.so` for `domdec_common` symbols.
-- Check whether `pycharmm` exposes atom group / domain queries (none found in June 2026 survey).
+```bash
+# Symbol probe on cluster (run after sourcing CHARMM env):
+python -c "
+from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import domdec_summary
+import mmml.interfaces.pycharmmInterface.import_pycharmm  # loads libcharmm.so
+print(domdec_summary())
+"
+```
 
 ## Success criteria (Tier 3)
 
-- SD with domdec on + spatial ML completes without segfault.
-- Integration wall time decreases with `n_ranks` on fixed box size.
-- Python `SpatialDomainGrid` slab partition matches CHARMM domdec cell ownership (or is replaced by Fortran metadata).
+- Callback smoke: `use_spatial=True`, `domdec_path=True`, owned monomers correctly
+  partitioned, energy finite.
+- Live ENER: `domdec_summary` reports `DOMDEC active: True` and `Symbols found: 8/8`;
+  TOTE is finite; no segfault.
+- CHARMM slab partition from `build_domdec_spatial_batch_indices` matches DOMDEC
+  atom ownership (confirmed by the callback test comparing ctypes vs COM paths).
+- (Stretch) SD and short MD with `domdec on` + spatial MLpot complete without segfault;
+  wall time decreases with `n_ranks` on a fixed box.
 
 ## Fallback
 
