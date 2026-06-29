@@ -33,6 +33,7 @@ pip install -e .
 | `05_mlpot_dynamics_stub.py` | yes | Short NVE with DCD/restart (`--run`) |
 | `06_spatial_mpi_tier2_smoke.py` | optional | Tier 2 spatial MPI env + hybrid callback under `mpirun` (see `docs/pycharmm-mpi.md`) |
 | `07_md_system_spatial_mpi_mini.py` | optional | Full `md-system --ml-spatial-mpi` mini dry-run / cluster smoke |
+| `10_spatial_mpi_cpu_profile.py` | optional | CPU spatial MPI np sweep (DCM:100) with cProfile + JAX timers |
 | `08_serial_vs_mpirun_md_system.py` | optional | A/B serial `python md-system` vs `mpirun np=1` (`upinb` claim); writes JSON report |
 | `run_all.sh` | — | Run 00→03; `RUN_EXTENDED=1` adds 04–05 |
 

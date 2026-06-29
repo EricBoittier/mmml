@@ -49,14 +49,20 @@ _snapshot() {
       echo "(no snakemake_slurm.log)"
     fi
     echo ""
-    echo "--- MPI NP sweep ---"
-    if [[ -f "$REPO_ROOT/artifacts/mpi_cpu_np_sweep/results.csv" ]]; then
+    echo "--- MPI spatial NP sweep ---"
+    if [[ -f "$REPO_ROOT/artifacts/mpi_spatial_cpu_np_sweep/results.csv" ]]; then
+      column -t -s, "$REPO_ROOT/artifacts/mpi_spatial_cpu_np_sweep/results.csv" 2>/dev/null \
+        || cat "$REPO_ROOT/artifacts/mpi_spatial_cpu_np_sweep/results.csv"
+    elif [[ -f "$REPO_ROOT/artifacts/mpi_cpu_np_sweep/results.csv" ]]; then
       column -t -s, "$REPO_ROOT/artifacts/mpi_cpu_np_sweep/results.csv" 2>/dev/null \
         || cat "$REPO_ROOT/artifacts/mpi_cpu_np_sweep/results.csv"
     else
-      echo "(no mpi_cpu_np_sweep/results.csv yet)"
+      echo "(no mpi_spatial_cpu_np_sweep/results.csv yet)"
     fi
-    if [[ -f "$REPO_ROOT/artifacts/mpi_cpu_np_sweep/sweep.log" ]]; then
+    if [[ -f "$REPO_ROOT/artifacts/mpi_spatial_cpu_np_sweep/sweep.log" ]]; then
+      echo "spatial sweep tail:"
+      tail -3 "$REPO_ROOT/artifacts/mpi_spatial_cpu_np_sweep/sweep.log" 2>&1 || true
+    elif [[ -f "$REPO_ROOT/artifacts/mpi_cpu_np_sweep/sweep.log" ]]; then
       echo "sweep tail:"
       tail -3 "$REPO_ROOT/artifacts/mpi_cpu_np_sweep/sweep.log" 2>&1 || true
     fi
