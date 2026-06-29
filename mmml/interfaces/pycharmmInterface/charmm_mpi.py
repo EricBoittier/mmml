@@ -997,17 +997,16 @@ def mpi_charmm_script(
     relaxed_bomlev: bool = False,
     quiet: bool = False,
     rank0_drive: bool = False,
+    barriers: str = "none",
 ) -> None:
-    """Run ``lingo.charmm_script`` under MPI with rank-synchronised barriers.
+    """Run ``lingo.charmm_script`` under MPI.
+
+    Default ``barriers="none"`` matches the workshop pattern: caller synchronises
+    ranks in Python, then every rank enters ``eval_charmm_script`` without nested
+    mpi4py barriers (those can desync CHARMM's Fortran MPI worker loop).
 
     By default (**``rank0_drive=False``**) every rank calls ``eval_charmm_script``
-    with the same script after an mpi4py barrier.  For READ/CRYSTAL setup this is
-    required: rank 0 performs disk I/O inside CHARMM and Fortran MPI broadcasts
-    the topology to worker ranks.  Skipping ``eval_charmm_script`` on non-root
-    ranks leaves them with empty PSF state (``n_atoms=0``).
-
-    Set ``rank0_drive=True`` only for commands that must not be parsed on worker
-    ranks (rare; most setup still needs the all-rank entry).
+    with the same script.  Rank 0 performs disk I/O; Fortran MPI broadcasts state.
     """
     from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
@@ -1020,7 +1019,8 @@ def mpi_charmm_script(
         )
         return
 
-    _mpi_script_barrier()
+    if barriers in ("both", "pre"):
+        _mpi_script_barrier()
     try:
         if rank0_drive:
             if rank == 0:
@@ -1036,7 +1036,8 @@ def mpi_charmm_script(
                 quiet=quiet,
             )
     finally:
-        _mpi_script_barrier()
+        if barriers in ("both", "post"):
+            _mpi_script_barrier()
 
 
 def _mpi_script_barrier() -> None:

@@ -154,13 +154,12 @@ def _configure_live_charmm_mpi_import(*, size: int) -> None:
 
 
 def _sync_import_pycharmm(*, tag: str = "sync") -> None:
-    """Load ``import_pycharmm`` on all ranks in lockstep (mpi4py barriers)."""
+    """Load ``import_pycharmm`` on all ranks; barrier only after MPI is live."""
     rank, size = _mpi_info()
     if size <= 1:
         import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
         return
-    _log(tag, "barrier before import_pycharmm")
-    _mpi_barrier(tag=tag)
+    # No barrier before import — Fortran MPI_Init happens during import_pycharmm.
     _log(tag, "importing import_pycharmm")
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     from mmml.interfaces.pycharmmInterface.charmm_mpi import ensure_mpi4py_after_charmm_init
@@ -200,8 +199,12 @@ def _write_prebuilt_restart(res_path: Path, *, write_unit: int = 20) -> None:
 
 
 def _load_prebuilt_restart_mpi(res_path: Path, *, read_unit: int = 20) -> None:
-    """Load prebuilt state via ``read restart`` (np>1 MPI-safe bootstrap)."""
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import mpi_charmm_script
+    """Load prebuilt state via ``read restart`` (np>1 bootstrap).
+
+    Uses one Python barrier pair and direct ``lingo.charmm_script`` (no nested
+    mpi4py barriers inside ``mpi_charmm_script``).
+    """
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import _invoke_charmm_script
     from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
 
     if not res_path.is_file():
@@ -209,17 +212,23 @@ def _load_prebuilt_restart_mpi(res_path: Path, *, read_unit: int = 20) -> None:
             f"Prebuilt restart not found: {res_path}\n"
             "Re-run --prepare-prebuilt-only with MMML_MPI_NP=1 (writes .res)."
         )
+    rank, size = _mpi_info()
     fortran_path, alias = charmm_fortran_path(res_path, for_write=False)
     script = (
-        f"open read unit {read_unit} form name {fortran_path}\n"
+        f"open read unit {read_unit} name {fortran_path}\n"
         f"read restart unit {read_unit}\n"
         f"close unit {read_unit}\n"
+        "UPDATE\n"
     )
+    _log("load", f"eval_charmm_script read restart (rank {rank}/{size})")
+    _mpi_barrier(tag="load")
     try:
-        mpi_charmm_script(script, relaxed_bomlev=True)
+        _invoke_charmm_script(script, relaxed_bomlev=True)
     finally:
         if alias is not None:
             alias.finalize()
+    _log("load", f"read restart returned (rank {rank}/{size})")
+    _mpi_barrier(tag="load")
 
 
 def _print_dry_run(args: argparse.Namespace) -> None:
@@ -240,8 +249,18 @@ def _print_dry_run(args: argparse.Namespace) -> None:
         f"  tests/functionality/mlpot/10_domdec_spatial_mpi_smoke.py"
     )
     print()
-    print("# Step 3 — live CHARMM ENER (requires checkpoint + prebuilt artifacts):")
+    print("# Step 3a — live CHARMM ENER at np=1 (recommended first gate):")
     ckpt = args.checkpoint or Path("$MMML_CKPT")
+    print(
+        f"MMML_MPI_NP=1 MMML_MLPOT_SPATIAL_MPI=1 \\\n"
+        f"  ./scripts/mmml-charmm-mpirun.sh python \\\n"
+        f"  tests/functionality/mlpot/10_domdec_spatial_mpi_smoke.py \\\n"
+        f"  --charmm-ener --checkpoint {ckpt} \\\n"
+        f"  --residue {args.residue} --n-molecules {args.n_molecules} "
+        f"--box-side {args.box_side}"
+    )
+    print()
+    print("# Step 3b — live ENER at np>1 (may hang in PyCHARMM read restart on some builds):")
     print(
         f"MMML_MPI_NP={np_cb} MMML_MLPOT_SPATIAL_MPI=1 \\\n"
         f"  ./scripts/mmml-charmm-mpirun.sh python \\\n"
@@ -571,6 +590,15 @@ def _charmm_domdec_ener_smoke(args: argparse.Namespace) -> int:
     """Live CHARMM ENER: prebuilt DCM + DOMDEC + spatial MPI."""
     rank, size = _mpi_info()
     ndir = args.ndir or size  # default: one domain per rank along x
+
+    if size > 1 and rank == 0:
+        print(
+            "NOTE: np>1 PyCHARMM setup I/O (read restart) may hang on some clusters. "
+            "If load stalls after 'eval_charmm_script read restart', validate live ENER "
+            "at MMML_MPI_NP=1 first (Step 3a in --dry-run).",
+            file=sys.stderr,
+            flush=True,
+        )
 
     from _common import check_mlpot_symbols, resolve_checkpoint
 

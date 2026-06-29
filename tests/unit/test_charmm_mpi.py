@@ -390,6 +390,20 @@ def test_mpi_charmm_script_all_ranks_under_mpirun():
         charmm_mpi.mpi_charmm_script("read psf card name foo.psf")
 
     assert calls == ["read psf card name foo.psf"]
+    assert mock_barrier.call_count == 0
+
+
+def test_mpi_charmm_script_barriers_both():
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        return_value=(2, 4),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._mpi_script_barrier",
+    ) as mock_barrier, mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._invoke_charmm_script",
+    ):
+        charmm_mpi.mpi_charmm_script("read psf", barriers="both")
+
     assert mock_barrier.call_count == 2
 
 

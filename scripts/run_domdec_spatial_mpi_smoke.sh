@@ -16,7 +16,8 @@
 #
 # Environment:
 #   MMML_CKPT          PhysNet checkpoint path (required for --live)
-#   SMOKE_NP           Number of MPI ranks for the smoke (default: 4)
+#   SMOKE_NP           MPI ranks for callback-only step 2 (default: 4)
+#   SMOKE_LIVE_NP      MPI ranks for live ENER step 3 (default: 1)
 #   SMOKE_N_MOL        Number of DCM monomers (default: 20)
 #   SMOKE_BOX          Box side length in Å (default: 40)
 #   SMOKE_CUTNB        Nonbond cutoff in Å (default: 10)
@@ -78,14 +79,17 @@ echo ""
 
 # ----------------------------------------------------------------
 # Step 3 — Live CHARMM ENER (opt-in, requires checkpoint)
+# Default np=1 for live ENER: PyCHARMM eval_charmm setup I/O can hang at np>1.
+# Override with SMOKE_LIVE_NP=4 once np>1 restart load is verified on your node.
 # ----------------------------------------------------------------
 if [[ "$LIVE" -eq 1 ]]; then
     if [[ -z "${MMML_CKPT:-}" ]]; then
         echo "ERROR: --live requires MMML_CKPT to be set." >&2
         exit 1
     fi
-    echo "Step 3: live CHARMM ENER (DOMDEC + spatial MPI, np=$SMOKE_NP)..."
-    MMML_MPI_NP="$SMOKE_NP" MMML_MLPOT_SPATIAL_MPI=1 \
+    SMOKE_LIVE_NP="${SMOKE_LIVE_NP:-1}"
+    echo "Step 3: live CHARMM ENER (DOMDEC + spatial MPI, np=$SMOKE_LIVE_NP)..."
+    MMML_MPI_NP="$SMOKE_LIVE_NP" MMML_MLPOT_SPATIAL_MPI=1 \
         ./scripts/mmml-charmm-mpirun.sh python \
         "$SCRIPT" \
         --charmm-ener \
