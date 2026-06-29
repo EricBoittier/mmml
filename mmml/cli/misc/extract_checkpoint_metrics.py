@@ -56,13 +56,23 @@ def extract_metrics_from_orbax(epoch_dir: Path) -> Dict:
         return None
 
 
-def collect_all_metrics(ckpt_dir: Path, verbose: bool = True) -> Dict[str, List]:
-    """Collect metrics from all epoch checkpoints."""
+def collect_all_metrics(
+    ckpt_dir: Path,
+    verbose: bool = True,
+    *,
+    stride: int = 1,
+    max_epochs: int | None = None,
+) -> Dict[str, List]:
+    """Collect metrics from epoch checkpoints (optionally subsampled)."""
     
     # Find epoch directories
     epoch_dirs = sorted([d for d in ckpt_dir.iterdir() 
                         if d.is_dir() and d.name.startswith('epoch-')],
                        key=lambda x: int(re.search(r'(\d+)', x.name).group(1)))
+    if stride > 1:
+        epoch_dirs = epoch_dirs[::stride]
+    if max_epochs is not None and max_epochs > 0:
+        epoch_dirs = epoch_dirs[:max_epochs]
     
     if not epoch_dirs:
         raise ValueError(f"No epoch checkpoints found in {ckpt_dir}")
@@ -124,180 +134,367 @@ def collect_all_metrics(ckpt_dir: Path, verbose: bool = True) -> Dict[str, List]
     return all_metrics
 
 
+EV_TO_KCAL_MOL = 23.0605
+
+_PLOT_COLORS = {
+    "train": "#4C72B0",
+    "valid": "#C44E52",
+    "best": "#E5BA41",
+    "accent": "#55A868",
+    "lr": "#8172B3",
+    "muted": "#8C8C8C",
+}
+
+
+def _apply_training_plot_style() -> None:
+    plt.rcParams.update(
+        {
+            "figure.facecolor": "white",
+            "axes.facecolor": "#FAFAFA",
+            "axes.edgecolor": "#333333",
+            "axes.labelsize": 11,
+            "axes.titlesize": 12,
+            "axes.titleweight": "bold",
+            "axes.grid": True,
+            "grid.alpha": 0.35,
+            "grid.linestyle": "-",
+            "grid.linewidth": 0.6,
+            "legend.framealpha": 0.92,
+            "legend.fontsize": 9,
+            "xtick.labelsize": 10,
+            "ytick.labelsize": 10,
+            "font.family": "sans-serif",
+        }
+    )
+
+
+def _finite_series(values: np.ndarray) -> np.ndarray:
+    out = np.asarray(values, dtype=float).copy()
+    out[~np.isfinite(out)] = np.nan
+    return out
+
+
+def _valid_metric_mask(metrics: Dict[str, np.ndarray]) -> np.ndarray:
+    return ~np.isnan(_finite_series(metrics["valid_loss"]))
+
+
+def _warmup_trim_mask(values: np.ndarray, *, factor: float = 40.0) -> np.ndarray:
+    """Mask out early epochs with unphysically large loss spikes."""
+    y = _finite_series(values)
+    if y.size < 4:
+        return np.ones(y.size, dtype=bool)
+    finite = y[np.isfinite(y)]
+    if finite.size == 0:
+        return np.ones(y.size, dtype=bool)
+    tail = finite[max(0, finite.size // 2) :]
+    ref = float(np.nanmedian(tail))
+    if ref <= 0:
+        ref = float(np.nanmedian(finite))
+    if ref <= 0:
+        return np.ones(y.size, dtype=bool)
+    return y <= factor * ref
+
+
+def _set_positive_log_ylim(ax, arrays: List[np.ndarray]) -> None:
+    pooled = np.concatenate([_finite_series(a) for a in arrays if a is not None])
+    pooled = pooled[np.isfinite(pooled) & (pooled > 0)]
+    if pooled.size == 0:
+        return
+    lo = float(np.nanpercentile(pooled, 2))
+    hi = float(np.nanpercentile(pooled, 98))
+    if hi <= lo:
+        hi = lo * 10.0
+    ax.set_yscale("log")
+    ax.set_ylim(max(lo * 0.85, np.finfo(float).tiny), hi * 1.15)
+
+
+def _short_run_label(name: str, max_len: int = 14) -> str:
+    label = name.replace("dcm1-", "")
+    if len(label) > max_len:
+        return label[: max_len - 1] + "…"
+    return label
+
+
+def _plot_train_valid_series(
+    ax,
+    epochs: np.ndarray,
+    train: np.ndarray,
+    valid: np.ndarray,
+    *,
+    ylabel: str,
+    title: str,
+    log_scale: bool,
+    train_scale: float = 1.0,
+    valid_scale: float = 1.0,
+) -> int | None:
+    """Plot train/valid curves; return epoch index of best validation point."""
+    train_y = _finite_series(train) * train_scale
+    valid_y = _finite_series(valid) * valid_scale
+    ax.plot(
+        epochs,
+        train_y,
+        color=_PLOT_COLORS["train"],
+        linewidth=2.0,
+        alpha=0.75,
+        label="Train",
+    )
+    ax.plot(
+        epochs,
+        valid_y,
+        color=_PLOT_COLORS["valid"],
+        linewidth=2.4,
+        alpha=0.95,
+        label="Valid",
+    )
+    best_idx = int(np.nanargmin(valid_y))
+    ax.scatter(
+        epochs[best_idx],
+        valid_y[best_idx],
+        s=120,
+        marker="*",
+        color=_PLOT_COLORS["best"],
+        edgecolors="#222222",
+        linewidths=0.8,
+        zorder=5,
+        label=f"Best (ep {int(epochs[best_idx])})",
+    )
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    if log_scale:
+        _set_positive_log_ylim(ax, [train_y, valid_y])
+    ax.legend(loc="best")
+    return best_idx
+
+
+def _summary_text_box(metrics: Dict[str, np.ndarray], valid_idx: np.ndarray) -> str:
+    eV_to_kcal = EV_TO_KCAL_MOL
+    valid_loss = _finite_series(metrics["valid_loss"])[valid_idx]
+    energy = _finite_series(metrics["valid_energy_mae"])[valid_idx] * eV_to_kcal
+    forces = _finite_series(metrics["valid_forces_mae"])[valid_idx] * eV_to_kcal
+    lines = [
+        f"Epochs: {int(valid_idx.sum())}",
+        f"Best valid loss: {np.nanmin(valid_loss):.4g}",
+        f"Final valid loss: {valid_loss[-1]:.4g}",
+    ]
+    if np.any(np.isfinite(energy)):
+        lines.append(f"Best E MAE: {np.nanmin(energy):.3f} kcal/mol")
+    if np.any(np.isfinite(forces)):
+        lines.append(f"Best F MAE: {np.nanmin(forces):.3f} kcal/mol/Å")
+    return "\n".join(lines)
+
+
 def plot_training_metrics(
     metrics: Dict[str, np.ndarray],
     output_path: Path,
     ckpt_name: str = "Training",
     log_loss: bool = True,
     verbose: bool = True,
+    *,
+    ef_only: bool = False,
 ):
-    """Create comprehensive training plots."""
-    
-    epochs = metrics['epochs']
-    
-    # Remove NaN values
-    valid_idx = ~np.isnan(metrics['valid_loss'])
-    epochs_valid = epochs[valid_idx]
-    
-    fig = plt.figure(figsize=(18, 12))
-    gs = fig.add_gridspec(3, 3, hspace=0.35, wspace=0.3)
-    
-    # Plot 1: Training and Validation Loss (Large, spans 2 columns)
-    ax1 = fig.add_subplot(gs[0, :2])
-    
-    train_loss_valid = metrics['train_loss'][valid_idx]
-    valid_loss_valid = metrics['valid_loss'][valid_idx]
-    
-    ax1.plot(epochs_valid, train_loss_valid, 'o-', label='Training Loss',
-            color='#0072B2', linewidth=2.5, markersize=6, alpha=0.8)
-    ax1.plot(epochs_valid, valid_loss_valid, 's-', label='Validation Loss',
-            color='#D55E00', linewidth=2.5, markersize=6, alpha=0.8)
-    
-    # Mark best
-    best_idx = np.argmin(valid_loss_valid)
-    ax1.scatter(epochs_valid[best_idx], valid_loss_valid[best_idx], 
-               s=300, color='gold', edgecolor='black', linewidth=3, 
-               zorder=5, marker='*', label='Best')
-    
-    ax1.set_xlabel('Epoch', fontsize=13, fontweight='bold')
-    ax1.set_ylabel('Loss', fontsize=13, fontweight='bold')
-    if log_loss:
-        ax1.set_yscale('log')
-        ax1.set_title('Training Progress (Log Scale)', fontsize=14, fontweight='bold')
+    """Create publication-style training curves from extracted checkpoint metrics."""
+    _apply_training_plot_style()
+
+    valid_idx = _valid_metric_mask(metrics)
+    if not valid_idx.any():
+        raise ValueError(
+            f"No metrics could be extracted from {ckpt_name}. "
+            "Check GPU/CUDA availability for Orbax restore or reduce --stride."
+        )
+
+    epochs_all = np.asarray(metrics["epochs"], dtype=float)
+    trim = _warmup_trim_mask(metrics["valid_loss"][valid_idx])
+    plot_idx = valid_idx.copy()
+    plot_idx[valid_idx] = trim
+
+    epochs = epochs_all[plot_idx]
+    eV_to_kcal = EV_TO_KCAL_MOL
+
+    if ef_only:
+        fig, axes = plt.subplots(2, 2, figsize=(12, 8), constrained_layout=True)
+        ax_loss, ax_best, ax_e, ax_f = axes.ravel()
     else:
-        ax1.set_title('Training Progress', fontsize=14, fontweight='bold')
-    ax1.legend(fontsize=11, loc='best')
-    ax1.grid(True, alpha=0.3)
-    
-    # Annotations removed per user request
-    
-    # Plot 2: Best Loss Progression
-    ax2 = fig.add_subplot(gs[0, 2])
-    best_loss_valid = metrics['best_loss'][valid_idx]
-    ax2.plot(epochs_valid, best_loss_valid, 'o-', color='#009E73',
-            linewidth=2.5, markersize=6, alpha=0.8)
-    ax2.set_xlabel('Epoch', fontsize=11)
-    ax2.set_ylabel('Best Loss So Far', fontsize=11)
-    ax2.set_title('Best Model Progress', fontsize=12, fontweight='bold')
-    ax2.grid(True, alpha=0.3)
+        fig = plt.figure(figsize=(14, 10), constrained_layout=True)
+        gs = fig.add_gridspec(3, 2, height_ratios=[1.2, 1.0, 0.9])
+        ax_loss = fig.add_subplot(gs[0, :])
+        ax_best = fig.add_subplot(gs[1, 0])
+        ax_e = fig.add_subplot(gs[1, 1])
+        ax_f = fig.add_subplot(gs[2, 0])
+        ax_lr = fig.add_subplot(gs[2, 1])
+
+    _plot_train_valid_series(
+        ax_loss,
+        epochs,
+        metrics["train_loss"][plot_idx],
+        metrics["valid_loss"][plot_idx],
+        ylabel="Loss",
+        title="Training / validation loss",
+        log_scale=log_loss,
+    )
+
+    best_loss = _finite_series(metrics["best_loss"])[plot_idx]
+    ax_best.plot(epochs, best_loss, color=_PLOT_COLORS["accent"], linewidth=2.2)
+    ax_best.set_xlabel("Epoch")
+    ax_best.set_ylabel("Best valid loss so far")
+    ax_best.set_title("Best-model trace")
     if log_loss:
-        ax2.set_yscale('log')
-    
-    # Unit conversion constant
-    eV_to_kcal = 23.0605  # 1 eV = 23.0605 kcal/mol
-    
-    # Plot 3: Energy MAE
-    ax3 = fig.add_subplot(gs[1, 0])
-    if not np.all(np.isnan(metrics['valid_energy_mae'])):
-        valid_energy_valid = metrics['valid_energy_mae'][valid_idx] * eV_to_kcal
-        ax3.plot(epochs_valid, valid_energy_valid, 's-', color='#E69F00',
-                linewidth=2.5, markersize=6, alpha=0.8, label='Validation')
-        
-        if not np.all(np.isnan(metrics['train_energy_mae'])):
-            train_energy_valid = metrics['train_energy_mae'][valid_idx] * eV_to_kcal
-            ax3.plot(epochs_valid, train_energy_valid, 'o-', color='#E69F00',
-                    linewidth=1.5, markersize=4, alpha=0.4, label='Training')
-        
-        # Mark best
-        best_idx = np.argmin(valid_energy_valid)
-        ax3.scatter(epochs_valid[best_idx], valid_energy_valid[best_idx],
-                   s=200, color='gold', edgecolor='black', linewidth=2, zorder=5, marker='*')
-    
-    ax3.set_xlabel('Epoch', fontsize=11)
-    ax3.set_ylabel('Energy MAE (kcal/mol)', fontsize=11)
-    ax3.set_title('Energy Prediction', fontsize=12, fontweight='bold')
-    ax3.legend(fontsize=9)
-    ax3.grid(True, alpha=0.3)
-    if log_loss:
-        ax3.set_yscale('log')
-    
-    # Plot 4: Forces MAE
-    ax4 = fig.add_subplot(gs[1, 1])
-    if not np.all(np.isnan(metrics['valid_forces_mae'])):
-        valid_forces_valid = metrics['valid_forces_mae'][valid_idx] * eV_to_kcal
-        ax4.plot(epochs_valid, valid_forces_valid, 's-', color='#CC79A7',
-                linewidth=2.5, markersize=6, alpha=0.8, label='Validation')
-        
-        if not np.all(np.isnan(metrics['train_forces_mae'])):
-            train_forces_valid = metrics['train_forces_mae'][valid_idx] * eV_to_kcal
-            ax4.plot(epochs_valid, train_forces_valid, 'o-', color='#CC79A7',
-                    linewidth=1.5, markersize=4, alpha=0.4, label='Training')
-        
-        # Mark best
-        best_idx = np.argmin(valid_forces_valid)
-        ax4.scatter(epochs_valid[best_idx], valid_forces_valid[best_idx],
-                   s=200, color='gold', edgecolor='black', linewidth=2, zorder=5, marker='*')
-    
-    ax4.set_xlabel('Epoch', fontsize=11)
-    ax4.set_ylabel('Forces MAE (kcal/mol/Å)', fontsize=11)
-    ax4.set_title('Forces Prediction', fontsize=12, fontweight='bold')
-    ax4.legend(fontsize=9)
-    ax4.grid(True, alpha=0.3)
-    if log_loss:
-        ax4.set_yscale('log')
-    
-    # Plot 5: Dipole MAE
-    ax5 = fig.add_subplot(gs[1, 2])
-    if not np.all(np.isnan(metrics['valid_dipole_mae'])):
-        valid_dipole_valid = metrics['valid_dipole_mae'][valid_idx]
-        ax5.plot(epochs_valid, valid_dipole_valid, 's-', color='#56B4E9',
-                linewidth=2.5, markersize=6, alpha=0.8, label='Validation')
-        
-        if not np.all(np.isnan(metrics['train_dipole_mae'])):
-            train_dipole_valid = metrics['train_dipole_mae'][valid_idx]
-            ax5.plot(epochs_valid, train_dipole_valid, 'o-', color='#56B4E9',
-                    linewidth=1.5, markersize=4, alpha=0.4, label='Training')
-        
-        # Mark best
-        best_idx = np.argmin(valid_dipole_valid)
-        ax5.scatter(epochs_valid[best_idx], valid_dipole_valid[best_idx],
-                   s=200, color='gold', edgecolor='black', linewidth=2, zorder=5, marker='*')
-    
-    ax5.set_xlabel('Epoch', fontsize=11)
-    ax5.set_ylabel('Dipole MAE (e·Å)', fontsize=11)
-    ax5.set_title('Dipole Prediction', fontsize=12, fontweight='bold')
-    ax5.legend(fontsize=9)
-    ax5.grid(True, alpha=0.3)
-    if log_loss:
-        ax5.set_yscale('log')
-    
-    # Plot 6: Learning Rate
-    ax6 = fig.add_subplot(gs[2, 0])
-    if not np.all(np.isnan(metrics['lr_eff'])):
-        lr_valid = metrics['lr_eff'][valid_idx]
-        ax6.plot(epochs_valid, lr_valid, 'o-', color='#F0E442',
-                linewidth=2.5, markersize=6, alpha=0.8)
-        ax6.set_xlabel('Epoch', fontsize=11)
-        ax6.set_ylabel('Learning Rate', fontsize=11)
-        ax6.set_title('Learning Rate Schedule', fontsize=12, fontweight='bold')
-        ax6.grid(True, alpha=0.3)
-        ax6.set_yscale('log')
-    
-    # Plot 7: Loss Components Breakdown
-    ax7 = fig.add_subplot(gs[2, 1:])
-    
-    # Calculate improvement from start
-    if len(valid_loss_valid) > 1:
-        improvement = (valid_loss_valid[0] - valid_loss_valid) / valid_loss_valid[0] * 100
-        ax7.plot(epochs_valid, improvement, 'o-', color='#009E73',
-                linewidth=2.5, markersize=6, alpha=0.8)
-        ax7.axhline(0, color='red', linestyle='--', linewidth=2, alpha=0.5)
-        ax7.set_xlabel('Epoch', fontsize=11)
-        ax7.set_ylabel('Improvement from Start (%)', fontsize=11)
-        ax7.set_title('Validation Loss Improvement', fontsize=12, fontweight='bold')
-        ax7.grid(True, alpha=0.3)
-        ax7.fill_between(epochs_valid, 0, improvement, alpha=0.2, color='#009E73')
-        
-        # Annotations removed per user request
-    
-    plt.suptitle(f'Training Analysis: {ckpt_name}\n{len(epochs_valid)} checkpoints analyzed',
-                 fontsize=16, fontweight='bold')
-    
-    plt.savefig(output_path, dpi=300, bbox_inches='tight')
-    plt.close()
-    
+        _set_positive_log_ylim(ax_best, [best_loss])
+
+    _plot_train_valid_series(
+        ax_e,
+        epochs,
+        metrics["train_energy_mae"][plot_idx],
+        metrics["valid_energy_mae"][plot_idx],
+        ylabel="Energy MAE (kcal/mol)",
+        title="Energy MAE",
+        log_scale=log_loss,
+        train_scale=eV_to_kcal,
+        valid_scale=eV_to_kcal,
+    )
+    _plot_train_valid_series(
+        ax_f,
+        epochs,
+        metrics["train_forces_mae"][plot_idx],
+        metrics["valid_forces_mae"][plot_idx],
+        ylabel="Forces MAE (kcal/mol/Å)",
+        title="Forces MAE",
+        log_scale=log_loss,
+        train_scale=eV_to_kcal,
+        valid_scale=eV_to_kcal,
+    )
+
+    if not ef_only:
+        lr = _finite_series(metrics.get("lr_eff", np.array([])))[plot_idx]
+        if lr.size and np.any(np.isfinite(lr)):
+            ax_lr.plot(epochs, lr, color=_PLOT_COLORS["lr"], linewidth=2.0)
+            ax_lr.set_xlabel("Epoch")
+            ax_lr.set_ylabel("Learning rate")
+            ax_lr.set_title("LR schedule")
+            if np.all(lr[np.isfinite(lr)] > 0):
+                ax_lr.set_yscale("log")
+        else:
+            ax_lr.axis("off")
+            ax_lr.text(
+                0.5,
+                0.5,
+                _summary_text_box(metrics, plot_idx),
+                ha="center",
+                va="center",
+                fontsize=10,
+                family="monospace",
+                transform=ax_lr.transAxes,
+                bbox=dict(boxstyle="round", facecolor="white", edgecolor="#CCCCCC"),
+            )
+
+        dip_valid = _finite_series(metrics.get("valid_dipole_mae", np.array([np.nan])))
+        if not np.all(np.isnan(dip_valid)):
+            inset = fig.add_axes([0.68, 0.08, 0.28, 0.22])
+            _plot_train_valid_series(
+                inset,
+                epochs,
+                metrics["train_dipole_mae"][plot_idx],
+                metrics["valid_dipole_mae"][plot_idx],
+                ylabel="Dipole (e·Å)",
+                title="Dipole MAE",
+                log_scale=log_loss,
+            )
+    else:
+        ax_best.text(
+            0.03,
+            0.97,
+            _summary_text_box(metrics, plot_idx),
+            transform=ax_best.transAxes,
+            va="top",
+            ha="left",
+            fontsize=9,
+            family="monospace",
+            bbox=dict(boxstyle="round", facecolor="white", edgecolor="#CCCCCC", alpha=0.95),
+        )
+
+    mode = "energy & forces" if ef_only else "full training"
+    fig.suptitle(
+        f"{ckpt_name}\n{int(plot_idx.sum())} checkpoints · {mode}",
+        fontsize=14,
+        fontweight="bold",
+        y=1.02 if not ef_only else 1.01,
+    )
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, dpi=220, bbox_inches="tight")
+    plt.close(fig)
+
     if verbose:
-        print(f"✅ Saved: {output_path}")
+        print(f"Saved: {output_path}")
+
+
+def plot_training_comparison(
+    runs: List[tuple[str, Dict[str, np.ndarray]]],
+    output_path: Path,
+    *,
+    log_scale: bool = True,
+    ef_only: bool = True,
+    title: str = "Training comparison",
+    verbose: bool = True,
+) -> None:
+    """Overlay valid metrics from multiple checkpoint runs."""
+    _apply_training_plot_style()
+    if not runs:
+        raise ValueError("No runs provided for comparison plot")
+
+    panels = (
+        ("valid_loss", "Validation loss", 1.0),
+        ("valid_energy_mae", "Valid energy MAE (kcal/mol)", EV_TO_KCAL_MOL),
+        ("valid_forces_mae", "Valid forces MAE (kcal/mol/Å)", EV_TO_KCAL_MOL),
+    )
+    if not ef_only:
+        panels = panels + (("valid_dipole_mae", "Valid dipole MAE (e·Å)", 1.0),)
+
+    ncols = 2
+    nrows = int(np.ceil(len(panels) / ncols))
+    fig, axes = plt.subplots(nrows, ncols, figsize=(6.5 * ncols, 4.5 * nrows), constrained_layout=True)
+    axes_flat = np.atleast_1d(axes).ravel()
+    colors = plt.cm.tab10(np.linspace(0, 1, max(len(runs), 1)))
+
+    for ax, (key, panel_title, scale) in zip(axes_flat, panels):
+        panel_arrays: List[np.ndarray] = []
+        for color, (run_name, metrics) in zip(colors, runs):
+            mask = _valid_metric_mask(metrics)
+            if not mask.any():
+                continue
+            epochs = np.asarray(metrics["epochs"], dtype=float)[mask]
+            y = _finite_series(metrics[key])[mask] * scale
+            trim = _warmup_trim_mask(y, factor=40.0)
+            if trim.any():
+                epochs = epochs[trim]
+                y = y[trim]
+            if y.size == 0:
+                continue
+            panel_arrays.append(y)
+            ax.plot(
+                epochs,
+                y,
+                color=color,
+                linewidth=2.1,
+                label=_short_run_label(run_name),
+            )
+        ax.set_xlabel("Epoch")
+        ax.set_title(panel_title)
+        if log_scale and panel_arrays:
+            _set_positive_log_ylim(ax, panel_arrays)
+        ax.legend(fontsize=8, loc="best")
+
+    for ax in axes_flat[len(panels) :]:
+        ax.axis("off")
+
+    fig.suptitle(title, fontsize=14, fontweight="bold")
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, dpi=220, bbox_inches="tight")
+    plt.close(fig)
+    if verbose:
+        print(f"Saved: {output_path}")
 
 
 def print_metrics_summary(metrics: Dict[str, np.ndarray], ckpt_dir: Path):
@@ -415,6 +612,29 @@ Examples:
                        help='Use log scale for loss axes (recommended)')
     parser.add_argument('--quiet', action='store_true',
                        help='Suppress output')
+    parser.add_argument(
+        '--stride',
+        type=int,
+        default=1,
+        help='Read every Nth epoch checkpoint (default: 1 = all). Use for large runs.',
+    )
+    parser.add_argument(
+        '--max-epochs',
+        type=int,
+        default=None,
+        help='Cap the number of epoch checkpoints read after stride (default: no cap).',
+    )
+    parser.add_argument(
+        '--metrics-json',
+        type=Path,
+        default=None,
+        help='Optional path to write extracted metrics as JSON arrays.',
+    )
+    parser.add_argument(
+        '--ef-only',
+        action='store_true',
+        help='Plot energy/forces panels only (omit dipole inset from main layout).',
+    )
     return parser
 
 
@@ -459,14 +679,36 @@ def main():
     if verbose:
         print("📊 Extracting metrics from checkpoints...")
     
-    metrics = collect_all_metrics(args.checkpoint_dir, verbose=verbose)
+    stride = max(1, int(args.stride))
+    metrics = collect_all_metrics(
+        args.checkpoint_dir,
+        verbose=verbose,
+        stride=stride,
+        max_epochs=args.max_epochs,
+    )
+
+    if args.metrics_json is not None:
+        payload = {k: np.asarray(v).tolist() for k, v in metrics.items()}
+        args.metrics_json.parent.mkdir(parents=True, exist_ok=True)
+        import json
+
+        with args.metrics_json.open("w") as handle:
+            json.dump(payload, handle, indent=2)
+        if verbose:
+            print(f"Wrote metrics JSON: {args.metrics_json}")
     
     # Create plots
     if verbose:
         print("\n📈 Creating training plots...")
     
-    plot_training_metrics(metrics, args.output, ckpt_name=args.checkpoint_dir.name,
-                         log_loss=args.log_loss, verbose=verbose)
+    plot_training_metrics(
+        metrics,
+        args.output,
+        ckpt_name=args.checkpoint_dir.name,
+        log_loss=args.log_loss,
+        verbose=verbose,
+        ef_only=args.ef_only,
+    )
     
     # Print summary
     print_metrics_summary(metrics, args.checkpoint_dir)
