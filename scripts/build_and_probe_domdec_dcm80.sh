@@ -88,9 +88,14 @@ echo "--- rank 00 ---"
 cat domdec_probe_rank00.txt
 
 # ---- Step 3: 8-rank DOMDEC -----------------------------------------------
+# Disable the broken OpenFabrics/InfiniBand BTL so MPI falls back to
+# shared-memory (within one node) or TCP.  Prevents spin-wait deadlock
+# when mlx5_* devices are present but non-functional.
+MPIFLAGS="--mca btl ^openib --mca shmem mmap"
 echo ""
 echo ">>> Step 3: mpirun -np ${NRANKS}  ndir=${NDIR}  cutnb=${CUTNB}"
-mpirun -np ${NRANKS} python "${SCRIPT_DIR}/probe_domdec_atoms_live.py" \
+echo "    MPI flags: ${MPIFLAGS}"
+mpirun -np ${NRANKS} ${MPIFLAGS} python "${SCRIPT_DIR}/probe_domdec_atoms_live.py" \
     --psf "${PSF}" --crd "${CRD}" \
     --box ${BOX} --ndir ${NDIR} \
     --cutnb ${CUTNB} --ctofnb ${CTOFNB} --ctonnb ${CTONNB}
