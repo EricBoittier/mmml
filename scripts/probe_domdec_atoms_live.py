@@ -103,24 +103,29 @@ read psf  card name {args.psf}
 read coor card name {args.crd}
 """)
 
-    # ------------------------------------------------------------------ PBC
+    # ------------------------------------------------------------------ PBC (crystal only — no image transform needed for energy probe)
     L = args.box
     lingo.charmm_script(f"""
 crystal define cubic {L} {L} {L} 90 90 90
 crystal build cutoff {args.cutnb} noper 0
-image byres xcen 0 ycen 0 zcen 0
 """)
 
-    # ------------------------------------------------------------------ DOMDEC energy
-    # fftx/y/z must be >= box/spacing; use 32 for boxes ~40 Å, 64 for ~80 Å
-    fft = max(32, int(args.box / 1.2 / 2) * 2)   # even integer, ~box/1.2
-    lingo.charmm_script(f"""
-faster on
-energy cutnb {args.cutnb} ctofnb {args.ctofnb} ctonnb {args.ctonnb} -
-    vfswitch atom fswitch -
-    domd ndir {ndir} 1 1 -
-    ewald kappa 0.32 order 6 fftx {fft} ffty {fft} fftz {fft}
-""")
+    # ------------------------------------------------------------------ energy
+    # fftx/y/z: even integer >= box/grid_spacing (use ~0.8 Å spacing)
+    fft = max(32, int(args.box / 0.8 / 2) * 2)
+    base = (
+        f"energy cutnb {args.cutnb} ctofnb {args.ctofnb} ctonnb {args.ctonnb} -\n"
+        f"    vfswitch atom fswitch -\n"
+        f"    ewald kappa 0.32 order 6 fftx {fft} ffty {fft} fftz {fft}"
+    )
+    if ndir > 1:
+        base = (
+            f"energy cutnb {args.cutnb} ctofnb {args.ctofnb} ctonnb {args.ctonnb} -\n"
+            f"    vfswitch atom fswitch -\n"
+            f"    domd ndir {ndir} 1 1 -\n"
+            f"    ewald kappa 0.32 order 6 fftx {fft} ffty {fft} fftz {fft}"
+        )
+    lingo.charmm_script(f"faster on\n{base}")
 
     # ------------------------------------------------------------------ probe
     from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
