@@ -1168,9 +1168,14 @@ def setup_calculator(
             tag_style="bold magenta",
         )
 
-    def _ensure_mm_fn(positions_concrete, cutoff_params):
+    def _ensure_mm_fn(positions_concrete, cutoff_params, pbc_cell_override=None):
         """Build the MM energy/force function if not yet cached (or if cutoffs changed)."""
-        cell_key = None if pbc_cell is None else tuple(np.asarray(pbc_cell).reshape(-1).tolist())
+        cell_for_build = pbc_cell_override if pbc_cell_override is not None else pbc_cell
+        cell_key = (
+            None
+            if cell_for_build is None
+            else tuple(np.asarray(cell_for_build, dtype=np.float64).reshape(-1).tolist())
+        )
         key = (
             cutoff_params.ml_switch_width,
             cutoff_params.mm_switch_on,
@@ -1188,6 +1193,7 @@ def setup_calculator(
                 mm_switch_on=cutoff_params.mm_switch_on,
                 mm_switch_width=cutoff_params.mm_switch_width,
                 complementary_handoff=getattr(cutoff_params, "complementary_handoff", True),
+                pbc_cell_override=cell_for_build,
                 mm_r_min=mm_r_min,
             )
             _cached_mm_fn[0] = mm_result
@@ -2098,7 +2104,7 @@ def setup_calculator(
                 box_jax = jnp.asarray(box_vec) if box_vec is not None else None
 
                 if self.doMM:
-                    _ensure_mm_fn(np.asarray(R), self.cutoff_params)
+                    _ensure_mm_fn(np.asarray(R), self.cutoff_params, pbc_cell_override=box_vec)
                     update_fn = _cached_update_mm_pairs[0]
                     if update_fn is not None:
                         if box_vec is not None:
@@ -2489,7 +2495,7 @@ def setup_calculator(
             def get_update_fn(positions, cutoff_params_arg, box=None):
                 """Ensure MM fn is built and return update_mm_pairs, or None for cell-list path."""
                 pos_np = np.asarray(positions)
-                _ensure_mm_fn(pos_np, cutoff_params_arg)
+                _ensure_mm_fn(pos_np, cutoff_params_arg, pbc_cell_override=box)
                 return _cached_update_mm_pairs[0]
 
             update_fn_factory = get_update_fn if doMM else None

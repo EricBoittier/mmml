@@ -243,6 +243,94 @@ def test_setup_calculator_defer_skips_terminal_xla_gpu_warmup():
     assert callable(factory)
 
 
+def test_runtime_box_is_forwarded_to_lazy_mm_builder():
+    """Regression: deferred MLpot + JAX-PME must build MM with callback PBC box."""
+    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+
+    class DummyModel:
+        def __init__(self, **kwargs):
+            self.natoms = int(kwargs.get("natoms", 8))
+            self.use_pbc = False
+
+        def apply(self, params, **kwargs):  # pragma: no cover - not evaluated here
+            R = kwargs["positions"]
+            return {"energy": jnp.zeros((1,), dtype=R.dtype), "forces": jnp.zeros_like(R)}
+
+    dummy_checkpoint = {
+        "params": {},
+        "config": {
+            "features": 32,
+            "max_degree": 3,
+            "num_iterations": 2,
+            "num_basis_functions": 16,
+            "cutoff": 6.0,
+            "max_atomic_number": 118,
+            "charges": False,
+            "include_electrostatics": False,
+            "natoms": 8,
+            "total_charge": 0,
+            "n_res": 3,
+            "zbl": True,
+            "debug": False,
+            "efa": False,
+            "use_energy_bias": False,
+            "use_pbc": True,
+        },
+    }
+    calls: list[Any] = []
+    fake_mm_fn = MagicMock(return_value=(jnp.array(0.0), jnp.zeros((8, 3))))
+    fake_update_fn = MagicMock(return_value=(jnp.zeros((1, 2), dtype=jnp.int32), jnp.ones((1,), dtype=bool)))
+
+    def fake_build_mm(*args, **kwargs):
+        calls.append(kwargs)
+        if kwargs.get("use_jax_md_neighbor_list", True):
+            return fake_mm_fn, fake_update_fn
+        return fake_mm_fn
+
+    restart_path = MagicMock(spec=Path)
+    restart_path.is_file.return_value = True
+    restart_path.suffix = ".json"
+    restart_path.resolve.return_value = restart_path
+    z = jnp.array([6, 1, 1, 1, 6, 1, 1, 1], dtype=jnp.int32)
+    r0 = np.zeros((8, 3), dtype=np.float64)
+    box = jnp.asarray([[31.0, 0.0, 0.0], [0.0, 31.0, 0.0], [0.0, 0.0, 31.0]])
+
+    with patch("mmml.utils.model_checkpoint.load_model_checkpoint", return_value=dummy_checkpoint), patch(
+        "mmml.models.physnetjax.physnetjax.models.model.PhysNet", DummyModel
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mmml_calculator.build_mm_energy_forces_fn",
+        side_effect=fake_build_mm,
+    ):
+        factory = setup_calculator(
+            ATOMS_PER_MONOMER=[4, 4],
+            N_MONOMERS=2,
+            doML=True,
+            doMM=True,
+            model_restart_path=restart_path,
+            MAX_ATOMS_PER_SYSTEM=8,
+            cell=False,
+            defer_xla_gpu_warmup=True,
+            verbose=False,
+        )
+        _, _, get_update_fn = factory(
+            atomic_numbers=z,
+            atomic_positions=jnp.asarray(r0),
+            n_monomers=2,
+            cutoff_params=CutoffParameters(),
+            doML=True,
+            doMM=True,
+            doML_dimer=True,
+            backprop=False,
+            create_ase_calculator=False,
+        )
+        assert get_update_fn is not None
+        assert get_update_fn(r0, CutoffParameters(), box=box) is fake_update_fn
+
+    assert len(calls) == 2
+    for call in calls:
+        np.testing.assert_allclose(np.asarray(call["pbc_cell"]), np.asarray(box))
+
+
 def test_register_mlpot_context_forwards_cell():
     from mmml.interfaces.pycharmmInterface.mlpot import run_workflow
 
