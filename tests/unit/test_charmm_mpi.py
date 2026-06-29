@@ -320,6 +320,7 @@ def test_prepare_serial_charmm_mpi_env_preserves_explicit_blas_threads(monkeypat
 def test_configure_mpi4py_charmm_owned_init(monkeypatch):
     pytest.importorskip("mpi4py")
     monkeypatch.delenv("MMML_MPI_PY_INIT", raising=False)
+    monkeypatch.delenv("MMML_DEFER_MPI4PY_PACKAGE_IMPORT", raising=False)
     charmm_mpi._mpi4py_charmm_configured = False
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
@@ -330,6 +331,26 @@ def test_configure_mpi4py_charmm_owned_init(monkeypatch):
 
     assert mpi4py.rc.initialize is False
     assert mpi4py.rc.finalize is False
+
+
+def test_configure_mpi4py_deferred_package_import(monkeypatch):
+    monkeypatch.delenv("MMML_MPI_PY_INIT", raising=False)
+    monkeypatch.setenv("MMML_DEFER_MPI4PY_PACKAGE_IMPORT", "1")
+    charmm_mpi._mpi4py_charmm_configured = False
+    import sys
+
+    saved = sys.modules.pop("mpi4py", None)
+    try:
+        with mock.patch(
+            "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+            return_value=True,
+        ):
+            charmm_mpi.configure_mpi4py_charmm_owned_init()
+        assert "mpi4py" not in sys.modules
+        assert os.environ.get("MPI4PY_RC_INITIALIZE") == "false"
+    finally:
+        if saved is not None:
+            sys.modules["mpi4py"] = saved
 
 
 def test_ensure_charmm_mpi_initialized_idempotent():

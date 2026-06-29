@@ -900,6 +900,11 @@ def configure_mpi4py_charmm_owned_init() -> None:
         return
     if not charmm_lib_links_mpi():
         return
+    os.environ.setdefault("MPI4PY_RC_INITIALIZE", "false")
+    os.environ.setdefault("MPI4PY_RC_FINALIZE", "false")
+    if _truthy("MMML_DEFER_MPI4PY_PACKAGE_IMPORT"):
+        _mpi4py_charmm_configured = True
+        return
     try:
         import mpi4py
 
@@ -907,6 +912,15 @@ def configure_mpi4py_charmm_owned_init() -> None:
         _mpi4py_charmm_configured = True
     except Exception:
         return
+
+
+def _purge_mpi4py_modules() -> None:
+    """Drop cached ``mpi4py`` modules so ``mpi4py.MPI`` can reload after CHARMM init."""
+    import sys
+
+    for key in list(sys.modules):
+        if key == "mpi4py" or key.startswith("mpi4py."):
+            del sys.modules[key]
 
 
 def ensure_charmm_mpi_initialized() -> None:
@@ -933,13 +947,22 @@ def ensure_mpi4py_after_charmm_init(*, phase: str = "after PyCHARMM import") -> 
     ``from mpi4py import MPI`` when the ``mpi4py`` package is already present.
     That import must happen **after** CHARMM has initialized MPI, otherwise ASE
     (and any later mpi4py collectives) fail with ``cannot import name 'MPI'``.
+
+    When ``MMML_DEFER_MPI4PY_PACKAGE_IMPORT=1``, the mpi4py package was not
+    imported before PyCHARMM; this function performs the first load with MPI
+    library paths from ``prepare_charmm_mpi_runtime()`` already applied.
     """
     if _truthy("MMML_MPI_PY_INIT") or not charmm_lib_links_mpi():
         return True
     if not _mpi4py_available():
         return True
+    prepare_charmm_mpi_runtime()
+    _purge_mpi4py_modules()
     configure_mpi4py_charmm_owned_init()
     try:
+        import mpi4py
+
+        mpi4py.rc(initialize=False, finalize=False)
         from mpi4py import MPI
 
         if not MPI.Is_initialized():
@@ -953,10 +976,15 @@ def ensure_mpi4py_after_charmm_init(*, phase: str = "after PyCHARMM import") -> 
         _ = int(MPI.COMM_WORLD.Get_size())
         return True
     except Exception as exc:
+        cause = exc.__cause__
+        detail = f"{exc}" + (f" (cause: {cause})" if cause else "")
+        mismatch_ok, mismatch_msg = mpi4py_openmpi_mismatch()
+        hint = "./scripts/rebuild_mpi4py_for_charmm.sh"
+        if not mismatch_ok:
+            hint = f"{hint}  ({mismatch_msg})"
         print(
-            f"mmml: mpi4py.MPI unavailable {phase}: {exc}. "
-            "Rebuild mpi4py against libcharmm OpenMPI: "
-            "./scripts/rebuild_mpi4py_for_charmm.sh",
+            f"mmml: mpi4py.MPI unavailable {phase}: {detail}. "
+            f"Rebuild mpi4py against libcharmm OpenMPI: {hint}",
             file=sys.stderr,
             flush=True,
         )

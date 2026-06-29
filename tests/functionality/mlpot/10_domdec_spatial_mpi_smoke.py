@@ -141,7 +141,8 @@ def _configure_live_charmm_mpi_import(*, size: int) -> None:
     if size <= 1:
         return
     os.environ.setdefault("MMML_SKIP_CHARMM_RESET_BLOCK", "1")
-    _log("setup", "np>1 live CHARMM: skip import-time reset_block")
+    os.environ.setdefault("MMML_DEFER_MPI4PY_PACKAGE_IMPORT", "1")
+    _log("setup", "np>1 live CHARMM: skip import-time reset_block; defer mpi4py")
     _skip_vacuum_crystal_free_for_mpi()
 
 
@@ -369,6 +370,55 @@ def _prepare_prebuilt(args: argparse.Namespace) -> int:
     return 0
 
 
+def _psf_atom_types(psf_path: Path) -> set[str]:
+    types: set[str] = set()
+    in_atoms = False
+    remaining = 0
+    for line in psf_path.read_text(encoding="utf-8", errors="replace").splitlines():
+        if "!NATOM" in line:
+            remaining = int(line.split()[0])
+            in_atoms = True
+            continue
+        if not in_atoms:
+            continue
+        if remaining <= 0:
+            break
+        parts = line.split()
+        if len(parts) >= 6:
+            types.add(parts[5])
+            remaining -= 1
+    if not types:
+        raise ValueError(f"No atom types parsed from PSF: {psf_path}")
+    return types
+
+
+def _minimal_rtf_for_psf_types(psf_path: Path, prm_path: Path) -> Path:
+    """Minimal MASS-only RTF for MPI-safe prebuilt PSF load (see 09_domdec_mlpot_smoke)."""
+    import tempfile
+
+    needed = _psf_atom_types(psf_path)
+    mass_lines: list[str] = []
+    seen: set[str] = set()
+    for line in prm_path.read_text(encoding="utf-8", errors="replace").splitlines():
+        parts = line.split()
+        if len(parts) >= 4 and parts[0].upper() == "MASS" and parts[2] in needed:
+            mass_lines.append(line)
+            seen.add(parts[2])
+    missing = sorted(needed - seen)
+    if missing:
+        raise ValueError(f"Missing MASS records in {prm_path}: {missing}")
+
+    fd, name = tempfile.mkstemp(suffix=".rtf", prefix="mmml_domdec_mass_")
+    path = Path(name)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write("* MMML DOMDEC spatial smoke minimal MASS topology\n")
+        handle.write("*\n")
+        for line in mass_lines:
+            handle.write(f"{line}\n")
+        handle.write("END\n")
+    return path
+
+
 def _load_prebuilt(args: argparse.Namespace) -> tuple["np.ndarray", "np.ndarray", int, list[int]]:
     """Load prebuilt PSF/CRD and return (z, r, n_monomers, atoms_per_monomer)."""
     import numpy as np
@@ -376,7 +426,7 @@ def _load_prebuilt(args: argparse.Namespace) -> tuple["np.ndarray", "np.ndarray"
     import pycharmm.read as read
 
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-    from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
     from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
     psf_path, crd_path = _prebuilt_paths(args)
@@ -388,14 +438,26 @@ def _load_prebuilt(args: argparse.Namespace) -> tuple["np.ndarray", "np.ndarray"
     if not crd_path.is_file():
         raise FileNotFoundError(f"Prebuilt CRD not found: {crd_path}")
 
-    _log("load", "reading CGenFF toppar")
-    read_cgenff_toppar()
+    rank, size = _mpi_info()
+    # Full CGENFF RTF stream (read_cgenff_toppar) deadlocks under mpirun np>1.
+    # Load only MASS records required by the prebuilt PSF, then PRM + PSF/CRD.
+    minimal_rtf = _minimal_rtf_for_psf_types(psf_path, Path(CGENFF_PRM))
+    n_types = len(_psf_atom_types(psf_path))
+    _log("load", f"minimal MASS RTF ({n_types} types) begin")
+    with charmm_relaxed_bomlev():
+        read.rtf(str(minimal_rtf))
+    _log("load", "minimal MASS RTF done")
+    _log("load", f"reading PRM: {CGENFF_PRM}")
+    with charmm_relaxed_bomlev():
+        read.prm(CGENFF_PRM)
+    _log("load", "PRM done")
     _log("load", f"reading PSF: {psf_path}")
     with charmm_relaxed_bomlev():
         read.psf_card(str(psf_path))
     _log("load", f"reading CRD: {crd_path}")
     with charmm_relaxed_bomlev():
         read.coor_card(str(crd_path))
+    _log("load", f"loaded PSF/CRD on rank {rank}/{size}")
 
     z = np.asarray(get_Z_from_psf(), dtype=int)
     r = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)

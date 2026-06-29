@@ -36,11 +36,14 @@ if mpirun is None:
         "(set CHARMM_LIB_DIR / MMML_MPIRUN)"
     )
 bindir = mpirun.parent
+ompi_lib = bindir.parent / "lib"
 for name in ("mpicc", "mpicxx", "mpic++"):
     cc = bindir / name
     if cc.is_file():
         print(f"export MPICC={shlex.quote(str(cc))}")
         print(f"export MPICXX={shlex.quote(str(cc))}")
+        if ompi_lib.is_dir():
+            print(f"export LDFLAGS={shlex.quote(f'-Wl,-rpath,{ompi_lib}')}")
         break
 else:
     raise SystemExit(f"rebuild_mpi4py_for_charmm: no mpicc under {bindir}")
@@ -65,4 +68,15 @@ fi
 
 echo "rebuild_mpi4py_for_charmm: verify with:" >&2
 echo "  mmml mpi-check" >&2
+echo "  # after: eval mpi_shell_setup_lines from rebuild script output above" >&2
+echo "  python -c \"from mpi4py import MPI; print('mpi4py OK', MPI.Is_initialized())\"" >&2
 echo "  ldd \$($PY -c \"import importlib.util as u; print(u.find_spec('mpi4py.MPI').origin)\") | grep libmpi" >&2
+
+echo "rebuild_mpi4py_for_charmm: post-install import test..." >&2
+if ! "$PY" - <<'PY'; then
+from mpi4py import MPI
+print(f"rebuild_mpi4py_for_charmm: mpi4py.MPI import OK (initialized={MPI.Is_initialized()})")
+PY
+  echo "rebuild_mpi4py_for_charmm: WARNING: mpi4py.MPI import failed (LD_LIBRARY_PATH may be unset in this shell)" >&2
+  echo "rebuild_mpi4py_for_charmm: run under ./scripts/mmml-charmm-mpirun.sh or export OpenMPI lib path" >&2
+fi
