@@ -125,6 +125,11 @@ COMMAND_REGISTRY: tuple[CommandSpec, ...] = (
         "mmml.cli.misc.extract_checkpoint_metrics",
         "Plot training metrics from Orbax checkpoints",
     ),
+    CommandSpec(
+        "diagnose-lc-outliers",
+        "mmml.cli.misc.diagnose_learning_curve_outliers",
+        "Inspect learning-curve sweeps for bad seeds and NPZ outliers",
+    ),
     CommandSpec("orbax-to-json", "mmml.cli.misc.orbax_to_json_cmd", "Export Orbax checkpoint to JSON"),
     CommandSpec("orca-server", "mmml.interfaces.orca_external.server", "Persistent JAX server for ORCA"),
     CommandSpec("orca-client", "mmml.interfaces.orca_external.client", "ORCA client → orca-server"),
