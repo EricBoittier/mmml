@@ -18,30 +18,78 @@ RUN_DIR="${RUN_DIR:-$TESTS_ROOT/runs/domdec_dcm${N_DCM}_native_l${BOX_SIZE}}"
 MPIRUN="${MMML_MPIRUN_WRAPPER:-$MMML_ROOT/scripts/mmml-charmm-mpirun.sh}"
 CHARMM_HOME="${CHARMM_HOME:-$MMML_ROOT/setup/charmm}"
 CHARMM_LIB_DIR="${CHARMM_LIB_DIR:-$CHARMM_HOME}"
+CHARMM_BUILD_DIR="${CHARMM_BUILD_DIR:-}"
 RTF="${RTF:-$MMML_ROOT/mmml/data/charmm/top_all36_cgenff.rtf}"
 PRM="${PRM:-$MMML_ROOT/mmml/data/charmm/par_all36_cgenff.prm}"
 CHARMM_EXE="${CHARMM_EXE:-}"
 
-if [[ -z "$CHARMM_EXE" ]]; then
+platform_tag() {
+  local os arch
+  os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+  arch="$(uname -m)"
+  case "$os" in
+    darwin) echo "darwin-${arch}" ;;
+    linux) echo "linux-${arch}" ;;
+    *) echo "${os}-${arch}" ;;
+  esac
+}
+
+find_charmm_exe() {
+  local candidate build_root
   for candidate in \
+    "$CHARMM_EXE" \
+    "$CHARMM_BUILD_DIR/charmm" \
+    "$CHARMM_BUILD_DIR/bin/charmm" \
+    "$CHARMM_BUILD_DIR/exec/charmm" \
     "$CHARMM_HOME/build/cmake/charmm" \
+    "$CHARMM_HOME/build/cmake/bin/charmm" \
     "$CHARMM_HOME/charmm" \
+    "$CHARMM_HOME/bin/charmm" \
     "$CHARMM_HOME/exec/charmm" \
     "$CHARMM_HOME/exec/gnu/charmm" \
-    "$MMML_ROOT/setup/charmm/build/cmake/charmm"
+    "$HOME/.cache/mmml-charmm-build/$(platform_tag)/charmm" \
+    "$HOME/.cache/mmml-charmm-build/$(platform_tag)/bin/charmm" \
+    "$HOME/.cache/mmml-charmm-build/$(platform_tag)/exec/charmm"
   do
-    if [[ -x "$candidate" ]]; then
-      CHARMM_EXE="$candidate"
-      break
+    if [[ -n "$candidate" && -x "$candidate" ]]; then
+      echo "$candidate"
+      return 0
     fi
   done
-fi
+  for build_root in \
+    "$CHARMM_BUILD_DIR" \
+    "$HOME/.cache/mmml-charmm-build/$(platform_tag)" \
+    "$CHARMM_HOME/build/cmake"
+  do
+    if [[ -d "$build_root" ]]; then
+      candidate="$(command find "$build_root" -type f -name charmm -perm -111 -print -quit 2>/dev/null || true)"
+      if [[ -n "$candidate" ]]; then
+        echo "$candidate"
+        return 0
+      fi
+    fi
+  done
+  return 1
+}
+
+CHARMM_EXE="$(find_charmm_exe || true)"
 
 if [[ -z "$CHARMM_EXE" || ! -x "$CHARMM_EXE" ]]; then
   cat >&2 <<EOF
 Could not find a CHARMM executable.
 Set CHARMM_EXE=/path/to/charmm and retry.
-Tried common paths under: $CHARMM_HOME
+
+Tried common paths under:
+  CHARMM_HOME=$CHARMM_HOME
+  CHARMM_BUILD_DIR=${CHARMM_BUILD_DIR:-<unset>}
+  $HOME/.cache/mmml-charmm-build/$(platform_tag)
+
+Quick locate:
+  command find "$HOME/.cache/mmml-charmm-build" "$CHARMM_HOME" -type f -name charmm -perm -111 2>/dev/null
+
+If no executable exists, this CHARMM build may be library-only. Reconfigure/build a
+native CHARMM executable with the same MPI/DOMDEC stack, then rerun:
+  CHARMM_EXE=/path/to/charmm bash scripts/run_domdec_dcm10_smoke.sh tier3
 EOF
   exit 1
 fi
