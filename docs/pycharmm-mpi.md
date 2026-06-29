@@ -393,12 +393,11 @@ DLPack (`__dlpack__` / `from_dlpack`) gives **zero-copy GPU array interchange** 
 
 **When to invest in DLPack:** JAX-MD or other runners that keep positions on device across steps. **When not to:** PyCHARMM hybrid MD until Fortran exposes GPU coordinates (Tier 3+ / upstream). See [`NONBOND_LISTS.md`](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/mlpot/NONBOND_LISTS.md) GPU section and `tests/functionality/neighbor_lists/11_gpu_nl_sync_profile.py` for timing validation.
 
-### Known limitations (Phase 2)
+### Known limitations (Phase 2 / Phase 3)
 
-- DOMDEC ownership metadata is not used during MLpot
 - `np>1` without `--ml-spatial-mpi` uses rank-0 bridge (correct but slow)
-- PyCHARMM does not expose Fortran DOMDEC atom maps (blocks Tier 3)
 - Live Tier 2 MLpot not exercised in CI (cluster smoke required)
+- DOMDEC + JAX MLpot coexistence not yet validated on cluster (Phase 3 smoke pending)
 
 ---
 
@@ -430,12 +429,16 @@ DLPack (`__dlpack__` / `from_dlpack`) gives **zero-copy GPU array interchange** 
 - [x] Example YAML `md_system.spatial_mpi.example.yaml` + dry-run smoke `07_md_system_spatial_mpi_mini.py`
 - [ ] Full `md-system --ml-spatial-mpi` mini on cluster (user `--run` validation)
 
-### Phase 3 (blocked)
+### Phase 3
 
 - [x] DOMDEC API survey (`domdec_info.py`, `tier3_domdec_validate.py`)
-- [x] `mmml mpi-check --tier3` (informational; production blocked)
-- [ ] PyCHARMM per-rank local/ghost atom API (upstream blocker)
-- [ ] DOMDEC + MLpot coexistence spike (`tests/functionality/mlpot/SPATIAL_MPI_DOMDEC.md`)
+- [x] `mmml mpi-check --tier3` (informational)
+- [x] `domdec_atoms.py` — ctypes reader for `domdec_common` / `domdec_local` scalars and allocatable arrays (`natoml`, `loc2glo_ind`, `atoml`)
+- [x] `DomdecAlignedGrid` — auto-reads NDIR, exposes `get_local_atom_indices()` / `get_ghost_atom_indices()` / `molecules_owned_by_this_rank()` / `molecules_in_ghost_halo()`
+- [x] `make_domdec_aligned_grid` + `build_domdec_spatial_batch_indices` in `batch_builder.py` — DOMDEC-aware owned-monomer selection wired into spatial batch builder
+- [x] `calculate_charmm` in `hybrid_mlpot.py` updated to use `DomdecAlignedGrid` (falls back to COM-slab when DOMDEC inactive)
+- [x] Unit tests: `test_domdec_atoms.py` (32 tests), `test_mlpot_domdec_callback.py` (12 tests)
+- [ ] Live DOMDEC + MLpot cluster smoke (`tests/functionality/mlpot/SPATIAL_MPI_DOMDEC.md`)
 
 ---
 

@@ -393,14 +393,16 @@ class DecomposedMlpotCalculator:
                 dimer_jax = jnp.zeros((0,), dtype=jnp.int32)
                 if use_spatial:
                     from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.batch_builder import (
-                        build_spatial_batch_indices,
-                        make_spatial_domain_grid,
+                        build_domdec_spatial_batch_indices,
+                        make_domdec_aligned_grid,
                     )
 
-                    grid = make_spatial_domain_grid(
-                        float(self._cell), mpi_size, self.cutoff_params
+                    grid = make_domdec_aligned_grid(
+                        float(self._cell),
+                        self.cutoff_params,
+                        n_ranks_fallback=mpi_size,
                     )
-                    batch_idx = build_spatial_batch_indices(
+                    batch_idx = build_domdec_spatial_batch_indices(
                         pos,
                         self.n_monomers,
                         self._atoms_per_monomer,
