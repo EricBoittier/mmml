@@ -61,8 +61,8 @@ dependencies:
   - pip:
       # JAX with CUDA 13 support (must be installed from specific index)
       - --find-links https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
-      - jax>=0.9.0
-      - jaxlib>=0.9.0
+      - jax>=0.10.0
+      - jaxlib>=0.10.0
       - jax-cuda13-plugin>=0.9.0
       - jax-cuda13-pjrt>=0.9.0
       - cupy-cuda13x>=13.0.0
