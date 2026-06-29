@@ -774,6 +774,12 @@ def build_mm_energy_forces_fn(
     )
     _jax_pme_method = resolve_jax_pme_method(jax_pme_method)
     _jax_pme_sr_cutoff = float(jax_pme_sr_cutoff_A)
+    if _use_jax_pme_coulomb and pbc_cell is None:
+        raise ValueError(
+            "lr_solver=jax_pme requires a PBC cell when building MM forces. "
+            "For MLpot PBC callbacks, ensure the runtime CHARMM box is forwarded "
+            "to setup_calculator's lazy MM builder."
+        )
     if ml_cutoff_distance is not None:
         ml_switch_width = ml_cutoff_distance
     if mm_cutoff is not None:
