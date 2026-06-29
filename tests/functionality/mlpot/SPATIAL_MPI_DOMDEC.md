@@ -109,7 +109,7 @@ MMML_MPI_NP=4 MMML_MLPOT_SPATIAL_MPI=1 \
 
 # Step 3 — live CHARMM ENER at np=1 (checkpoint required; np>1 READ hangs)
 MMML_MPI_NP=1 MMML_MLPOT_SPATIAL_MPI=1 \
-  CUDA_VISIBLE_DEVICES="" JAX_PLATFORM_NAME=cpu \
+  CUDA_VISIBLE_DEVICES="" MMML_MLPOT_DEVICE=cpu JAX_PLATFORMS=cpu \
   ./scripts/mmml-charmm-mpirun.sh python \
   tests/functionality/mlpot/10_domdec_spatial_mpi_smoke.py \
   --charmm-ener --checkpoint "$MMML_CKPT" \

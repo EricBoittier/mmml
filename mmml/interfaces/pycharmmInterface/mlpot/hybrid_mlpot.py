@@ -636,9 +636,18 @@ class DecomposedMlpotModel:
             return
         if self._pending_factory is None or self._pending_factory_z is None:
             raise RuntimeError("DecomposedMlpotModel: JAX factory was not initialized")
-        cpu_only = self._defer_jax_until_after_sd and not gpu
         from mmml.interfaces.pycharmmInterface.jax_compile_threads import (
             jax_compile_threads_context,
+        )
+        from mmml.interfaces.pycharmmInterface.jax_device_policy import (
+            jax_cpu_until_mlpot_registered,
+            mlpot_jax_device_context,
+            mlpot_jax_device_name,
+        )
+
+        cpu_only = (
+            (self._defer_jax_until_after_sd and not gpu)
+            or mlpot_jax_device_name() == "cpu"
         )
 
         with jax_compile_threads_context():

@@ -787,6 +787,14 @@ def warmup_hybrid_spherical_cutoff(
 
     backend = _jax_warmup_backend()
     if backend == "gpu" and not prefer_cpu:
+        try:
+            import jax
+
+            if not jax.devices("gpu"):
+                backend = "cpu"
+        except Exception:
+            backend = "cpu"
+    if backend == "gpu" and not prefer_cpu:
         ensure_jax_cuda_toolchain(required=True)
         ensure_xla_gpu_warmed(force=False)
     try:

@@ -89,7 +89,7 @@ if [[ "$LIVE" -eq 1 ]]; then
     SMOKE_LIVE_NP="${SMOKE_LIVE_NP:-1}"
     echo "Step 3: live CHARMM ENER (np=$SMOKE_LIVE_NP; use np=1 unless MMML_ALLOW_NP_GT1_LIVE_ENER=1)..."
     MMML_MPI_NP="$SMOKE_LIVE_NP" MMML_MLPOT_SPATIAL_MPI=1 \
-        CUDA_VISIBLE_DEVICES="" JAX_PLATFORM_NAME=cpu \
+        CUDA_VISIBLE_DEVICES="" MMML_MLPOT_DEVICE=cpu JAX_PLATFORMS=cpu \
         ./scripts/mmml-charmm-mpirun.sh python \
         "$SCRIPT" \
         --charmm-ener \

@@ -31,17 +31,17 @@ Prebuilt PSF/CRD for the live path (run once at ``MMML_MPI_NP=1``)::
 The prepare step writes ``artifacts/domdec_spatial_smoke/dcm_20mer.{psf,crd,res}``.
 ``np>1`` live ENER reads PSF/CRD (``.res`` is optional; restart load is opt-in).
 
-Callback-only (np=2, no checkpoint; CPU node: add JAX_PLATFORM_NAME=cpu)::
+Callback-only (np=2, no checkpoint; CPU node)::
 
     MMML_MPI_NP=2 MMML_MLPOT_SPATIAL_MPI=1 \\
-      CUDA_VISIBLE_DEVICES="" JAX_PLATFORM_NAME=cpu \\
+      CUDA_VISIBLE_DEVICES="" MMML_MLPOT_DEVICE=cpu JAX_PLATFORMS=cpu \\
       ./scripts/mmml-charmm-mpirun.sh python \\
       tests/functionality/mlpot/10_domdec_spatial_mpi_smoke.py
 
 Live ENER (**np=1**, prebuilt artifacts required)::
 
     MMML_MPI_NP=1 MMML_MLPOT_SPATIAL_MPI=1 \\
-      CUDA_VISIBLE_DEVICES="" JAX_PLATFORM_NAME=cpu \\
+      CUDA_VISIBLE_DEVICES="" MMML_MLPOT_DEVICE=cpu JAX_PLATFORMS=cpu \\
       ./scripts/mmml-charmm-mpirun.sh python \\
       tests/functionality/mlpot/10_domdec_spatial_mpi_smoke.py \\
       --charmm-ener --checkpoint $MMML_CKPT \\
@@ -146,6 +146,19 @@ def _mpi_barrier(*, tag: str = "sync") -> None:
 def _log(tag: str, msg: str) -> None:
     rank, size = _mpi_info()
     print(f"[{tag} rank {rank}/{size}] {msg}", flush=True)
+
+
+def _configure_cpu_jax_if_requested() -> None:
+    """Force CPU JAX before first ``import jax`` on GPU-less / CPU-only launches."""
+    if os.environ.get("JAX_PLATFORM_NAME", "").strip().lower() == "cpu":
+        os.environ.setdefault("JAX_PLATFORMS", "cpu")
+    if os.environ.get("CUDA_VISIBLE_DEVICES", None) == "":
+        os.environ.setdefault("MMML_MLPOT_DEVICE", "cpu")
+        os.environ.setdefault("JAX_PLATFORMS", "cpu")
+        os.environ.setdefault("MMML_JAX_WARMUP_DEVICE", "cpu")
+    if os.environ.get("MMML_MLPOT_DEVICE", "").strip().lower() == "cpu":
+        os.environ.setdefault("JAX_PLATFORMS", "cpu")
+        os.environ.setdefault("MMML_JAX_WARMUP_DEVICE", "cpu")
 
 
 def _allow_np_gt1_live_ener(args: argparse.Namespace) -> bool:
@@ -317,7 +330,7 @@ def _print_dry_run(args: argparse.Namespace) -> None:
     np_cb = max(2, int(os.environ.get("MMML_MPI_NP", "2")))
     print(
         f"MMML_MPI_NP={np_cb} MMML_MLPOT_SPATIAL_MPI=1 \\\n"
-        f"  CUDA_VISIBLE_DEVICES=\"\" JAX_PLATFORM_NAME=cpu \\\n"
+        f"  CUDA_VISIBLE_DEVICES=\"\" MMML_MLPOT_DEVICE=cpu JAX_PLATFORMS=cpu \\\n"
         f"  ./scripts/mmml-charmm-mpirun.sh python \\\n"
         f"  tests/functionality/mlpot/10_domdec_spatial_mpi_smoke.py"
     )
@@ -853,6 +866,7 @@ def _charmm_domdec_ener_smoke(args: argparse.Namespace) -> int:
 
 def main() -> int:
     args = _parse_args()
+    _configure_cpu_jax_if_requested()
     callback_only = not args.prepare_prebuilt_only and not args.charmm_ener
 
     # Callback-only: no real CHARMM topology/ENER — skip PyCHARMM import entirely.
