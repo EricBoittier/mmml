@@ -1131,6 +1131,9 @@ def warmup_decomposed_mlpot(
             msg += f", MIC PBC L={float(pbc_cell):.3f} Å"
         print(msg, flush=True)
 
+    if verbose:
+        print("Decomposed MLpot JAX warmup: spherical_cutoff...", flush=True)
+
     warmup_hybrid_spherical_cutoff(
         model._spherical_fn,
         atomic_numbers=jnp.asarray(z),
@@ -1145,6 +1148,8 @@ def warmup_decomposed_mlpot(
         mm_pair_mask=mm_pair_mask,
         prefer_cpu=model._jax_pme_lr_active() and not model._jax_on_gpu,
     )
+    if verbose:
+        print("Decomposed MLpot JAX warmup: spherical_forward...", flush=True)
     _warmup_value_and_grad_for_model(
         model,
         r,

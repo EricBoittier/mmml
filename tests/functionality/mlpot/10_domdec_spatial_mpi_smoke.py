@@ -159,6 +159,8 @@ def _configure_cpu_jax_if_requested() -> None:
     if os.environ.get("MMML_MLPOT_DEVICE", "").strip().lower() == "cpu":
         os.environ.setdefault("JAX_PLATFORMS", "cpu")
         os.environ.setdefault("MMML_JAX_WARMUP_DEVICE", "cpu")
+        # jax-pme mesh first eval can hang on CPU after XLA compile (node09, June 2026).
+        os.environ.setdefault("MMML_LR_SOLVER", "mic")
 
 
 def _allow_np_gt1_live_ener(args: argparse.Namespace) -> bool:
@@ -789,6 +791,9 @@ def _charmm_domdec_ener_smoke(args: argparse.Namespace) -> int:
             print(domdec_summary())
 
     _log("ener", "loading PhysNet checkpoint / building model")
+    lr_solver = os.environ.get("MMML_LR_SOLVER", "auto")
+    if rank == 0:
+        print(f"Live ENER lr_solver={lr_solver} (CPU smoke defaults to mic)", flush=True)
     ase_atoms = ase.Atoms(numbers=z, positions=r)
     _, _, pyCModel = load_physnet_mlpot_bundle(
         ckpt,
