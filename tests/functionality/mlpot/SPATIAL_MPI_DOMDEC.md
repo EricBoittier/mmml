@@ -94,6 +94,21 @@ Use the classic DOMDEC model:
 
 Residue/template requirement: PSF atom order must be DOMDEC-compatible (hydrogens adjacent to bonded heavy atoms) and must remain the canonical atom order for MLpot, ASE/JAX helpers, selections, monomer slices, and checkpoint comparisons.
 
+DCM:10 scaffold:
+
+```bash
+# Build/certify a DCM:10 PSF/CRD with np=1.
+bash scripts/run_domdec_dcm10_smoke.sh prep
+
+# Offline DOMDEC hydrogen-order validation on the generated PSF.
+bash scripts/run_domdec_dcm10_smoke.sh validate
+
+# Tier 3 requires a native/prebuilt CHARMM state loader; PyCHARMM np>1 RTF setup
+# is intentionally not used. Fill in NATIVE_STATE_CMD once that loader exists.
+NATIVE_STATE_CMD='<native CHARMM-state launch command>' \
+  bash scripts/run_domdec_dcm10_smoke.sh tier3
+```
+
 ### F. ctypes / PyCHARMM survey
 
 - Inspect `ldd libcharmm.so` for `domdec_common` symbols.

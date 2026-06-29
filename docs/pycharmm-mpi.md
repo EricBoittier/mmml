@@ -337,6 +337,15 @@ Next Tier 3 path:
 3. Attach/register MLpot only after CHARMM topology, coordinates, image/PBC state, and DOMDEC setup are established.
 4. Keep DOMDEC-order validation for residue templates before attempting `ACO`, `MEOH`, or `DCM`.
 
+For the DCM:10 scaffold:
+
+```bash
+bash scripts/run_domdec_dcm10_smoke.sh prep
+bash scripts/run_domdec_dcm10_smoke.sh validate
+NATIVE_STATE_CMD='<native CHARMM-state launch command>' \
+  bash scripts/run_domdec_dcm10_smoke.sh tier3
+```
+
 ### DLPack loose coupling — where it applies
 
 DLPack (`__dlpack__` / `from_dlpack`) gives **zero-copy GPU array interchange** between JAX and CuPy. It is implemented in [`nl_gpu.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/nl_gpu.py) for the **MM neighbor-list rebuild** path, not for CHARMM↔MLpot force handoff.
