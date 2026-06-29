@@ -19,6 +19,15 @@ from typing import Dict, List
 import numpy as np
 import re
 
+from mmml.utils.plotting.styles import (
+    DEFAULT_PLOT_STYLE,
+    PlotStyle,
+    apply_plot_style,
+    comparison_colors,
+    get_plot_style,
+    list_plot_styles,
+)
+
 try:
     import matplotlib.pyplot as plt
     import matplotlib
@@ -136,36 +145,9 @@ def collect_all_metrics(
 
 EV_TO_KCAL_MOL = 23.0605
 
-_PLOT_COLORS = {
-    "train": "#4C72B0",
-    "valid": "#C44E52",
-    "best": "#E5BA41",
-    "accent": "#55A868",
-    "lr": "#8172B3",
-    "muted": "#8C8C8C",
-}
 
-
-def _apply_training_plot_style() -> None:
-    plt.rcParams.update(
-        {
-            "figure.facecolor": "white",
-            "axes.facecolor": "#FAFAFA",
-            "axes.edgecolor": "#333333",
-            "axes.labelsize": 11,
-            "axes.titlesize": 12,
-            "axes.titleweight": "bold",
-            "axes.grid": True,
-            "grid.alpha": 0.35,
-            "grid.linestyle": "-",
-            "grid.linewidth": 0.6,
-            "legend.framealpha": 0.92,
-            "legend.fontsize": 9,
-            "xtick.labelsize": 10,
-            "ytick.labelsize": 10,
-            "font.family": "sans-serif",
-        }
-    )
+def _apply_training_plot_style(plot_style: str | PlotStyle | None = None) -> PlotStyle:
+    return apply_plot_style(plot_style)
 
 
 def _finite_series(values: np.ndarray) -> np.ndarray:
@@ -226,6 +208,7 @@ def _plot_train_valid_series(
     log_scale: bool,
     train_scale: float = 1.0,
     valid_scale: float = 1.0,
+    style: PlotStyle,
 ) -> int | None:
     """Plot train/valid curves; return epoch index of best validation point."""
     train_y = _finite_series(train) * train_scale
@@ -233,16 +216,16 @@ def _plot_train_valid_series(
     ax.plot(
         epochs,
         train_y,
-        color=_PLOT_COLORS["train"],
-        linewidth=2.0,
+        color=style.colors["train"],
+        linewidth=style.train_linewidth,
         alpha=0.75,
         label="Train",
     )
     ax.plot(
         epochs,
         valid_y,
-        color=_PLOT_COLORS["valid"],
-        linewidth=2.4,
+        color=style.colors["valid"],
+        linewidth=style.valid_linewidth,
         alpha=0.95,
         label="Valid",
     )
@@ -250,10 +233,10 @@ def _plot_train_valid_series(
     ax.scatter(
         epochs[best_idx],
         valid_y[best_idx],
-        s=120,
+        s=style.best_marker_size,
         marker="*",
-        color=_PLOT_COLORS["best"],
-        edgecolors="#222222",
+        color=style.colors["best"],
+        edgecolors=style.best_marker_edge,
         linewidths=0.8,
         zorder=5,
         label=f"Best (ep {int(epochs[best_idx])})",
@@ -292,9 +275,10 @@ def plot_training_metrics(
     verbose: bool = True,
     *,
     ef_only: bool = False,
+    plot_style: str | PlotStyle | None = DEFAULT_PLOT_STYLE,
 ):
     """Create publication-style training curves from extracted checkpoint metrics."""
-    _apply_training_plot_style()
+    style = _apply_training_plot_style(plot_style)
 
     valid_idx = _valid_metric_mask(metrics)
     if not valid_idx.any():
@@ -331,10 +315,11 @@ def plot_training_metrics(
         ylabel="Loss",
         title="Training / validation loss",
         log_scale=log_loss,
+        style=style,
     )
 
     best_loss = _finite_series(metrics["best_loss"])[plot_idx]
-    ax_best.plot(epochs, best_loss, color=_PLOT_COLORS["accent"], linewidth=2.2)
+    ax_best.plot(epochs, best_loss, color=style.colors["accent"], linewidth=2.2)
     ax_best.set_xlabel("Epoch")
     ax_best.set_ylabel("Best valid loss so far")
     ax_best.set_title("Best-model trace")
@@ -351,6 +336,7 @@ def plot_training_metrics(
         log_scale=log_loss,
         train_scale=eV_to_kcal,
         valid_scale=eV_to_kcal,
+        style=style,
     )
     _plot_train_valid_series(
         ax_f,
@@ -362,12 +348,13 @@ def plot_training_metrics(
         log_scale=log_loss,
         train_scale=eV_to_kcal,
         valid_scale=eV_to_kcal,
+        style=style,
     )
 
     if not ef_only:
         lr = _finite_series(metrics.get("lr_eff", np.array([])))[plot_idx]
         if lr.size and np.any(np.isfinite(lr)):
-            ax_lr.plot(epochs, lr, color=_PLOT_COLORS["lr"], linewidth=2.0)
+            ax_lr.plot(epochs, lr, color=style.colors["lr"], linewidth=2.0)
             ax_lr.set_xlabel("Epoch")
             ax_lr.set_ylabel("Learning rate")
             ax_lr.set_title("LR schedule")
@@ -382,9 +369,9 @@ def plot_training_metrics(
                 ha="center",
                 va="center",
                 fontsize=10,
-                family="monospace",
+                family=style.summary_font_family,
                 transform=ax_lr.transAxes,
-                bbox=dict(boxstyle="round", facecolor="white", edgecolor="#CCCCCC"),
+                bbox=dict(style.text_box),
             )
 
         dip_valid = _finite_series(metrics.get("valid_dipole_mae", np.array([np.nan])))
@@ -398,6 +385,7 @@ def plot_training_metrics(
                 ylabel="Dipole (e·Å)",
                 title="Dipole MAE",
                 log_scale=log_loss,
+                style=style,
             )
     else:
         ax_best.text(
@@ -408,16 +396,21 @@ def plot_training_metrics(
             va="top",
             ha="left",
             fontsize=9,
-            family="monospace",
-            bbox=dict(boxstyle="round", facecolor="white", edgecolor="#CCCCCC", alpha=0.95),
+            family=style.summary_font_family,
+            bbox=dict(style.text_box),
         )
 
     mode = "energy & forces" if ef_only else "full training"
+    suptitle_kw: dict = {
+        "fontsize": 14,
+        "fontweight": "bold",
+        "y": 1.02 if not ef_only else 1.01,
+    }
+    if style.suptitle_color:
+        suptitle_kw["color"] = style.suptitle_color
     fig.suptitle(
         f"{ckpt_name}\n{int(plot_idx.sum())} checkpoints · {mode}",
-        fontsize=14,
-        fontweight="bold",
-        y=1.02 if not ef_only else 1.01,
+        **suptitle_kw,
     )
 
     output_path = Path(output_path)
@@ -437,9 +430,10 @@ def plot_training_comparison(
     ef_only: bool = True,
     title: str = "Training comparison",
     verbose: bool = True,
+    plot_style: str | PlotStyle | None = DEFAULT_PLOT_STYLE,
 ) -> None:
     """Overlay valid metrics from multiple checkpoint runs."""
-    _apply_training_plot_style()
+    style = _apply_training_plot_style(plot_style)
     if not runs:
         raise ValueError("No runs provided for comparison plot")
 
@@ -455,7 +449,7 @@ def plot_training_comparison(
     nrows = int(np.ceil(len(panels) / ncols))
     fig, axes = plt.subplots(nrows, ncols, figsize=(6.5 * ncols, 4.5 * nrows), constrained_layout=True)
     axes_flat = np.atleast_1d(axes).ravel()
-    colors = plt.cm.tab10(np.linspace(0, 1, max(len(runs), 1)))
+    colors = comparison_colors(style, len(runs))
 
     for ax, (key, panel_title, scale) in zip(axes_flat, panels):
         panel_arrays: List[np.ndarray] = []
@@ -488,7 +482,10 @@ def plot_training_comparison(
     for ax in axes_flat[len(panels) :]:
         ax.axis("off")
 
-    fig.suptitle(title, fontsize=14, fontweight="bold")
+    suptitle_kw: dict = {"fontsize": 14, "fontweight": "bold"}
+    if style.suptitle_color:
+        suptitle_kw["color"] = style.suptitle_color
+    fig.suptitle(title, **suptitle_kw)
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path, dpi=220, bbox_inches="tight")
@@ -635,6 +632,16 @@ Examples:
         action='store_true',
         help='Plot energy/forces panels only (omit dipole inset from main layout).',
     )
+    parser.add_argument(
+        '--plot-style',
+        choices=list_plot_styles(),
+        default=DEFAULT_PLOT_STYLE,
+        help=(
+            'Matplotlib style preset '
+            f'(default: {DEFAULT_PLOT_STYLE}). '
+            'Options: nature, xmgrace, google, tron, mpl_classic.'
+        ),
+    )
     return parser
 
 
@@ -708,6 +715,7 @@ def main():
         log_loss=args.log_loss,
         verbose=verbose,
         ef_only=args.ef_only,
+        plot_style=args.plot_style,
     )
     
     # Print summary
