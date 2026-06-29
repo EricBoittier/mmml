@@ -11,6 +11,10 @@ MMML_ROOT="${MMML_ROOT:-$HOME/mmml}"
 TESTS_ROOT="${TESTS_ROOT:-$HOME/tests}"
 N_DCM="${N_DCM:-10}"
 BOX_SIZE="${BOX_SIZE:-32}"
+# Effective nonbond cutoff for DOMDEC domain sizing (cutnb + 2*max_group_radius).
+DOMDEC_CUTNB="${DOMDEC_CUTNB:-15}"
+DOMDEC_GROUP_HALO="${DOMDEC_GROUP_HALO:-4}"
+DOMDEC_CMD="${DOMDEC_CMD:-domdec}"
 BOX_DIR="${BOX_DIR:-$TESTS_ROOT/boxes/domdec_dcm${N_DCM}_l${BOX_SIZE}}"
 PSF="${PSF:-$BOX_DIR/model.psf}"
 CRD="${CRD:-$BOX_DIR/model.crd}"
@@ -100,6 +104,28 @@ test -s "$RTF" || { echo "Missing RTF: $RTF" >&2; exit 1; }
 test -s "$PRM" || { echo "Missing PRM: $PRM" >&2; exit 1; }
 test -x "$MPIRUN" || { echo "Missing mpirun wrapper: $MPIRUN" >&2; exit 1; }
 
+domdec_min_box_size() {
+  local np="$1" cutnb="$2" halo="$3"
+  # Worst case: 1-D decomposition along one axis (box/np per domain).
+  echo $(( np * (cutnb + halo) ))
+}
+
+MMML_MPI_NP="${MMML_MPI_NP:-2}"
+if ! [[ "$MMML_MPI_NP" =~ ^[1-9][0-9]*$ ]]; then
+  echo "MMML_MPI_NP must be a positive integer (got: ${MMML_MPI_NP})" >&2
+  exit 1
+fi
+
+_min_box="$(domdec_min_box_size "$MMML_MPI_NP" "$DOMDEC_CUTNB" "$DOMDEC_GROUP_HALO")"
+DOMDEC_BOX_SIZE="${DOMDEC_BOX_SIZE:-$BOX_SIZE}"
+if [[ "$DOMDEC_BOX_SIZE" -lt "$_min_box" ]]; then
+  echo "DOMDEC box size ${DOMDEC_BOX_SIZE}Å too small for MMML_MPI_NP=${MMML_MPI_NP} and cutnb=${DOMDEC_CUTNB} (need >= ${_min_box}Å per domain); using ${_min_box}Å for crystal define." >&2
+  DOMDEC_BOX_SIZE="$_min_box"
+fi
+if [[ "$DOMDEC_BOX_SIZE" != "$BOX_SIZE" ]]; then
+  echo "Note: crystal uses ${DOMDEC_BOX_SIZE}Å but prep PSF/CRD were built for ${BOX_SIZE}Å (OK for DOMDEC mechanics smoke)." >&2
+fi
+
 mkdir -p "$RUN_DIR"
 INP="$RUN_DIR/domdec_dcm${N_DCM}.inp"
 OUT="$RUN_DIR/domdec_dcm${N_DCM}.out"
@@ -116,11 +142,11 @@ read param card name $PRM
 read psf card name $PSF
 read coor card name $CRD
 
-crystal define cubic $BOX_SIZE $BOX_SIZE $BOX_SIZE 90.0 90.0 90.0
+crystal define cubic $DOMDEC_BOX_SIZE $DOMDEC_BOX_SIZE $DOMDEC_BOX_SIZE 90.0 90.0 90.0
 crystal build cutoff 15.0 noper 0
 image byres xcen 0.0 ycen 0.0 zcen 0.0 sele all end
 
-nbonds cutnb 15.0 -
+nbonds cutnb ${DOMDEC_CUTNB}.0 -
   ctonnb 10.83 -
   ctofnb 14.17 -
   eps 1.0 -
@@ -135,7 +161,7 @@ nbonds cutnb 15.0 -
   inbfrq 50 -
   imgfrq 50
 
-domdec on
+$DOMDEC_CMD
 energy
 
 stop
@@ -145,14 +171,21 @@ echo "== Native CHARMM DOMDEC DCM:${N_DCM} smoke =="
 echo "CHARMM_EXE: $CHARMM_EXE"
 echo "PSF:        $PSF"
 echo "CRD:        $CRD"
+echo "DOMDEC:     MMML_MPI_NP=${MMML_MPI_NP} crystal=${DOMDEC_BOX_SIZE}Å cmd='${DOMDEC_CMD}'"
 echo "INP:        $INP"
 echo "OUT:        $OUT"
 
 export CHARMM_HOME CHARMM_LIB_DIR
 export LD_LIBRARY_PATH="$CHARMM_LIB_DIR:${LD_LIBRARY_PATH:-}"
-export MMML_MPI_NP="${MMML_MPI_NP:-2}"
 
 "$MPIRUN" "$CHARMM_EXE" -i "$INP" -o "$OUT"
+_rc=$?
 
 echo "== native CHARMM output tail =="
 tail -n 80 "$OUT" || true
+
+if grep -q 'ABNORMAL TERMINATION' "$OUT" 2>/dev/null; then
+  echo "DOMDEC smoke failed: see $OUT" >&2
+  exit "${_rc:-1}"
+fi
+exit "$_rc"

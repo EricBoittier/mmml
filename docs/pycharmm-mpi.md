@@ -345,6 +345,8 @@ bash scripts/run_domdec_dcm10_smoke.sh validate
 bash scripts/run_domdec_dcm10_smoke.sh tier3
 ```
 
+Tier 3 native CHARMM auto-expands the crystal if the prep box is too small for `MMML_MPI_NP` (e.g. 32Å with `np=2` fails DOMDEC because each domain is ~16Å while the effective cutoff is ~17Å). The script bumps the crystal to at least `np × (cutnb + 4)` Å without re-prep. CGENFF `NBFIX` warnings from older site CHARMM builds (missing `CLGR`/`BRGR` types) are harmless at `bomlev -2`.
+
 ### DLPack loose coupling — where it applies
 
 DLPack (`__dlpack__` / `from_dlpack`) gives **zero-copy GPU array interchange** between JAX and CuPy. It is implemented in [`nl_gpu.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/nl_gpu.py) for the **MM neighbor-list rebuild** path, not for CHARMM↔MLpot force handoff.

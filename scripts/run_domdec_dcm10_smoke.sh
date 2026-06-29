@@ -17,7 +17,9 @@
 #   MMML_ROOT=$HOME/mmml
 #   TESTS_ROOT=$HOME/tests
 #   N_DCM=10
-#   BOX_SIZE=32
+#   BOX_SIZE=32          # prep box side (Å); tier3 auto-expands crystal if too small for DOMDEC
+#   DOMDEC_BOX_SIZE=     # override crystal side for tier3 (default: max(BOX_SIZE, np*(cutnb+4)))
+#   DOMDEC_CMD=domdec    # c47: domdec; newer CHARMM may need "domdec on"
 #   BOX_DIR=$TESTS_ROOT/boxes/domdec_dcm10_l32
 #   CHARMM_EXE=/path/to/charmm
 #   NATIVE_STATE_CMD='...'  # optional override
