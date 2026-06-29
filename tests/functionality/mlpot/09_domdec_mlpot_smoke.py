@@ -68,6 +68,11 @@ def _parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--allow-mpi-size-gt1",
+        action="store_true",
+        help="Allow np>1. Default refuses because this Tier 3 smoke can hang in CHARMM setup.",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Print the recommended cluster command and exit without importing PyCHARMM.",
@@ -79,14 +84,17 @@ def _mpi_info() -> tuple[int, int]:
     try:
         from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
-        return mpi_rank_size()
+        rank, size = mpi_rank_size()
+        if size <= 1 and os.environ.get("MMML_MPI_NP"):
+            return rank, max(1, int(os.environ["MMML_MPI_NP"]))
+        return rank, size
     except Exception:
-        return 0, 1
+        return 0, max(1, int(os.environ.get("MMML_MPI_NP", "1")))
 
 
 def _print_dry_run(args: argparse.Namespace) -> None:
     cmd = [
-        "MMML_MPI_NP=1",
+        f"MMML_MPI_NP={2 if args.allow_mpi_size_gt1 else 1}",
         "MMML_DOMDEC_MLPOT_SMOKE=1",
         "./scripts/mmml-charmm-mpirun.sh",
         "python",
@@ -109,14 +117,20 @@ def _print_dry_run(args: argparse.Namespace) -> None:
     print(" ".join(cmd))
 
 
+def _rank_log(msg: str) -> None:
+    rank, size = _mpi_info()
+    print(f"[domdec-smoke rank {rank}/{size}] {msg}", flush=True)
+
+
 def _run_domdec_command(command: str | None) -> None:
     if not command:
-        print("DOMDEC command: skipped", flush=True)
+        _rank_log("DOMDEC command: skipped")
         return
     import pycharmm.lingo as lingo
 
-    print(f"DOMDEC command: {command!r}", flush=True)
+    _rank_log(f"DOMDEC command: {command!r} begin")
     lingo.charmm_script(str(command))
+    _rank_log(f"DOMDEC command: {command!r} done")
 
 
 def _domdec_command_turns_on(command: str | None) -> bool:
@@ -159,6 +173,16 @@ def main() -> int:
     if not args.allow_domdec_off_hook:
         os.environ["MMML_NO_CHARMM_DOMDEC_OFF"] = "1"
 
+    rank, size = _mpi_info()
+    if size > 1 and not args.allow_mpi_size_gt1:
+        print(
+            f"Refusing np={size} DOMDEC+MLpot smoke without --allow-mpi-size-gt1. "
+            "The current Tier 3 diagnostic may hang during CHARMM setup.",
+            file=sys.stderr,
+            flush=True,
+        )
+        return 4
+
     domdec_command = None if args.no_domdec_command else args.domdec_command
     if _domdec_command_turns_on(domdec_command) and not args.allow_domdec_order_risk:
         issue = _known_domdec_order_issue(str(args.residue))
@@ -172,58 +196,74 @@ def main() -> int:
             )
             return 3
 
+    _rank_log("importing functionality helpers")
     from _common import (
         all_atom_selection,
         build_ase_cluster,
         charmm_energy_row,
         check_mlpot_symbols,
-        load_physnet_for_cluster,
-        print_header,
         resolve_checkpoint,
     )
+    _rank_log("imported functionality helpers")
 
-    rank, size = _mpi_info()
-    print_header("Tier 3 DOMDEC + MLpot ENER smoke")
     if rank == 0:
+        print("\n================================")
+        print("Tier 3 DOMDEC + MLpot ENER smoke")
+        print("================================")
         print(
             f"MPI size={size}; residue={args.residue}; n_molecules={args.n_molecules}; "
             f"box={float(args.box_side):.3f} Å",
             flush=True,
         )
 
+    _rank_log("checking MLpot symbols")
     missing = check_mlpot_symbols()
     if missing:
         print(f"FAIL: missing libcharmm MLpot symbols: {missing}", file=sys.stderr)
         return 1
+    _rank_log("MLpot symbols ok")
 
+    _rank_log("resolving checkpoint")
     ckpt = resolve_checkpoint(args.checkpoint)
+    _rank_log("building CHARMM/ASE cluster begin")
     z, r = build_ase_cluster(args.residue, args.n_molecules, args.spacing)
+    _rank_log("building CHARMM/ASE cluster done")
     n_atoms = len(z)
     if rank == 0:
         print(f"Cluster: {n_atoms} atoms; checkpoint={ckpt}", flush=True)
 
+    _rank_log("importing PyCHARMM modules")
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import ase
     import pycharmm
     import pycharmm.energy as energy
+    _rank_log("imported PyCHARMM modules")
 
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
 
+    _rank_log("PBC setup begin")
     setup_charmm_environment(use_pbc=True, cubic_box_side_A=float(args.box_side))
+    _rank_log("PBC setup done")
     # Do not call the vacuum nbonds helper here: it runs ``crystal free`` and
     # leaves DOMDEC with a zero/NaN box.
     _run_domdec_command(domdec_command)
 
+    _rank_log("loading checkpoint/model begin")
+    from _common import load_physnet_for_cluster
+
     params, model = load_physnet_for_cluster(ckpt, n_atoms)
     model.natoms = n_atoms
     atoms = ase.Atoms(numbers=z, positions=r)
+    _rank_log("loading checkpoint/model done")
 
     from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_pyc
 
+    _rank_log("building PyCHARMM ML model begin")
     pyc_model = get_pyc(params, model, atoms)
+    _rank_log("building PyCHARMM ML model done")
     mlpot = None
     try:
-        print("Registering MLpot...", flush=True)
+        _rank_log("Registering MLpot begin")
         mlpot = pycharmm.MLpot(
             ml_model=pyc_model,
             ml_Z=list(z),
@@ -231,8 +271,10 @@ def main() -> int:
             ml_charge=0,
             ml_fq=True,
         )
-        print("Running CHARMM ENER...", flush=True)
+        _rank_log("Registering MLpot done")
+        _rank_log("CHARMM ENER begin")
         energy.show()
+        _rank_log("CHARMM ENER done")
         terms = charmm_energy_row()
     except Exception as exc:
         print(f"FAIL: DOMDEC+MLpot smoke raised {type(exc).__name__}: {exc}", file=sys.stderr)
