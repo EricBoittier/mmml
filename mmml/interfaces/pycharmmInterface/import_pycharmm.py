@@ -125,6 +125,12 @@ END
 def reset_block() -> None:
     if not PYCHARMM_AVAILABLE:
         return
+    if os.environ.get("MMML_SKIP_CHARMM_RESET_BLOCK", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    ):
+        return
     block = """BLOCK 
         CALL 1 SELE ALL END
           COEFF 1 1 1.0 

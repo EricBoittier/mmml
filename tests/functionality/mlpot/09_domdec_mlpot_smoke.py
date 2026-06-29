@@ -201,6 +201,8 @@ def main() -> int:
         )
         return 4
     if size > 1 and not args.no_skip_vacuum_crystal_free_on_mpi:
+        os.environ["MMML_SKIP_CHARMM_RESET_BLOCK"] = "1"
+        _rank_log("skipping CHARMM reset_block for np>1 diagnostic")
         _skip_vacuum_crystal_free_for_mpi_cluster_build()
 
     domdec_command = None if args.no_domdec_command else args.domdec_command
