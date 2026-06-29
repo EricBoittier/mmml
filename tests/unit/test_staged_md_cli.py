@@ -6,6 +6,8 @@ import argparse
 from pathlib import Path
 from unittest.mock import patch
 
+import numpy as np
+
 from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     recommend_echeck_kcal,
     resolve_charmm_use_pbc,
@@ -26,6 +28,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
     _configure_heat_dynamics_start,
     _configure_nve_dynamics_start,
     _overlap_for_stage,
+    _publish_staged_handoff,
     _prior_restart_for_stage,
     _should_seed_heat_prior_restart,
 )
@@ -50,6 +53,45 @@ def test_resolve_md_stages_override():
         phase="staged",
     )
     assert resolve_md_stages(args) == ["mini", "heat"]
+
+
+def test_publish_staged_handoff_records_mini_only_state(tmp_path: Path):
+    restart = tmp_path / "mini.res"
+    restart.write_text("REST 1 7\n", encoding="ascii")
+    args = argparse.Namespace(box_size=32.0, temperature=260.0, pressure=None)
+    z = np.array([6, 1, 1], dtype=np.int32)
+    handoff = object()
+
+    with patch(
+        "mmml.cli.run.md_handoff.handoff_from_charmm",
+        return_value=handoff,
+    ) as handoff_from_charmm, patch(
+        "mmml.cli.run.md_handoff.set_handoff_out",
+    ) as set_handoff_out, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
+        return_value=7,
+    ):
+        _publish_staged_handoff(
+            atomic_numbers=z,
+            restart_path=restart,
+            args=args,
+            tag="DCM20",
+            stages=["mini"],
+        )
+
+    handoff_from_charmm.assert_called_once()
+    _, kwargs = handoff_from_charmm.call_args
+    np.testing.assert_array_equal(handoff_from_charmm.call_args.args[0], z)
+    assert kwargs["restart_path"] == restart
+    assert kwargs["fallback_box_side_A"] == 32.0
+    assert kwargs["temperature_K"] == 260.0
+    assert kwargs["step"] == 7
+    assert kwargs["metadata"] == {
+        "backend": "pycharmm",
+        "tag": "DCM20",
+        "stages": ["mini"],
+    }
+    set_handoff_out.assert_called_once_with(handoff)
 
 
 def test_resolve_use_pbc_from_setup():

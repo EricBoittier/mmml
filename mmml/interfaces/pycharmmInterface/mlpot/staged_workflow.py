@@ -1170,6 +1170,37 @@ def _load_or_build_cluster(
     return build_cluster_from_args_with_tag(args)
 
 
+def _publish_staged_handoff(
+    *,
+    atomic_numbers: np.ndarray,
+    restart_path: Path | None,
+    args: argparse.Namespace,
+    tag: str,
+    stages: list[str],
+) -> None:
+    """Expose the current CHARMM state to campaign dependents."""
+    from mmml.cli.run.md_handoff import handoff_from_charmm, set_handoff_out
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_restart_last_step,
+    )
+
+    set_handoff_out(
+        handoff_from_charmm(
+            atomic_numbers,
+            restart_path=restart_path,
+            fallback_box_side_A=getattr(args, "box_size", None),
+            temperature_K=float(getattr(args, "temperature", getattr(args, "temp", 300.0))),
+            pressure_atm=float(args.pressure) if getattr(args, "pressure", None) is not None else None,
+            step=(
+                read_restart_last_step(restart_path)
+                if restart_path is not None
+                else None
+            ),
+            metadata={"backend": "pycharmm", "tag": tag, "stages": list(stages)},
+        )
+    )
+
+
 def run_staged_workflow(args: argparse.Namespace) -> int:
     from mmml.interfaces.pycharmmInterface.mlpot.cleanup_mode import apply_cleanup_defaults
     from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
@@ -1184,7 +1215,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         import os
         os.environ["MMML_MLPOT_PROFILE"] = "1"
         os.environ["MMML_JAX_COMPILE_TIMERS"] = "1"
-    from mmml.cli.run.md_handoff import get_handoff_in, handoff_from_charmm, set_handoff_out
+    from mmml.cli.run.md_handoff import get_handoff_in
     from mmml.cli.run.md_stage_summary import cubic_box_side_from_cell
 
     handoff_in = get_handoff_in()
@@ -1891,6 +1922,13 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
 
         dyn_stages = [s for s in _STAGE_ORDER if s in stages and s != "mini"]
         if not dyn_stages:
+            _publish_staged_handoff(
+                atomic_numbers=z,
+                restart_path=last_restart_path,
+                args=args,
+                tag=tag,
+                stages=list(stages),
+            )
             return 0
 
         stage_overlap_pre = _overlap_for_stage(
@@ -3257,23 +3295,11 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             n_atoms=n_atoms,
             bondless_psf=paths["mini_psf"] if paths["mini_psf"].is_file() else None,
         )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
-        read_restart_last_step,
-    )
-
-    set_handoff_out(
-        handoff_from_charmm(
-            z,
-            restart_path=last_restart_path,
-            fallback_box_side_A=getattr(args, "box_size", None),
-            temperature_K=float(getattr(args, "temperature", getattr(args, "temp", 300.0))),
-            pressure_atm=float(args.pressure) if getattr(args, "pressure", None) is not None else None,
-            step=(
-                read_restart_last_step(last_restart_path)
-                if last_restart_path is not None
-                else None
-            ),
-            metadata={"backend": "pycharmm", "tag": tag, "stages": list(stages)},
-        )
+    _publish_staged_handoff(
+        atomic_numbers=z,
+        restart_path=last_restart_path,
+        args=args,
+        tag=tag,
+        stages=list(stages),
     )
     return 0
