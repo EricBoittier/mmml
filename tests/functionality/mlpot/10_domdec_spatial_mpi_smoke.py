@@ -558,7 +558,30 @@ def main() -> int:
         print(f"FAIL: {msg}", file=sys.stderr)
         return 1
 
-    if not callback_only:
+    if callback_only:
+        # Init mpi4py MPI BEFORE any pycharmm import fires — exactly the
+        # pattern from pyCHARMM Workshop rep_ex_amino_acid.py which does
+        # "from mpi4py import MPI" as its very first import.
+        #
+        # CHARMM's settings.set_verbosity() (called at import time by
+        # import_pycharmm._init_charmm_default_levels) initialises CHARMM's
+        # Fortran before mpi4py has a chance to call MPI_Init; each rank ends
+        # up with COMM_WORLD size=1, making every Barrier and Allreduce a
+        # no-op on rank 0 while ranks 1-3 may block on a genuine 4-rank
+        # MPI world they initialised later — causing the hang.
+        #
+        # By calling "from mpi4py import MPI" here (AFTER prepare_serial…
+        # which already pinned CUDA_VISIBLE_DEVICES per rank), mpi4py calls
+        # MPI_Init with the full 4-rank COMM_WORLD BEFORE pycharmm loads.
+        # All subsequent CHARMM Fortran calls then see an already-initialised
+        # MPI world of size 4.
+        try:
+            from mpi4py import MPI as _MPI  # noqa: N812 — local alias only
+            if not _MPI.Is_initialized():
+                _MPI.Init()
+        except Exception:
+            pass
+    else:
         # Load PyCHARMM so CHARMM Fortran MPI_Init fires before mpi4py
         # collectives.  Non-root ranks enter the CHARMM receive loop here.
         from mmml.interfaces.pycharmmInterface.charmm_mpi import ensure_charmm_mpi_initialized
