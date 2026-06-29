@@ -112,13 +112,16 @@ def _mpi_info() -> tuple[int, int]:
         return 0, max(1, int(os.environ.get("MMML_MPI_NP", "1")))
 
 
-def _mpi_barrier() -> None:
-    """Best-effort MPI barrier (no-op when mpi4py is unavailable)."""
+def _mpi_barrier(*, tag: str = "sync") -> None:
+    """Synchronise ranks before CHARMM I/O (all ranks must enter eval_charmm together)."""
+    rank, size = _mpi_info()
+    if size <= 1:
+        return
     try:
         from mpi4py import MPI  # noqa: PLC0415
         MPI.COMM_WORLD.Barrier()
-    except Exception:
-        pass
+    except Exception as exc:
+        _log(tag, f"MPI barrier failed ({type(exc).__name__}: {exc}) — CHARMM may hang")
 
 
 def _log(tag: str, msg: str) -> None:
@@ -443,20 +446,25 @@ def _load_prebuilt(args: argparse.Namespace) -> tuple["np.ndarray", "np.ndarray"
     # Load only MASS records required by the prebuilt PSF, then PRM + PSF/CRD.
     minimal_rtf = _minimal_rtf_for_psf_types(psf_path, Path(CGENFF_PRM))
     n_types = len(_psf_atom_types(psf_path))
+    _mpi_barrier(tag="load")
     _log("load", f"minimal MASS RTF ({n_types} types) begin")
     with charmm_relaxed_bomlev():
         read.rtf(str(minimal_rtf))
     _log("load", "minimal MASS RTF done")
+    _mpi_barrier(tag="load")
     _log("load", f"reading PRM: {CGENFF_PRM}")
     with charmm_relaxed_bomlev():
         read.prm(CGENFF_PRM)
     _log("load", "PRM done")
+    _mpi_barrier(tag="load")
     _log("load", f"reading PSF: {psf_path}")
     with charmm_relaxed_bomlev():
         read.psf_card(str(psf_path))
+    _mpi_barrier(tag="load")
     _log("load", f"reading CRD: {crd_path}")
     with charmm_relaxed_bomlev():
         read.coor_card(str(crd_path))
+    _mpi_barrier(tag="load")
     _log("load", f"loaded PSF/CRD on rank {rank}/{size}")
 
     z = np.asarray(get_Z_from_psf(), dtype=int)
@@ -489,12 +497,14 @@ def _charmm_domdec_ener_smoke(args: argparse.Namespace) -> int:
     _log("ener", "importing import_pycharmm")
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     _log("ener", "import_pycharmm done")
+    _mpi_barrier(tag="ener")
 
     from mmml.interfaces.pycharmmInterface.charmm_mpi import ensure_mpi4py_after_charmm_init
 
     if not ensure_mpi4py_after_charmm_init(phase="before ASE import in live ENER"):
         print("FAIL: mpi4py.MPI not available after PyCHARMM import", file=sys.stderr)
         return 1
+    _mpi_barrier(tag="ener")
 
     import ase
     import pycharmm
@@ -517,12 +527,15 @@ def _charmm_domdec_ener_smoke(args: argparse.Namespace) -> int:
     if missing:
         print(f"FAIL: missing libcharmm MLpot symbols: {missing}", file=sys.stderr)
         return 1
+    _mpi_barrier(tag="ener")
 
     ckpt = resolve_checkpoint(args.checkpoint)
     if rank == 0:
         print(f"\nDOMDEC + Spatial MPI ENER smoke: np={size} ndir={ndir} "
               f"residue={args.residue} n_monomers={args.n_molecules} "
-              f"box={args.box_side:.1f}Å cutnb={args.cutnb:.1f}Å checkpoint={ckpt}")
+              f"box={args.box_side:.1f}Å cutnb={args.cutnb:.1f}Å checkpoint={ckpt}",
+              flush=True)
+    _mpi_barrier(tag="ener")
 
     # Geometry check: domain width must be >= cutnb
     domain_width = float(args.box_side) / max(1, ndir)
@@ -538,12 +551,15 @@ def _charmm_domdec_ener_smoke(args: argparse.Namespace) -> int:
     _log("ener", "loading prebuilt topology")
     # Guard: disable the automatic domdec-off hook so active DOMDEC survives MLpot registration
     os.environ["MMML_NO_CHARMM_DOMDEC_OFF"] = "1"
+    _mpi_barrier(tag="ener")
 
     z, r, n_monomers, atoms_per_monomer = _load_prebuilt(args)
     n_atoms = len(z)
+    _mpi_barrier(tag="ener")
 
     _log("ener", f"PBC setup: box={args.box_side:.1f}Å")
     setup_charmm_environment(use_pbc=True, cubic_box_side_A=float(args.box_side))
+    _mpi_barrier(tag="ener")
 
     # Enable DOMDEC
     if ndir > 1:
@@ -552,6 +568,7 @@ def _charmm_domdec_ener_smoke(args: argparse.Namespace) -> int:
         domdec_cmd = "domdec on"
     _log("ener", f"DOMDEC command: {domdec_cmd!r}")
     lingo.charmm_script(domdec_cmd)
+    _mpi_barrier(tag="ener")
 
     _log("ener", "domdec_summary (pre-MLpot):")
     if rank == 0:
@@ -568,6 +585,7 @@ def _charmm_domdec_ener_smoke(args: argparse.Namespace) -> int:
         cell=float(args.box_side),
     )
     _log("ener", "model built — registering MLpot")
+    _mpi_barrier(tag="ener")
 
     # Enable spatial MPI before the ENER callback fires
     os.environ["MMML_MLPOT_SPATIAL_MPI"] = "1"
@@ -581,6 +599,7 @@ def _charmm_domdec_ener_smoke(args: argparse.Namespace) -> int:
         cubic_box_side_A=float(args.box_side),
     )
     _log("ener", "MLpot registered — running ENER")
+    _mpi_barrier(tag="ener")
     try:
         energy.show()
         tote = energy.get_total()
