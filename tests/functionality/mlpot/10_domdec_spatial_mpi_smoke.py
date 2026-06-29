@@ -15,10 +15,10 @@ Two independent sub-tests:
 
 2. **Live CHARMM ENER** (``--charmm-ener``, cluster only, requires
    ``--checkpoint`` and prebuilt PSF/CRD):
-   At ``np>1``, loads prebuilt PSF/CRD via direct ``lingo.charmm_script``
-   (``scripts/probe_domdec_atoms_live.py`` pattern — no mpi4py barriers around
-   setup I/O).  Then ``domdec ndir N 1 1`` + spatial MLpot + ENER.
-   Set ``MMML_MPI_LOAD_RESTART=1`` to try ``read restart`` instead (often hangs).
+   Run at **``MMML_MPI_NP=1``** — ``np>1`` PyCHARMM ``eval_charmm_script`` setup
+   I/O (READ/restart) hangs on current cluster builds (confirmed node09, June 2026).
+   Spatial MPI decomposition at ``np>1`` is covered by the callback-only sub-test.
+   Optional ``MMML_ALLOW_NP_GT1_LIVE_ENER=1`` retries the experimental np>1 path.
 
 Prerequisites
 -------------
@@ -38,13 +38,17 @@ Callback-only (np=2, no checkpoint; CPU node: add JAX_PLATFORM_NAME=cpu)::
       ./scripts/mmml-charmm-mpirun.sh python \\
       tests/functionality/mlpot/10_domdec_spatial_mpi_smoke.py
 
-Live ENER (np=4, prebuilt artifacts required)::
+Live ENER (**np=1**, prebuilt artifacts required)::
 
-    MMML_MPI_NP=4 MMML_MLPOT_SPATIAL_MPI=1 \\
+    MMML_MPI_NP=1 MMML_MLPOT_SPATIAL_MPI=1 \\
+      CUDA_VISIBLE_DEVICES="" JAX_PLATFORM_NAME=cpu \\
       ./scripts/mmml-charmm-mpirun.sh python \\
       tests/functionality/mlpot/10_domdec_spatial_mpi_smoke.py \\
       --charmm-ener --checkpoint $MMML_CKPT \\
       --residue DCM --n-molecules 20 --box-side 40
+
+First ENER compiles JAX on CPU (often 2–10 min); the script runs an explicit
+warmup before ``energy.show()`` so progress is visible.
 
 Pass criteria
 -------------
@@ -59,6 +63,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import time
 from pathlib import Path
 from unittest import mock
 
@@ -98,6 +103,16 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Run the live CHARMM ENER sub-test (requires checkpoint + prebuilt PSF/CRD).",
     )
+    p.add_argument(
+        "--allow-np-gt1-live-ener",
+        action="store_true",
+        help="Allow --charmm-ener at np>1 (experimental; PyCHARMM READ often hangs).",
+    )
+    p.add_argument(
+        "--no-domdec",
+        action="store_true",
+        help="Skip domdec on/ndir before ENER (baseline MLpot gate at np=1).",
+    )
     p.add_argument("--ndir", type=int, default=None,
                    help="DOMDEC NDIR (domains along x). Default: mpi_size.")
     p.add_argument("--cutnb", type=float, default=10.0,
@@ -131,6 +146,16 @@ def _mpi_barrier(*, tag: str = "sync") -> None:
 def _log(tag: str, msg: str) -> None:
     rank, size = _mpi_info()
     print(f"[{tag} rank {rank}/{size}] {msg}", flush=True)
+
+
+def _allow_np_gt1_live_ener(args: argparse.Namespace) -> bool:
+    if args.allow_np_gt1_live_ener:
+        return True
+    return os.environ.get("MMML_ALLOW_NP_GT1_LIVE_ENER", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
 
 
 def _skip_vacuum_crystal_free_for_mpi() -> None:
@@ -308,12 +333,12 @@ def _print_dry_run(args: argparse.Namespace) -> None:
         f"--box-side {args.box_side}"
     )
     print()
-    print("# Step 3b — live ENER at np>1 (may hang in PyCHARMM read restart on some builds):")
+    print("# Step 3b — live ENER at np>1 (experimental; PyCHARMM READ hangs on node09):")
     print(
-        f"MMML_MPI_NP={np_cb} MMML_MLPOT_SPATIAL_MPI=1 \\\n"
+        f"MMML_ALLOW_NP_GT1_LIVE_ENER=1 MMML_MPI_NP={np_cb} MMML_MLPOT_SPATIAL_MPI=1 \\\n"
         f"  ./scripts/mmml-charmm-mpirun.sh python \\\n"
         f"  tests/functionality/mlpot/10_domdec_spatial_mpi_smoke.py \\\n"
-        f"  --charmm-ener --checkpoint {ckpt} \\\n"
+        f"  --charmm-ener --allow-np-gt1-live-ener --checkpoint {ckpt} \\\n"
         f"  --residue {args.residue} --n-molecules {args.n_molecules} "
         f"--box-side {args.box_side}"
     )
@@ -651,11 +676,24 @@ def _charmm_domdec_ener_smoke(args: argparse.Namespace) -> int:
     rank, size = _mpi_info()
     ndir = args.ndir or size  # default: one domain per rank along x
 
+    if size > 1 and not _allow_np_gt1_live_ener(args):
+        if rank == 0:
+            print(
+                "FAIL: --charmm-ener at np>1 is blocked — PyCHARMM eval_charmm setup I/O "
+                "(read rtf/psf/coor/restart) hangs on current cluster builds.\n"
+                "  Validate live ENER at MMML_MPI_NP=1 (Step 3a in --dry-run).\n"
+                "  Use MMML_MPI_NP=4 without --charmm-ener for the callback-only "
+                "spatial-MPI check.\n"
+                "  To retry the experimental np>1 path: "
+                "MMML_ALLOW_NP_GT1_LIVE_ENER=1 or --allow-np-gt1-live-ener.",
+                file=sys.stderr,
+                flush=True,
+            )
+        return 2
+
     if size > 1 and rank == 0:
         print(
-            "NOTE: np>1 PyCHARMM setup I/O can hang on some clusters. "
-            "This smoke uses probe-style PSF/CRD load (no mpi4py barriers). "
-            "If load stalls, validate live ENER at MMML_MPI_NP=1 first.",
+            "WARN: experimental np>1 live ENER — PyCHARMM READ may hang indefinitely.",
             file=sys.stderr,
             flush=True,
         )
@@ -720,17 +758,22 @@ def _charmm_domdec_ener_smoke(args: argparse.Namespace) -> int:
     setup_charmm_environment(use_pbc=True, cubic_box_side_A=float(args.box_side))
     _mpi_barrier(tag="ener")
 
-    # Enable DOMDEC
-    if ndir > 1:
+    # Enable DOMDEC (skip with --no-domdec for a baseline MLpot gate at np=1).
+    if args.no_domdec:
+        _log("ener", "skipping DOMDEC (--no-domdec)")
+    elif ndir > 1:
         domdec_cmd = f"domdec ndir {ndir} 1 1\nfaster on"
+        _log("ener", f"DOMDEC command: {domdec_cmd!r}")
+        mpi_charmm_script(domdec_cmd)
     else:
         domdec_cmd = "domdec on"
-    _log("ener", f"DOMDEC command (rank 0): {domdec_cmd!r}")
-    mpi_charmm_script(domdec_cmd)
+        _log("ener", f"DOMDEC command: {domdec_cmd!r}")
+        mpi_charmm_script(domdec_cmd)
 
-    _log("ener", "domdec_summary (pre-MLpot):")
-    if rank == 0:
-        print(domdec_summary())
+    if not args.no_domdec:
+        _log("ener", "domdec_summary (pre-MLpot):")
+        if rank == 0:
+            print(domdec_summary())
 
     _log("ener", "loading PhysNet checkpoint / building model")
     ase_atoms = ase.Atoms(numbers=z, positions=r)
@@ -742,11 +785,22 @@ def _charmm_domdec_ener_smoke(args: argparse.Namespace) -> int:
         atoms_per_monomer=atoms_per_monomer,
         cell=float(args.box_side),
     )
-    _log("ener", "model built — registering MLpot")
+    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import warmup_decomposed_mlpot
+
+    _log("ener", "JAX warmup begin (CPU compile may take several minutes)")
+    t_warm = time.perf_counter()
+    warmup_decomposed_mlpot(
+        pyCModel,
+        r,
+        cell=float(args.box_side),
+        verbose=(rank == 0),
+    )
+    _log("ener", f"JAX warmup done in {time.perf_counter() - t_warm:.1f}s")
     _mpi_barrier(tag="ener")
 
-    # Enable spatial MPI before the ENER callback fires
-    os.environ["MMML_MLPOT_SPATIAL_MPI"] = "1"
+    _log("ener", "registering MLpot")
+    if size > 1:
+        os.environ["MMML_MLPOT_SPATIAL_MPI"] = "1"
 
     ml_selection = select_all_atoms()
     ctx = register_mlpot(
@@ -758,10 +812,11 @@ def _charmm_domdec_ener_smoke(args: argparse.Namespace) -> int:
     )
     _log("ener", "MLpot registered — running ENER")
     _mpi_barrier(tag="ener")
+    t_ener = time.perf_counter()
     try:
         energy.show()
         tote = energy.get_total()
-        _log("ener", f"ENER done: TOTE={float(tote):.4f} kcal/mol")
+        _log("ener", f"ENER done in {time.perf_counter() - t_ener:.1f}s: TOTE={float(tote):.4f} kcal/mol")
     except Exception as exc:
         print(f"FAIL rank {rank}: ENER raised {type(exc).__name__}: {exc}", file=sys.stderr)
         ctx.unset()

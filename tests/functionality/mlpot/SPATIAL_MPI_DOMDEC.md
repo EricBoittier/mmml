@@ -16,7 +16,10 @@ Mode C from [Spatial ML MPI](../../../docs/mlpot-spatial-mpi.md): `np>1`, domdec
 - `calculate_charmm` in `hybrid_mlpot.py` now calls `make_domdec_aligned_grid` (auto-detects DOMDEC state); falls back to COM-slab Tier 2 when DOMDEC is off.
 
 **Remaining open items:**
-1. `np>1` PyCHARMM topology construction still hangs: RTF/PSF reads must be done at np=1, then artifacts loaded at np=N.
+1. **`np>1` PyCHARMM setup I/O hangs** (confirmed node09, June 2026): even probe-style
+   ``lingo.charmm_script`` READ of prebuilt PSF/CRD blocks all ranks inside
+   ``eval_charmm_script``. Live ``--charmm-ener`` must run at ``MMML_MPI_NP=1``;
+   use the callback-only sub-test at ``np>1`` for spatial MPI decomposition.
 2. JAX GPU warmup + active DOMDEC may segfault (`send_coord_to_recip` / `PMPI_Free_mem`) — defer JAX warmup until after MLpot registration.
 3. `domdec off` is an opt-in safety hook (`MMML_FORCE_DOMDEC_OFF=1`). Set `MMML_NO_CHARMM_DOMDEC_OFF=1` to keep DOMDEC on during MLpot ENER smoke.
 
@@ -104,8 +107,9 @@ MMML_MPI_NP=4 MMML_MLPOT_SPATIAL_MPI=1 \
   ./scripts/mmml-charmm-mpirun.sh python \
   tests/functionality/mlpot/10_domdec_spatial_mpi_smoke.py
 
-# Step 3 — live CHARMM ENER with DOMDEC + spatial MLpot (checkpoint required)
-MMML_MPI_NP=4 MMML_MLPOT_SPATIAL_MPI=1 \
+# Step 3 — live CHARMM ENER at np=1 (checkpoint required; np>1 READ hangs)
+MMML_MPI_NP=1 MMML_MLPOT_SPATIAL_MPI=1 \
+  CUDA_VISIBLE_DEVICES="" JAX_PLATFORM_NAME=cpu \
   ./scripts/mmml-charmm-mpirun.sh python \
   tests/functionality/mlpot/10_domdec_spatial_mpi_smoke.py \
   --charmm-ener --checkpoint "$MMML_CKPT" \

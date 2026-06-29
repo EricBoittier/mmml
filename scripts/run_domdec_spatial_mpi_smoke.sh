@@ -79,8 +79,7 @@ echo ""
 
 # ----------------------------------------------------------------
 # Step 3 — Live CHARMM ENER (opt-in, requires checkpoint)
-# Default np=1 for live ENER: PyCHARMM eval_charmm setup I/O can hang at np>1.
-# Override with SMOKE_LIVE_NP=4 once np>1 restart load is verified on your node.
+# Live ENER runs at np=1 by default (np>1 PyCHARMM READ hangs on node09).
 # ----------------------------------------------------------------
 if [[ "$LIVE" -eq 1 ]]; then
     if [[ -z "${MMML_CKPT:-}" ]]; then
@@ -88,8 +87,9 @@ if [[ "$LIVE" -eq 1 ]]; then
         exit 1
     fi
     SMOKE_LIVE_NP="${SMOKE_LIVE_NP:-1}"
-    echo "Step 3: live CHARMM ENER (DOMDEC + spatial MPI, np=$SMOKE_LIVE_NP)..."
+    echo "Step 3: live CHARMM ENER (np=$SMOKE_LIVE_NP; use np=1 unless MMML_ALLOW_NP_GT1_LIVE_ENER=1)..."
     MMML_MPI_NP="$SMOKE_LIVE_NP" MMML_MLPOT_SPATIAL_MPI=1 \
+        CUDA_VISIBLE_DEVICES="" JAX_PLATFORM_NAME=cpu \
         ./scripts/mmml-charmm-mpirun.sh python \
         "$SCRIPT" \
         --charmm-ener \
