@@ -111,6 +111,15 @@ def _mpi_info() -> tuple[int, int]:
         return 0, max(1, int(os.environ.get("MMML_MPI_NP", "1")))
 
 
+def _mpi_barrier() -> None:
+    """Best-effort MPI barrier (no-op when mpi4py is unavailable)."""
+    try:
+        from mpi4py import MPI  # noqa: PLC0415
+        MPI.COMM_WORLD.Barrier()
+    except Exception:
+        pass
+
+
 def _log(tag: str, msg: str) -> None:
     rank, size = _mpi_info()
     print(f"[{tag} rank {rank}/{size}] {msg}", flush=True)
@@ -158,6 +167,14 @@ def _print_dry_run(args: argparse.Namespace) -> None:
 
 def _callback_smoke(args: argparse.Namespace) -> int:
     """Exercise the DOMDEC-active branch without live CHARMM."""
+    rank, size = _mpi_info()
+    if size < 2:
+        _log("callback", "skipped (need np>=2; re-run under mpirun with MMML_MPI_NP=2)")
+        return 0
+
+    # Log first so output from all ranks confirms they are alive before heavy imports.
+    _log("callback", "starting — heavy imports next, may take 1–2 min on first run")
+
     import jax.numpy as jnp
 
     from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
@@ -167,12 +184,8 @@ def _callback_smoke(args: argparse.Namespace) -> int:
     from mmml.interfaces.pycharmmInterface.mlpot.medium_pbc_validation import (
         lattice_positions_cubic_pbc,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
-    rank, size = mpi_rank_size()
-    if size < 2:
-        _log("callback", "skipped (need np>=2; re-run under mpirun with MMML_MPI_NP=2)")
-        return 0
+    _log("callback", "imports done, building test fixture")
 
     box = float(args.box_side)
     n_monomers = 8  # lightweight fixture regardless of CLI n-molecules
@@ -223,6 +236,11 @@ def _callback_smoke(args: argparse.Namespace) -> int:
     x, y, zc = pos[:, 0], pos[:, 1], pos[:, 2]
     dx = dy = dz = np.zeros(n, dtype=np.float64)
 
+    # Barrier 1: all ranks must finish initialization before any rank calls
+    # broadcast_mlpot_result (a collective inside calculate_charmm).  Without
+    # this, a fast rank 0 can call the collective, get a non-blocking result,
+    # exit, and trigger MPI_Finalize while the other ranks are still initializing.
+    _mpi_barrier()
     _log("callback", "running calculate_charmm with mocked DOMDEC ctypes")
     with (
         mock.patch(f"{_DOMDEC_MODULE}.is_domdec_active", return_value=True),
@@ -261,6 +279,10 @@ def _callback_smoke(args: argparse.Namespace) -> int:
             x, y, zc, dx, dy, dz,
             0, 0, None, None, None, None, None, None, None,
         )
+
+    # Barrier 2: no rank exits main() before all ranks complete calculate_charmm.
+    # This prevents rank 0 from calling MPI_Finalize while others are mid-collective.
+    _mpi_barrier()
 
     _log("callback", f"energy={float(energy_val):.4f}  use_spatial={captured.get('use_spatial')}  "
                      f"owned_mono={captured.get('owned_mono')}")
