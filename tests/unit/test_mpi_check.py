@@ -2,13 +2,99 @@
 
 from __future__ import annotations
 
+import json
 import os
+from contextlib import ExitStack
 from unittest import mock
 
 import pytest
 
 from mmml.cli.run.mpi_check import run_mpi_check, render_mpi_check_report
 from mmml.interfaces.pycharmmInterface import mpi_rank_io
+
+
+def _healthy_mpi_check_context(monkeypatch, tmp_path):
+    """Patch base MPI checks so CLI tests can focus on tier-specific behavior."""
+    lib = tmp_path / "libcharmm.so"
+    lib.write_bytes(b"x")
+    mpirun = tmp_path / "mpirun"
+    mpirun.write_text("#!/bin/sh\nexit 0\n")
+    mpirun.chmod(0o755)
+    monkeypatch.setenv("CHARMM_LIB_DIR", str(tmp_path))
+
+    stack = ExitStack()
+    stack.enter_context(
+        mock.patch(
+            "mmml.interfaces.pycharmmInterface.charmm_mpi.prepare_charmm_mpi_runtime"
+        )
+    )
+    stack.enter_context(
+        mock.patch(
+            "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_available",
+            return_value=True,
+        )
+    )
+    stack.enter_context(
+        mock.patch(
+            "mmml.interfaces.pycharmmInterface.charmm_mpi._charmm_lib_path",
+            return_value=lib,
+        )
+    )
+    stack.enter_context(
+        mock.patch(
+            "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+            return_value=True,
+        )
+    )
+    stack.enter_context(
+        mock.patch(
+            "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_mpirun_path",
+            return_value=mpirun.resolve(),
+        )
+    )
+    stack.enter_context(
+        mock.patch(
+            "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
+            return_value=True,
+        )
+    )
+    stack.enter_context(
+        mock.patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+            return_value=(0, 2),
+        )
+    )
+    stack.enter_context(
+        mock.patch(
+            "mmml.interfaces.pycharmmInterface.charmm_mpi._mpi4py_available",
+            return_value=True,
+        )
+    )
+    stack.enter_context(
+        mock.patch(
+            "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_libmpi_path",
+            return_value=tmp_path / "libmpi.so",
+        )
+    )
+    stack.enter_context(
+        mock.patch(
+            "mmml.interfaces.pycharmmInterface.charmm_mpi.mpi4py_libmpi_path",
+            return_value=tmp_path / "libmpi.so",
+        )
+    )
+    stack.enter_context(
+        mock.patch(
+            "mmml.interfaces.pycharmmInterface.charmm_mpi.mpi4py_openmpi_mismatch",
+            return_value=(True, ""),
+        )
+    )
+    stack.enter_context(
+        mock.patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy.spatial_mpi_enabled",
+            return_value=False,
+        )
+    )
+    return stack
 
 
 def test_run_mpi_check_missing_charmm_lib(monkeypatch):
@@ -265,6 +351,40 @@ def test_mpi_check_tier2_flag(monkeypatch, tmp_path):
         return_value=True,
     ):
         assert main(["--tier2"]) == 1
+
+
+def test_mpi_check_tier3_informational_passes(monkeypatch, tmp_path, capsys):
+    from mmml.cli.run.mpi_check import main
+
+    with _healthy_mpi_check_context(monkeypatch, tmp_path):
+        assert main(["--tier3"]) == 0
+
+    text = capsys.readouterr().out
+    assert "Production status: BLOCKED" in text
+    assert "Check status: survey completed" in text
+
+
+def test_mpi_check_tier3_strict_fails(monkeypatch, tmp_path):
+    from mmml.cli.run.mpi_check import main
+
+    with _healthy_mpi_check_context(monkeypatch, tmp_path):
+        assert main(["--tier3", "--strict"]) == 1
+
+
+def test_mpi_check_tier3_json_reports_blocker(monkeypatch, tmp_path, capsys):
+    from mmml.cli.run.mpi_check import main
+
+    with _healthy_mpi_check_context(monkeypatch, tmp_path):
+        assert main(["--tier3", "--json"]) == 0
+
+    payload = json.loads(capsys.readouterr().out)
+    tier3 = payload["tier3"]
+    survey = tier3["survey"]
+    assert tier3["ok"] is True
+    assert tier3["blocked"] is True
+    assert tier3["spike_doc"] == "tests/functionality/mlpot/SPATIAL_MPI_DOMDEC.md"
+    assert survey["pycharmm_local_atom_api"] is False
+    assert survey["pycharmm_ghost_atom_api"] is False
 
 
 def test_maybe_rerun_liquid_box_subcommand(monkeypatch, tmp_path):

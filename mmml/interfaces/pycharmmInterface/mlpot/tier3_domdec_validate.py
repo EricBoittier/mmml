@@ -13,7 +13,12 @@ from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_info import (
 
 @dataclass
 class Tier3DomdecReport:
-    """Readiness report for DOMDEC coexistence with MLpot (Tier 3)."""
+    """Readiness report for DOMDEC coexistence with MLpot (Tier 3).
+
+    ``ok`` means the survey itself completed. ``blocked`` means Tier 3 is not
+    production-ready because required PyCHARMM DOMDEC metadata is unavailable.
+    Strict mode intentionally maps a blocked survey to ``ok=False``.
+    """
 
     ok: bool
     tier: str = "tier3_domdec_mlpot"
@@ -47,7 +52,12 @@ class Tier3DomdecReport:
 
 
 def validate_tier3_domdec_env(*, strict: bool = False) -> Tier3DomdecReport:
-    """Survey DOMDEC + MLpot blockers. Always reports ``blocked=True`` until PyCHARMM API exists."""
+    """Survey DOMDEC + MLpot blockers.
+
+    Non-strict mode is informational: the check exits successfully once the
+    survey runs, while ``blocked=True`` continues to mark production Tier 3 as
+    unavailable until PyCHARMM exposes per-rank atom ownership and ghost maps.
+    """
     survey = survey_domdec_api()
     report = Tier3DomdecReport(ok=False, blocked=True, survey=survey)
 
@@ -58,7 +68,7 @@ def validate_tier3_domdec_env(*, strict: bool = False) -> Tier3DomdecReport:
 
     if survey.mmml_disable_domdec_for_mlpot:
         report.warnings.append(
-            "MMML disables DOMDEC during MLpot (segfault guard); use Tier 2 spatial MPI instead"
+            "MMML can send ``domdec off`` via MMML_FORCE_DOMDEC_OFF for MLpot stability; use Tier 2 spatial MPI instead"
         )
 
     if survey.pycharmm_domdec_script:
@@ -80,10 +90,12 @@ def validate_tier3_domdec_env(*, strict: bool = False) -> Tier3DomdecReport:
 
 
 def render_tier3_report(report: Tier3DomdecReport) -> str:
+    check_state = "survey completed" if report.ok else "survey failed or strict blocker"
     lines = [
         "MMML Tier 3 DOMDEC + MLpot survey",
         "================================",
-        f"Status: {'BLOCKED' if report.blocked else 'OK'} (check ok={report.ok})",
+        f"Production status: {'BLOCKED' if report.blocked else 'OK'}",
+        f"Check status: {check_state} (ok={report.ok})",
         f"Spike doc: {report.spike_doc}",
     ]
     if report.survey is not None:
@@ -96,7 +108,7 @@ def render_tier3_report(report: Tier3DomdecReport) -> str:
                 f"  domdec script control: {s.pycharmm_domdec_script}",
                 f"  per-rank local atom API: {s.pycharmm_local_atom_api}",
                 f"  ghost atom API: {s.pycharmm_ghost_atom_api}",
-                f"  MMML domdec-off guard for MLpot: {s.mmml_disable_domdec_for_mlpot}",
+                f"  MMML domdec-off command available for MLpot guard: {s.mmml_disable_domdec_for_mlpot}",
                 f"  Phase 2 fallback grid: {s.recommended_phase2_grid}",
                 f"  Halo width: {s.halo_width_formula}",
             ]

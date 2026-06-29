@@ -29,11 +29,35 @@ MMML_MPI_NP=2 ./scripts/mmml-charmm-mpirun.sh md-system \
 
 **Pass:** minimization completes; energies finite on all ranks.
 
-### B. Domdec on (do not disable before SD)
+### B. Domdec on (MLpot ENER smoke)
 
-1. Temporarily comment out `disable_charmm_domdec()` / `ensure_domdec_off_for_mlpot_energy` in the MLpot dynamics path (local experiment only).
-2. Launch with `MMML_MPI_NP=2`, `--ml-spatial-mpi`, short SD (10 steps).
-3. Record: segfault yes/no, whether `send_coord_to_recip` appears in backtrace.
+Start with the smallest possible active-DOMDEC check before any SD/dynamics:
+
+```bash
+# Print the exact launch line without importing PyCHARMM.
+python tests/functionality/mlpot/09_domdec_mlpot_smoke.py --dry-run
+
+# Live active-DOMDEC ENER smoke. Requires DOMDEC-enabled libcharmm.so.
+export MMML_CKPT=/path/to/DESdimers_params.json
+MMML_MPI_NP=1 MMML_DOMDEC_MLPOT_SMOKE=1 \
+  ./scripts/mmml-charmm-mpirun.sh python \
+  tests/functionality/mlpot/09_domdec_mlpot_smoke.py \
+  --checkpoint "$MMML_CKPT" \
+  --residue ACO --n-molecules 2 --box-side 28
+```
+
+Same-script off-control:
+
+```bash
+MMML_MPI_NP=1 MMML_DOMDEC_MLPOT_SMOKE=1 \
+  ./scripts/mmml-charmm-mpirun.sh python \
+  tests/functionality/mlpot/09_domdec_mlpot_smoke.py \
+  --checkpoint "$MMML_CKPT" \
+  --residue ACO --n-molecules 2 --box-side 28 \
+  --no-domdec-command
+```
+
+Record: pass/fail, traceback/segfault yes/no, and whether `send_coord_to_recip` appears in any backtrace.
 
 ### C. ctypes / PyCHARMM survey
 

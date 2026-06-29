@@ -16,9 +16,10 @@ PyCHARMM Python surface
     bounds was found in the vendored PyCHARMM tree or MMML wrappers.
 
 MMML current behavior
-  - MLpot paths call ``disable_charmm_domdec()`` once per process because
-    MLpot + DOMDEC + JAX warmup can segfault (``send_coord_to_recip`` /
-    ``PMPI_Free_mem``).
+  - MLpot paths can call ``disable_charmm_domdec()`` once per process when
+    ``MMML_FORCE_DOMDEC_OFF=1`` is set. The default is to skip ``domdec off``
+    because calling it on inactive DOMDEC builds can itself corrupt OpenMPI
+    pools and segfault in ``send_coord_to_recip`` / ``PMPI_Free_mem``.
   - ``charmm_mpi`` handles OpenMPI bootstrap only; no ML force gather/scatter.
 
 Implications for spatial ML (Phase 2–3)
@@ -70,7 +71,7 @@ def survey_domdec_api() -> DomdecApiSurvey:
         halo_width_formula="mm_switch_on + physnet_cutoff + ml_switch_width",
         open_questions=(
             "PyCHARMM exposure of per-rank atom ownership and ghost lists",
-            "DOMDEC on without MLpot segfault (defer domdec off timing)",
+            "DOMDEC on with MLpot without segfaults (domdec off remains opt-in)",
             "COM vs atom ownership at domain boundaries",
             "Global energy reduction for logging",
         ),

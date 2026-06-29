@@ -17,7 +17,7 @@ GPU-cluster `libcharmm.so` builds are **MPI-linked**. Serial `python -m mmml md-
 
 1. Launch under the **same OpenMPI** as `libcharmm.so` (`./scripts/mmml-charmm-mpirun.sh`)
 2. Defer JAX GPU warmup until after MLpot SD on MPI builds (launcher default)
-3. Keep DOMDEC **off** during MLpot (stability stopgap)
+3. Do not enable DOMDEC for MLpot production; `domdec off` is an opt-in guard (`MMML_FORCE_DOMDEC_OFF=1`) for streams that enabled it
 4. Default to `OMP_NUM_THREADS=1` for conservative startup; opt into higher values with `--charmm-omp-threads N`
 
 **Node validation:** the serial-vs-mpirun probe (`08_serial_vs_mpirun_md_system.py`) passed on **gpu09** (June 2026): serial `python md-system` and `MMML_MPI_NP=1` mpirun both completed the ACO:2 hybrid mini with matching outcomes. The blanket segfault claim is **environment-dependent** — re-run the probe after OpenMPI / module / `libcharmm.so` changes or on a new node.
@@ -50,7 +50,7 @@ The workshop [3SimpleMPIExample](https://github.com/BrooksResearchGroup-UM/pyCHA
 flowchart LR
   subgraph tier1 ["Tier 1 — np=1 production"]
     A1["mmml-charmm-mpirun.sh"]
-    A2["DOMDEC off at MLpot"]
+    A2["DOMDEC not enabled for MLpot"]
     A3["Dual-GPU pmap optional"]
   end
 
@@ -288,6 +288,32 @@ MMML_MPI_NP=2 MMML_MLPOT_SPATIAL_MPI=1 ./scripts/mmml-charmm-mpirun.sh mpi-check
 | `mpi_size >` visible JAX GPUs | Ranks share one GPU | SLURM `CUDA_VISIBLE_DEVICES` per task or lower `MMML_MPI_NP` |
 
 Run `mmml mpi-check --tier2` before long jobs; it encodes most of the above.
+
+### Tier 3 DOMDEC smoke
+
+DOMDEC + MLpot is still experimental. After rebuilding CHARMM with DOMDEC enabled, use the tiny opt-in ENER smoke before any SD/dynamics:
+
+```bash
+export MMML_CKPT=/path/to/DESdimers_params.json
+MMML_MPI_NP=1 MMML_DOMDEC_MLPOT_SMOKE=1 \
+  ./scripts/mmml-charmm-mpirun.sh python \
+  tests/functionality/mlpot/09_domdec_mlpot_smoke.py \
+  --checkpoint "$MMML_CKPT" \
+  --residue ACO --n-molecules 2 --box-side 28
+```
+
+Run the same-script baseline without sending `domdec on`:
+
+```bash
+MMML_MPI_NP=1 MMML_DOMDEC_MLPOT_SMOKE=1 \
+  ./scripts/mmml-charmm-mpirun.sh python \
+  tests/functionality/mlpot/09_domdec_mlpot_smoke.py \
+  --checkpoint "$MMML_CKPT" \
+  --residue ACO --n-molecules 2 --box-side 28 \
+  --no-domdec-command
+```
+
+Pass: the script exits 0 and prints finite `ENER` / `USER` terms. Failures to record: Python traceback, hard segfault, MPI abort, or `send_coord_to_recip` in a backtrace.
 
 ### DLPack loose coupling — where it applies
 
