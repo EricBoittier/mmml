@@ -137,6 +137,16 @@ class DecomposedMlpotCalculator:
         parent = getattr(self, "_parent_model", None)
         return parent if parent is not None else self
 
+    def _requires_callback_pbc_box(self) -> bool:
+        """True when the callback must query a live CHARMM box even if no cell was cached."""
+        parent = getattr(self, "_parent_model", None)
+        active = getattr(parent, "_jax_pme_lr_active", None)
+        if callable(active) and bool(active()):
+            return True
+        cfg = getattr(self, "_periodic_mm_config", None)
+        uses_jax_pme = getattr(cfg, "uses_jax_pme", False)
+        return bool(uses_jax_pme() if callable(uses_jax_pme) else uses_jax_pme)
+
     def _get_spherical_forward_fn(
         self,
         *,
@@ -327,7 +337,7 @@ class DecomposedMlpotCalculator:
         n = int(Natom)
         pos = np.array([x[:n], y[:n], z[:n]], dtype=np.float64).T
         box = None
-        if self._cell:
+        if self._cell or self._requires_callback_pbc_box():
             from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
                 cubic_box_matrix_from_side,
                 resolve_mlpot_mic_box_side_A,

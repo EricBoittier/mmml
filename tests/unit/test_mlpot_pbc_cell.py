@@ -750,6 +750,69 @@ def test_decomposed_calculator_passes_charmm_box_to_spherical_fn():
     assert float(box[0, 0]) == pytest.approx(39.0)
 
 
+def test_decomposed_calculator_queries_box_when_jax_pme_active_without_cached_cell():
+    z = np.zeros(8, dtype=int)
+    get_update_fn = MagicMock(return_value=MagicMock(return_value=(None, None)))
+    calc = DecomposedMlpotCalculator(
+        MagicMock(),
+        CutoffParameters(),
+        2,
+        z,
+        cell=False,
+        do_mm=True,
+        get_update_fn=get_update_fn,
+    )
+    parent = MagicMock()
+    parent._jax_pme_lr_active.return_value = True
+    calc._parent_model = parent
+    captured: dict[str, Any] = {}
+
+    def _fake_forward_fn(*, n_atoms, atomic_numbers_jax, box_jax):
+        captured["box_jax"] = box_jax
+
+        def _eval(
+            positions_jax,
+            mm_pair_idx,
+            mm_pair_mask,
+            use_mm_pairs,
+            spatial_monomer_indices,
+            spatial_dimer_indices,
+            use_spatial,
+        ):
+            return jnp.array(0.0), jnp.zeros((8, 3))
+
+        return _eval
+
+    calc._get_spherical_forward_fn = MagicMock(side_effect=_fake_forward_fn)
+    n = 8
+    x = np.zeros(n, dtype=np.float64)
+    y = np.zeros(n, dtype=np.float64)
+    zc = np.zeros(n, dtype=np.float64)
+    dx = np.zeros(n, dtype=np.float64)
+    dy = np.zeros(n, dtype=np.float64)
+    dz = np.zeros(n, dtype=np.float64)
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_mlpot_mic_box_side_A",
+        return_value=(37.5, "pbound"),
+    ) as mock_resolve, patch(
+        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
+        return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()),
+    ):
+        calc.calculate_charmm(
+            n, 0, 0, None, x, y, zc, dx, dy, dz, 0, 0, None, None, None, None, None, None, None
+        )
+
+    mock_resolve.assert_called_once()
+    assert calc._cell == pytest.approx(37.5)
+    box = captured["box_jax"]
+    assert box is not None
+    assert float(box[0, 0]) == pytest.approx(37.5)
+    get_update_fn.assert_called_once()
+    forwarded_box = get_update_fn.call_args.kwargs["box"]
+    assert forwarded_box is not None
+    assert float(forwarded_box[0, 0]) == pytest.approx(37.5)
+
+
 def test_decomposed_calculator_propagates_box_sync_failure():
     z = np.zeros(8, dtype=int)
     calc = DecomposedMlpotCalculator(
