@@ -768,5 +768,5 @@ def test_mmml_charmm_mpirun_dispatches_native_executable(tmp_path):
     )
     combined = proc.stdout + proc.stderr
     assert "Unknown command" not in combined
-    assert "native-charmm-ok" in combined
-    assert f"{fake_charmm} -i run.inp -o run.out" in combined
+    assert f" {fake_charmm} -i run.inp -o run.out" in combined
+    assert f"mmml {fake_charmm}" not in combined

@@ -216,7 +216,11 @@ mmml_mpi_run() {
   echo "mmml-charmm-mpirun: ${cmd[*]}" >&2
   set +e
   # New session so Ctrl+C can signal the whole prterun + rank-0 tree.
-  setsid "${cmd[@]}" &
+  if command -v setsid >/dev/null 2>&1; then
+    setsid "${cmd[@]}" &
+  else
+    "${cmd[@]}" &
+  fi
   MMML_MPIRUN_PID=$!
   MMML_MPIRUN_PGID=$MMML_MPIRUN_PID
   wait "$MMML_MPIRUN_PID"
