@@ -216,6 +216,54 @@ else
   fi
 fi
 
+# ---------------------------------------------------------------------------
+# Function must be defined BEFORE the configure block that calls it.
+# (bash resolves function names at call time within a running block, so a
+#  definition that appears after the call site is not yet in scope.)
+# ---------------------------------------------------------------------------
+_assert_charmm_domdec_cmake_flags() {
+  [[ -f "$BUILD_DIR/CMakeCache.txt" ]] || return 0
+  if [[ "$NO_DOMDEC" == 1 ]]; then
+    return 0
+  fi
+  local domdec_val colfft_val
+  domdec_val="$(grep '^domdec:BOOL=' "$BUILD_DIR/CMakeCache.txt" 2>/dev/null | cut -d= -f2- || true)"
+  colfft_val="$(grep '^colfft:BOOL=' "$BUILD_DIR/CMakeCache.txt" 2>/dev/null | cut -d= -f2- || true)"
+  if [[ "$domdec_val" == "ON" && "$colfft_val" == "ON" ]]; then
+    echo "CMake cache: domdec=ON colfft=ON"
+    return 0
+  fi
+  echo "rebuild_charmm_mlpot: ERROR: DOMDEC requires colfft=ON; CMake has domdec=${domdec_val:-?} colfft=${colfft_val:-?}" >&2
+  echo "CHARMM CMake turns domdec OFF when colfft is OFF (no FFTW/MKL found)." >&2
+  echo "" >&2
+  echo "On cluster — find and load the FFTW module:" >&2
+  echo "  module spider fftw                      # find available FFTW modules" >&2
+  echo "  module load FFTW/3.3.10-GCC-12.2.0     # adjust to the name shown above" >&2
+  echo "  export FFTW_ROOT=\${EBROOTFFTW}          # set by the module" >&2
+  echo "" >&2
+  echo "Or recover the path from the existing library build cache:" >&2
+  echo "  grep -i fftw_include \${HOME}/.cache/mmml-charmm-build/linux-x86_64/CMakeCache.txt" >&2
+  echo "  export FFTW_ROOT=<prefix printed above>  # parent of include/ and lib/" >&2
+  echo "" >&2
+  echo "Then: bash scripts/rebuild_charmm_native_exec.sh --clean" >&2
+  exit 1
+}
+
+# ---------------------------------------------------------------------------
+# FFTW auto-discovery: if FFTW_ROOT is not set, try to recover it from the
+# library build's CMakeCache (which succeeded when the library was built).
+# ---------------------------------------------------------------------------
+if [[ -z "$FFTW_ROOT" ]]; then
+  _lib_cache="${HOME}/.cache/mmml-charmm-build/$(_platform_tag)/CMakeCache.txt"
+  if [[ -f "$_lib_cache" ]]; then
+    _fftw_inc="$(grep '^FFTW_INCLUDE_DIR:PATH=' "$_lib_cache" 2>/dev/null | cut -d= -f2- || true)"
+    if [[ -n "$_fftw_inc" && -d "$_fftw_inc" ]]; then
+      FFTW_ROOT="$(dirname "$_fftw_inc")"
+      echo "FFTW_ROOT auto-discovered from library cache: $FFTW_ROOT (include: $_fftw_inc)" >&2
+    fi
+  fi
+fi
+
 MPI_CC="${MPI_CC:-${OPENMPI_ROOT}/bin/mpicc}"
 MPI_CXX="${MPI_CXX:-${OPENMPI_ROOT}/bin/mpicxx}"
 MPI_FC="${MPI_FC:-${OPENMPI_ROOT}/bin/mpifort}"
@@ -339,25 +387,6 @@ if [[ "$needs_configure" == 1 ]]; then
   cmake "${CMAKE_ARGS[@]}"
   _assert_charmm_domdec_cmake_flags
 fi
-
-_assert_charmm_domdec_cmake_flags() {
-  [[ -f "$BUILD_DIR/CMakeCache.txt" ]] || return 0
-  if [[ "$NO_DOMDEC" == 1 ]]; then
-    return 0
-  fi
-  local domdec_val colfft_val
-  domdec_val="$(grep '^domdec:BOOL=' "$BUILD_DIR/CMakeCache.txt" 2>/dev/null | cut -d= -f2- || true)"
-  colfft_val="$(grep '^colfft:BOOL=' "$BUILD_DIR/CMakeCache.txt" 2>/dev/null | cut -d= -f2- || true)"
-  if [[ "$domdec_val" == "ON" && "$colfft_val" == "ON" ]]; then
-    echo "CMake cache: domdec=ON colfft=ON"
-    return 0
-  fi
-  echo "rebuild_charmm_mlpot: ERROR: DOMDEC requires colfft=ON; CMake has domdec=${domdec_val:-?} colfft=${colfft_val:-?}" >&2
-  echo "CHARMM CMake turns domdec OFF when colfft is OFF (no FFTW/MKL found)." >&2
-  echo "On cluster: module load FFTW && export FFTW_ROOT=\${EBROOTFFTW:-\$FFTW_ROOT}" >&2
-  echo "Then: bash scripts/rebuild_charmm_native_exec.sh --clean" >&2
-  exit 1
-}
 
 # Re-check an existing cache before native-exec builds (configure may have been skipped).
 if [[ "$needs_configure" == 0 && "$NO_DOMDEC" != 1 ]]; then

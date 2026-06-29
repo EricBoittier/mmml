@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # Report whether a MMML CHARMM binary was built with CMake domdec=ON (requires colfft + FFTW/MKL).
+#
+# CMakeCache.txt stores the REQUESTED value (-Ddomdec=ON) even when CMakeLists.txt
+# silently overrides it to OFF due to missing FFTW/MKL. Use `nm` on the binary to check
+# the EFFECTIVE state — DOMDEC compiled in iff the binary exports `domdec_com`.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -31,37 +35,85 @@ else
   echo "  executable: NO" >&2
 fi
 
-_domdec_ok=0
+# CMakeCache check (informational — may show ON even when effective build is OFF).
+echo ""
+echo "=== CMakeCache (requested values — may differ from effective build) ==="
 _found=0
 for dir in "${BUILD_DIRS[@]}"; do
   [[ -n "$dir" && -f "$dir/CMakeCache.txt" ]] || continue
   _found=1
   echo "CMakeCache: $dir/CMakeCache.txt"
   grep -E '^(domdec|colfft):BOOL=' "$dir/CMakeCache.txt" 2>/dev/null || true
-  _d="$(grep '^domdec:BOOL=' "$dir/CMakeCache.txt" 2>/dev/null | cut -d= -f2- || true)"
-  _c="$(grep '^colfft:BOOL=' "$dir/CMakeCache.txt" 2>/dev/null | cut -d= -f2- || true)"
-  if [[ "$_d" == "ON" && "$_c" == "ON" ]]; then
-    _domdec_ok=1
-  fi
 done
 if [[ "$_found" == 0 ]]; then
-  echo "No CMakeCache.txt found under native-exec / lib build dirs." >&2
-  echo "Rebuild with: bash scripts/rebuild_charmm_native_exec.sh --clean" >&2
-elif [[ "$_domdec_ok" != 1 ]]; then
-  echo "" >&2
-  echo "DOMDEC is OFF or COLFFT is OFF in CMake cache." >&2
-  echo "CHARMM requires COLFFT (FFTW or MKL) for DOMDEC — see setup/charmm/doc/domdec.info Limitations." >&2
-  echo "Fix: module load FFTW; export FFTW_ROOT=\${EBROOTFFTW:-\$FFTW_ROOT}; bash scripts/rebuild_charmm_native_exec.sh --clean" >&2
+  echo "No CMakeCache.txt found under native-exec / lib build dirs."
+fi
+
+# Effective DOMDEC check via nm — definitive; CMakeCache can lie when FFTW missing.
+echo ""
+echo "=== Effective DOMDEC in binary (nm symbol check) ==="
+_domdec_compiled=0
+if [[ -x "$CHARMM_EXE" ]] && command -v nm >/dev/null 2>&1; then
+  if nm "$CHARMM_EXE" 2>/dev/null | grep -q 'domdec_com\|domdec_common'; then
+    echo "  PASS: domdec_com / domdec_common symbols present in $CHARMM_EXE"
+    _domdec_compiled=1
+  else
+    echo "  FAIL: no domdec_com symbol in $CHARMM_EXE — DOMDEC was compiled OUT" >&2
+    echo "" >&2
+    echo "  CMake silently disables DOMDEC when FFTW/MKL is not found (colfft=OFF)." >&2
+    echo "  The CMakeCache above may still show domdec=ON (that is the requested value)." >&2
+    echo "" >&2
+    echo "  Fix — find FFTW on your cluster:" >&2
+    echo "    module spider fftw                       # find available FFTW modules" >&2
+    echo "    module load FFTW/3.3.10-GCC-12.2.0      # adjust to name above" >&2
+    echo "    export FFTW_ROOT=\${EBROOTFFTW}" >&2
+    echo "" >&2
+    echo "  Or check the library build cache for an already-found FFTW path:" >&2
+    _lib_cache="\${HOME}/.cache/mmml-charmm-build/$(platform_tag)/CMakeCache.txt"
+    if [[ -f "$HOME/.cache/mmml-charmm-build/$(platform_tag)/CMakeCache.txt" ]]; then
+      _inc="$(grep '^FFTW_INCLUDE_DIR:PATH=' "$HOME/.cache/mmml-charmm-build/$(platform_tag)/CMakeCache.txt" 2>/dev/null | cut -d= -f2- || true)"
+      if [[ -n "$_inc" ]]; then
+        echo "    Library build found FFTW include at: $_inc" >&2
+        echo "    → export FFTW_ROOT=$(dirname "$_inc")" >&2
+      else
+        echo "    grep -i fftw_include $HOME/.cache/mmml-charmm-build/$(platform_tag)/CMakeCache.txt" >&2
+      fi
+    fi
+    echo "" >&2
+    echo "  Then rebuild: bash scripts/rebuild_charmm_native_exec.sh --clean" >&2
+  fi
+elif [[ -x "$CHARMM_EXE" ]]; then
+  echo "  (nm not available — falling back to strings)" >&2
+  if strings "$CHARMM_EXE" 2>/dev/null | grep -q 'domdec_com\|DOMDEC.*init'; then
+    echo "  PASS (strings): domdec symbols found"
+    _domdec_compiled=1
+  else
+    echo "  FAIL (strings): no domdec_com found"
+  fi
+fi
+
+# FFTW path in library build cache (informational).
+_lib_cache="$HOME/.cache/mmml-charmm-build/$(platform_tag)/CMakeCache.txt"
+if [[ -f "$_lib_cache" ]]; then
+  _fftw_inc="$(grep '^FFTW_INCLUDE_DIR:PATH=' "$_lib_cache" 2>/dev/null | cut -d= -f2- || true)"
+  _fftw_lib="$(grep '^FFTW_LIBRARY:FILEPATH=' "$_lib_cache" 2>/dev/null | cut -d= -f2- || true)"
+  if [[ -n "$_fftw_inc" || -n "$_fftw_lib" ]]; then
+    echo ""
+    echo "=== FFTW in library build cache (use this prefix for FFTW_ROOT) ==="
+    [[ -n "$_fftw_inc" ]] && echo "  FFTW include: $_fftw_inc"
+    [[ -n "$_fftw_lib" ]] && echo "  FFTW lib:     $_fftw_lib"
+    if [[ -n "$_fftw_inc" ]]; then
+      echo "  → export FFTW_ROOT=$(dirname "$_fftw_inc")"
+    fi
+  fi
+fi
+
+echo ""
+if [[ "$_domdec_compiled" == 1 ]]; then
+  echo "DOMDEC build: OK — binary has domdec_com symbols."
+  echo "Run the tier3 smoke:"
+  echo "  CHARMM_EXE=$CHARMM_EXE bash scripts/run_domdec_dcm10_smoke.sh tier3"
+else
+  echo "DOMDEC build: NOT compiled in — rebuild with FFTW (see above)." >&2
   exit 1
 fi
-
-if [[ -x "$CHARMM_EXE" ]] && command -v strings >/dev/null 2>&1; then
-  echo "Binary strings (domdec-related, first 8):"
-  strings "$CHARMM_EXE" | grep -i domdec | head -8 || echo "  (none — likely domdec=OFF build)"
-fi
-
-cat <<EOF
-
-Runtime: extraneous "DOMDEC NDIR" after ENER => ?domdec is 0 (ENERGY lacks domdec-spec).
-Input: continued ENERGY per setup/charmm/doc/domdec.info Example 1.
-EOF
