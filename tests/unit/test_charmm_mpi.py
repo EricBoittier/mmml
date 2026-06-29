@@ -372,7 +372,7 @@ def test_ensure_charmm_mpi_initialized_idempotent():
     assert charmm_mpi._charmm_mpi_bootstrapped is True
 
 
-def test_mpi_charmm_script_rank0_only_under_mpirun():
+def test_mpi_charmm_script_all_ranks_under_mpirun():
     calls: list[str] = []
 
     def _fake_script(script: str, **kwargs) -> None:
@@ -389,10 +389,30 @@ def test_mpi_charmm_script_rank0_only_under_mpirun():
     ):
         charmm_mpi.mpi_charmm_script("read psf card name foo.psf")
 
-    assert calls == []
+    assert calls == ["read psf card name foo.psf"]
     assert mock_barrier.call_count == 2
 
-    calls.clear()
+
+def test_mpi_charmm_script_rank0_drive_skips_nonroot():
+    calls: list[str] = []
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        return_value=(2, 4),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._mpi_script_barrier",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._invoke_charmm_script",
+        side_effect=lambda s, **kw: calls.append(s),
+    ):
+        charmm_mpi.mpi_charmm_script("skip", rank0_drive=True)
+
+    assert calls == []
+
+
+def test_mpi_charmm_script_rank0_drive_calls_on_root():
+    calls: list[str] = []
+
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
         return_value=(0, 4),
@@ -400,11 +420,11 @@ def test_mpi_charmm_script_rank0_only_under_mpirun():
         "mmml.interfaces.pycharmmInterface.charmm_mpi._mpi_script_barrier",
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi._invoke_charmm_script",
-        side_effect=_fake_script,
+        side_effect=lambda s, **kw: calls.append(s),
     ):
-        charmm_mpi.mpi_charmm_script("read psf card name foo.psf")
+        charmm_mpi.mpi_charmm_script("skip", rank0_drive=True)
 
-    assert calls == ["read psf card name foo.psf"]
+    assert calls == ["skip"]
 
 
 def test_mpi_charmm_script_serial_calls_directly():

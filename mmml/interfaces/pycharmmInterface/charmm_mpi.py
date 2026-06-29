@@ -996,16 +996,19 @@ def mpi_charmm_script(
     *,
     relaxed_bomlev: bool = False,
     quiet: bool = False,
+    rank0_drive: bool = False,
 ) -> None:
-    """Run ``lingo.charmm_script`` on rank 0 when ``size > 1``.
+    """Run ``lingo.charmm_script`` under MPI with rank-synchronised barriers.
 
-    Non-root ranks must **not** call ``eval_charmm_script`` during setup I/O
-    (READ, CRYSTAL, stream commands). They stay in CHARMM's Fortran MPI worker
-    receive loop while rank 0 drives the command stream. mpi4py barriers keep
-    Python ranks in lockstep before and after the rank-0 script block.
+    By default (**``rank0_drive=False``**) every rank calls ``eval_charmm_script``
+    with the same script after an mpi4py barrier.  For READ/CRYSTAL setup this is
+    required: rank 0 performs disk I/O inside CHARMM and Fortran MPI broadcasts
+    the topology to worker ranks.  Skipping ``eval_charmm_script`` on non-root
+    ranks leaves them with empty PSF state (``n_atoms=0``).
+
+    Set ``rank0_drive=True`` only for commands that must not be parsed on worker
+    ranks (rare; most setup still needs the all-rank entry).
     """
-    from contextlib import nullcontext
-
     from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     rank, size = mpi_rank_size()
@@ -1019,7 +1022,14 @@ def mpi_charmm_script(
 
     _mpi_script_barrier()
     try:
-        if rank == 0:
+        if rank0_drive:
+            if rank == 0:
+                _invoke_charmm_script(
+                    script,
+                    relaxed_bomlev=relaxed_bomlev,
+                    quiet=quiet,
+                )
+        else:
             _invoke_charmm_script(
                 script,
                 relaxed_bomlev=relaxed_bomlev,
@@ -1060,6 +1070,15 @@ def _invoke_charmm_script(
         ctx = nullcontext()
     with ctx:
         lingo.charmm_script(script)
+
+
+def disable_ase_mpi_parallel() -> None:
+    """Force ASE serial I/O when mpi4py is loaded for CHARMM (avoids bcast clashes)."""
+    try:
+        import ase.parallel as ase_parallel
+    except ImportError:
+        return
+    ase_parallel.MPI.comm = ase_parallel.DummyMPI()
 
 
 def prepare_serial_charmm_mpi_env() -> None:

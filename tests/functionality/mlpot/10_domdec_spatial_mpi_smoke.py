@@ -458,9 +458,7 @@ def _load_prebuilt(args: argparse.Namespace) -> tuple["np.ndarray", "np.ndarray"
     minimal_rtf = _ensure_shared_minimal_rtf(psf_path, Path(CGENFF_PRM))
     n_types = len(_psf_atom_types(psf_path))
     if rank == 0:
-        _log("load", f"rank 0 read topology ({n_types} types): {minimal_rtf}")
-    else:
-        _log("load", "waiting — rank 0 drives READ (no eval_charmm_script here)")
+        _log("load", f"read topology ({n_types} types): {minimal_rtf}")
     read_script = (
         f"read rtf card name {minimal_rtf}\n"
         f"read param card name {CGENFF_PRM} flex\n"
@@ -474,6 +472,11 @@ def _load_prebuilt(args: argparse.Namespace) -> tuple["np.ndarray", "np.ndarray"
     z = np.asarray(get_Z_from_psf(), dtype=int)
     r = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
     n_atoms = len(z)
+    if n_atoms <= 0:
+        raise RuntimeError(
+            f"rank {rank}/{size}: CHARMM PSF has n_atoms={n_atoms} after prebuilt load. "
+            "Under MPI, all ranks must enter READ together (rank 0 disk I/O + Fortran broadcast)."
+        )
     n_monomers = int(args.n_molecules)
     apm_cli = args.atoms_per_monomer
     if apm_cli is not None:
@@ -537,11 +540,15 @@ def _charmm_domdec_ener_smoke(args: argparse.Namespace) -> int:
     n_atoms = len(z)
     _mpi_barrier(tag="ener")
 
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import ensure_mpi4py_after_charmm_init
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+        disable_ase_mpi_parallel,
+        ensure_mpi4py_after_charmm_init,
+    )
 
     if not ensure_mpi4py_after_charmm_init(phase="after prebuilt load in live ENER"):
         print("FAIL: mpi4py.MPI not available after PyCHARMM import", file=sys.stderr)
         return 1
+    disable_ase_mpi_parallel()
     _mpi_barrier(tag="ener")
 
     import ase

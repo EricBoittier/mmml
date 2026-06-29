@@ -262,11 +262,29 @@ def ensure_charmm_crystal_for_cpt(
         )
 
 
+def _ensure_crystal_image_str() -> None:
+    """Copy bundled ``crystal_image.str`` into cwd when missing (no setupBox import)."""
+    import shutil
+
+    from mmml.paths import crystal_image_str_source
+
+    dst = Path("crystal_image.str")
+    if dst.exists():
+        return
+    src = crystal_image_str_source()
+    if src.is_file():
+        shutil.copy2(src, dst)
+        return
+    raise FileNotFoundError(
+        f"crystal_image.str not found in cwd and source {src} does not exist. "
+        "CHARMM requires this file for periodic box setup."
+    )
+
+
 def prepare_charmm_pbc(cubic_box_side_A: float) -> None:
     """Install CHARMM crystal + IMAGE for a cubic cell."""
     from mmml.interfaces.pycharmmInterface.charmm_mpi import mpi_charmm_script
     from mmml.interfaces.pycharmmInterface.pycharmmCommands import pbcset
-    from mmml.interfaces.pycharmmInterface.setupBox import _ensure_crystal_image_str
 
     L = float(cubic_box_side_A)
     if L <= 0.0:
