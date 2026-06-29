@@ -592,18 +592,28 @@ def setup_calculator(
 
     # Precompute padded index arrays for vectorized gather (avoids Python loops in get_ML_energy_fn)
     monomer_idx_arr = np.zeros((n_monomers, max_atoms), dtype=np.int32)
+    monomer_atom_mask_arr = np.zeros((n_monomers, max_atoms), dtype=bool)
     for mi in range(n_monomers):
         idxs = all_monomer_idxs[mi]
         n_i = len(idxs)
         monomer_idx_arr[mi, :n_i] = idxs
+        monomer_atom_mask_arr[mi, :n_i] = True
         monomer_idx_arr[mi, n_i:] = idxs[0] if n_i > 0 else 0  # safe padding
     dimer_idx_arr = np.zeros((len(all_dimer_idxs), max_atoms), dtype=np.int32)
+    dimer_atom_mask_arr = np.zeros((len(all_dimer_idxs), max_atoms), dtype=bool)
     for di, idxs in enumerate(all_dimer_idxs):
         n_d = len(idxs)
         dimer_idx_arr[di, :n_d] = idxs
+        dimer_atom_mask_arr[di, :n_d] = True
         dimer_idx_arr[di, n_d:] = idxs[0] if n_d > 0 else 0
+    atoms_per_monomer_arr_jnp = jnp.array(atoms_per_monomer_list, dtype=jnp.int32)
+    dimer_pair_arr_jnp = jnp.array(dimer_perms, dtype=jnp.int32)
+    dimer_n_atoms_a_jnp = jnp.array([atoms_per_monomer_list[a] for a, _ in dimer_perms], dtype=jnp.int32)
+    dimer_n_atoms_b_jnp = jnp.array([atoms_per_monomer_list[b] for _, b in dimer_perms], dtype=jnp.int32)
     monomer_idx_arr_jnp = jnp.array(monomer_idx_arr)
+    monomer_atom_mask_jnp = jnp.array(monomer_atom_mask_arr)
     dimer_idx_arr_jnp = jnp.array(dimer_idx_arr)
+    dimer_atom_mask_jnp = jnp.array(dimer_atom_mask_arr)
     padded_dimer_idx_arr_jnp = jnp.array(dimer_idx_arr)  # same as dimer_idx_arr for apply_dimer_switching
 
     N_MONOMERS = n_monomers
@@ -1473,8 +1483,8 @@ def setup_calculator(
             atoms_per_monomer_list[a] + atoms_per_monomer_list[b]
             for a, b in dimer_perms
         ]
-        dimer_n_a = jnp.array([atoms_per_monomer_list[a] for a, _ in dimer_perms])
-        dimer_n_b = jnp.array([atoms_per_monomer_list[b] for _, b in dimer_perms])
+        dimer_n_a = dimer_n_atoms_a_jnp
+        dimer_n_b = dimer_n_atoms_b_jnp
         max_monomer_atoms = max(atoms_per_monomer_list)
         max_dimer_atoms = max(_dimer_atom_counts) if _dimer_atom_counts else 2 * max_monomer_atoms
         max_atoms = max(max_monomer_atoms, max_dimer_atoms)
@@ -1487,7 +1497,7 @@ def setup_calculator(
         # --- Monomer data (vectorized gather via precomputed index arrays) ---
         monomer_positions = positions[monomer_idx_arr_jnp]  # (n_monomers, max_atoms, 3)
         monomer_atomic = atomic_numbers[monomer_idx_arr_jnp]  # (n_monomers, max_atoms)
-        monomer_N_arr = jnp.array([atoms_per_monomer_list[i] for i in range(n_monomers)])
+        monomer_N_arr = atoms_per_monomer_arr_jnp
         monomer_mask = jnp.arange(max_atoms)[None, :] < monomer_N_arr[:, None]
         monomer_positions = jnp.where(monomer_mask[:, :, None], monomer_positions, pad_positions[None, :, :])
         monomer_atomic = jnp.where(monomer_mask, monomer_atomic, 0)
@@ -1787,29 +1797,12 @@ def setup_calculator(
             e = jnp.concatenate([full_mono_e, full_dimer_e])
             f = jnp.concatenate([full_mono_f.reshape(-1, 3), full_dimer_f.reshape(-1, 3)])
 
-        # Calculate monomer contributions (flatten variable-size monomer indices)
-        monomer_atomic_numbers_flat = jnp.concatenate([
-            atomic_numbers[jnp.array(all_monomer_idxs[i])] for i in range(n_monomers)
-        ])
-        monomer_positions_flat = jnp.concatenate([
-            positions[jnp.array(all_monomer_idxs[i])] for i in range(n_monomers)
-        ])
-        # Build atom mask for valid monomer atoms (variable sizes)
-        monomer_atom_mask_parts = []
-        for mi in range(n_monomers):
-            n_i = atoms_per_monomer_list[mi]
-            monomer_atom_mask_parts.append(jnp.ones(n_i, dtype=jnp.int32))
-        monomer_atom_mask_flat = jnp.concatenate(monomer_atom_mask_parts)
-
         monomer_contribs = calculate_monomer_contributions(
             e,
             f,
             n_monomers,
             max_atoms,
             debug,
-            monomer_atomic_numbers_flat=monomer_atomic_numbers_flat,
-            monomer_positions_flat=monomer_positions_flat,
-            monomer_atom_mask_flat=monomer_atom_mask_flat,
         )
         
         # No dimer pairs exist for a single monomer (n_monomers < 2); skip ML 2-body
@@ -1886,10 +1879,7 @@ def setup_calculator(
         
         # Segment indices mapping each force entry back to the global atom index.
         # Heterogeneous: monomer 0 has atoms [0..n0-1], monomer 1 has [n0..n0+n1-1], ...
-        monomer_segment_idxs = jnp.concatenate([
-            jnp.arange(atoms_per_monomer_list[i]) + int(monomer_offsets[i])
-            for i in range(n_monomers)
-        ])
+        monomer_segment_idxs = monomer_idx_arr_jnp.reshape(-1)
 
         # Process forces
         monomer_forces = process_monomer_forces(
