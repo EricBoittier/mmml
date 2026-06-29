@@ -780,6 +780,10 @@ def _register_mlpot_context(
                     cell=ml_cell,
                     verbose=verbose,
                 )
+    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotModel
+
+    if isinstance(pyCModel, DecomposedMlpotModel) and cubic_box_side_A is not None:
+        pyCModel._charmm_box_side_A = float(cubic_box_side_A)
     ctx.ml_Z = np.asarray(z, dtype=int)
     ctx.use_pbc = bool(mlpot_use_pbc)
     ctx.atoms_per_monomer = list(apm)

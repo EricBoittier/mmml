@@ -596,6 +596,91 @@ def test_mlpot_spherical_forces_passes_cubic_box_matrix():
     assert np.asarray(box_arg).shape == (3, 3)
 
 
+def test_mlpot_spherical_forces_loose_pbc_jax_pme_passes_box():
+    from unittest import mock
+
+    import jax.numpy as jnp
+
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import mlpot_spherical_forces_ev_angstrom
+    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+        DecomposedMlpotCalculator,
+        DecomposedMlpotModel,
+    )
+
+    calc = mock.Mock(spec=DecomposedMlpotCalculator)
+    calc.atomic_numbers = np.array([6, 1], dtype=int)
+    calc.n_monomers = 1
+    calc.cutoff_params = mock.Mock()
+    calc.do_mm = True
+    calc._get_update_fn = None
+    calc.spherical_fn = mock.Mock(
+        return_value=mock.Mock(forces=jnp.zeros((2, 3), dtype=jnp.float32))
+    )
+    calc._resolve_mm_pairs = mock.Mock(
+        return_value=(jnp.zeros((1, 2), dtype=jnp.int32), jnp.zeros((1,), dtype=jnp.bool_), True)
+    )
+    model = mock.Mock(spec=DecomposedMlpotModel)
+    model._cell = False
+    model._jax_pme_lr_active = mock.Mock(return_value=True)
+    model._periodic_mm_config = None
+    model.get_pycharmm_calculator.return_value = calc
+    pos = np.zeros((2, 3), dtype=np.float64)
+
+    forces = mlpot_spherical_forces_ev_angstrom(
+        model, positions=pos, use_pbc=False, box_A=31.994
+    )
+
+    assert forces is not None
+    calc._resolve_mm_pairs.assert_called_once()
+    box_arg = calc._resolve_mm_pairs.call_args.args[1]
+    assert float(np.asarray(box_arg)[0, 0]) == pytest.approx(31.994)
+    assert "box" in calc.spherical_fn.call_args.kwargs
+
+
+def test_decomposed_calculator_jax_pme_uses_charmm_box_fallback():
+    z = np.zeros(8, dtype=int)
+    get_update_fn = MagicMock(return_value=MagicMock(return_value=(None, None)))
+    calc = DecomposedMlpotCalculator(
+        MagicMock(),
+        CutoffParameters(),
+        2,
+        z,
+        cell=False,
+        do_mm=True,
+        get_update_fn=get_update_fn,
+    )
+    parent = MagicMock()
+    parent._jax_pme_lr_active.return_value = True
+    parent._cell = False
+    parent._charmm_box_side_A = 31.994
+    parent._npt_restart_read = None
+    calc._parent_model = parent
+    calc._get_spherical_forward_fn = MagicMock(
+        return_value=lambda *args, **kwargs: (jnp.array(0.0), jnp.zeros((8, 3)))
+    )
+    n = 8
+    x = np.zeros(n, dtype=np.float64)
+    y = np.zeros(n, dtype=np.float64)
+    zc = np.zeros(n, dtype=np.float64)
+    dx = np.zeros(n, dtype=np.float64)
+    dy = np.zeros(n, dtype=np.float64)
+    dz = np.zeros(n, dtype=np.float64)
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_mlpot_mic_box_side_A",
+        return_value=(31.994, "fallback"),
+    ) as mock_resolve, patch(
+        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
+        return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()),
+    ):
+        calc.calculate_charmm(
+            n, 0, 0, None, x, y, zc, dx, dy, dz, 0, 0, None, None, None, None, None, None, None
+        )
+
+    mock_resolve.assert_called_once()
+    assert mock_resolve.call_args.kwargs["fallback_side_A"] == pytest.approx(31.994)
+    assert calc._cell == pytest.approx(31.994)
+
+
 def test_is_cubic_box_sides():
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import _is_cubic_box_sides
 

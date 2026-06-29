@@ -147,6 +147,30 @@ class DecomposedMlpotCalculator:
         uses_jax_pme = getattr(cfg, "uses_jax_pme", False)
         return bool(uses_jax_pme() if callable(uses_jax_pme) else uses_jax_pme)
 
+    def _callback_box_resolution_inputs(
+        self,
+    ) -> tuple[float | None, Path | None]:
+        """Fallback side and restart for jax-pme / MIC when pbound is inactive."""
+        fallback: float | None = float(self._cell) if self._cell else None
+        restart_path = getattr(self, "_npt_restart_read", None)
+        parent = getattr(self, "_parent_model", None)
+        if parent is not None:
+            if fallback is None:
+                parent_cell = getattr(parent, "_cell", False)
+                if parent_cell:
+                    fallback = float(parent_cell)
+            if fallback is None:
+                charmm_box = getattr(parent, "_charmm_box_side_A", None)
+                if charmm_box is not None and float(charmm_box) > 0.0:
+                    fallback = float(charmm_box)
+            if restart_path is None:
+                restart_path = getattr(parent, "_npt_restart_read", None)
+        if restart_path is not None:
+            restart_path = Path(restart_path)
+            if not restart_path.is_file():
+                restart_path = None
+        return fallback, restart_path
+
     def _get_spherical_forward_fn(
         self,
         *,
@@ -343,9 +367,10 @@ class DecomposedMlpotCalculator:
                 resolve_mlpot_mic_box_side_A,
             )
 
+            fallback_side_A, restart_path = self._callback_box_resolution_inputs()
             side, _ = resolve_mlpot_mic_box_side_A(
-                fallback_side_A=float(self._cell) if self._cell else None,
-                restart_path=getattr(self, "_npt_restart_read", None),
+                fallback_side_A=fallback_side_A,
+                restart_path=restart_path,
             )
             self._cell = side
             box = jnp.asarray(cubic_box_matrix_from_side(side))
@@ -553,6 +578,8 @@ class DecomposedMlpotModel:
         self._n_monomers = int(n_monomers)
         self._atomic_numbers = np.asarray(atomic_numbers, dtype=int)
         self._cell = float(cell) if cell else False
+        self._charmm_box_side_A: float | None = None
+        self._npt_restart_read: Path | None = None
         self._do_mm = bool(do_mm)
         self._periodic_mm_config = periodic_mm_config
         self._get_update_fn = get_update_fn

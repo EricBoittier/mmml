@@ -1783,6 +1783,12 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         )
         ctx.cubic_box_side_A = float(box_side)
         ctx.charmm_cubic_box_side_A = float(box_side)
+    elif pretreat_restart_path is not None and charmm_pbc:
+        from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotModel
+
+        rpath = Path(pretreat_restart_path)
+        if isinstance(pyCModel, DecomposedMlpotModel) and rpath.is_file():
+            pyCModel._npt_restart_read = rpath
 
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
         probe_and_light_resync_if_desync,

@@ -1795,6 +1795,59 @@ def mlpot_hybrid_forces_ev_angstrom(
     return np.asarray(forces_kcal, dtype=np.float64) / float(ev2kcalmol)
 
 
+def mlpot_hybrid_needs_charmm_box(pyCModel: Any) -> bool:
+    """True when hybrid MM needs a cubic box (MIC PBC or jax-pme long-range Coulomb)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotModel
+
+    if not isinstance(pyCModel, DecomposedMlpotModel):
+        return False
+    if pyCModel._cell:
+        return True
+    if pyCModel._jax_pme_lr_active():
+        return True
+    cfg = getattr(pyCModel, "_periodic_mm_config", None)
+    uses_jax_pme = getattr(cfg, "uses_jax_pme", False) if cfg is not None else False
+    return bool(uses_jax_pme() if callable(uses_jax_pme) else uses_jax_pme)
+
+
+def _mlpot_spherical_eval_kwargs(
+    calc: Any,
+    pyCModel: Any,
+    pos_np: np.ndarray,
+    *,
+    use_pbc: bool,
+    box_A: float | None,
+) -> dict[str, Any]:
+    """Build kwargs for ``spherical_fn`` including MM pair prep when a box is required."""
+    import jax.numpy as jnp
+
+    n = int(pos_np.shape[0])
+    pos_j = jnp.asarray(pos_np, dtype=jnp.float32)
+    z_j = jnp.asarray(calc.atomic_numbers[:n], dtype=jnp.int32)
+    kwargs: dict[str, Any] = dict(
+        positions=pos_j,
+        atomic_numbers=z_j,
+        n_monomers=int(calc.n_monomers),
+        cutoff_params=calc.cutoff_params,
+        doML=True,
+        doMM=bool(calc.do_mm),
+        doML_dimer=True,
+    )
+    needs_box = bool(use_pbc) or mlpot_hybrid_needs_charmm_box(pyCModel)
+    if needs_box and box_A is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import cubic_box_matrix_from_side
+
+        box_j = jnp.asarray(cubic_box_matrix_from_side(float(box_A)), dtype=jnp.float32)
+        kwargs["box"] = box_j
+        mm_pair_idx, mm_pair_mask, use_mm_pairs = calc._resolve_mm_pairs(pos_np, box_j)
+        if use_mm_pairs:
+            kwargs["mm_pair_idx"] = mm_pair_idx
+            kwargs["mm_pair_mask"] = mm_pair_mask
+    elif bool(calc.do_mm) and calc._get_update_fn is not None:
+        calc._get_update_fn(pos_np, calc.cutoff_params, box=None)
+    return kwargs
+
+
 def mlpot_spherical_forces_ev_angstrom(
     pyCModel: Any,
     *,
@@ -1815,30 +1868,16 @@ def mlpot_spherical_forces_ev_angstrom(
         return None
 
     import jax
-    import jax.numpy as jnp
 
     pos_np = np.asarray(positions, dtype=np.float64).reshape(-1, 3)
     n = int(pos_np.shape[0])
-    pos_j = jnp.asarray(pos_np, dtype=jnp.float32)
-    z_j = jnp.asarray(calc.atomic_numbers[:n], dtype=jnp.int32)
-    kwargs: dict[str, Any] = dict(
-        positions=pos_j,
-        atomic_numbers=z_j,
-        n_monomers=int(calc.n_monomers),
-        cutoff_params=calc.cutoff_params,
-        doML=True,
-        doMM=bool(calc.do_mm),
-        doML_dimer=True,
+    kwargs = _mlpot_spherical_eval_kwargs(
+        calc,
+        pyCModel,
+        pos_np,
+        use_pbc=use_pbc,
+        box_A=box_A,
     )
-    if use_pbc and box_A is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import cubic_box_matrix_from_side
-
-        box_j = jnp.asarray(cubic_box_matrix_from_side(float(box_A)), dtype=jnp.float32)
-        kwargs["box"] = box_j
-        mm_pair_idx, mm_pair_mask, use_mm_pairs = calc._resolve_mm_pairs(pos_np, box_j)
-        if use_mm_pairs:
-            kwargs["mm_pair_idx"] = mm_pair_idx
-            kwargs["mm_pair_mask"] = mm_pair_mask
     out = calc.spherical_fn(**kwargs)
     forces = np.asarray(jax.device_get(out.forces), dtype=np.float64).reshape(n, 3)
     return forces
@@ -1868,26 +1907,13 @@ def mlpot_spherical_energy_forces_ev_angstrom(
 
     pos_np = np.asarray(positions, dtype=np.float64).reshape(-1, 3)
     n = int(pos_np.shape[0])
-    pos_j = jnp.asarray(pos_np, dtype=jnp.float32)
-    z_j = jnp.asarray(calc.atomic_numbers[:n], dtype=jnp.int32)
-    kwargs: dict[str, Any] = dict(
-        positions=pos_j,
-        atomic_numbers=z_j,
-        n_monomers=int(calc.n_monomers),
-        cutoff_params=calc.cutoff_params,
-        doML=True,
-        doMM=bool(calc.do_mm),
-        doML_dimer=True,
+    kwargs = _mlpot_spherical_eval_kwargs(
+        calc,
+        pyCModel,
+        pos_np,
+        use_pbc=use_pbc,
+        box_A=box_A,
     )
-    if use_pbc and box_A is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import cubic_box_matrix_from_side
-
-        box_j = jnp.asarray(cubic_box_matrix_from_side(float(box_A)), dtype=jnp.float32)
-        kwargs["box"] = box_j
-        mm_pair_idx, mm_pair_mask, use_mm_pairs = calc._resolve_mm_pairs(pos_np, box_j)
-        if use_mm_pairs:
-            kwargs["mm_pair_idx"] = mm_pair_idx
-            kwargs["mm_pair_mask"] = mm_pair_mask
     out = calc.spherical_fn(**kwargs)
     energy_ev = float(jax.device_get(jnp.reshape(out.energy, (-1,))[0]))
     forces_ev = np.asarray(jax.device_get(out.forces), dtype=np.float64).reshape(n, 3)
