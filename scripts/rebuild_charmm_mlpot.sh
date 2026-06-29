@@ -37,29 +37,34 @@ _default_openmpi_root() {
 }
 
 _auto_find_fftw_root() {
-  # 1. Check for libfftw3.h in common cluster software prefixes.
-  #    Globs are sorted newest-first so the latest installed version wins.
-  local candidate
+  # Find an FFTW prefix that has fftw3.h AND libfftw3f (single-precision, required for COLFFT).
+  # Tries bare prefix first (e.g. /srv/opt/gcc-12.2.0/fftw-3.3.10), then /build sub-dir.
+  local candidate base
   for pattern in \
-    "/srv/opt/gcc-*/fftw-*/build" \
-    "/srv/opt/fftw-*/build" \
-    "/srv/opt/gcc-*/fftw*/build" \
-    "/opt/fftw-*/build" \
-    "/opt/gcc-*/fftw-*/build" \
+    "/srv/opt/gcc-*/fftw-*" \
+    "/srv/opt/fftw-*" \
+    "/opt/gcc-*/fftw-*" \
+    "/opt/fftw-*" \
     "/usr/local" \
     "/usr"; do
     # shellcheck disable=SC2086
-    for candidate in $(ls -d $pattern 2>/dev/null | sort -rV 2>/dev/null | head -5); do
-      if [[ -f "$candidate/include/fftw3.h" ]]; then
-        echo "$candidate"
-        return 0
-      fi
+    for base in $(ls -d $pattern 2>/dev/null | sort -rV 2>/dev/null | head -5); do
+      for candidate in "$base" "$base/build"; do
+        if [[ -f "$candidate/include/fftw3.h" ]] && \
+           { [[ -f "$candidate/lib/libfftw3f.a" ]] || \
+             [[ -f "$candidate/lib/libfftw3f.so" ]] || \
+             [[ -f "$candidate/lib64/libfftw3f.a" ]] || \
+             [[ -f "$candidate/lib64/libfftw3f.so" ]]; }; then
+          echo "$candidate"
+          return 0
+        fi
+      done
     done
   done
-  # 2. pkg-config fallback
-  if command -v pkg-config >/dev/null 2>&1 && pkg-config --exists fftw3 2>/dev/null; then
+  # pkg-config fallback
+  if command -v pkg-config >/dev/null 2>&1 && pkg-config --exists fftw3f 2>/dev/null; then
     local inc
-    inc="$(pkg-config --variable=includedir fftw3 2>/dev/null || true)"
+    inc="$(pkg-config --variable=includedir fftw3f 2>/dev/null || true)"
     [[ -n "$inc" && -f "$inc/fftw3.h" ]] && { echo "$(dirname "$inc")"; return 0; }
   fi
   return 1
@@ -392,40 +397,40 @@ if [[ "$needs_configure" == 1 ]]; then
       fi
     done
     if [[ -n "$FFTW_LIB_DIR" ]]; then
-      FFTW_SHARED=""
-      FFTWF_SHARED=""
-      for candidate in "$FFTW_LIB_DIR"/libfftw3.so "$FFTW_LIB_DIR"/libfftw3.so.* "$FFTW_LIB_DIR"/libfftw3.dylib; do
-        if [[ -f "$candidate" ]]; then
-          FFTW_SHARED="$candidate"
-          break
-        fi
+      FFTW_LIB=""    # double precision (libfftw3)
+      FFTWF_LIB=""   # single precision (libfftw3f) — required for COLFFT/PME
+      # Prefer shared libs (.so/.dylib); fall back to static (.a) — CMake needs an
+      # explicit path when the install only provides static archives.
+      for candidate in \
+          "$FFTW_LIB_DIR"/libfftw3.so "$FFTW_LIB_DIR"/libfftw3.so.* \
+          "$FFTW_LIB_DIR"/libfftw3.dylib \
+          "$FFTW_LIB_DIR"/libfftw3.a; do
+        if [[ -f "$candidate" ]]; then FFTW_LIB="$candidate"; break; fi
       done
-      for candidate in "$FFTW_LIB_DIR"/libfftw3f.so "$FFTW_LIB_DIR"/libfftw3f.so.* "$FFTW_LIB_DIR"/libfftw3f.dylib; do
-        if [[ -f "$candidate" ]]; then
-          FFTWF_SHARED="$candidate"
-          break
-        fi
+      for candidate in \
+          "$FFTW_LIB_DIR"/libfftw3f.so "$FFTW_LIB_DIR"/libfftw3f.so.* \
+          "$FFTW_LIB_DIR"/libfftw3f.dylib \
+          "$FFTW_LIB_DIR"/libfftw3f.a; do
+        if [[ -f "$candidate" ]]; then FFTWF_LIB="$candidate"; break; fi
       done
       CMAKE_ARGS+=(
         -DFFTW_ROOT="$FFTW_ROOT"
         -DFFTW_INCLUDE_DIR="$FFTW_ROOT/include"
         -DFFTW_INCLUDE_DIRS="$FFTW_ROOT/include"
       )
-      if [[ -n "$FFTW_SHARED" ]]; then
-        CMAKE_ARGS+=(
-          -DFFTW_LIBRARY="$FFTW_SHARED"
-          -DFFTW_LIBRARIES="$FFTW_SHARED"
-        )
-        echo "Using shared FFTW from FFTW_ROOT=$FFTW_ROOT ($FFTW_SHARED)"
-      else
-        echo "rebuild_charmm_mlpot: warning: no shared libfftw3 found under $FFTW_LIB_DIR; CMake may choose a static archive" >&2
+      if [[ -n "$FFTW_LIB" ]]; then
+        CMAKE_ARGS+=(-DFFTW_LIBRARY="$FFTW_LIB" -DFFTW_LIBRARIES="$FFTW_LIB")
+        echo "Using FFTW (double) from $FFTW_ROOT ($FFTW_LIB)"
       fi
-      if [[ -n "$FFTWF_SHARED" ]]; then
-        CMAKE_ARGS+=(
-          -DFFTWF_LIBRARY="$FFTWF_SHARED"
-          -DFFTWF_LIBRARIES="$FFTWF_SHARED"
-        )
-        echo "Using shared FFTWF from FFTW_ROOT=$FFTW_ROOT ($FFTWF_SHARED)"
+      if [[ -n "$FFTWF_LIB" ]]; then
+        CMAKE_ARGS+=(-DFFTWF_LIBRARY="$FFTWF_LIB" -DFFTWF_LIBRARIES="$FFTWF_LIB")
+        echo "Using FFTWF (single, required for COLFFT) from $FFTW_ROOT ($FFTWF_LIB)"
+      else
+        echo "rebuild_charmm_mlpot: warning: libfftw3f not found under $FFTW_LIB_DIR" >&2
+        echo "  COLFFT/DOMDEC requires single-precision FFTW (libfftw3f)." >&2
+        if [[ -d "$(dirname "$FFTW_ROOT")/fftw-3.3.10-dp" ]]; then
+          echo "  Found fftw-3.3.10-dp sibling — check if it has libfftw3f." >&2
+        fi
       fi
     else
       echo "rebuild_charmm_mlpot: warning: FFTW_ROOT=$FFTW_ROOT has no lib or lib64 directory" >&2
