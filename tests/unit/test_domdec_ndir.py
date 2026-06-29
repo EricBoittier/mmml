@@ -9,6 +9,7 @@ import pytest
 from mmml.utils.domdec_ndir import (
     format_domdec_charmm_commands,
     format_domdec_ndir,
+    format_domdec_tier3_energy_block,
     min_domdec_crystal_side_A,
     min_domdec_mpi_ranks,
     pick_domdec_prep_dir,
@@ -72,4 +73,8 @@ def test_min_domdec_mpi_ranks() -> None:
 
 
 def test_format_domdec_charmm_commands_np2() -> None:
-    assert format_domdec_charmm_commands(2) == "energy domdec ndir 2 1 1"
+    block = format_domdec_tier3_energy_block(2)
+    assert "energy cutnb 15.0" in block
+    assert "domdec ndir 2 1 1" in block
+    assert block == format_domdec_charmm_commands(2)
+    assert block.count("-") >= 3

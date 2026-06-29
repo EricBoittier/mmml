@@ -354,6 +354,17 @@ CHARMM_EXE=$MMML_ROOT/setup/charmm/charmm bash scripts/run_domdec_dcm10_smoke.sh
 
 CGENFF `NBFIX` warnings on older c47 are harmless at `bomlev -2`.
 
+Tier 3 native input uses a **single continued ENERGY command** (DOMDec is an ENERGY subcommand, not a separate `nbonds` + bare `energy`):
+
+```text
+energy cutnb 15.0 ctonnb 10.83 ctofnb 14.17 -
+  vfswitch vatom cdie eps 1.0 atom fswitch -
+  cutim 15.0 ctexnb 15.0 nbxmod 5 -
+  domdec ndir 2 1 1
+```
+
+See [CHARMM domdec (c41b2)](https://academiccharmm.org/documentation/version/c41b2/domdec). DOMDEC targets **dynamics**; minimization does not work with DOMDEC enabled — minimize at `np=1`, then enable DOMDEC for MD. The tier3 smoke is a one-shot **ENER** gate only.
+
 ### DLPack loose coupling — where it applies
 
 DLPack (`__dlpack__` / `from_dlpack`) gives **zero-copy GPU array interchange** between JAX and CuPy. It is implemented in [`nl_gpu.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/nl_gpu.py) for the **MM neighbor-list rebuild** path, not for CHARMM↔MLpot force handoff.

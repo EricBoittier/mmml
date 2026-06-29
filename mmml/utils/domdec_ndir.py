@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 
@@ -73,9 +74,33 @@ def format_domdec_ndir(n_ranks: int, *, strict_c47_axis_rule: bool = False) -> s
 
 
 def format_domdec_charmm_commands(n_ranks: int, *, strict_c47_axis_rule: bool = False) -> str:
-    """CHARMM stream line: ``energy domdec ndir …`` (DOMDEC is an ENERGY subcommand)."""
+    """Alias for :func:`format_domdec_tier3_energy_block` (single continued ENERGY line)."""
+    return format_domdec_tier3_energy_block(n_ranks, strict_c47_axis_rule=strict_c47_axis_rule)
+
+
+def format_domdec_tier3_energy_block(
+    n_ranks: int,
+    *,
+    cutnb: float = 15.0,
+    ctonnb: float = 10.83,
+    ctofnb: float = 14.17,
+    cutim: float = 15.0,
+    ctexnb: float = 15.0,
+    strict_c47_axis_rule: bool = False,
+) -> str:
+    """Continued ENERGY command with nonbond keywords and ``domdec ndir`` on the same command.
+
+    DOMDec must be on the ENERGY line (not a separate ``nbonds`` + bare ``energy``).
+    See https://academiccharmm.org/documentation/version/c41b2/domdec
+    """
     ndir = format_domdec_ndir(n_ranks, strict_c47_axis_rule=strict_c47_axis_rule)
-    return f"energy domdec ndir {ndir}"
+    keyword = (os.environ.get("DOMDEC_ENERGY_KEYWORD") or "domdec").strip().lower()
+    return (
+        f"energy cutnb {cutnb} ctonnb {ctonnb} ctofnb {ctofnb} -\n"
+        f"  vfswitch vatom cdie eps 1.0 atom fswitch -\n"
+        f"  cutim {cutim} ctexnb {ctexnb} nbxmod 5 -\n"
+        f"  {keyword} ndir {ndir}"
+    )
 
 
 def min_domdec_crystal_side_A(

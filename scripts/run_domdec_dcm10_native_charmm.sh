@@ -244,7 +244,14 @@ energy"
 elif [[ -n "${DOMDEC_ENERGY:-}" ]]; then
   _domdec_energy_block="$DOMDEC_ENERGY"
 else
-  _domdec_energy_block="energy domdec ndir ${DOMDEC_NDIR}"
+  _domdec_energy_block="$("$PY" -c "
+from mmml.utils.domdec_ndir import format_domdec_tier3_energy_block
+print(format_domdec_tier3_energy_block(
+    ${MMML_MPI_NP},
+    cutnb=${DOMDEC_CUTNB},
+    strict_c47_axis_rule=bool(int('${DOMDEC_STRICT_C47}')),
+))
+")"
 fi
 
 cat > "$INP" <<EOF
@@ -262,21 +269,6 @@ read coor card name $CRD
 crystal define cubic $DOMDEC_BOX_SIZE $DOMDEC_BOX_SIZE $DOMDEC_BOX_SIZE 90.0 90.0 90.0
 crystal build cutoff 15.0 noper 0
 image byres xcen 0.0 ycen 0.0 zcen 0.0 sele all end
-
-nbonds cutnb ${DOMDEC_CUTNB}.0 -
-  ctonnb 10.83 -
-  ctofnb 14.17 -
-  eps 1.0 -
-  cdie -
-  atom -
-  vatom -
-  fswitch -
-  vfswitch -
-  nbxmod 5 -
-  cutim 15.0 -
-  ctexnb 15.0 -
-  inbfrq 50 -
-  imgfrq 50
 
 $_domdec_energy_block
 
@@ -324,14 +316,17 @@ fi
 
 if grep -q 'extraneous characters' "$OUT" 2>/dev/null; then
   echo "DOMDEC/ENERGY command was not parsed cleanly (extraneous-characters warning in $OUT)." >&2
-  echo "Expected a single line: energy domdec ndir ${DOMDEC_NDIR}" >&2
-  echo "See domdec.doc: DOMDEC NDIR is an ENERGY subcommand, not 'domdec on ndir ...'." >&2
+  echo "DOMDec must be on the same continued ENERGY line as CUTNB/etc. (see ${INP})." >&2
+  echo "Verify DOMDEC was compiled in:" >&2
+  echo "  bash scripts/verify_charmm_domdec_build.sh $CHARMM_EXE" >&2
+  echo "If domdec=OFF, rebuild:" >&2
+  echo "  bash scripts/rebuild_charmm_native_exec.sh --clean" >&2
   exit 1
 fi
 
 if [[ "$MMML_MPI_NP" -gt 1 ]] && ! grep -qiE 'NDIR\s*=' "$OUT" 2>/dev/null; then
   echo "DOMDEC did not activate at np=${MMML_MPI_NP} (no NDIR= line in $OUT)." >&2
-  echo "Check ${INP} contains: energy domdec ndir ${DOMDEC_NDIR}" >&2
+  echo "Check ${INP}: energy cutnb ... - / domdec ndir ${DOMDEC_NDIR}" >&2
   exit 1
 fi
 

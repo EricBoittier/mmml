@@ -5,7 +5,7 @@
 # Do not use huge dilute boxes — molecules stay in the center and crystal build finds
 # zero images ("IMAGES NEED TO BE PRESENT").
 #
-# Default: MMML_MPI_NP=2, energy domdec ndir 2 1 1 (MMML / non-c47 CHARMM).
+# Default: MMML_MPI_NP=2; continued ENERGY line with domdec ndir 2 1 1.
 # Site c47 (/opt/charmm/c47*) rejects np=2; use a MMML native CHARMM executable instead.
 #
 # Usage:
