@@ -92,18 +92,21 @@ def format_domdec_tier3_energy_block(
     ctexnb: float = 15.0,
     strict_c47_axis_rule: bool = False,
 ) -> str:
-    """Continued ENERGY command with nonbond keywords and ``domdec ndir`` on the same command.
+    """Continued ENERGY command with nonbond keywords and ``domd ndir`` on the same command.
 
-    Matches domdec.info Example 1 (``energy … - / domdec ndir …`` on one ENERGY command).
-    ``energy.info`` lists ``[ domdec-spec ]``; see ``setup/charmm/doc/domdec.info`` Syntax/Examples.
+    CHARMM ``GETE0`` (``source/energy/eutil.F90``) calls ``indxa(..., 'DOMD')``; the energy
+    line must include the 4-char token ``domd`` (``domdec.info`` Example 1 uses the word
+    ``domdec``, which ``indxa`` matches as ``DOMD`` when it is its own token on the line).
+    See ``setup/charmm/doc/domdec.info`` and ``setup/charmm/doc/energy.info`` [ domdec-spec ].
     """
     ndir = format_domdec_ndir(n_ranks, strict_c47_axis_rule=strict_c47_axis_rule)
-    keyword = (os.environ.get("DOMDEC_ENERGY_KEYWORD") or "domdec").strip().lower()
+    # GETE0 (eutil.F90) attaches domdec via indxa(..., 'DOMD') — use domd not domdec.
+    keyword = (os.environ.get("DOMDEC_ENERGY_KEYWORD") or "domd").strip().lower()
+    split = " split off" if n_ranks > 1 else ""
     return (
-        f"energy cutnb {cutnb} ctonnb {ctonnb} ctofnb {ctofnb} -\n"
-        f"  vfswitch vatom cdie eps 1.0 atom fswitch -\n"
-        f"  cutim {cutim} ctexnb {ctexnb} nbxmod 5 -\n"
-        f"  {keyword} ndir {ndir}"
+        f"energy cutnb {cutnb} cutim {cutim} ctonnb {ctonnb} ctofnb {ctofnb} -\n"
+        f"  vfswitch vatom cdie eps 1.0 -\n"
+        f"  {keyword} ndir {ndir}{split}"
     )
 
 

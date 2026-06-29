@@ -74,9 +74,8 @@ def test_min_domdec_mpi_ranks() -> None:
 
 def test_format_domdec_charmm_commands_np2() -> None:
     block = format_domdec_tier3_energy_block(2)
-    assert "energy cutnb 15.0" in block
-    assert "domdec ndir 2 1 1" in block
+    assert "energy cutnb 15.0 cutim 15.0" in block
+    assert "domd ndir 2 1 1 split off" in block
     assert block == format_domdec_charmm_commands(2)
-    assert block.count("-") >= 3
-    # domdec.info Example 1: domdec ndir on continued energy line, not a separate command.
-    assert block.strip().splitlines()[-1].strip().startswith("domdec ndir")
+    assert block.count("-") >= 2
+    assert block.strip().splitlines()[-1].strip().startswith("domd ndir")

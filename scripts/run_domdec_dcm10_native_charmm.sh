@@ -283,6 +283,8 @@ echo "CRD:        $CRD"
 echo "DOMDEC:     MMML_MPI_NP=${MMML_MPI_NP} ndir=${DOMDEC_NDIR} crystal=${DOMDEC_BOX_SIZE}Å"
 echo "INP:        $INP"
 echo "OUT:        $OUT"
+echo "== INP energy block =="
+sed -n '/^energy/,/^stop/p' "$INP" | head -10
 
 export CHARMM_HOME CHARMM_LIB_DIR
 export LD_LIBRARY_PATH="$CHARMM_LIB_DIR:${LD_LIBRARY_PATH:-}"

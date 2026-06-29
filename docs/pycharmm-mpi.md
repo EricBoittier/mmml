@@ -365,11 +365,13 @@ Tier 3 native input uses a **single continued ENERGY command** per vendored
 ``nbonds`` block plus bare ``energy``:
 
 ```text
-energy cutnb 15.0 ctonnb 10.83 ctofnb 14.17 -
-  vfswitch vatom cdie eps 1.0 atom fswitch -
-  cutim 15.0 ctexnb 15.0 nbxmod 5 -
-  domdec ndir 2 1 1
+energy cutnb 15.0 cutim 15.0 ctonnb 10.83 ctofnb 14.17 -
+  vfswitch vatom cdie eps 1.0 -
+  domd ndir 2 1 1 split off
 ```
+
+``GETE0`` in ``source/energy/eutil.F90`` attaches DOMDec via ``indxa(..., 'DOMD')``; the
+``domd`` token must be on the continued ENERGY line (not a separate ``nbonds`` + bare ``energy``).
 
 After ``bash setup/install.sh``, read ``less setup/charmm/doc/domdec.info`` (or
 ``tar -xOf setup/charmm.tar.xz charmm/doc/domdec.info`` on a fresh clone).
