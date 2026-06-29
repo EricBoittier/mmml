@@ -256,10 +256,16 @@ def _load_prebuilt_topology(psf_path: Path, crd_path: Path) -> tuple["np.ndarray
     if not crd_path.is_file():
         raise FileNotFoundError(f"Prebuilt CRD not found: {crd_path}")
 
+    minimal_rtf = _minimal_rtf_for_psf_types(psf_path, Path(CGENFF_PRM))
+    _rank_log(f"load minimal MASS RTF before PSF begin {minimal_rtf}")
+    with charmm_relaxed_bomlev():
+        # CHARMM requires a topology/type table before PRM or PSF reads. Avoid the
+        # MPI-unsafe full CGENFF RTF by loading only MASS records used by the PSF.
+        read.rtf(str(minimal_rtf))
+    _rank_log("load minimal MASS RTF before PSF done")
+
     _rank_log(f"load CGENFF PRM before PSF begin {CGENFF_PRM}")
     with charmm_relaxed_bomlev():
-        # The prebuilt PSF references CGenFF atom-type names (e.g. CG321).
-        # Loading the PRM first provides MASS/type records without the MPI-unsafe RTF read.
         read.prm(CGENFF_PRM)
     _rank_log("load CGENFF PRM before PSF done")
 
@@ -274,6 +280,54 @@ def _load_prebuilt_topology(psf_path: Path, crd_path: Path) -> tuple["np.ndarray
     r = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
     _rank_log(f"load prebuilt Z/positions done n_atoms={len(z)}")
     return z, r
+
+
+def _psf_atom_types(psf_path: Path) -> set[str]:
+    types: set[str] = set()
+    in_atoms = False
+    remaining = 0
+    for line in psf_path.read_text(encoding="utf-8", errors="replace").splitlines():
+        if "!NATOM" in line:
+            remaining = int(line.split()[0])
+            in_atoms = True
+            continue
+        if not in_atoms:
+            continue
+        if remaining <= 0:
+            break
+        parts = line.split()
+        if len(parts) >= 6:
+            types.add(parts[5])
+            remaining -= 1
+    if not types:
+        raise ValueError(f"No atom types parsed from PSF: {psf_path}")
+    return types
+
+
+def _minimal_rtf_for_psf_types(psf_path: Path, prm_path: Path) -> Path:
+    import tempfile
+
+    needed = _psf_atom_types(psf_path)
+    mass_lines: list[str] = []
+    seen: set[str] = set()
+    for line in prm_path.read_text(encoding="utf-8", errors="replace").splitlines():
+        parts = line.split()
+        if len(parts) >= 4 and parts[0].upper() == "MASS" and parts[2] in needed:
+            mass_lines.append(line)
+            seen.add(parts[2])
+    missing = sorted(needed - seen)
+    if missing:
+        raise ValueError(f"Missing MASS records in {prm_path}: {missing}")
+
+    fd, name = tempfile.mkstemp(suffix=".rtf", prefix="mmml_domdec_mass_")
+    path = Path(name)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write("* MMML DOMDEC smoke minimal MASS topology\n")
+        handle.write("*\n")
+        for line in mass_lines:
+            handle.write(f"{line}\n")
+        handle.write("END\n")
+    return path
 
 
 def _build_ocoh_cluster_traced(
