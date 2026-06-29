@@ -36,11 +36,50 @@ _default_openmpi_root() {
   fi
 }
 
+_auto_find_fftw_root() {
+  # 1. Check for libfftw3.h in common cluster software prefixes.
+  #    Globs are sorted newest-first so the latest installed version wins.
+  local candidate
+  for pattern in \
+    "/srv/opt/gcc-*/fftw-*/build" \
+    "/srv/opt/fftw-*/build" \
+    "/srv/opt/gcc-*/fftw*/build" \
+    "/opt/fftw-*/build" \
+    "/opt/gcc-*/fftw-*/build" \
+    "/usr/local" \
+    "/usr"; do
+    # shellcheck disable=SC2086
+    for candidate in $(ls -d $pattern 2>/dev/null | sort -rV 2>/dev/null | head -5); do
+      if [[ -f "$candidate/include/fftw3.h" ]]; then
+        echo "$candidate"
+        return 0
+      fi
+    done
+  done
+  # 2. pkg-config fallback
+  if command -v pkg-config >/dev/null 2>&1 && pkg-config --exists fftw3 2>/dev/null; then
+    local inc
+    inc="$(pkg-config --variable=includedir fftw3 2>/dev/null || true)"
+    [[ -n "$inc" && -f "$inc/fftw3.h" ]] && { echo "$(dirname "$inc")"; return 0; }
+  fi
+  return 1
+}
+
 PLATFORM_TAG="$(_platform_tag)"
 LOCAL_BUILD="${CHARMM_BUILD_DIR:-${HOME}/.cache/mmml-charmm-build/${PLATFORM_TAG}}"
 OPENMPI_ROOT="${OPENMPI_ROOT:-$(_default_openmpi_root)}"
 PMIX_LIB="${PMIX_LIB:-/opt/gcc-14.2.0/pmix-5.0.4/lib}"
+# FFTW_ROOT resolution order:
+#  1. Explicit env var FFTW_ROOT
+#  2. EBROOTFFTW set by Environment Modules (module load FFTW/...)
+#  3. Auto-discovery under /srv/opt/gcc-*/fftw-*/build and similar prefixes
 FFTW_ROOT="${FFTW_ROOT:-${EBROOTFFTW:-}}"
+if [[ -z "$FFTW_ROOT" ]]; then
+  if _found="$(_auto_find_fftw_root 2>/dev/null)"; then
+    FFTW_ROOT="$_found"
+    echo "FFTW_ROOT auto-detected: $FFTW_ROOT" >&2
+  fi
+fi
 
 if [[ "$(uname -s)" == "Darwin" ]]; then
   LIB_BASENAME="libcharmm.dylib"
@@ -236,16 +275,24 @@ _assert_charmm_domdec_cmake_flags() {
   echo "rebuild_charmm_mlpot: ERROR: DOMDEC requires colfft=ON; CMake has domdec=${domdec_val:-?} colfft=${colfft_val:-?}" >&2
   echo "CHARMM CMake turns domdec OFF when colfft is OFF (no FFTW/MKL found)." >&2
   echo "" >&2
-  echo "On cluster — find and load the FFTW module:" >&2
-  echo "  module spider fftw                      # find available FFTW modules" >&2
-  echo "  module load FFTW/3.3.10-GCC-12.2.0     # adjust to the name shown above" >&2
-  echo "  export FFTW_ROOT=\${EBROOTFFTW}          # set by the module" >&2
-  echo "" >&2
-  echo "Or recover the path from the existing library build cache:" >&2
-  echo "  grep -i fftw_include \${HOME}/.cache/mmml-charmm-build/linux-x86_64/CMakeCache.txt" >&2
-  echo "  export FFTW_ROOT=<prefix printed above>  # parent of include/ and lib/" >&2
-  echo "" >&2
-  echo "Then: bash scripts/rebuild_charmm_native_exec.sh --clean" >&2
+  # Try auto-discovery and print a ready-to-paste export if found
+  local _auto_fftw
+  if _auto_fftw="$(_auto_find_fftw_root 2>/dev/null)"; then
+    echo "Auto-detected FFTW at: $_auto_fftw" >&2
+    echo "  export FFTW_ROOT=$_auto_fftw" >&2
+    echo "  bash scripts/rebuild_charmm_native_exec.sh --clean" >&2
+  else
+    echo "Could not auto-detect FFTW. Try:" >&2
+    echo "  module avail 2>&1 | grep -i fftw     # list available FFTW modules" >&2
+    echo "  module load <fftw-module-name>        # load it" >&2
+    echo "  export FFTW_ROOT=\${EBROOTFFTW}        # set by the module" >&2
+    echo "" >&2
+    echo "Or set it manually (check /srv/opt/gcc-*/fftw-*/build):" >&2
+    echo "  ls /srv/opt/gcc-12.2.0/ 2>/dev/null | grep fftw" >&2
+    echo "  export FFTW_ROOT=/srv/opt/gcc-12.2.0/fftw-<ver>/build" >&2
+    echo "" >&2
+    echo "Then: bash scripts/rebuild_charmm_native_exec.sh --clean" >&2
+  fi
   exit 1
 }
 
