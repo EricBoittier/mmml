@@ -17,12 +17,21 @@ from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.dedup import (
     verify_unique_dimer_coverage,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import (
+    DomdecAlignedGrid,
     SpatialDomainGrid,
     compute_monomer_coms,
     halo_radius_from_cutoffs,
     monomers_in_extended_domain,
     rank_for_com,
     resolve_halo_radius,
+)
+from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
+    discover_domdec_symbols,
+    domdec_summary,
+    get_ghost_atom_indices,
+    get_local_atom_indices,
+    get_ndir,
+    is_domdec_active,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_info import (
     DomdecApiSurvey,
@@ -45,11 +54,18 @@ from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.pool import (
 )
 
 __all__ = [
+    "DomdecAlignedGrid",
     "DomdecApiSurvey",
     "MlpotPoolConfig",
     "RankActiveSet",
     "SpatialBatchIndices",
     "SpatialDomainGrid",
+    "discover_domdec_symbols",
+    "domdec_summary",
+    "get_ghost_atom_indices",
+    "get_local_atom_indices",
+    "get_ndir",
+    "is_domdec_active",
     "assign_canonical_dimer_owner",
     "build_all_rank_active_sets",
     "build_rank_active_set",
