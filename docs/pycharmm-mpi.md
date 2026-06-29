@@ -330,6 +330,12 @@ Observed on `pc-bach` (June 2026):
 
 Conclusion: true multi-rank DOMDEC testing must start from a CHARMM-native/prebuilt state. Do not use simultaneous PyCHARMM `read.rtf()` / topology generation on all ranks as the Tier 3 entry point.
 
+**Supported `np>1` topology entry (June 2026):** `bootstrap_topology_mpi()` in
+[`charmm_mpi.py`](../../mmml/interfaces/pycharmmInterface/charmm_mpi.py). Bisect
+hangs with [`tests/functionality/charmm/mpi_pycharmm_read_gate.py`](../../tests/functionality/charmm/mpi_pycharmm_read_gate.py)
+and [`scripts/run_mpi_pycharmm_read_gate.sh`](../../scripts/run_mpi_pycharmm_read_gate.sh).
+See [`tests/functionality/charmm/README_mpi_read_gate.md`](../../tests/functionality/charmm/README_mpi_read_gate.md).
+
 Next Tier 3 path:
 
 1. Prepare PSF/CRD/restart with CHARMM-native tooling or `np=1` setup.

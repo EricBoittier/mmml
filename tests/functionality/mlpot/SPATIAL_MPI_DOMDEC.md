@@ -16,12 +16,15 @@ Mode C from [Spatial ML MPI](../../../docs/mlpot-spatial-mpi.md): `np>1`, domdec
 - `calculate_charmm` in `hybrid_mlpot.py` now calls `make_domdec_aligned_grid` (auto-detects DOMDEC state); falls back to COM-slab Tier 2 when DOMDEC is off.
 
 **Remaining open items:**
-1. **`np>1` PyCHARMM setup I/O hangs** (confirmed node09, June 2026): even probe-style
-   ``lingo.charmm_script`` READ of prebuilt PSF/CRD blocks all ranks inside
-   ``eval_charmm_script``. Live ``--charmm-ener`` must run at ``MMML_MPI_NP=1``;
-   use the callback-only sub-test at ``np>1`` for spatial MPI decomposition.
+1. **`np>1` PyCHARMM cooperative READ** — use the READ gate before live ENER:
+   ``./scripts/run_mpi_pycharmm_read_gate.sh`` (see
+   [`README_mpi_read_gate.md`](../charmm/README_mpi_read_gate.md)).
+   ``bootstrap_topology_mpi`` in ``charmm_mpi.py`` is the supported entry; node09
+   bisect (June 2026) showed hangs inside ``eval_charmm_script`` on inline READ.
+   Run native CHARMM control on the same PSF/CRD to isolate Python vs Fortran.
 2. JAX GPU warmup + active DOMDEC may segfault (`send_coord_to_recip` / `PMPI_Free_mem`) — defer JAX warmup until after MLpot registration.
 3. `domdec off` is an opt-in safety hook (`MMML_FORCE_DOMDEC_OFF=1`). Set `MMML_NO_CHARMM_DOMDEC_OFF=1` to keep DOMDEC on during MLpot ENER smoke.
+4. CPU live ENER: set `MMML_MLPOT_DEVICE=cpu`, `JAX_PLATFORMS=cpu`, `MMML_LR_SOLVER=mic` (jax-pme mesh can hang on CPU).
 
 Tier 2 (`--ml-spatial-mpi`) parallelizes **ML only** with domdec still off; CHARMM integration remains replicated per rank.
 
@@ -107,9 +110,12 @@ MMML_MPI_NP=4 MMML_MLPOT_SPATIAL_MPI=1 \
   ./scripts/mmml-charmm-mpirun.sh python \
   tests/functionality/mlpot/10_domdec_spatial_mpi_smoke.py
 
-# Step 3 — live CHARMM ENER at np=1 (checkpoint required; np>1 READ hangs)
-MMML_MPI_NP=1 MMML_MLPOT_SPATIAL_MPI=1 \
-  CUDA_VISIBLE_DEVICES="" MMML_MLPOT_DEVICE=cpu JAX_PLATFORMS=cpu \
+# Step 2b — READ gate (np=4; must pass before live ENER at np>1)
+MMML_MPI_NP=4 ./scripts/run_mpi_pycharmm_read_gate.sh --mode psf-crd
+
+# Step 3 — live CHARMM ENER at np=4 (checkpoint required; CPU/MIC on node09)
+MMML_MPI_NP=4 MMML_MLPOT_SPATIAL_MPI=1 \
+  CUDA_VISIBLE_DEVICES="" MMML_MLPOT_DEVICE=cpu JAX_PLATFORMS=cpu MMML_LR_SOLVER=mic \
   ./scripts/mmml-charmm-mpirun.sh python \
   tests/functionality/mlpot/10_domdec_spatial_mpi_smoke.py \
   --charmm-ener --checkpoint "$MMML_CKPT" \

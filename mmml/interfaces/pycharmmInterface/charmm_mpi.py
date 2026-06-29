@@ -10,6 +10,7 @@ import subprocess
 import sys
 from functools import lru_cache
 from pathlib import Path
+from typing import Callable
 
 _MPI_LDD_KEYWORDS = (
     "libmpi",
@@ -1073,6 +1074,241 @@ def _invoke_charmm_script(
         ctx = nullcontext()
     with ctx:
         lingo.charmm_script(script)
+
+
+def configure_mpi_bootstrap_env() -> None:
+    """Env guards before cooperative ``np>1`` topology READ (no import-time crystal free)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+
+    _, size = mpi_rank_size()
+    if size <= 1:
+        return
+    os.environ.setdefault("MMML_SKIP_CHARMM_RESET_BLOCK", "1")
+    os.environ.setdefault("MMML_DEFER_MPI4PY_PACKAGE_IMPORT", "1")
+    os.environ.setdefault("MMML_QUIET", "1")
+
+
+def sync_import_pycharmm_for_bootstrap(*, tag: str = "bootstrap") -> None:
+    """Load ``import_pycharmm`` on all ranks without pre-import mpi4py barriers."""
+    import sys
+
+    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+
+    rank, size = mpi_rank_size()
+    if "mmml.interfaces.pycharmmInterface.import_pycharmm" in sys.modules:
+        if size > 1:
+            ensure_mpi4py_after_charmm_init(phase=f"{tag} import_pycharmm already loaded")
+        return
+    if size <= 1:
+        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+        return
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    if not ensure_mpi4py_after_charmm_init(phase=f"{tag} synchronized import_pycharmm"):
+        raise RuntimeError(f"rank {rank}/{size}: mpi4py.MPI unavailable after import_pycharmm")
+
+
+def charmm_natom_count() -> int:
+    """Return CHARMM PSF atom count (0 when empty)."""
+    import pycharmm.psf as psf
+
+    return int(psf.get_natom())
+
+
+def _psf_atom_types_from_path(psf_path: Path) -> set[str]:
+    types: set[str] = set()
+    in_atoms = False
+    remaining = 0
+    for line in psf_path.read_text(encoding="utf-8", errors="replace").splitlines():
+        if "!NATOM" in line:
+            remaining = int(line.split()[0])
+            in_atoms = True
+            continue
+        if not in_atoms:
+            continue
+        if remaining <= 0:
+            break
+        parts = line.split()
+        if len(parts) >= 6:
+            types.add(parts[5])
+            remaining -= 1
+    if not types:
+        raise ValueError(f"No atom types parsed from PSF: {psf_path}")
+    return types
+
+
+def ensure_shared_minimal_rtf(psf_path: Path, prm_path: Path) -> Path:
+    """Write a MASS-only RTF beside *psf_path* (same path on every MPI rank)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+
+    needed = _psf_atom_types_from_path(psf_path)
+    mass_lines: list[str] = []
+    seen: set[str] = set()
+    for line in prm_path.read_text(encoding="utf-8", errors="replace").splitlines():
+        parts = line.split()
+        if len(parts) >= 4 and parts[0].upper() == "MASS" and parts[2] in needed:
+            mass_lines.append(line)
+            seen.add(parts[2])
+    missing = sorted(needed - seen)
+    if missing:
+        raise ValueError(f"Missing MASS records in {prm_path}: {missing}")
+
+    out = psf_path.with_name(f"{psf_path.stem}.minimal_mass.rtf")
+    lines = [
+        "* MMML MPI bootstrap minimal MASS topology",
+        "*",
+        *mass_lines,
+        "END",
+    ]
+    rank, size = mpi_rank_size()
+    if rank == 0 or (size <= 1 and not out.is_file()):
+        out.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    if size > 1 and _mpi_comm_valid():
+        from mpi4py import MPI
+
+        MPI.COMM_WORLD.Barrier()
+    return out
+
+
+def bootstrap_charmm_step(
+    step: str,
+    script: str,
+    *,
+    log_fn: Callable[[str, str], None] | None = None,
+) -> int:
+    """Run one CHARMM script on all ranks; return ``n_atoms`` after the step."""
+    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+
+    rank, size = mpi_rank_size()
+    if log_fn is not None:
+        log_fn(step, f"begin rank {rank}/{size}: {script.strip()}")
+    _invoke_charmm_script(script, relaxed_bomlev=True)
+    n_atoms = charmm_natom_count()
+    if log_fn is not None:
+        log_fn(step, f"done rank {rank}/{size}: n_atoms={n_atoms}")
+    return n_atoms
+
+
+def bootstrap_topology_mpi(
+    psf_path: str | Path,
+    crd_path: str | Path,
+    *,
+    prm_path: str | Path | None = None,
+    rtf_path: str | Path | None = None,
+    crystal_side_A: float | None = None,
+    crystal_cutnb_A: float = 15.0,
+    restart_path: str | Path | None = None,
+    mode: str = "psf-crd",
+    log_fn: Callable[[str, str], None] | None = None,
+) -> int:
+    """Cooperative ``np>1`` topology bootstrap (one ``eval_charmm_script`` per sub-command).
+
+    Supported ``mode`` values: ``psf-crd``, ``stream-inp``, ``restart``.
+    """
+    from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
+    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+
+    psf = Path(psf_path).expanduser().resolve()
+    crd = Path(crd_path).expanduser().resolve()
+    if not psf.is_file():
+        raise FileNotFoundError(f"PSF not found: {psf}")
+    if mode != "restart" and not crd.is_file():
+        raise FileNotFoundError(f"CRD not found: {crd}")
+
+    if prm_path is None:
+        from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
+
+        prm = Path(CGENFF_PRM).expanduser().resolve()
+    else:
+        prm = Path(prm_path).expanduser().resolve()
+
+    rank, size = mpi_rank_size()
+
+    if mode == "restart":
+        res = Path(restart_path or psf.with_suffix(".res")).expanduser().resolve()
+        if not res.is_file():
+            raise FileNotFoundError(f"Restart not found: {res}")
+        fortran_path, alias = charmm_fortran_path(res, for_write=False)
+        try:
+            for step_name, script in (
+                ("open_restart", f"open read unit 20 name {fortran_path}\n"),
+                ("read_restart", "read restart unit 20\n"),
+                ("close_restart", "close unit 20\n"),
+                ("update", "UPDATE\n"),
+            ):
+                bootstrap_charmm_step(step_name, script, log_fn=log_fn)
+        finally:
+            if alias is not None:
+                alias.finalize()
+    elif mode == "stream-inp":
+        if rtf_path is None:
+            minimal = ensure_shared_minimal_rtf(psf, prm).resolve()
+        else:
+            minimal = Path(rtf_path).expanduser().resolve()
+        inp_dir = psf.parent / "mpi_bootstrap_stream"
+        inp_path = inp_dir / f"{psf.stem}_read.inp"
+        if rank == 0:
+            inp_dir.mkdir(parents=True, exist_ok=True)
+            lines = [
+                "* MMML MPI bootstrap stream READ",
+                "bomlev -2",
+                f"read rtf card name {minimal}",
+                f"read param card name {prm} flex",
+                f"read psf card name {psf}",
+                f"read coor card name {crd}",
+            ]
+            if crystal_side_A is not None:
+                side = float(crystal_side_A)
+                lines.extend(
+                    [
+                        f"crystal define cubic {side} {side} {side} 90 90 90",
+                        f"crystal build cutoff {float(crystal_cutnb_A)} noper 0",
+                    ]
+                )
+            lines.append("stop")
+            inp_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        if size > 1 and _mpi_comm_valid():
+            from mpi4py import MPI
+
+            MPI.COMM_WORLD.Barrier()
+        bootstrap_charmm_step(
+            "stream_inp",
+            f"stream {inp_path}\n",
+            log_fn=log_fn,
+        )
+    else:
+        if mode != "psf-crd":
+            raise ValueError(f"unsupported bootstrap mode: {mode!r}")
+        if rtf_path is None:
+            minimal = ensure_shared_minimal_rtf(psf, prm).resolve()
+        else:
+            minimal = Path(rtf_path).expanduser().resolve()
+        steps = [
+            ("read_rtf", f"read rtf card name {minimal}\n"),
+            ("read_prm", f"read param card name {prm} flex\n"),
+            ("read_psf", f"read psf card name {psf}\n"),
+            ("read_coor", f"read coor card name {crd}\n"),
+        ]
+        if crystal_side_A is not None:
+            side = float(crystal_side_A)
+            steps.extend(
+                [
+                    (
+                        "crystal_define",
+                        f"crystal define cubic {side} {side} {side} 90 90 90\n",
+                    ),
+                    (
+                        "crystal_build",
+                        f"crystal build cutoff {float(crystal_cutnb_A)} noper 0\n",
+                    ),
+                ]
+            )
+        for step_name, script in steps:
+            bootstrap_charmm_step(step_name, script, log_fn=log_fn)
+
+    n_final = charmm_natom_count()
+    if n_final <= 0:
+        raise RuntimeError(f"rank {rank}/{size}: empty CHARMM state after bootstrap ({mode})")
+    return n_final
 
 
 def disable_ase_mpi_parallel() -> None:

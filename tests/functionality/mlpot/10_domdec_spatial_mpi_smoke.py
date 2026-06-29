@@ -15,10 +15,9 @@ Two independent sub-tests:
 
 2. **Live CHARMM ENER** (``--charmm-ener``, cluster only, requires
    ``--checkpoint`` and prebuilt PSF/CRD):
-   Run at **``MMML_MPI_NP=1``** — ``np>1`` PyCHARMM ``eval_charmm_script`` setup
-   I/O (READ/restart) hangs on current cluster builds (confirmed node09, June 2026).
-   Spatial MPI decomposition at ``np>1`` is covered by the callback-only sub-test.
-   Optional ``MMML_ALLOW_NP_GT1_LIVE_ENER=1`` retries the experimental np>1 path.
+   Uses ``bootstrap_topology_mpi`` for cooperative ``np>1`` READ. Validate the
+   READ gate first (``./scripts/run_mpi_pycharmm_read_gate.sh``). Full Tier 3
+   target: ``MMML_MPI_NP=4 --charmm-ener`` with CPU/MIC (see below).
 
 Prerequisites
 -------------
@@ -29,7 +28,8 @@ Prebuilt PSF/CRD for the live path (run once at ``MMML_MPI_NP=1``)::
       --prepare-prebuilt-only --residue DCM --n-molecules 20 --box-side 40
 
 The prepare step writes ``artifacts/domdec_spatial_smoke/dcm_20mer.{psf,crd,res}``.
-``np>1`` live ENER reads PSF/CRD (``.res`` is optional; restart load is opt-in).
+``np>1`` live ENER uses ``bootstrap_topology_mpi`` (PSF/CRD default; restart via
+``MMML_MPI_LOAD_RESTART=1``).
 
 Callback-only (np=2, no checkpoint; CPU node)::
 
@@ -38,10 +38,13 @@ Callback-only (np=2, no checkpoint; CPU node)::
       ./scripts/mmml-charmm-mpirun.sh python \\
       tests/functionality/mlpot/10_domdec_spatial_mpi_smoke.py
 
-Live ENER (**np=1**, prebuilt artifacts required)::
+Live ENER (np=1 gate, then np=4 Tier 3)::
 
-    MMML_MPI_NP=1 MMML_MLPOT_SPATIAL_MPI=1 \\
-      CUDA_VISIBLE_DEVICES="" MMML_MLPOT_DEVICE=cpu JAX_PLATFORMS=cpu \\
+    # READ gate (cluster)
+    MMML_MPI_NP=4 ./scripts/run_mpi_pycharmm_read_gate.sh --mode psf-crd
+
+    MMML_MPI_NP=4 MMML_MLPOT_SPATIAL_MPI=1 \\
+      CUDA_VISIBLE_DEVICES="" MMML_MLPOT_DEVICE=cpu JAX_PLATFORMS=cpu MMML_LR_SOLVER=mic \\
       ./scripts/mmml-charmm-mpirun.sh python \\
       tests/functionality/mlpot/10_domdec_spatial_mpi_smoke.py \\
       --charmm-ener --checkpoint $MMML_CKPT \\
@@ -104,11 +107,6 @@ def _parse_args() -> argparse.Namespace:
         help="Run the live CHARMM ENER sub-test (requires checkpoint + prebuilt PSF/CRD).",
     )
     p.add_argument(
-        "--allow-np-gt1-live-ener",
-        action="store_true",
-        help="Allow --charmm-ener at np>1 (experimental; PyCHARMM READ often hangs).",
-    )
-    p.add_argument(
         "--no-domdec",
         action="store_true",
         help="Skip domdec on/ndir before ENER (baseline MLpot gate at np=1).",
@@ -163,14 +161,15 @@ def _configure_cpu_jax_if_requested() -> None:
         os.environ.setdefault("MMML_LR_SOLVER", "mic")
 
 
-def _allow_np_gt1_live_ener(args: argparse.Namespace) -> bool:
-    if args.allow_np_gt1_live_ener:
-        return True
-    return os.environ.get("MMML_ALLOW_NP_GT1_LIVE_ENER", "").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-    )
+def _configure_live_charmm_mpi_import(*, size: int) -> None:
+    """Env guards before the first ``import_pycharmm`` on np>1 live CHARMM paths."""
+    if size <= 1:
+        return
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import configure_mpi_bootstrap_env
+
+    configure_mpi_bootstrap_env()
+    _log("setup", "np>1 live CHARMM: skip import-time reset_block; defer mpi4py; MMML_QUIET")
+    _skip_vacuum_crystal_free_for_mpi()
 
 
 def _skip_vacuum_crystal_free_for_mpi() -> None:
@@ -183,19 +182,10 @@ def _skip_vacuum_crystal_free_for_mpi() -> None:
     mlpot_setup.prepare_charmm_vacuum = _skip
 
 
-def _configure_live_charmm_mpi_import(*, size: int) -> None:
-    """Env guards before the first ``import_pycharmm`` on np>1 live CHARMM paths."""
-    if size <= 1:
-        return
-    os.environ.setdefault("MMML_SKIP_CHARMM_RESET_BLOCK", "1")
-    os.environ.setdefault("MMML_DEFER_MPI4PY_PACKAGE_IMPORT", "1")
-    os.environ.setdefault("MMML_QUIET", "1")
-    _log("setup", "np>1 live CHARMM: skip import-time reset_block; defer mpi4py; MMML_QUIET")
-    _skip_vacuum_crystal_free_for_mpi()
-
-
 def _sync_import_pycharmm(*, tag: str = "sync") -> None:
     """Ensure ``import_pycharmm`` is loaded on all ranks."""
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import sync_import_pycharmm_for_bootstrap
+
     rank, size = _mpi_info()
     if "mmml.interfaces.pycharmmInterface.import_pycharmm" in sys.modules:
         if size > 1:
@@ -207,13 +197,8 @@ def _sync_import_pycharmm(*, tag: str = "sync") -> None:
     if size <= 1:
         import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
         return
-    # No barrier before import — Fortran MPI_Init happens during import_pycharmm.
     _log(tag, "importing import_pycharmm")
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import ensure_mpi4py_after_charmm_init
-
-    if not ensure_mpi4py_after_charmm_init(phase="synchronized import_pycharmm"):
-        raise RuntimeError(f"rank {rank}/{size}: mpi4py.MPI unavailable after import_pycharmm")
+    sync_import_pycharmm_for_bootstrap(tag=tag)
     _log(tag, "import_pycharmm done")
 
 
@@ -245,80 +230,6 @@ def _write_prebuilt_restart(res_path: Path, *, write_unit: int = 20) -> None:
         alias.finalize()
 
 
-def _load_prebuilt_restart_mpi(res_path: Path, *, read_unit: int = 20) -> None:
-    """Load prebuilt state via ``read restart`` (np>1; opt-in — often hangs).
-
-    Set ``MMML_MPI_LOAD_RESTART=1`` to use this instead of the default PSF/CRD
-    probe-style load.
-    """
-    import pycharmm.lingo as lingo
-
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-    from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
-
-    if not res_path.is_file():
-        raise FileNotFoundError(
-            f"Prebuilt restart not found: {res_path}\n"
-            "Re-run --prepare-prebuilt-only with MMML_MPI_NP=1 (writes .res)."
-        )
-    rank, size = _mpi_info()
-    fortran_path, alias = charmm_fortran_path(res_path, for_write=False)
-    script = (
-        f"open read unit {read_unit} name {fortran_path}\n"
-        f"read restart unit {read_unit}\n"
-        f"close unit {read_unit}\n"
-        "UPDATE\n"
-    )
-    _log("load", f"lingo.charmm_script read restart (rank {rank}/{size})")
-    try:
-        with charmm_relaxed_bomlev():
-            lingo.charmm_script(script)
-    finally:
-        if alias is not None:
-            alias.finalize()
-    _log("load", f"read restart returned (rank {rank}/{size})")
-
-
-def _load_prebuilt_mpi_psf_crd(
-    psf_path: Path,
-    crd_path: Path,
-    prm_path: Path,
-) -> None:
-    """Load prebuilt PSF/CRD on all MPI ranks (probe_domdec_atoms_live pattern).
-
-    Every rank calls ``lingo.charmm_script`` with the same READ block and no
-    mpi4py barriers around it — rank 0 disk I/O + Fortran broadcast inside CHARMM.
-    """
-    import pycharmm.lingo as lingo
-
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-
-    rank, size = _mpi_info()
-    if not psf_path.is_file():
-        raise FileNotFoundError(
-            f"Prebuilt PSF not found: {psf_path}\n"
-            "Run with --prepare-prebuilt-only first (MMML_MPI_NP=1)."
-        )
-    if not crd_path.is_file():
-        raise FileNotFoundError(f"Prebuilt CRD not found: {crd_path}")
-
-    minimal_rtf = _ensure_shared_minimal_rtf(psf_path, prm_path).resolve()
-    psf_abs = psf_path.resolve()
-    crd_abs = crd_path.resolve()
-    prm_abs = prm_path.resolve()
-    n_types = len(_psf_atom_types(psf_path))
-    script = (
-        f"read rtf card name {minimal_rtf}\n"
-        f"read param card name {prm_abs} flex\n"
-        f"read psf card name {psf_abs}\n"
-        f"read coor card name {crd_abs}\n"
-    )
-    _log("load", f"lingo.charmm_script READ ({n_types} MASS types, rank {rank}/{size})")
-    with charmm_relaxed_bomlev():
-        lingo.charmm_script(script)
-    _log("load", f"READ returned (rank {rank}/{size})")
-
-
 def _print_dry_run(args: argparse.Namespace) -> None:
     print("# Step 1 — build prebuilt PSF/CRD (np=1):")
     print(
@@ -337,23 +248,18 @@ def _print_dry_run(args: argparse.Namespace) -> None:
         f"  tests/functionality/mlpot/10_domdec_spatial_mpi_smoke.py"
     )
     print()
-    print("# Step 3a — live CHARMM ENER at np=1 (recommended first gate):")
+    print("# Step 3 — live CHARMM ENER (run READ gate first at np=4):")
     ckpt = args.checkpoint or Path("$MMML_CKPT")
     print(
-        f"MMML_MPI_NP=1 MMML_MLPOT_SPATIAL_MPI=1 \\\n"
+        f"MMML_MPI_NP=4 ./scripts/run_mpi_pycharmm_read_gate.sh --mode psf-crd"
+    )
+    print()
+    print(
+        f"MMML_MPI_NP=4 MMML_MLPOT_SPATIAL_MPI=1 \\\n"
+        f"  CUDA_VISIBLE_DEVICES=\"\" MMML_MLPOT_DEVICE=cpu JAX_PLATFORMS=cpu MMML_LR_SOLVER=mic \\\n"
         f"  ./scripts/mmml-charmm-mpirun.sh python \\\n"
         f"  tests/functionality/mlpot/10_domdec_spatial_mpi_smoke.py \\\n"
         f"  --charmm-ener --checkpoint {ckpt} \\\n"
-        f"  --residue {args.residue} --n-molecules {args.n_molecules} "
-        f"--box-side {args.box_side}"
-    )
-    print()
-    print("# Step 3b — live ENER at np>1 (experimental; PyCHARMM READ hangs on node09):")
-    print(
-        f"MMML_ALLOW_NP_GT1_LIVE_ENER=1 MMML_MPI_NP={np_cb} MMML_MLPOT_SPATIAL_MPI=1 \\\n"
-        f"  ./scripts/mmml-charmm-mpirun.sh python \\\n"
-        f"  tests/functionality/mlpot/10_domdec_spatial_mpi_smoke.py \\\n"
-        f"  --charmm-ener --allow-np-gt1-live-ener --checkpoint {ckpt} \\\n"
         f"  --residue {args.residue} --n-molecules {args.n_molecules} "
         f"--box-side {args.box_side}"
     )
@@ -576,37 +482,10 @@ def _shared_minimal_rtf_path(psf_path: Path) -> Path:
 
 
 def _ensure_shared_minimal_rtf(psf_path: Path, prm_path: Path) -> Path:
-    """Build minimal MASS-only RTF beside the PSF (shared path for MPI read.rtf).
+    """Build minimal MASS-only RTF beside the PSF (shared path for MPI read.rtf)."""
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import ensure_shared_minimal_rtf
 
-    Per-rank ``tempfile.mkstemp`` paths deadlock under ``mpirun``: CHARMM MPI
-    expects every rank to pass the same filename to ``read rtf`` (rank 0 reads,
-    others receive the broadcast topology).
-    """
-    needed = _psf_atom_types(psf_path)
-    mass_lines: list[str] = []
-    seen: set[str] = set()
-    for line in prm_path.read_text(encoding="utf-8", errors="replace").splitlines():
-        parts = line.split()
-        if len(parts) >= 4 and parts[0].upper() == "MASS" and parts[2] in needed:
-            mass_lines.append(line)
-            seen.add(parts[2])
-    missing = sorted(needed - seen)
-    if missing:
-        raise ValueError(f"Missing MASS records in {prm_path}: {missing}")
-
-    out = _shared_minimal_rtf_path(psf_path)
-    lines = [
-        "* MMML DOMDEC spatial smoke minimal MASS topology",
-        "*",
-        *mass_lines,
-        "END",
-    ]
-    rank, size = _mpi_info()
-    if rank == 0 or (size <= 1 and not out.is_file()):
-        out.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    if size > 1:
-        _mpi_barrier(tag="load")
-    return out
+    return ensure_shared_minimal_rtf(psf_path, prm_path)
 
 
 def _load_prebuilt(args: argparse.Namespace) -> tuple["np.ndarray", "np.ndarray", int, list[int]]:
@@ -614,7 +493,10 @@ def _load_prebuilt(args: argparse.Namespace) -> tuple["np.ndarray", "np.ndarray"
     import numpy as np
     import pycharmm.coor as coor
 
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import mpi_charmm_script
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+        bootstrap_topology_mpi,
+        mpi_charmm_script,
+    )
     from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
     from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
@@ -626,16 +508,17 @@ def _load_prebuilt(args: argparse.Namespace) -> tuple["np.ndarray", "np.ndarray"
             "true",
             "yes",
         )
-        if use_restart:
-            _log("load", f"MPI read restart begin: {res_path.resolve()}")
-            _load_prebuilt_restart_mpi(res_path.resolve())
-        else:
-            _load_prebuilt_mpi_psf_crd(
-                psf_path.resolve(),
-                crd_path.resolve(),
-                Path(CGENFF_PRM).resolve(),
-            )
-        _log("load", "MPI prebuilt load done")
+        mode = "restart" if use_restart else "psf-crd"
+        _log("load", f"MPI bootstrap_topology_mpi begin mode={mode}")
+        n_atoms = bootstrap_topology_mpi(
+            psf_path.resolve(),
+            crd_path.resolve(),
+            prm_path=Path(CGENFF_PRM).resolve(),
+            restart_path=res_path.resolve(),
+            mode=mode,
+            log_fn=_log,
+        )
+        _log("load", f"MPI bootstrap done n_atoms={n_atoms}")
     else:
         if not psf_path.is_file():
             raise FileNotFoundError(
@@ -690,28 +573,6 @@ def _charmm_domdec_ener_smoke(args: argparse.Namespace) -> int:
     """Live CHARMM ENER: prebuilt DCM + DOMDEC + spatial MPI."""
     rank, size = _mpi_info()
     ndir = args.ndir or size  # default: one domain per rank along x
-
-    if size > 1 and not _allow_np_gt1_live_ener(args):
-        if rank == 0:
-            print(
-                "FAIL: --charmm-ener at np>1 is blocked — PyCHARMM eval_charmm setup I/O "
-                "(read rtf/psf/coor/restart) hangs on current cluster builds.\n"
-                "  Validate live ENER at MMML_MPI_NP=1 (Step 3a in --dry-run).\n"
-                "  Use MMML_MPI_NP=4 without --charmm-ener for the callback-only "
-                "spatial-MPI check.\n"
-                "  To retry the experimental np>1 path: "
-                "MMML_ALLOW_NP_GT1_LIVE_ENER=1 or --allow-np-gt1-live-ener.",
-                file=sys.stderr,
-                flush=True,
-            )
-        return 2
-
-    if size > 1 and rank == 0:
-        print(
-            "WARN: experimental np>1 live ENER — PyCHARMM READ may hang indefinitely.",
-            file=sys.stderr,
-            flush=True,
-        )
 
     from _common import check_mlpot_symbols, resolve_checkpoint
 

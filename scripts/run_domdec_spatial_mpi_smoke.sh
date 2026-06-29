@@ -17,7 +17,7 @@
 # Environment:
 #   MMML_CKPT          PhysNet checkpoint path (required for --live)
 #   SMOKE_NP           MPI ranks for callback-only step 2 (default: 4)
-#   SMOKE_LIVE_NP      MPI ranks for live ENER step 3 (default: 1)
+#   SMOKE_LIVE_NP      MPI ranks for live ENER step 3 (default: 4)
 #   SMOKE_N_MOL        Number of DCM monomers (default: 20)
 #   SMOKE_BOX          Box side length in Å (default: 40)
 #   SMOKE_CUTNB        Nonbond cutoff in Å (default: 10)
@@ -78,18 +78,24 @@ MMML_MPI_NP="$SMOKE_NP" MMML_MLPOT_SPATIAL_MPI=1 \
 echo ""
 
 # ----------------------------------------------------------------
-# Step 3 — Live CHARMM ENER (opt-in, requires checkpoint)
-# Live ENER runs at np=1 by default (np>1 PyCHARMM READ hangs on node09).
+# Step 3 — Live CHARMM ENER (opt-in, requires checkpoint + READ gate at np>1)
 # ----------------------------------------------------------------
 if [[ "$LIVE" -eq 1 ]]; then
     if [[ -z "${MMML_CKPT:-}" ]]; then
         echo "ERROR: --live requires MMML_CKPT to be set." >&2
         exit 1
     fi
-    SMOKE_LIVE_NP="${SMOKE_LIVE_NP:-1}"
-    echo "Step 3: live CHARMM ENER (np=$SMOKE_LIVE_NP; use np=1 unless MMML_ALLOW_NP_GT1_LIVE_ENER=1)..."
+    SMOKE_LIVE_NP="${SMOKE_LIVE_NP:-4}"
+    if [[ "$SMOKE_LIVE_NP" -gt 1 ]]; then
+        echo "Step 2b: READ gate (np=$SMOKE_LIVE_NP)..."
+        MMML_MPI_NP="$SMOKE_LIVE_NP" ./scripts/run_mpi_pycharmm_read_gate.sh --mode psf-crd \
+            --psf "$SMOKE_PREBUILT_DIR/dcm_${SMOKE_N_MOL}mer.psf" \
+            --crd "$SMOKE_PREBUILT_DIR/dcm_${SMOKE_N_MOL}mer.crd" || exit 1
+        echo ""
+    fi
+    echo "Step 3: live CHARMM ENER (np=$SMOKE_LIVE_NP)..."
     MMML_MPI_NP="$SMOKE_LIVE_NP" MMML_MLPOT_SPATIAL_MPI=1 \
-        CUDA_VISIBLE_DEVICES="" MMML_MLPOT_DEVICE=cpu JAX_PLATFORMS=cpu \
+        CUDA_VISIBLE_DEVICES="" MMML_MLPOT_DEVICE=cpu JAX_PLATFORMS=cpu MMML_LR_SOLVER=mic \
         ./scripts/mmml-charmm-mpirun.sh python \
         "$SCRIPT" \
         --charmm-ener \
