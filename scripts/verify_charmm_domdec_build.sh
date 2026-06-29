@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Report whether a MMML CHARMM binary was built with CMake domdec=ON.
+# Report whether a MMML CHARMM binary was built with CMake domdec=ON (requires colfft + FFTW/MKL).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -31,28 +31,37 @@ else
   echo "  executable: NO" >&2
 fi
 
+_domdec_ok=0
 _found=0
 for dir in "${BUILD_DIRS[@]}"; do
   [[ -n "$dir" && -f "$dir/CMakeCache.txt" ]] || continue
   _found=1
   echo "CMakeCache: $dir/CMakeCache.txt"
-  grep -E '^domdec:|^DOMDEC:|domdec:BOOL' "$dir/CMakeCache.txt" 2>/dev/null || true
+  grep -E '^(domdec|colfft):BOOL=' "$dir/CMakeCache.txt" 2>/dev/null || true
+  _d="$(grep '^domdec:BOOL=' "$dir/CMakeCache.txt" 2>/dev/null | cut -d= -f2- || true)"
+  _c="$(grep '^colfft:BOOL=' "$dir/CMakeCache.txt" 2>/dev/null | cut -d= -f2- || true)"
+  if [[ "$_d" == "ON" && "$_c" == "ON" ]]; then
+    _domdec_ok=1
+  fi
 done
 if [[ "$_found" == 0 ]]; then
   echo "No CMakeCache.txt found under native-exec / lib build dirs." >&2
   echo "Rebuild with: bash scripts/rebuild_charmm_native_exec.sh --clean" >&2
+elif [[ "$_domdec_ok" != 1 ]]; then
+  echo "" >&2
+  echo "DOMDEC is OFF or COLFFT is OFF in CMake cache." >&2
+  echo "CHARMM requires COLFFT (FFTW or MKL) for DOMDEC — see setup/charmm/doc/domdec.info Limitations." >&2
+  echo "Fix: module load FFTW; export FFTW_ROOT=\${EBROOTFFTW:-\$FFTW_ROOT}; bash scripts/rebuild_charmm_native_exec.sh --clean" >&2
+  exit 1
 fi
 
 if [[ -x "$CHARMM_EXE" ]] && command -v strings >/dev/null 2>&1; then
   echo "Binary strings (domdec-related, first 8):"
-  strings "$CHARMM_EXE" | grep -i domdec | head -8 || echo "  (none)"
+  strings "$CHARMM_EXE" | grep -i domdec | head -8 || echo "  (none — likely domdec=OFF build)"
 fi
 
 cat <<EOF
 
-Runtime check: extraneous "DOMDEC NDIR" after ENER => ENERGY did not accept DOMDec.
-Site c47 with domdec compiled shows NDIR= and/or domdec_dr_common messages at np>1.
-
-Docs: continued ENERGY with domdec ndir on the same command (not nbonds + bare energy)
-  https://academiccharmm.org/documentation/version/c41b2/domdec
+Runtime: extraneous "DOMDEC NDIR" after ENER => ?domdec is 0 (ENERGY lacks domdec-spec).
+Input: continued ENERGY per setup/charmm/doc/domdec.info Example 1.
 EOF

@@ -352,9 +352,17 @@ bash scripts/rebuild_charmm_native_exec.sh   # as_library=OFF; installs setup/ch
 CHARMM_EXE=$MMML_ROOT/setup/charmm/charmm bash scripts/run_domdec_dcm10_smoke.sh tier3
 ```
 
+**DOMDEC requires COLFFT + FFTW/MKL** in the CMake build (`setup/charmm/CMakeLists.txt` turns
+`domdec=OFF` when `colfft=OFF`). On the cluster: `module load FFTW`, then
+`export FFTW_ROOT=${EBROOTFFTW}` before `rebuild_charmm_native_exec.sh --clean`.
+Verify with `bash scripts/verify_charmm_domdec_build.sh`.
+
 CGENFF `NBFIX` warnings on older c47 are harmless at `bomlev -2`.
 
-Tier 3 native input uses a **single continued ENERGY command** (DOMDec is an ENERGY subcommand, not a separate `nbonds` + bare `energy`):
+Tier 3 native input uses a **single continued ENERGY command** per vendored
+[`setup/charmm/doc/domdec.info`](../../setup/charmm/doc/domdec.info) (Syntax + Example 1).
+``energy.info`` attaches DOMDec via ``[ domdec-spec ]`` on ENERGY — not a separate
+``nbonds`` block plus bare ``energy``:
 
 ```text
 energy cutnb 15.0 ctonnb 10.83 ctofnb 14.17 -
@@ -363,7 +371,12 @@ energy cutnb 15.0 ctonnb 10.83 ctofnb 14.17 -
   domdec ndir 2 1 1
 ```
 
-See [CHARMM domdec (c41b2)](https://academiccharmm.org/documentation/version/c41b2/domdec). DOMDEC targets **dynamics**; minimization does not work with DOMDEC enabled — minimize at `np=1`, then enable DOMDEC for MD. The tier3 smoke is a one-shot **ENER** gate only.
+After ``bash setup/install.sh``, read ``less setup/charmm/doc/domdec.info`` (or
+``tar -xOf setup/charmm.tar.xz charmm/doc/domdec.info`` on a fresh clone).
+
+DOMDEC targets **dynamics**; ``domdec.info`` Limitations: minimization (``mini``) does
+not work with DOMDEC — minimize at ``np=1``, then enable DOMDEC for MD. Tier3 is a
+one-shot **ENER** gate only.
 
 ### DLPack loose coupling — where it applies
 

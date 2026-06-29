@@ -3317,11 +3317,18 @@ def _harmonize_overlap_chunk_frequencies(
         if key == "nsavc":
             old = int(chunk_kw[key])
             if old >= n:
-                chunk_kw.pop("nsavc", None)
+                # Suppress trajectory I/O but keep an explicit large NSAVC.
+                # If NSAVC is omitted, CHARMM defaults to NSAVC=1 even with
+                # IUNCRD=-1, which creates expensive per-step trajectory
+                # bookkeeping.  n-1 is accepted by CHARMM and avoids the slow
+                # default while producing no DCD without an IUNCRD handle.
+                chunk_kw["nsavc"] = max(1, n - 1)
+                chunk_kw["_suppress_trajectory"] = True
                 for k in ("nprint", "iprfrq", "isvfrq"):
                     chunk_kw.pop(k, None)
                 _emit_overlap_log(
-                    f"chunk: skip DCD (nsavc={old} >= nstep={n}; "
+                    f"chunk: skip DCD (target nsavc={old} >= nstep={n}; "
+                    f"CHARMM nsavc={chunk_kw['nsavc']}; "
                     f"global step {int(global_step_start)}–{int(global_step_start) + n})",
                 )
             else:
@@ -4134,11 +4141,17 @@ def _run_cpt_stability_subchunked(
                     restart_read=read_path,
                 )
 
-        if "nsavc" not in sub_kw:
+        suppress_sub_traj = bool(sub_kw.get("_suppress_trajectory", False))
+        if suppress_sub_traj or "nsavc" not in sub_kw:
             sub_io = _drop_trajectory_io(sub_io)
         sub_traj_iokw = (
             extra_iokw
-            if (extra_iokw and steps_done == 0 and "nsavc" in sub_kw)
+            if (
+                extra_iokw
+                and steps_done == 0
+                and "nsavc" in sub_kw
+                and not suppress_sub_traj
+            )
             else {}
         )
         last_dyn = _run_dynamics_chunk(
@@ -4717,7 +4730,8 @@ def run_dynamics_with_io(
                     loose_pbc=loose_pbc,
                     global_step_start=steps_before_chunk,
                 )
-                if "nsavc" not in chunk_kw:
+                suppress_chunk_traj = bool(chunk_kw.get("_suppress_trajectory", False))
+                if suppress_chunk_traj or "nsavc" not in chunk_kw:
                     chunk_io = _drop_trajectory_io(chunk_io)
                 if (
                     split_trajectory
@@ -4739,6 +4753,7 @@ def run_dynamics_with_io(
                     trajectory_iokw
                     if (
                         "nsavc" in chunk_kw
+                        and not suppress_chunk_traj
                         and (
                             (not split_trajectory and chunk_index == 0)
                             or split_trajectory

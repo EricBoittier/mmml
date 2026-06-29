@@ -3041,9 +3041,68 @@ def test_run_dynamics_with_io_cpt_overlap_subchunks(tmp_path):
     assert calls == [250, 250, 250, 250]
     assert restart_flags == [False, False, True, False]
     assert trajectory_paths == [None, None, None, None]
-    assert nsavc_values == [None, None, None, None]
+    assert nsavc_values == [249, 249, 249, 249]
     materialize.assert_not_called()
     assert sum(calls) == 1000
+
+
+def test_overlap_chunk_skips_dcd_without_defaulting_nsavc_to_one(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        CharmmTrajectoryFiles,
+        run_dynamics_with_io,
+    )
+
+    cfg = DynamicsOverlapConfig(
+        action="error",
+        min_distance_A=0.5,
+        check_interval=1600,
+        n_monomers=2,
+        use_pbc=False,
+    )
+    pos_ok = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [5.0, 0.0, 0.0],
+            [6.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    io = CharmmTrajectoryFiles(
+        restart_write=tmp_path / "heat.res",
+        trajectory=tmp_path / "heat.dcd",
+    )
+    seen: list[tuple[int | None, Path | None, dict]] = []
+
+    def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
+        seen.append(
+            (
+                kw.get("nsavc"),
+                _io.trajectory if _io is not None else None,
+                extra_iokw or {},
+            )
+        )
+        if _io is not None and _io.restart_write is not None:
+            _write_test_restart(Path(_io.restart_write), int(kw["nstep"]))
+        return mock.Mock()
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        side_effect=fake_chunk,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        return_value=pos_ok,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_restart_write_after_chunk",
+    ):
+        run_dynamics_with_io(
+            {"nstep": 3200, "nsavc": 1600},
+            io,
+            overlap=cfg,
+            overlap_context="HEAT",
+        )
+
+    assert seen == [(1599, None, {}), (1599, None, {})]
 
 
 def test_run_dynamics_with_io_uses_even_overlap_chunks(tmp_path):
@@ -3122,7 +3181,8 @@ def test_harmonize_dynamics_frequency_for_remainder_chunk():
 
     kw3 = {"nsavc": 40}
     _harmonize_overlap_chunk_frequencies(kw3, 40)
-    assert "nsavc" not in kw3
+    assert kw3["nsavc"] == 39
+    assert kw3["_suppress_trajectory"] is True
 
     kw3b = {"nsavc": 16, "nprint": 10, "iprfrq": 10, "isvfrq": 10}
     _harmonize_overlap_chunk_frequencies(kw3b, 250)
@@ -3165,7 +3225,8 @@ def test_harmonize_dynamics_frequency_for_remainder_chunk():
         "timestep": 0.0002,
     }
     _harmonize_overlap_chunk_frequencies(kw5, 250, global_step_start=0)
-    assert "nsavc" not in kw5
+    assert kw5["nsavc"] == 249
+    assert kw5["_suppress_trajectory"] is True
 
 
 def test_apply_dyn_imgfrq_from_args_sets_pbc_list_freqs():

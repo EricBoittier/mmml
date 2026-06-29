@@ -78,3 +78,5 @@ def test_format_domdec_charmm_commands_np2() -> None:
     assert "domdec ndir 2 1 1" in block
     assert block == format_domdec_charmm_commands(2)
     assert block.count("-") >= 3
+    # domdec.info Example 1: domdec ndir on continued energy line, not a separate command.
+    assert block.strip().splitlines()[-1].strip().startswith("domdec ndir")

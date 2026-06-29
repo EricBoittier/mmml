@@ -10,6 +10,10 @@ from pathlib import Path
 # NIH site c47 builds: each NDIR axis must be 1 or >= 8 (2–7 nodes forbidden).
 _MIN_AXIS_NODES = 8
 
+# Vendored CHARMM doc (extract setup/charmm via setup/install.sh or charmm.tar.xz).
+CHARMM_DOMDEC_DOC = "setup/charmm/doc/domdec.info"
+CHARMM_ENERGY_DOC = "setup/charmm/doc/energy.info"
+
 
 def _axis_valid_c47(n: int) -> bool:
     return n == 1 or n >= _MIN_AXIS_NODES
@@ -90,8 +94,8 @@ def format_domdec_tier3_energy_block(
 ) -> str:
     """Continued ENERGY command with nonbond keywords and ``domdec ndir`` on the same command.
 
-    DOMDec must be on the ENERGY line (not a separate ``nbonds`` + bare ``energy``).
-    See https://academiccharmm.org/documentation/version/c41b2/domdec
+    Matches domdec.info Example 1 (``energy … - / domdec ndir …`` on one ENERGY command).
+    ``energy.info`` lists ``[ domdec-spec ]``; see ``setup/charmm/doc/domdec.info`` Syntax/Examples.
     """
     ndir = format_domdec_ndir(n_ranks, strict_c47_axis_rule=strict_c47_axis_rule)
     keyword = (os.environ.get("DOMDEC_ENERGY_KEYWORD") or "domdec").strip().lower()

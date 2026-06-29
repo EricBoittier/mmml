@@ -257,6 +257,7 @@ if [[ "$needs_configure" == 1 ]]; then
     -Das_library="${_as_library}"
     -Din_place_install=ON
     -Dopenmm=OFF
+    -Dcolfft=ON
     -Ddomdec="$([[ "$NO_DOMDEC" == 1 ]] && echo OFF || echo ON)"
     -DMPI_C_COMPILER="$MPI_CC"
     -DMPI_CXX_COMPILER="$MPI_CXX"
@@ -336,6 +337,31 @@ if [[ "$needs_configure" == 1 ]]; then
     fi
   fi
   cmake "${CMAKE_ARGS[@]}"
+  _assert_charmm_domdec_cmake_flags
+fi
+
+_assert_charmm_domdec_cmake_flags() {
+  [[ -f "$BUILD_DIR/CMakeCache.txt" ]] || return 0
+  if [[ "$NO_DOMDEC" == 1 ]]; then
+    return 0
+  fi
+  local domdec_val colfft_val
+  domdec_val="$(grep '^domdec:BOOL=' "$BUILD_DIR/CMakeCache.txt" 2>/dev/null | cut -d= -f2- || true)"
+  colfft_val="$(grep '^colfft:BOOL=' "$BUILD_DIR/CMakeCache.txt" 2>/dev/null | cut -d= -f2- || true)"
+  if [[ "$domdec_val" == "ON" && "$colfft_val" == "ON" ]]; then
+    echo "CMake cache: domdec=ON colfft=ON"
+    return 0
+  fi
+  echo "rebuild_charmm_mlpot: ERROR: DOMDEC requires colfft=ON; CMake has domdec=${domdec_val:-?} colfft=${colfft_val:-?}" >&2
+  echo "CHARMM CMake turns domdec OFF when colfft is OFF (no FFTW/MKL found)." >&2
+  echo "On cluster: module load FFTW && export FFTW_ROOT=\${EBROOTFFTW:-\$FFTW_ROOT}" >&2
+  echo "Then: bash scripts/rebuild_charmm_native_exec.sh --clean" >&2
+  exit 1
+}
+
+# Re-check an existing cache before native-exec builds (configure may have been skipped).
+if [[ "$needs_configure" == 0 && "$NO_DOMDEC" != 1 ]]; then
+  _assert_charmm_domdec_cmake_flags
 fi
 
 _build_jobs() {
@@ -375,7 +401,11 @@ if [[ "$NATIVE_EXEC" == 1 ]]; then
     exit 1
   fi
 
-  cp -f "$BUILT" "$EXE_OUT"
+  _real_built="$(readlink -f "$BUILT" 2>/dev/null || echo "$BUILT")"
+  _real_out="$(readlink -f "$EXE_OUT" 2>/dev/null || echo "$EXE_OUT")"
+  if [[ "$_real_built" != "$_real_out" ]]; then
+    cp -f "$BUILT" "$EXE_OUT"
+  fi
   chmod +x "$EXE_OUT"
   echo "Installed $EXE_OUT (from $BUILT)"
   if [[ "$DEBUG" == 1 ]]; then
@@ -391,7 +421,8 @@ if [[ "$NATIVE_EXEC" == 1 ]]; then
 Verify Tier 3 DOMDEC smoke (dense ~40Å prep, np=2):
   CHARMM_EXE=$EXE_OUT bash scripts/run_domdec_dcm10_smoke.sh tier3
 
-Expect NORMAL TERMINATION in domdec_dcm10.out (site c47 /opt/charmm/c47* rejects np=2 NDIR).
+If domdec ndir is "extraneous" at runtime, DOMDEC was not compiled in (check domdec/colfft in CMakeCache).
+Site c47 /opt/charmm/c47* rejects np=2 NDIR; use this MMML native binary instead.
 EOF
   exit 0
 fi

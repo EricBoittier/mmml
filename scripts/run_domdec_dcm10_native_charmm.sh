@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Native CHARMM DOMDEC smoke from a prebuilt DCM PSF/CRD.
 #
-# This is intentionally CHARMM-native: it does not use PyCHARMM topology setup.
+# DOMDec syntax: setup/charmm/doc/domdec.info (Example 1) — domdec ndir on the
+# continued ENERGY line; see also energy.info [ domdec-spec ].
 # It reads RTF/PRM/PSF/CRD in CHARMM, establishes a cubic PBC box, turns DOMDEC on,
 # and runs ENER. Use this as the first np>1 gate before any MLpot attachment.
 
@@ -316,11 +317,10 @@ fi
 
 if grep -q 'extraneous characters' "$OUT" 2>/dev/null; then
   echo "DOMDEC/ENERGY command was not parsed cleanly (extraneous-characters warning in $OUT)." >&2
-  echo "DOMDec must be on the same continued ENERGY line as CUTNB/etc. (see ${INP})." >&2
-  echo "Verify DOMDEC was compiled in:" >&2
+  echo "Usually domdec=OFF in the build (CMake disables DOMDEC when colfft/FFTW is missing)." >&2
+  echo "Check input block in ${INP} — then:" >&2
   echo "  bash scripts/verify_charmm_domdec_build.sh $CHARMM_EXE" >&2
-  echo "If domdec=OFF, rebuild:" >&2
-  echo "  bash scripts/rebuild_charmm_native_exec.sh --clean" >&2
+  echo "  module load FFTW; export FFTW_ROOT=\${EBROOTFFTW}; bash scripts/rebuild_charmm_native_exec.sh --clean" >&2
   exit 1
 fi
 
