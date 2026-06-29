@@ -36,7 +36,7 @@ class DynamicsOverlapConfig:
 
     action: DynamicsOverlapAction = "rescue"
     min_distance_A: float = 1.5
-    intra_min_distance_A: float = 1.0
+    intra_min_distance_A: float = 0.5
     intra_exclude_1_3: bool = True
     intra_rescue_sd_steps: int | None = None
     check_interval: int = 100
@@ -129,11 +129,11 @@ def add_dynamics_overlap_args(parser: argparse.ArgumentParser) -> None:
     group.add_argument(
         "--dynamics-intra-min-distance",
         type=float,
-        default=1.0,
+        default=0.5,
         metavar="ANG",
         help=(
             "Minimum allowed nonbonded atom distance within each monomer (1–2 and 1–3 "
-            "pairs excluded from PSF bonds). Set 0 to disable (default: 1.0 Å)."
+            "pairs excluded from PSF bonds). Set 0 to disable (default: 0.5 Å)."
         ),
     )
     group.add_argument(
@@ -311,7 +311,7 @@ def resolve_dynamics_overlap_config(
         action=action,  # type: ignore[arg-type]
         min_distance_A=float(min_dist),
         intra_min_distance_A=float(
-            getattr(args, "dynamics_intra_min_distance", 1.0) or 0.0
+            getattr(args, "dynamics_intra_min_distance", 0.5) or 0.0
         ),
         intra_exclude_1_3=not bool(
             getattr(args, "no_dynamics_intra_exclude_1_3", False)

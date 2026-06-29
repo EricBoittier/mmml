@@ -610,7 +610,7 @@ def test_resolve_defaults_to_rescue_and_1p5A():
     cfg = resolve_dynamics_overlap_config(args, n_monomers=4, use_pbc=True)
     assert cfg.action == "rescue"
     assert cfg.min_distance_A == 1.5
-    assert cfg.intra_min_distance_A == 1.0
+    assert cfg.intra_min_distance_A == 0.5
     assert cfg.intra_exclude_1_3 is True
     assert cfg.check_interval == 100
     assert cfg.enabled is True

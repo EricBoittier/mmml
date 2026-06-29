@@ -186,7 +186,7 @@ def test_build_pycharmm_command_forwards_bonded_recovery_backend():
 def test_build_pycharmm_command_forwards_intra_monomer_guard():
     cmd = build_pycharmm_command(_pycharmm_args())
     idx = cmd.index("--dynamics-intra-min-distance")
-    assert cmd[idx + 1] == "1.0"
+    assert cmd[idx + 1] == "0.5"
 
 
 def test_build_pycharmm_command_forwards_heat_thermostat():
