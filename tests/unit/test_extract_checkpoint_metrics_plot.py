@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 
 from mmml.cli.misc.extract_checkpoint_metrics import (
+    plot_learning_curve_scaling,
     plot_training_comparison,
     plot_training_metrics,
 )
@@ -77,6 +78,34 @@ def test_plot_training_comparison_with_table(tmp_path: Path) -> None:
     )
     assert out.is_file()
     assert out.stat().st_size > 10_000
+
+
+def test_plot_learning_curve_scaling(tmp_path: Path) -> None:
+    runs = [
+        {
+            "parent": "n800",
+            "name": "r1",
+            "summary": {
+                "n_train": 800,
+                "repeat": 1,
+                "training_final": {"valid_loss": 2.0, "valid_energy_mae": 0.05, "valid_forces_mae": 0.04},
+                "test_eval": {"energy_mae_kcal_mol": 0.6, "forces_mae_kcal_mol": 1.0},
+            },
+        },
+        {
+            "parent": "n3200",
+            "name": "r1",
+            "summary": {
+                "n_train": 3200,
+                "repeat": 1,
+                "training_final": {"valid_loss": 0.5, "valid_energy_mae": 0.02, "valid_forces_mae": 0.01},
+                "test_eval": {"energy_mae_kcal_mol": 0.3, "forces_mae_kcal_mol": 0.2},
+            },
+        },
+    ]
+    out = tmp_path / "scaling.png"
+    plot_learning_curve_scaling(runs, out, verbose=False, plot_style="nature")
+    assert out.is_file()
 
 
 def test_warmup_trim_allows_plot_with_spikes(tmp_path: Path) -> None:

@@ -14,6 +14,7 @@ Usage:
 
 import argparse
 import sys
+from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Sequence, Union
@@ -630,6 +631,172 @@ def plot_training_comparison(
     if style.suptitle_color:
         suptitle_kw["color"] = style.suptitle_color
     fig.suptitle(title, **suptitle_kw)
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, dpi=220, bbox_inches="tight")
+    plt.close(fig)
+    if verbose:
+        print(f"Saved: {output_path}")
+
+
+@dataclass(frozen=True)
+class ScalingPoint:
+    n_train: int
+    repeat: int
+    inv_sqrt_n: float
+    values: Dict[str, float]
+
+
+def collect_scaling_points(runs: Sequence[dict]) -> list[ScalingPoint]:
+    """Collect final validation/test metrics for 1/√n_train scaling plots."""
+    points: list[ScalingPoint] = []
+    for run in runs:
+        summary = run.get("summary", {})
+        n_train = summary.get("n_train")
+        if n_train is None:
+            parent = str(run.get("parent", ""))
+            if parent.startswith("n"):
+                n_train = int(parent[1:])
+            else:
+                continue
+        repeat = summary.get("repeat")
+        if repeat is None:
+            name = str(run.get("name", ""))
+            if name.startswith("r"):
+                repeat = int(name[1:])
+            else:
+                repeat = 0
+        train_final = summary.get("training_final", {})
+        test_eval = summary.get("test_eval", {})
+        values = {
+            "valid_loss": train_final.get("valid_loss"),
+            "valid_energy_mae": train_final.get("valid_energy_mae"),
+            "valid_forces_mae": train_final.get("valid_forces_mae"),
+            "test_energy_mae": test_eval.get("energy_mae_kcal_mol"),
+            "test_forces_mae": test_eval.get("forces_mae_kcal_mol"),
+        }
+        clean = {}
+        for key, val in values.items():
+            if val is None:
+                continue
+            scale = EV_TO_KCAL_MOL if key in {"valid_energy_mae", "valid_forces_mae"} else 1.0
+            number = float(val) * scale
+            if np.isfinite(number) and number > 0:
+                clean[key] = number
+        if not clean:
+            continue
+        points.append(
+            ScalingPoint(
+                n_train=int(n_train),
+                repeat=int(repeat),
+                inv_sqrt_n=1.0 / np.sqrt(float(n_train)),
+                values=clean,
+            )
+        )
+    return points
+
+
+def plot_learning_curve_scaling(
+    runs: Sequence[dict],
+    output_path: Path,
+    *,
+    title: str = "Learning-curve scaling",
+    plot_style: str | PlotStyle | None = DEFAULT_PLOT_STYLE,
+    verbose: bool = True,
+) -> None:
+    """Plot log10(final metrics) versus 1/√n_train for sweep summary."""
+    style = _apply_training_plot_style(plot_style)
+    points = collect_scaling_points(runs)
+    if not points:
+        raise ValueError("No scaling points available for plot")
+
+    metric_panels = (
+        ("valid_loss", "log10 validation loss"),
+        ("valid_energy_mae", "log10 valid energy MAE (kcal/mol)"),
+        ("valid_forces_mae", "log10 valid forces MAE (kcal/mol/Å)"),
+        ("test_energy_mae", "log10 test energy MAE (kcal/mol)"),
+        ("test_forces_mae", "log10 test forces MAE (kcal/mol/Å)"),
+    )
+
+    ncols = 3
+    nrows = int(np.ceil(len(metric_panels) / ncols))
+    fig, axes = plt.subplots(nrows, ncols, figsize=(4.6 * ncols, 4.0 * nrows), constrained_layout=True)
+    axes_flat = np.atleast_1d(axes).ravel()
+
+    repeats = sorted({point.repeat for point in points})
+    repeat_colors = comparison_colors(style, max(len(repeats), 1))
+    repeat_color = {rep: repeat_colors[i % len(repeat_colors)] for i, rep in enumerate(repeats)}
+
+    for ax, (metric_key, ylabel) in zip(axes_flat, metric_panels):
+        metric_points = [p for p in points if metric_key in p.values]
+        if not metric_points:
+            ax.axis("off")
+            continue
+
+        for point in metric_points:
+            ax.scatter(
+                point.inv_sqrt_n,
+                np.log10(point.values[metric_key]),
+                color=repeat_color.get(point.repeat, "#333333"),
+                s=42,
+                alpha=0.9,
+                edgecolors="white",
+                linewidths=0.4,
+                zorder=3,
+            )
+
+        by_n: dict[int, list[float]] = defaultdict(list)
+        inv_sqrt_by_n: dict[int, float] = {}
+        for point in metric_points:
+            by_n[point.n_train].append(np.log10(point.values[metric_key]))
+            inv_sqrt_by_n[point.n_train] = point.inv_sqrt_n
+
+        n_sorted = sorted(by_n)
+        xs = [inv_sqrt_by_n[n] for n in n_sorted]
+        means = [float(np.mean(by_n[n])) for n in n_sorted]
+        stds = [float(np.std(by_n[n])) if len(by_n[n]) > 1 else 0.0 for n in n_sorted]
+        ax.errorbar(
+            xs,
+            means,
+            yerr=stds,
+            color=style.colors.get("valid", "#333333"),
+            linewidth=2.0,
+            marker="o",
+            markersize=5,
+            capsize=3,
+            label="mean ± σ",
+            zorder=4,
+        )
+
+        ax.set_xlabel("1/√n_train")
+        ax.set_ylabel(ylabel)
+        ax.set_title(ylabel.replace("log10 ", ""), fontsize=9)
+        ax.invert_xaxis()
+        if ax is axes_flat[0]:
+            handles = [
+                Line2D(
+                    [0],
+                    [0],
+                    marker="o",
+                    linestyle="",
+                    color=repeat_color[rep],
+                    label=f"repeat {rep}",
+                )
+                for rep in repeats
+            ]
+            handles.append(
+                Line2D([0], [0], color=style.colors.get("valid", "#333333"), marker="o", label="mean ± σ")
+            )
+            ax.legend(handles=handles, fontsize=7, loc="best")
+
+    for ax in axes_flat[len(metric_panels) :]:
+        ax.axis("off")
+
+    suptitle_kw: dict = {"fontsize": 14, "fontweight": "bold"}
+    if style.suptitle_color:
+        suptitle_kw["color"] = style.suptitle_color
+    fig.suptitle(title, **suptitle_kw)
+
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path, dpi=220, bbox_inches="tight")
