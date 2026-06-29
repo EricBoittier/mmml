@@ -7,12 +7,18 @@ Manual smoke for aligning CHARMM domain decomposition with spatial MLpot.
 
 Mode C from [Spatial ML MPI](../../../docs/mlpot-spatial-mpi.md): `np>1`, domdec **on**, spatial ML per rank, one GPU per rank. Both CHARMM integration and PhysNet should scale.
 
-## Current blockers (June 2026)
+## Status (June 2026)
 
-1. `np>1` PyCHARMM topology construction is unsupported for this path. On `pc-bach`, concurrent `crystal free`, `DELETE ATOM`, `read rtf`, and even a minimal `MASS` RTF load hang/abort before DOMDEC or MLpot.
-2. PyCHARMM exposes no per-rank local/ghost atom API ([`domdec_info.py`](../../../mmml/interfaces/pycharmmInterface/mlpot/mpi_spatial/domdec_info.py)).
-3. JAX GPU warmup + active DOMDEC can segfault (`send_coord_to_recip` / `PMPI_Free_mem`).
-4. `domdec off` is opt-in via `MMML_FORCE_DOMDEC_OFF=1` for streams that enabled DOMDEC; it is not a Tier 3 integration path ([`import_pycharmm.py`](../../../mmml/interfaces/pycharmmInterface/import_pycharmm.py)).
+**Resolved blockers:**
+- `domdec_atoms.py` reads `natoml` / `loc2glo_ind` / `atoml` from `libcharmm.so` via ctypes. No upstream PyCHARMM change needed.
+- `DomdecAlignedGrid` auto-reads NDIR and exposes `get_local_atom_indices()` / `molecules_owned_by_this_rank()`.
+- `build_domdec_spatial_batch_indices` in `batch_builder.py` uses DOMDEC atom ownership (not COM slabs) when `domdec_active=True`.
+- `calculate_charmm` in `hybrid_mlpot.py` now calls `make_domdec_aligned_grid` (auto-detects DOMDEC state); falls back to COM-slab Tier 2 when DOMDEC is off.
+
+**Remaining open items:**
+1. `np>1` PyCHARMM topology construction still hangs: RTF/PSF reads must be done at np=1, then artifacts loaded at np=N.
+2. JAX GPU warmup + active DOMDEC may segfault (`send_coord_to_recip` / `PMPI_Free_mem`) — defer JAX warmup until after MLpot registration.
+3. `domdec off` is an opt-in safety hook (`MMML_FORCE_DOMDEC_OFF=1`). Set `MMML_NO_CHARMM_DOMDEC_OFF=1` to keep DOMDEC on during MLpot ENER smoke.
 
 Tier 2 (`--ml-spatial-mpi`) parallelizes **ML only** with domdec still off; CHARMM integration remains replicated per rank.
 
