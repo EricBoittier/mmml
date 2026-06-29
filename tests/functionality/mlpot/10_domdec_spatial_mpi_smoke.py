@@ -577,10 +577,12 @@ def main() -> int:
         import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
         return _prepare_prebuilt(args)
 
-    # Phase 1: callback-only (no checkpoint required, no real CHARMM ENER)
-    code = _callback_smoke(args)
-    if code != 0:
-        return code
+    # Phase 1: callback-only (default; skipped when --charmm-ener — live path
+    # loads PyCHARMM on all ranks and must not re-enter callback import pattern).
+    if not args.charmm_ener:
+        code = _callback_smoke(args)
+        if code != 0:
+            return code
 
     # Phase 2 (opt-in): live CHARMM ENER
     if args.charmm_ener:
