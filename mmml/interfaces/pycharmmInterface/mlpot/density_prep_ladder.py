@@ -1293,6 +1293,17 @@ def run_geometry_packing_recovery(
 
         def _run_bfgs() -> float:
             nonlocal grms
+            skip_below = float(
+                getattr(args, "geometry_packing_skip_bfgs_grms", 5.0) or 0.0
+            )
+            if skip_below > 0.0 and np.isfinite(grms) and float(grms) <= skip_below:
+                if verbose:
+                    print(
+                        f"{context_prefix} (BFGS): skip "
+                        f"(GRMS {float(grms):.2f} <= {skip_below:.1f} kcal/mol/Å)",
+                        flush=True,
+                    )
+                return float(grms)
             mini = coerce_hybrid_minimize_result(
                 minimize_hybrid_calculator_before_sd(
                     mlpot_ctx,

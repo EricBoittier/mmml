@@ -53,7 +53,9 @@ class HybridCalculatorMinimizeConfig:
     max_initial_fmax_ev_a: float = 100.0
     max_start_grms_kcalmol_A: float | None = None
     stall_patience_steps: int = 15
+    stall_patience_soft_steps: int = 3
     stall_improvement_ratio: float = 0.99
+    stall_soft_fmax_factor: float = 10.0
 
 
 @dataclass
@@ -456,6 +458,23 @@ def _run_hybrid_calculator_bfgs(
                     f"{context_prefix} hybrid calculator BFGS: "
                     f"stalled at fmax={best_frame.best_force_fmax:.4f} eV/Å "
                     f"for {steps_since_improvement} steps; stopping",
+                    flush=True,
+                )
+            return
+        soft_fmax = float(config.fmax_ev_a) * float(config.stall_soft_fmax_factor)
+        if (
+            np.isfinite(best_frame.best_force_fmax)
+            and best_frame.best_force_fmax <= soft_fmax
+            and steps_since_improvement >= int(config.stall_patience_soft_steps)
+            and opt.get_number_of_steps() >= 1
+        ):
+            stopped_on_spike = True
+            if config.verbose:
+                print(
+                    f"{context_prefix} hybrid calculator BFGS: "
+                    f"soft-region plateau at fmax={best_frame.best_force_fmax:.4f} eV/Å "
+                    f"(target {config.fmax_ev_a} eV/Å); stopping after "
+                    f"{steps_since_improvement} step(s) without improvement",
                     flush=True,
                 )
 
