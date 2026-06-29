@@ -53,7 +53,28 @@ def main() -> None:
         rank = 0
         nranks = 1
 
-    ndir = args.ndir if args.ndir > 0 else nranks
+    # --- sanity: DOMDEC needs domain_width >= cutnb
+    # c47 axis rule: each axis must have 1 or >=8 domains
+    ndir_requested = args.ndir if args.ndir > 0 else nranks
+    domain_width = args.box / ndir_requested
+    min_box_for_ndir = ndir_requested * args.cutnb
+    if domain_width < args.cutnb:
+        if rank == 0:
+            print(
+                f"WARNING: box={args.box:.1f} Å / ndir={ndir_requested} = "
+                f"{domain_width:.1f} Å domain width < cutnb={args.cutnb:.1f} Å.\n"
+                f"  DOMDEC requires domain_width >= cutnb  →  "
+                f"min box for ndir={ndir_requested}: {min_box_for_ndir:.0f} Å.\n"
+                f"  Falling back to ndir=1 (no DOMDEC decomposition, just 1 direct rank).\n"
+                f"  To use ndir=8 you need box >= {min_box_for_ndir:.0f} Å  "
+                f"(≈ {int(min_box_for_ndir**3 / (args.box**3 / 10)):.0f} DCM molecules "
+                f"for the same density).",
+                flush=True,
+            )
+        ndir = 1
+    else:
+        ndir = ndir_requested
+
     log = open(f"domdec_probe_rank{rank:02d}.txt", "w")
 
     def pr(*a, **kw):
