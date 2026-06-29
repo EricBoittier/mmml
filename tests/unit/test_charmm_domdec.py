@@ -2,49 +2,69 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from unittest import mock
 
-import importlib.util
 from pathlib import Path
 
 
-def _load_import_pycharmm_stub():
-    """Load import_pycharmm domdec helpers with pycharmm mocked."""
-    path = (
-        Path(__file__).resolve().parents[2]
-        / "mmml/interfaces/pycharmmInterface/import_pycharmm.py"
-    )
-    source = path.read_text(encoding="utf-8")
-    # Extract only the vacuum-mode helpers for a minimal module.
-    mod = type(mock.Mock())()
+def _prepare_domdec_module(monkeypatch):
+    """Use the real DOMDEC helper functions with PyCHARMM side effects mocked."""
+    from mmml.interfaces.pycharmmInterface import import_pycharmm as mod
+
     mod._domdec_vacuum_disabled = False
     mod._domdec_disabled_early = False
-    mod._force_domdec_off = True
-    mod.pycharmm = mock.Mock()
+    monkeypatch.delenv("MMML_FORCE_DOMDEC_OFF", raising=False)
+    monkeypatch.delenv("MMML_NO_CHARMM_DOMDEC_OFF", raising=False)
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        lambda *args, **kwargs: nullcontext(),
+    )
+    monkeypatch.setattr(mod, "pycharmm", mock.Mock())
     mod.pycharmm.lingo.charmm_script = mock.Mock()
-
-    def disable_charmm_domdec(*, when: str = "early"):
-        if not getattr(mod, "_force_domdec_off", True):
-            return False
-        if mod._domdec_vacuum_disabled:
-            return False
-        mod.pycharmm.lingo.charmm_script("domdec off")
-        mod._domdec_vacuum_disabled = True
-        if when != "mlpot_energy":
-            mod._domdec_disabled_early = True
-        return True
-
-    mod.disable_charmm_domdec = disable_charmm_domdec
     return mod
 
 
-def test_disable_charmm_domdec_runs_once():
-    mod = _load_import_pycharmm_stub()
-    mod.disable_charmm_domdec()
-    mod.disable_charmm_domdec()
-    mod.disable_charmm_domdec()
+def test_disable_charmm_domdec_skips_by_default(monkeypatch):
+    mod = _prepare_domdec_module(monkeypatch)
+    assert mod.disable_charmm_domdec() is False
+    mod.pycharmm.lingo.charmm_script.assert_not_called()
+
+
+def test_disable_charmm_domdec_force_hatch_runs_once(monkeypatch):
+    mod = _prepare_domdec_module(monkeypatch)
+    monkeypatch.setenv("MMML_FORCE_DOMDEC_OFF", "1")
+    assert mod.disable_charmm_domdec(when="mlpot_energy") is True
+    assert mod.disable_charmm_domdec(when="mlpot_energy") is False
+    assert mod.disable_charmm_domdec(when="mlpot_energy") is False
     assert mod.pycharmm.lingo.charmm_script.call_count == 1
     assert mod.pycharmm.lingo.charmm_script.call_args[0][0] == "domdec off"
+    assert mod._domdec_vacuum_disabled is True
+    assert mod._domdec_disabled_early is False
+
+
+def test_disable_charmm_domdec_no_hatch_wins_over_force(monkeypatch):
+    mod = _prepare_domdec_module(monkeypatch)
+    monkeypatch.setenv("MMML_FORCE_DOMDEC_OFF", "1")
+    monkeypatch.setenv("MMML_NO_CHARMM_DOMDEC_OFF", "1")
+    assert mod.disable_charmm_domdec(when="mlpot_energy") is False
+    mod.pycharmm.lingo.charmm_script.assert_not_called()
+
+
+def test_ensure_domdec_off_recovers_mpi_only_after_success(monkeypatch):
+    mod = _prepare_domdec_module(monkeypatch)
+    recover = mock.Mock()
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+        recover,
+    )
+
+    assert mod.ensure_domdec_off_for_mlpot_energy(context="unit default") is False
+    recover.assert_not_called()
+
+    monkeypatch.setenv("MMML_FORCE_DOMDEC_OFF", "1")
+    assert mod.ensure_domdec_off_for_mlpot_energy(context="unit forced") is True
+    recover.assert_called_once_with(phase="after domdec off (unit forced)")
 
 
 def test_disable_charmm_domdec_skipped_by_default():
