@@ -128,6 +128,36 @@ def test_wrap_mm_fn_jax_pme_dynamic_path_under_jit(monkeypatch) -> None:
     np.testing.assert_allclose(np.asarray(forces), 0.5, rtol=0, atol=1e-6)
 
 
+def test_wrap_mm_fn_jax_pme_dynamic_path_uses_static_pbc_when_box_missing(monkeypatch) -> None:
+    seen: list[float] = []
+
+    def _fake(*args, **kwargs):
+        del args
+        seen.append(float(kwargs["box_length_A"]))
+        assert kwargs["pbc_cell"] is not None
+        return _fake_hybrid_lr(np.zeros((5, 3), dtype=np.float64))
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb.hybrid_jax_pme_mm_lr_correction",
+        _fake,
+    )
+    wrapped = _wrap_mm_fn_with_jax_pme_coulomb(
+        _lj_only_mm_fn_dynamic, **_wrap_kwargs(dynamic=True)
+    )
+    pos = jnp.zeros((5, 3), dtype=jnp.float32)
+    pair_idx = jnp.zeros((2, 2), dtype=jnp.int32)
+    pair_mask = jnp.ones((2,), dtype=jnp.bool_)
+
+    @jax.jit
+    def eval_mm(p):
+        return wrapped(p, pair_idx, pair_mask)
+
+    energy, forces = eval_mm(pos)
+    assert float(energy) == pytest.approx(3.0)
+    np.testing.assert_allclose(np.asarray(forces), 0.5, rtol=0, atol=1e-6)
+    assert seen == [pytest.approx(32.0)]
+
+
 def test_wrap_mm_fn_pme_pure_callback_enters_host_context(monkeypatch) -> None:
     entered: list[str] = []
 

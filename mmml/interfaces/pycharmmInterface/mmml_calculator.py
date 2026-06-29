@@ -1160,12 +1160,14 @@ def setup_calculator(
 
     def _ensure_mm_fn(positions_concrete, cutoff_params):
         """Build the MM energy/force function if not yet cached (or if cutoffs changed)."""
+        cell_key = None if pbc_cell is None else tuple(np.asarray(pbc_cell).reshape(-1).tolist())
         key = (
             cutoff_params.ml_switch_width,
             cutoff_params.mm_switch_on,
             cutoff_params.mm_switch_width,
             getattr(cutoff_params, "complementary_handoff", True),
             mm_r_min,
+            cell_key,
             _lambda_version[0],
         )
         if _cached_mm_fn[0] is None or _cached_mm_cutoff_key[0] != key:
@@ -1351,7 +1353,7 @@ def setup_calculator(
                 debug=debug,
                 mm_pair_idx=mm_pair_idx,
                 mm_pair_mask=mm_pair_mask,
-                box=box,
+                box=mic_pbc_cell,
             )
             # Preserve separate MM terms and add to totals instead of overwriting
             mm_E = mm_out.get("mm_E", 0)
