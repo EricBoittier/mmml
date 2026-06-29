@@ -119,6 +119,15 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Residue composition as RES:count comma list (e.g. MEOH:5,TIP3:5). Overrides --n-molecules.",
     )
+    p.add_argument(
+        "--builder",
+        choices=("gas", "liquid", "crystal"),
+        default=None,
+        help=(
+            "Starting-coordinate builder: gas=open grid, liquid=cube/sphere grid, "
+            "crystal=PyXtal."
+        ),
+    )
     p.add_argument("--spacing", type=float, default=5.0, help="Target minimum random COM spacing in Angstrom.")
     p.add_argument("--min-com-start-distance", type=float, default=6.0)
     p.add_argument(
@@ -168,8 +177,8 @@ def main(argv: list[str] | None = None) -> int:
         action=argparse.BooleanOptionalAction,
         default=None,
         help=(
-            "Pack --composition with Packmol (default cube inside --box-size). "
-            "Use --no-packmol for legacy grid placement."
+            "Explicitly pack --composition with Packmol. "
+            "Default uses grid placement plus refinement."
         ),
     )
     p.add_argument(

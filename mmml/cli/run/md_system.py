@@ -1832,6 +1832,40 @@ def _validate_packmol_args(args: argparse.Namespace) -> None:
         resolve_packmol_cube_side_from_args(args)
 
 
+def _validate_builder_args(args: argparse.Namespace) -> None:
+    from mmml.interfaces.pycharmmInterface.grid_placement import resolve_system_builder
+    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+        resolve_packmol_cube_side_from_args,
+        resolve_packmol_placement_mode,
+        resolve_packmol_sphere_radius,
+    )
+
+    if getattr(args, "from_psf", None) or getattr(args, "skip_cluster_build", False):
+        return
+    builder = resolve_system_builder(
+        builder=getattr(args, "builder", None),
+        composition=getattr(args, "composition", None),
+        pyxtal=getattr(args, "pyxtal", None),
+    )
+    if builder == "crystal":
+        if not getattr(args, "composition", None):
+            raise ValueError("Crystal builder requires --composition (e.g. MEOH:8).")
+        return
+    if builder == "gas" or not getattr(args, "composition", None):
+        return
+    placement = resolve_packmol_placement_mode(
+        packmol_placement=getattr(args, "packmol_placement", None),
+        packmol_sphere=getattr(args, "packmol_sphere", None),
+    )
+    if placement == "sphere":
+        resolve_packmol_sphere_radius(
+            getattr(args, "packmol_radius", None),
+            getattr(args, "flat_bottom_radius", None),
+        )
+    else:
+        resolve_packmol_cube_side_from_args(args)
+
+
 def _validate_packmol_sphere_args(args: argparse.Namespace) -> None:
     """Backward-compatible alias."""
     _validate_packmol_args(args)
@@ -1984,6 +2018,7 @@ def _append_packmol_args(cmd: list[str], args: argparse.Namespace) -> None:
         builder=getattr(args, "builder", None),
     ):
         return
+    cmd.append("--packmol")
     placement = resolve_packmol_placement_mode(
         packmol_placement=getattr(args, "packmol_placement", None),
         packmol_sphere=getattr(args, "packmol_sphere", None),
@@ -2205,6 +2240,7 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     else:
         cmd.extend(["--residue", str(args.residue)])
         cmd.extend(["--n-molecules", str(args.n_molecules)])
+    _append_optional(cmd, "--builder", getattr(args, "builder", None))
     if not args.no_fix:
         _append_if_nonempty(cmd, "--fix-resids", args.fix_resids)
     _append_if_nonempty(cmd, "--constrain-resids", args.constrain_resids)
@@ -2698,6 +2734,7 @@ def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
         cmd.extend(["--composition", str(args.composition)])
     else:
         cmd.extend(["--n-molecules", str(args.n_molecules)])
+    _append_optional(cmd, "--builder", getattr(args, "builder", None))
     if not skip_box_size_for_cmd:
         _append_optional(cmd, "--box-size", args.box_size)
     _append_optional(cmd, "--checkpoint", args.checkpoint)
@@ -2925,6 +2962,7 @@ def main() -> int:
             if not getattr(args, "evaluate_npz", None):
                 _validate_pyxtal_args(args)
                 _validate_box_sizing_args(args)
+                _validate_builder_args(args)
                 _validate_packmol_args(args)
         except ValueError as exc:
             print(f"mmml md-system: error: {exc}", file=sys.stderr)

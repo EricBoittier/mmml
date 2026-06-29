@@ -99,7 +99,8 @@ def test_resolve_pyxtal_use_and_packmol_exclusion():
     assert not resolve_packmol_use(
         composition="MEOH:4", packmol=None, pyxtal=True
     )
-    assert resolve_packmol_use(composition="MEOH:4", packmol=None, pyxtal=None)
+    assert not resolve_packmol_use(composition="MEOH:4", packmol=None, pyxtal=None)
+    assert resolve_packmol_use(composition="MEOH:4", packmol=True, pyxtal=None)
 
 
 def test_validate_pyxtal_cluster_args_rejects_packmol_combo():

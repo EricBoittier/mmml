@@ -14,11 +14,14 @@ def test_resolve_packmol_use_defaults():
         resolve_packmol_use,
     )
 
-    assert resolve_packmol_use(composition="MEOH:5") is True
+    assert resolve_packmol_use(composition="MEOH:5") is False
+    assert resolve_packmol_use(composition="MEOH:5", packmol=True) is True
     assert resolve_packmol_use(composition="MEOH:5", packmol=False) is False
     assert resolve_packmol_use(composition=None) is False
     assert resolve_packmol_sphere_use(composition="MEOH:5", packmol_radius=12.0) is False
-    assert resolve_packmol_sphere_use(composition="MEOH:5", packmol_sphere=True) is True
+    assert resolve_packmol_sphere_use(
+        composition="MEOH:5", packmol=True, packmol_sphere=True
+    ) is True
     assert resolve_packmol_sphere_use(composition=None, packmol_sphere=True) is False
 
 

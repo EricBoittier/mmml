@@ -161,14 +161,13 @@ def test_ase_vac_nve_warms_initial_temperature(cfg: dict) -> None:
     assert extra[t_idx + 1] == "300"
 
 
-def test_vacuum_jobs_use_packmol_cube(cfg: dict) -> None:
+def test_vacuum_jobs_use_grid_builder_default(cfg: dict) -> None:
     os.environ.setdefault("MMML_CKPT", "/tmp/dcm5_test_ckpt")
     for job_id, job in cfg["jobs"].items():
         if job.get("pbc"):
             continue
         argv = build_md_system_argv(cfg, job_id)
-        assert "--packmol-placement" in argv, job_id
-        assert argv[argv.index("--packmol-placement") + 1] == "cube", job_id
+        assert "--packmol-placement" not in argv, job_id
 
 
 def test_pbc_jobs_use_box_size(cfg: dict) -> None:
@@ -183,14 +182,13 @@ def test_pbc_jobs_use_box_size(cfg: dict) -> None:
         assert argv[idx + 1] == expected
 
 
-def test_pbc_jobs_use_packmol_cube(cfg: dict) -> None:
+def test_pbc_jobs_use_grid_builder_default(cfg: dict) -> None:
     os.environ.setdefault("MMML_CKPT", "/tmp/dcm5_test_ckpt")
     for job_id, job in cfg["jobs"].items():
         if not job.get("pbc"):
             continue
         argv = build_md_system_argv(cfg, job_id)
-        assert "--packmol-placement" in argv, job_id
-        assert argv[argv.index("--packmol-placement") + 1] == "cube", job_id
+        assert "--packmol-placement" not in argv, job_id
 
 
 def test_jaxmd_pbc_npt_uses_larger_box(cfg: dict) -> None:

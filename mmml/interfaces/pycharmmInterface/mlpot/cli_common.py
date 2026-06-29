@@ -821,6 +821,15 @@ def add_cluster_args(parser: argparse.ArgumentParser) -> None:
         help="Comma-separated RES:N entries (e.g. ACO:4,MEOH:2)",
     )
     parser.add_argument(
+        "--packmol",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Explicitly use Packmol for --composition. "
+            "Default uses grid placement plus CHARMM refinement."
+        ),
+    )
+    parser.add_argument(
         "--spacing",
         type=float,
         default=DEFAULT_SPACING,

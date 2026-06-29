@@ -291,11 +291,19 @@ def test_build_pycharmm_command_forwards_ml_compute_dtype_when_set():
     assert cmd[idx + 1] == "float64"
 
 
-def test_build_pycharmm_command_cube_packmol_argv_parses_in_pycharmm_backend():
+def test_build_pycharmm_command_uses_grid_builder_by_default():
+    cmd = build_pycharmm_command(
+        _pycharmm_args(packmol_sphere=None, packmol_placement="cube")
+    )
+    assert "--packmol-placement" not in cmd
+    assert "--packmol" not in cmd
+
+
+def test_build_pycharmm_command_explicit_packmol_argv_parses_in_pycharmm_backend():
     from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
 
     cmd = build_pycharmm_command(
-        _pycharmm_args(packmol_sphere=None, packmol_placement="cube")
+        _pycharmm_args(packmol=True, packmol_sphere=None, packmol_placement="cube")
     )
     assert "--packmol-placement" in cmd
     idx = cmd.index("--packmol-placement")

@@ -349,7 +349,12 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
         atoms_per_list = [len(z) // int(n_mol)] * int(n_mol)
 
     mc_summary: dict[str, Any] | None = None
-    steps_applied: list[str] = ["packmol_cluster"]
+    builder_step = "grid_cluster"
+    if getattr(args, "packmol", None) is True:
+        builder_step = "packmol_cluster"
+    elif getattr(args, "pyxtal", None) is True or getattr(args, "builder", None) == "crystal":
+        builder_step = "pyxtal_cluster"
+    steps_applied: list[str] = [builder_step]
     if atoms_per_list is not None and charmm_pbc and box_side is not None:
         from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
             apply_mc_density_equalization,

@@ -67,9 +67,6 @@ def grid_centers_cube(
     else:
         n_axis = int(np.ceil(n ** (1.0 / 3.0)))
         step = max(float(spacing), 1.0e-6)
-        values = (np.arange(n_axis, dtype=float) - 0.5 * (n_axis - 1)) * step
-        values = values + np.asarray(center, dtype=float)[0]
-        # Rebuild per axis below so nonzero centers are honored exactly.
         axis_values = []
         for axis_center in np.asarray(center, dtype=float):
             axis_values.append(

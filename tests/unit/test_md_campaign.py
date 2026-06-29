@@ -349,7 +349,7 @@ def test_namespace_from_merged_keeps_extra_args_last() -> None:
     assert "--continue-from" not in args.extra_args
 
 
-def test_build_command_jaxmd_cube_packmol_argv_parses_in_jaxmd_backend() -> None:
+def test_build_command_jaxmd_liquid_grid_default_omits_packmol_argv() -> None:
     from argparse import Namespace
 
     from mmml.cli.run.md_system import build_command
@@ -386,9 +386,7 @@ def test_build_command_jaxmd_cube_packmol_argv_parses_in_jaxmd_backend() -> None
     )
     backend, argv = build_command(args)
     assert backend == "jaxmd"
-    assert "--packmol-placement" in argv
-    idx = argv.index("--packmol-placement")
-    assert argv[idx + 1] == "cube"
+    assert "--packmol-placement" not in argv
     assert "--steps-per-recording" in argv
     assert "--jax-md-update-interval" in argv
 
