@@ -78,13 +78,47 @@ PMIX_LIB="${PMIX_LIB:-/opt/gcc-14.2.0/pmix-5.0.4/lib}"
 #  1. Explicit env var FFTW_ROOT
 #  2. EBROOTFFTW set by Environment Modules (module load FFTW/...)
 #  3. Auto-discovery under /srv/opt/gcc-*/fftw-*/build and similar prefixes
+# FFTW_ROOT  = prefix containing double-precision libfftw3 (required for COLFFT check).
+# FFTWF_ROOT = prefix containing single-precision libfftw3f (required for PME).
+#   When the cluster splits precisions into fftw-X.Y.Z (sp) and fftw-X.Y.Z-dp (dp),
+#   set FFTW_ROOT=.../fftw-X.Y.Z-dp and FFTWF_ROOT=.../fftw-X.Y.Z .
+#   If only FFTW_ROOT is given, FFTWF_ROOT defaults to FFTW_ROOT.
 FFTW_ROOT="${FFTW_ROOT:-${EBROOTFFTW:-}}"
+FFTWF_ROOT="${FFTWF_ROOT:-${EBROOTFFTWF:-}}"
+
 if [[ -z "$FFTW_ROOT" ]]; then
   if _found="$(_auto_find_fftw_root 2>/dev/null)"; then
     FFTW_ROOT="$_found"
     echo "FFTW_ROOT auto-detected: $FFTW_ROOT" >&2
   fi
 fi
+
+# Auto-detect split sp/dp layout: if FFTW_ROOT has no libfftw3.a but a sibling *-dp does,
+# swap so FFTW_ROOT → dp (double) and FFTWF_ROOT → sp (single), or vice versa.
+if [[ -n "$FFTW_ROOT" && -z "$FFTWF_ROOT" ]]; then
+  _parent="$(dirname "$FFTW_ROOT")"
+  _base="$(basename "$FFTW_ROOT")"
+  # Current root is the sp (non-dp) build; look for the -dp sibling for double-precision.
+  if [[ "$_base" != *-dp ]] && [[ ! -f "$FFTW_ROOT/lib/libfftw3.a" ]] && \
+     [[ ! -f "$FFTW_ROOT/lib/libfftw3.so" ]]; then
+    _dp_candidate="$_parent/${_base}-dp"
+    if [[ -f "$_dp_candidate/lib/libfftw3.a" ]] || [[ -f "$_dp_candidate/lib/libfftw3.so" ]]; then
+      echo "Split FFTW layout detected: FFTW_ROOT (double) = $_dp_candidate, FFTWF_ROOT (single) = $FFTW_ROOT" >&2
+      FFTWF_ROOT="$FFTW_ROOT"
+      FFTW_ROOT="$_dp_candidate"
+    fi
+  fi
+  # Current root is the dp build; look for the sp sibling (strip -dp suffix).
+  if [[ "$_base" == *-dp ]]; then
+    _sp_candidate="$_parent/${_base%-dp}"
+    if [[ -f "$_sp_candidate/lib/libfftw3f.a" ]] || [[ -f "$_sp_candidate/lib/libfftw3f.so" ]]; then
+      echo "Split FFTW layout detected: FFTW_ROOT (double) = $FFTW_ROOT, FFTWF_ROOT (single) = $_sp_candidate" >&2
+      FFTWF_ROOT="$_sp_candidate"
+    fi
+  fi
+fi
+
+[[ -z "$FFTWF_ROOT" ]] && FFTWF_ROOT="$FFTW_ROOT"
 
 if [[ "$(uname -s)" == "Darwin" ]]; then
   LIB_BASENAME="libcharmm.dylib"
@@ -125,7 +159,10 @@ Environment:
   CHARMM_BUILD_DIR  CMake build directory (default: \$HOME/.cache/mmml-charmm-build/${PLATFORM_TAG})
   CHARMM_BUILD_TYPE CMake build type (default: Release; --debug sets RelWithDebInfo)
   OPENMPI_ROOT      OpenMPI prefix (default: auto-detect; Linux cluster: /opt/gcc-14.2.0/openmpi-5.0.5/build)
-  FFTW_ROOT         FFTW prefix; falls back to EBROOTFFTW when modules set it.
+  FFTW_ROOT         Double-precision FFTW prefix (libfftw3); falls back to EBROOTFFTW.
+  FFTWF_ROOT        Single-precision FFTW prefix (libfftw3f); defaults to FFTW_ROOT.
+                    On clusters that split precisions (e.g. fftw-X.Y.Z vs fftw-X.Y.Z-dp),
+                    set FFTW_ROOT=.../fftw-X.Y.Z-dp and FFTWF_ROOT=.../fftw-X.Y.Z .
 EOF
 }
 
@@ -389,51 +426,55 @@ if [[ "$needs_configure" == 1 ]]; then
     echo "Using code model flags: $FFLAGS (linker: $CODE_MODEL_FLAG)"
   fi
   if [[ -n "$FFTW_ROOT" ]]; then
-    FFTW_LIB_DIR=""
+    _fftw_lib_dir=""
     for candidate in "$FFTW_ROOT/lib" "$FFTW_ROOT/lib64"; do
-      if [[ -d "$candidate" ]]; then
-        FFTW_LIB_DIR="$candidate"
-        break
-      fi
+      [[ -d "$candidate" ]] && { _fftw_lib_dir="$candidate"; break; }
     done
-    if [[ -n "$FFTW_LIB_DIR" ]]; then
-      FFTW_LIB=""    # double precision (libfftw3)
-      FFTWF_LIB=""   # single precision (libfftw3f) — required for COLFFT/PME
-      # Prefer shared libs (.so/.dylib); fall back to static (.a) — CMake needs an
-      # explicit path when the install only provides static archives.
+    _fftwf_lib_dir=""
+    for candidate in "$FFTWF_ROOT/lib" "$FFTWF_ROOT/lib64"; do
+      [[ -d "$candidate" ]] && { _fftwf_lib_dir="$candidate"; break; }
+    done
+
+    FFTW_LIB=""   # double-precision libfftw3 — required by CMake COLFFT check
+    FFTWF_LIB=""  # single-precision libfftw3f — required for PME
+
+    if [[ -n "$_fftw_lib_dir" ]]; then
       for candidate in \
-          "$FFTW_LIB_DIR"/libfftw3.so "$FFTW_LIB_DIR"/libfftw3.so.* \
-          "$FFTW_LIB_DIR"/libfftw3.dylib \
-          "$FFTW_LIB_DIR"/libfftw3.a; do
-        if [[ -f "$candidate" ]]; then FFTW_LIB="$candidate"; break; fi
+          "$_fftw_lib_dir"/libfftw3.so "$_fftw_lib_dir"/libfftw3.so.* \
+          "$_fftw_lib_dir"/libfftw3.dylib "$_fftw_lib_dir"/libfftw3.a; do
+        [[ -f "$candidate" ]] && { FFTW_LIB="$candidate"; break; }
       done
+    fi
+    if [[ -n "$_fftwf_lib_dir" ]]; then
       for candidate in \
-          "$FFTW_LIB_DIR"/libfftw3f.so "$FFTW_LIB_DIR"/libfftw3f.so.* \
-          "$FFTW_LIB_DIR"/libfftw3f.dylib \
-          "$FFTW_LIB_DIR"/libfftw3f.a; do
-        if [[ -f "$candidate" ]]; then FFTWF_LIB="$candidate"; break; fi
+          "$_fftwf_lib_dir"/libfftw3f.so "$_fftwf_lib_dir"/libfftw3f.so.* \
+          "$_fftwf_lib_dir"/libfftw3f.dylib "$_fftwf_lib_dir"/libfftw3f.a; do
+        [[ -f "$candidate" ]] && { FFTWF_LIB="$candidate"; break; }
       done
-      CMAKE_ARGS+=(
-        -DFFTW_ROOT="$FFTW_ROOT"
-        -DFFTW_INCLUDE_DIR="$FFTW_ROOT/include"
-        -DFFTW_INCLUDE_DIRS="$FFTW_ROOT/include"
-      )
-      if [[ -n "$FFTW_LIB" ]]; then
-        CMAKE_ARGS+=(-DFFTW_LIBRARY="$FFTW_LIB" -DFFTW_LIBRARIES="$FFTW_LIB")
-        echo "Using FFTW (double) from $FFTW_ROOT ($FFTW_LIB)"
-      fi
-      if [[ -n "$FFTWF_LIB" ]]; then
-        CMAKE_ARGS+=(-DFFTWF_LIBRARY="$FFTWF_LIB" -DFFTWF_LIBRARIES="$FFTWF_LIB")
-        echo "Using FFTWF (single, required for COLFFT) from $FFTW_ROOT ($FFTWF_LIB)"
-      else
-        echo "rebuild_charmm_mlpot: warning: libfftw3f not found under $FFTW_LIB_DIR" >&2
-        echo "  COLFFT/DOMDEC requires single-precision FFTW (libfftw3f)." >&2
-        if [[ -d "$(dirname "$FFTW_ROOT")/fftw-3.3.10-dp" ]]; then
-          echo "  Found fftw-3.3.10-dp sibling — check if it has libfftw3f." >&2
-        fi
-      fi
+    fi
+
+    # Include dir: prefer FFTWF_ROOT (has fftw3.h in both sp and dp), fall back to FFTW_ROOT.
+    _fftw_inc_dir="$FFTWF_ROOT/include"
+    [[ ! -f "$_fftw_inc_dir/fftw3.h" ]] && _fftw_inc_dir="$FFTW_ROOT/include"
+
+    CMAKE_ARGS+=(
+      -DFFTW_ROOT="$FFTW_ROOT"
+      -DFFTW_INCLUDE_DIR="$_fftw_inc_dir"
+      -DFFTW_INCLUDE_DIRS="$_fftw_inc_dir"
+      -DFFTW_INCLUDES="$_fftw_inc_dir"
+    )
+    if [[ -n "$FFTW_LIB" ]]; then
+      CMAKE_ARGS+=(-DFFTW_LIBRARY="$FFTW_LIB" -DFFTW_LIBRARIES="$FFTW_LIB")
+      echo "Using FFTW  (double) from $FFTW_ROOT  → $FFTW_LIB"
     else
-      echo "rebuild_charmm_mlpot: warning: FFTW_ROOT=$FFTW_ROOT has no lib or lib64 directory" >&2
+      echo "rebuild_charmm_mlpot: warning: libfftw3 (double) not found under ${_fftw_lib_dir:-$FFTW_ROOT/lib}" >&2
+    fi
+    if [[ -n "$FFTWF_LIB" ]]; then
+      CMAKE_ARGS+=(-DFFTWF_LIBRARY="$FFTWF_LIB" -DFFTWF_LIBRARIES="$FFTWF_LIB")
+      echo "Using FFTWF (single) from $FFTWF_ROOT → $FFTWF_LIB"
+    else
+      echo "rebuild_charmm_mlpot: warning: libfftw3f (single) not found under ${_fftwf_lib_dir:-$FFTWF_ROOT/lib}" >&2
+      echo "  COLFFT/DOMDEC requires single-precision FFTW. Set FFTWF_ROOT=/path/to/sp-fftw." >&2
     fi
   fi
   cmake "${CMAKE_ARGS[@]}"
