@@ -10,7 +10,6 @@ import numpy as np
 from mmml.interfaces.pycharmmInterface.calculator_utils import dimer_permutations
 from mmml.interfaces.pycharmmInterface.cutoffs import DEFAULT_MM_SWITCH_ON
 from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
-    dimer_com_distance_numpy,
     mic_displacement_numpy,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import (
@@ -48,6 +47,26 @@ def _cell_from_box(box_side_A: Optional[float]) -> Optional[np.ndarray]:
     return np.array([[s, 0.0, 0.0], [0.0, s, 0.0], [0.0, 0.0, s]], dtype=np.float64)
 
 
+def monomer_pair_com_distances_mic(
+    coms: np.ndarray,
+    pairs: np.ndarray,
+    cell: Optional[np.ndarray],
+) -> np.ndarray:
+    """MIC distances between monomer COM pairs, shape ``(n_pairs,)``."""
+    coms = np.asarray(coms, dtype=np.float64)
+    pairs = np.asarray(pairs, dtype=np.int32)
+    a = coms[pairs[:, 0]]
+    b = coms[pairs[:, 1]]
+    d = b - a
+    if cell is not None:
+        cell = np.asarray(cell, dtype=np.float64)
+        inv = np.linalg.inv(cell.T)
+        frac = (inv @ d.T).T
+        frac = frac - np.round(frac)
+        d = frac @ cell
+    return np.linalg.norm(d, axis=1)
+
+
 def global_near_dimer_mask(
     positions: np.ndarray,
     n_monomers: int,
@@ -57,24 +76,10 @@ def global_near_dimer_mask(
     box_side_A: Optional[float] = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Return (dimer_pair_index array shape (n_dimers,2), near_mask bool)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
-        build_monomer_dimer_index_arrays,
-    )
-
-    cell = _cell_from_box(box_side_A)
-    _, dimer_idx, dimer_n_a, dimer_n_b, _ = build_monomer_dimer_index_arrays(
-        n_monomers, atoms_per_monomer
-    )
     pairs = np.array(dimer_permutations(int(n_monomers)), dtype=np.int32)
-    dists = np.array(
-        [
-            dimer_com_distance_numpy(
-                positions, dimer_idx[di], int(dimer_n_a[di]), int(dimer_n_b[di]), cell
-            )
-            for di in range(len(dimer_idx))
-        ],
-        dtype=np.float64,
-    )
+    coms = compute_monomer_coms(positions, n_monomers, atoms_per_monomer)
+    cell = _cell_from_box(box_side_A)
+    dists = monomer_pair_com_distances_mic(coms, pairs, cell)
     return pairs, dists < float(mm_switch_on)
 
 
@@ -87,6 +92,8 @@ def build_rank_active_set(
     *,
     mm_switch_on: float = DEFAULT_MM_SWITCH_ON,
     dimer_owner_ranks: Optional[np.ndarray] = None,
+    pairs: Optional[np.ndarray] = None,
+    near: Optional[np.ndarray] = None,
 ) -> RankActiveSet:
     """Build monomer/dimer active lists for one rank (before deduplication)."""
     coms = compute_monomer_coms(positions, n_monomers, atoms_per_monomer)
@@ -94,13 +101,14 @@ def build_rank_active_set(
     extended = grid.monomers_in_extended_domain(coms, rank)
     ghost = extended & ~owned
 
-    pairs, near = global_near_dimer_mask(
-        positions,
-        n_monomers,
-        atoms_per_monomer,
-        mm_switch_on=mm_switch_on,
-        box_side_A=grid.box_side_A,
-    )
+    if pairs is None or near is None:
+        pairs, near = global_near_dimer_mask(
+            positions,
+            n_monomers,
+            atoms_per_monomer,
+            mm_switch_on=mm_switch_on,
+            box_side_A=grid.box_side_A,
+        )
     cell = _cell_from_box(grid.box_side_A)
 
     candidate: list[int] = []

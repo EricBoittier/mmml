@@ -92,6 +92,8 @@ def build_spatial_batch_indices(
         rank,
         mm_switch_on=float(cutoff_params.mm_switch_on),
         dimer_owner_ranks=owners,
+        pairs=pairs,
+        near=near,
     )
     owned = np.asarray(active_set.owned_monomers, dtype=np.int32)
     dimers = np.asarray(active_set.active_dimer_indices, dtype=np.int32)
