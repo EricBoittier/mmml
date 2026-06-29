@@ -925,6 +925,44 @@ def ensure_charmm_mpi_initialized() -> None:
     _charmm_mpi_bootstrapped = True
 
 
+def ensure_mpi4py_after_charmm_init(*, phase: str = "after PyCHARMM import") -> bool:
+    """Load ``mpi4py.MPI`` after CHARMM Fortran ``MPI_Init``.
+
+    ``configure_mpi4py_charmm_owned_init()`` sets ``mpi4py.rc(initialize=False)``.
+    ASE imports ``ase.parallel`` at package load time, which immediately tries
+    ``from mpi4py import MPI`` when the ``mpi4py`` package is already present.
+    That import must happen **after** CHARMM has initialized MPI, otherwise ASE
+    (and any later mpi4py collectives) fail with ``cannot import name 'MPI'``.
+    """
+    if _truthy("MMML_MPI_PY_INIT") or not charmm_lib_links_mpi():
+        return True
+    if not _mpi4py_available():
+        return True
+    configure_mpi4py_charmm_owned_init()
+    try:
+        from mpi4py import MPI
+
+        if not MPI.Is_initialized():
+            print(
+                f"mmml: mpi4py reports MPI not initialized {phase}. "
+                "PyCHARMM should have called MPI_Init from Fortran.",
+                file=sys.stderr,
+                flush=True,
+            )
+            return False
+        _ = int(MPI.COMM_WORLD.Get_size())
+        return True
+    except Exception as exc:
+        print(
+            f"mmml: mpi4py.MPI unavailable {phase}: {exc}. "
+            "Rebuild mpi4py against libcharmm OpenMPI: "
+            "./scripts/rebuild_mpi4py_for_charmm.sh",
+            file=sys.stderr,
+            flush=True,
+        )
+        return False
+
+
 def prepare_serial_charmm_mpi_env() -> None:
     """Env/LD setup only — do **not** call ``MPI_Init`` from mpi4py (CHARMM owns that)."""
     from mmml.interfaces.pycharmmInterface.jax_compile_threads import (

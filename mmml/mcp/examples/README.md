@@ -68,8 +68,9 @@ in `defaults` so cluster geometry can be built. JAX-MD `free_nve` omits `--box-s
 from its subprocess argv; `packmol_radius` alone is sufficient.
 
 **JAX-MD dependency:** if `import jax_md` fails with `mutable_array` from `jax._src.core`,
-your `jax` / `flax` / `jax-md` pins are incompatible. ASE and PyCHARMM hybrid backends
-are unaffected. Re-sync the project venv (`uv sync`) or use the git-pinned `jax-md`
+you likely have **flax 0.12.0** (or stale wheels) with **jax ≥ 0.10** — upgrade flax:
+`uv pip install 'flax>=0.12.1' --upgrade --reinstall && uv sync`. ASE and PyCHARMM hybrid
+backends are unaffected. Re-sync the project venv (`uv sync`) or use the git-pinned `jax-md`
 from `pyproject.toml`.
 
 ### Programmatic hybrid calculator (ASE)

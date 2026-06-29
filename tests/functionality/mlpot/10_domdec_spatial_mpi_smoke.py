@@ -428,6 +428,12 @@ def _charmm_domdec_ener_smoke(args: argparse.Namespace) -> int:
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     _log("ener", "import_pycharmm done")
 
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import ensure_mpi4py_after_charmm_init
+
+    if not ensure_mpi4py_after_charmm_init(phase="before ASE import in live ENER"):
+        print("FAIL: mpi4py.MPI not available after PyCHARMM import", file=sys.stderr)
+        return 1
+
     import ase
     import pycharmm
     import pycharmm.energy as energy

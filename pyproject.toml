@@ -24,13 +24,13 @@ dependencies = [
     "scipy",
     "pandas",
     "matplotlib>=3.5.0",
-    # JAX ecosystem (CPU version by default). Flax 0.12+ / jax-md 0.2.29+ need jax>=0.10
-    # (mutable_array in jax._src.core); without this pin, stale jaxlib survives uv sync.
+    # JAX ecosystem (CPU version by default).
+    # jax-md 0.2.29+ / flax 0.12.1+ use jax.Ref (not jax._src.core.mutable_array, gone in JAX 0.10).
     "jax>=0.10.0",
     "jaxlib>=0.10.0",
     "jax-md",
     "jax-pme @ git+https://github.com/EricBoittier/jax-pme.git@c5f82726840de0abe29e3074adfaac8c826ffb85",
-    "flax",
+    "flax>=0.12.1",
     "optax",
     "jaxtyping",
     "orbax-checkpoint",

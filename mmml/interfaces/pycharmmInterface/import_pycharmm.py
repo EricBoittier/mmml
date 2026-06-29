@@ -82,6 +82,14 @@ if PYCHARMM_AVAILABLE:
     psf = _psf
     minimize = _minimize
 
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+        charmm_lib_links_mpi,
+        ensure_mpi4py_after_charmm_init,
+    )
+
+    if charmm_lib_links_mpi():
+        ensure_mpi4py_after_charmm_init(phase="during import_pycharmm")
+
 
 def _report_charmm_import_paths() -> None:
     if not PYCHARMM_AVAILABLE:
@@ -105,9 +113,6 @@ def _report_charmm_import_paths() -> None:
 
 
 _report_charmm_import_paths()
-
-import ase
-from ase.visualize import view
 
 
 def get_block(a, b):
@@ -227,6 +232,8 @@ def reset_block_no_internal():
 
 
 def view_atoms(atoms):
+    from ase.visualize import view
+
     return view(atoms, viewer="x3d")
 
 def get_forces_pycharmm():
@@ -469,6 +476,8 @@ if PYCHARMM_AVAILABLE and not _under_mpirun():
 
 
 def ase_from_pycharmm_state():
+    import ase
+
     from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
     Z = get_Z_from_psf()
