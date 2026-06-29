@@ -219,8 +219,9 @@ def _build_ocoh_cluster_traced(
     import pycharmm.psf as psf
     import pycharmm.read as read
 
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM, CGENFF_RTF
     from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
-    from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
     from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
     residue = "OCOH"
@@ -234,9 +235,17 @@ def _build_ocoh_cluster_traced(
         lingo.charmm_script("DELETE ATOM SELE ALL END")
         _rank_log("traced cluster: DELETE ATOM done")
 
-    _rank_log("traced cluster: read CGENFF toppar begin")
-    read_cgenff_toppar(enable_drude=False)
-    _rank_log("traced cluster: read CGENFF toppar done")
+    _rank_log(f"traced cluster: read RTF begin {CGENFF_RTF}")
+    with charmm_relaxed_bomlev():
+        # Use the committed RTF directly for np>1 diagnostics; the standard helper
+        # writes a per-rank temp no-Drude RTF, which obscures where MPI setup hangs.
+        read.rtf(CGENFF_RTF)
+    _rank_log("traced cluster: read RTF done")
+
+    _rank_log(f"traced cluster: read PRM begin {CGENFF_PRM}")
+    with charmm_relaxed_bomlev():
+        read.prm(CGENFF_PRM)
+    _rank_log("traced cluster: read PRM done")
 
     _rank_log("traced cluster: read sequence begin")
     read.sequence_string(sequence)
