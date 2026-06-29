@@ -14,7 +14,7 @@ Example:
   MMML_MPI_NP=1 MMML_DOMDEC_MLPOT_SMOKE=1 \\
     ./scripts/mmml-charmm-mpirun.sh python \\
     tests/functionality/mlpot/09_domdec_mlpot_smoke.py \\
-    --residue ACO --n-molecules 2 --box-side 28
+    --residue OCOH --n-molecules 1 --box-side 32
 """
 
 from __future__ import annotations
@@ -31,8 +31,8 @@ if str(REPO_ROOT) not in sys.path:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--residue", default="ACO")
-    parser.add_argument("--n-molecules", type=int, default=2)
+    parser.add_argument("--residue", default="OCOH")
+    parser.add_argument("--n-molecules", type=int, default=1)
     parser.add_argument("--spacing", type=float, default=5.0)
     parser.add_argument(
         "--checkpoint",
@@ -40,7 +40,7 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="PhysNet checkpoint (.json or Orbax root). Default: MMML_CKPT or repo ckpts.",
     )
-    parser.add_argument("--box-side", type=float, default=28.0)
+    parser.add_argument("--box-side", type=float, default=32.0)
     parser.add_argument(
         "--domdec-command",
         default="domdec on",
@@ -57,6 +57,14 @@ def _parse_args() -> argparse.Namespace:
         help=(
             "Do not set MMML_NO_CHARMM_DOMDEC_OFF=1. Default protects this active-DOMDEC "
             "smoke from the MLpot DOMDEC-off safety hook."
+        ),
+    )
+    parser.add_argument(
+        "--allow-domdec-order-risk",
+        action="store_true",
+        help=(
+            "Run even when the selected residue is known to have DOMDEC-incompatible "
+            "heavy/H atom ordering."
         ),
     )
     parser.add_argument(
@@ -111,6 +119,29 @@ def _run_domdec_command(command: str | None) -> None:
     lingo.charmm_script(str(command))
 
 
+def _domdec_command_turns_on(command: str | None) -> bool:
+    if not command:
+        return False
+    words = str(command).lower().replace("=", " ").split()
+    return "domdec" in words and "on" in words and "off" not in words
+
+
+def _known_domdec_order_issue(residue: str) -> str | None:
+    residue = residue.upper()
+    if residue == "ACO":
+        return (
+            "ACO is ordered as O1,C1,C2,C3,H21,H22,H23,H31,H32,H33 in the generated "
+            "PSF. CHARMM DOMDEC groupxfast requires hydrogens to be adjacent to the "
+            "heavy atom they are bonded to, so this dies before testing MLpot/JAX."
+        )
+    if residue == "MEOH":
+        return (
+            "MEOH is ordered as CB,OG,HG1,HB1,HB2,HB3 in the generated PSF. The CB "
+            "hydrogens are separated from CB by OG/HG1, which trips DOMDEC groupxfast."
+        )
+    return None
+
+
 def main() -> int:
     args = _parse_args()
     if args.dry_run:
@@ -127,6 +158,19 @@ def main() -> int:
 
     if not args.allow_domdec_off_hook:
         os.environ["MMML_NO_CHARMM_DOMDEC_OFF"] = "1"
+
+    domdec_command = None if args.no_domdec_command else args.domdec_command
+    if _domdec_command_turns_on(domdec_command) and not args.allow_domdec_order_risk:
+        issue = _known_domdec_order_issue(str(args.residue))
+        if issue:
+            print("Refusing active-DOMDEC smoke for this residue atom order.", file=sys.stderr)
+            print(issue, file=sys.stderr)
+            print(
+                "Use --residue OCOH --n-molecules 1 for the default DOMDEC-order smoke, "
+                "or pass --allow-domdec-order-risk to reproduce the CHARMM failure.",
+                file=sys.stderr,
+            )
+            return 3
 
     from _common import (
         all_atom_selection,
@@ -168,7 +212,7 @@ def main() -> int:
     setup_charmm_environment(use_pbc=True, cubic_box_side_A=float(args.box_side))
     # Do not call the vacuum nbonds helper here: it runs ``crystal free`` and
     # leaves DOMDEC with a zero/NaN box.
-    _run_domdec_command(None if args.no_domdec_command else args.domdec_command)
+    _run_domdec_command(domdec_command)
 
     params, model = load_physnet_for_cluster(ckpt, n_atoms)
     model.natoms = n_atoms

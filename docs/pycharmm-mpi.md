@@ -305,7 +305,7 @@ MMML_MPI_NP=1 MMML_DOMDEC_MLPOT_SMOKE=1 \
   ./scripts/mmml-charmm-mpirun.sh python \
   tests/functionality/mlpot/09_domdec_mlpot_smoke.py \
   --checkpoint "$MMML_CKPT" \
-  --residue ACO --n-molecules 2 --box-side 28
+  --residue OCOH --n-molecules 1 --box-side 32
 ```
 
 Run the same-script baseline without sending `domdec on`:
@@ -315,7 +315,7 @@ MMML_MPI_NP=1 MMML_DOMDEC_MLPOT_SMOKE=1 \
   ./scripts/mmml-charmm-mpirun.sh python \
   tests/functionality/mlpot/09_domdec_mlpot_smoke.py \
   --checkpoint "$MMML_CKPT" \
-  --residue ACO --n-molecules 2 --box-side 28 \
+  --residue OCOH --n-molecules 1 --box-side 32 \
   --no-domdec-command
 ```
 
