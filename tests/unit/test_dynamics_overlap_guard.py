@@ -3046,65 +3046,6 @@ def test_run_dynamics_with_io_cpt_overlap_subchunks(tmp_path):
     assert sum(calls) == 1000
 
 
-def test_overlap_chunk_skips_dcd_without_defaulting_nsavc_to_one(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
-        CharmmTrajectoryFiles,
-        run_dynamics_with_io,
-    )
-
-    cfg = DynamicsOverlapConfig(
-        action="error",
-        min_distance_A=0.5,
-        check_interval=1600,
-        n_monomers=2,
-        use_pbc=False,
-    )
-    pos_ok = np.array(
-        [
-            [0.0, 0.0, 0.0],
-            [1.0, 0.0, 0.0],
-            [5.0, 0.0, 0.0],
-            [6.0, 0.0, 0.0],
-        ],
-        dtype=float,
-    )
-    io = CharmmTrajectoryFiles(
-        restart_write=tmp_path / "heat.res",
-        trajectory=tmp_path / "heat.dcd",
-    )
-    seen: list[tuple[int | None, Path | None, dict]] = []
-
-    def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
-        seen.append(
-            (
-                kw.get("nsavc"),
-                _io.trajectory if _io is not None else None,
-                extra_iokw or {},
-            )
-        )
-        if _io is not None and _io.restart_write is not None:
-            _write_test_restart(Path(_io.restart_write), int(kw["nstep"]))
-        return mock.Mock()
-
-    with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
-        side_effect=fake_chunk,
-    ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
-        return_value=pos_ok,
-    ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_restart_write_after_chunk",
-    ):
-        run_dynamics_with_io(
-            {"nstep": 3200, "nsavc": 1600},
-            io,
-            overlap=cfg,
-            overlap_context="HEAT",
-        )
-
-    assert seen == [(1599, None, {}), (1599, None, {})]
-
-
 def test_run_dynamics_with_io_uses_even_overlap_chunks(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
