@@ -341,8 +341,10 @@ def domdec_summary() -> str:
     nlocal = get_local_atom_count()
     nghost = get_ghost_atom_count()
     sym_avail = discover_domdec_symbols()
-    n_found = sum(sym_avail.values())
-    n_total = len([k for k in sym_avail if not k.startswith("_")])
+    # Filter out the special sentinel key (_libcharmm_not_found)
+    real_syms = {k: v for k, v in sym_avail.items() if not k.startswith("_lib")}
+    n_found = sum(real_syms.values())
+    n_total = len(real_syms)
     lines = [
         f"DOMDEC active    : {active}",
         f"NDIR             : {nx} {ny} {nz}",
