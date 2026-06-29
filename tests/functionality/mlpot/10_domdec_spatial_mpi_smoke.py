@@ -126,6 +126,25 @@ def _log(tag: str, msg: str) -> None:
     print(f"[{tag} rank {rank}/{size}] {msg}", flush=True)
 
 
+def _skip_vacuum_crystal_free_for_mpi() -> None:
+    """Avoid ``prepare_charmm_vacuum`` → ``crystal free`` during np>1 prebuilt load."""
+    import mmml.interfaces.pycharmmInterface.mlpot.setup as mlpot_setup
+
+    def _skip() -> None:
+        _log("setup", "skipping prepare_charmm_vacuum for np>1 prebuilt path")
+
+    mlpot_setup.prepare_charmm_vacuum = _skip
+
+
+def _configure_live_charmm_mpi_import(*, size: int) -> None:
+    """Env guards before the first ``import_pycharmm`` on np>1 live CHARMM paths."""
+    if size <= 1:
+        return
+    os.environ.setdefault("MMML_SKIP_CHARMM_RESET_BLOCK", "1")
+    _log("setup", "np>1 live CHARMM: skip import-time reset_block")
+    _skip_vacuum_crystal_free_for_mpi()
+
+
 def _prebuilt_paths(args: argparse.Namespace) -> tuple[Path, Path]:
     stem = f"{args.residue.lower()}_{args.n_molecules}mer"
     psf = args.prebuilt_psf or (Path(args.prebuilt_dir) / f"{stem}.psf")
@@ -401,6 +420,14 @@ def _load_prebuilt(args: argparse.Namespace) -> tuple["np.ndarray", "np.ndarray"
 
 def _charmm_domdec_ener_smoke(args: argparse.Namespace) -> int:
     """Live CHARMM ENER: prebuilt DCM + DOMDEC + spatial MPI."""
+    rank, size = _mpi_info()
+
+    # import_pycharmm must load before any other mmml path that transitively
+    # imports it; on np>1, main() already set MMML_SKIP_CHARMM_RESET_BLOCK.
+    _log("ener", "importing import_pycharmm")
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    _log("ener", "import_pycharmm done")
+
     import ase
     import pycharmm
     import pycharmm.energy as energy
@@ -415,7 +442,6 @@ def _charmm_domdec_ener_smoke(args: argparse.Namespace) -> int:
         select_all_atoms,
     )
 
-    rank, size = _mpi_info()
     ndir = args.ndir or size  # default: one domain per rank along x
 
     _log("ener", "checking MLpot symbols")
@@ -442,7 +468,6 @@ def _charmm_domdec_ener_smoke(args: argparse.Namespace) -> int:
         _log("ener", f"ndir reduced to {ndir}")
 
     _log("ener", "loading prebuilt topology")
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     # Guard: disable the automatic domdec-off hook so active DOMDEC survives MLpot registration
     os.environ["MMML_NO_CHARMM_DOMDEC_OFF"] = "1"
 
@@ -559,8 +584,21 @@ def main() -> int:
         except Exception:
             pass
     elif args.charmm_ener or args.prepare_prebuilt_only:
-        from mmml.interfaces.pycharmmInterface.charmm_mpi import ensure_charmm_mpi_initialized
-        ensure_charmm_mpi_initialized()
+        rank, size = _mpi_info()
+        if args.charmm_ener:
+            os.environ.setdefault("MMML_NO_CHARMM_DOMDEC_OFF", "1")
+            _configure_live_charmm_mpi_import(size=size)
+        # np>1 live ENER: defer PyCHARMM import to _charmm_domdec_ener_smoke so
+        # MMML_SKIP_CHARMM_RESET_BLOCK is in place before import_pycharmm loads.
+        # ensure_charmm_mpi_initialized also runs init_vacuum/crystal free, which
+        # is unsafe before synchronized prebuilt topology on np>1.
+        if args.prepare_prebuilt_only or size <= 1:
+            from mmml.interfaces.pycharmmInterface.charmm_mpi import ensure_charmm_mpi_initialized
+            _log("setup", "ensure_charmm_mpi_initialized")
+            ensure_charmm_mpi_initialized()
+            _log("setup", "ensure_charmm_mpi_initialized done")
+        elif args.charmm_ener:
+            _log("setup", f"np={size} live ENER: deferred PyCHARMM bootstrap")
 
     rank, size = _mpi_info()
 

@@ -291,7 +291,44 @@ def capture_neighbour_list():
     }
 
 
-reset_block()
+def _launcher_mpi_size() -> int:
+    """MPI world size from OpenMPI/PMI env (no mpi4py import)."""
+    size_raw = (
+        os.environ.get("OMPI_COMM_WORLD_SIZE")
+        or os.environ.get("PMIX_SIZE")
+        or os.environ.get("PMI_SIZE")
+        or "1"
+    )
+    try:
+        return max(1, int(size_raw))
+    except ValueError:
+        return 1
+
+
+def _maybe_reset_block_at_import() -> None:
+    """Run the default BLOCK reset once per process when safe under MPI.
+
+    Under ``mpirun -np > 1``, ranks finish this module at different times
+    (``import ase``, etc.).  ``eval_charmm_script`` during import deadlocks
+    MPI-linked CHARMM: early ranks spin in Fortran receive while late ranks
+    are still in Python.  Skip import-time ``reset_block`` for np>1; callers
+    run it after a barrier or from rank-synchronized setup (see
+    ``MMML_SKIP_CHARMM_RESET_BLOCK`` to force-skip on np=1 diagnostics).
+    """
+    if not PYCHARMM_AVAILABLE:
+        return
+    if os.environ.get("MMML_SKIP_CHARMM_RESET_BLOCK", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    ):
+        return
+    if _under_mpirun() and _launcher_mpi_size() > 1:
+        return
+    reset_block()
+
+
+_maybe_reset_block_at_import()
 
 
 def _init_charmm_default_levels() -> None:
