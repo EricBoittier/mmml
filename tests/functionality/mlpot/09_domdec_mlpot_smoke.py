@@ -42,6 +42,24 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--box-side", type=float, default=32.0)
     parser.add_argument(
+        "--prebuilt-dir",
+        type=Path,
+        default=Path("artifacts/domdec_smoke"),
+        help="Directory for prebuilt PSF/CRD artifacts used by np>1 diagnostics.",
+    )
+    parser.add_argument("--prebuilt-psf", type=Path, default=None)
+    parser.add_argument("--prebuilt-crd", type=Path, default=None)
+    parser.add_argument(
+        "--prepare-prebuilt-only",
+        action="store_true",
+        help="Build OCOH topology/coords, write PSF/CRD, and exit (run with MMML_MPI_NP=1).",
+    )
+    parser.add_argument(
+        "--use-prebuilt-topology",
+        action="store_true",
+        help="Load PSF/CRD instead of constructing topology via RTF/sequence.",
+    )
+    parser.add_argument(
         "--domdec-command",
         default="domdec on",
         help="CHARMM stream command before MLpot registration (default: 'domdec on').",
@@ -201,6 +219,52 @@ def _load_template_pdb_coords(template_pdb: Path) -> dict[str, "np.ndarray"]:
     if not coords:
         raise ValueError(f"No ATOM/HETATM coordinates found in template PDB: {template_pdb}")
     return coords
+
+
+def _prebuilt_paths(args: argparse.Namespace) -> tuple[Path, Path]:
+    residue = str(args.residue).lower()
+    n_mol = int(args.n_molecules)
+    psf = args.prebuilt_psf or (Path(args.prebuilt_dir) / f"{residue}_{n_mol}mer.psf")
+    crd = args.prebuilt_crd or (Path(args.prebuilt_dir) / f"{residue}_{n_mol}mer.crd")
+    return Path(psf), Path(crd)
+
+
+def _write_prebuilt_topology(psf_path: Path, crd_path: Path) -> None:
+    import pycharmm.write as write
+
+    psf_path.parent.mkdir(parents=True, exist_ok=True)
+    crd_path.parent.mkdir(parents=True, exist_ok=True)
+    _rank_log(f"write prebuilt PSF begin {psf_path}")
+    write.psf_card(str(psf_path), title="DOMDEC MLpot smoke prebuilt PSF")
+    _rank_log(f"write prebuilt PSF done {psf_path}")
+    _rank_log(f"write prebuilt CRD begin {crd_path}")
+    write.coor_card(str(crd_path), title="DOMDEC MLpot smoke prebuilt coordinates")
+    _rank_log(f"write prebuilt CRD done {crd_path}")
+
+
+def _load_prebuilt_topology(psf_path: Path, crd_path: Path) -> tuple["np.ndarray", "np.ndarray"]:
+    import numpy as np
+    import pycharmm.coor as coor
+    import pycharmm.read as read
+
+    from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+
+    if not psf_path.is_file():
+        raise FileNotFoundError(f"Prebuilt PSF not found: {psf_path}")
+    if not crd_path.is_file():
+        raise FileNotFoundError(f"Prebuilt CRD not found: {crd_path}")
+
+    _rank_log(f"load prebuilt PSF begin {psf_path}")
+    read.psf_card(str(psf_path))
+    _rank_log("load prebuilt PSF done")
+    _rank_log(f"load prebuilt CRD begin {crd_path}")
+    read.coor_card(str(crd_path))
+    _rank_log("load prebuilt CRD done")
+    _rank_log("load prebuilt Z/positions begin")
+    z = np.asarray(get_Z_from_psf(), dtype=int)
+    r = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
+    _rank_log(f"load prebuilt Z/positions done n_atoms={len(z)}")
+    return z, r
 
 
 def _build_ocoh_cluster_traced(
@@ -374,8 +438,16 @@ def main() -> int:
 
     _rank_log("resolving checkpoint")
     ckpt = resolve_checkpoint(args.checkpoint)
-    _rank_log("building CHARMM/ASE cluster begin")
-    if size > 1:
+    psf_path, crd_path = _prebuilt_paths(args)
+    use_prebuilt = bool(args.use_prebuilt_topology or size > 1)
+
+    _rank_log("building/loading CHARMM cluster begin")
+    if use_prebuilt:
+        if size <= 1 and not args.use_prebuilt_topology:
+            raise RuntimeError("Internal error: use_prebuilt set unexpectedly for size<=1")
+        _rank_log("using prebuilt PSF/CRD topology path")
+        z, r = _load_prebuilt_topology(psf_path, crd_path)
+    elif size > 1:
         if str(args.residue).upper() != "OCOH":
             print("np>1 traced diagnostic currently supports only --residue OCOH.", file=sys.stderr)
             return 5
@@ -386,10 +458,19 @@ def main() -> int:
         )
     else:
         z, r = build_ase_cluster(args.residue, args.n_molecules, args.spacing)
-    _rank_log("building CHARMM/ASE cluster done")
+    _rank_log("building/loading CHARMM cluster done")
     n_atoms = len(z)
     if rank == 0:
         print(f"Cluster: {n_atoms} atoms; checkpoint={ckpt}", flush=True)
+
+    if args.prepare_prebuilt_only:
+        if size > 1:
+            print("--prepare-prebuilt-only must be run with MMML_MPI_NP=1.", file=sys.stderr)
+            return 6
+        _write_prebuilt_topology(psf_path, crd_path)
+        if rank == 0:
+            print(f"\nPASS: wrote prebuilt topology:\n  PSF: {psf_path}\n  CRD: {crd_path}")
+        return 0
 
     _rank_log("importing PyCHARMM modules")
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
