@@ -47,6 +47,25 @@ def _rank_size_from_launcher_env() -> Tuple[int, int]:
 
 
 def _mpi4py_is_initialized() -> bool:
+    """Return True only when mpi4py.MPI extension is already loaded AND initialized.
+
+    Deliberately avoids importing ``mpi4py.MPI`` if the extension has not been
+    loaded yet.  Importing the extension before CHARMM's ``MPI_Init`` causes
+    mpi4py to wrap an uninitialised ``MPI_COMM_WORLD`` (size=1 or undefined).
+    That cached view never updates after CHARMM's Fortran ``MPI_Init`` fires,
+    making every subsequent ``MPI.COMM_WORLD.Get_size()`` call return 1 even on
+    a 4-rank mpirun job — silently breaking all allreduce collectives.
+
+    After the first real ``from mpi4py import MPI`` (inside ``_mpi_barrier()``
+    or the allreduce helpers, which are called *after* pycharmm is imported and
+    CHARMM's ``MPI_Init`` has already created a proper multi-rank world), the
+    extension is in ``sys.modules`` and this function starts returning the real
+    value.
+    """
+    import sys
+
+    if "mpi4py.MPI" not in sys.modules:
+        return False
     try:
         from mpi4py import MPI
 

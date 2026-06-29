@@ -236,11 +236,15 @@ def _callback_smoke(args: argparse.Namespace) -> int:
     x, y, zc = pos[:, 0], pos[:, 1], pos[:, 2]
     dx = dy = dz = np.zeros(n, dtype=np.float64)
 
-    # Barrier 1: ensure all ranks finish heavy imports (JAX, etc.) and are
-    # ready before any rank calls the first mpi4py collective inside
-    # calculate_charmm → broadcast_mlpot_result → mpi_allreduce_*.
-    # mpi4py auto-initialises MPI on the first "from mpi4py import MPI"
-    # inside _mpi_barrier(), so this is also the point where MPI_Init fires.
+    # Barrier 1 — two purposes:
+    # 1. Synchronise all ranks after heavy imports (JAX JIT, pycharmm init).
+    # 2. THIS IS THE FIRST "from mpi4py import MPI" call in the process.
+    #    The heavy-import chain (hybrid_mlpot → mmml_calculator →
+    #    mm_energy_forces → import_pycharmm → import pycharmm) already fired
+    #    CHARMM's Fortran MPI_Init, giving MPI_COMM_WORLD a real np-rank world.
+    #    mpi4py (rc initialize=False, set by prepare_serial_charmm_mpi_env)
+    #    loads its extension here, wraps that fully-initialised MPI_COMM_WORLD,
+    #    and sees size=np — so Barrier and Allreduce work correctly.
     _mpi_barrier()
     _log("callback", "running calculate_charmm with mocked DOMDEC ctypes")
     with (
@@ -263,11 +267,10 @@ def _callback_smoke(args: argparse.Namespace) -> int:
         mock.patch("mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax"),
         mock.patch("mmml.utils.jax_gpu_warmup.sync_jax_gpu_before_charmm"),
         # Prevent broadcast_mlpot_result / mpi_allreduce_forces / mpi_allreduce_energy
-        # from calling ensure_charmm_mpi_initialized(), which would trigger
-        # lingo.charmm_script() and put non-root ranks into CHARMM's Fortran
-        # receive loop mid-callback — causing an MPI allreduce deadlock.
-        # With MMML_MPI_PY_INIT=1 set in main(), mpi4py already owns MPI
-        # (initialised at Barrier 1 above), so CHARMM init is not needed here.
+        # from calling ensure_charmm_mpi_initialized(), which would try to run
+        # init_vacuum_charmm_state_mpi() (sets up CHARMM topology, nbonds, etc.)
+        # — not needed in this mocked callback-only path and potentially
+        # unsafe if pycharmm was imported without a vacuum topology.
         mock.patch("mmml.interfaces.pycharmmInterface.charmm_mpi.ensure_charmm_mpi_initialized"),
         mock.patch(
             "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.as_ml_array",
@@ -528,25 +531,21 @@ def _charmm_domdec_ener_smoke(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 
 def main() -> int:
-    # Parse args FIRST so we know whether CHARMM will be needed before
-    # configuring the MPI ownership model.
     args = _parse_args()
 
-    # Callback-only mode: Python (mpi4py) owns MPI init so ALL 4 Python
-    # processes stay alive and can participate in mpi4py barriers and
-    # Allreduce collectives.  Setting MMML_MPI_PY_INIT=1 prevents
-    # configure_mpi4py_charmm_owned_init() from calling
-    # mpi4py.rc(initialize=False), so mpi4py auto-initialises MPI normally
-    # on every rank — no CHARMM Fortran receive loop is entered.
+    # CHARMM owns MPI_Init (via Fortran, called when pycharmm is first
+    # imported).  We must NOT call mpi4py's MPI_Init before that, because
+    # mpi4py would wrap an uninitialised MPI_COMM_WORLD (size=1) and cache it
+    # permanently — making every later Barrier/Allreduce a silent no-op.
     #
-    # CHARMM-enabled paths (--prepare-prebuilt-only, --charmm-ener):
-    # keep the normal CHARMM-owns-MPI design; ensure_charmm_mpi_initialized()
-    # loads PyCHARMM and lets non-root ranks enter the CHARMM receive loop,
-    # which is required for lingo.charmm_script() to work correctly.
-    callback_only = not args.prepare_prebuilt_only and not args.charmm_ener
-    if callback_only:
-        os.environ["MMML_MPI_PY_INIT"] = "1"
-
+    # prepare_serial_charmm_mpi_env() sets mpi4py.rc(initialize=False) so
+    # mpi4py never auto-inits.  The first "from mpi4py import MPI" then happens
+    # inside _mpi_barrier() (Barrier 1), AFTER pycharmm has been imported and
+    # CHARMM has called MPI_Init with the full np-rank world.  At that point
+    # mpi4py wraps the real MPI_COMM_WORLD correctly (size=np).
+    #
+    # CHARMM-enabled paths (--prepare-prebuilt-only, --charmm-ener): same
+    # design; ensure_charmm_mpi_initialized() bootstraps CHARMM's vacuum state.
     from mmml.interfaces.pycharmmInterface.charmm_mpi import (
         mpi4py_openmpi_mismatch,
         prepare_serial_charmm_mpi_env,
@@ -558,32 +557,7 @@ def main() -> int:
         print(f"FAIL: {msg}", file=sys.stderr)
         return 1
 
-    if callback_only:
-        # Init mpi4py MPI BEFORE any pycharmm import fires — exactly the
-        # pattern from pyCHARMM Workshop rep_ex_amino_acid.py which does
-        # "from mpi4py import MPI" as its very first import.
-        #
-        # CHARMM's settings.set_verbosity() (called at import time by
-        # import_pycharmm._init_charmm_default_levels) initialises CHARMM's
-        # Fortran before mpi4py has a chance to call MPI_Init; each rank ends
-        # up with COMM_WORLD size=1, making every Barrier and Allreduce a
-        # no-op on rank 0 while ranks 1-3 may block on a genuine 4-rank
-        # MPI world they initialised later — causing the hang.
-        #
-        # By calling "from mpi4py import MPI" here (AFTER prepare_serial…
-        # which already pinned CUDA_VISIBLE_DEVICES per rank), mpi4py calls
-        # MPI_Init with the full 4-rank COMM_WORLD BEFORE pycharmm loads.
-        # All subsequent CHARMM Fortran calls then see an already-initialised
-        # MPI world of size 4.
-        try:
-            from mpi4py import MPI as _MPI  # noqa: N812 — local alias only
-            if not _MPI.Is_initialized():
-                _MPI.Init()
-        except Exception:
-            pass
-    else:
-        # Load PyCHARMM so CHARMM Fortran MPI_Init fires before mpi4py
-        # collectives.  Non-root ranks enter the CHARMM receive loop here.
+    if args.charmm_ener or args.prepare_prebuilt_only:
         from mmml.interfaces.pycharmmInterface.charmm_mpi import ensure_charmm_mpi_initialized
         ensure_charmm_mpi_initialized()
 
