@@ -222,6 +222,7 @@ def _build_ocoh_cluster_traced(
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
     from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM, CGENFF_RTF
     from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+    from mmml.interfaces.pycharmmInterface.nbonds_config import _rtf_path_without_drude_autogen
     from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
     residue = "OCOH"
@@ -235,12 +236,13 @@ def _build_ocoh_cluster_traced(
         lingo.charmm_script("DELETE ATOM SELE ALL END")
         _rank_log("traced cluster: DELETE ATOM done")
 
-    _rank_log(f"traced cluster: read RTF begin {CGENFF_RTF}")
+    no_drude_rtf = _rtf_path_without_drude_autogen(CGENFF_RTF)
+    _rank_log(f"traced cluster: read no-Drude RTF begin {no_drude_rtf}")
     with charmm_relaxed_bomlev():
-        # Use the committed RTF directly for np>1 diagnostics; the standard helper
-        # writes a per-rank temp no-Drude RTF, which obscures where MPI setup hangs.
-        read.rtf(CGENFF_RTF)
-    _rank_log("traced cluster: read RTF done")
+        # Use a no-Drude RTF for this CGENFF/MLpot smoke; Drude autogen is not
+        # part of the DOMDEC question and can obscure MPI setup hangs.
+        read.rtf(no_drude_rtf)
+    _rank_log("traced cluster: read no-Drude RTF done")
 
     _rank_log(f"traced cluster: read PRM begin {CGENFF_PRM}")
     with charmm_relaxed_bomlev():
