@@ -5,8 +5,6 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
-
 from mmml.cli.configure_presets import PRESETS, list_presets_text
 from mmml.cli.registry import COMMAND_REGISTRY
 from mmml.cli.run.health_check import run_health_check
@@ -15,6 +13,31 @@ from mmml.mcp.env import default_checkpoint, repo_root, runs_root
 from mmml.mcp.recipes import configure_run, list_recipe_names, load_recipe, run_recipe_stage
 from mmml.mcp.runner import run_console_script, run_mmml
 from mmml.mcp.status import get_run_status, list_runs, tail_log
+
+
+try:
+    from mcp.server.fastmcp import FastMCP
+except ModuleNotFoundError as exc:
+    _FASTMCP_IMPORT_ERROR = exc
+
+    class FastMCP:  # type: ignore[no-redef]
+        """Minimal decorator shim so non-server helpers remain importable."""
+
+        def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+            pass
+
+        def tool(self, *_args: Any, **_kwargs: Any) -> Any:
+            def decorator(func: Any) -> Any:
+                return func
+
+            return decorator
+
+        def run(self) -> None:
+            raise RuntimeError(
+                "The MMML MCP server requires the optional 'mcp' dependency. "
+                "Install with `pip install 'mmml[mcp]'` or `pip install 'mmml[dev]'`."
+            ) from _FASTMCP_IMPORT_ERROR
+
 
 mcp = FastMCP(
     "mmml",

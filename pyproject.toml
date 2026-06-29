@@ -240,6 +240,7 @@ dev = [
     "mkdocs>=1.6,<2.0",
     "mkdocs-material>=9.7",
     "mkdocstrings[python]>=0.30",
+    "mcp>=1.0.0",
     "ruff>=0.15",
     "vulture>=2.16",
 ]
