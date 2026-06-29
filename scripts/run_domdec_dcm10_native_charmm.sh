@@ -197,7 +197,7 @@ crystal build finds no images within cutnb, and CHARMM stops with "IMAGES NEED T
 
 Re-prep at a large enough box (DCM:10 will be dilute; that is OK for this MPI gate):
 
-  BOX_SIZE=${_min_box%%.*} bash scripts/run_domdec_dcm10_smoke.sh prep
+  bash scripts/run_domdec_dcm10_smoke.sh prep-tier3
   bash scripts/run_domdec_dcm10_smoke.sh tier3
 
 Or set MMML_MPI_NP=1 for a serial DOMDEC ENER smoke only (not a true np>1 gate).

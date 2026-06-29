@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import json
+import re
+from pathlib import Path
+
 # c47 site builds: each NDIR axis must be 1 or >= 8 (2–7 nodes forbidden).
 _MIN_AXIS_NODES = 8
 
@@ -75,3 +79,47 @@ def min_domdec_crystal_side_A(
     nx, ny, nz = suggest_domdec_ndir(n)
     n_split = max(nx, ny, nz)
     return float(n_split * per_domain)
+
+
+def _read_prep_box_side_A(box_dir: Path) -> float | None:
+    box_json = box_dir / "box.json"
+    if box_json.is_file():
+        side = json.loads(box_json.read_text()).get("box_side_A")
+        if side is not None:
+            return float(side)
+    match = re.search(r"_l([0-9]+)$", box_dir.name)
+    if match:
+        return float(match.group(1))
+    return None
+
+
+def pick_domdec_prep_dir(
+    boxes_root: Path,
+    *,
+    n_dcm: int,
+    min_side_A: float = 0.0,
+) -> Path | None:
+    """Pick prep dir: smallest side >= min_side_A, else newest when min_side_A=0."""
+    pattern = f"domdec_dcm{n_dcm}_l"
+    candidates: list[tuple[float, float, Path]] = []
+    if not boxes_root.is_dir():
+        return None
+    for entry in boxes_root.iterdir():
+        if not entry.is_dir() or not entry.name.startswith(pattern):
+            continue
+        psf = entry / "model.psf"
+        if not psf.is_file():
+            continue
+        side = _read_prep_box_side_A(entry)
+        if side is None:
+            continue
+        if side + 1e-6 < float(min_side_A):
+            continue
+        candidates.append((side, psf.stat().st_mtime, entry))
+    if not candidates:
+        return None
+    if min_side_A > 0:
+        candidates.sort(key=lambda item: (item[0], -item[1]))
+    else:
+        candidates.sort(key=lambda item: -item[1])
+    return candidates[0][2]

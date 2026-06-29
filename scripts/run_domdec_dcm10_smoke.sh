@@ -52,30 +52,33 @@ if [[ -f "$MMML_ROOT/scripts/resolve_mmml_env.sh" ]]; then
 fi
 
 _infer_box_size_from_dir() {
+  BOX_SIZE="$(_box_crystal_side "${1%/}")"
+}
+
+_box_crystal_side() {
   local dir="${1%/}"
-  local box_json="$dir/box.json"
-  if [[ -f "$box_json" ]]; then
-    local side
-    side="$("$PY" - <<PY
+  "$PY" - <<PY
 import json
+import re
 from pathlib import Path
-data = json.loads(Path(${box_json@Q}).read_text())
-side = data.get("box_side_A")
-if side is not None:
-    print(float(side))
+
+d = Path(${dir@Q})
+box_json = d / "box.json"
+if box_json.is_file():
+    side = json.loads(box_json.read_text()).get("box_side_A")
+    if side is not None:
+        print(float(side))
+        raise SystemExit(0)
+match = re.search(r"_l([0-9]+)$", d.name)
+if match:
+    print(float(match.group(1)))
+else:
+    raise SystemExit(1)
 PY
-)" || true
-    if [[ -n "$side" ]]; then
-      BOX_SIZE="$side"
-      return 0
-    fi
-  fi
-  if [[ "$dir" =~ _l([0-9]+)$ ]]; then
-    BOX_SIZE="${BASH_REMATCH[1]}"
-  fi
 }
 
 resolve_domdec_box_artifacts() {
+  local min_side="${1:-0}"
   local boxes_root="$TESTS_ROOT/boxes"
   local pattern="domdec_dcm${N_DCM}_l"
 
@@ -91,6 +94,38 @@ resolve_domdec_box_artifacts() {
     CRD="${CRD:-$BOX_DIR/model.crd}"
     _infer_box_size_from_dir "$BOX_DIR"
     return 0
+  fi
+
+  if [[ "$min_side" != "0" && "$min_side" != "0.0" ]]; then
+    local picked
+    picked="$("$PY" - <<PY
+from pathlib import Path
+from mmml.utils.domdec_ndir import pick_domdec_prep_dir, _read_prep_box_side_A
+
+picked = pick_domdec_prep_dir(
+    Path(${boxes_root@Q}),
+    n_dcm=${N_DCM},
+    min_side_A=float("${min_side}"),
+)
+if picked is None:
+    raise SystemExit(1)
+side = _read_prep_box_side_A(picked)
+print(picked)
+print(side)
+PY
+)" || true
+    if [[ -n "$picked" ]]; then
+      BOX_DIR="$(sed -n '1p' <<< "$picked")"
+      BOX_SIZE="$(sed -n '2p' <<< "$picked")"
+      PSF="$BOX_DIR/model.psf"
+      CRD="$BOX_DIR/model.crd"
+      echo "Using tier3 prep box: $BOX_DIR (BOX_SIZE=${BOX_SIZE}Å, min=${min_side}Å)" >&2
+      return 0
+    fi
+    BOX_DIR="${BOX_DIR:-$boxes_root/${pattern}${BOX_SIZE}}"
+    PSF="$BOX_DIR/model.psf"
+    CRD="$BOX_DIR/model.crd"
+    return 1
   fi
 
   local default_dir="$boxes_root/${pattern}${BOX_SIZE}"
@@ -159,8 +194,26 @@ prep_tier3() {
   prep
 }
 
+tier3_min_crystal_side() {
+  local np="${MMML_MPI_NP:-8}"
+  "$PY" -c "
+from mmml.utils.domdec_ndir import min_domdec_crystal_side_A
+print(min_domdec_crystal_side_A(${np}, 15, 4))
+"
+}
+
+require_tier3_box_artifacts() {
+  local min_side
+  min_side="$(tier3_min_crystal_side)"
+  resolve_domdec_box_artifacts "$min_side" || {
+    echo "No tier3 prep box >= ${min_side}Å under $TESTS_ROOT/boxes/domdec_dcm${N_DCM}_l*" >&2
+    echo "Run: bash $0 prep-tier3" >&2
+    exit 1
+  }
+}
+
 require_domdec_box_artifacts() {
-  resolve_domdec_box_artifacts || {
+  resolve_domdec_box_artifacts 0 || {
     echo "No DOMDEC prep box found under $TESTS_ROOT/boxes/domdec_dcm${N_DCM}_l*" >&2
     echo "Run: BOX_SIZE=40 $0 prep" >&2
     exit 1
@@ -185,7 +238,9 @@ prep() {
 }
 
 validate() {
-  require_domdec_box_artifacts
+  if [[ -z "${PSF:-}" || ! -s "$PSF" ]]; then
+    require_domdec_box_artifacts
+  fi
   echo "== DOMDEC PSF atom-order validation =="
   test -s "$PSF" || {
     echo "Missing PSF: $PSF (run prep first)" >&2
@@ -196,6 +251,7 @@ validate() {
 
 tier3() {
   echo "== DOMDEC Tier 3 native-state launch =="
+  require_tier3_box_artifacts
   validate
   test -s "$CRD" || {
     echo "Missing CRD: $CRD (run prep first)" >&2
