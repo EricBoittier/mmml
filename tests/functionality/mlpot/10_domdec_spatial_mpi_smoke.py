@@ -578,10 +578,8 @@ def _charmm_domdec_ener_smoke(args: argparse.Namespace) -> int:
     os.environ["MMML_NO_CHARMM_DOMDEC_OFF"] = "1"
     _sync_import_pycharmm(tag="ener")
 
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import mpi_charmm_script
-
-    _log("ener", "crystal free (MPI bootstrap)")
-    mpi_charmm_script("crystal free\n", quiet=True)
+    # Skip ``crystal free`` before np>1 restart load — same MPI eval_charmm hang
+    # as multi-step READ.  PBC crystal is installed after load via setup_charmm_environment.
 
     _log("ener", "checking MLpot symbols")
     missing = check_mlpot_symbols()
