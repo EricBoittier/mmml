@@ -237,7 +237,16 @@ def main() -> int:
                 jax_pme_sr_cutoff_A=sr,
                 **common_kw,
             )
-            return out[0] if isinstance(out, tuple) else out
+            if not isinstance(out, tuple):
+                return out
+
+            mm_fn, update_fn = out
+            pair_idx, pair_mask = update_fn(positions, box=pbc_cell)
+
+            def eval_dynamic(pos: np.ndarray) -> tuple[float, np.ndarray]:
+                return mm_fn(pos, pair_idx, pair_mask)
+
+            return eval_dynamic
 
         mic_fn = _wrap_fn("mic")
         pme_fn = _wrap_fn("jax_pme")
