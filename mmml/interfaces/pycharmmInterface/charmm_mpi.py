@@ -1040,6 +1040,8 @@ def mpi_charmm_script(
 
 
 def _mpi_script_barrier() -> None:
+    if _under_mpirun() and not _mpi_comm_valid():
+        ensure_mpi4py_after_charmm_init(phase="mpi_charmm_script barrier")
     if not _mpi_comm_valid():
         return
     from mpi4py import MPI

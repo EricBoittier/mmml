@@ -113,13 +113,14 @@ def _mpi_info() -> tuple[int, int]:
 
 
 def _mpi_barrier(*, tag: str = "sync") -> None:
-    """Synchronise Python ranks before/after rank-0 CHARMM script blocks."""
-    rank, size = _mpi_info()
+    """Synchronise Python ranks before/after CHARMM script blocks."""
+    _, size = _mpi_info()
     if size <= 1:
         return
     try:
-        from mpi4py import MPI  # noqa: PLC0415
-        MPI.COMM_WORLD.Barrier()
+        from mmml.interfaces.pycharmmInterface.charmm_mpi import _mpi_script_barrier
+
+        _mpi_script_barrier()
     except Exception as exc:
         _log(tag, f"MPI barrier failed ({type(exc).__name__}: {exc}) — CHARMM may hang")
 
@@ -145,8 +146,27 @@ def _configure_live_charmm_mpi_import(*, size: int) -> None:
         return
     os.environ.setdefault("MMML_SKIP_CHARMM_RESET_BLOCK", "1")
     os.environ.setdefault("MMML_DEFER_MPI4PY_PACKAGE_IMPORT", "1")
-    _log("setup", "np>1 live CHARMM: skip import-time reset_block; defer mpi4py")
+    os.environ.setdefault("MMML_QUIET", "1")
+    _log("setup", "np>1 live CHARMM: skip import-time reset_block; defer mpi4py; MMML_QUIET")
     _skip_vacuum_crystal_free_for_mpi()
+
+
+def _sync_import_pycharmm(*, tag: str = "sync") -> None:
+    """Load ``import_pycharmm`` on all ranks in lockstep (mpi4py barriers)."""
+    rank, size = _mpi_info()
+    if size <= 1:
+        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+        return
+    _log(tag, "barrier before import_pycharmm")
+    _mpi_barrier(tag=tag)
+    _log(tag, "importing import_pycharmm")
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import ensure_mpi4py_after_charmm_init
+
+    if not ensure_mpi4py_after_charmm_init(phase="synchronized import_pycharmm"):
+        raise RuntimeError(f"rank {rank}/{size}: mpi4py.MPI unavailable after import_pycharmm")
+    _log(tag, "import_pycharmm done — barrier")
+    _mpi_barrier(tag=tag)
 
 
 def _prebuilt_paths(args: argparse.Namespace) -> tuple[Path, Path]:
@@ -455,15 +475,18 @@ def _load_prebuilt(args: argparse.Namespace) -> tuple["np.ndarray", "np.ndarray"
     rank, size = _mpi_info()
     # Full CGENFF RTF stream (read_cgenff_toppar) deadlocks under mpirun np>1.
     # Load only MASS records required by the prebuilt PSF, then PRM + PSF/CRD.
-    minimal_rtf = _ensure_shared_minimal_rtf(psf_path, Path(CGENFF_PRM))
+    minimal_rtf = _ensure_shared_minimal_rtf(psf_path, Path(CGENFF_PRM)).resolve()
+    psf_abs = psf_path.resolve()
+    crd_abs = crd_path.resolve()
+    prm_abs = Path(CGENFF_PRM).resolve()
     n_types = len(_psf_atom_types(psf_path))
-    if rank == 0:
-        _log("load", f"read topology ({n_types} types): {minimal_rtf}")
+    _mpi_barrier(tag="load")
+    _log("load", f"READ begin ({n_types} MASS types) rtf={minimal_rtf.name}")
     read_script = (
         f"read rtf card name {minimal_rtf}\n"
-        f"read param card name {CGENFF_PRM} flex\n"
-        f"read psf card name {psf_path}\n"
-        f"read coor card name {crd_path}\n"
+        f"read param card name {prm_abs} flex\n"
+        f"read psf card name {psf_abs}\n"
+        f"read coor card name {crd_abs}\n"
     )
     mpi_charmm_script(read_script, relaxed_bomlev=True)
     _log("load", "read topology done")
@@ -534,20 +557,14 @@ def _charmm_domdec_ener_smoke(args: argparse.Namespace) -> int:
     _log("ener", "loading prebuilt topology")
     # Guard: disable the automatic domdec-off hook so active DOMDEC survives MLpot registration
     os.environ["MMML_NO_CHARMM_DOMDEC_OFF"] = "1"
-    _mpi_barrier(tag="ener")
+    _sync_import_pycharmm(tag="ener")
 
     z, r, n_monomers, atoms_per_monomer = _load_prebuilt(args)
     n_atoms = len(z)
     _mpi_barrier(tag="ener")
 
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
-        disable_ase_mpi_parallel,
-        ensure_mpi4py_after_charmm_init,
-    )
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import disable_ase_mpi_parallel
 
-    if not ensure_mpi4py_after_charmm_init(phase="after prebuilt load in live ENER"):
-        print("FAIL: mpi4py.MPI not available after PyCHARMM import", file=sys.stderr)
-        return 1
     disable_ase_mpi_parallel()
     _mpi_barrier(tag="ener")
 
