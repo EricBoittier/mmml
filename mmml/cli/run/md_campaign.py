@@ -283,6 +283,7 @@ def run_campaign(args: Namespace) -> int:
         prepare_serial_charmm_mpi_env()
         rerun = maybe_rerun_md_system_under_mpirun(sys.argv[1:])
         if rerun is not None:
+            setattr(args, "_mpi_rerun_proxy_return", True)
             return int(rerun)
 
     plan_rows = build_plan_rows(campaign, order)

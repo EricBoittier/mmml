@@ -5,7 +5,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -494,3 +496,40 @@ def test_save_job_run_manifest_writes_registry_and_output_copy(tmp_path):
     assert payload["backend"] == "pycharmm"
     assert payload["setup"] == "pbc_nvt"
     assert payload["args"]["composition"] == "DCM:20"
+
+
+def test_main_skips_parent_manifest_after_campaign_mpi_rerun(monkeypatch, tmp_path):
+    from mmml.cli.run import md_system
+
+    cfg = tmp_path / "campaign.yaml"
+    cfg.write_text(
+        "\n".join(
+            [
+                "defaults:",
+                "  backend: pycharmm",
+                "  setup: pbc_npt",
+                "  composition: DCM:20",
+                "  box_size: 32.0",
+                "runs:",
+                "  md_run:",
+                "    output_dir: artifacts/md_run",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["mmml", "--config", str(cfg), "--run-all"],
+    )
+
+    def _fake_run_campaign(args):
+        args._mpi_rerun_proxy_return = True
+        return 2
+
+    with mock.patch("mmml.cli.run.md_campaign.run_campaign", side_effect=_fake_run_campaign), mock.patch(
+        "mmml.cli.run.md_system._maybe_save_job_run_manifest"
+    ) as save_manifest:
+        assert md_system.main() == 2
+
+    save_manifest.assert_not_called()

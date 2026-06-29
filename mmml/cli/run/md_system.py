@@ -2905,6 +2905,7 @@ def main() -> int:
     backend: str | None = None
     argv: list[str] | None = None
     exit_code = 2
+    rerun_proxy_return = False
     try:
         try:
             if not getattr(args, "evaluate_npz", None):
@@ -2922,6 +2923,7 @@ def main() -> int:
             campaign = load_yaml_config(args.config)
             if config_is_campaign(campaign):
                 exit_code = int(run_campaign(args))
+                rerun_proxy_return = bool(getattr(args, "_mpi_rerun_proxy_return", False))
                 return exit_code
             if getattr(args, "run_all", False):
                 print(
@@ -3007,23 +3009,24 @@ def main() -> int:
         exit_code = run_backend(backend, argv, args)
         return exit_code
     finally:
-        manifest = _maybe_save_job_run_manifest(
-            args,
-            backend=backend,
-            argv=argv,
-            started_at=started_at,
-            finished_at=datetime.now(timezone.utc).isoformat(),
-            exit_code=exit_code,
-        )
-        if manifest is not None and args.output_dir is not None:
-            from mmml.cli.run.md_run_advice import maybe_emit_run_advice
-
-            maybe_emit_run_advice(
+        if not rerun_proxy_return:
+            manifest = _maybe_save_job_run_manifest(
                 args,
-                manifest=manifest,
+                backend=backend,
+                argv=argv,
+                started_at=started_at,
+                finished_at=datetime.now(timezone.utc).isoformat(),
                 exit_code=exit_code,
-                repo_root=_repo_root(),
             )
+            if manifest is not None and args.output_dir is not None:
+                from mmml.cli.run.md_run_advice import maybe_emit_run_advice
+
+                maybe_emit_run_advice(
+                    args,
+                    manifest=manifest,
+                    exit_code=exit_code,
+                    repo_root=_repo_root(),
+                )
 
 
 if __name__ == "__main__":
