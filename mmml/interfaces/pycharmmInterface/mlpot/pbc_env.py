@@ -268,6 +268,10 @@ def prepare_charmm_pbc(cubic_box_side_A: float) -> None:
     from mmml.interfaces.pycharmmInterface.pycharmmCommands import pbcset
     from mmml.interfaces.pycharmmInterface.setupBox import _ensure_crystal_image_str
 
+    L = float(cubic_box_side_A)
+    if L <= 0.0:
+        raise ValueError(f"cubic box side must be > 0, got {L}")
+
     _ensure_crystal_image_str()
     mpi_charmm_script(pbcset.format(SIDELENGTH=L), quiet=True)
     mpi_charmm_script(
