@@ -271,6 +271,10 @@ crystal define cubic $DOMDEC_BOX_SIZE $DOMDEC_BOX_SIZE $DOMDEC_BOX_SIZE 90.0 90.
 crystal build cutoff 15.0 noper 0
 image byres xcen 0.0 ycen 0.0 zcen 0.0 sele all end
 
+! Required for DOMDEC — eutil.F90 checks lfast before activating domain decomposition.
+! See setup/charmm/doc/domdec.info and c47test/domdec.inp (faster on before first ENERGY).
+faster on
+
 $_domdec_energy_block
 
 stop
@@ -284,7 +288,7 @@ echo "DOMDEC:     MMML_MPI_NP=${MMML_MPI_NP} ndir=${DOMDEC_NDIR} crystal=${DOMDE
 echo "INP:        $INP"
 echo "OUT:        $OUT"
 echo "== INP energy block =="
-sed -n '/^energy/,/^stop/p' "$INP" | head -10
+sed -n '/^faster/,/^stop/p' "$INP" | head -15
 
 export CHARMM_HOME CHARMM_LIB_DIR
 export LD_LIBRARY_PATH="$CHARMM_LIB_DIR:${LD_LIBRARY_PATH:-}"

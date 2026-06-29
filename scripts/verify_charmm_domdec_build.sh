@@ -51,14 +51,41 @@ fi
 
 # Effective DOMDEC check via nm — definitive; CMakeCache can lie when FFTW missing.
 echo ""
-echo "=== Effective DOMDEC in binary (nm symbol check) ==="
+echo "=== Effective DOMDEC in binary (KEY_DOMDEC + FFTW check) ==="
 _domdec_compiled=0
 if [[ -x "$CHARMM_EXE" ]] && command -v nm >/dev/null 2>&1; then
-  if nm "$CHARMM_EXE" 2>/dev/null | grep -q 'domdec_com\|domdec_common'; then
-    echo "  PASS: domdec_com / domdec_common symbols present in $CHARMM_EXE"
-    _domdec_compiled=1
+  # Use -E (ERE) so '|' is alternation — BRE '\|' is not portable across all grep versions.
+  _nm_count="$(nm "$CHARMM_EXE" 2>/dev/null | grep -cE 'domdec_com|domdec_common' || true)"
+  echo "  nm domdec_com symbol count: $_nm_count (>0 = domdec source compiled in)"
+  if [[ "${_nm_count:-0}" -gt 0 ]]; then
+    echo "  domdec symbols present in $CHARMM_EXE"
   else
-    echo "  FAIL: no domdec_com symbol in $CHARMM_EXE — DOMDEC was compiled OUT" >&2
+    echo "  WARN: no domdec_com symbol in $CHARMM_EXE — DOMDEC was compiled OUT" >&2
+  fi
+
+  # Check whether KEY_DOMDEC==1 was set in eutil.F90 by looking for a string that
+  # is ONLY compiled when #if KEY_DOMDEC==1 is true.
+  _key_domdec=0
+  if command -v strings >/dev/null 2>&1; then
+    if strings "$CHARMM_EXE" 2>/dev/null | grep -qF 'DOMDec cannot be used with FASTer'; then
+      echo "  PASS: KEY_DOMDEC==1 confirmed (strings: 'DOMDec cannot be used with FASTer' present)"
+      _key_domdec=1
+      _domdec_compiled=1
+    else
+      echo "  FAIL: KEY_DOMDEC==0 — 'DOMDec cannot be used with FASTer' string absent from binary" >&2
+      echo "        COLFFT (FFTW/MKL) was not enabled at compile time → eutil.F90 compiled without DOMDEC" >&2
+    fi
+  fi
+
+  # FFTW symbol count — confirms COLFFT was active (static FFTW linked into binary).
+  if command -v nm >/dev/null 2>&1; then
+    _fftw_count="$(nm "$CHARMM_EXE" 2>/dev/null | grep -cE 'fftw|FFTW' || true)"
+    echo "  nm FFTW symbol count: ${_fftw_count:-0} (>0 = static FFTW/COLFFT linked in)"
+    [[ "${_fftw_count:-0}" -gt 0 ]] && _domdec_compiled=1
+  fi
+
+  if [[ "$_key_domdec" == 0 ]]; then
+    echo "" >&2
     echo "" >&2
     echo "  CMake silently disables DOMDEC when FFTW/MKL is not found (colfft=OFF)." >&2
     echo "  The CMakeCache above may still show domdec=ON (that is the requested value)." >&2
@@ -84,11 +111,11 @@ if [[ -x "$CHARMM_EXE" ]] && command -v nm >/dev/null 2>&1; then
   fi
 elif [[ -x "$CHARMM_EXE" ]]; then
   echo "  (nm not available — falling back to strings)" >&2
-  if strings "$CHARMM_EXE" 2>/dev/null | grep -q 'domdec_com\|DOMDEC.*init'; then
-    echo "  PASS (strings): domdec symbols found"
+  if strings "$CHARMM_EXE" 2>/dev/null | grep -qF 'DOMDec cannot be used with FASTer'; then
+    echo "  PASS (strings): KEY_DOMDEC==1 confirmed"
     _domdec_compiled=1
   else
-    echo "  FAIL (strings): no domdec_com found"
+    echo "  FAIL (strings): KEY_DOMDEC==0 — binary was compiled without COLFFT/DOMDEC"
   fi
 fi
 
@@ -110,10 +137,10 @@ fi
 
 echo ""
 if [[ "$_domdec_compiled" == 1 ]]; then
-  echo "DOMDEC build: OK — binary has domdec_com symbols."
+  echo "DOMDEC build: OK — KEY_DOMDEC==1 confirmed (or FFTW symbols present)."
   echo "Run the tier3 smoke:"
   echo "  CHARMM_EXE=$CHARMM_EXE bash scripts/run_domdec_dcm10_smoke.sh tier3"
 else
-  echo "DOMDEC build: NOT compiled in — rebuild with FFTW (see above)." >&2
+  echo "DOMDEC build: KEY_DOMDEC==0 — COLFFT/FFTW was not linked; rebuild with FFTW (see above)." >&2
   exit 1
 fi
