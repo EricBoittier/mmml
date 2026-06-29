@@ -760,9 +760,17 @@ def _register_mlpot_context(
         if isinstance(pyCModel, DecomposedMlpotModel):
             if defer_jax_warmup:
                 if verbose:
+                    from mmml.interfaces.pycharmmInterface.jax_device_policy import (
+                        mlpot_jax_device_name,
+                    )
+
+                    detail = (
+                        "deferring JAX/GPU warmup until after MLpot SD"
+                        if mlpot_jax_device_name() == "gpu"
+                        else "deferring JAX factory compilation until after MLpot SD (CPU backend)"
+                    )
                     print(
-                        "Decomposed MLpot: deferring JAX GPU warmup until after MLpot SD "
-                        "(MPI-linked CHARMM)",
+                        f"Decomposed MLpot: {detail} (MPI-linked CHARMM)",
                         flush=True,
                     )
             else:

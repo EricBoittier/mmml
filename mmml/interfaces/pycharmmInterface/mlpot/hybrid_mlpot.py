@@ -613,8 +613,8 @@ class DecomposedMlpotModel:
             )
             if cpu_only and self._verbose:
                 print(
-                    "Decomposed MLpot: JAX factory on CPU until after MLpot SD "
-                    "(MPI-linked CHARMM)",
+                    "Decomposed MLpot: compiling JAX factory on CPU before MLpot SD "
+                    "(MPI-linked CHARMM deferred backend promotion)",
                     flush=True,
                 )
             with device_ctx():

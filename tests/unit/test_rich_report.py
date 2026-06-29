@@ -110,6 +110,7 @@ def test_emit_hybrid_ml_setup_plain(capsys) -> None:
         neighbor_lists={"ml_sparse_dimers": True},
         model=_Model(),
         checkpoint={"epoch": 1000},
+        runtime={"OMP_NUM_THREADS": "8", "XLA_FLAGS": "--xla_cpu_multi_thread_eigen=true"},
         ml_flags={"doML": True, "doMM": True},
         long_range={
             "lr_solver": "jax_pme",
@@ -123,6 +124,8 @@ def test_emit_hybrid_ml_setup_plain(capsys) -> None:
     assert "Long-range Coulomb" in out
     assert "jax_pme_method" in out
     assert "n_monomers" in out
+    assert "Runtime threads" in out
+    assert "XLA_FLAGS" in out
     assert "features" in out
 
 

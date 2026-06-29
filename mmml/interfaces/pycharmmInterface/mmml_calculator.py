@@ -827,15 +827,23 @@ def setup_calculator(
         ml_force_conversion_factor = float(HARTREE_TO_EV)
     _calculator_unit_metadata = calculator_results_units()
     apply_xla_cuda_timer_log_filter()
+    from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_name
+
+    mlpot_device = mlpot_jax_device_name()
     if not defer_xla_gpu_warmup and ensure_xla_gpu_warmed():
         emit_tagged(
             "setup_calculator",
             "Generic XLA GPU warmup (full hybrid warmup runs after PyCHARMM/CGENFF init)",
         )
     elif defer_xla_gpu_warmup and verbose:
+        detail = (
+            "Deferred JAX/GPU warmup until after CHARMM MLpot registration"
+            if mlpot_device == "gpu"
+            else "Deferred JAX factory compilation until after CHARMM MLpot registration (CPU backend)"
+        )
         emit_tagged(
             "setup_calculator",
-            "Deferred XLA GPU warmup until after CHARMM MLpot registration",
+            detail,
         )
     is_spooky_model = "spooky_model" in type(MODEL).__module__
 
@@ -940,6 +948,9 @@ def setup_calculator(
             "NUMEXPR_NUM_THREADS": os.environ.get("NUMEXPR_NUM_THREADS", "unset"),
             "MMML_JAX_COMPILE_THREADS": os.environ.get("MMML_JAX_COMPILE_THREADS", "unset"),
             "MMML_NO_JAX_COMPILE_THREADS": os.environ.get("MMML_NO_JAX_COMPILE_THREADS", "unset"),
+            "XLA_FLAGS": os.environ.get("XLA_FLAGS", "unset"),
+            "JAX_PLATFORMS": os.environ.get("JAX_PLATFORMS", "unset"),
+            "MMML_MLPOT_DEVICE": os.environ.get("MMML_MLPOT_DEVICE", "unset"),
         },
         ml_flags={
             "doML": doML,

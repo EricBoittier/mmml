@@ -198,6 +198,17 @@ def _horizontal_table_from_mapping(
     return table
 
 
+def _vertical_table_from_mapping(mapping: Mapping[str, Any]):
+    from rich.table import Table
+
+    table = Table(show_header=False, expand=True, show_edge=True)
+    table.add_column("Field", style="cyan", no_wrap=True, ratio=1)
+    table.add_column("Value", style="white", ratio=4)
+    for key, value in mapping.items():
+        table.add_row(str(key), _format_cell(value))
+    return table
+
+
 def emit_horizontal_table(
     title: str,
     mapping: Mapping[str, Any],
@@ -257,11 +268,17 @@ def emit_dashboard(
         from rich.console import Group
         from rich.panel import Panel
 
+        vertical_sections = {"System", "Runtime threads", "Checkpoint"}
         blocks = []
         for section_title, mapping in active:
+            table = (
+                _vertical_table_from_mapping(mapping)
+                if section_title in vertical_sections
+                else _horizontal_table_from_mapping(mapping)
+            )
             blocks.append(
                 Panel(
-                    _horizontal_table_from_mapping(mapping),
+                    table,
                     title=f"[bold]{section_title}[/bold]",
                     border_style="dim",
                     padding=(0, 1),

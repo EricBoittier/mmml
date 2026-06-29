@@ -106,7 +106,7 @@ def apply_jax_compile_xla_flags(*, quiet: bool = False) -> int:
 
             emit_tagged(
                 "mmml",
-                "JAX compile XLA_FLAGS already set; not overriding",
+                f"JAX CPU thread XLA_FLAGS already present; using existing flags: {existing}",
                 tag_style="bold magenta",
             )
         return n
@@ -141,7 +141,10 @@ def jax_compile_threads_context(*, quiet: bool = False) -> Iterator[int]:
         prev_omp = saved.get("OMP_NUM_THREADS")
         emit_tagged(
             "mmml",
-            f"JAX compile threads={n} (OMP {prev_omp!r} -> {thread_s}; restored after warmup)",
+            (
+                f"JAX compile-time thread env={n} "
+                f"(OMP {prev_omp!r} -> {thread_s}; restored after compile context)"
+            ),
             tag_style="bold magenta",
         )
     try:
