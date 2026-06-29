@@ -991,6 +991,77 @@ def ensure_mpi4py_after_charmm_init(*, phase: str = "after PyCHARMM import") -> 
         return False
 
 
+def mpi_charmm_script(
+    script: str,
+    *,
+    relaxed_bomlev: bool = False,
+    quiet: bool = False,
+) -> None:
+    """Run ``lingo.charmm_script`` on rank 0 when ``size > 1``.
+
+    Non-root ranks must **not** call ``eval_charmm_script`` during setup I/O
+    (READ, CRYSTAL, stream commands). They stay in CHARMM's Fortran MPI worker
+    receive loop while rank 0 drives the command stream. mpi4py barriers keep
+    Python ranks in lockstep before and after the rank-0 script block.
+    """
+    from contextlib import nullcontext
+
+    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+
+    rank, size = mpi_rank_size()
+    if size <= 1:
+        _invoke_charmm_script(
+            script,
+            relaxed_bomlev=relaxed_bomlev,
+            quiet=quiet,
+        )
+        return
+
+    _mpi_script_barrier()
+    try:
+        if rank == 0:
+            _invoke_charmm_script(
+                script,
+                relaxed_bomlev=relaxed_bomlev,
+                quiet=quiet,
+            )
+    finally:
+        _mpi_script_barrier()
+
+
+def _mpi_script_barrier() -> None:
+    if not _mpi_comm_valid():
+        return
+    from mpi4py import MPI
+
+    MPI.COMM_WORLD.Barrier()
+
+
+def _invoke_charmm_script(
+    script: str,
+    *,
+    relaxed_bomlev: bool = False,
+    quiet: bool = False,
+) -> None:
+    from contextlib import nullcontext
+
+    import pycharmm.lingo as lingo
+
+    from mmml.interfaces.pycharmmInterface.charmm_levels import (
+        charmm_quiet_output,
+        charmm_relaxed_bomlev,
+    )
+
+    if relaxed_bomlev:
+        ctx = charmm_relaxed_bomlev()
+    elif quiet:
+        ctx = charmm_quiet_output()
+    else:
+        ctx = nullcontext()
+    with ctx:
+        lingo.charmm_script(script)
+
+
 def prepare_serial_charmm_mpi_env() -> None:
     """Env/LD setup only — do **not** call ``MPI_Init`` from mpi4py (CHARMM owns that)."""
     from mmml.interfaces.pycharmmInterface.jax_compile_threads import (

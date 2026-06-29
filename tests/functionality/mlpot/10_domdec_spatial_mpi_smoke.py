@@ -113,7 +113,7 @@ def _mpi_info() -> tuple[int, int]:
 
 
 def _mpi_barrier(*, tag: str = "sync") -> None:
-    """Synchronise ranks before CHARMM I/O (all ranks must enter eval_charmm together)."""
+    """Synchronise Python ranks before/after rank-0 CHARMM script blocks."""
     rank, size = _mpi_info()
     if size <= 1:
         return
@@ -438,9 +438,8 @@ def _load_prebuilt(args: argparse.Namespace) -> tuple["np.ndarray", "np.ndarray"
     """Load prebuilt PSF/CRD and return (z, r, n_monomers, atoms_per_monomer)."""
     import numpy as np
     import pycharmm.coor as coor
-    import pycharmm.lingo as lingo
 
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import mpi_charmm_script
     from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
     from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
@@ -458,18 +457,18 @@ def _load_prebuilt(args: argparse.Namespace) -> tuple["np.ndarray", "np.ndarray"
     # Load only MASS records required by the prebuilt PSF, then PRM + PSF/CRD.
     minimal_rtf = _ensure_shared_minimal_rtf(psf_path, Path(CGENFF_PRM))
     n_types = len(_psf_atom_types(psf_path))
-    _mpi_barrier(tag="load")
-    _log("load", f"read topology ({n_types} MASS types) begin: {minimal_rtf}")
+    if rank == 0:
+        _log("load", f"rank 0 read topology ({n_types} types): {minimal_rtf}")
+    else:
+        _log("load", "waiting — rank 0 drives READ (no eval_charmm_script here)")
     read_script = (
         f"read rtf card name {minimal_rtf}\n"
         f"read param card name {CGENFF_PRM} flex\n"
         f"read psf card name {psf_path}\n"
         f"read coor card name {crd_path}\n"
     )
-    with charmm_relaxed_bomlev():
-        lingo.charmm_script(read_script)
+    mpi_charmm_script(read_script, relaxed_bomlev=True)
     _log("load", "read topology done")
-    _mpi_barrier(tag="load")
     _log("load", f"loaded PSF/CRD on rank {rank}/{size}")
 
     z = np.asarray(get_Z_from_psf(), dtype=int)
@@ -547,8 +546,8 @@ def _charmm_domdec_ener_smoke(args: argparse.Namespace) -> int:
 
     import ase
     import pycharmm.energy as energy
-    import pycharmm.lingo as lingo
 
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import mpi_charmm_script
     from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import domdec_summary
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
@@ -566,9 +565,8 @@ def _charmm_domdec_ener_smoke(args: argparse.Namespace) -> int:
         domdec_cmd = f"domdec ndir {ndir} 1 1\nfaster on"
     else:
         domdec_cmd = "domdec on"
-    _log("ener", f"DOMDEC command: {domdec_cmd!r}")
-    lingo.charmm_script(domdec_cmd)
-    _mpi_barrier(tag="ener")
+    _log("ener", f"DOMDEC command (rank 0): {domdec_cmd!r}")
+    mpi_charmm_script(domdec_cmd)
 
     _log("ener", "domdec_summary (pre-MLpot):")
     if rank == 0:

@@ -264,23 +264,19 @@ def ensure_charmm_crystal_for_cpt(
 
 def prepare_charmm_pbc(cubic_box_side_A: float) -> None:
     """Install CHARMM crystal + IMAGE for a cubic cell."""
-    import mmml.interfaces.pycharmmInterface.import_pycharmm as pyci
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_quiet_output
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import mpi_charmm_script
     from mmml.interfaces.pycharmmInterface.pycharmmCommands import pbcset
     from mmml.interfaces.pycharmmInterface.setupBox import _ensure_crystal_image_str
 
-    L = float(cubic_box_side_A)
-    if L <= 0.0:
-        raise ValueError(f"cubic box side must be > 0, got {L}")
     _ensure_crystal_image_str()
-    with charmm_quiet_output():
-        pyci.pycharmm.lingo.charmm_script(pbcset.format(SIDELENGTH=L))
-        pyci.pycharmm.lingo.charmm_script(
-            "open read unit 10 card name crystal_image.str\n"
-            f"crystal defi cubic {L} {L} {L} 90. 90. 90.\n"
-            "CRYSTAL READ UNIT 10 CARD\n"
-            "image byres xcen 0.0 ycen 0.0 zcen 0.0 sele all end\n"
-        )
+    mpi_charmm_script(pbcset.format(SIDELENGTH=L), quiet=True)
+    mpi_charmm_script(
+        "open read unit 10 card name crystal_image.str\n"
+        f"crystal defi cubic {L} {L} {L} 90. 90. 90.\n"
+        "CRYSTAL READ UNIT 10 CARD\n"
+        "image byres xcen 0.0 ycen 0.0 zcen 0.0 sele all end\n",
+        quiet=True,
+    )
 
 
 def apply_pbc_nbonds(
@@ -315,7 +311,10 @@ def apply_pbc_nbonds(
             ctofnb=ctofnb,
             ctexnb=float(cutnb),
         )
-    pycharmm.NonBondedScript(**cuts.as_pbc_nbond_kwargs(nbxmod=nbxmod)).run()
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import mpi_charmm_script
+
+    nb_script = pycharmm.NonBondedScript(**cuts.as_pbc_nbond_kwargs(nbxmod=nbxmod))
+    mpi_charmm_script(nb_script.create_script_string(), quiet=True)
     return cuts
 
 

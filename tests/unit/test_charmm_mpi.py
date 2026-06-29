@@ -372,6 +372,56 @@ def test_ensure_charmm_mpi_initialized_idempotent():
     assert charmm_mpi._charmm_mpi_bootstrapped is True
 
 
+def test_mpi_charmm_script_rank0_only_under_mpirun():
+    calls: list[str] = []
+
+    def _fake_script(script: str, **kwargs) -> None:
+        calls.append(script)
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        return_value=(2, 4),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._mpi_script_barrier",
+    ) as mock_barrier, mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._invoke_charmm_script",
+        side_effect=_fake_script,
+    ):
+        charmm_mpi.mpi_charmm_script("read psf card name foo.psf")
+
+    assert calls == []
+    assert mock_barrier.call_count == 2
+
+    calls.clear()
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        return_value=(0, 4),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._mpi_script_barrier",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._invoke_charmm_script",
+        side_effect=_fake_script,
+    ):
+        charmm_mpi.mpi_charmm_script("read psf card name foo.psf")
+
+    assert calls == ["read psf card name foo.psf"]
+
+
+def test_mpi_charmm_script_serial_calls_directly():
+    calls: list[str] = []
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        return_value=(0, 1),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._invoke_charmm_script",
+        side_effect=lambda s, **kw: calls.append(s),
+    ):
+        charmm_mpi.mpi_charmm_script("crystal free")
+
+    assert calls == ["crystal free"]
+
+
 def test_init_vacuum_charmm_deferred_under_mpirun():
     path = (
         Path(__file__).resolve().parents[2]
