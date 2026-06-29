@@ -3216,15 +3216,13 @@ def effective_overlap_check_interval(
     requested 50), which triggers CHARMM FINCYC frequency retuning and PBC
     instability after scratch restart reads.
 
-    When ``nsavc`` is set, the effective interval is at least ``nsavc + 1`` so
-    trajectory save frequency is not re-clamped inside each chunk — unless
-    ``cpt`` is true (CPT overlap runs harmonize ``nsavc`` per chunk and must not
-    inflate overlap intervals to tens of thousands of steps).
+    ``nsavc`` is intentionally not allowed to inflate the geometry-check cadence.
+    Chunks with ``nsavc >= nstep`` suppress trajectory I/O and keep a large
+    harmless CHARMM ``NSAVC`` internally, so frequent geometry checks do not imply
+    per-step DCD bookkeeping.
     """
     n = max(1, int(total_nstep))
     req = max(1, int(requested_interval))
-    if not cpt and nsavc is not None and int(nsavc) > 0:
-        req = max(req, int(nsavc) + 1)
     if n % req == 0:
         return req
     for d in range(min(req, n), 0, -1):

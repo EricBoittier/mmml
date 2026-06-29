@@ -39,7 +39,7 @@ class DynamicsOverlapConfig:
     intra_min_distance_A: float = 1.0
     intra_exclude_1_3: bool = True
     intra_rescue_sd_steps: int | None = None
-    check_interval: int = 500
+    check_interval: int = 100
     n_monomers: int = 1
     use_pbc: bool = False
     fallback_box_side_A: float | None = None
@@ -293,7 +293,7 @@ def resolve_dynamics_overlap_config(
     if min_dist is None:
         min_dist = getattr(args, "min_intermonomer_atom_distance", 1.5)
 
-    interval = int(getattr(args, "dynamics_overlap_check_interval", 500))
+    interval = int(getattr(args, "dynamics_overlap_check_interval", 100))
     if use_pbc and fallback_box_side_A is None:
         box_size = getattr(args, "box_size", None)
         if box_size is not None:

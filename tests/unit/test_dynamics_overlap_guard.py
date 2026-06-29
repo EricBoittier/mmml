@@ -612,7 +612,7 @@ def test_resolve_defaults_to_rescue_and_1p5A():
     assert cfg.min_distance_A == 1.5
     assert cfg.intra_min_distance_A == 1.0
     assert cfg.intra_exclude_1_3 is True
-    assert cfg.check_interval == 500
+    assert cfg.check_interval == 100
     assert cfg.enabled is True
     assert cfg.intra_enabled is True
     assert cfg.extent_enabled is True
@@ -2890,14 +2890,15 @@ def test_effective_overlap_check_interval_divides_nstep():
     assert effective_overlap_check_interval(7, 50) == 7
 
 
-def test_effective_overlap_check_interval_respects_nsavc():
+def test_effective_overlap_check_interval_ignores_nsavc_for_guard_cadence():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         effective_overlap_check_interval,
     )
 
-    assert effective_overlap_check_interval(8000, 50, nsavc=100) == 100
+    assert effective_overlap_check_interval(8000, 50, nsavc=100) == 50
     assert effective_overlap_check_interval(8000, 500, nsavc=100) == 500
     assert effective_overlap_check_interval(8000, 200, nsavc=100) == 200
+    assert effective_overlap_check_interval(40000, 100, nsavc=1600) == 100
 
 
 def test_effective_overlap_check_interval_cpt_ignores_large_nsavc():
@@ -2905,9 +2906,8 @@ def test_effective_overlap_check_interval_cpt_ignores_large_nsavc():
         effective_overlap_check_interval,
     )
 
-    # Without cpt, nsavc=10000 forces interval >= 10001 (often much larger).
-    assert effective_overlap_check_interval(500000, 500, nsavc=10000) == 10000
-    # CPT overlap harmonizes nsavc per chunk; keep the requested overlap interval.
+    # Large DCD cadence must not delay geometry checks.
+    assert effective_overlap_check_interval(500000, 500, nsavc=10000) == 500
     assert effective_overlap_check_interval(500000, 500, nsavc=10000, cpt=True) == 500
 
 

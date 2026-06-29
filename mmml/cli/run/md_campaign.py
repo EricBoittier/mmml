@@ -526,7 +526,7 @@ def build_benchmark_md_system_argv(
                 "--dynamics-overlap-action",
                 "rescue",
                 "--dynamics-overlap-check-interval",
-                str(cfg.get("dynamics_overlap_check_interval", 8000)),
+                str(cfg.get("dynamics_overlap_check_interval", 100)),
                 "--echeck",
                 str(cfg.get("echeck", 500.0)),
                 "--charmm-sd-steps",

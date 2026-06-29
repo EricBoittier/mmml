@@ -294,6 +294,7 @@ def wizard_md_campaign(out_dir: Path) -> list[Path]:
             "backend": "pycharmm",
             "bonded_mm_mini": True,
             "no_echeck": True,
+            "dynamics_overlap_check_interval": 100,
         },
         "runs": {},
     }
