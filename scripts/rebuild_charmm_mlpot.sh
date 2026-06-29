@@ -40,6 +40,7 @@ PLATFORM_TAG="$(_platform_tag)"
 LOCAL_BUILD="${CHARMM_BUILD_DIR:-${HOME}/.cache/mmml-charmm-build/${PLATFORM_TAG}}"
 OPENMPI_ROOT="${OPENMPI_ROOT:-$(_default_openmpi_root)}"
 PMIX_LIB="${PMIX_LIB:-/opt/gcc-14.2.0/pmix-5.0.4/lib}"
+FFTW_ROOT="${FFTW_ROOT:-${EBROOTFFTW:-}}"
 
 if [[ "$(uname -s)" == "Darwin" ]]; then
   LIB_BASENAME="libcharmm.dylib"
@@ -77,6 +78,7 @@ Environment:
   CHARMM_BUILD_DIR  CMake build directory (default: \$HOME/.cache/mmml-charmm-build/${PLATFORM_TAG})
   CHARMM_BUILD_TYPE CMake build type (default: Release; --debug sets RelWithDebInfo)
   OPENMPI_ROOT      OpenMPI prefix (default: auto-detect; Linux cluster: /opt/gcc-14.2.0/openmpi-5.0.5/build)
+  FFTW_ROOT         FFTW prefix; falls back to EBROOTFFTW when modules set it.
 EOF
 }
 
@@ -273,9 +275,53 @@ if [[ "$needs_configure" == 1 ]]; then
     )
     echo "Using code model flags: $FFLAGS (linker: $CODE_MODEL_FLAG)"
   fi
-  if [[ -n "${FFTW_ROOT:-}" && -d "${FFTW_ROOT}/lib" ]]; then
-    CMAKE_ARGS+=(-DFFTW_ROOT="$FFTW_ROOT")
-    echo "Using PIC FFTW from FFTW_ROOT=$FFTW_ROOT"
+  if [[ -n "$FFTW_ROOT" ]]; then
+    FFTW_LIB_DIR=""
+    for candidate in "$FFTW_ROOT/lib" "$FFTW_ROOT/lib64"; do
+      if [[ -d "$candidate" ]]; then
+        FFTW_LIB_DIR="$candidate"
+        break
+      fi
+    done
+    if [[ -n "$FFTW_LIB_DIR" ]]; then
+      FFTW_SHARED=""
+      FFTWF_SHARED=""
+      for candidate in "$FFTW_LIB_DIR"/libfftw3.so "$FFTW_LIB_DIR"/libfftw3.so.* "$FFTW_LIB_DIR"/libfftw3.dylib; do
+        if [[ -f "$candidate" ]]; then
+          FFTW_SHARED="$candidate"
+          break
+        fi
+      done
+      for candidate in "$FFTW_LIB_DIR"/libfftw3f.so "$FFTW_LIB_DIR"/libfftw3f.so.* "$FFTW_LIB_DIR"/libfftw3f.dylib; do
+        if [[ -f "$candidate" ]]; then
+          FFTWF_SHARED="$candidate"
+          break
+        fi
+      done
+      CMAKE_ARGS+=(
+        -DFFTW_ROOT="$FFTW_ROOT"
+        -DFFTW_INCLUDE_DIR="$FFTW_ROOT/include"
+        -DFFTW_INCLUDE_DIRS="$FFTW_ROOT/include"
+      )
+      if [[ -n "$FFTW_SHARED" ]]; then
+        CMAKE_ARGS+=(
+          -DFFTW_LIBRARY="$FFTW_SHARED"
+          -DFFTW_LIBRARIES="$FFTW_SHARED"
+        )
+        echo "Using shared FFTW from FFTW_ROOT=$FFTW_ROOT ($FFTW_SHARED)"
+      else
+        echo "rebuild_charmm_mlpot: warning: no shared libfftw3 found under $FFTW_LIB_DIR; CMake may choose a static archive" >&2
+      fi
+      if [[ -n "$FFTWF_SHARED" ]]; then
+        CMAKE_ARGS+=(
+          -DFFTWF_LIBRARY="$FFTWF_SHARED"
+          -DFFTWF_LIBRARIES="$FFTWF_SHARED"
+        )
+        echo "Using shared FFTWF from FFTW_ROOT=$FFTW_ROOT ($FFTWF_SHARED)"
+      fi
+    else
+      echo "rebuild_charmm_mlpot: warning: FFTW_ROOT=$FFTW_ROOT has no lib or lib64 directory" >&2
+    fi
   fi
   cmake "${CMAKE_ARGS[@]}"
 fi
