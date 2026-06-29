@@ -82,6 +82,7 @@ def _pycharmm_args(**overrides) -> argparse.Namespace:
         no_scale_mini_nstep=False,
         no_scale_echeck=False,
         allow_high_grms=False,
+        no_scale_max_grms=False,
         max_grms_before_dyn=50.0,
         test_first=False,
         test_first_tol=0.005,
@@ -187,6 +188,15 @@ def test_build_pycharmm_command_forwards_intra_monomer_guard():
     cmd = build_pycharmm_command(_pycharmm_args())
     idx = cmd.index("--dynamics-intra-min-distance")
     assert cmd[idx + 1] == "0.5"
+
+
+def test_build_pycharmm_command_forwards_no_scale_max_grms():
+    cmd = build_pycharmm_command(
+        _pycharmm_args(no_scale_max_grms=True, max_grms_before_dyn=80.0)
+    )
+    assert "--no-scale-max-grms" in cmd
+    idx = cmd.index("--max-grms-before-dyn")
+    assert cmd[idx + 1] == "80.0"
 
 
 def test_build_pycharmm_command_forwards_heat_thermostat():

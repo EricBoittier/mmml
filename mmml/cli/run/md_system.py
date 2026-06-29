@@ -530,6 +530,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="pycharmm: start dynamics even if post-min GRMS is high",
     )
     parser.add_argument(
+        "--no-scale-max-grms",
+        action="store_true",
+        help=(
+            "pycharmm: use --max-grms-before-dyn exactly (skip size-aware scaling "
+            "from per-monomer hybrid GRMS tails)"
+        ),
+    )
+    parser.add_argument(
         "--max-grms-before-dyn",
         type=float,
         default=50.0,
@@ -2540,6 +2548,8 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd.append("--no-scale-echeck")
     if getattr(args, "allow_high_grms", False):
         cmd.append("--allow-high-grms")
+    if getattr(args, "no_scale_max_grms", False):
+        cmd.append("--no-scale-max-grms")
     cmd.extend(["--max-grms-before-dyn", str(args.max_grms_before_dyn)])
     if getattr(args, "test_first", False):
         cmd.append("--test-first")

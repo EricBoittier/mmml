@@ -169,6 +169,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Run dynamics even if post-min GRMS is high (not recommended)",
     )
     parser.add_argument(
+        "--no-scale-max-grms",
+        action="store_true",
+        help=(
+            "Use --max-grms-before-dyn exactly (skip size-aware scaling from "
+            "per-monomer hybrid GRMS tails)"
+        ),
+    )
+    parser.add_argument(
         "--max-grms-before-dyn",
         type=float,
         default=50.0,

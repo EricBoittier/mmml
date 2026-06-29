@@ -860,6 +860,16 @@ def test_resolve_max_grms_before_dyn_scales_large_pbc_cluster():
     assert grms >= 175.0
 
 
+def test_resolve_max_grms_before_dyn_no_scale_uses_base():
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        resolve_max_grms_before_dyn,
+    )
+
+    args = argparse.Namespace(max_grms_before_dyn=80.0, no_scale_max_grms=True)
+    grms = resolve_max_grms_before_dyn(args, 20, 100, pbc=True)
+    assert grms == 80.0
+
+
 def test_heat_multiseg_memory_handoff_reset_then_seed(tmp_path):
     """Multi-segment HEAT resets scratch before seeding fly-off checkpoint."""
     from unittest.mock import patch

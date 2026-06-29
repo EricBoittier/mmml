@@ -135,6 +135,19 @@ def test_apply_mapping_hyphen_keys() -> None:
     assert args.handoff_write_res is False
 
 
+def test_apply_mapping_no_scale_max_grms() -> None:
+    from mmml.cli.run.md_system import parse_args
+
+    args = parse_args([])
+    apply_mapping_to_namespace(
+        args,
+        {"no_scale_max_grms": True, "max_grms_before_dyn": 80.0},
+        source="test",
+    )
+    assert args.no_scale_max_grms is True
+    assert args.max_grms_before_dyn == pytest.approx(80.0)
+
+
 def test_validate_packmol_skips_certified_box_handoff() -> None:
     from mmml.cli.run.md_system import _validate_packmol_args, parse_args
 
