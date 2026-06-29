@@ -19,7 +19,8 @@
 #   N_DCM=10
 #   BOX_SIZE=40          # prep box side (Å); auto-discovered from newest domdec_dcm*_l* prep
 #   DOMDEC_BOX_SIZE=     # override crystal side for tier3 (default: max(BOX_SIZE, np*(cutnb+4)))
-#   DOMDEC_CMD=domdec    # c47: domdec; newer CHARMM may need "domdec on"
+#   DOMDEC_NDIR=2 1 1   # override; default avoids c47 Y=2..7 auto-NDIR trap
+#   DOMDEC_ENERGY='energy domdec ndir 2 1 1'  # full ENER line override
 #   BOX_DIR=$TESTS_ROOT/boxes/domdec_dcm10_l32
 #   CHARMM_EXE=/path/to/charmm
 #   NATIVE_STATE_CMD='...'  # optional override

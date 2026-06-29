@@ -14,7 +14,7 @@ BOX_SIZE="${BOX_SIZE:-40}"
 # Effective nonbond cutoff for DOMDEC domain sizing (cutnb + 2*max_group_radius).
 DOMDEC_CUTNB="${DOMDEC_CUTNB:-15}"
 DOMDEC_GROUP_HALO="${DOMDEC_GROUP_HALO:-4}"
-DOMDEC_CMD="${DOMDEC_CMD:-domdec}"
+DOMDEC_CMD="${DOMDEC_CMD:-}"  # optional legacy; prefer DOMDEC_NDIR / DOMDEC_ENERGY
 BOX_DIR="${BOX_DIR:-}"
 PSF="${PSF:-}"
 CRD="${CRD:-}"
@@ -198,6 +198,15 @@ mkdir -p "$RUN_DIR"
 INP="$RUN_DIR/domdec_dcm${N_DCM}.inp"
 OUT="$RUN_DIR/domdec_dcm${N_DCM}.out"
 
+DOMDEC_NDIR="${DOMDEC_NDIR:-$("$PY" -c "from mmml.utils.domdec_ndir import format_domdec_ndir; print(format_domdec_ndir(${MMML_MPI_NP}))")}"
+if [[ -n "$DOMDEC_CMD" ]]; then
+  _domdec_energy_block="${DOMDEC_CMD}
+energy"
+else
+  DOMDEC_ENERGY="${DOMDEC_ENERGY:-energy domdec ndir ${DOMDEC_NDIR}}"
+  _domdec_energy_block="$DOMDEC_ENERGY"
+fi
+
 cat > "$INP" <<EOF
 * DCM:${N_DCM} native CHARMM DOMDEC smoke
 *
@@ -229,8 +238,7 @@ nbonds cutnb ${DOMDEC_CUTNB}.0 -
   inbfrq 50 -
   imgfrq 50
 
-$DOMDEC_CMD
-energy
+$_domdec_energy_block
 
 stop
 EOF
@@ -239,7 +247,7 @@ echo "== Native CHARMM DOMDEC DCM:${N_DCM} smoke =="
 echo "CHARMM_EXE: $CHARMM_EXE"
 echo "PSF:        $PSF"
 echo "CRD:        $CRD"
-echo "DOMDEC:     MMML_MPI_NP=${MMML_MPI_NP} crystal=${DOMDEC_BOX_SIZE}Å cmd='${DOMDEC_CMD}'"
+echo "DOMDEC:     MMML_MPI_NP=${MMML_MPI_NP} ndir=${DOMDEC_NDIR} crystal=${DOMDEC_BOX_SIZE}Å"
 echo "INP:        $INP"
 echo "OUT:        $OUT"
 
