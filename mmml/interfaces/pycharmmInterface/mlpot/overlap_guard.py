@@ -68,6 +68,7 @@ class DynamicsOverlapConfig:
     # Default False: mid-segment checks every ``check_interval`` (extent/overlap early).
     heat_segment_boundary_only: bool = False
     density_prep_ladder_fallback: bool = False
+    cleanup_mode: bool = False
 
     @property
     def enabled(self) -> bool:
@@ -348,7 +349,14 @@ def resolve_dynamics_overlap_config(
             getattr(args, "heat_overlap_segment_boundary_only", False)
         ),
         density_prep_ladder_fallback=_cleanup_overlap_fallback_from_args(args),
+        cleanup_mode=_cleanup_mode_from_args(args),
     )
+
+
+def _cleanup_mode_from_args(args: argparse.Namespace) -> bool:
+    from mmml.interfaces.pycharmmInterface.mlpot.cleanup_mode import cleanup_enabled
+
+    return cleanup_enabled(args)
 
 
 def _cleanup_overlap_fallback_from_args(args: argparse.Namespace) -> bool:
@@ -1090,6 +1098,116 @@ def _handle_intramonomer_rescue(
         ) from still_bad
 
 
+def _load_extent_reference_positions(
+    candidates: list[Path],
+) -> tuple[np.ndarray, Path]:
+    """Load reference coordinates for selective monomer rebuild (CRD preferred)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+        first_valid_geometry_crd_path,
+        first_valid_restart_path,
+        is_geometry_recovery_crd_path,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_crd_coordinates,
+        read_restart_coordinates,
+    )
+
+    crd = first_valid_geometry_crd_path(candidates)
+    if crd is not None:
+        ref = read_crd_coordinates(crd)
+        if ref is not None:
+            return ref, crd.resolve()
+
+    restart = first_valid_restart_path(candidates)
+    if restart is not None:
+        ref = read_restart_coordinates(restart)
+        if ref is not None:
+            return ref, restart.resolve()
+
+    for cand in candidates:
+        p = Path(cand).expanduser()
+        if not p.is_file():
+            continue
+        if is_geometry_recovery_crd_path(p):
+            ref = read_crd_coordinates(p)
+        else:
+            ref = read_restart_coordinates(p)
+        if ref is not None:
+            return ref, p.resolve()
+
+    names = ", ".join(p.name for p in candidates) or "(none)"
+    raise RuntimeError(
+        f"extent cleanup: no readable reference coordinates in ladder ({names})"
+    )
+
+
+def _handle_extent_cleanup_rescue(
+    config: DynamicsOverlapConfig,
+    *,
+    label: str,
+    exc: RuntimeError,
+    mlpot_ctx: "MlpotContext",
+) -> float:
+    """Rebuild fly-off monomer(s) from mini checkpoint, then minimize + cold restart."""
+    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+        build_extent_recovery_candidates,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        get_charmm_positions_array,
+        sync_charmm_positions,
+    )
+    from mmml.utils.geometry_checks import (
+        find_worst_monomer_extent,
+        rebuild_monomers_from_reference,
+        repack_selected_monomers_clear_overlap,
+    )
+
+    pos = get_charmm_positions_array()
+    offsets = monomer_offsets(int(pos.shape[0]), config.n_monomers)
+    cell = _overlap_cell(
+        use_pbc=config.use_pbc,
+        fallback_box_side_A=config.fallback_box_side_A,
+    )
+    _, violation = find_worst_monomer_extent(pos, offsets, cell=cell)
+    if violation is None:
+        raise exc
+
+    candidates = build_extent_recovery_candidates(config)
+    if not candidates:
+        raise RuntimeError(
+            f"{exc}; cleanup extent rescue requires a geometry baseline / checkpoint "
+            f"ladder (prior_segment_restart={config.prior_segment_restart!r})"
+        ) from exc
+
+    ref_pos, ref_path = _load_extent_reference_positions(candidates)
+    if ref_pos.shape != pos.shape:
+        raise RuntimeError(
+            f"{exc}; cleanup extent rescue: reference {ref_path.name} has "
+            f"{ref_pos.shape[0]} atoms but system has {pos.shape[0]}"
+        ) from exc
+
+    flagged = [int(violation.monomer)]
+    print(
+        f"{exc}\nCleanup extent rescue: rebuild monomer {violation.monomer + 1} "
+        f"from {ref_path.name}, minimize, cold restart...",
+        flush=True,
+    )
+    new_pos = rebuild_monomers_from_reference(pos, ref_pos, offsets, flagged)
+    new_pos = repack_selected_monomers_clear_overlap(
+        new_pos,
+        offsets,
+        flagged,
+        min_distance=config.min_distance_A,
+        spacing=config.repack_spacing_A,
+        margin=config.separate_margin_A,
+        seed=config.recovery_seed,
+        cell=cell,
+    )
+    sync_charmm_positions(new_pos)
+    setattr(mlpot_ctx, "_overlap_post_rescue_cold_start", True)
+    return _extent_check(config, context=f"{label} after cleanup extent rescue")
+
+
 def _handle_extent_rescue(
     config: DynamicsOverlapConfig,
     *,
@@ -1097,6 +1215,11 @@ def _handle_extent_rescue(
     exc: RuntimeError,
     mlpot_ctx: "MlpotContext",
 ) -> float:
+    if config.cleanup_mode:
+        return _handle_extent_cleanup_rescue(
+            config, label=label, exc=exc, mlpot_ctx=mlpot_ctx
+        )
+
     from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
         build_extent_recovery_candidates,
         resolve_extent_recovery_source,
@@ -1130,6 +1253,18 @@ def _handle_extent_rescue(
             candidates=candidates,
         )
     except Exception as rescue_exc:
+        if config.density_prep_ladder_fallback:
+            try:
+                return _try_density_prep_ladder_after_extent_failure(
+                    config,
+                    label=label,
+                    exc=RuntimeError(f"{exc}; fly-off recovery failed: {rescue_exc}"),
+                    mlpot_ctx=mlpot_ctx,
+                )
+            except Exception as ladder_exc:
+                if not isinstance(ladder_exc, RuntimeError):
+                    raise
+                rescue_exc = ladder_exc
         raise RuntimeError(
             f"{exc}; fly-off recovery from {recovery_path.name} failed: {rescue_exc}"
         ) from rescue_exc

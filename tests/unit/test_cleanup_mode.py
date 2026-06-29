@@ -95,3 +95,4 @@ def test_overlap_config_uses_cleanup_for_ladder_fallback():
         fallback_box_side_A=29.0,
     )
     assert cfg.density_prep_ladder_fallback is True
+    assert cfg.cleanup_mode is True

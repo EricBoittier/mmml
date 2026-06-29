@@ -9,7 +9,31 @@ from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import monomer_offset
 from mmml.utils.geometry_checks import (
     assert_monomer_extent_within_limit,
     find_worst_monomer_extent,
+    monomer_axis_extent,
+    rebuild_monomers_from_reference,
 )
+
+
+def test_rebuild_monomers_from_reference_restores_internal_geometry():
+    ref = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [5.0, 0.0, 0.0],
+            [5.0, 1.0, 0.0],
+            [5.5, 0.5, 0.0],
+        ],
+        dtype=float,
+    )
+    stretched = ref.copy()
+    stretched[3:] += np.array([0.0, 0.0, 15.0])
+    offsets = monomer_offsets(len(ref), 2)
+    out = rebuild_monomers_from_reference(stretched, ref, offsets, [1])
+    assert monomer_axis_extent(out, offsets, 1) == pytest.approx(
+        monomer_axis_extent(ref, offsets, 1)
+    )
+    assert np.allclose(out[:3], stretched[:3])
 
 
 def test_find_worst_monomer_extent_detects_stretched_monomer():

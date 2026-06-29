@@ -3407,6 +3407,9 @@ def _prepare_post_rescue_overlap_handoff(
     Required for Hoover CPT: static ``write restart`` lacks barostat piston
     internals, so ``READYN`` on scratch ``.overlap_*.res`` files fails with EOF.
     """
+    if mlpot_ctx is not None and getattr(mlpot_ctx, "_overlap_post_rescue_cold_start", False):
+        _prepare_post_rescue_cold_start_overlap_handoff(chunk_kw, mlpot_ctx=mlpot_ctx)
+        return
     _prepare_post_rescue_bath_and_crystal(chunk_kw, mlpot_ctx=mlpot_ctx)
     chunk_kw["restart"] = False
     chunk_kw["new"] = False
@@ -3417,6 +3420,33 @@ def _prepare_post_rescue_overlap_handoff(
     _strip_stale_heat_ramp_keywords(chunk_kw)
     if int(chunk_kw.get("ihtfrq", 0) or 0) != 0:
         chunk_kw["ihtfrq"] = 0
+
+
+def _prepare_post_rescue_cold_start_overlap_handoff(
+    chunk_kw: dict[str, Any],
+    *,
+    mlpot_ctx: Optional["MlpotContext"],
+) -> None:
+    """Zero velocities and resume with ``iasvel=0`` (IHTFRQ heat ramp when configured)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+        prepare_comp_for_iasvel0,
+    )
+
+    _prepare_post_rescue_bath_and_crystal(chunk_kw, mlpot_ctx=mlpot_ctx)
+    prepare_comp_for_iasvel0(zero_only=True)
+    chunk_kw["restart"] = False
+    chunk_kw["new"] = False
+    chunk_kw["start"] = False
+    chunk_kw["iasvel"] = 0
+    chunk_kw["iasors"] = 0
+    chunk_kw.pop("iunrea", None)
+    chunk_kw["iunrea"] = -1
+    if mlpot_ctx is not None:
+        setattr(mlpot_ctx, "_overlap_post_rescue_cold_start", False)
+    print(
+        "overlap: post-rescue cold restart (iasvel=0; IHTFRQ ramp when configured)",
+        flush=True,
+    )
 
 
 def _materialize_post_rescue_restart_handoff(
@@ -3437,6 +3467,15 @@ def _materialize_post_rescue_restart_handoff(
     )
 
     _assign_post_rescue_velocities_and_crystal(chunk_kw, mlpot_ctx=mlpot_ctx)
+    cold_start = mlpot_ctx is not None and getattr(
+        mlpot_ctx, "_overlap_post_rescue_cold_start", False
+    )
+    if cold_start:
+        from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+            prepare_comp_for_iasvel0,
+        )
+
+        prepare_comp_for_iasvel0(zero_only=True)
 
     read_path = (
         Path(chunk_io.restart_read) if chunk_io.restart_read is not None else None
@@ -3492,17 +3531,25 @@ def _materialize_post_rescue_restart_handoff(
     _prepare_post_rescue_bath_and_crystal(chunk_kw, mlpot_ctx=mlpot_ctx)
     chunk_kw["restart"] = True
     chunk_kw["new"] = False
-    chunk_kw["start"] = True
-    chunk_kw["iasvel"] = 1
+    if cold_start:
+        chunk_kw["start"] = False
+        chunk_kw["iasvel"] = 0
+        chunk_kw["iasors"] = 0
+        if mlpot_ctx is not None:
+            setattr(mlpot_ctx, "_overlap_post_rescue_cold_start", False)
+    else:
+        chunk_kw["start"] = True
+        chunk_kw["iasvel"] = 1
+        _strip_stale_heat_ramp_keywords(chunk_kw)
+        if int(chunk_kw.get("ihtfrq", 0) or 0) != 0:
+            chunk_kw["ihtfrq"] = 0
     chunk_kw.pop("iunrea", None)
-    _strip_stale_heat_ramp_keywords(chunk_kw)
-    if int(chunk_kw.get("ihtfrq", 0) or 0) != 0:
-        chunk_kw["ihtfrq"] = 0
 
+    handoff_mode = "cold restart (iasvel=0)" if cold_start else "READYN; MLpot stabilized"
     print(
         f"overlap ({overlap_context}): post-rescue restart handoff from "
         f"{valid_read.name if valid_read is not None else targets[0].name} "
-        f"at global step {step} (READYN; MLpot stabilized)",
+        f"at global step {step} ({handoff_mode})",
         flush=True,
     )
 

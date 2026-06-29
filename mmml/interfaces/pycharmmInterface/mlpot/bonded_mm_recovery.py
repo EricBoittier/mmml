@@ -438,8 +438,6 @@ def run_extent_recovery_from_prior_restart(
             f"({names}): {exc}"
         ) from exc
     bonded_cfg = _bonded_cfg_from_overlap_config(config)
-    if str(bonded_cfg.backend).lower() == "auto":
-        bonded_cfg = replace(bonded_cfg, backend="jax")
     pos = get_charmm_positions_array()
     if pos is None or not np.all(np.isfinite(pos)):
         raise RuntimeError(

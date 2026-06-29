@@ -1616,7 +1616,7 @@ def test_run_extent_recovery_passes_restart_coords_to_all_ml_path(tmp_path):
     restore.assert_called_once()
     assert restore.call_args[0][0][0] == restart.resolve()
     extent_path.assert_called_once()
-    assert extent_path.call_args.args[2].backend == "jax"
+    assert extent_path.call_args.args[2].backend == "auto"
     assert np.allclose(extent_path.call_args.kwargs["positions"], expected)
     light.assert_not_called()
 

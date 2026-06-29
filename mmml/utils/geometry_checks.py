@@ -359,6 +359,31 @@ def _place_coms_pbc_random(
     return np.asarray(coms, dtype=float)
 
 
+def rebuild_monomers_from_reference(
+    positions: np.ndarray,
+    reference: np.ndarray,
+    monomer_offsets: np.ndarray,
+    monomer_indices: list[int] | tuple[int, ...],
+) -> np.ndarray:
+    """Restore internal geometry of selected monomers from reference at current COM."""
+    pos = np.asarray(positions, dtype=float).copy()
+    ref = np.asarray(reference, dtype=float)
+    offsets = np.asarray(monomer_offsets, dtype=int)
+    if ref.shape != pos.shape:
+        raise ValueError(
+            f"reference shape {ref.shape} != positions shape {pos.shape}"
+        )
+    ref_templates, _ = _monomer_internal_templates(ref, offsets)
+    for mi in sorted({int(i) for i in monomer_indices}):
+        n_monomers = int(len(offsets) - 1)
+        if mi < 0 or mi >= n_monomers:
+            continue
+        s, e = int(offsets[mi]), int(offsets[mi + 1])
+        com = pos[s:e].mean(axis=0)
+        pos[s:e] = ref_templates[mi] + com
+    return pos
+
+
 def repack_monomers_clear_overlap(
     positions: np.ndarray,
     monomer_offsets: np.ndarray,

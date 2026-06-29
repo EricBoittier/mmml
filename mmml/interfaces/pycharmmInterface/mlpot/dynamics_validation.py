@@ -328,6 +328,65 @@ def read_restart_coordinates(path: Path) -> np.ndarray | None:
     return pos
 
 
+def _parse_crd_xyz(parts: Sequence[str]) -> tuple[float, float, float] | None:
+    if len(parts) >= 6:
+        try:
+            return float(parts[3]), float(parts[4]), float(parts[5])
+        except ValueError:
+            pass
+    if len(parts) >= 5:
+        try:
+            return float(parts[2]), float(parts[3]), float(parts[4])
+        except ValueError:
+            pass
+    return None
+
+
+def read_crd_coordinates(path: Path) -> np.ndarray | None:
+    """Return ``(N, 3)`` Cartesian coordinates from a CHARMM CRD card (EXT format)."""
+    p = Path(path)
+    if not p.is_file():
+        return None
+    try:
+        lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return None
+    if len(lines) < 2:
+        return None
+
+    n_atoms: int | None = None
+    header_idx: int | None = None
+    for idx, line in enumerate(lines):
+        parts = line.split()
+        if len(parts) >= 2 and parts[-1].upper() == "EXT":
+            try:
+                n_atoms = int(parts[0])
+                header_idx = idx
+                break
+            except ValueError:
+                continue
+    if n_atoms is None or header_idx is None or n_atoms <= 0:
+        return None
+
+    coords: list[tuple[float, float, float]] = []
+    for line in lines[header_idx + 1 :]:
+        if len(coords) >= n_atoms:
+            break
+        parts = line.split()
+        if not parts or parts[0].startswith("*"):
+            continue
+        xyz = _parse_crd_xyz(parts)
+        if xyz is None:
+            continue
+        coords.append(xyz)
+    if len(coords) != n_atoms:
+        return None
+    pos = np.asarray(coords, dtype=float)
+    if not np.all(np.isfinite(pos)):
+        return None
+    return pos
+
+
 def restart_has_nonfinite_coordinates(path: Path | None) -> bool:
     """Return True when a restart file contains non-finite Cartesian coordinates."""
     if path is None:
