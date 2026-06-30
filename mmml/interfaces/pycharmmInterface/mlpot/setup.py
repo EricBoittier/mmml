@@ -496,6 +496,7 @@ def write_charmm_psf(path: PathLike) -> Path:
     import ctypes
 
     from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
+    from pycharmm.charmm_file import c_api_path_buffer
 
     p = Path(path).expanduser().resolve()
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -503,9 +504,8 @@ def write_charmm_psf(path: PathLike) -> Path:
     try:
         import pycharmm.lib as lib
 
-        fn = ctypes.c_char_p(fortran_path.encode())
-        len_fn = ctypes.c_int(len(fortran_path))
-        status = int(lib.charmm.write_psf_card(fn, ctypes.byref(len_fn)))
+        buf, fn_len = c_api_path_buffer(fortran_path)
+        status = int(lib.charmm.write_psf_card(buf, ctypes.byref(fn_len)))
         if status != 1:
             raise RuntimeError(
                 f"write_psf_card failed for {p} (staging={fortran_path!r}, status={status})"

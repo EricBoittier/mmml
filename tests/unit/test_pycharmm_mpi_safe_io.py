@@ -13,7 +13,8 @@ def test_read_rtf_uses_c_api_not_command_script():
     block = _read("pycharmm/read.py").split("def rtf(")[1].split("\ndef ")[0]
     assert "read_rtf_file" in block
     assert "CommandScript" not in block
-    assert "charmm_fortran_path" in block or "_resolve_read_path" in block
+    assert "c_api_path_buffer" in block
+    assert "byref(append)" in block
 
 
 def test_read_prm_uses_c_api_not_command_script():
@@ -26,6 +27,7 @@ def test_write_coor_pdb_uses_c_api_not_write_script():
     block = _read("pycharmm/write.py").split("def coor_pdb(")[1].split("\ndef ")[0]
     assert "write_coor_pdb" in block
     assert "WriteScript" not in block
+    assert "c_api_path_buffer" in block
 
 
 def test_write_coor_card_avoids_write_script_when_mmml_available():

@@ -26,6 +26,16 @@ import ctypes
 import pycharmm.lib as lib
 
 
+def c_api_path_buffer(file_name: str) -> tuple[ctypes.Array, ctypes.c_int]:
+    """Stable path buffer + length for CHARMM ``bind(c)`` file APIs.
+
+    ``ctypes.c_char_p(path.encode())`` is unsafe: the backing bytes can be
+    collected before Fortran reads the pointer (segfault in ``read_rtf_file``).
+    """
+    buf = ctypes.create_string_buffer(file_name.encode())
+    return buf, ctypes.c_int(len(file_name))
+
+
 def _resolve_charmm_fortran_path(file_name, *, read_only, append):
     try:
         from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path

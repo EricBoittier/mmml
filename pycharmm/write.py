@@ -41,7 +41,10 @@ Write coordinates to a CHARMM coordinate file named out.crd
 >>> write.coor_card('out.crd')
 """
 
+import ctypes
+
 import pycharmm.script
+from pycharmm.charmm_file import c_api_path_buffer
 
 
 def _resolve_write_path(filename: str) -> tuple[str, object | None]:
@@ -64,8 +67,6 @@ def coor_pdb(filename, title='', **kwargs):
     **kwargs: dict
         extra settings to pass to the CHARMM command
     """
-    import ctypes
-
     import pycharmm
     import pycharmm.lib as lib
 
@@ -73,13 +74,12 @@ def coor_pdb(filename, title='', **kwargs):
     fortran_path, alias = _resolve_write_path(filename)
     try:
         selection = pycharmm.SelectAtoms().all_atoms()
-        fn = ctypes.c_char_p(fortran_path.encode())
-        len_fn = ctypes.c_int(len(fortran_path))
+        buf, fn_len = c_api_path_buffer(fortran_path)
         c_comp = ctypes.c_int(1 if comparison else 0)
         status = int(
             lib.charmm.write_coor_pdb(
-                fn,
-                ctypes.byref(len_fn),
+                buf,
+                ctypes.byref(fn_len),
                 selection.as_ctypes(),
                 ctypes.byref(c_comp),
             )
@@ -142,15 +142,12 @@ def psf_card(filename, title='', **kwargs):
     **kwargs: dict
         extra settings to pass to the CHARMM command
     """
-    import ctypes
-
     import pycharmm.lib as lib
 
     fortran_path, alias = _resolve_write_path(filename)
     try:
-        fn = ctypes.c_char_p(fortran_path.encode())
-        len_fn = ctypes.c_int(len(fortran_path))
-        status = int(lib.charmm.write_psf_card(fn, ctypes.byref(len_fn)))
+        buf, fn_len = c_api_path_buffer(fortran_path)
+        status = int(lib.charmm.write_psf_card(buf, ctypes.byref(fn_len)))
         if status != 1:
             raise RuntimeError(
                 f"write_psf_card failed for {filename!r} "

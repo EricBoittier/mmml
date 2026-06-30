@@ -36,8 +36,10 @@ Read a sequence from a PDB file
 """
 
 import ctypes
+
 import pycharmm.lib as lib
 import pycharmm.script
+from pycharmm.charmm_file import c_api_path_buffer
 
 
 def _resolve_read_path(filename: str) -> str:
@@ -59,19 +61,14 @@ def rtf(filename, **kwargs):
     **kwargs
         additional keyword arguments
     """
-    import ctypes
-
-    import pycharmm.lib as lib
-
     fortran_path = _resolve_read_path(filename)
-    append = 1 if kwargs.get("append") else 0
-    fn = ctypes.c_char_p(fortran_path.encode())
-    len_fn = ctypes.c_int(len(fortran_path))
+    buf, fn_len = c_api_path_buffer(fortran_path)
+    append = ctypes.c_int(1 if kwargs.get("append") else 0)
     status = int(
         lib.charmm.read_rtf_file(
-            fn,
-            ctypes.byref(len_fn),
-            ctypes.c_int(append),
+            buf,
+            ctypes.byref(fn_len),
+            ctypes.byref(append),
         )
     )
     if status != 1:
@@ -89,21 +86,16 @@ def prm(filename, **kwargs):
     ----------
     filename : str
     """
-    import ctypes
-
-    import pycharmm.lib as lib
-
     fortran_path = _resolve_read_path(filename)
-    append = 1 if kwargs.get("append") else 0
-    flex = 1 if kwargs.get("flex") else 0
-    fn = ctypes.c_char_p(fortran_path.encode())
-    len_fn = ctypes.c_int(len(fortran_path))
+    buf, fn_len = c_api_path_buffer(fortran_path)
+    append = ctypes.c_int(1 if kwargs.get("append") else 0)
+    flex = ctypes.c_int(1 if kwargs.get("flex") else 0)
     status = int(
         lib.charmm.read_param_file(
-            fn,
-            ctypes.byref(len_fn),
-            ctypes.c_int(append),
-            ctypes.c_int(flex),
+            buf,
+            ctypes.byref(fn_len),
+            ctypes.byref(append),
+            ctypes.byref(flex),
         )
     )
     if status != 1:
