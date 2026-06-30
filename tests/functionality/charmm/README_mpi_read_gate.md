@@ -44,10 +44,11 @@ MPI READ). You should see ``[bootstrap_sync rank */N] barrier done`` before
 `psf-crd` mode. Root cause: per-rank SCRATCH units inside `eval_charmm_script`
 (`setup/api/api_eval.F90`) desync cooperative MPI READ. Fix: restore direct
 `maincomx` evaluation + line-splitting in vendored `pycharmm/lingo.py`, then
-**rebuild** `libcharmm.so`:
+**rebuild** `libcharmm.so` (rebuild script must sync `api_eval.F90` into the tree):
 
 ```bash
-bash scripts/rebuild_charmm_mlpot.sh   # or your usual DOMDEC MPI build
+grep -q "call maincomx" setup/charmm/source/api/api_eval.F90 || echo "MISSING api_eval patch"
+bash scripts/rebuild_charmm_mlpot.sh --clean
 ```
 
 After rebuild, re-run the matrix above. Also try `stream-inp` if rebuilding is delayed:

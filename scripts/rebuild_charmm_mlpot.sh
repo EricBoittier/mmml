@@ -156,7 +156,7 @@ Usage: $(basename "$0") [--clean] [--use-nfs-build] [--debug] [--no-sync-patches
   --clean             Remove the cmake build directory and reconfigure from scratch.
   --use-nfs-build     Build in setup/charmm/build/cmake (default: \$HOME/.cache/mmml-charmm-build/<platform>).
   --debug             RelWithDebInfo + -g -fbacktrace (readable gdb/addr2line on segfaults).
-  --no-sync-patches   Skip copying setup/api/api_func.F90 into the CHARMM tree.
+  --no-sync-patches   Skip copying setup/api/{api_func,api_psf,api_eval}.F90 into the CHARMM tree.
   --no-domdec         CMake -Ddomdec=OFF (no DOMDEC send_coord_to_recip path; MPI MLpot SD).
   --skip-packmol      Skip rebuilding mmml/generate/packmol/packmol for this platform.
   --native-exec       Build charmm executable (as_library=OFF) for DOMDEC tier3 smoke; skips Packmol.
@@ -239,6 +239,17 @@ if [[ "$SYNC_PATCHES" == 1 && -f "$PATCH_PSF_F90" ]]; then
     echo "Syncing api_psf.F90 from $PATCH_PSF_F90"
     cp -f "$PATCH_PSF_F90" "$PSF_F90"
   fi
+fi
+
+EVAL_F90="$CHARMM_HOME/source/api/api_eval.F90"
+PATCH_EVAL_F90="$ROOT/setup/api/api_eval.F90"
+if [[ -f "$EVAL_F90" && -f "$PATCH_EVAL_F90" ]]; then
+  if [[ "$SYNC_PATCHES" == 1 ]] && ! cmp -s "$PATCH_EVAL_F90" "$EVAL_F90"; then
+    echo "Syncing api_eval.F90 from $PATCH_EVAL_F90 (direct maincomx for MPI READ)"
+    cp -f "$PATCH_EVAL_F90" "$EVAL_F90"
+  fi
+elif [[ "$SYNC_PATCHES" == 1 && -f "$PATCH_EVAL_F90" ]]; then
+  echo "rebuild_charmm_mlpot: warning: missing $EVAL_F90 (api_eval patch not applied)" >&2
 fi
 
 echo "MLpot limits in source:"
