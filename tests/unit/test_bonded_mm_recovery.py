@@ -549,7 +549,7 @@ def test_reregister_mlpot_reattaches_without_new_mlpot_or_nbond_rebuild():
         cubic_box_side_A=31.0,
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_mlpot_energy_block",
+        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_mlpot_registration_mm_off",
         return_value="all",
     ) as apply_block:
         ctx.reregister_mlpot()
@@ -622,7 +622,7 @@ def test_assert_mlpot_user_active_reattaches_when_user_missing():
             "mmml.interfaces.pycharmmInterface.import_pycharmm": MagicMock(),
         },
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_mlpot_energy_block",
+        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_mlpot_registration_mm_off",
         return_value="all",
     ):
         user = assert_mlpot_user_active(ctx, context="test", quiet=True)
@@ -674,7 +674,7 @@ def test_assert_mlpot_user_active_forces_stale_python_is_set():
             "mmml.interfaces.pycharmmInterface.import_pycharmm": MagicMock(),
         },
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_mlpot_energy_block",
+        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_mlpot_registration_mm_off",
         return_value="all",
     ):
         user = assert_mlpot_user_active(ctx, context="test", quiet=True)

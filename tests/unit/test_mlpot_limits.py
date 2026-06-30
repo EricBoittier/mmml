@@ -209,7 +209,7 @@ def test_register_mlpot_validates_pbc_pair_budget(monkeypatch):
             __exit__=mock.Mock(return_value=False),
         ),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_mlpot_energy_block",
+        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_mlpot_registration_mm_off",
         return_value="all",
     ), mock.patch("mmml.interfaces.pycharmmInterface.mlpot.setup._require_mlpot_skip_iblo_support"), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup._install_ml_exclusions"
