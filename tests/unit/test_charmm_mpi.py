@@ -1093,8 +1093,8 @@ def test_bootstrap_topology_mpi_np_gt1_auto_restart_when_res_exists(tmp_path):
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi._read_psf_api",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi._load_coor_from_restart_api",
-    ) as res_mock, mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._load_coor_from_crd_api",
+    ) as crd_mock, mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_natom_diagnostics",
         return_value={"psf_natom": 2, "coor_natom": 2, "psf_loaded": True},
     ), mock.patch(
@@ -1112,7 +1112,7 @@ def test_bootstrap_topology_mpi_np_gt1_auto_restart_when_res_exists(tmp_path):
         )
 
     assert n == 2
-    res_mock.assert_called_once()
+    crd_mock.assert_called_once()
 
 
 def test_bootstrap_topology_mpi_invalid_mode(tmp_path):

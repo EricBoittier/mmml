@@ -1390,6 +1390,27 @@ def align_mpi_ranks_after_import(
         log_fn("bootstrap_sync", f"rank {rank}/{size} align done ({label})")
 
 
+def _bootstrap_coor_source(
+    effective_mode: str,
+    compact: dict[str, Path],
+    *,
+    log_fn: Callable[[str, str], None] | None = None,
+) -> str:
+    """Return ``crd`` or ``restart`` for the final bootstrap coord load step."""
+    if effective_mode != "restart":
+        return "crd"
+    crd = compact.get("crd")
+    if crd is not None and crd.is_file():
+        if log_fn is not None:
+            log_fn(
+                "bootstrap",
+                "restart mode: load coords from CRD "
+                f"({crd.name}); prepare-phase .res is binary write restart",
+            )
+        return "crd"
+    return "restart"
+
+
 def _bootstrap_full_rtf() -> bool:
     flag = os.environ.get("MMML_MPI_BOOTSTRAP_FULL_RTF", "").strip().lower()
     return flag in ("1", "true", "yes")
@@ -1520,7 +1541,7 @@ def _cooperative_restart_script(
 
 
 # Bump when cooperative bootstrap I/O strategy changes (read-gate diagnostics).
-BOOTSTRAP_MPI_API = "direct-api-v4.1"
+BOOTSTRAP_MPI_API = "direct-api-v4.2"
 
 # ``eval_charmm_script`` uses ``comlyn(mxcmsz)`` (~80); stage short paths for file APIs too.
 _BOOTSTRAP_CMD_MAX_LEN = 78
@@ -1566,9 +1587,11 @@ def stage_compact_bootstrap_paths(
                 if log_fn is not None and size > 1 and rank == 0:
                     log_fn("bootstrap_stage", f"rank 0/{size}: copy {src.name} → {dst.name}")
                 shutil.copy2(src, dst)
-        if size > 1:
-            _wait_for_shared_file(dst)
         compact[key] = dst
+    if size > 1:
+        align_mpi_ranks_after_import(log_fn=log_fn, label="bootstrap stage")
+        for dst in compact.values():
+            _wait_for_shared_file(dst)
     return base, compact
 
 
@@ -1659,7 +1682,12 @@ def _load_coor_from_crd_api(crd_path: Path) -> None:
     coor.set_positions(pd.DataFrame(pos, columns=["x", "y", "z"]))
 
 
-def _load_coor_from_restart_api(res_path: Path) -> None:
+def _load_coor_from_restart_api(
+    res_path: Path,
+    *,
+    crd_fallback: Path | None = None,
+    log_fn: Callable[[str, str], None] | None = None,
+) -> None:
     import pandas as pd
     import pycharmm.coor as coor
 
@@ -1668,6 +1696,14 @@ def _load_coor_from_restart_api(res_path: Path) -> None:
     )
 
     pos = read_restart_coordinates(res_path)
+    if pos is None and crd_fallback is not None and crd_fallback.is_file():
+        if log_fn is not None:
+            log_fn(
+                "bootstrap",
+                f"restart parse failed for {res_path.name}; fallback CRD {crd_fallback.name}",
+            )
+        _load_coor_from_crd_api(crd_fallback)
+        return
     if pos is None:
         raise RuntimeError(f"failed to parse restart coordinates: {res_path}")
     n_psf = charmm_natom_count()
@@ -1728,7 +1764,11 @@ def _run_cooperative_api_bootstrap(
             elif name == "crd":
                 _load_coor_from_crd_api(compact["crd"])
             elif name == "restart":
-                _load_coor_from_restart_api(compact["res"])
+                _load_coor_from_restart_api(
+                    compact["res"],
+                    crd_fallback=compact.get("crd"),
+                    log_fn=log_fn,
+                )
             else:
                 raise ValueError(f"unknown bootstrap load step: {name!r}")
             if log_fn is not None:
@@ -1901,10 +1941,11 @@ def bootstrap_topology_mpi(
         log_fn=log_fn,
     )
     if effective_mode == "restart":
+        coor_src = _bootstrap_coor_source(effective_mode, compact, log_fn=log_fn)
         _run_cooperative_api_bootstrap(
             "read_restart",
             compact,
-            coor_source="restart",
+            coor_source=coor_src,
             crystal_side_A=crystal_side_A,
             crystal_cutnb_A=crystal_cutnb_A,
             log_fn=log_fn,
