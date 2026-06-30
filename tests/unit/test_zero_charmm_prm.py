@@ -21,6 +21,16 @@ def test_zero_angle_keeps_theta0():
     assert "21.20" not in out
 
 
+def test_zero_angle_ub_zeros_kub_keeps_rub():
+    line = "CG311  CG321  HGA2     33.43    110.10   22.53   2.17900 ! PROT alkanes"
+    out = zero_prm_line(line, "ANGLES")
+    assert "0.0" in out
+    assert "110.10" in out
+    assert "2.17900" in out
+    assert "33.43" not in out
+    assert "22.53" not in out
+
+
 def test_zero_dihedral_keeps_multiplicity_and_phase():
     line = "NG1T1  CG1N1  CG2R61 CG2R61  0.0100 2    0.00 ! CNP2"
     out = zero_prm_line(line, "DIHEDRALS")

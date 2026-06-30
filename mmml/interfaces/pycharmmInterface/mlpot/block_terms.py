@@ -54,7 +54,7 @@ def zero_mlpot_psf_mm_terms(
 ) -> str:
     """Disable CHARMM MM on ML atoms via zeroed CGENFF params (PSF connectivity kept).
 
-    - Re-reads a **bonded-only** zeroed CGENFF .prm (BOND/ANGL/DIHE/IMPR → 0;
+    - Re-reads a **bonded-only** zeroed CGENFF .prm (BOND/ANGL/DIHE/IMPR/UREY-b → 0;
       NONBOND/NBFIX/HBOND omitted so READ PARAM APPEND does not clear exclusion lists).
     - Zeros partial charges on ML atoms (ELEC off; MLpot supplies ML electrostatics).
     - Does **not** call ``delete_connectivity`` (no DELTIC bond/angle deletion).
