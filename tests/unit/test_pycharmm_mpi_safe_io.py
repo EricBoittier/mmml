@@ -90,6 +90,9 @@ def test_dynamics_setters_use_c_api_path_buffer():
         "\ndef "
     )[0]
     assert "c_api_path_buffer" in block or "_dynamics_path_ctypes" in block
+
+
+def test_run_dynamics_applies_c_api_io_setters_before_dynamics_script():
     block = _read("mmml/interfaces/pycharmmInterface/mlpot/dynamics.py").split(
         "def run_dynamics("
     )[1].split("\ndef ")[0]
