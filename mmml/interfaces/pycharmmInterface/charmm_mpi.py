@@ -1306,6 +1306,11 @@ def _resolve_bootstrap_topology_paths(
     return paths
 
 
+def _bootstrap_barrier_enabled() -> bool:
+    flag = os.environ.get("MMML_MPI_BOOTSTRAP_BARRIER", "").strip().lower()
+    return flag in ("1", "true", "yes")
+
+
 def sync_bootstrap_ranks(
     *,
     log_fn: Callable[[str, str], None] | None = None,
@@ -1318,13 +1323,15 @@ def sync_bootstrap_ranks(
     uses one multiline ``mpi_charmm_script`` call with no Python barriers instead.
     Opt in with ``MMML_MPI_BOOTSTRAP_BARRIER=1``.
     """
-    flag = os.environ.get("MMML_MPI_BOOTSTRAP_BARRIER", "").strip().lower()
-    if flag not in ("1", "true", "yes"):
+    if not _bootstrap_barrier_enabled():
         return
     from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     rank, size = mpi_rank_size()
     if size <= 1:
+        return
+    flag = os.environ.get("MMML_MPI_BOOTSTRAP_BARRIER", "").strip().lower()
+    if flag not in ("1", "true", "yes"):
         return
     if not ensure_mpi4py_after_charmm_init(phase=f"bootstrap sync ({label})"):
         raise RuntimeError(f"rank {rank}/{size}: mpi4py.MPI unavailable before bootstrap sync")
