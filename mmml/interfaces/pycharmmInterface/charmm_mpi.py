@@ -1093,6 +1093,7 @@ def configure_mpi_bootstrap_env() -> None:
 
     _, size = mpi_rank_size()
     os.environ.setdefault("MMML_SKIP_CHARMM_RESET_BLOCK", "1")
+    os.environ.setdefault("MMML_SKIP_VACUUM_CHARMM_INIT", "1")
     if size <= 1:
         return
     os.environ.setdefault("MMML_DEFER_MPI4PY_PACKAGE_IMPORT", "1")

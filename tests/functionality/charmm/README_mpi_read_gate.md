@@ -52,9 +52,12 @@ split multiline scripts into separate ``eval_charmm_script`` calls or MPI ranks 
 
 **Abort at import (`BLOCK` / `ILLEGAL COMMAND` / `BOMLEV 0`):** import-time
 ``reset_block`` runs before ``bomlev -2``. Bootstrap sets
-``MMML_SKIP_CHARMM_RESET_BLOCK=1`` before ``import_pycharmm`` (do not run deferred
-BLOCK under ``mpirun`` — it hangs). At ``np=1`` the read gate uses plain Python, not
-``mpirun``.
+``MMML_SKIP_CHARMM_RESET_BLOCK=1`` before ``import_pycharmm``.
+
+**Warning ``Unrecognized command: crys`` at np=1:** plain-Python import runs
+``crystal free`` (vacuum init) which poisons CHARMM before READ. Bootstrap sets
+``MMML_SKIP_VACUUM_CHARMM_INIT=1``. Do not run deferred BLOCK under ``mpirun`` — it
+hangs. At ``np=1`` the read gate uses plain Python, not ``mpirun``.
 
 **node09 bisect (June 2026):** `np=1` passes; `np=2` hangs on the first `read_rtf` step in
 `psf-crd` mode. Root cause: per-rank SCRATCH units inside `eval_charmm_script`
