@@ -42,6 +42,7 @@ CGENFF_PRM = str(CGENFF_PRM)
 
 from mmml.interfaces.pycharmmInterface.charmm_mpi import (  # noqa: E402
     charmm_lib_available,
+    charmm_lib_links_mpi,
     prepare_serial_charmm_mpi_env,
     _under_mpirun,
 )
@@ -83,7 +84,6 @@ if PYCHARMM_AVAILABLE:
     minimize = _minimize
 
     from mmml.interfaces.pycharmmInterface.charmm_mpi import (
-        charmm_lib_links_mpi,
         ensure_mpi4py_after_charmm_init,
     )
 
@@ -113,6 +113,26 @@ def _report_charmm_import_paths() -> None:
 
 
 _report_charmm_import_paths()
+
+
+def should_skip_vacuum_charmm_init() -> bool:
+    """Skip import-time / vacuum ``crystal free`` (poisons MPI-linked CHARMM as ``crys``)."""
+    flag = os.environ.get("MMML_SKIP_VACUUM_CHARMM_INIT", "").strip().lower()
+    if flag in ("1", "true", "yes"):
+        return True
+    if _under_mpirun() and charmm_lib_links_mpi():
+        return True
+    return False
+
+
+def should_skip_charmm_reset_block() -> bool:
+    """Skip import-time / vacuum ``BLOCK`` reset (hangs or aborts under ``mpirun``)."""
+    flag = os.environ.get("MMML_SKIP_CHARMM_RESET_BLOCK", "").strip().lower()
+    if flag in ("1", "true", "yes"):
+        return True
+    if _under_mpirun() and charmm_lib_links_mpi():
+        return True
+    return False
 
 
 def get_block(a, b):
@@ -409,26 +429,6 @@ def ensure_domdec_off_for_mlpot_energy(*, context: str = "MLpot energy") -> bool
     if ok:
         recover_mpi_for_charmm_after_jax(phase=f"after domdec off ({context})")
     return ok
-
-
-def should_skip_vacuum_charmm_init() -> bool:
-    """Skip import-time / vacuum ``crystal free`` (poisons MPI-linked CHARMM as ``crys``)."""
-    flag = os.environ.get("MMML_SKIP_VACUUM_CHARMM_INIT", "").strip().lower()
-    if flag in ("1", "true", "yes"):
-        return True
-    if _under_mpirun() and charmm_lib_links_mpi():
-        return True
-    return False
-
-
-def should_skip_charmm_reset_block() -> bool:
-    """Skip import-time / vacuum ``BLOCK`` reset (hangs or aborts under ``mpirun``)."""
-    flag = os.environ.get("MMML_SKIP_CHARMM_RESET_BLOCK", "").strip().lower()
-    if flag in ("1", "true", "yes"):
-        return True
-    if _under_mpirun() and charmm_lib_links_mpi():
-        return True
-    return False
 
 
 def crystal_free_charmm() -> None:

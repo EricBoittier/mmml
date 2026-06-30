@@ -19,5 +19,8 @@ def test_reset_block_skips_under_mpi_linked_mpirun():
         encoding="utf-8"
     )
     assert "def should_skip_charmm_reset_block()" in source
+    skip_pos = source.index("def should_skip_charmm_reset_block()")
+    reset_pos = source.index("def reset_block()")
+    assert skip_pos < reset_pos
     reset = source.split("def reset_block")[1].split("\ndef ")[0]
     assert "should_skip_charmm_reset_block()" in reset
