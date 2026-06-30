@@ -1001,7 +1001,7 @@ def test_bootstrap_topology_mpi_psf_crd_np_gt1_uses_cooperative_read(tmp_path, m
 
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
-        return_value=(1, 2),
+        return_value=(0, 2),
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi._bootstrap_rank_local_staging_enabled",
         return_value=False,
@@ -1009,6 +1009,8 @@ def test_bootstrap_topology_mpi_psf_crd_np_gt1_uses_cooperative_read(tmp_path, m
         "mmml.interfaces.pycharmmInterface.charmm_mpi.sync_bootstrap_ranks",
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.align_mpi_ranks_after_import",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._wait_for_shared_file",
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.mpi_charmm_script",
         side_effect=lambda s, **kw: calls.append(s),
@@ -1028,9 +1030,11 @@ def test_bootstrap_topology_mpi_psf_crd_np_gt1_uses_cooperative_read(tmp_path, m
 
     assert n == 2
     assert len(calls) == 1
-    assert "read rtf card name" in calls[0]
-    assert "read psf card name" in calls[0]
-    assert "read coor card name" in calls[0]
+    assert calls[0].startswith("stream ")
+    inp_path = psf.parent / "mpi_bootstrap_stream" / "x_read_psf_crd.inp"
+    assert inp_path.is_file()
+    text = inp_path.read_text(encoding="utf-8")
+    assert "read psf card name" in text
 
 
 def test_bootstrap_topology_mpi_np_gt1_auto_restart_when_res_exists(tmp_path):
@@ -1047,12 +1051,14 @@ def test_bootstrap_topology_mpi_np_gt1_auto_restart_when_res_exists(tmp_path):
 
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
-        return_value=(1, 2),
+        return_value=(0, 2),
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi._bootstrap_rank_local_staging_enabled",
         return_value=False,
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.align_mpi_ranks_after_import",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._wait_for_shared_file",
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_paths.charmm_fortran_path",
         return_value=(str(res), None),
@@ -1075,9 +1081,13 @@ def test_bootstrap_topology_mpi_np_gt1_auto_restart_when_res_exists(tmp_path):
 
     assert n == 2
     assert len(calls) == 1
-    assert "read psf card name" in calls[0]
-    assert "read restart unit 20" in calls[0]
-    assert "UPDATE" not in calls[0]
+    assert calls[0].startswith("stream ")
+    inp_path = psf.parent / "mpi_bootstrap_stream" / "x_read_restart.inp"
+    assert inp_path.is_file()
+    text = inp_path.read_text(encoding="utf-8")
+    assert "read psf card name" in text
+    assert "read restart unit 20" in text
+    assert "UPDATE" not in text
 
 
 def test_bootstrap_topology_mpi_invalid_mode(tmp_path):

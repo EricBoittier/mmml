@@ -44,8 +44,9 @@ READ). Optional per-rank UUID copies: ``MMML_MPI_BOOTSTRAP_RANK_LOCAL=1`` (each
 rank reads independently — usually leaves ``n_atoms=0`` on DOMDEC builds).
 
 **Do not** use ``mpi4py`` barriers between READ sub-commands (``MMML_MPI_BOOTSTRAP_BARRIER=1``
-is bisect-only). Default bootstrap sends one multiline ``mpi_charmm_script`` call
-with no Python barriers between READ lines — same pattern as serial ``np=1`` smoke load.
+is bisect-only). At ``np>1``, bootstrap writes a shared ``.inp`` and all ranks run
+**one** ``stream`` command (Fortran processes the full READ chain — Python must not
+split multiline scripts into separate ``eval_charmm_script`` calls or MPI ranks desync).
 
 **Hang:** last line like `[read_psf rank 2/4] begin ...` — that sub-command is the stall point.
 
@@ -68,31 +69,29 @@ MMML_MPI_NP=4 ./scripts/run_mpi_pycharmm_read_gate.sh --mode stream-inp
 
 ## Native CHARMM control
 
-Proves Fortran READ works on the same PSF/CRD under the same `mpirun` wrapper:
+Proves Fortran READ works under the same `mpirun` wrapper (no PyCHARMM). Requires a
+**standalone** `charmm` executable — `libcharmm.so` alone is not enough:
 
 ```bash
-PSF="$PWD/artifacts/domdec_spatial_smoke/dcm_20mer.psf"
-CRD="$PWD/artifacts/domdec_spatial_smoke/dcm_20mer.crd"
-RTF="$PWD/mmml/data/charmm/top_all36_cgenff.rtf"
-PRM="$PWD/mmml/data/charmm/par_all36_cgenff.prm"
-
-cat > /tmp/read_gate.inp <<EOF
-* read gate control
-*
-bomlev -2
-read rtf card name $RTF
-read param card name $PRM
-read psf card name $PSF
-read coor card name $CRD
-energy
-stop
-EOF
-
-MMML_MPI_NP=4 ./scripts/mmml-charmm-mpirun.sh \
-  "$CHARMM_EXE" -i /tmp/read_gate.inp -o /tmp/read_gate.out
+bash scripts/rebuild_charmm_native_exec.sh --clean   # if setup/charmm/charmm missing
+MMML_MPI_NP=2 ./scripts/run_native_charmm_read_gate.sh
+MMML_MPI_NP=2 ./scripts/run_native_charmm_read_gate.sh --with-restart
 ```
 
-If native passes and PyCHARMM hangs → bug is in Python `eval_charmm_script` entry, not cluster fabric.
+The script resolves `setup/charmm/charmm` (or `CHARMM_EXE`) and writes output under
+`artifacts/domdec_spatial_smoke/native_read_gate/`.
+
+**Do not** pass an empty `$CHARMM_EXE` to `mmml-charmm-mpirun.sh` — the wrapper falls
+through to the `mmml` CLI when the first argument is not an executable file.
+
+If native passes and PyCHARMM fails → bug is in library-mode `eval_charmm_script`, not fabric.
+
+## Bootstrap API version
+
+PyCHARMM read gate logs `bootstrap_api=...` at startup. You need **`stream-cooperative-v2`**
+(not legacy multiline `6 line(s)`) for the np>1 stream fix. If `git pull` is up to date but
+the log still shows `6 line(s)`, the stream patch is not on your branch yet — sync from the
+commit that adds `_run_cooperative_stream_bootstrap` in `charmm_mpi.py`.
 
 ## Implementation
 

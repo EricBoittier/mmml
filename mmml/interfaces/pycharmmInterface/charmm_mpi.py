@@ -1472,20 +1472,68 @@ def _cooperative_restart_script(
     return "\n".join(lines) + "\n"
 
 
+# Bump when cooperative np>1 bootstrap I/O strategy changes (read-gate diagnostics).
+BOOTSTRAP_MPI_API = "stream-cooperative-v2"
+
+
+def _cooperative_stream_inp_path(psf: Path, step: str) -> Path:
+    return psf.parent / "mpi_bootstrap_stream" / f"{psf.stem}_{step}.inp"
+
+
+def _run_cooperative_stream_bootstrap(
+    step: str,
+    paths: dict[str, Path],
+    lines: list[str],
+    *,
+    rank: int,
+    size: int,
+    log_fn: Callable[[str, str], None] | None = None,
+) -> int:
+    """One ``stream`` eval (Fortran reads all lines; avoids Python line-split desync)."""
+    psf = paths["psf"]
+    inp_path = _cooperative_stream_inp_path(psf, step)
+    if rank == 0:
+        inp_path.parent.mkdir(parents=True, exist_ok=True)
+        inp_path.write_text(
+            "\n".join(["* MMML MPI cooperative bootstrap", *lines]) + "\n",
+            encoding="utf-8",
+        )
+    if size > 1:
+        _wait_for_shared_file(inp_path)
+    if log_fn is not None:
+        log_fn(step, f"begin rank {rank}/{size}: stream {inp_path}")
+    mpi_charmm_script(f"stream {inp_path}\n", relaxed_bomlev=True)
+    n_atoms = charmm_natom_count()
+    if log_fn is not None:
+        log_fn(step, f"done rank {rank}/{size}: n_atoms={n_atoms}")
+    return n_atoms
+
+
 def _run_cooperative_bootstrap_script(
     step: str,
     script: str,
     *,
+    paths: dict[str, Path] | None = None,
     log_fn: Callable[[str, str], None] | None = None,
 ) -> int:
     """Run CHARMM script on all ranks without mpi4py barriers (workshop pattern)."""
     from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     rank, size = mpi_rank_size()
-    n_lines = max(1, script.count("\n"))
+    body = [ln for ln in script.strip().splitlines() if ln.strip()]
+    if size > 1 and paths is not None and len(body) > 1:
+        return _run_cooperative_stream_bootstrap(
+            step,
+            paths,
+            body,
+            rank=rank,
+            size=size,
+            log_fn=log_fn,
+        )
+    n_lines = max(1, len(body))
     if log_fn is not None:
         log_fn(step, f"begin rank {rank}/{size}: {n_lines} line(s)")
-    mpi_charmm_script(script, relaxed_bomlev=True)
+    mpi_charmm_script(script if script.endswith("\n") else script + "\n", relaxed_bomlev=True)
     n_atoms = charmm_natom_count()
     if log_fn is not None:
         log_fn(step, f"done rank {rank}/{size}: n_atoms={n_atoms}")
@@ -1524,36 +1572,17 @@ def _bootstrap_via_stream_inp(
     log_fn: Callable[[str, str], None] | None = None,
 ) -> None:
     """Load topology via one ``stream`` (native CHARMM input path; best for np>1)."""
-    minimal = paths["rtf"]
-    prm = paths["prm"]
-    psf = paths["psf"]
-    crd = paths["crd"]
-    inp_dir = psf.parent / "mpi_bootstrap_stream"
-    inp_path = inp_dir / f"{psf.stem}_read.inp"
-    if rank == 0:
-        inp_dir.mkdir(parents=True, exist_ok=True)
-        lines = [
-            "* MMML MPI bootstrap stream READ",
-            "bomlev -2",
-            f"read rtf card name {minimal}",
-            f"read param card name {prm} flex",
-            f"read psf card name {psf}",
-            f"read coor card name {crd}",
-        ]
-        if crystal_side_A is not None:
-            side = float(crystal_side_A)
-            lines.extend(
-                [
-                    f"crystal define cubic {side} {side} {side} 90 90 90",
-                    f"crystal build cutoff {float(crystal_cutnb_A)} noper 0",
-                ]
-            )
-        inp_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    if size > 1:
-        _wait_for_shared_file(inp_path)
-    _run_cooperative_bootstrap_script(
+    lines = _cooperative_read_script(
+        paths,
+        crystal_side_A=crystal_side_A,
+        crystal_cutnb_A=crystal_cutnb_A,
+    ).strip().splitlines()
+    _run_cooperative_stream_bootstrap(
         "stream_inp",
-        f"stream {inp_path}\n",
+        paths,
+        lines,
+        rank=rank,
+        size=size,
         log_fn=log_fn,
     )
 
@@ -1634,6 +1663,7 @@ def bootstrap_topology_mpi(
                 _run_cooperative_bootstrap_script(
                     "read_restart",
                     restart_script,
+                    paths=paths,
                     log_fn=log_fn,
                 )
             else:
@@ -1668,6 +1698,7 @@ def bootstrap_topology_mpi(
         _run_cooperative_bootstrap_script(
             "read_psf_crd",
             read_script,
+            paths=paths,
             log_fn=log_fn,
         )
     else:
