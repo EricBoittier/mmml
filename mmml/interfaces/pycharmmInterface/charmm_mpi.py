@@ -1085,14 +1085,13 @@ def _invoke_charmm_script(
 def configure_mpi_bootstrap_env() -> None:
     """Env guards before cooperative topology READ (no import-time crystal free).
 
-    ``MMML_SKIP_CHARMM_RESET_BLOCK=1`` applies at **all** world sizes when CHARMM is
-    MPI-linked: import-time ``reset_block`` under ``mpirun -np 1`` can hang after the
-    PyCHARMM env panel (Fortran MPI worker not ready for BLOCK during module load).
+    ``MMML_SKIP_CHARMM_RESET_BLOCK=1`` applies under ``mpirun`` when CHARMM is
+    MPI-linked: import-time ``reset_block`` can hang after the PyCHARMM env panel.
     """
     from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     _, size = mpi_rank_size()
-    if charmm_lib_links_mpi():
+    if charmm_lib_links_mpi() and _under_mpirun():
         os.environ.setdefault("MMML_SKIP_CHARMM_RESET_BLOCK", "1")
     if size <= 1:
         return
@@ -1315,7 +1314,9 @@ def _resolve_bootstrap_topology_paths(
             log_fn=log_fn,
         )
     if rtf_path is None:
-        minimal = ensure_shared_minimal_rtf(psf, prm)
+        minimal = _resolve_bootstrap_rtf(
+            psf=psf, prm=prm, size=size, rtf_path=rtf_path
+        )
     else:
         minimal = Path(rtf_path).expanduser().resolve()
     paths = {
@@ -1384,27 +1385,25 @@ def align_mpi_ranks_after_import(
         log_fn("bootstrap_sync", f"rank {rank}/{size} align done ({label})")
 
 
-def _deferred_bootstrap_reset_block(
+def _bootstrap_full_rtf() -> bool:
+    flag = os.environ.get("MMML_MPI_BOOTSTRAP_FULL_RTF", "").strip().lower()
+    return flag in ("1", "true", "yes")
+
+
+def _resolve_bootstrap_rtf(
     *,
-    rank: int,
+    psf: Path,
+    prm: Path,
     size: int,
-    log_fn: Callable[[str, str], None] | None = None,
-) -> None:
-    """Run BLOCK before READ when import-time ``reset_block`` was skipped (MPI bootstrap)."""
-    if not charmm_lib_links_mpi():
-        return
-    skip = os.environ.get("MMML_SKIP_CHARMM_RESET_BLOCK", "").strip().lower()
-    if skip not in ("1", "true", "yes"):
-        return
-    block = (
-        "BLOCK \n"
-        "CALL 1 SELE ALL END\n"
-        "  COEFF 1 1 1.0 \n"
-        "END\n"
-    )
-    if log_fn is not None:
-        log_fn("bootstrap_sync", f"rank {rank}/{size} deferred reset_block")
-    mpi_charmm_script(block, relaxed_bomlev=True)
+    rtf_path: Path | None,
+) -> Path:
+    if rtf_path is not None:
+        return Path(rtf_path).expanduser().resolve()
+    if size <= 1 or _bootstrap_full_rtf():
+        from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_RTF
+
+        return Path(CGENFF_RTF).expanduser().resolve()
+    return ensure_shared_minimal_rtf(psf, prm)
 
 
 def _bootstrap_force_psf_crd() -> bool:
@@ -1710,7 +1709,6 @@ def bootstrap_topology_mpi(
     )
     if size > 1:
         align_mpi_ranks_after_import(log_fn=log_fn)
-    _deferred_bootstrap_reset_block(rank=rank, size=size, log_fn=log_fn)
 
     if effective_mode == "restart":
         res_local = paths["res"]

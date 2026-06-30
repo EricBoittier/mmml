@@ -18,7 +18,7 @@ MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh python \
 ```bash
 cd ~/mmml
 
-# Baseline — must pass
+# Baseline — must pass (np=1 uses plain Python, not mpirun — see below)
 MMML_MPI_NP=1 ./scripts/run_mpi_pycharmm_read_gate.sh
 
 # Bisect modes at np=4 (record last log line before hang)
@@ -50,10 +50,10 @@ split multiline scripts into separate ``eval_charmm_script`` calls or MPI ranks 
 
 **Hang:** last line like `[read_psf rank 2/4] begin ...` — that sub-command is the stall point.
 
-**Hang after PyCHARMM env panel at ``np=1``:** import-time ``reset_block`` on MPI-linked
-``libcharmm.so``. The read gate sets ``MMML_SKIP_CHARMM_RESET_BLOCK=1`` before import
-(``configure_mpi_bootstrap_env``); bootstrap then runs a **deferred** ``reset_block`` on
-all ranks immediately before READ. Manual bisect: export that skip flag and re-run.
+**Hang after PyCHARMM env panel at ``np=1`` under ``mpirun``:** import-time or deferred
+``reset_block`` on MPI-linked ``libcharmm.so``. The read gate runs **plain Python** at
+``MMML_MPI_NP=1`` (no ``mpirun``). For ``np>1``, ``configure_mpi_bootstrap_env`` sets
+``MMML_SKIP_CHARMM_RESET_BLOCK=1`` before import.
 
 **node09 bisect (June 2026):** `np=1` passes; `np=2` hangs on the first `read_rtf` step in
 `psf-crd` mode. Root cause: per-rank SCRATCH units inside `eval_charmm_script`
