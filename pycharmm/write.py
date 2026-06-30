@@ -116,15 +116,20 @@ def psf_card(filename, title='', **kwargs):
     **kwargs: dict
         extra settings to pass to the CHARMM command
     """
+    import ctypes
+
+    import pycharmm.lib as lib
+
     fortran_path, alias = _resolve_write_path(filename)
     try:
-        write_command = pycharmm.script.WriteScript(
-            fortran_path,
-            title,
-            psf='card',
-            **kwargs,
-        )
-        write_command.run()
+        fn = ctypes.c_char_p(fortran_path.encode())
+        len_fn = ctypes.c_int(len(fortran_path))
+        status = int(lib.charmm.write_psf_card(fn, ctypes.byref(len_fn)))
+        if status != 1:
+            raise RuntimeError(
+                f"write_psf_card failed for {filename!r} "
+                f"(staging={fortran_path!r}, status={status})"
+            )
     finally:
         if alias is not None:
             alias.finalize()

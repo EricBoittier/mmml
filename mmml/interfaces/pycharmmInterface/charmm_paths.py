@@ -175,17 +175,33 @@ def charmm_fortran_max_path_length() -> int:
     return 128
 
 
-def fortran_path_needs_alias(path: str | Path) -> bool:
-    """True when CHARMM Fortran I/O may fail on *path* (uppercase or too long)."""
+def fortran_path_needs_alias(path: str | Path, *, for_write: bool = False) -> bool:
+    """True when CHARMM Fortran I/O may fail on *path* (uppercase, long, or MPI)."""
     if _charmm_io_aliases_disabled():
         return False
     p = Path(path).expanduser()
     if not p.is_absolute():
         p = Path.cwd() / p
     resolved = p.resolve()
+    # Library-mode CHARMM Fortran OPEN is case-sensitive; always stage writes to a
+    # lowercase path under $TMPDIR/mmml-charmm-io and copy back afterward.
+    if for_write:
+        return True
     if len(str(resolved)) > charmm_fortran_max_path_length():
         return True
-    return any(_path_component_has_uppercase(part) for part in resolved.parts)
+    if any(_path_component_has_uppercase(part) for part in resolved.parts):
+        return True
+    try:
+        from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+            _under_mpirun,
+            charmm_lib_links_mpi,
+        )
+
+        if _under_mpirun() and charmm_lib_links_mpi():
+            return True
+    except ImportError:
+        pass
+    return False
 
 
 def charmm_io_staging_root() -> Path:
@@ -228,7 +244,7 @@ def charmm_io_alias(
 ) -> CharmmIoAlias | None:
     """Return a lowercase alias when CHARMM cannot open *path* directly."""
     original = Path(path).expanduser().resolve()
-    if not fortran_path_needs_alias(original):
+    if not fortran_path_needs_alias(original, for_write=for_write):
         return None
 
     root = staging_root or charmm_io_staging_root()

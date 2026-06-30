@@ -486,12 +486,33 @@ def apply_charmm_verbosity(
 
 
 def write_charmm_psf(path: PathLike) -> Path:
-    """Write the current in-memory PSF (connectivity as in CHARMM)."""
-    import pycharmm.write as write
+    """Write the current in-memory PSF (connectivity as in CHARMM).
+
+    Uses the Fortran ``write_psf_card`` C API with a lowercase staging path when
+    needed.  ``WRITE PSF`` via ``lingo.charmm_script`` can abort in ``parse.F90``
+    on MPI-linked builds (gfortrantmp EOF on unit 90) and cannot open paths with
+    uppercase letters on many cluster CHARMM installs.
+    """
+    import ctypes
+
+    from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
 
     p = Path(path).expanduser().resolve()
     p.parent.mkdir(parents=True, exist_ok=True)
-    write.psf_card(str(p))
+    fortran_path, alias = charmm_fortran_path(p, for_write=True)
+    try:
+        import pycharmm.lib as lib
+
+        fn = ctypes.c_char_p(fortran_path.encode())
+        len_fn = ctypes.c_int(len(fortran_path))
+        status = int(lib.charmm.write_psf_card(fn, ctypes.byref(len_fn)))
+        if status != 1:
+            raise RuntimeError(
+                f"write_psf_card failed for {p} (staging={fortran_path!r}, status={status})"
+            )
+    finally:
+        if alias is not None:
+            alias.finalize()
     return p
 
 

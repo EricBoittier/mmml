@@ -180,8 +180,9 @@ def test_charmm_lib_available_without_explicit_env(tmp_path, monkeypatch):
 def test_fortran_path_needs_alias_detects_uppercase(tmp_path):
     upper = tmp_path / "DCM60_L32" / "pretreat" / "mini_box_equil.res"
     lower = tmp_path / "dcm60_l32" / "pretreat" / "mini_box_equil.res"
-    assert charmm_paths.fortran_path_needs_alias(upper)
-    assert not charmm_paths.fortran_path_needs_alias(lower)
+    assert charmm_paths.fortran_path_needs_alias(upper, for_write=False)
+    assert not charmm_paths.fortran_path_needs_alias(lower, for_write=False)
+    assert charmm_paths.fortran_path_needs_alias(lower, for_write=True)
 
 
 def test_charmm_io_alias_read_symlink(tmp_path):
@@ -213,12 +214,25 @@ def test_charmm_io_alias_write_copy_back(tmp_path):
     assert target.read_text(encoding="ascii") == "written via alias\n"
 
 
-def test_charmm_fortran_path_noop_for_lowercase(tmp_path):
+def test_charmm_fortran_path_stages_writes_even_when_lowercase(tmp_path):
+    path = tmp_path / "pretreat" / "mini_box_equil.res"
+    path.parent.mkdir()
+    staging = tmp_path / "staging"
+
+    fortran_path, alias = charmm_paths.charmm_fortran_path(
+        path, for_write=True, staging_root=staging
+    )
+    assert alias is not None
+    assert fortran_path == str(alias.alias)
+    assert alias.alias.name == alias.alias.name.lower()
+
+
+def test_charmm_fortran_path_read_noop_for_lowercase(tmp_path):
     path = tmp_path / "pretreat" / "mini_box_equil.res"
     path.parent.mkdir()
     path.write_text("x", encoding="ascii")
 
-    fortran_path, alias = charmm_paths.charmm_fortran_path(path, for_write=True)
+    fortran_path, alias = charmm_paths.charmm_fortran_path(path, for_write=False)
     assert alias is None
     assert fortran_path == str(path.resolve())
 
@@ -230,7 +244,7 @@ def test_fortran_path_needs_alias_for_long_paths(tmp_path):
     deep.mkdir(parents=True)
     target = deep / "002_pre_mlpot_monomer_repack.crd"
     assert len(str(target.resolve())) > charmm_paths.charmm_fortran_max_path_length()
-    assert charmm_paths.fortran_path_needs_alias(target)
+    assert charmm_paths.fortran_path_needs_alias(target, for_write=False)
 
 
 def test_charmm_io_alias_long_write_copy_back(tmp_path):
