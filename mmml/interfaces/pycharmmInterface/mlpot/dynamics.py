@@ -474,10 +474,10 @@ def bonded_mm_mini_config_from_namespace(
 
 def _with_mlpot_block_restored(ctx: "MlpotContext", fn):
     """Run ``fn`` with full/bonded MM registration, then restore hybrid MLpot MM-off."""
-    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
-        apply_mlpot_registration_mm_off,
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        MlpotContext,
+        _apply_mlpot_psf_mm_off_and_pbc,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     if not isinstance(ctx, MlpotContext) and not hasattr(ctx, "mock_calls"):
         raise TypeError("ctx must be MlpotContext")
@@ -486,11 +486,7 @@ def _with_mlpot_block_restored(ctx: "MlpotContext", fn):
     try:
         return fn()
     finally:
-        ctx.block_tag = apply_mlpot_registration_mm_off(
-            ctx.ml_selection,
-            mm_internal_scale=float(getattr(ctx, "mm_internal_scale", 0.0)),
-            use_block=getattr(ctx, "registration_uses_block", None),
-        )
+        ctx.block_tag = _apply_mlpot_psf_mm_off_and_pbc(ctx)
 
 
 def measure_mm_grms_with_full_block(ctx: "MlpotContext") -> float:

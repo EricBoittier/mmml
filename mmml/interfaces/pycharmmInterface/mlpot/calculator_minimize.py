@@ -700,7 +700,7 @@ def minimize_hybrid_calculator_before_sd(
     sync_charmm_positions(np.asarray(atoms.get_positions(), dtype=np.float64))
     sync_charmm_lists_after_mini(quiet=True)
     invalidate_mlpot_calculator_caches(mlpot_ctx)
-    mlpot_ctx.reregister_mlpot(verbose=False)
+    mlpot_ctx.reregister_mlpot(verbose=False, reregister_params=False)
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms_after_ener_force
 
     charmm_grms_after_ener_force()
@@ -828,7 +828,7 @@ def minimize_hybrid_calculator_fire_before_sd(
     sync_charmm_positions(np.asarray(atoms.get_positions(), dtype=np.float64))
     sync_charmm_lists_after_mini(quiet=True)
     invalidate_mlpot_calculator_caches(mlpot_ctx)
-    mlpot_ctx.reregister_mlpot(verbose=False)
+    mlpot_ctx.reregister_mlpot(verbose=False, reregister_params=False)
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms_after_ener_force
 
     charmm_grms_after_ener_force()

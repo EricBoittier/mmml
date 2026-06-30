@@ -156,31 +156,23 @@ class MlpotContext:
             clear_mlpot_energy_block(self.ml_selection, block_tag=self.block_tag)
         apply_charmm_mm_block()
 
-    def reregister_mlpot(self, *, verbose: bool = False, force: bool = False) -> None:
-        """Re-attach MLpot + ML MM-off registration after temporary MM-only work."""
-        from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
-            apply_mlpot_registration_mm_off,
-        )
+    def reregister_mlpot(
+        self,
+        *,
+        verbose: bool = False,
+        force: bool = False,
+        reregister_params: bool = True,
+    ) -> None:
+        """Re-attach MLpot after temporary MM-only work or calculator mini.
 
+        Set ``reregister_params=False`` when CGENFF/BLOCK state is unchanged
+        (e.g. ASE FIRE/BFGS moved coordinates only). ``READ PARAM APPEND`` always
+        clears PBC IMAGE/NBOND lists and must not run without a full rebuild.
+        """
         if self.ml_selection is None or self.ml_Z is None:
             raise RuntimeError("MlpotContext missing ml_selection or ml_Z for reregister")
-        self.block_tag = apply_mlpot_registration_mm_off(
-            self.ml_selection,
-            mm_internal_scale=float(self.mm_internal_scale),
-            verbose=verbose,
-            periodic_external=bool(getattr(self, "periodic_external", False)),
-            use_block=self.registration_uses_block,
-        )
-        if (
-            bool(getattr(self, "use_pbc", False))
-            and not bool(getattr(self, "registration_uses_block", False))
-            and getattr(self, "cubic_box_side_A", None) is not None
-        ):
-            _finalize_pbc_mlpot_exclusions_after_param_read(
-                self.ml_selection,
-                cubic_box_side_A=float(self.cubic_box_side_A),
-                verbose=verbose,
-            )
+        if reregister_params:
+            self.block_tag = _apply_mlpot_psf_mm_off_and_pbc(self, verbose=verbose)
         reattach = getattr(self.mlpot, "reattach_mlpot", None)
         if callable(reattach):
             # Do not construct a new MLpot(): __init__ rebuilds iblo/inb via update_bnbnd
@@ -1194,6 +1186,46 @@ def _registration_pbc_box_side_A(
         "PBC MLpot registration needs a cubic box side "
         "(pass cubic_box_side_A or ensure CHARMM crystal is set)"
     )
+
+
+def _resolve_mlpot_ctx_pbc_box_side(ctx: MlpotContext) -> float | None:
+    """Best-effort cubic box side (Å) from context fields or live CHARMM crystal."""
+    if not bool(getattr(ctx, "use_pbc", False)):
+        return None
+    for attr in ("cubic_box_side_A", "charmm_cubic_box_side_A"):
+        val = getattr(ctx, attr, None)
+        if val is not None:
+            return float(val)
+    try:
+        return _registration_pbc_box_side_A(None, None)
+    except RuntimeError:
+        return None
+
+
+def _apply_mlpot_psf_mm_off_and_pbc(ctx: MlpotContext, *, verbose: bool = False) -> str:
+    """Zero CHARMM MM on ML atoms; rebuild PBC lists after CGENFF param read."""
+    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
+        apply_mlpot_registration_mm_off,
+    )
+
+    block_tag = apply_mlpot_registration_mm_off(
+        ctx.ml_selection,
+        mm_internal_scale=float(ctx.mm_internal_scale),
+        verbose=verbose,
+        periodic_external=bool(getattr(ctx, "periodic_external", False)),
+        use_block=ctx.registration_uses_block,
+    )
+    if bool(getattr(ctx, "use_pbc", False)) and not bool(
+        getattr(ctx, "registration_uses_block", False)
+    ):
+        box_side = _resolve_mlpot_ctx_pbc_box_side(ctx)
+        if box_side is not None:
+            _finalize_pbc_mlpot_exclusions_after_param_read(
+                ctx.ml_selection,
+                cubic_box_side_A=float(box_side),
+                verbose=verbose,
+            )
+    return block_tag
 
 
 def _finalize_pbc_mlpot_exclusions_after_param_read(
