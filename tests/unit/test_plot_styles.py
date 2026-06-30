@@ -87,5 +87,6 @@ def test_comparison_plot_accepts_style(tmp_path: Path, style_name: str) -> None:
         ("dcm1-cccc-dddd", _synthetic_metrics(35, seed=2)),
     ]
     out = tmp_path / f"compare_{style_name}.png"
-    plot_training_comparison(runs, out, ef_only=True, verbose=False, plot_style=style_name)
-    assert out.is_file()
+    written = plot_training_comparison(runs, out, ef_only=True, verbose=False, plot_style=style_name)
+    assert len(written) == 3
+    assert (tmp_path / f"compare_{style_name}_valid_loss.png").is_file()

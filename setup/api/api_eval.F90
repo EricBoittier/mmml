@@ -59,11 +59,10 @@ contains
   integer(c_int) function eval_charmm_script(c_script, c_len) bind(C)
     use, intrinsic :: iso_c_binding, only: c_int, c_char, c_null_char
 
+    use api_util, only: c2f_string
+
     use comand, only: comlen, comlyn
-    use ctitla, only: titlea, ntitla
     use dimens_fcm, only: mxcmsz
-    use exfunc, only: lunass
-    use stream, only: nstrm, istrm, jstrm
 
     implicit none
 
@@ -72,65 +71,88 @@ contains
     integer(c_int), value, intent(in) :: c_len
 
     ! local vars
-    integer :: script_unit
-    logical :: read_cmd, used, ok, eof, get_next_cmd
+    logical :: lused = .false.
 
     eval_charmm_script = 0
 
-    script_unit = lunass(90)
-    open(unit=script_unit, status='SCRATCH')
-    write(script_unit, *) c_script(1:c_len)
-    rewind(script_unit)
+    if (c_len .gt. mxcmsz) then
+       comlen = mxcmsz
+    else
+       comlen = c_len
+    end if
 
-    nstrm = 1
-    istrm = script_unit
-    jstrm(nstrm) = istrm
+    comlyn(1:comlen) = c2f_string(c_script, comlen)
 
-    titlea = ' '
-    titlea = '* EXECUTING CHARMM SCRIPT FROM PYTHON'
-    ntitla = 1
+    if (comlen .lt. mxcmsz) comlyn((comlen + 1):mxcmsz) = ' '
+    comlen = len(trim(comlyn))
 
-    eof = .false.
-    read_cmd = .true.
-    used = .false.
-    get_next_cmd = .true.
-    do while (.true.)
-       get_next_cmd = .true.
-       do while (get_next_cmd)
-          if (read_cmd) then
-             call rdcmnd(comlyn, mxcmsz, comlen, istrm, eof, .true., .true., &
-                  'CHARMM> ')
-          end if
-          read_cmd = .true.
-          call miscom(comlyn, mxcmsz, comlen, used)
-          get_next_cmd = used .and. .not. eof
-       end do
+    call miscom(comlyn, mxcmsz, comlen, lused)
+    if (.not. lused) call maincomx(comlyn, comlen, lused)
 
-       ! If we run out of stuff on a particular stream, pop to the
-       ! previous stream. quit when there are no more streams.
-       if (eof) then
-          if (nstrm > 1) then
-             call ppstrm(ok)
-          else
-             ok = .false.
-          end if
-
-          if (.not. ok) then
-             close(script_unit)
-             eval_charmm_script = 1
-             return
-          end if
-
-          eof = .false.
-          cycle
-       end if
-
-       call maincomx(comlyn, comlen, used)
-    end do
-
-    close(script_unit)
     eval_charmm_script = 1
   end function eval_charmm_script
+
+  !> @brief evaluate all commands in a CHARMM input file (native stream loop).
+  !
+  ! Library builds omit the ``stream`` command; this processes a ``.inp`` in one
+  ! Fortran session so cooperative MPI READ stays synchronized across lines.
+  integer(c_int) function eval_charmm_inp_file(c_filename, c_len) bind(C)
+    use, intrinsic :: iso_c_binding, only: c_int, c_char
+
+    use api_util, only: c2f_string
+    use comand, only: comlen, comlyn
+    use dimens_fcm, only: mxcmsz
+
+    implicit none
+
+    character(kind=c_char), dimension(*) :: c_filename
+    integer(c_int), value :: c_len
+
+    character(len=:), allocatable :: fn_str, raw, work
+    integer :: iunit, ios, ntrim
+    logical :: lused
+
+    eval_charmm_inp_file = 0
+    fn_str = c2f_string(c_filename, c_len)
+
+    open(newunit=iunit, file=trim(fn_str), status='old', action='read', iostat=ios)
+    if (ios /= 0) return
+
+    do
+       read(iunit, '(A)', iostat=ios) raw
+       if (ios /= 0) exit
+       work = adjustl(raw)
+       if (len_trim(work) == 0) cycle
+       if (work(1:1) == '*') cycle
+       if (work(1:1) == '!') cycle
+
+       ntrim = len_trim(work)
+       do while (ntrim > 0 .and. work(ntrim:ntrim) == '-')
+          read(iunit, '(A)', iostat=ios) raw
+          if (ios /= 0) exit
+          work = trim(work(1:ntrim - 1)) // ' ' // trim(adjustl(raw))
+          ntrim = len_trim(work)
+       end do
+
+       if (len_trim(work) == 0) cycle
+       if (len_trim(work) > mxcmsz) then
+          comlen = mxcmsz
+       else
+          comlen = len_trim(work)
+       end if
+
+       comlyn(1:comlen) = work(1:comlen)
+       if (comlen < mxcmsz) comlyn((comlen + 1):mxcmsz) = ' '
+       comlen = len(trim(comlyn))
+
+       lused = .false.
+       call miscom(comlyn, mxcmsz, comlen, lused)
+       if (.not. lused) call maincomx(comlyn, comlen, lused)
+    end do
+
+    close(iunit)
+    eval_charmm_inp_file = 1
+  end function eval_charmm_inp_file
 
   function eval_get_param(name, len_name, val, len_val) result(is_found) bind(c)
     use, intrinsic :: iso_c_binding, only: c_char, c_int, c_null_char

@@ -877,14 +877,16 @@ def test_mmml_charmm_mpirun_dispatches_native_executable(tmp_path):
     assert f"mmml {fake_charmm}" not in combined
 
 
-def test_bootstrap_charmm_step_invokes_script_without_barrier():
+def test_bootstrap_charmm_step_skips_barrier_by_default():
     calls: list[str] = []
 
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
-        return_value=(2, 4),
+        return_value=(1, 2),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi._invoke_charmm_script",
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.sync_bootstrap_ranks",
+    ) as sync_mock, mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.mpi_charmm_script",
         side_effect=lambda s, **kw: calls.append(s),
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_natom_count",
@@ -894,12 +896,50 @@ def test_bootstrap_charmm_step_invokes_script_without_barrier():
 
     assert n == 100
     assert calls == ["read psf card name foo.psf\n"]
+    sync_mock.assert_not_called()
 
 
-def test_bootstrap_topology_mpi_psf_crd_steps_all_ranks(tmp_path):
+def test_bootstrap_charmm_step_barrier_when_opt_in(monkeypatch):
+    monkeypatch.setenv("MMML_MPI_BOOTSTRAP_BARRIER", "1")
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        return_value=(1, 2),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.sync_bootstrap_ranks",
+    ) as sync_mock, mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.mpi_charmm_script",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_natom_count",
+        return_value=1,
+    ):
+        charmm_mpi.bootstrap_charmm_step("read_psf", "read psf card name foo.psf\n")
+
+    sync_mock.assert_called_once_with(log_fn=None, label="before read_psf")
+
+
+def test_bootstrap_charmm_step_serial_skips_barrier():
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        return_value=(0, 1),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.sync_bootstrap_ranks",
+    ) as sync_mock, mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._invoke_charmm_script",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_natom_count",
+        return_value=1,
+    ):
+        charmm_mpi.bootstrap_charmm_step("read_psf", "read psf card name foo.psf\n")
+
+    sync_mock.assert_not_called()
+
+
+def test_bootstrap_topology_mpi_psf_crd_serial_steps(tmp_path):
     psf = tmp_path / "x.psf"
     crd = tmp_path / "x.crd"
     prm = tmp_path / "x.prm"
+    rtf = tmp_path / "x.rtf"
     psf.write_text(
         "2 !NATOM\n"
         "1 DCM 1 DCM 1 C1 0 1\n"
@@ -908,19 +948,35 @@ def test_bootstrap_topology_mpi_psf_crd_steps_all_ranks(tmp_path):
     )
     crd.write_text("* coords\n*\n2\n", encoding="utf-8")
     prm.write_text("MASS -1 C1 12.0 C\nMASS -1 H1 1.0 H\n", encoding="utf-8")
+    rtf.write_text("* minimal\n", encoding="utf-8")
 
     calls: list[str] = []
-    natom_seq = iter([0, 0, 0, 2])
 
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
-        return_value=(3, 4),
+        return_value=(0, 1),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi._invoke_charmm_script",
-        side_effect=lambda s, **kw: calls.append(s.strip()),
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._bootstrap_rank_local_staging_enabled",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._resolve_bootstrap_rtf",
+        return_value=rtf,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.sync_bootstrap_ranks",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._read_rtf_api",
+    ) as rtf_mock, mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._read_prm_api",
+    ) as prm_mock, mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._read_psf_api",
+    ) as psf_mock, mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._load_coor_from_crd_api",
+    ) as crd_mock, mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_natom_diagnostics",
+        return_value={"psf_natom": 2, "coor_natom": 2, "psf_loaded": True},
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_natom_count",
-        side_effect=lambda: next(natom_seq, 2),
+        return_value=2,
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi._mpi_comm_valid",
         return_value=False,
@@ -933,10 +989,325 @@ def test_bootstrap_topology_mpi_psf_crd_steps_all_ranks(tmp_path):
         )
 
     assert n == 2
-    assert len(calls) == 4
-    assert calls[0].startswith("read rtf card name")
-    assert "read psf card name" in calls[2]
-    assert "read coor card name" in calls[3]
+    rtf_mock.assert_called_once()
+    prm_mock.assert_called_once()
+    psf_mock.assert_called_once()
+    crd_mock.assert_called_once()
+    assert (tmp_path / "bs_read.crd").is_file()
+
+
+def test_bootstrap_topology_mpi_psf_crd_np_gt1_uses_cooperative_read(tmp_path, monkeypatch):
+    monkeypatch.setenv("MMML_MPI_BOOTSTRAP_FORCE_PSF_CRD", "1")
+    psf = tmp_path / "x.psf"
+    crd = tmp_path / "x.crd"
+    prm = tmp_path / "x.prm"
+    rtf = tmp_path / "x.rtf"
+    psf.write_text(
+        "2 !NATOM\n"
+        "1 DCM 1 DCM 1 C1 0 1\n"
+        "2 DCM 1 DCM 1 H1 0 1\n",
+        encoding="utf-8",
+    )
+    crd.write_text("* coords\n*\n2\n", encoding="utf-8")
+    prm.write_text("MASS -1 C1 12.0 C\nMASS -1 H1 1.0 H\n", encoding="utf-8")
+    rtf.write_text("* minimal\n", encoding="utf-8")
+
+    calls: list[str] = []
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        return_value=(0, 2),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._bootstrap_rank_local_staging_enabled",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._resolve_bootstrap_rtf",
+        return_value=rtf,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.sync_bootstrap_ranks",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.align_mpi_ranks_after_import",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._wait_for_shared_file",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._read_rtf_api",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._read_prm_api",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._cooperative_stream_topology_read",
+    ) as stream_mock, mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._load_coor_from_crd_api",
+    ) as crd_mock, mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_natom_diagnostics",
+        return_value={"psf_natom": 2, "coor_natom": 2, "psf_loaded": True},
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_natom_count",
+        return_value=2,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._mpi_comm_valid",
+        return_value=False,
+    ):
+        n = charmm_mpi.bootstrap_topology_mpi(
+            psf,
+            crd,
+            prm_path=prm,
+            mode="psf-crd",
+        )
+
+    assert n == 2
+    stream_mock.assert_called_once()
+    crd_mock.assert_called_once()
+
+
+def test_bootstrap_topology_mpi_np_gt1_auto_restart_when_res_exists(tmp_path):
+    psf = tmp_path / "x.psf"
+    crd = tmp_path / "x.crd"
+    prm = tmp_path / "x.prm"
+    res = tmp_path / "x.res"
+    rtf = tmp_path / "x.rtf"
+    psf.write_text("2 !NATOM\n1 DCM 1 DCM 1 C1 0 1\n2 DCM 1 DCM 1 H1 0 1\n", encoding="utf-8")
+    crd.write_text("* coords\n*\n2\n", encoding="utf-8")
+    prm.write_text("MASS -1 C1 12.0 C\nMASS -1 H1 1.0 H\n", encoding="utf-8")
+    res.write_text("dummy restart\n", encoding="utf-8")
+    rtf.write_text("* minimal\n", encoding="utf-8")
+
+    calls: list[str] = []
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        return_value=(0, 2),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._bootstrap_rank_local_staging_enabled",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._resolve_bootstrap_rtf",
+        return_value=rtf,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.align_mpi_ranks_after_import",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._wait_for_shared_file",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._read_rtf_api",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._read_prm_api",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._cooperative_stream_topology_read",
+    ) as stream_mock, mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._load_coor_from_crd_api",
+    ) as crd_mock, mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_natom_diagnostics",
+        return_value={"psf_natom": 2, "coor_natom": 2, "psf_loaded": True},
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_natom_count",
+        return_value=2,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._mpi_comm_valid",
+        return_value=False,
+    ):
+        n = charmm_mpi.bootstrap_topology_mpi(
+            psf,
+            crd,
+            prm_path=prm,
+            mode="psf-crd",
+        )
+
+    assert n == 2
+    stream_mock.assert_called_once()
+    crd_mock.assert_called_once()
+
+
+def test_bootstrap_topology_mpi_np_gt1_all_ranks_read_bisect_uses_direct_psf(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("MMML_MPI_BOOTSTRAP_ALL_RANKS_READ", "1")
+    monkeypatch.setenv("MMML_MPI_BOOTSTRAP_FORCE_PSF_CRD", "1")
+    psf = tmp_path / "x.psf"
+    crd = tmp_path / "x.crd"
+    prm = tmp_path / "x.prm"
+    rtf = tmp_path / "x.rtf"
+    psf.write_text("2 !NATOM\n1 DCM 1 DCM 1 C1 0 1\n2 DCM 1 DCM 1 H1 0 1\n", encoding="utf-8")
+    crd.write_text("* coords\n*\n2\n", encoding="utf-8")
+    prm.write_text("MASS -1 C1 12.0 C\nMASS -1 H1 1.0 H\n", encoding="utf-8")
+    rtf.write_text("* minimal\n", encoding="utf-8")
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        return_value=(0, 2),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._bootstrap_rank_local_staging_enabled",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._resolve_bootstrap_rtf",
+        return_value=rtf,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.align_mpi_ranks_after_import",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._wait_for_shared_file",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._read_rtf_api",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._read_prm_api",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._read_psf_api",
+    ) as psf_mock, mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._cooperative_eval_read_step",
+    ) as eval_mock, mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._cooperative_stream_topology_read",
+    ) as stream_mock, mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._load_coor_from_crd_api",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_natom_diagnostics",
+        return_value={"psf_natom": 2, "coor_natom": 2, "psf_loaded": True},
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_natom_count",
+        return_value=2,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._mpi_comm_valid",
+        return_value=False,
+    ):
+        n = charmm_mpi.bootstrap_topology_mpi(
+            psf,
+            crd,
+            prm_path=prm,
+            mode="psf-crd",
+        )
+
+    assert n == 2
+    psf_mock.assert_called_once()
+    eval_mock.assert_not_called()
+    stream_mock.assert_not_called()
+
+
+def test_bootstrap_stream_topology_read_default_at_np2(monkeypatch):
+    monkeypatch.delenv("MMML_MPI_BOOTSTRAP_EVAL_LINES", raising=False)
+    monkeypatch.delenv("MMML_MPI_BOOTSTRAP_HYBRID_READ", raising=False)
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        return_value=(1, 2),
+    ):
+        assert charmm_mpi._bootstrap_stream_topology_read() is True
+
+
+def test_bootstrap_eval_topology_read_opt_in(monkeypatch):
+    monkeypatch.setenv("MMML_MPI_BOOTSTRAP_EVAL_LINES", "1")
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        return_value=(1, 2),
+    ):
+        assert charmm_mpi._bootstrap_eval_topology_read() is True
+        assert charmm_mpi._bootstrap_stream_topology_read() is False
+
+
+def test_bootstrap_eval_topology_read_off_when_hybrid_bisect(monkeypatch):
+    monkeypatch.setenv("MMML_MPI_BOOTSTRAP_HYBRID_READ", "1")
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        return_value=(1, 2),
+    ):
+        assert charmm_mpi._bootstrap_eval_topology_read() is False
+        assert charmm_mpi._bootstrap_stream_topology_read() is False
+
+
+def test_bootstrap_rank0_topology_read_off_by_default(monkeypatch):
+    monkeypatch.delenv("MMML_MPI_BOOTSTRAP_RANK0_TOPOLOGY_READ", raising=False)
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        return_value=(1, 2),
+    ):
+        assert charmm_mpi._bootstrap_rank0_topology_read() is False
+
+
+def test_bootstrap_rank0_topology_read_opt_in(monkeypatch):
+    monkeypatch.setenv("MMML_MPI_BOOTSTRAP_RANK0_TOPOLOGY_READ", "1")
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        return_value=(1, 2),
+    ):
+        assert charmm_mpi._bootstrap_rank0_topology_read() is True
+
+
+def test_cooperative_eval_read_step_raises_when_psf_empty():
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        return_value=(0, 2),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.mpi_charmm_script",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_natom_count",
+        return_value=0,
+    ), pytest.raises(RuntimeError, match="psf_natom=0"):
+        charmm_mpi._cooperative_eval_read_step(
+            "psf",
+            "read psf card name bs_read.psf",
+            expect_psf_natom_min=1,
+        )
+
+
+def test_cooperative_psf_read_eval_calls_mpi_charmm_script(tmp_path):
+    psf = tmp_path / "bs_read.psf"
+    psf.write_text("2 !NATOM\n", encoding="utf-8")
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._cooperative_eval_read_step",
+    ) as eval_mock:
+        charmm_mpi._cooperative_psf_read_eval(psf)
+
+    eval_mock.assert_called_once()
+    assert eval_mock.call_args.kwargs["expect_psf_natom_min"] == 1
+
+
+def test_cooperative_stream_topology_read_prefers_inp_api(tmp_path):
+    base = tmp_path / "artifacts"
+    base.mkdir()
+    compact = {
+        "rtf": base / "bs_rtf.rtf",
+        "prm": base / "bs_read.prm",
+        "psf": base / "bs_read.psf",
+        "artifact_stem": "dcm_20mer",
+    }
+    for p in (compact["rtf"], compact["prm"], compact["psf"]):
+        p.write_text("x", encoding="utf-8")
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        return_value=(0, 2),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._eval_charmm_inp_file_available",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._invoke_charmm_inp_file",
+        return_value=True,
+    ) as inp_mock, mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.mpi_charmm_script",
+    ) as script_mock, mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_natom_count",
+        return_value=100,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._bootstrap_workdir",
+        return_value=mock.MagicMock(__enter__=mock.MagicMock(), __exit__=mock.MagicMock()),
+    ):
+        charmm_mpi._cooperative_stream_topology_read(compact)
+
+    inp_mock.assert_called_once()
+    script_mock.assert_not_called()
+
+
+def test_cooperative_direct_api_step_all_ranks_by_default():
+    path = Path("/tmp/bs_read.rtf")
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        return_value=(1, 2),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._bootstrap_rank0_topology_read",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._mpi_script_barrier",
+    ) as barrier_mock, mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._read_rtf_api",
+    ) as rtf_mock:
+        charmm_mpi._cooperative_direct_api_step("rtf", charmm_mpi._read_rtf_api, path)
+
+    rtf_mock.assert_called_once_with(path)
+    barrier_mock.assert_not_called()
 
 
 def test_bootstrap_topology_mpi_invalid_mode(tmp_path):
@@ -950,3 +1321,26 @@ def test_bootstrap_topology_mpi_invalid_mode(tmp_path):
         return_value=(0, 1),
     ), pytest.raises(ValueError, match="unsupported bootstrap mode"):
         charmm_mpi.bootstrap_topology_mpi(psf, crd, mode="bad-mode")
+
+
+def test_stage_topology_files_for_rank_copies_to_uuid_dir(tmp_path, monkeypatch):
+    monkeypatch.setenv("TMPDIR", str(tmp_path))
+    psf = tmp_path / "a.psf"
+    crd = tmp_path / "a.crd"
+    prm = tmp_path / "a.prm"
+    psf.write_text("2 !NATOM\n1 DCM 1 DCM 1 C1 0 1\n2 DCM 1 DCM 1 H1 0 1\n", encoding="utf-8")
+    crd.write_text("* coords\n*\n2\n", encoding="utf-8")
+    prm.write_text("MASS -1 C1 12.0 C\nMASS -1 H1 1.0 H\n", encoding="utf-8")
+
+    staged = charmm_mpi.prepare_rank_local_bootstrap_paths(
+        psf=psf,
+        crd=crd,
+        prm=prm,
+        rank=2,
+        size=4,
+    )
+
+    assert staged["rtf"].is_file()
+    assert staged["psf"].parent == staged["crd"].parent == staged["rtf"].parent
+    assert staged["staging_dir"].name.startswith("rank2_")
+    assert staged["rtf"].read_text(encoding="utf-8").startswith("* MMML MPI bootstrap")

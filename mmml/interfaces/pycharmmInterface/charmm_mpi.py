@@ -8,6 +8,10 @@ import platform
 import shutil
 import subprocess
 import sys
+import tempfile
+import time
+import uuid
+from contextlib import contextmanager
 from functools import lru_cache
 from pathlib import Path
 from typing import Callable
@@ -999,7 +1003,7 @@ def mpi_charmm_script(
     quiet: bool = False,
     rank0_drive: bool = False,
     barriers: str = "none",
-) -> None:
+) -> bool:
     """Run ``lingo.charmm_script`` under MPI.
 
     Default ``barriers="none"`` matches the workshop pattern: caller synchronises
@@ -1008,30 +1012,32 @@ def mpi_charmm_script(
 
     By default (**``rank0_drive=False``**) every rank calls ``eval_charmm_script``
     with the same script.  Rank 0 performs disk I/O; Fortran MPI broadcasts state.
+
+    Returns ``True`` when ``lingo.charmm_script`` reports success.
     """
     from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     rank, size = mpi_rank_size()
     if size <= 1:
-        _invoke_charmm_script(
+        return _invoke_charmm_script(
             script,
             relaxed_bomlev=relaxed_bomlev,
             quiet=quiet,
         )
-        return
 
     if barriers in ("both", "pre"):
         _mpi_script_barrier()
+    ok = True
     try:
         if rank0_drive:
             if rank == 0:
-                _invoke_charmm_script(
+                ok = _invoke_charmm_script(
                     script,
                     relaxed_bomlev=relaxed_bomlev,
                     quiet=quiet,
                 )
         else:
-            _invoke_charmm_script(
+            ok = _invoke_charmm_script(
                 script,
                 relaxed_bomlev=relaxed_bomlev,
                 quiet=quiet,
@@ -1039,6 +1045,7 @@ def mpi_charmm_script(
     finally:
         if barriers in ("both", "post"):
             _mpi_script_barrier()
+    return ok
 
 
 def _mpi_script_barrier() -> None:
@@ -1056,7 +1063,7 @@ def _invoke_charmm_script(
     *,
     relaxed_bomlev: bool = False,
     quiet: bool = False,
-) -> None:
+) -> bool:
     from contextlib import nullcontext
 
     import pycharmm.lingo as lingo
@@ -1073,17 +1080,23 @@ def _invoke_charmm_script(
     else:
         ctx = nullcontext()
     with ctx:
-        lingo.charmm_script(script)
+        return bool(lingo.charmm_script(script))
 
 
 def configure_mpi_bootstrap_env() -> None:
-    """Env guards before cooperative ``np>1`` topology READ (no import-time crystal free)."""
+    """Env guards before cooperative topology READ (no import-time crystal free).
+
+    Always skip import-time ``reset_block`` for bootstrap: it runs before
+    ``bomlev -2`` is applied and aborts on an empty system (BLOCK ILLEGAL COMMAND).
+    Under ``mpirun``, import-time BLOCK can also hang on MPI-linked builds.
+    """
     from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     _, size = mpi_rank_size()
+    os.environ.setdefault("MMML_SKIP_CHARMM_RESET_BLOCK", "1")
+    os.environ.setdefault("MMML_SKIP_VACUUM_CHARMM_INIT", "1")
     if size <= 1:
         return
-    os.environ.setdefault("MMML_SKIP_CHARMM_RESET_BLOCK", "1")
     os.environ.setdefault("MMML_DEFER_MPI4PY_PACKAGE_IMPORT", "1")
     os.environ.setdefault("MMML_QUIET", "1")
 
@@ -1114,6 +1127,20 @@ def charmm_natom_count() -> int:
     return int(psf.get_natom())
 
 
+def charmm_natom_diagnostics() -> dict[str, int | bool]:
+    """PSF/coor atom counts and whether Fortran reports a loaded PSF."""
+    import pycharmm.coor as coor
+    import pycharmm.psf as psf
+
+    psf_n = int(psf.get_natom())
+    coor_n = int(coor.get_natom())
+    return {
+        "psf_natom": psf_n,
+        "coor_natom": coor_n,
+        "psf_loaded": bool(psf_n > 0 or coor_n > 0),
+    }
+
+
 def _psf_atom_types_from_path(psf_path: Path) -> set[str]:
     types: set[str] = set()
     in_atoms = False
@@ -1136,10 +1163,8 @@ def _psf_atom_types_from_path(psf_path: Path) -> set[str]:
     return types
 
 
-def ensure_shared_minimal_rtf(psf_path: Path, prm_path: Path) -> Path:
-    """Write a MASS-only RTF beside *psf_path* (same path on every MPI rank)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
-
+def write_minimal_mass_rtf(psf_path: Path, prm_path: Path, out_path: Path) -> Path:
+    """Write a MASS-only RTF for atom types in *psf_path*."""
     needed = _psf_atom_types_from_path(psf_path)
     mass_lines: list[str] = []
     seen: set[str] = set()
@@ -1152,21 +1177,999 @@ def ensure_shared_minimal_rtf(psf_path: Path, prm_path: Path) -> Path:
     if missing:
         raise ValueError(f"Missing MASS records in {prm_path}: {missing}")
 
-    out = psf_path.with_name(f"{psf_path.stem}.minimal_mass.rtf")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     lines = [
         "* MMML MPI bootstrap minimal MASS topology",
         "*",
         *mass_lines,
         "END",
     ]
+    out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return out_path.resolve()
+
+
+def ensure_shared_minimal_rtf(psf_path: Path, prm_path: Path) -> Path:
+    """Write a MASS-only RTF beside *psf_path* (same path on every MPI rank)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+
+    out = psf_path.with_name(f"{psf_path.stem}.minimal_mass.rtf")
     rank, size = mpi_rank_size()
     if rank == 0 or (size <= 1 and not out.is_file()):
-        out.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    if size > 1 and _mpi_comm_valid():
-        from mpi4py import MPI
+        write_minimal_mass_rtf(psf_path, prm_path, out)
+    if size > 1:
+        if _mpi_comm_valid():
+            from mpi4py import MPI
 
-        MPI.COMM_WORLD.Barrier()
+            MPI.COMM_WORLD.Barrier()
+        else:
+            _wait_for_shared_file(out)
     return out
+
+
+def _bootstrap_rank_local_staging_enabled(*, size: int) -> bool:
+    """Whether each MPI rank copies topology files to a private UUID directory.
+
+    Default **off**: DOMDEC MPI READ is cooperative (rank 0 disk + Fortran broadcast);
+    every rank must pass the **same** paths. Opt in with ``MMML_MPI_BOOTSTRAP_RANK_LOCAL=1``
+    only for bisect / embarrassingly parallel workloads.
+    """
+    if size <= 1:
+        return False
+    flag = os.environ.get("MMML_MPI_BOOTSTRAP_RANK_LOCAL", "").strip().lower()
+    if flag in ("0", "false", "no"):
+        return False
+    if flag in ("1", "true", "yes"):
+        return True
+    return False
+
+
+def stage_topology_files_for_rank(
+    paths: dict[str, Path],
+    *,
+    rank: int,
+    log_fn: Callable[[str, str], None] | None = None,
+) -> dict[str, Path]:
+    """Copy topology artifacts to ``$TMPDIR/mmml_mpi_bootstrap/rank<R>_<uuid>/``."""
+    run_id = uuid.uuid4().hex
+    base = Path(tempfile.gettempdir()) / "mmml_mpi_bootstrap" / f"rank{rank}_{run_id}"
+    base.mkdir(parents=True, exist_ok=True)
+    staged: dict[str, Path] = {"staging_dir": base.resolve()}
+    for key, src in paths.items():
+        src = Path(src).expanduser().resolve()
+        if not src.is_file():
+            raise FileNotFoundError(f"bootstrap staging missing {key}: {src}")
+        dst = base / src.name
+        shutil.copy2(src, dst)
+        staged[key] = dst.resolve()
+    if log_fn is not None:
+        names = ", ".join(f"{k}={v}" for k, v in staged.items() if k != "staging_dir")
+        log_fn("stage", f"rank {rank}: dir={base} {names}")
+    return staged
+
+
+def prepare_rank_local_bootstrap_paths(
+    *,
+    psf: Path,
+    crd: Path,
+    prm: Path,
+    rank: int,
+    size: int,
+    rtf_path: Path | None = None,
+    res: Path | None = None,
+    log_fn: Callable[[str, str], None] | None = None,
+) -> dict[str, Path]:
+    """Stage PSF/CRD/PRM (and optional RTF/res) under a per-rank UUID directory."""
+    run_id = uuid.uuid4().hex
+    base = Path(tempfile.gettempdir()) / "mmml_mpi_bootstrap" / f"rank{rank}_{run_id}"
+    base.mkdir(parents=True, exist_ok=True)
+
+    if rtf_path is not None and Path(rtf_path).is_file():
+        minimal = _copy_bootstrap_file(base, Path(rtf_path))
+    else:
+        minimal = write_minimal_mass_rtf(psf, prm, base / f"{psf.stem}.minimal_mass.rtf")
+
+    staged: dict[str, Path] = {
+        "staging_dir": base.resolve(),
+        "rtf": minimal,
+        "prm": _copy_bootstrap_file(base, prm),
+        "psf": _copy_bootstrap_file(base, psf),
+        "crd": _copy_bootstrap_file(base, crd),
+    }
+    if res is not None and Path(res).is_file():
+        staged["res"] = _copy_bootstrap_file(base, res)
+    if log_fn is not None:
+        log_fn(
+            "stage",
+            f"rank {rank}/{size}: dir={base} "
+            f"rtf={staged['rtf']} psf={staged['psf']} crd={staged['crd']}",
+        )
+    return staged
+
+
+def _copy_bootstrap_file(base: Path, src: Path) -> Path:
+    src = Path(src).expanduser().resolve()
+    if not src.is_file():
+        raise FileNotFoundError(f"bootstrap staging missing file: {src}")
+    dst = base / src.name
+    if not dst.is_file():
+        shutil.copy2(src, dst)
+    return dst.resolve()
+
+
+def _resolve_bootstrap_topology_paths(
+    *,
+    psf: Path,
+    crd: Path,
+    prm: Path,
+    rank: int,
+    size: int,
+    rtf_path: Path | None,
+    res: Path | None,
+    log_fn: Callable[[str, str], None] | None,
+) -> dict[str, Path]:
+    if _bootstrap_rank_local_staging_enabled(size=size):
+        return prepare_rank_local_bootstrap_paths(
+            psf=psf,
+            crd=crd,
+            prm=prm,
+            rank=rank,
+            size=size,
+            rtf_path=rtf_path,
+            res=res,
+            log_fn=log_fn,
+        )
+    if rtf_path is None:
+        minimal = _resolve_bootstrap_rtf(
+            psf=psf, prm=prm, size=size, rtf_path=rtf_path
+        )
+    else:
+        minimal = Path(rtf_path).expanduser().resolve()
+    paths = {
+        "rtf": minimal,
+        "prm": prm,
+        "psf": psf,
+        "crd": crd,
+    }
+    if res is not None and Path(res).is_file():
+        paths["res"] = Path(res).expanduser().resolve()
+    return paths
+
+
+def _bootstrap_barrier_enabled() -> bool:
+    flag = os.environ.get("MMML_MPI_BOOTSTRAP_BARRIER", "").strip().lower()
+    return flag in ("1", "true", "yes")
+
+
+def sync_bootstrap_ranks(
+    *,
+    log_fn: Callable[[str, str], None] | None = None,
+    label: str = "CHARMM READ",
+) -> None:
+    """Optional mpi4py barrier (bisect only — **not** used during cooperative READ).
+
+    ``mpi4py.MPI.Barrier`` between ``eval_charmm_script`` calls can desync CHARMM's
+    Fortran MPI worker loop and leave ``n_atoms=0`` after READ.  Default bootstrap
+    uses one multiline ``mpi_charmm_script`` call with no Python barriers instead.
+    Opt in with ``MMML_MPI_BOOTSTRAP_BARRIER=1``.
+    """
+    if not _bootstrap_barrier_enabled():
+        return
+    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+
+    rank, size = mpi_rank_size()
+    if size <= 1:
+        return
+    if not ensure_mpi4py_after_charmm_init(phase=f"bootstrap sync ({label})"):
+        raise RuntimeError(f"rank {rank}/{size}: mpi4py.MPI unavailable before bootstrap sync")
+    if not _mpi_comm_valid():
+        raise RuntimeError(f"rank {rank}/{size}: MPI comm invalid before bootstrap sync")
+    from mpi4py import MPI
+
+    if log_fn is not None:
+        log_fn("bootstrap_sync", f"rank {rank}/{size} barrier ({label})")
+    MPI.COMM_WORLD.Barrier()
+    if log_fn is not None:
+        log_fn("bootstrap_sync", f"rank {rank}/{size} barrier done ({label})")
+
+
+def align_mpi_ranks_after_import(
+    *,
+    log_fn: Callable[[str, str], None] | None = None,
+    label: str = "after import_pycharmm",
+) -> None:
+    """One Python barrier so all ranks finish staggered ``import_pycharmm`` before CHARMM I/O."""
+    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+
+    rank, size = mpi_rank_size()
+    if size <= 1:
+        return
+    if log_fn is not None:
+        log_fn("bootstrap_sync", f"rank {rank}/{size} align ({label})")
+    _mpi_script_barrier()
+    if log_fn is not None:
+        log_fn("bootstrap_sync", f"rank {rank}/{size} align done ({label})")
+
+
+def _bootstrap_coor_source(
+    effective_mode: str,
+    compact: dict[str, Path],
+    *,
+    log_fn: Callable[[str, str], None] | None = None,
+) -> str:
+    """Return ``crd`` or ``restart`` for the final bootstrap coord load step."""
+    if effective_mode != "restart":
+        return "crd"
+    crd = compact.get("crd")
+    if crd is not None and crd.is_file():
+        if log_fn is not None:
+            log_fn(
+                "bootstrap",
+                "restart mode: load coords from CRD "
+                f"({crd.name}); prepare-phase .res is binary write restart",
+            )
+        return "crd"
+    return "restart"
+
+
+def _bootstrap_full_rtf() -> bool:
+    flag = os.environ.get("MMML_MPI_BOOTSTRAP_FULL_RTF", "").strip().lower()
+    return flag in ("1", "true", "yes")
+
+
+def _resolve_bootstrap_rtf(
+    *,
+    psf: Path,
+    prm: Path,
+    size: int,
+    rtf_path: Path | None,
+) -> Path:
+    if rtf_path is not None:
+        return Path(rtf_path).expanduser().resolve()
+    if size <= 1 or _bootstrap_full_rtf():
+        from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_RTF
+
+        return Path(CGENFF_RTF).expanduser().resolve()
+    return ensure_shared_minimal_rtf(psf, prm)
+
+
+def _bootstrap_force_psf_crd() -> bool:
+    flag = os.environ.get("MMML_MPI_BOOTSTRAP_FORCE_PSF_CRD", "").strip().lower()
+    return flag in ("1", "true", "yes")
+
+
+def _bootstrap_rank0_drive() -> bool:
+    flag = os.environ.get("MMML_MPI_BOOTSTRAP_RANK0_DRIVE", "").strip().lower()
+    return flag in ("1", "true", "yes")
+
+
+def _bootstrap_all_ranks_read() -> bool:
+    """Bisect-only: every rank calls ``api_read`` (v4.5 hung on ``read_psf_card`` at np>1)."""
+    flag = os.environ.get("MMML_MPI_BOOTSTRAP_ALL_RANKS_READ", "").strip().lower()
+    return flag in ("1", "true", "yes")
+
+
+def _bootstrap_hybrid_topology_read() -> bool:
+    """Bisect v4.7: direct ``api_read`` RTF/PRM + eval PSF only."""
+    flag = os.environ.get("MMML_MPI_BOOTSTRAP_HYBRID_READ", "").strip().lower()
+    return flag in ("1", "true", "yes")
+
+
+def _bootstrap_eval_topology_read() -> bool:
+    """Bisect v4.8: per-line ``eval`` READ (desyncs MPI between lines on some builds)."""
+    flag = os.environ.get("MMML_MPI_BOOTSTRAP_EVAL_LINES", "").strip().lower()
+    if flag not in ("1", "true", "yes"):
+        return False
+    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+
+    _, size = mpi_rank_size()
+    return size > 1 and not _bootstrap_all_ranks_read() and not _bootstrap_hybrid_topology_read()
+
+
+def _bootstrap_stream_topology_read() -> bool:
+    """At ``np>1``, one ``eval_charmm_inp_file`` / multiline READ chain (native-style)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+
+    _, size = mpi_rank_size()
+    if size <= 1:
+        return False
+    return not (
+        _bootstrap_all_ranks_read()
+        or _bootstrap_hybrid_topology_read()
+        or _bootstrap_eval_topology_read()
+    )
+
+
+def _bootstrap_rank0_topology_read() -> bool:
+    """Bisect-only (v4.6): rank 0 alone calls ``api_read`` — PSF hung waiting for workers."""
+    flag = os.environ.get("MMML_MPI_BOOTSTRAP_RANK0_TOPOLOGY_READ", "").strip().lower()
+    if flag not in ("1", "true", "yes"):
+        return False
+    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+
+    _, size = mpi_rank_size()
+    return size > 1
+
+
+def _resolve_bootstrap_mode(
+    mode: str,
+    *,
+    psf: Path,
+    restart_path: str | Path | None,
+    size: int,
+    rank: int,
+    log_fn: Callable[[str, str], None] | None = None,
+) -> tuple[str, Path | None]:
+    """Return ``(effective_mode, res_path)``; at ``np>1`` prefer restart when ``.res`` exists."""
+    if mode != "psf-crd" or size <= 1 or _bootstrap_force_psf_crd():
+        if mode == "restart":
+            res = Path(restart_path or psf.with_suffix(".res")).expanduser().resolve()
+            return mode, res
+        return mode, None
+
+    res = Path(restart_path or psf.with_suffix(".res")).expanduser().resolve()
+    if res.is_file():
+        if log_fn is not None:
+            log_fn(
+                "bootstrap",
+                f"rank {rank}/{size}: np>1 psf-crd → restart ({res})",
+            )
+        return "restart", res
+
+    if log_fn is not None:
+        log_fn(
+            "bootstrap",
+            f"rank {rank}/{size}: np>1 psf-crd (no restart at {res}; "
+            "cooperative PSF/CRD READ often leaves n_atoms=0 on DOMDEC MPI builds)",
+        )
+    return mode, None
+
+
+def _wait_for_shared_file(
+    path: Path,
+    *,
+    timeout_s: float = 120.0,
+    log_fn: Callable[[str, str], None] | None = None,
+    label: str = "",
+) -> None:
+    """Poll until *path* exists with non-zero size (after rank-0 staging barrier)."""
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        if path.is_file():
+            size = path.stat().st_size
+            if size > 0:
+                if log_fn is not None and label:
+                    log_fn("bootstrap_stage", f"visible {label} size={size}")
+                return
+        time.sleep(0.05)
+    raise TimeoutError(f"timed out waiting for shared file: {path}")
+
+
+def _cooperative_direct_api_step(
+    label: str,
+    fn: Callable[[Path], None],
+    path: Path,
+    *,
+    log_fn: Callable[[str, str], None] | None = None,
+) -> None:
+    """Run one ``api_read`` step on every rank (RTF/PRM only — no ``atmini``)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+
+    rank, size = mpi_rank_size()
+    rank0_only = _bootstrap_rank0_topology_read()
+    if log_fn is not None and size > 1:
+        log_fn(
+            "bootstrap_sync",
+            f"rank {rank}/{size} api-read ({label}) "
+            f"rank0_only={int(rank0_only)}",
+        )
+    if not rank0_only or rank == 0:
+        fn(path)
+    if rank0_only and size > 1:
+        _mpi_script_barrier()
+
+
+_STREAM_BOOTSTRAP_INP = "bs_load.inp"
+
+
+def _write_cooperative_stream_inp(compact: dict[str, Path], dest: Path) -> None:
+    """Write a short-basename READ chain for ``stream bs_load.inp`` (no ``mxcmsz`` limit)."""
+    lines = [
+        "* MMML MPI cooperative bootstrap",
+        "bomlev -2",
+        f"read rtf card name {compact['rtf'].name}",
+        f"read param card name {compact['prm'].name} flex",
+        f"read psf card name {compact['psf'].name}",
+    ]
+    dest.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _archive_bootstrap_stream_inp(
+    inp_path: Path,
+    *,
+    psf_stem: str,
+    log_fn: Callable[[str, str], None] | None = None,
+) -> None:
+    """Copy stream inp beside PSF for read-gate failure diagnostics."""
+    diag_dir = inp_path.parent / "mpi_bootstrap_stream"
+    diag_dir.mkdir(parents=True, exist_ok=True)
+    archived = diag_dir / f"{psf_stem}_read_restart.inp"
+    shutil.copy2(inp_path, archived)
+    if log_fn is not None:
+        log_fn("bootstrap_stage", f"archived stream inp {archived}")
+
+
+def _eval_charmm_inp_file_available() -> bool:
+    """True when ``libcharmm`` exports ``eval_charmm_inp_file`` (v4.10 rebuild)."""
+    try:
+        import pycharmm.lib as lib
+
+        return callable(getattr(lib.charmm, "eval_charmm_inp_file", None))
+    except Exception:
+        return False
+
+
+def _invoke_charmm_inp_file(path: Path) -> bool:
+    """Process a ``.inp`` in one Fortran loop (cooperative MPI READ)."""
+    import ctypes
+
+    import pycharmm.lib as lib
+
+    buf, fn_len = _c_path_args(path)
+    fn = lib.charmm.eval_charmm_inp_file
+    fn.restype = ctypes.c_int
+    return int(fn(buf, fn_len)) == 1
+
+
+def _cooperative_inp_script_text(compact: dict[str, Path]) -> str:
+    """READ chain for multiline fallback (no ``stream`` command in library mode)."""
+    lines = [
+        "bomlev -2",
+        f"read rtf card name {compact['rtf'].name}",
+        f"read param card name {compact['prm'].name} flex",
+        f"read psf card name {compact['psf'].name}",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def _cooperative_stream_topology_read(
+    compact: dict[str, Path],
+    *,
+    log_fn: Callable[[str, str], None] | None = None,
+) -> None:
+    """Load RTF/PRM/PSF from shared ``bs_load.inp`` on all ranks (one Fortran session)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+
+    rank, size = mpi_rank_size()
+    base = compact["psf"].parent.resolve()
+    inp_path = base / _STREAM_BOOTSTRAP_INP
+
+    if rank == 0 or size <= 1:
+        _write_cooperative_stream_inp(compact, inp_path)
+        _archive_bootstrap_stream_inp(
+            inp_path,
+            psf_stem=str(compact.get("artifact_stem", "bootstrap")),
+            log_fn=log_fn if rank == 0 else None,
+        )
+    if size > 1:
+        _wait_for_shared_file(inp_path, log_fn=log_fn, label="stream_inp")
+
+    use_inp_api = _eval_charmm_inp_file_available()
+    if log_fn is not None and size > 1:
+        log_fn(
+            "bootstrap_sync",
+            f"rank {rank}/{size} inp-read all_ranks=1 "
+            f"eval_charmm_inp_file={int(use_inp_api)}",
+        )
+
+    quiet = (os.environ.get("MMML_QUIET") or "").strip().lower() in ("1", "true", "yes")
+    with _bootstrap_workdir(base):
+        if use_inp_api:
+            ok = _invoke_charmm_inp_file(inp_path)
+        else:
+            ok = mpi_charmm_script(
+                _cooperative_inp_script_text(compact),
+                relaxed_bomlev=False,
+                quiet=quiet,
+                barriers="none",
+            )
+    if not ok:
+        hint = (
+            "rebuild libcharmm.so (eval_charmm_inp_file in api_eval.F90)"
+            if not use_inp_api
+            else "Set MMML_QUIET=0 for CHARMM error text"
+        )
+        raise RuntimeError(
+            f"inp bootstrap failed on rank {rank}/{size}: {inp_path}. {hint}"
+        )
+    n_psf = charmm_natom_count()
+    if n_psf <= 0:
+        rebuild = (
+            " Rebuild libcharmm.so if eval_charmm_inp_file is missing "
+            "(v4.10 api_eval patch)."
+            if not use_inp_api
+            else ""
+        )
+        raise RuntimeError(
+            f"inp bootstrap left psf_natom=0 on rank {rank}/{size}. "
+            f"Inp={inp_path}. Set MMML_QUIET=0 for CHARMM error text.{rebuild}"
+        )
+
+
+def _cooperative_eval_read_step(
+    label: str,
+    cmd: str,
+    *,
+    log_fn: Callable[[str, str], None] | None = None,
+    expect_psf_natom_min: int = 0,
+) -> None:
+    """One ``maincomx`` READ line on all ranks (short basename under bootstrap ``chdir``)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+
+    rank, size = mpi_rank_size()
+    line = cmd if cmd.endswith("\n") else cmd + "\n"
+    stripped = line.strip()
+    if len(stripped) > _BOOTSTRAP_CMD_MAX_LEN:
+        raise RuntimeError(
+            f"bootstrap READ command exceeds mxcmsz budget "
+            f"({len(stripped)}>{_BOOTSTRAP_CMD_MAX_LEN}): {stripped!r}"
+        )
+    if log_fn is not None and size > 1:
+        log_fn(
+            "bootstrap_sync",
+            f"rank {rank}/{size} eval-read ({label}) all_ranks=1",
+        )
+    ok = mpi_charmm_script(
+        line,
+        relaxed_bomlev=_bootstrap_relaxed_bomlev(),
+        barriers="none",
+    )
+    if not ok:
+        raise RuntimeError(f"eval read {label!r} failed: {stripped!r}")
+    if expect_psf_natom_min > 0:
+        n_psf = charmm_natom_count()
+        if n_psf < expect_psf_natom_min:
+            raise RuntimeError(
+                f"eval read {label!r} left psf_natom={n_psf} on rank {rank}/{size} "
+                f"(expected >={expect_psf_natom_min}); cmd={stripped!r}. "
+                "Set MMML_QUIET=0 for CHARMM error text."
+            )
+
+
+def _cooperative_psf_read_eval(
+    psf_path: Path,
+    *,
+    log_fn: Callable[[str, str], None] | None = None,
+) -> None:
+    """PSF via ``maincomx`` READ at ``np>1`` — ``atmini`` needs all ranks in Fortran."""
+    _cooperative_eval_read_step(
+        "psf",
+        f"read psf card name {psf_path.name}",
+        log_fn=log_fn,
+        expect_psf_natom_min=1,
+    )
+
+
+def _cooperative_read_script(
+    paths: dict[str, Path],
+    *,
+    crystal_side_A: float | None,
+    crystal_cutnb_A: float,
+) -> str:
+    """Multiline READ chain; use basenames (bootstrap ``chdir`` to PSF parent)."""
+    lines = [
+        f"read rtf card name {paths['rtf'].name}",
+        f"read param card name {paths['prm'].name} flex",
+        f"read psf card name {paths['psf'].name}",
+        f"read coor card name {paths['crd'].name}",
+    ]
+    if crystal_side_A is not None:
+        side = float(crystal_side_A)
+        lines.extend(
+            [
+                f"crystal define cubic {side} {side} {side} 90 90 90",
+                f"crystal build cutoff {float(crystal_cutnb_A)} noper 0",
+            ]
+        )
+    return "\n".join(lines) + "\n"
+
+
+def _cooperative_restart_script(
+    paths: dict[str, Path],
+    *,
+    crystal_side_A: float | None,
+    crystal_cutnb_A: float,
+) -> str:
+    """RTF/PRM/PSF then ``read restart`` (coords); no ``UPDATE`` (nbonds not ready yet)."""
+    lines = [
+        f"read rtf card name {paths['rtf'].name}",
+        f"read param card name {paths['prm'].name} flex",
+        f"read psf card name {paths['psf'].name}",
+        f"open read unit 20 name {paths['res'].name}",
+        "read restart unit 20",
+        "close unit 20",
+    ]
+    if crystal_side_A is not None:
+        side = float(crystal_side_A)
+        lines.extend(
+            [
+                f"crystal define cubic {side} {side} {side} 90 90 90",
+                f"crystal build cutoff {float(crystal_cutnb_A)} noper 0",
+            ]
+        )
+    return "\n".join(lines) + "\n"
+
+
+# Bump when cooperative bootstrap I/O strategy changes (read-gate diagnostics).
+BOOTSTRAP_MPI_API = "direct-api-v4.10"
+
+# ``eval_charmm_script`` uses ``comlyn(mxcmsz)`` (~80); stage short paths for file APIs too.
+_BOOTSTRAP_CMD_MAX_LEN = 78
+_BOOTSTRAP_FPATH_MAX_LEN = 240
+
+_COMPACT_BOOTSTRAP_FILENAMES = {
+    "rtf": "bs_rtf.rtf",
+    "prm": "bs_read.prm",
+    "psf": "bs_read.psf",
+    "crd": "bs_read.crd",
+    "res": "bs_read.res",
+}
+
+
+@contextmanager
+def _bootstrap_workdir(path: Path):
+    """Run bootstrap READ with short relative filenames under *path*."""
+    prev = Path.cwd()
+    os.chdir(path)
+    try:
+        yield
+    finally:
+        os.chdir(prev)
+
+
+def stage_compact_bootstrap_paths(
+    paths: dict[str, Path],
+    *,
+    rank: int,
+    size: int,
+    log_fn: Callable[[str, str], None] | None = None,
+) -> tuple[Path, dict[str, Path]]:
+    """Stage short filenames beside the PSF (rank 0 copies, then MPI barrier)."""
+    base = paths["psf"].parent.resolve()
+    compact: dict[str, Path] = {}
+    for key, dst_name in _COMPACT_BOOTSTRAP_FILENAMES.items():
+        if key not in paths:
+            continue
+        compact[key] = base / dst_name
+
+    if rank == 0 or size <= 1:
+        for key, dst in compact.items():
+            src = Path(paths[key]).expanduser().resolve()
+            if src == dst:
+                continue
+            if size <= 1 and dst.is_file():
+                continue
+            if log_fn is not None and size > 1:
+                log_fn("bootstrap_stage", f"rank 0/{size}: copy {src.name} → {dst.name}")
+            shutil.copy2(src, dst)
+
+    if size > 1:
+        align_mpi_ranks_after_import(log_fn=log_fn, label="bootstrap stage")
+        for key, dst in compact.items():
+            _wait_for_shared_file(dst, log_fn=log_fn, label=key)
+        align_mpi_ranks_after_import(log_fn=log_fn, label="bootstrap files ready")
+    return base, compact
+
+
+def _fortran_file_path(path: Path) -> str:
+    """Absolute path string for ``api_read`` Fortran ``open`` (stage when too long)."""
+    s = str(path.expanduser().resolve())
+    if len(s) > _BOOTSTRAP_FPATH_MAX_LEN:
+        raise RuntimeError(
+            f"bootstrap file path exceeds Fortran open budget "
+            f"({len(s)}>{_BOOTSTRAP_FPATH_MAX_LEN}): {s!r}"
+        )
+    return s
+
+
+def _c_path_args(path: Path):
+    """``create_string_buffer`` + length for ``api_read`` ``bind(c)`` (len is by reference)."""
+    import ctypes
+
+    fn = _fortran_file_path(path)
+    buf = ctypes.create_string_buffer(fn.encode())
+    return buf, ctypes.c_int(len(fn))
+
+
+def _read_rtf_api(path: Path) -> None:
+    import ctypes
+
+    import pycharmm.lib as lib
+
+    buf, fn_len = _c_path_args(path)
+    append = ctypes.c_int(0)
+    status = lib.charmm.read_rtf_file(buf, ctypes.byref(fn_len), ctypes.byref(append))
+    if int(status) != 1:
+        raise RuntimeError(f"read_rtf_file failed for {path} (status={status})")
+
+
+def _read_prm_api(path: Path, *, flex: bool = True) -> None:
+    import ctypes
+
+    import pycharmm.lib as lib
+
+    buf, fn_len = _c_path_args(path)
+    append = ctypes.c_int(0)
+    flex_i = ctypes.c_int(1 if flex else 0)
+    status = lib.charmm.read_param_file(
+        buf,
+        ctypes.byref(fn_len),
+        ctypes.byref(append),
+        ctypes.byref(flex_i),
+    )
+    if int(status) != 1:
+        raise RuntimeError(f"read_param_file failed for {path} (status={status})")
+
+
+def _read_psf_api(path: Path) -> None:
+    import ctypes
+
+    import pycharmm.lib as lib
+
+    buf, fn_len = _c_path_args(path)
+    append = ctypes.c_int(0)
+    xplor = ctypes.c_int(0)
+    status = lib.charmm.read_psf_card(
+        buf,
+        ctypes.byref(fn_len),
+        ctypes.byref(append),
+        ctypes.byref(xplor),
+    )
+    if int(status) != 1:
+        raise RuntimeError(f"read_psf_card failed for {path} (status={status})")
+
+
+def _load_coor_from_crd_api(crd_path: Path) -> None:
+    import pandas as pd
+    import pycharmm.coor as coor
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_crd_coordinates,
+    )
+
+    pos = read_crd_coordinates(crd_path)
+    if pos is None:
+        raise RuntimeError(f"failed to parse CRD coordinates: {crd_path}")
+    n_psf = charmm_natom_count()
+    if pos.shape[0] != n_psf:
+        raise RuntimeError(
+            f"CRD atom count {pos.shape[0]} != PSF atom count {n_psf} ({crd_path})"
+        )
+    coor.set_positions(pd.DataFrame(pos, columns=["x", "y", "z"]))
+
+
+def _load_coor_from_restart_api(
+    res_path: Path,
+    *,
+    crd_fallback: Path | None = None,
+    log_fn: Callable[[str, str], None] | None = None,
+) -> None:
+    import pandas as pd
+    import pycharmm.coor as coor
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_restart_coordinates,
+    )
+
+    pos = read_restart_coordinates(res_path)
+    if pos is None and crd_fallback is not None and crd_fallback.is_file():
+        if log_fn is not None:
+            log_fn(
+                "bootstrap",
+                f"restart parse failed for {res_path.name}; fallback CRD {crd_fallback.name}",
+            )
+        _load_coor_from_crd_api(crd_fallback)
+        return
+    if pos is None:
+        raise RuntimeError(f"failed to parse restart coordinates: {res_path}")
+    n_psf = charmm_natom_count()
+    if pos.shape[0] != n_psf:
+        raise RuntimeError(
+            f"restart atom count {pos.shape[0]} != PSF atom count {n_psf} ({res_path})"
+        )
+    coor.set_positions(pd.DataFrame(pos, columns=["x", "y", "z"]))
+
+
+def _apply_bootstrap_crystal(
+    *,
+    crystal_side_A: float,
+    crystal_cutnb_A: float,
+    step: str,
+    log_fn: Callable[[str, str], None] | None,
+) -> None:
+    """Optional PBC after load (still uses ``eval_charmm_script`` — may fail on some builds)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+
+    rank, size = mpi_rank_size()
+    side = float(crystal_side_A)
+    lines = [
+        f"crystal define cubic {side} {side} {side} 90 90 90",
+        f"crystal build cutoff {float(crystal_cutnb_A)} noper 0",
+    ]
+    if log_fn is not None:
+        log_fn(step, f"rank {rank}/{size}: crystal ({len(lines)} eval cmd(s))")
+    for line in lines:
+        mpi_charmm_script(line + "\n", relaxed_bomlev=_bootstrap_relaxed_bomlev())
+
+
+def _run_cooperative_api_bootstrap(
+    step: str,
+    compact: dict[str, Path],
+    *,
+    coor_source: str,
+    crystal_side_A: float | None,
+    crystal_cutnb_A: float,
+    log_fn: Callable[[str, str], None] | None = None,
+) -> int:
+    """Cooperative topology at ``np>1``: shared ``bs_load.inp`` READ + Python CRD coords."""
+    from contextlib import nullcontext
+
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+
+    rank, size = mpi_rank_size()
+    stream_topology = _bootstrap_stream_topology_read()
+    eval_topology = _bootstrap_eval_topology_read()
+    hybrid_topology = (
+        size > 1 and not _bootstrap_all_ranks_read() and _bootstrap_hybrid_topology_read()
+    )
+    if stream_topology:
+        load_steps: tuple[str, ...] = ("stream", coor_source)
+    else:
+        load_steps = ("rtf", "prm", "psf", coor_source)
+    if log_fn is not None:
+        if stream_topology:
+            mode = "inp"
+        elif eval_topology:
+            mode = "eval"
+        elif hybrid_topology:
+            mode = "hybrid"
+        else:
+            mode = "api"
+        log_fn(
+            step,
+            f"begin rank {rank}/{size}: {len(load_steps)} {mode} read step(s)",
+        )
+    eval_cmds = {
+        "rtf": f"read rtf card name {compact['rtf'].name}",
+        "prm": f"read param card name {compact['prm'].name} flex",
+        "psf": f"read psf card name {compact['psf'].name}",
+    }
+    with charmm_relaxed_bomlev():
+        topology_ctx = (
+            _bootstrap_workdir(compact["psf"].parent)
+            if eval_topology or hybrid_topology
+            else nullcontext()
+        )
+        with topology_ctx:
+            for idx, name in enumerate(load_steps, start=1):
+                step_label = name
+                if stream_topology and name == "stream":
+                    _cooperative_stream_topology_read(compact, log_fn=log_fn)
+                elif eval_topology and name in eval_cmds:
+                    step_label = f"eval-{name}"
+                    _cooperative_eval_read_step(
+                        name,
+                        eval_cmds[name],
+                        log_fn=log_fn,
+                        expect_psf_natom_min=1 if name == "psf" else 0,
+                    )
+                elif hybrid_topology and name in ("rtf", "prm"):
+                    _cooperative_direct_api_step(
+                        name,
+                        _read_rtf_api if name == "rtf" else _read_prm_api,
+                        compact[name],
+                        log_fn=log_fn,
+                    )
+                elif hybrid_topology and name == "psf":
+                    step_label = "eval-psf"
+                    _cooperative_psf_read_eval(compact["psf"], log_fn=log_fn)
+                elif name == "rtf":
+                    _cooperative_direct_api_step(
+                        name, _read_rtf_api, compact["rtf"], log_fn=log_fn
+                    )
+                elif name == "prm":
+                    _cooperative_direct_api_step(
+                        name, _read_prm_api, compact["prm"], log_fn=log_fn
+                    )
+                elif name == "psf":
+                    _read_psf_api(compact["psf"])
+                elif name == "crd":
+                    _load_coor_from_crd_api(compact["crd"])
+                elif name == "restart":
+                    _load_coor_from_restart_api(
+                        compact["res"],
+                        crd_fallback=compact.get("crd"),
+                        log_fn=log_fn,
+                    )
+                else:
+                    raise ValueError(f"unknown bootstrap load step: {name!r}")
+                if name in ("crd", "restart") and size > 1:
+                    _mpi_script_barrier()
+                if log_fn is not None:
+                    diag = charmm_natom_diagnostics()
+                    log_fn(
+                        step,
+                        f"  step {idx}/{len(load_steps)} rank {rank}/{size}: "
+                        f"{step_label} psf={diag['psf_natom']} coor={diag['coor_natom']}",
+                    )
+    if crystal_side_A is not None:
+        _apply_bootstrap_crystal(
+            crystal_side_A=crystal_side_A,
+            crystal_cutnb_A=crystal_cutnb_A,
+            step=step,
+            log_fn=log_fn,
+        )
+    diag = charmm_natom_diagnostics()
+    n_atoms = int(diag["psf_natom"])
+    if log_fn is not None:
+        log_fn(
+            step,
+            f"done rank {rank}/{size}: n_atoms={n_atoms} "
+            f"psf={diag['psf_natom']} coor={diag['coor_natom']}",
+        )
+    return n_atoms
+
+
+def _bootstrap_relaxed_bomlev() -> bool:
+    """Serial bootstrap uses strict bomlev so READ failures are visible."""
+    if (os.environ.get("MMML_QUIET") or "").strip().lower() in ("1", "true", "yes"):
+        return True
+    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+
+    _, size = mpi_rank_size()
+    return size > 1
+
+
+def _run_cooperative_bootstrap_script(
+    step: str,
+    script: str,
+    *,
+    paths: dict[str, Path] | None = None,
+    log_fn: Callable[[str, str], None] | None = None,
+) -> int:
+    """Run READ lines sequentially on all ranks (library mode has no ``stream`` eval)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+
+    rank, size = mpi_rank_size()
+    body = [ln for ln in script.strip().splitlines() if ln.strip()]
+    n_cmds = max(1, len(body))
+    if log_fn is not None:
+        log_fn(step, f"begin rank {rank}/{size}: {n_cmds} read cmd(s)")
+    for idx, line in enumerate(body, start=1):
+        cmd = line if line.endswith("\n") else line + "\n"
+        stripped = cmd.strip()
+        if len(stripped) > _BOOTSTRAP_CMD_MAX_LEN:
+            raise RuntimeError(
+                f"rank {rank}/{size}: bootstrap READ command exceeds mxcmsz budget "
+                f"({len(stripped)}>{_BOOTSTRAP_CMD_MAX_LEN}): {stripped!r}"
+            )
+        mpi_charmm_script(cmd, relaxed_bomlev=_bootstrap_relaxed_bomlev())
+        if log_fn is not None:
+            diag = charmm_natom_diagnostics()
+            log_fn(
+                step,
+                f"  cmd {idx}/{n_cmds} rank {rank}/{size}: "
+                f"psf={diag['psf_natom']} coor={diag['coor_natom']}",
+            )
+    diag = charmm_natom_diagnostics()
+    n_atoms = int(diag["psf_natom"])
+    if log_fn is not None:
+        log_fn(
+            step,
+            f"done rank {rank}/{size}: n_atoms={n_atoms} "
+            f"psf={diag['psf_natom']} coor={diag['coor_natom']}",
+        )
+    return n_atoms
 
 
 def bootstrap_charmm_step(
@@ -1179,9 +2182,11 @@ def bootstrap_charmm_step(
     from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     rank, size = mpi_rank_size()
+    if _bootstrap_barrier_enabled():
+        sync_bootstrap_ranks(log_fn=log_fn, label=f"before {step}")
     if log_fn is not None:
         log_fn(step, f"begin rank {rank}/{size}: {script.strip()}")
-    _invoke_charmm_script(script, relaxed_bomlev=True)
+    mpi_charmm_script(script, relaxed_bomlev=_bootstrap_relaxed_bomlev())
     n_atoms = charmm_natom_count()
     if log_fn is not None:
         log_fn(step, f"done rank {rank}/{size}: n_atoms={n_atoms}")
@@ -1200,12 +2205,18 @@ def bootstrap_topology_mpi(
     mode: str = "psf-crd",
     log_fn: Callable[[str, str], None] | None = None,
 ) -> int:
-    """Cooperative ``np>1`` topology bootstrap (one ``eval_charmm_script`` per sub-command).
+    """Cooperative ``np>1`` topology bootstrap.
 
     Supported ``mode`` values: ``psf-crd``, ``stream-inp``, ``restart``.
+    At ``np>1``, ``psf-crd`` auto-switches to ``restart`` when a sidecar ``.res``
+    exists (from ``--prepare-prebuilt-only``). Set
+    ``MMML_MPI_BOOTSTRAP_FORCE_PSF_CRD=1`` to bisect cooperative PSF/CRD READ.
     """
-    from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
     from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+
+    allowed_modes = frozenset({"psf-crd", "stream-inp", "restart"})
+    if mode not in allowed_modes:
+        raise ValueError(f"unsupported bootstrap mode: {mode!r}")
 
     psf = Path(psf_path).expanduser().resolve()
     crd = Path(crd_path).expanduser().resolve()
@@ -1222,92 +2233,80 @@ def bootstrap_topology_mpi(
         prm = Path(prm_path).expanduser().resolve()
 
     rank, size = mpi_rank_size()
+    rtf_opt = Path(rtf_path).expanduser().resolve() if rtf_path else None
+    effective_mode, res_opt = _resolve_bootstrap_mode(
+        mode,
+        psf=psf,
+        restart_path=restart_path,
+        size=size,
+        rank=rank,
+        log_fn=log_fn,
+    )
+    if effective_mode == "restart" and (res_opt is None or not res_opt.is_file()):
+        raise FileNotFoundError(f"Restart not found: {res_opt}")
 
-    if mode == "restart":
-        res = Path(restart_path or psf.with_suffix(".res")).expanduser().resolve()
-        if not res.is_file():
-            raise FileNotFoundError(f"Restart not found: {res}")
-        fortran_path, alias = charmm_fortran_path(res, for_write=False)
-        try:
-            for step_name, script in (
-                ("open_restart", f"open read unit 20 name {fortran_path}\n"),
-                ("read_restart", "read restart unit 20\n"),
-                ("close_restart", "close unit 20\n"),
-                ("update", "UPDATE\n"),
-            ):
-                bootstrap_charmm_step(step_name, script, log_fn=log_fn)
-        finally:
-            if alias is not None:
-                alias.finalize()
-    elif mode == "stream-inp":
-        if rtf_path is None:
-            minimal = ensure_shared_minimal_rtf(psf, prm).resolve()
-        else:
-            minimal = Path(rtf_path).expanduser().resolve()
-        inp_dir = psf.parent / "mpi_bootstrap_stream"
-        inp_path = inp_dir / f"{psf.stem}_read.inp"
-        if rank == 0:
-            inp_dir.mkdir(parents=True, exist_ok=True)
-            lines = [
-                "* MMML MPI bootstrap stream READ",
-                "bomlev -2",
-                f"read rtf card name {minimal}",
-                f"read param card name {prm} flex",
-                f"read psf card name {psf}",
-                f"read coor card name {crd}",
-            ]
-            if crystal_side_A is not None:
-                side = float(crystal_side_A)
-                lines.extend(
-                    [
-                        f"crystal define cubic {side} {side} {side} 90 90 90",
-                        f"crystal build cutoff {float(crystal_cutnb_A)} noper 0",
-                    ]
-                )
-            lines.append("stop")
-            inp_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        if size > 1 and _mpi_comm_valid():
-            from mpi4py import MPI
+    paths = _resolve_bootstrap_topology_paths(
+        psf=psf,
+        crd=crd,
+        prm=prm,
+        rank=rank,
+        size=size,
+        rtf_path=rtf_opt,
+        res=res_opt if effective_mode == "restart" else None,
+        log_fn=log_fn,
+    )
+    if size > 1:
+        align_mpi_ranks_after_import(log_fn=log_fn)
 
-            MPI.COMM_WORLD.Barrier()
-        bootstrap_charmm_step(
-            "stream_inp",
-            f"stream {inp_path}\n",
+    paths_for_stage = dict(paths)
+    if (
+        effective_mode == "restart"
+        and paths_for_stage.get("crd") is not None
+        and Path(paths_for_stage["crd"]).is_file()
+        and "res" in paths_for_stage
+    ):
+        if log_fn is not None:
+            log_fn(
+                "bootstrap",
+                "staging skip .res (coords from CRD; prepare write restart is binary)",
+            )
+        paths_for_stage.pop("res")
+
+    _, compact = stage_compact_bootstrap_paths(
+        paths_for_stage,
+        rank=rank,
+        size=size,
+        log_fn=log_fn,
+    )
+    compact["artifact_stem"] = psf.stem
+    if effective_mode == "restart":
+        coor_src = _bootstrap_coor_source(effective_mode, compact, log_fn=log_fn)
+        _run_cooperative_api_bootstrap(
+            "read_restart",
+            compact,
+            coor_source=coor_src,
+            crystal_side_A=crystal_side_A,
+            crystal_cutnb_A=crystal_cutnb_A,
+            log_fn=log_fn,
+        )
+    elif effective_mode in ("stream-inp", "psf-crd"):
+        _run_cooperative_api_bootstrap(
+            "read_psf_crd" if effective_mode == "psf-crd" else "stream_inp",
+            compact,
+            coor_source="crd",
+            crystal_side_A=crystal_side_A,
+            crystal_cutnb_A=crystal_cutnb_A,
             log_fn=log_fn,
         )
     else:
-        if mode != "psf-crd":
-            raise ValueError(f"unsupported bootstrap mode: {mode!r}")
-        if rtf_path is None:
-            minimal = ensure_shared_minimal_rtf(psf, prm).resolve()
-        else:
-            minimal = Path(rtf_path).expanduser().resolve()
-        steps = [
-            ("read_rtf", f"read rtf card name {minimal}\n"),
-            ("read_prm", f"read param card name {prm} flex\n"),
-            ("read_psf", f"read psf card name {psf}\n"),
-            ("read_coor", f"read coor card name {crd}\n"),
-        ]
-        if crystal_side_A is not None:
-            side = float(crystal_side_A)
-            steps.extend(
-                [
-                    (
-                        "crystal_define",
-                        f"crystal define cubic {side} {side} {side} 90 90 90\n",
-                    ),
-                    (
-                        "crystal_build",
-                        f"crystal build cutoff {float(crystal_cutnb_A)} noper 0\n",
-                    ),
-                ]
-            )
-        for step_name, script in steps:
-            bootstrap_charmm_step(step_name, script, log_fn=log_fn)
+        raise ValueError(f"unsupported bootstrap mode: {mode!r}")
 
     n_final = charmm_natom_count()
     if n_final <= 0:
-        raise RuntimeError(f"rank {rank}/{size}: empty CHARMM state after bootstrap ({mode})")
+        raise RuntimeError(
+            f"rank {rank}/{size}: empty CHARMM state after bootstrap "
+            f"(requested={mode!r} effective={effective_mode!r})"
+        )
     return n_final
 
 

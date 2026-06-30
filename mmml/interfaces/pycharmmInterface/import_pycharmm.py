@@ -471,7 +471,13 @@ def init_vacuum_charmm_state_mpi() -> None:
 
 _init_charmm_default_levels()
 
-if PYCHARMM_AVAILABLE and not _under_mpirun():
+
+def _skip_import_vacuum_init() -> bool:
+    flag = os.environ.get("MMML_SKIP_VACUUM_CHARMM_INIT", "").strip().lower()
+    return flag in ("1", "true", "yes")
+
+
+if PYCHARMM_AVAILABLE and not _under_mpirun() and not _skip_import_vacuum_init():
     init_vacuum_charmm_state_mpi()
 
 

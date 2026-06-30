@@ -97,17 +97,9 @@ def _print_dry_run(args: argparse.Namespace) -> None:
             f"--mode {args.mode} --psf {psf}"
         )
         print()
-    print("# Native CHARMM control (requires CHARMM_EXE):")
-    print(
-        "PSF=artifacts/domdec_spatial_smoke/dcm_20mer.psf \\"
-    )
-    print(
-        "CRD=artifacts/domdec_spatial_smoke/dcm_20mer.crd \\"
-    )
-    print(
-        "MMML_MPI_NP=4 ./scripts/mmml-charmm-mpirun.sh "
-        "$CHARMM_EXE -i /tmp/read_gate.inp -o /tmp/read_gate.out"
-    )
+    print("# Native CHARMM control (finds setup/charmm/charmm or CHARMM_EXE):")
+    print("MMML_MPI_NP=4 ./scripts/run_native_charmm_read_gate.sh")
+    print("MMML_MPI_NP=4 ./scripts/run_native_charmm_read_gate.sh --with-restart")
 
 
 def main() -> int:
@@ -117,6 +109,7 @@ def main() -> int:
         return 0
 
     from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+        BOOTSTRAP_MPI_API,
         bootstrap_topology_mpi,
         configure_mpi_bootstrap_env,
         mpi4py_openmpi_mismatch,
@@ -124,6 +117,7 @@ def main() -> int:
         sync_import_pycharmm_for_bootstrap,
     )
 
+    configure_mpi_bootstrap_env()
     prepare_serial_charmm_mpi_env()
     ok, msg = mpi4py_openmpi_mismatch()
     if not ok:
@@ -132,8 +126,9 @@ def main() -> int:
 
     rank, size = _mpi_info()
     configure_mpi_bootstrap_env()
-    _log("gate", f"mode={args.mode} np={size} psf={args.psf.resolve()}")
+    _log("gate", f"mode={args.mode} np={size} bootstrap_api={BOOTSTRAP_MPI_API} psf={args.psf.resolve()}")
     sync_import_pycharmm_for_bootstrap(tag="read_gate")
+    _log("gate", "import_pycharmm done; starting bootstrap")
 
     crystal = float(args.box_side) if args.with_crystal else None
     try:
@@ -146,11 +141,30 @@ def main() -> int:
             log_fn=_log,
         )
     except Exception as exc:
+        rank, size = _mpi_info()
+        if size > 1:
+            stream_glob = args.psf.parent / "mpi_bootstrap_stream" / f"{args.psf.stem}_*.inp"
+            streams = sorted(stream_glob.parent.glob(stream_glob.name))
+            if rank == 0 and streams:
+                latest = streams[-1]
+                print(f"[gate rank {rank}/{size}] last stream inp: {latest}", flush=True)
+                try:
+                    print(latest.read_text(encoding="utf-8"), flush=True)
+                except OSError:
+                    pass
         print(
             f"FAIL rank {rank}/{size}: bootstrap raised {type(exc).__name__}: {exc}",
             file=sys.stderr,
             flush=True,
         )
+        if size > 1 and rank == 0:
+            print(
+                "[gate] bisect: MMML_QUIET=0 (CHARMM errors) | "
+                "MMML_MPI_BOOTSTRAP_RANK0_DRIVE=1 | "
+                "MMML_MPI_NP=1 --mode restart | "
+                "./scripts/run_native_charmm_read_gate.sh",
+                flush=True,
+            )
         return 1
 
     expected = int(args.expected_n_atoms)

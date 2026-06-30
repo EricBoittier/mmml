@@ -23,17 +23,19 @@ _platform_tag() {
 }
 
 _default_openmpi_root() {
-  if [[ -d /opt/gcc-14.2.0/openmpi-5.0.5/build/bin ]]; then
-    echo /opt/gcc-14.2.0/openmpi-5.0.5/build
-  elif [[ "$(uname -s)" == "Darwin" && -d /opt/homebrew/opt/open-mpi/bin ]]; then
-    echo /opt/homebrew/opt/open-mpi
-  elif [[ "$(uname -s)" == "Darwin" && -d /opt/homebrew/bin ]]; then
-    echo /opt/homebrew
-  elif [[ -d /usr/bin/mpicc ]]; then
-    echo /usr
-  else
-    echo /usr
-  fi
+  local candidate
+  for candidate in \
+    /opt/gcc-14.2.0/openmpi-5.0.5/build \
+    /opt/gcc-12.2.0/openmpi-4.1.4/build \
+    /opt/homebrew/opt/open-mpi \
+    /opt/homebrew \
+    /usr; do
+    if [[ -x "$candidate/bin/mpicc" ]]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+  echo /usr
 }
 
 _auto_find_fftw_root() {
@@ -120,6 +122,36 @@ fi
 
 [[ -z "$FFTWF_ROOT" ]] && FFTWF_ROOT="$FFTW_ROOT"
 
+# libcharmm.so needs shared FFTW; cluster /opt static .a lacks -fPIC.
+_MMML_FFTW_PIC="${MMML_FFTW_ROOT:-${HOME}/.local/fftw-3.3.10-pic}"
+_pic_fftw_ready() {
+  [[ -f "${_MMML_FFTW_PIC}/lib/libfftw3.so" && -f "${_MMML_FFTW_PIC}/lib/libfftw3f.so" ]]
+}
+if [[ -n "${MMML_FFTW_ROOT:-}" ]]; then
+  if _pic_fftw_ready; then
+    FFTW_ROOT="$_MMML_FFTW_PIC"
+    FFTWF_ROOT="$_MMML_FFTW_PIC"
+    echo "Using PIC/shared FFTW (MMML_FFTW_ROOT): $FFTW_ROOT" >&2
+  else
+    echo "rebuild_charmm_mlpot: MMML_FFTW_ROOT=$_MMML_FFTW_PIC but shared libs are missing." >&2
+    echo "  Expected: \$_MMML_FFTW_PIC/lib/libfftw3.so and libfftw3f.so" >&2
+    echo "  One-time build (~5–15 min):" >&2
+    echo "    bash scripts/build_fftw_pic.sh" >&2
+    echo "  Then:" >&2
+    echo "    export MMML_FFTW_ROOT=\${HOME}/.local/fftw-3.3.10-pic" >&2
+    echo "    export FFTW_ROOT=\$MMML_FFTW_ROOT FFTWF_ROOT=\$MMML_FFTW_ROOT" >&2
+    echo "    OPENMPI_ROOT=/opt/gcc-12.2.0/openmpi-4.1.4/build bash scripts/rebuild_charmm_mlpot.sh --clean" >&2
+    exit 1
+  fi
+elif [[ -z "${FFTW_ROOT:-}" || "${FFTW_ROOT}" == /opt/* || "${FFTW_ROOT}" == /srv/opt/* ]]; then
+  if _pic_fftw_ready; then
+    FFTW_ROOT="$_MMML_FFTW_PIC"
+    FFTWF_ROOT="$_MMML_FFTW_PIC"
+    echo "Using PIC/shared FFTW: $FFTW_ROOT" >&2
+  fi
+fi
+unset _MMML_FFTW_PIC
+
 if [[ "$(uname -s)" == "Darwin" ]]; then
   LIB_BASENAME="libcharmm.dylib"
 else
@@ -143,7 +175,7 @@ Usage: $(basename "$0") [--clean] [--use-nfs-build] [--debug] [--no-sync-patches
   --clean             Remove the cmake build directory and reconfigure from scratch.
   --use-nfs-build     Build in setup/charmm/build/cmake (default: \$HOME/.cache/mmml-charmm-build/<platform>).
   --debug             RelWithDebInfo + -g -fbacktrace (readable gdb/addr2line on segfaults).
-  --no-sync-patches   Skip copying setup/api/api_func.F90 into the CHARMM tree.
+  --no-sync-patches   Skip copying setup/api/{api_func,api_psf,api_eval}.F90 into the CHARMM tree.
   --no-domdec         CMake -Ddomdec=OFF (no DOMDEC send_coord_to_recip path; MPI MLpot SD).
   --skip-packmol      Skip rebuilding mmml/generate/packmol/packmol for this platform.
   --native-exec       Build charmm executable (as_library=OFF) for DOMDEC tier3 smoke; skips Packmol.
@@ -161,6 +193,8 @@ Environment:
   OPENMPI_ROOT      OpenMPI prefix (default: auto-detect; Linux cluster: /opt/gcc-14.2.0/openmpi-5.0.5/build)
   FFTW_ROOT         Double-precision FFTW prefix (libfftw3); falls back to EBROOTFFTW.
   FFTWF_ROOT        Single-precision FFTW prefix (libfftw3f); defaults to FFTW_ROOT.
+  MMML_FFTW_ROOT    User PIC/shared FFTW prefix (default: ~/.local/fftw-3.3.10-pic).
+                    Build once: bash scripts/build_fftw_pic.sh
                     On clusters that split precisions (e.g. fftw-X.Y.Z vs fftw-X.Y.Z-dp),
                     set FFTW_ROOT=.../fftw-X.Y.Z-dp and FFTWF_ROOT=.../fftw-X.Y.Z .
 EOF
@@ -224,6 +258,17 @@ if [[ "$SYNC_PATCHES" == 1 && -f "$PATCH_PSF_F90" ]]; then
     echo "Syncing api_psf.F90 from $PATCH_PSF_F90"
     cp -f "$PATCH_PSF_F90" "$PSF_F90"
   fi
+fi
+
+EVAL_F90="$CHARMM_HOME/source/api/api_eval.F90"
+PATCH_EVAL_F90="$ROOT/setup/api/api_eval.F90"
+if [[ -f "$EVAL_F90" && -f "$PATCH_EVAL_F90" ]]; then
+  if [[ "$SYNC_PATCHES" == 1 ]] && ! cmp -s "$PATCH_EVAL_F90" "$EVAL_F90"; then
+    echo "Syncing api_eval.F90 from $PATCH_EVAL_F90 (direct maincomx for MPI READ)"
+    cp -f "$PATCH_EVAL_F90" "$EVAL_F90"
+  fi
+elif [[ "$SYNC_PATCHES" == 1 && -f "$PATCH_EVAL_F90" ]]; then
+  echo "rebuild_charmm_mlpot: warning: missing $EVAL_F90 (api_eval patch not applied)" >&2
 fi
 
 echo "MLpot limits in source:"
@@ -475,6 +520,20 @@ if [[ "$needs_configure" == 1 ]]; then
     else
       echo "rebuild_charmm_mlpot: warning: libfftw3f (single) not found under ${_fftwf_lib_dir:-$FFTWF_ROOT/lib}" >&2
       echo "  COLFFT/DOMDEC requires single-precision FFTW. Set FFTWF_ROOT=/path/to/sp-fftw." >&2
+    fi
+    if [[ "$NATIVE_EXEC" != 1 ]]; then
+      for _lib_name in FFTW_LIB FFTWF_LIB; do
+        _lib_val="${!_lib_name:-}"
+        if [[ "$_lib_val" == *.a ]]; then
+          echo "rebuild_charmm_mlpot: $_lib_name is static ($_lib_val) — cannot link into libcharmm.so (needs -fPIC)." >&2
+          echo "  One-time fix on this node:" >&2
+          echo "    bash scripts/build_fftw_pic.sh" >&2
+          echo "    export MMML_FFTW_ROOT=\${HOME}/.local/fftw-3.3.10-pic" >&2
+          echo "    export FFTW_ROOT=\$MMML_FFTW_ROOT FFTWF_ROOT=\$MMML_FFTW_ROOT" >&2
+          echo "    OPENMPI_ROOT=/opt/gcc-12.2.0/openmpi-4.1.4/build bash scripts/rebuild_charmm_mlpot.sh --clean" >&2
+          exit 1
+        fi
+      done
     fi
   fi
   cmake "${CMAKE_ARGS[@]}"

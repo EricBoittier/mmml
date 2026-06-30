@@ -578,6 +578,37 @@ def test_read_restart_coordinates_from_fixture():
     assert pos[1, 2] == pytest.approx(-7.53960710226643e-4)
 
 
+def test_read_crd_coordinates_from_pycharmm_ext_fixture():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_crd_coordinates,
+    )
+
+    crd = (
+        Path(__file__).resolve().parents[1]
+        / "functionality/mlpot/output/minimize/mini_full_mlpot.crd"
+    )
+    if not crd.is_file():
+        pytest.skip("mini_full_mlpot.crd fixture missing")
+    pos = read_crd_coordinates(crd)
+    assert pos is not None
+    assert pos.shape == (20, 3)
+    assert pos[0, 0] == pytest.approx(0.3308962950)
+
+
+def test_read_restart_coordinates_accepts_compact_xyz_header(tmp_path):
+    path = tmp_path / "compact.res"
+    path.write_text(
+        _minimal_restart_text(natom=1, coord_lines=[" 1.0D+00 2.0D+00 3.0D+00"]).replace(
+            " !X, Y, Z",
+            " !X,Y,Z",
+        )
+    )
+    pos = read_restart_coordinates(path)
+    assert pos is not None
+    assert pos.shape == (1, 3)
+    assert np.allclose(pos[0], [1.0, 2.0, 3.0])
+
+
 def _minimal_restart_text(*, natom: int, coord_lines: list[str]) -> str:
     return (
         "REST     0     1\n"
