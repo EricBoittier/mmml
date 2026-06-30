@@ -30,6 +30,21 @@ import numpy as np
 os.environ.setdefault("JAX_PLATFORMS", "cpu")
 import jax  # noqa: E402
 
+try:
+    import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
+
+    import matplotlib
+
+    matplotlib.use("Agg")
+    HAS_MATPLOTLIB = True
+except ImportError:
+    HAS_MATPLOTLIB = False
+
+from mmml.utils.plotting.styles import DEFAULT_PLOT_STYLE, apply_plot_style, comparison_colors
+
+EV_TO_KCAL_MOL = 23.0605
+
 
 @dataclass
 class Spike:
@@ -449,6 +464,221 @@ def write_json_report(
     path.write_text(json.dumps(payload, indent=2))
 
 
+def _late_spikes(run: RunRecord, *, min_epoch: int = 150) -> list[Spike]:
+    """Spikes after warmup, excluding early valid_loss blow-ups."""
+    return [
+        spike
+        for spike in run.spikes
+        if spike.epoch >= min_epoch and spike.metric in {"valid_energy_mae", "valid_forces_mae"}
+    ]
+
+
+def plot_outlier_summary(
+    runs: list[RunRecord],
+    seed_summary: dict[int, dict[str, Any]],
+    candidates: list[dict[str, Any]],
+    global_outliers: list[dict[str, Any]],
+    output_path: Path,
+    *,
+    train_npz: Path | None = None,
+    dataset: str = "aco",
+    plot_style: str = DEFAULT_PLOT_STYLE,
+    verbose: bool = True,
+) -> None:
+    """Single-page dashboard: test metrics, NPZ energy distribution, spikes, summary table."""
+    if not HAS_MATPLOTLIB:
+        raise RuntimeError("matplotlib is required for plot_outlier_summary")
+
+    style = apply_plot_style(plot_style)
+    seeds = sorted({run.seed for run in runs})
+    seed_colors = {
+        seed: comparison_colors(style, len(seeds))[idx] for idx, seed in enumerate(seeds)
+    }
+
+    fig, axes = plt.subplots(2, 2, figsize=(11.5, 8.8), constrained_layout=True)
+    ax_test, ax_hist, ax_gap, ax_tbl = axes.ravel()
+
+    # --- Panel A: test E MAE vs n_train ---
+    for run in runs:
+        if run.test_energy_mae is None:
+            continue
+        color = seed_colors[run.seed]
+        marker = "D" if run.run_outlier else "o"
+        size = 55 + 8 * len(_late_spikes(run))
+        ax_test.scatter(
+            run.n_train,
+            run.test_energy_mae,
+            c=color,
+            s=size,
+            marker=marker,
+            edgecolors="#CC0000" if run.run_outlier else "white",
+            linewidths=1.8 if run.run_outlier else 0.6,
+            alpha=0.95,
+            zorder=4 if run.run_outlier else 3,
+        )
+    for n_train in sorted({run.n_train for run in runs}):
+        ys = [run.test_energy_mae for run in runs if run.n_train == n_train and run.test_energy_mae is not None]
+        if len(ys) >= 2:
+            ax_test.hlines(float(np.median(ys)), n_train * 0.92, n_train * 1.08, colors="#888888", linestyles=":", lw=1)
+    ax_test.set_xscale("log")
+    ax_test.set_xlabel("n_train")
+    ax_test.set_ylabel("Test energy MAE (kcal/mol)")
+    ax_test.set_title("Outlier runs vs training size")
+    handles = [Line2D([0], [0], marker="o", linestyle="", color=seed_colors[s], label=f"seed {s}") for s in seeds]
+    handles.append(Line2D([0], [0], marker="D", linestyle="", color="#666666", markeredgecolor="#CC0000", label="flagged run"))
+    ax_test.legend(handles=handles, fontsize=7, loc="upper right")
+
+    # --- Panel B: NPZ energy distribution + suspects ---
+    if train_npz is not None and train_npz.is_file():
+        data = np.load(train_npz, allow_pickle=True)
+        energies = np.asarray(data["E"], dtype=float)
+        ax_hist.hist(energies, bins=60, color=style.colors.get("muted", "#AAAAAA"), alpha=0.75, edgecolor="white")
+        ax_hist.axvline(float(np.median(energies)), color=style.colors.get("valid", "#CC0000"), ls="--", lw=1.5, label="median")
+        suspect_idx = {row["index"] for row in candidates[:20]}
+        global_idx = {row["index"] for row in global_outliers[:5]}
+        for idx in sorted(suspect_idx):
+            ax_hist.axvline(float(energies[idx]), color="#E64B35", alpha=0.25, lw=1.0)
+        if global_idx:
+            for idx in sorted(global_idx):
+                ax_hist.axvline(
+                    float(energies[idx]),
+                    color="#00A087",
+                    alpha=0.9,
+                    lw=1.8,
+                    label="global outlier" if idx == sorted(global_idx)[0] else None,
+                )
+        if candidates:
+            top = candidates[:8]
+            ax_hist.scatter(
+                [row["energy"] for row in top],
+                [0.02 * ax_hist.get_ylim()[1]] * len(top),
+                s=35,
+                c="#E64B35",
+                marker="v",
+                label="split-exclusive suspect",
+                zorder=5,
+            )
+        ax_hist.set_xlabel("Train NPZ energy (kcal/mol)")
+        ax_hist.set_ylabel("Count")
+        ax_hist.set_title("Training-set energy distribution")
+        ax_hist.legend(fontsize=7, loc="upper left")
+    else:
+        ax_hist.axis("off")
+        ax_hist.text(0.5, 0.5, "Provide --train-npz for\ndistribution panel", ha="center", va="center")
+
+    # --- Panel C: generalization gap (valid vs test E) + late spikes ---
+    for run in runs:
+        if run.test_energy_mae is None or run.valid_energy_mae is None:
+            continue
+        valid_e = float(run.valid_energy_mae) * EV_TO_KCAL_MOL
+        late_n = len(_late_spikes(run))
+        ax_gap.scatter(
+            valid_e,
+            run.test_energy_mae,
+            c=seed_colors[run.seed],
+            s=50 + 12 * late_n,
+            marker="D" if run.run_outlier else "o",
+            edgecolors="#CC0000" if run.run_outlier else "white",
+            linewidths=1.5 if run.run_outlier else 0.5,
+        )
+        if run.run_outlier:
+            ax_gap.annotate(
+                f"n{run.n_train}/r{run.repeat}",
+                (valid_e, run.test_energy_mae),
+                fontsize=7,
+                xytext=(4, 4),
+                textcoords="offset points",
+            )
+    lims = [
+        v
+        for v in ax_gap.get_xlim() + ax_gap.get_ylim()
+        if np.isfinite(v) and v > 0
+    ]
+    if lims:
+        lo, hi = min(lims), max(lims)
+        ax_gap.plot([lo, hi], [lo, hi], ls=":", color="#999999", lw=1, label="valid = test")
+    ax_gap.set_xlabel("Final valid energy MAE (kcal/mol)")
+    ax_gap.set_ylabel("Test energy MAE (kcal/mol)")
+    ax_gap.set_title("Generalization gap + late metric spikes (size)")
+    ax_gap.legend(fontsize=7, loc="upper left")
+
+    # --- Panel D: summary table ---
+    ax_tbl.axis("off")
+    headers = ["run", "seed", "test E", "valid E", "late spikes", "status"]
+    rows: list[list[str]] = []
+    for run in sorted(runs, key=lambda r: (r.run_outlier, r.test_energy_mae or -1), reverse=True):
+        if not run.run_outlier and len(_late_spikes(run)) == 0:
+            continue
+        valid_e = (
+            f"{float(run.valid_energy_mae) * EV_TO_KCAL_MOL:.3f}"
+            if run.valid_energy_mae is not None
+            else "—"
+        )
+        test_e = f"{run.test_energy_mae:.3f}" if run.test_energy_mae is not None else "—"
+        rows.append(
+            [
+                f"n{run.n_train}/r{run.repeat}",
+                str(run.seed),
+                test_e,
+                valid_e,
+                str(len(_late_spikes(run))),
+                "OUTLIER" if run.run_outlier else "spikes",
+            ]
+        )
+    for seed_str, info in sorted(seed_summary.items(), key=lambda item: int(item[0])):
+        if info.get("outlier_runs", 0) == 0:
+            continue
+        rows.append(
+            [
+                f"seed {seed_str}",
+                seed_str,
+                f"max {info['test_energy_mae_max']:.3f}",
+                f"mean {info['test_energy_mae_mean']:.3f}",
+                str(info.get("spike_epochs", 0)),
+                f"{info['outlier_runs']} bad runs",
+            ]
+        )
+    if candidates:
+        rows.append(["—", "—", "—", "—", "—", "—"])
+        rows.append(["top suspect idx", "E", "fmax", "excl", "seeds", "—"])
+        for row in candidates[:6]:
+            rows.append(
+                [
+                    str(row["index"]),
+                    f"{row['energy']:.2f}",
+                    f"{row['fmax']:.2f}",
+                    str(row["exclusive_to_outlier_runs"]),
+                    ",".join(str(s) for s in row["outlier_seeds"]),
+                    "—",
+                ]
+            )
+    if not rows:
+        rows = [["(none flagged)", "", "", "", "", ""]]
+    table = ax_tbl.table(cellText=rows, colLabels=headers, loc="center", cellLoc="center", bbox=[0.0, 0.0, 1.0, 1.0])
+    table.auto_set_font_size(False)
+    table.set_fontsize(7)
+    table.scale(1.0, 1.1)
+    for (row, col), cell in table.get_celld().items():
+        if row == 0:
+            cell.set_facecolor("#F2F2F2")
+            cell.set_text_props(fontweight="bold")
+        elif col == 5 and cell.get_text().get_text() == "OUTLIER":
+            cell.set_facecolor("#FCE4E4")
+    ax_tbl.set_title("Flagged runs, seeds, suspect NPZ indices", fontsize=9, fontweight="bold", pad=8)
+
+    suptitle_kw: dict = {"fontsize": 14, "fontweight": "bold"}
+    if style.suptitle_color:
+        suptitle_kw["color"] = style.suptitle_color
+    fig.suptitle(f"{dataset} outlier summary (metrics, spikes, NPZ distribution)", **suptitle_kw)
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, dpi=220, bbox_inches="tight")
+    plt.close(fig)
+    if verbose:
+        print(f"Saved: {output_path}")
+
+
 def run_diagnosis(
     *,
     eval_root: Path,
@@ -461,6 +691,8 @@ def run_diagnosis(
     test_ratio_threshold: float = 2.0,
     top_samples: int = 25,
     top_spikes: int = 20,
+    plot_out: Path | None = None,
+    plot_style: str = DEFAULT_PLOT_STYLE,
     verbose: bool = True,
 ) -> dict[str, Any]:
     """Run full diagnosis and return structured results."""
@@ -500,6 +732,18 @@ def run_diagnosis(
         write_json_report(json_out.resolve(), runs, seed_summary, candidates, global_outliers)
         if verbose:
             print(f"\nWrote {json_out}")
+    if plot_out is not None:
+        plot_outlier_summary(
+            runs,
+            seed_summary,
+            candidates,
+            global_outliers,
+            plot_out.resolve(),
+            train_npz=train_npz,
+            dataset=dataset,
+            plot_style=plot_style,
+            verbose=verbose,
+        )
 
     return {
         "runs": runs,
@@ -525,6 +769,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dataset", default="aco", help="Dataset subdir under eval-root (default: aco)")
     parser.add_argument("--train-npz", type=Path, default=None, help="Train NPZ for split reproduction + scoring")
     parser.add_argument("--json-out", type=Path, default=None, help="Write full JSON report")
+    parser.add_argument("--plot-out", type=Path, default=None, help="Write summary dashboard PNG")
+    parser.add_argument("--plot-style", default=DEFAULT_PLOT_STYLE, help="Matplotlib style preset")
     parser.add_argument("--spike-relative-factor", type=float, default=5.0)
     parser.add_argument("--spike-jump-factor", type=float, default=3.0)
     parser.add_argument("--test-z-threshold", type=float, default=1.5)
@@ -548,6 +794,8 @@ def main(argv: list[str] | None = None) -> int:
         test_ratio_threshold=args.test_ratio_threshold,
         top_samples=args.top_samples,
         top_spikes=args.top_spikes,
+        plot_out=args.plot_out,
+        plot_style=args.plot_style,
         verbose=not args.quiet,
     )
     return 0
