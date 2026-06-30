@@ -216,7 +216,7 @@ def restart_training(restart: str, transform, optimizer, num_atoms: int):
         - state: Training state
     """
     restart = get_last(restart)
-    _, _model = get_params_model(restart, num_atoms)
+    _, _model = get_params_model(restart, num_atoms, quiet=True)
     if _model is not None:
         model = _model
 
