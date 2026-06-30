@@ -443,6 +443,21 @@ def charmm_coordinates_are_finite() -> bool:
     return bool(np.all(np.isfinite(arr)))
 
 
+def charmm_coordinates_are_nontrivial(*, min_span_A: float = 1.0e-6) -> bool:
+    """False when every atom is at the origin (blow-up / cleared CRD)."""
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import pycharmm.coor as coor
+
+    pos = coor.get_positions()
+    arr = pos[["x", "y", "z"]].to_numpy(dtype=np.float64).reshape(-1)
+    if arr.size == 0:
+        return True
+    if not np.all(np.isfinite(arr)):
+        return False
+    span = float(np.max(arr) - np.min(arr))
+    return span > float(min_span_A)
+
+
 def charmm_dynamics_energy_is_finite() -> bool:
     """True when the current CHARMM energy row has no NaN/Inf scalars."""
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
@@ -461,12 +476,24 @@ def charmm_dynamics_energy_is_finite() -> bool:
 
 def charmm_dynamics_state_is_finite() -> bool:
     """Coordinates and energy row are finite after a dynamics segment."""
-    return charmm_coordinates_are_finite() and charmm_dynamics_energy_is_finite()
+    return (
+        charmm_coordinates_are_finite()
+        and charmm_coordinates_are_nontrivial()
+        and charmm_dynamics_energy_is_finite()
+    )
 
 
 def validate_charmm_dynamics_state_after_chunk(*, context: str) -> None:
     """Raise when coordinates or energies are non-finite (barostat / MLpot blow-up)."""
-    if charmm_dynamics_state_is_finite():
+    if charmm_coordinates_are_finite() and charmm_dynamics_energy_is_finite():
+        if not charmm_coordinates_are_nontrivial():
+            raise RuntimeError(
+                f"{context}: CHARMM coordinates are all zero after dynamics "
+                "(MLpot integration blow-up). Refuse overlap rescue — fix heat "
+                "thermostat (scale heat needs ihtfrq < nstep per overlap chunk; "
+                "prefer --heat-thermostat hoover with overlap), shorten timestep, "
+                "or run bonded-MM mini before heat."
+            )
         return
     raise RuntimeError(
         f"{context}: CHARMM dynamics produced non-finite coordinates or energy "

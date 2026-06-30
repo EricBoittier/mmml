@@ -2493,6 +2493,8 @@ def test_overlap_chunk_continues_velocity_scaling_heat_ramp(tmp_path, monkeypatc
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.validate_charmm_dynamics_state_after_chunk",
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_restart_write_after_chunk",
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
@@ -2515,6 +2517,7 @@ def test_overlap_chunk_continues_velocity_scaling_heat_ramp(tmp_path, monkeypatc
 
     assert len(calls) == 4
     assert calls[0]["firstt"] == 0.0
+    assert calls[0]["iasvel"] == 1
     assert calls[1]["restart"] is True
     assert calls[1]["iasvel"] == 1
     assert calls[1]["firstt"] == pytest.approx(0.6)
@@ -2595,7 +2598,7 @@ def test_apply_overlap_chunk_hoover_chunk0_preserves_cold_start():
 
 
 def test_apply_overlap_chunk_clears_start_for_scale_heat_chunk_zero():
-    """Overlap chunk 0 scale heat expects Boltzmann assign before dyna (start=False)."""
+    """Overlap chunk 0 scale heat preserves cold start (start=True) and ihtfrq."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
 
     kw = {
@@ -2604,13 +2607,13 @@ def test_apply_overlap_chunk_clears_start_for_scale_heat_chunk_zero():
         "finalt": 100.0,
         "iasvel": 1,
         "iasors": 0,
-        "ihtfrq": 500,
+        "ihtfrq": 250,
         "TEMINC": 1.0,
     }
     _apply_overlap_chunk_dynamics_kw(kw, chunk_index=0, has_restart_read=False)
-    assert kw["start"] is False
+    assert kw["start"] is True
     assert kw["iasvel"] == 1
-    assert kw["ihtfrq"] == 500
+    assert kw["ihtfrq"] == 250
 
 
 def test_apply_overlap_chunk_preserves_heat_cold_start_kw():
@@ -3243,6 +3246,31 @@ def test_harmonize_dynamics_frequency_for_remainder_chunk():
     _harmonize_overlap_chunk_frequencies(kw5, 250, global_step_start=0)
     assert kw5["nsavc"] == 249
     assert kw5["_suppress_trajectory"] is True
+
+    kw6 = {"nsavc": 1600}
+    _harmonize_overlap_chunk_frequencies(
+        kw6, 500, global_step_start=0, split_trajectory=True
+    )
+    assert kw6["nsavc"] == 499
+    assert "_suppress_trajectory" not in kw6
+
+
+def test_apply_overlap_chunk_heat_ramp_chunk_zero():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _apply_overlap_chunk_heat_ramp,
+    )
+
+    chunk_kw = {"firstt": 1.0, "finalt": 5.0, "iasors": 0}
+    ramp_spec = {"firstt": 1.0, "finalt": 5.0, "teminc": 0.05, "ihtfrq": 500}
+    _apply_overlap_chunk_heat_ramp(
+        chunk_kw,
+        chunk_index=0,
+        chunk_nstep=500,
+        steps_done=0,
+        ramp_spec=ramp_spec,
+    )
+    assert chunk_kw["ihtfrq"] < 500
+    assert chunk_kw["TEMINC"] > 0.0
 
 
 def test_apply_dyn_imgfrq_from_args_sets_pbc_list_freqs():

@@ -1409,12 +1409,43 @@ def apply_heat_ramp_frequencies(
     ihtfrq: int,
 ) -> None:
     """Update ``ihtfrq`` / ``TEMINC`` after the stage length or CLI cadence is known."""
-    iht = max(1, min(int(ihtfrq), max(1, int(nstep))))
+    nstep = max(1, int(nstep))
+    requested = max(1, int(ihtfrq))
+    min_rescales = 2 if nstep >= 2 else 1
+    iht = min(requested, nstep)
+    # CHARMM disables IHTFRQ velocity scaling when ihtfrq >= nstep (no interior events).
+    if iht >= nstep:
+        iht = max(1, nstep // min_rescales)
+    iht = _harmonize_dynamics_frequency(iht, nstep)
     firstt = float(kw.get("firstt", kw.get("finalt", 300.0)))
     finalt = float(kw.get("finalt", 300.0))
     heat_updates = max(1, int(nstep) // iht)
     kw["ihtfrq"] = iht
     kw["TEMINC"] = max(0.0, (finalt - firstt) / heat_updates)
+
+
+def _apply_overlap_chunk_heat_ramp(
+    chunk_kw: dict[str, Any],
+    *,
+    chunk_index: int,
+    chunk_nstep: int,
+    steps_done: int,
+    ramp_spec: dict[str, float | int],
+) -> None:
+    """Recompute ``ihtfrq`` / ``TEMINC`` for one overlap chunk (stage cadence ≠ chunk ``nstep``)."""
+    apply_heat_ramp_frequencies(
+        chunk_kw,
+        nstep=int(chunk_nstep),
+        ihtfrq=int(ramp_spec["ihtfrq"]),
+    )
+    if int(chunk_index) <= 0:
+        return
+    apply_heat_ramp_overlap_chunk(
+        chunk_kw,
+        chunk_index=int(chunk_index),
+        steps_done=int(steps_done),
+        ramp_spec=ramp_spec,
+    )
 
 
 def heat_ramp_bath_target_K(
@@ -1590,8 +1621,8 @@ def apply_heat_ramp_overlap_chunk(
         step=int(steps_done),
     )
     chunk_kw["finalt"] = float(ramp_spec["finalt"])
-    chunk_kw["TEMINC"] = float(ramp_spec["teminc"])
-    chunk_kw["ihtfrq"] = int(ramp_spec["ihtfrq"])
+    # ``ihtfrq`` / ``TEMINC`` for this chunk's ``nstep`` come from
+    # ``apply_heat_ramp_frequencies`` (called immediately before this helper).
     chunk_kw["iasvel"] = 1
     chunk_kw["iasors"] = 0
     chunk_kw["start"] = False
@@ -2703,6 +2734,19 @@ def apply_charmm_dynamics_echeck_kw(kw: dict[str, Any], echeck: float) -> None:
         pass
 
 
+def _dynamics_script_append_for_heat_ramp(kw: dict[str, Any]) -> str:
+    """Extra ``dyna`` keywords when scale-heat ramp must reach Fortran ``reawri``."""
+    parts: list[str] = []
+    iht = kw.get("ihtfrq")
+    if iht is not None and int(iht) > 0:
+        parts.append(f"ihtfrq {int(iht)}")
+    for key in ("TEMINC", "teminc"):
+        if key in kw:
+            parts.append(f"teminc {float(kw[key])}")
+            break
+    return (" " + " ".join(parts)) if parts else ""
+
+
 def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     """Instantiate and run ``pycharmm.DynamicsScript``."""
     kw = dict(dynamics_kwargs)
@@ -2727,9 +2771,10 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     if "echeck" in kw:
         apply_charmm_dynamics_echeck_kw(kw, float(kw["echeck"]))
     _apply_dynamics_io_setters(kw)
+    heat_append = _dynamics_script_append_for_heat_ramp(kw)
     _release_charmm_dynamics_api_buffers()
     dyn = pycharmm.DynamicsScript(**kw)
-    dyn.run()
+    dyn.run(append=heat_append)
     _release_charmm_dynamics_api_buffers()
     return dyn
 
@@ -3350,6 +3395,7 @@ def _harmonize_overlap_chunk_frequencies(
     *,
     loose_pbc: bool = False,
     global_step_start: int = 0,
+    split_trajectory: bool = False,
 ) -> None:
     """Align list/image/HB update freqs with this chunk's ``nstep`` (avoids FINCYC retune)."""
 
@@ -3366,14 +3412,23 @@ def _harmonize_overlap_chunk_frequencies(
                 # bookkeeping.  n-1 is accepted by CHARMM and avoids the slow
                 # default while producing no DCD without an IUNCRD handle.
                 chunk_kw["nsavc"] = max(1, n - 1)
-                chunk_kw["_suppress_trajectory"] = True
-                for k in ("nprint", "iprfrq", "isvfrq"):
-                    chunk_kw.pop(k, None)
-                _emit_overlap_log(
-                    f"chunk: skip DCD (target nsavc={old} >= nstep={n}; "
-                    f"CHARMM nsavc={chunk_kw['nsavc']}; "
-                    f"global step {int(global_step_start)}–{int(global_step_start) + n})",
-                )
+                if split_trajectory:
+                    # Per-chunk ``*.chunk.NNNN.dcd``: one frame at chunk end.
+                    pass
+                else:
+                    chunk_kw["_suppress_trajectory"] = True
+                    for k in ("nprint", "iprfrq", "isvfrq"):
+                        chunk_kw.pop(k, None)
+                    _emit_overlap_log(
+                        f"chunk: skip DCD (target nsavc={old} >= nstep={n}; "
+                        f"CHARMM nsavc={chunk_kw['nsavc']}; "
+                        f"global step {int(global_step_start)}–{int(global_step_start) + n})",
+                    )
+                if split_trajectory:
+                    _emit_overlap_log(
+                        f"chunk: per-chunk DCD nsavc={chunk_kw['nsavc']} "
+                        f"(global step {int(global_step_start)}–{int(global_step_start) + n})",
+                    )
             else:
                 for k in ("nprint", "iprfrq", "isvfrq"):
                     if k in chunk_kw:
@@ -3864,6 +3919,17 @@ def _apply_overlap_chunk_dynamics_kw(
             and _cpt_npt_fresh_barostat_from_restart_kw(chunk_kw)
         ):
             return
+        if (
+            int(chunk_index) > 0
+            and int(chunk_kw.get("ihtfrq", 0) or 0) > 0
+            and "hoover reft" not in chunk_kw
+            and not bool(chunk_kw.get("cpt"))
+        ):
+            # Scale-heat ramp across READYN handoff (see COMP_AND_HEATING.md).
+            chunk_kw["start"] = False
+            chunk_kw["iasvel"] = 1
+            chunk_kw["iasors"] = 0
+            return
         chunk_kw["start"] = False
         chunk_kw["iasvel"] = 0
         if chunk_index > 0:
@@ -3896,10 +3962,11 @@ def _apply_overlap_chunk_dynamics_kw(
             chunk_kw.pop("firstt", None)
             _strip_stale_heat_ramp_keywords(chunk_kw)
     elif preserve_ihtfrq_heat_ramp:
-        # Boltzmann assign already ran (start=False); keep IHTFRQ / TEMINC / FIRSTT ramp.
-        chunk_kw["iasvel"] = 0 if chunk_index > 0 else 1
+        # Chunk 0 keeps ``start`` from ``_configure_heat_dynamics_start`` (cold Boltzmann).
+        chunk_kw["iasvel"] = 1 if int(chunk_index) == 0 else 0
         chunk_kw["iasors"] = 0
-        chunk_kw["start"] = False
+        if int(chunk_index) > 0:
+            chunk_kw["start"] = False
         # Hoover NVT: keep thermostat keywords; ensure scale-heat ramps stay off.
         if int(chunk_kw.get("ihtfrq", 0)) != 0 and "hoover reft" in chunk_kw:
             chunk_kw["ihtfrq"] = 0
@@ -4748,6 +4815,14 @@ def run_dynamics_with_io(
                         overlap_context=overlap_context,
                         overlap_run_state_dir=overlap_run_state_dir,
                     )
+                if heat_ramp_spec is not None:
+                    _apply_overlap_chunk_heat_ramp(
+                        chunk_kw,
+                        chunk_index=chunk_index,
+                        chunk_nstep=chunk_nstep,
+                        steps_done=steps_done,
+                        ramp_spec=heat_ramp_spec,
+                    )
                 _apply_overlap_chunk_dynamics_kw(
                     chunk_kw,
                     chunk_index=chunk_index,
@@ -4775,13 +4850,6 @@ def run_dynamics_with_io(
                     chunk_kw["start"] = False
                     chunk_kw["iasvel"] = 0
                     chunk_kw.pop("iunrea", None)
-                if heat_ramp_spec is not None:
-                    apply_heat_ramp_overlap_chunk(
-                        chunk_kw,
-                        chunk_index=chunk_index,
-                        steps_done=steps_done,
-                        ramp_spec=heat_ramp_spec,
-                    )
                 elif hoover_heat_ramp_spec is not None:
                     apply_hoover_cpt_heat_ramp_overlap_chunk(
                         chunk_kw,
@@ -4825,6 +4893,7 @@ def run_dynamics_with_io(
                     chunk_nstep,
                     loose_pbc=loose_pbc,
                     global_step_start=steps_before_chunk,
+                    split_trajectory=split_trajectory,
                 )
                 suppress_chunk_traj = bool(chunk_kw.get("_suppress_trajectory", False))
                 if suppress_chunk_traj or "nsavc" not in chunk_kw:
@@ -4898,6 +4967,16 @@ def run_dynamics_with_io(
                             retry_count=chunk_retry_count,
                         ),
                     )
+                from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+                    validate_charmm_dynamics_state_after_chunk,
+                )
+
+                validate_charmm_dynamics_state_after_chunk(
+                    context=(
+                        f"overlap ({overlap_context}) chunk "
+                        f"{chunk_index + 1}/{n_chunks}"
+                    ),
+                )
                 chunk_restart_path = (
                     Path(chunk_io.restart_write)
                     if chunk_io is not None

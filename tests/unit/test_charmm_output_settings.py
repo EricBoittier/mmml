@@ -96,6 +96,15 @@ def test_apply_heat_ramp_frequencies_recomputes_teminc():
     assert kw["TEMINC"] == (300.0 - 60.0) / (4000 // 40)
 
 
+def test_apply_heat_ramp_frequencies_caps_ihtfrq_below_nstep():
+    """Overlap chunks (nstep=500, stage ihtfrq=500) need interior IHTFRQ events."""
+    kw = {"firstt": 1.0, "finalt": 5.0}
+    apply_heat_ramp_frequencies(kw, nstep=500, ihtfrq=500)
+    assert kw["ihtfrq"] < 500
+    assert 500 % kw["ihtfrq"] == 0
+    assert kw["TEMINC"] > 0.0
+
+
 def test_heat_ramp_bath_target_at_step():
     assert heat_ramp_bath_target_K(
         firstt=0.0,

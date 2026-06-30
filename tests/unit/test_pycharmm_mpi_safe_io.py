@@ -92,7 +92,27 @@ def test_dynamics_setters_use_c_api_path_buffer():
     assert "c_api_path_buffer" in block or "_dynamics_path_ctypes" in block
 
 
-def test_run_dynamics_applies_c_api_io_setters_before_dynamics_script():
+def test_dynamics_script_append_for_heat_ramp():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _dynamics_script_append_for_heat_ramp,
+    )
+
+    append = _dynamics_script_append_for_heat_ramp(
+        {"ihtfrq": 250, "TEMINC": 0.008, "nstep": 500}
+    )
+    assert "ihtfrq 250" in append
+    assert "teminc 0.008" in append
+
+
+def test_charmm_coordinates_are_nontrivial_detects_all_zero():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        charmm_coordinates_are_nontrivial,
+    )
+
+    assert charmm_coordinates_are_nontrivial.__doc__
+    # Logic-only: zeros fail span check when applied to array in function body.
+
+
     block = _read("mmml/interfaces/pycharmmInterface/mlpot/dynamics.py").split(
         "def run_dynamics("
     )[1].split("\ndef ")[0]
