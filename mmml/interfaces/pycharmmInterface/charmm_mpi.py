@@ -1179,7 +1179,12 @@ def ensure_shared_minimal_rtf(psf_path: Path, prm_path: Path) -> Path:
 
 
 def _bootstrap_rank_local_staging_enabled(*, size: int) -> bool:
-    """Whether each MPI rank copies topology files to a private UUID directory."""
+    """Whether each MPI rank copies topology files to a private UUID directory.
+
+    Default **off**: DOMDEC MPI READ is cooperative (rank 0 disk + Fortran broadcast);
+    every rank must pass the **same** paths. Opt in with ``MMML_MPI_BOOTSTRAP_RANK_LOCAL=1``
+    only for bisect / embarrassingly parallel workloads.
+    """
     if size <= 1:
         return False
     flag = os.environ.get("MMML_MPI_BOOTSTRAP_RANK_LOCAL", "").strip().lower()
@@ -1187,7 +1192,7 @@ def _bootstrap_rank_local_staging_enabled(*, size: int) -> bool:
         return False
     if flag in ("1", "true", "yes"):
         return True
-    return True
+    return False
 
 
 def stage_topology_files_for_rank(
