@@ -54,8 +54,8 @@ def zero_mlpot_psf_mm_terms(
 ) -> str:
     """Disable CHARMM MM on ML atoms via zeroed CGENFF params (PSF connectivity kept).
 
-    - Re-reads a zeroed CGENFF .prm (bonded-only when ``periodic_external`` needs
-      CHARMM IMAGE VDW; full zero otherwise).
+    - Re-reads a **bonded-only** zeroed CGENFF .prm (BOND/ANGL/DIHE/IMPR → 0;
+      NONBOND/NBFIX/HBOND omitted so READ PARAM APPEND does not clear exclusion lists).
     - Zeros partial charges on ML atoms (ELEC off; MLpot supplies ML electrostatics).
     - Does **not** call ``delete_connectivity`` (no DELTIC bond/angle deletion).
 
@@ -83,34 +83,21 @@ def zero_mlpot_psf_mm_terms(
 
     if n_ml >= n_total:
         tag = "all"
-        if periodic_external:
-            summary = (
-                f"MLpot zeroed CGENFF: periodic external all-ML ({n_total} atoms; "
-                f"bonded params zeroed, PSF bonds={n_bond_before}, CHARMM VDW on)"
-            )
-        else:
-            summary = (
-                f"MLpot zeroed CGENFF: all-ML ({n_total} atoms; "
-                f"bonded+nonbond zeroed, PSF bonds={n_bond_before})"
-            )
+        vdw_note = ", CHARMM VDW on" if periodic_external else ""
+        summary = (
+            f"MLpot zeroed CGENFF: all-ML ({n_total} atoms; "
+            f"bonded params zeroed, PSF bonds={n_bond_before}{vdw_note})"
+        )
     else:
         tag = ml_selection.store(_ML_BLOCK_NAME)
         n_mm = n_total - n_ml
-        if periodic_external:
-            summary = (
-                f"MLpot zeroed CGENFF: periodic external hybrid ({n_ml} ML + {n_mm} MM; "
-                f"ML bonded zeroed, PSF bonds={n_bond_before}, CHARMM VDW on MM)"
-            )
-        else:
-            summary = (
-                f"MLpot zeroed CGENFF: hybrid ({n_ml} ML + {n_mm} MM; "
-                f"CGENFF zeroed, PSF bonds={n_bond_before})"
-            )
+        vdw_note = ", CHARMM VDW on MM" if periodic_external else ""
+        summary = (
+            f"MLpot zeroed CGENFF: hybrid ({n_ml} ML + {n_mm} MM; "
+            f"ML bonded zeroed, PSF bonds={n_bond_before}{vdw_note})"
+        )
 
-    apply_zeroed_cgenff_params(
-        bonded_only=bool(periodic_external),
-        verbose=verbose,
-    )
+    apply_zeroed_cgenff_params(bonded_only=True, verbose=verbose)
 
     charges = list(pycharmm.psf.get_charges())
     for idx in ml_indices:

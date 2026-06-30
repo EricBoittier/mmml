@@ -1252,11 +1252,9 @@ def register_mlpot(
     with charmm_relaxed_bomlev(CGENFF_PRM_BOMLEV):
         skip_iblo_inb_update = False
         if use_pbc:
-            # PBC all-ML: install ML exclusions before zeroed-CGENFF swap; skip second
-            # upinb in MLpot.__init__ when lists were built with PSF connectivity intact.
+            # PBC all-ML: bonded-only CGENFF append must run before ML exclusions so
+            # READ PARAM APPEND does not clear NONBOND lists after iblo/inb are set.
             _require_mlpot_skip_iblo_support(pycharmm)
-            _install_ml_exclusions(ml_selection)
-            skip_iblo_inb_update = True
         if periodic_external and periodic_charmm_vdw:
             block_tag = apply_mlpot_registration_mm_off(
                 ml_selection,
@@ -1273,6 +1271,9 @@ def register_mlpot(
                 periodic_external=periodic_external,
                 use_block=use_block_registration,
             )
+        if use_pbc:
+            _install_ml_exclusions(ml_selection)
+            skip_iblo_inb_update = True
         mlpot = pycharmm.MLpot(
             ml_model=pyCModel,
             ml_Z=z_ml,

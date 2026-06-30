@@ -18,6 +18,11 @@ def cgenff_prm_path() -> Path:
     return _cgenff_data_dir() / "par_all36_cgenff.prm"
 
 
+def bonded_cgenff_prm_path() -> Path:
+    """Bonded sections only (full constants); safe for READ PARAM APPEND restore."""
+    return _cgenff_data_dir() / "bonded_par_all36_cgenff.prm"
+
+
 def zeroed_cgenff_prm_path(*, bonded_only: bool = False) -> Path:
     name = (
         "zeroed_bonded_par_all36_cgenff.prm"
@@ -39,7 +44,10 @@ def _read_cgenff_prm(path: Path) -> None:
             "mmml/data/charmm/zeroed_par_all36_cgenff.prm\n"
             "  uv run python scripts/zero_charmm_prm.py "
             "mmml/data/charmm/par_all36_cgenff.prm "
-            "mmml/data/charmm/zeroed_bonded_par_all36_cgenff.prm --bonded-only"
+            "mmml/data/charmm/zeroed_bonded_par_all36_cgenff.prm --bonded-only\n"
+            "  uv run python scripts/zero_charmm_prm.py "
+            "mmml/data/charmm/par_all36_cgenff.prm "
+            "mmml/data/charmm/bonded_par_all36_cgenff.prm --extract-bonded-only"
         )
     read_cgenff_prm(path, append=True)
 
@@ -84,13 +92,13 @@ def apply_zeroed_cgenff_params(
 
 
 def apply_full_cgenff_params(*, verbose: bool = False) -> None:
-    """Restore full CGENFF parameters and verify PSF bonds are still present."""
+    """Restore bonded CGENFF parameters (append-safe) and verify PSF bonds."""
     global _active_mode
-    path = cgenff_prm_path()
+    path = bonded_cgenff_prm_path()
     _read_cgenff_prm(path)
     n_bond = assert_psf_bonds_present(context="CGENFF MM restore")
     _active_mode = "full"
-    summary = f"CGENFF params: full ({path.name}; PSF bonds={n_bond})"
+    summary = f"CGENFF params: bonded restore ({path.name}; PSF bonds={n_bond})"
     from mmml.utils.rich_report import emit_charmm_block
 
     emit_charmm_block(summary, verbose=verbose)
