@@ -1228,6 +1228,26 @@ def _apply_mlpot_psf_mm_off_and_pbc(ctx: MlpotContext, *, verbose: bool = False)
     return block_tag
 
 
+def _suspend_pbc_for_cgenff_param_read(*, verbose: bool = False) -> None:
+    """Drop IMAGE transforms before ``READ PARAM APPEND`` during PBC MLpot registration.
+
+    ``read_param_file`` calls ``climag`` (clears image PSF tables) then ``gtnbct INIT``,
+    which runs ``upinb`` → ``UPIMNB`` when ``NTRANS > 0``. With images cleared but
+    ``NTRANS`` still set (e.g. DCM:100 after lattice prep), ``UPIMNB`` segfaults.
+    ``crystal free`` sets ``NTRANS=0`` so the param-read ``upinb`` pass is vacuum-safe;
+    :func:`_finalize_pbc_mlpot_exclusions_after_param_read` restores crystal/nb lists.
+    """
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import crystal_free_charmm
+
+    crystal_free_charmm()
+    if verbose:
+        print(
+            "MLpot PBC: crystal free before zeroed CGENFF read "
+            "(READ PARAM APPEND clears IMAGE; avoids UPIMNB segfault)",
+            flush=True,
+        )
+
+
 def _finalize_pbc_mlpot_exclusions_after_param_read(
     ml_selection: Any,
     *,
@@ -1349,6 +1369,8 @@ def register_mlpot(
         uses_block = mlpot_use_block_registration(explicit=use_block_registration)
         if use_pbc:
             _require_mlpot_skip_iblo_support(pycharmm)
+            if not uses_block:
+                _suspend_pbc_for_cgenff_param_read(verbose=verbose)
         if periodic_external and periodic_charmm_vdw:
             block_tag = apply_mlpot_registration_mm_off(
                 ml_selection,

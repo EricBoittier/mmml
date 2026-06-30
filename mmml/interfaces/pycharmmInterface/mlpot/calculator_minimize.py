@@ -56,6 +56,7 @@ class HybridCalculatorMinimizeConfig:
     stall_patience_soft_steps: int = 3
     stall_improvement_ratio: float = 0.99
     stall_soft_fmax_factor: float = 10.0
+    safe_grms_kcalmol_A: float | None = 30.0
 
 
 @dataclass
@@ -76,6 +77,41 @@ class HybridCalculatorFireConfig:
     energy_absolute_ceiling_ev: float = 1.0e4
     stall_patience_steps: int = 15
     stall_improvement_ratio: float = 0.99
+    safe_grms_kcalmol_A: float | None = 30.0
+
+
+def resolve_calculator_mini_safe_grms(
+    *,
+    explicit: float | None = None,
+    args: Any | None = None,
+    default: float = 30.0,
+) -> float | None:
+    """Hybrid GRMS (kcal/mol/Å) at which ASE FIRE/BFGS may stop early."""
+    for value in (
+        explicit,
+        getattr(args, "calculator_safe_grms", None) if args is not None else None,
+        getattr(args, "pre_min_safe_grms", None) if args is not None else None,
+        getattr(args, "geometry_packing_safe_grms", None) if args is not None else None,
+    ):
+        if value is None:
+            continue
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError):
+            continue
+        if parsed <= 0.0:
+            return None
+        return parsed
+    return float(default)
+
+
+def _hybrid_grms_from_ase_atoms(atoms: Any) -> float:
+    """Hybrid GRMS (kcal/mol/Å) from ASE calculator forces (eV/Å)."""
+    from mmml.data.units import EV_TO_KCAL_MOL
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import forces_grms_kcalmol_A
+
+    forces_ev = np.asarray(atoms.get_forces(), dtype=np.float64).reshape(-1, 3)
+    return forces_grms_kcalmol_A(forces_ev * EV_TO_KCAL_MOL)
 
 
 def hybrid_calculator_mini_eligible(
@@ -478,6 +514,7 @@ def _commit_hybrid_calculator_mini_result(
     optimizer_name: str,
     step_count: int,
     verbose: bool,
+    stopped_on_safe_grms: bool = False,
 ) -> float:
     """Sync CHARMM, update historical best, and return hybrid GRMS (kcal/mol/Å)."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
@@ -536,7 +573,11 @@ def _commit_hybrid_calculator_mini_result(
 
     if verbose:
         grms_txt = f"{grms0:.4f}" if grms0 is not None and np.isfinite(grms0) else "?"
-        spike_note = " (spike abort)" if stopped_on_spike else ""
+        spike_note = (
+            " (safe GRMS)"
+            if stopped_on_safe_grms
+            else (" (spike abort)" if stopped_on_spike else "")
+        )
         energy_txt = format_energy_ev_kcal(energy_ev) if np.isfinite(energy_ev) else "?"
         print(
             f"{context_prefix} hybrid calculator {optimizer_name} done{spike_note}: "
@@ -631,8 +672,8 @@ def _run_hybrid_calculator_bfgs(
     *,
     context_prefix: str,
     initial_fmax_ev_a: float,
-) -> tuple[Any, _BestMinimizationFrame, bool]:
-    """Run guarded ASE BFGS; returns (optimizer, best_frame, stopped_on_spike)."""
+) -> tuple[Any, _BestMinimizationFrame, bool, bool]:
+    """Run guarded ASE BFGS; returns (optimizer, best_frame, stopped_on_spike, safe_grms)."""
     if config.use_bfgs_line_search:
         from ase.optimize.bfgslinesearch import BFGSLineSearch as BfgsOptimizer
     else:
@@ -646,6 +687,7 @@ def _run_hybrid_calculator_bfgs(
         floor_ev_a=config.fmax_spike_floor_ev_a,
     )
     stopped_on_spike = False
+    stopped_on_safe_grms = False
     steps_since_improvement = 0
     prev_best_fmax = float("inf")
 
@@ -659,9 +701,25 @@ def _run_hybrid_calculator_bfgs(
             steps_since_improvement += 1
 
     def _check_guards() -> None:
-        nonlocal stopped_on_spike
-        if stopped_on_spike:
+        nonlocal stopped_on_spike, stopped_on_safe_grms
+        if stopped_on_spike or stopped_on_safe_grms:
             return
+        safe_grms = config.safe_grms_kcalmol_A
+        if safe_grms is not None:
+            try:
+                grms = _hybrid_grms_from_ase_atoms(atoms)
+            except Exception:
+                grms = float("inf")
+            if np.isfinite(grms) and float(grms) <= float(safe_grms):
+                stopped_on_safe_grms = True
+                if config.verbose:
+                    print(
+                        f"{context_prefix} hybrid calculator BFGS: "
+                        f"safe GRMS reached ({grms:.4f} <= {float(safe_grms):.4f} "
+                        "kcal/mol/Å); stopping early",
+                        flush=True,
+                    )
+                return
         fmax = float(np.abs(atoms.get_forces()).max())
         if should_abort_bfgs_fmax(
             fmax,
@@ -721,10 +779,10 @@ def _run_hybrid_calculator_bfgs(
         fmax=float(config.fmax_ev_a),
         steps=int(config.max_steps),
     ):
-        if stopped_on_spike or converged:
+        if stopped_on_spike or stopped_on_safe_grms or converged:
             break
     best_frame.record("final")
-    return opt, best_frame, stopped_on_spike
+    return opt, best_frame, stopped_on_spike, stopped_on_safe_grms
 
 
 def _run_hybrid_calculator_fire(
@@ -735,8 +793,8 @@ def _run_hybrid_calculator_fire(
     initial_fmax_ev_a: float,
     initial_energy_ev: float,
     initial_grms_kcalmol_A: float | None,
-) -> tuple[Any, _BestMinimizationFrame, bool]:
-    """Run guarded ASE FIRE; returns (optimizer, best_frame, stopped_on_spike)."""
+) -> tuple[Any, _BestMinimizationFrame, bool, bool]:
+    """Run guarded ASE FIRE; returns (optimizer, best_frame, stopped_on_spike, safe_grms)."""
     from ase.optimize.fire import FIRE
 
     best_frame = _BestMinimizationFrame(atoms)
@@ -752,6 +810,7 @@ def _run_hybrid_calculator_fire(
         initial_grms_kcalmol_A=initial_grms_kcalmol_A,
     )
     stopped_on_spike = False
+    stopped_on_safe_grms = False
     steps_since_improvement = 0
     prev_best_fmax = float("inf")
 
@@ -765,9 +824,25 @@ def _run_hybrid_calculator_fire(
             steps_since_improvement += 1
 
     def _check_guards() -> None:
-        nonlocal stopped_on_spike
-        if stopped_on_spike:
+        nonlocal stopped_on_spike, stopped_on_safe_grms
+        if stopped_on_spike or stopped_on_safe_grms:
             return
+        safe_grms = config.safe_grms_kcalmol_A
+        if safe_grms is not None:
+            try:
+                grms = _hybrid_grms_from_ase_atoms(atoms)
+            except Exception:
+                grms = float("inf")
+            if np.isfinite(grms) and float(grms) <= float(safe_grms):
+                stopped_on_safe_grms = True
+                if config.verbose:
+                    print(
+                        f"{context_prefix} hybrid calculator FIRE: "
+                        f"safe GRMS reached ({grms:.4f} <= {float(safe_grms):.4f} "
+                        "kcal/mol/Å); stopping early",
+                        flush=True,
+                    )
+                return
         try:
             fmax = float(np.abs(atoms.get_forces()).max())
             energy = float(atoms.get_potential_energy())
@@ -835,10 +910,10 @@ def _run_hybrid_calculator_fire(
         fmax=float(config.fmax_ev_a),
         steps=int(config.max_steps),
     ):
-        if stopped_on_spike or converged:
+        if stopped_on_spike or stopped_on_safe_grms or converged:
             break
     best_frame.record("final")
-    return opt, best_frame, stopped_on_spike
+    return opt, best_frame, stopped_on_spike, stopped_on_safe_grms
 
 
 def minimize_hybrid_calculator_before_sd(
@@ -909,26 +984,39 @@ def minimize_hybrid_calculator_before_sd(
             grms=float(mlpot_ctx.sd_watchdog_baseline_grms),
             ran=False,
         )
-    opt, best_frame, stopped_on_spike = _run_hybrid_calculator_bfgs(
+    opt, best_frame, stopped_on_spike, stopped_on_safe_grms = _run_hybrid_calculator_bfgs(
         atoms,
         config,
         context_prefix=context_prefix,
         initial_fmax_ev_a=initial_fmax,
     )
-    best_frame.restore_best(on_abort=stopped_on_spike)
+    if stopped_on_safe_grms:
+        pass
+    elif stopped_on_spike:
+        best_frame.restore_best(on_abort=True)
+    else:
+        best_frame.restore_best(on_abort=False)
     if config.verbose and (
         stopped_on_spike
+        or stopped_on_safe_grms
         or (
             best_frame.restored_label()
             and best_frame.restored_label() not in ("initial", "final")
         )
     ):
-        print(
-            f"{context_prefix} hybrid calculator BFGS: restored best frame "
-            f"({best_frame.restored_label()}, fmax={best_frame.restored_fmax_ev_a():.6f} eV/Å, "
-            f"E={best_frame.restored_energy_ev():.6f} eV)",
-            flush=True,
-        )
+        if stopped_on_safe_grms:
+            print(
+                f"{context_prefix} hybrid calculator BFGS: keeping current frame "
+                f"(safe GRMS reached at step {opt.get_number_of_steps()})",
+                flush=True,
+            )
+        else:
+            print(
+                f"{context_prefix} hybrid calculator BFGS: restored best frame "
+                f"({best_frame.restored_label()}, fmax={best_frame.restored_fmax_ev_a():.6f} eV/Å, "
+                f"E={best_frame.restored_energy_ev():.6f} eV)",
+                flush=True,
+            )
 
     opt_name = "BFGSLineSearch" if config.use_bfgs_line_search else "BFGS"
     grms1 = _commit_hybrid_calculator_mini_result(
@@ -941,6 +1029,7 @@ def minimize_hybrid_calculator_before_sd(
         optimizer_name=opt_name,
         step_count=int(opt.get_number_of_steps()),
         verbose=config.verbose,
+        stopped_on_safe_grms=stopped_on_safe_grms,
     )
     return HybridMinimizeResult(grms=float(grms1), ran=True)
 
@@ -1020,7 +1109,7 @@ def minimize_hybrid_calculator_fire_before_sd(
             flush=True,
         )
 
-    opt, best_frame, stopped_on_spike = _run_hybrid_calculator_fire(
+    opt, best_frame, stopped_on_spike, stopped_on_safe_grms = _run_hybrid_calculator_fire(
         atoms,
         config,
         context_prefix=context_prefix,
@@ -1028,20 +1117,33 @@ def minimize_hybrid_calculator_fire_before_sd(
         initial_energy_ev=initial_energy,
         initial_grms_kcalmol_A=grms0,
     )
-    best_frame.restore_best(on_abort=stopped_on_spike)
+    if stopped_on_safe_grms:
+        pass
+    elif stopped_on_spike:
+        best_frame.restore_best(on_abort=True)
+    else:
+        best_frame.restore_best(on_abort=False)
     if config.verbose and (
         stopped_on_spike
+        or stopped_on_safe_grms
         or (
             best_frame.restored_label()
             and best_frame.restored_label() not in ("initial", "final")
         )
     ):
-        print(
-            f"{context_prefix} hybrid calculator FIRE: restored best frame "
-            f"({best_frame.restored_label()}, fmax={best_frame.restored_fmax_ev_a():.6f} eV/Å, "
-            f"E={best_frame.restored_energy_ev():.6f} eV)",
-            flush=True,
-        )
+        if stopped_on_safe_grms:
+            print(
+                f"{context_prefix} hybrid calculator FIRE: keeping current frame "
+                f"(safe GRMS reached at step {opt.get_number_of_steps()})",
+                flush=True,
+            )
+        else:
+            print(
+                f"{context_prefix} hybrid calculator FIRE: restored best frame "
+                f"({best_frame.restored_label()}, fmax={best_frame.restored_fmax_ev_a():.6f} eV/Å, "
+                f"E={best_frame.restored_energy_ev():.6f} eV)",
+                flush=True,
+            )
 
     grms1 = _commit_hybrid_calculator_mini_result(
         mlpot_ctx,
@@ -1053,6 +1155,7 @@ def minimize_hybrid_calculator_fire_before_sd(
         optimizer_name="FIRE",
         step_count=int(opt.get_number_of_steps()),
         verbose=config.verbose,
+        stopped_on_safe_grms=stopped_on_safe_grms,
     )
     return HybridMinimizeResult(grms=float(grms1), ran=True)
 
@@ -1087,6 +1190,7 @@ def run_pre_dynamics_hybrid_calculator_prep(
         or 0.05
     )
     calc_fmax = float(getattr(args, "pre_min_fmax", 0.05) or 0.05)
+    safe_grms = resolve_calculator_mini_safe_grms(args=args)
     fire = coerce_hybrid_minimize_result(
         minimize_hybrid_calculator_fire_before_sd(
             mlpot_ctx,
@@ -1097,6 +1201,7 @@ def run_pre_dynamics_hybrid_calculator_prep(
                 verbose=verbose,
                 max_start_grms_kcalmol_A=float("inf"),
                 max_initial_fmax_ev_a=1000.0,
+                safe_grms_kcalmol_A=safe_grms,
             ),
             context_prefix=f"{context_prefix} (FIRE)",
         )
@@ -1114,6 +1219,7 @@ def run_pre_dynamics_hybrid_calculator_prep(
                 quiet_bfgs=bool(getattr(args, "quiet_bfgs", False)),
                 max_start_grms_kcalmol_A=float("inf"),
                 max_initial_fmax_ev_a=1000.0,
+                safe_grms_kcalmol_A=safe_grms,
             ),
             context_prefix=f"{context_prefix} (BFGS)",
         )

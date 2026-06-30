@@ -2413,6 +2413,7 @@ def prepare_mlpot_hybrid_state_for_sd(
         hybrid_calculator_mini_eligible,
         minimize_hybrid_calculator_before_sd,
         minimize_hybrid_calculator_fire_before_sd,
+        resolve_calculator_mini_safe_grms,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         BondedMmMiniConfig,
@@ -2425,6 +2426,7 @@ def prepare_mlpot_hybrid_state_for_sd(
         if calculator_fire_fmax_ev_a is not None
         else float(calculator_minimize_fmax_ev_a)
     )
+    safe_grms = resolve_calculator_mini_safe_grms(args=workflow_args)
     ran_calculator_mini = False
     ran_calculator_fire = False
     ran_bonded_recovery = False
@@ -2469,6 +2471,7 @@ def prepare_mlpot_hybrid_state_for_sd(
                     quiet_bfgs=quiet_bfgs,
                     max_start_grms_kcalmol_A=start_cap,
                     max_initial_fmax_ev_a=max_initial_fmax,
+                    safe_grms_kcalmol_A=safe_grms,
                 ),
                 context_prefix=f"{context_prefix} ({phase})",
             )
@@ -2516,6 +2519,7 @@ def prepare_mlpot_hybrid_state_for_sd(
                     verbose=verbose,
                     max_start_grms_kcalmol_A=_effective_max_start(force=force),
                     max_initial_fmax_ev_a=max_initial_fmax,
+                    safe_grms_kcalmol_A=safe_grms,
                 ),
                 context_prefix=f"{context_prefix} ({phase})",
             )

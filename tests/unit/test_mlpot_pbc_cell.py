@@ -1066,6 +1066,9 @@ def test_register_mlpot_pbc_rebuilds_after_param_swap():
     def _finalize(_sel, *, cubic_box_side_A, verbose=False):
         call_order.append("finalize_pbc_exclusions")
 
+    def _suspend(*, verbose=False):
+        call_order.append("crystal_free")
+
     def _block(*args, **kwargs):
         call_order.append("block")
         return "all"
@@ -1080,6 +1083,10 @@ def test_register_mlpot_pbc_rebuilds_after_param_swap():
         mlpot_setup,
         "_finalize_pbc_mlpot_exclusions_after_param_read",
         side_effect=_finalize,
+    ), patch.object(
+        mlpot_setup,
+        "_suspend_pbc_for_cgenff_param_read",
+        side_effect=_suspend,
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_mlpot_registration_mm_off",
         side_effect=_block,
@@ -1098,7 +1105,65 @@ def test_register_mlpot_pbc_rebuilds_after_param_swap():
             cubic_box_side_A=50.0,
         )
 
-    assert call_order == ["block", "finalize_pbc_exclusions", "mlpot", "skip_iblo"]
+    assert call_order == [
+        "crystal_free",
+        "block",
+        "finalize_pbc_exclusions",
+        "mlpot",
+        "skip_iblo",
+    ]
+
+
+def test_register_mlpot_pbc_block_skips_crystal_free_before_prm():
+    from mmml.interfaces.pycharmmInterface.mlpot import setup as mlpot_setup
+
+    call_order: list[str] = []
+    fake_pycharmm = MagicMock()
+    fake_sel = MagicMock()
+    fake_sel.get_atom_indexes.return_value = [0, 1]
+
+    def _suspend(*, verbose=False):
+        call_order.append("crystal_free")
+
+    def _block(*args, **kwargs):
+        call_order.append("block")
+        return "all"
+
+    def _install(_sel, *, update=True):
+        call_order.append("install_exclusions")
+
+    class _FakeMLpot:
+        def __init__(self, *, skip_iblo_inb_update=False, **kwargs):
+            call_order.append("mlpot")
+
+    with patch.object(mlpot_setup, "_import_pycharmm", return_value=fake_pycharmm), patch.object(
+        mlpot_setup,
+        "_suspend_pbc_for_cgenff_param_read",
+        side_effect=_suspend,
+    ), patch.object(mlpot_setup, "_install_ml_exclusions", side_effect=_install), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_mlpot_registration_mm_off",
+        side_effect=_block,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.mlpot_use_block_registration",
+        return_value=True,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits.validate_mlpot_system_size",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        return_value=MagicMock(__enter__=MagicMock(return_value=None), __exit__=MagicMock(return_value=False)),
+    ):
+        fake_pycharmm.MLpot = _FakeMLpot
+        mlpot_setup.register_mlpot(
+            MagicMock(),
+            [1, 1],
+            fake_sel,
+            use_pbc=True,
+            cubic_box_side_A=50.0,
+            use_block_registration=True,
+        )
+
+    assert "crystal_free" not in call_order
+    assert call_order == ["block", "install_exclusions", "mlpot"]
 
 
 def test_register_mlpot_vacuum_skips_pre_block_exclusions():

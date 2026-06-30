@@ -813,18 +813,21 @@ def run_density_prep_ladder(
                 coerce_hybrid_minimize_result,
                 minimize_hybrid_calculator_before_sd,
                 minimize_hybrid_calculator_fire_before_sd,
+                resolve_calculator_mini_safe_grms,
             )
 
             calc_steps = int(getattr(args, "pre_min_steps", 200) or 200)
             calc_fmax = float(getattr(args, "pre_min_fmax", 0.05) or 0.05)
             fire_steps = int(getattr(args, "fire_min_steps", 200) or 200)
             fire_fmax = float(getattr(args, "rescue_fire_fmax", calc_fmax) or calc_fmax)
+            safe_grms = resolve_calculator_mini_safe_grms(args=args)
             fire_config = HybridCalculatorFireConfig(
                 max_steps=fire_steps,
                 fmax_ev_a=fire_fmax,
                 fire_maxstep=float(getattr(args, "fire_min_maxstep", 0.2) or 0.2),
                 verbose=not quiet,
                 max_start_grms_kcalmol_A=float(max_grms),
+                safe_grms_kcalmol_A=safe_grms,
             )
             bfgs_config = HybridCalculatorMinimizeConfig(
                 max_steps=calc_steps,
@@ -833,6 +836,7 @@ def run_density_prep_ladder(
                 verbose=not quiet,
                 quiet_bfgs=bool(getattr(args, "quiet_bfgs", False)),
                 max_start_grms_kcalmol_A=float(max_grms),
+                safe_grms_kcalmol_A=safe_grms,
             )
 
             for tag, runner, kwargs in (
@@ -1370,6 +1374,7 @@ def run_geometry_packing_recovery(
             coerce_hybrid_minimize_result,
             minimize_hybrid_calculator_before_sd,
             minimize_hybrid_calculator_fire_before_sd,
+            resolve_calculator_mini_safe_grms,
         )
 
         fire_fmax = (
@@ -1382,12 +1387,14 @@ def run_geometry_packing_recovery(
             getattr(args, "geometry_packing_fire_bfgs_crossover_grms", 30.0) or 30.0
         )
         bfgs_first = bool(np.isfinite(grms) and float(grms) > fire_bfgs_crossover)
+        safe_grms = resolve_calculator_mini_safe_grms(args=args)
         fire_config = HybridCalculatorFireConfig(
             max_steps=int(calculator_fire_steps),
             fmax_ev_a=fire_fmax,
             fire_maxstep=float(calculator_fire_maxstep),
             verbose=verbose,
             max_start_grms_kcalmol_A=start_cap,
+            safe_grms_kcalmol_A=safe_grms,
         )
         bfgs_config = HybridCalculatorMinimizeConfig(
             max_steps=int(calculator_minimize_steps),
@@ -1397,6 +1404,7 @@ def run_geometry_packing_recovery(
             quiet_bfgs=quiet_bfgs,
             max_start_grms_kcalmol_A=start_cap,
             max_initial_fmax_ev_a=1000.0,
+            safe_grms_kcalmol_A=safe_grms,
         )
 
         def _run_bfgs() -> float:
