@@ -1563,7 +1563,7 @@ def _cooperative_restart_script(
 
 
 # Bump when cooperative bootstrap I/O strategy changes (read-gate diagnostics).
-BOOTSTRAP_MPI_API = "direct-api-v4.4"
+BOOTSTRAP_MPI_API = "direct-api-v4.5"
 
 # ``eval_charmm_script`` uses ``comlyn(mxcmsz)`` (~80); stage short paths for file APIs too.
 _BOOTSTRAP_CMD_MAX_LEN = 78
@@ -1963,8 +1963,22 @@ def bootstrap_topology_mpi(
     if size > 1:
         align_mpi_ranks_after_import(log_fn=log_fn)
 
+    paths_for_stage = dict(paths)
+    if (
+        effective_mode == "restart"
+        and paths_for_stage.get("crd") is not None
+        and Path(paths_for_stage["crd"]).is_file()
+        and "res" in paths_for_stage
+    ):
+        if log_fn is not None:
+            log_fn(
+                "bootstrap",
+                "staging skip .res (coords from CRD; prepare write restart is binary)",
+            )
+        paths_for_stage.pop("res")
+
     _, compact = stage_compact_bootstrap_paths(
-        paths,
+        paths_for_stage,
         rank=rank,
         size=size,
         log_fn=log_fn,

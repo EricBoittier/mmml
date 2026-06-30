@@ -124,9 +124,9 @@ If native passes and PyCHARMM fails → bug is in library-mode `eval_charmm_scri
 
 ## Bootstrap API version
 
-PyCHARMM read gate logs `bootstrap_api=...` at startup. You need **`direct-api-v4.4`**
-(v4.4: all ranks wait for staged files + ``bootstrap files ready`` barrier before any
-rank enters ``api_read`` — v4.3 let rank 0 race ahead while rank 1 polled NFS).
+PyCHARMM read gate logs `bootstrap_api=...` at startup. You need **`direct-api-v4.5`**
+(v4.5 skips staging/wait on binary ``.res`` when CRD is present — np>1 restart path
+loads coords from CRD only).
 
 ## Implementation
 
