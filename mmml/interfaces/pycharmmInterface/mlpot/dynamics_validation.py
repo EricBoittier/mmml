@@ -651,6 +651,7 @@ def _restart_natom_counter_line(
 def write_charmm_restart_from_memory(
     path: Path,
     *,
+    positions: np.ndarray | None = None,
     title: str = "MMML snapshot",
     global_step: int | None = None,
     temperature_K: float | None = None,
@@ -668,7 +669,11 @@ def write_charmm_restart_from_memory(
     p = Path(path).expanduser().resolve()
     p.parent.mkdir(parents=True, exist_ok=True)
 
-    pos = np.asarray(get_charmm_positions_array(), dtype=float)
+    pos = (
+        np.asarray(positions, dtype=float)
+        if positions is not None
+        else np.asarray(get_charmm_positions_array(), dtype=float)
+    )
     if pos.ndim != 2 or pos.shape[1] != 3:
         raise ValueError(f"restart write: positions must be (N, 3), got {pos.shape}")
     if not np.all(np.isfinite(pos)):

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import patch
 
 import numpy as np
 
@@ -63,11 +62,9 @@ def test_write_charmm_restart_from_memory_roundtrip(tmp_path):
     )
     res = tmp_path / "mini_box_equil.res"
 
-    with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
-        return_value=pos,
-    ):
-        write_charmm_restart_from_memory(res, title="seed", include_crystal=False)
+    write_charmm_restart_from_memory(
+        res, positions=pos, title="seed", include_crystal=False
+    )
 
     assert read_restart_natom(res) == 3
     np.testing.assert_allclose(read_restart_coordinates(res), pos, rtol=0, atol=1e-12)
