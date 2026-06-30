@@ -1152,6 +1152,8 @@ def test_bootstrap_topology_mpi_np_gt1_all_ranks_read_bisect_uses_direct_psf(
     ) as psf_mock, mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi._cooperative_eval_read_step",
     ) as eval_mock, mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._cooperative_stream_topology_read",
+    ) as stream_mock, mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi._load_coor_from_crd_api",
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_natom_diagnostics",
@@ -1173,6 +1175,37 @@ def test_bootstrap_topology_mpi_np_gt1_all_ranks_read_bisect_uses_direct_psf(
     assert n == 2
     psf_mock.assert_called_once()
     eval_mock.assert_not_called()
+    stream_mock.assert_not_called()
+
+
+def test_bootstrap_stream_topology_read_default_at_np2(monkeypatch):
+    monkeypatch.delenv("MMML_MPI_BOOTSTRAP_EVAL_LINES", raising=False)
+    monkeypatch.delenv("MMML_MPI_BOOTSTRAP_HYBRID_READ", raising=False)
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        return_value=(1, 2),
+    ):
+        assert charmm_mpi._bootstrap_stream_topology_read() is True
+
+
+def test_bootstrap_eval_topology_read_opt_in(monkeypatch):
+    monkeypatch.setenv("MMML_MPI_BOOTSTRAP_EVAL_LINES", "1")
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        return_value=(1, 2),
+    ):
+        assert charmm_mpi._bootstrap_eval_topology_read() is True
+        assert charmm_mpi._bootstrap_stream_topology_read() is False
+
+
+def test_bootstrap_eval_topology_read_off_when_hybrid_bisect(monkeypatch):
+    monkeypatch.setenv("MMML_MPI_BOOTSTRAP_HYBRID_READ", "1")
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        return_value=(1, 2),
+    ):
+        assert charmm_mpi._bootstrap_eval_topology_read() is False
+        assert charmm_mpi._bootstrap_stream_topology_read() is False
 
 
 def test_bootstrap_rank0_topology_read_off_by_default(monkeypatch):
@@ -1191,25 +1224,6 @@ def test_bootstrap_rank0_topology_read_opt_in(monkeypatch):
         return_value=(1, 2),
     ):
         assert charmm_mpi._bootstrap_rank0_topology_read() is True
-
-
-def test_bootstrap_eval_topology_read_default_at_np2(monkeypatch):
-    monkeypatch.delenv("MMML_MPI_BOOTSTRAP_HYBRID_READ", raising=False)
-    monkeypatch.delenv("MMML_MPI_BOOTSTRAP_ALL_RANKS_READ", raising=False)
-    with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
-        return_value=(1, 2),
-    ):
-        assert charmm_mpi._bootstrap_eval_topology_read() is True
-
-
-def test_bootstrap_eval_topology_read_off_when_hybrid_bisect(monkeypatch):
-    monkeypatch.setenv("MMML_MPI_BOOTSTRAP_HYBRID_READ", "1")
-    with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
-        return_value=(1, 2),
-    ):
-        assert charmm_mpi._bootstrap_eval_topology_read() is False
 
 
 def test_cooperative_eval_read_step_raises_when_psf_empty():

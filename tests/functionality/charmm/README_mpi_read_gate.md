@@ -132,30 +132,24 @@ If native passes and PyCHARMM fails → bug is in library-mode `eval_charmm_scri
 
 ## Bootstrap API version
 
-PyCHARMM read gate logs `bootstrap_api=...` at startup. You need **`direct-api-v4.8`**
-(at ``np>1``: **all** topology steps RTF/PRM/PSF via ``maincomx`` eval READ with
-staged short basenames; Python CRD parse for coords).
+PyCHARMM read gate logs `bootstrap_api=...` at startup. You need **`direct-api-v4.9`**
+(at ``np>1``: single ``stream bs_load.inp`` eval for RTF/PRM/PSF; Python CRD for coords).
 
-### Why v4.7 hybrid failed on node09
+### Why v4.8 per-line eval failed on node09
 
-v4.7 used direct ``api_read`` for RTF/PRM then eval PSF. Eval returned success but
-``psf=0`` on all ranks — mixing ctypes I/O with ``maincomx`` READ does not MPI-sync
-parameter/topology state the way native CHARMM does. **v4.8** runs RTF/PRM/PSF
-entirely through eval READ (same as native control).
+v4.8 ran separate ``eval read …`` calls for RTF, PRM, PSF. Each call returned OK but
+``psf=0`` — **separate Python ``eval_charmm_script`` entries desync MPI** between lines.
+Native CHARMM processes one ``.inp`` in a single Fortran loop; **v4.9** matches that with
+one ``stream bs_load.inp`` command (inp holds the full READ chain; no ``mxcmsz`` limit).
 
-| Version | Topology at ``np>1`` | node09 result |
-|---------|---------------------|---------------|
-| v4.5 | all ranks direct ``api_read`` | hang at PSF |
-| v4.6 | rank-0-only direct ``api_read`` | hang at PSF |
+| Version | Topology at ``np>1`` | node09 |
+|---------|---------------------|--------|
 | v4.7 | direct RTF/PRM + eval PSF | eval OK, ``psf=0`` |
-| v4.8 | eval RTF/PRM/PSF (all ranks) | target |
-| native | eval READ chain | PASS |
+| v4.8 | eval RTF/PRM/PSF (3 lines) | eval OK, ``psf=0`` |
+| v4.9 | **one ``stream bs_load.inp``** | target |
+| native | one ``.inp`` under mpirun | PASS |
 
-Bisect env vars:
-
-- ``MMML_MPI_BOOTSTRAP_HYBRID_READ=1`` — revert to v4.7 (direct RTF/PRM + eval PSF)
-- ``MMML_MPI_BOOTSTRAP_ALL_RANKS_READ=1`` — all direct ``api_read`` (v4.5)
-- ``MMML_MPI_BOOTSTRAP_RANK0_TOPOLOGY_READ=1`` — rank-0-only direct api (v4.6)
+Bisect: ``MMML_MPI_BOOTSTRAP_EVAL_LINES=1`` (v4.8), ``MMML_MPI_BOOTSTRAP_HYBRID_READ=1`` (v4.7).
 
 ### Prerequisite: ``maincomx`` in ``libcharmm.so``
 
@@ -170,17 +164,17 @@ If SCRATCH path is present → ``bash scripts/rebuild_charmm_mlpot.sh --clean``
 
 ```bash
 git pull
-grep BOOTSTRAP_MPI_API mmml/interfaces/pycharmmInterface/charmm_mpi.py  # direct-api-v4.8
+grep BOOTSTRAP_MPI_API mmml/interfaces/pycharmmInterface/charmm_mpi.py  # direct-api-v4.9
 
 MMML_MPI_NP=1 ./scripts/run_mpi_pycharmm_read_gate.sh
 MMML_MPI_NP=2 ./scripts/run_native_charmm_read_gate.sh
 MMML_MPI_NP=2 ./scripts/run_mpi_pycharmm_read_gate.sh --mode psf-crd
 ```
 
-**Pass:** log shows ``4 eval read step(s)`` and ``step 3/4 ... eval-psf psf=100`` on
-**both** ranks, then ``PASS read_gate: n_atoms=100``.
+**Pass:** ``2 stream read step(s)``, ``stream-read all_ranks=1``, ``step 1/2 stream psf=100`` on
+both ranks, then ``PASS read_gate: n_atoms=100``.
 
-If eval steps still leave ``psf=0``: ``MMML_QUIET=0 MMML_MPI_NP=2 ...`` for CHARMM errors.
+If ``Unrecognized command: stre`` → rebuild ``libcharmm.so``. Use ``MMML_QUIET=0`` for CHARMM text.
 
 If pass → Tier 3 smoke (live ENER, not callback-only):
 
