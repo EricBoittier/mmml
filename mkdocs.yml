@@ -48,6 +48,7 @@ nav:
   - QC supplementary cross-check: qc-cross-check.md
   - Spatial ML MPI: mlpot-spatial-mpi.md
   - PyCHARMM Threading: pycharmm-threading.md
+  - FFTW for CHARMM: fftw-build.md
   - Development: development.md
   - Units Summary: UNITS_SUMMARY.md
   - API Reference: api.md

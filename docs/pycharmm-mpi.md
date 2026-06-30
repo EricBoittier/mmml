@@ -174,6 +174,12 @@ MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh md-system \
 
 ### CHARMM rebuild notes
 
+**FFTW:** DOMDEC needs COLFFT, which needs FFTW (double + single precision). If CMake
+reports `Could NOT find FFTW`, see [`docs/fftw-build.md`](fftw-build.md) — on a
+workstation, `sudo apt install libfftw3-dev` then
+`export FFTW_ROOT=/usr FFTWF_ROOT=/usr` is usually enough; for `libcharmm.so` on
+clusters, run `bash scripts/build_fftw_pic.sh` once and set `MMML_FFTW_ROOT`.
+
 ```bash
 ./scripts/rebuild_charmm_mlpot.sh              # DOMDEC on (default)
 ./scripts/rebuild_charmm_mlpot.sh --no-domdec  # if SD segfaults in send_coord_to_recip
@@ -359,9 +365,9 @@ CHARMM_EXE=$MMML_ROOT/setup/charmm/charmm bash scripts/run_domdec_dcm10_smoke.sh
 ```
 
 **DOMDEC requires COLFFT + FFTW/MKL** in the CMake build (`setup/charmm/CMakeLists.txt` turns
-`domdec=OFF` when `colfft=OFF`). On the cluster: `module load FFTW`, then
-`export FFTW_ROOT=${EBROOTFFTW}` before `rebuild_charmm_native_exec.sh --clean`.
-Verify with `bash scripts/verify_charmm_domdec_build.sh`.
+`domdec=OFF` when `colfft=OFF`). Full FFTW install paths: [`docs/fftw-build.md`](fftw-build.md).
+On the cluster: `module load FFTW`, then `export FFTW_ROOT=${EBROOTFFTW}` before
+`rebuild_charmm_native_exec.sh --clean`. Verify with `bash scripts/verify_charmm_domdec_build.sh`.
 
 CGENFF `NBFIX` warnings on older c47 are harmless at `bomlev -2`.
 

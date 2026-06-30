@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Build shared (-fPIC) FFTW 3.3.10 for linking into libcharmm.so.
 #
+# Full instructions (apt packages, cluster modules, troubleshooting):
+#   docs/fftw-build.md
+#
 # Cluster /opt FFTW installs are often static-only; linking .a into a shared
 # library fails with "recompile with -fPIC". Run this once per machine, then:
 #

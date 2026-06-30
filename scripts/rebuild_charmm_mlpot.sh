@@ -195,6 +195,7 @@ Environment:
   FFTWF_ROOT        Single-precision FFTW prefix (libfftw3f); defaults to FFTW_ROOT.
   MMML_FFTW_ROOT    User PIC/shared FFTW prefix (default: ~/.local/fftw-3.3.10-pic).
                     Build once: bash scripts/build_fftw_pic.sh
+                    Full guide: docs/fftw-build.md
                     On clusters that split precisions (e.g. fftw-X.Y.Z vs fftw-X.Y.Z-dp),
                     set FFTW_ROOT=.../fftw-X.Y.Z-dp and FFTWF_ROOT=.../fftw-X.Y.Z .
 EOF
@@ -369,7 +370,11 @@ _assert_charmm_domdec_cmake_flags() {
     echo "  export FFTW_ROOT=$_auto_fftw" >&2
     echo "  bash scripts/rebuild_charmm_native_exec.sh --clean" >&2
   else
-    echo "Could not auto-detect FFTW. Try:" >&2
+    echo "Could not auto-detect FFTW. See docs/fftw-build.md" >&2
+    echo "  Workstation: sudo apt install libfftw3-dev && export FFTW_ROOT=/usr FFTWF_ROOT=/usr" >&2
+    echo "  Or: bash scripts/build_fftw_pic.sh" >&2
+    echo "" >&2
+    echo "Cluster modules:" >&2
     echo "  module avail 2>&1 | grep -i fftw     # list available FFTW modules" >&2
     echo "  module load <fftw-module-name>        # load it" >&2
     echo "  export FFTW_ROOT=\${EBROOTFFTW}        # set by the module" >&2
@@ -469,6 +474,11 @@ if [[ "$needs_configure" == 1 ]]; then
       -DCMAKE_SHARED_LINKER_FLAGS="$CODE_MODEL_FLAG"
     )
     echo "Using code model flags: $FFLAGS (linker: $CODE_MODEL_FLAG)"
+  fi
+  if [[ -z "$FFTW_ROOT" && "$NO_DOMDEC" != 1 ]]; then
+    echo "rebuild_charmm_mlpot: FFTW_ROOT unset — COLFFT/DOMDEC will be disabled." >&2
+    echo "  Workstation: sudo apt install libfftw3-dev && export FFTW_ROOT=/usr FFTWF_ROOT=/usr" >&2
+    echo "  Or PIC build: bash scripts/build_fftw_pic.sh (see docs/fftw-build.md)" >&2
   fi
   if [[ -n "$FFTW_ROOT" ]]; then
     _fftw_lib_dir=""

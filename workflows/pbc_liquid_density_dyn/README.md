@@ -119,7 +119,7 @@ source ../../scripts/pc_bach_env.sh
 bash scripts/prebuild_charmm_tiers.sh
 ```
 
-Fresh `libcharmm.so` on pc-bach may require a **PIC FFTW** built locally (module `fftw` sometimes lacks `-fPIC`). Build/install FFTW with position-independent code, then point CMake at it before `rebuild_charmm_mlpot.sh` / `ensure_charmm_mlpot_limits.sh`. Skip this entirely when Step 1 already passes.
+Fresh `libcharmm.so` on pc-bach may require a **PIC FFTW** built locally (module `fftw` sometimes lacks `-fPIC`). See [`docs/fftw-build.md`](../../docs/fftw-build.md) (`bash scripts/build_fftw_pic.sh`, then set `MMML_FFTW_ROOT` before `rebuild_charmm_mlpot.sh` / `ensure_charmm_mlpot_limits.sh`). Skip this entirely when Step 1 already passes.
 
 #### Step 3 — job environment (Slurm prolog / interactive)
 
