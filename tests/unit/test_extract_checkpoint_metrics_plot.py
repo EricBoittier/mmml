@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 
 from mmml.cli.misc.extract_checkpoint_metrics import (
+    plot_individual_training_metrics,
     plot_learning_curve_scaling,
     plot_training_comparison,
     plot_training_metrics,
@@ -114,6 +115,21 @@ def test_plot_learning_curve_scaling(tmp_path: Path) -> None:
     energy_path = tmp_path / "scaling_test_energy_mae.png"
     assert energy_path.is_file()
     assert energy_path.stat().st_size > 5_000
+
+
+def test_plot_individual_training_metrics(tmp_path: Path) -> None:
+    metrics = _synthetic_metrics()
+    out_dir = tmp_path / "individual"
+    written = plot_individual_training_metrics(
+        metrics,
+        out_dir,
+        ckpt_name="test-run",
+        ef_only=True,
+        verbose=False,
+    )
+    assert len(written) >= 5
+    assert all(path.is_file() for path in written)
+    assert (out_dir / "valid_loss.png").is_file()
 
 
 def test_warmup_trim_allows_plot_with_spikes(tmp_path: Path) -> None:

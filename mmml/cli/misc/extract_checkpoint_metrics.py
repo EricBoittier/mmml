@@ -815,6 +815,74 @@ def plot_learning_curve_scaling(
     return written
 
 
+def plot_individual_training_metrics(
+    metrics: Dict[str, np.ndarray],
+    output_dir: Path,
+    *,
+    ckpt_name: str = "Training",
+    log_loss: bool = True,
+    ef_only: bool = False,
+    plot_style: str | PlotStyle | None = DEFAULT_PLOT_STYLE,
+    verbose: bool = True,
+) -> list[Path]:
+    """Write one PNG per metric series (train/valid where applicable)."""
+    style = _apply_training_plot_style(plot_style)
+    valid_idx = _valid_metric_mask(metrics)
+    if not valid_idx.any():
+        raise ValueError("No metrics available for individual plots")
+
+    epochs_all = np.asarray(metrics["epochs"], dtype=float)
+    trim = _warmup_trim_mask(metrics["valid_loss"][valid_idx])
+    plot_idx = valid_idx.copy()
+    plot_idx[valid_idx] = trim
+    epochs = epochs_all[plot_idx]
+    eV_to_kcal = EV_TO_KCAL_MOL
+
+    panels: list[tuple[str, str, float, bool]] = [
+        ("train_loss", "Train loss", 1.0, log_loss),
+        ("valid_loss", "Validation loss", 1.0, log_loss),
+        ("best_loss", "Best validation loss so far", 1.0, log_loss),
+        ("train_energy_mae", "Train energy MAE (kcal/mol)", eV_to_kcal, False),
+        ("valid_energy_mae", "Valid energy MAE (kcal/mol)", eV_to_kcal, False),
+        ("train_forces_mae", "Train forces MAE (kcal/mol/Å)", eV_to_kcal, False),
+        ("valid_forces_mae", "Valid forces MAE (kcal/mol/Å)", eV_to_kcal, False),
+    ]
+    if not ef_only:
+        panels.extend(
+            [
+                ("train_dipole_mae", "Train dipole MAE (e·Å)", 1.0, False),
+                ("valid_dipole_mae", "Valid dipole MAE (e·Å)", 1.0, False),
+            ]
+        )
+    if not np.all(np.isnan(metrics["lr_eff"])):
+        panels.append(("lr_eff", "Learning rate", 1.0, False))
+
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+
+    for key, title, scale, use_log in panels:
+        series = _finite_series(metrics[key])[plot_idx] * scale
+        if not np.any(np.isfinite(series)):
+            continue
+        fig, ax = plt.subplots(figsize=(6.5, 4.2))
+        ax.plot(epochs, series, color=style.colors["accent"], linewidth=2.1)
+        ax.set_xlabel("Epoch")
+        ax.set_ylabel(title)
+        ax.set_title(f"{ckpt_name}\n{title}")
+        if use_log:
+            _set_positive_log_ylim(ax, [series])
+        fig.tight_layout()
+        out = output_dir / f"{key}.png"
+        fig.savefig(out, dpi=220, bbox_inches="tight")
+        plt.close(fig)
+        written.append(out)
+
+    if verbose:
+        print(f"Wrote {len(written)} individual metric plots to {output_dir}")
+    return written
+
+
 def print_metrics_summary(metrics: Dict[str, np.ndarray], ckpt_dir: Path):
     """Print summary statistics."""
     
@@ -963,6 +1031,12 @@ Examples:
             'Options: nature, xmgrace, google, tron, mpl_classic.'
         ),
     )
+    parser.add_argument(
+        '--individual-dir',
+        type=Path,
+        default=None,
+        help='If set, write one PNG per metric into this directory.',
+    )
     return parser
 
 
@@ -1038,6 +1112,17 @@ def main():
         ef_only=args.ef_only,
         plot_style=args.plot_style,
     )
+
+    if args.individual_dir is not None:
+        plot_individual_training_metrics(
+            metrics,
+            args.individual_dir,
+            ckpt_name=args.checkpoint_dir.name,
+            log_loss=args.log_loss,
+            ef_only=args.ef_only,
+            plot_style=args.plot_style,
+            verbose=verbose,
+        )
     
     # Print summary
     print_metrics_summary(metrics, args.checkpoint_dir)

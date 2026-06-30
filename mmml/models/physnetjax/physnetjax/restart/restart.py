@@ -12,6 +12,7 @@ from pathlib import Path
 import e3x
 import jax
 import jax.numpy as jnp
+import numpy as np
 import orbax
 import orbax.checkpoint
 
@@ -153,8 +154,8 @@ def get_params_model(
     checkpoint_meta = {
         "Checkpoint": str(restart),
         "name": Path(restart).name,
-        "epoch": restored["epoch"],
-        "best_loss": restored["best_loss"],
+        "epoch": int(restored["epoch"]),
+        "best_loss": float(np.asarray(restored["best_loss"])),
         "Save Time": modification_date,
     }
     if not quiet:
@@ -215,7 +216,7 @@ def restart_training(restart: str, transform, optimizer, num_atoms: int):
         - state: Training state
     """
     restart = get_last(restart)
-    _, _model = get_params_model(restart, num_atoms)
+    _, _model = get_params_model(restart, num_atoms, quiet=True)
     if _model is not None:
         model = _model
 
@@ -243,9 +244,9 @@ def restart_training(restart: str, transform, optimizer, num_atoms: int):
     # )
     # # opt_state = (o_a, (_, o_b[1]))
     # Set training variables
-    step = restored["epoch"] + 1
-    best_loss = restored["best_loss"]
-    print(f"Training resumed from step {step - 1}, best_loss {best_loss}")
+    step = int(restored["epoch"]) + 1
+    best_loss = float(np.asarray(restored["best_loss"]))
+    print(f"Training resumed from step {step - 1}, best_loss {best_loss:.6f}")
     CKPT_DIR = Path(restart).parent.resolve()  # Orbax requires absolute paths
     return (
         ema_params,
