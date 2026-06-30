@@ -155,6 +155,14 @@ def main() -> int:
             file=sys.stderr,
             flush=True,
         )
+        if size > 1 and rank == 0:
+            print(
+                "[gate] bisect: MMML_QUIET=0 (CHARMM errors) | "
+                "MMML_MPI_BOOTSTRAP_RANK0_DRIVE=1 | "
+                "MMML_MPI_NP=1 --mode restart | "
+                "./scripts/run_native_charmm_read_gate.sh",
+                flush=True,
+            )
         return 1
 
     expected = int(args.expected_n_atoms)

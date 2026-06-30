@@ -84,6 +84,33 @@ The script resolves `setup/charmm/charmm` (or `CHARMM_EXE`) and writes output un
 **Do not** pass an empty `$CHARMM_EXE` to `mmml-charmm-mpirun.sh` — the wrapper falls
 through to the `mmml` CLI when the first argument is not an executable file.
 
+### np>1 stream completes but `n_atoms=0`
+
+The stream `.inp` is correct; library-mode cooperative READ still leaves empty state.
+Bisect on node09:
+
+```bash
+# 1. Validate restart artifact at np=1
+MMML_MPI_NP=1 ./scripts/run_mpi_pycharmm_read_gate.sh --mode restart
+
+# 2. Show CHARMM error text (bootstrap defaults to MMML_QUIET=1)
+MMML_QUIET=0 MMML_MPI_NP=2 ./scripts/run_mpi_pycharmm_read_gate.sh --mode psf-crd
+
+# 3. Rank-0-only stream eval (workshop I/O pattern)
+MMML_MPI_BOOTSTRAP_RANK0_DRIVE=1 MMML_QUIET=0 MMML_MPI_NP=2 \
+  ./scripts/run_mpi_pycharmm_read_gate.sh --mode psf-crd
+
+# 4. PSF/CRD via stream (no .res)
+MMML_MPI_BOOTSTRAP_FORCE_PSF_CRD=1 MMML_QUIET=0 MMML_MPI_NP=2 \
+  ./scripts/run_mpi_pycharmm_read_gate.sh --mode stream-inp
+
+# 5. Native Fortran (requires setup/charmm/charmm executable)
+MMML_MPI_NP=2 ./scripts/run_native_charmm_read_gate.sh
+MMML_MPI_NP=2 ./scripts/run_native_charmm_read_gate.sh --with-restart
+```
+
+Log lines now include `stream_ok=`, `psf=`, and `coor=` counts after each stream step.
+
 If native passes and PyCHARMM fails → bug is in library-mode `eval_charmm_script`, not fabric.
 
 ## Bootstrap API version

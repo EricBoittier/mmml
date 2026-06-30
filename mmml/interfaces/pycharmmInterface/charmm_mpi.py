@@ -1002,7 +1002,7 @@ def mpi_charmm_script(
     quiet: bool = False,
     rank0_drive: bool = False,
     barriers: str = "none",
-) -> None:
+) -> bool:
     """Run ``lingo.charmm_script`` under MPI.
 
     Default ``barriers="none"`` matches the workshop pattern: caller synchronises
@@ -1011,30 +1011,32 @@ def mpi_charmm_script(
 
     By default (**``rank0_drive=False``**) every rank calls ``eval_charmm_script``
     with the same script.  Rank 0 performs disk I/O; Fortran MPI broadcasts state.
+
+    Returns ``True`` when ``lingo.charmm_script`` reports success.
     """
     from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     rank, size = mpi_rank_size()
     if size <= 1:
-        _invoke_charmm_script(
+        return _invoke_charmm_script(
             script,
             relaxed_bomlev=relaxed_bomlev,
             quiet=quiet,
         )
-        return
 
     if barriers in ("both", "pre"):
         _mpi_script_barrier()
+    ok = True
     try:
         if rank0_drive:
             if rank == 0:
-                _invoke_charmm_script(
+                ok = _invoke_charmm_script(
                     script,
                     relaxed_bomlev=relaxed_bomlev,
                     quiet=quiet,
                 )
         else:
-            _invoke_charmm_script(
+            ok = _invoke_charmm_script(
                 script,
                 relaxed_bomlev=relaxed_bomlev,
                 quiet=quiet,
@@ -1042,6 +1044,7 @@ def mpi_charmm_script(
     finally:
         if barriers in ("both", "post"):
             _mpi_script_barrier()
+    return ok
 
 
 def _mpi_script_barrier() -> None:
@@ -1059,7 +1062,7 @@ def _invoke_charmm_script(
     *,
     relaxed_bomlev: bool = False,
     quiet: bool = False,
-) -> None:
+) -> bool:
     from contextlib import nullcontext
 
     import pycharmm.lingo as lingo
@@ -1076,7 +1079,7 @@ def _invoke_charmm_script(
     else:
         ctx = nullcontext()
     with ctx:
-        lingo.charmm_script(script)
+        return bool(lingo.charmm_script(script))
 
 
 def configure_mpi_bootstrap_env() -> None:
@@ -1115,6 +1118,20 @@ def charmm_natom_count() -> int:
     import pycharmm.psf as psf
 
     return int(psf.get_natom())
+
+
+def charmm_natom_diagnostics() -> dict[str, int | bool]:
+    """PSF/coor atom counts and whether Fortran reports a loaded PSF."""
+    import pycharmm.coor as coor
+    import pycharmm.psf as psf
+
+    psf_n = int(psf.get_natom())
+    coor_n = int(coor.get_natom())
+    return {
+        "psf_natom": psf_n,
+        "coor_natom": coor_n,
+        "psf_loaded": bool(psf_n > 0 or coor_n > 0),
+    }
 
 
 def _psf_atom_types_from_path(psf_path: Path) -> set[str]:
@@ -1366,6 +1383,11 @@ def _bootstrap_force_psf_crd() -> bool:
     return flag in ("1", "true", "yes")
 
 
+def _bootstrap_rank0_drive() -> bool:
+    flag = os.environ.get("MMML_MPI_BOOTSTRAP_RANK0_DRIVE", "").strip().lower()
+    return flag in ("1", "true", "yes")
+
+
 def _resolve_bootstrap_mode(
     mode: str,
     *,
@@ -1494,18 +1516,29 @@ def _run_cooperative_stream_bootstrap(
     inp_path = _cooperative_stream_inp_path(psf, step)
     if rank == 0:
         inp_path.parent.mkdir(parents=True, exist_ok=True)
+        header = ["* MMML MPI cooperative bootstrap", "bomlev -2"]
         inp_path.write_text(
-            "\n".join(["* MMML MPI cooperative bootstrap", *lines]) + "\n",
+            "\n".join([*header, *lines]) + "\n",
             encoding="utf-8",
         )
     if size > 1:
         _wait_for_shared_file(inp_path)
     if log_fn is not None:
-        log_fn(step, f"begin rank {rank}/{size}: stream {inp_path}")
-    mpi_charmm_script(f"stream {inp_path}\n", relaxed_bomlev=True)
-    n_atoms = charmm_natom_count()
+        drive = " rank0_drive" if _bootstrap_rank0_drive() else ""
+        log_fn(step, f"begin rank {rank}/{size}: stream {inp_path}{drive}")
+    stream_ok = mpi_charmm_script(
+        f"stream {inp_path}\n",
+        relaxed_bomlev=True,
+        rank0_drive=_bootstrap_rank0_drive(),
+    )
+    diag = charmm_natom_diagnostics()
+    n_atoms = int(diag["psf_natom"])
     if log_fn is not None:
-        log_fn(step, f"done rank {rank}/{size}: n_atoms={n_atoms}")
+        log_fn(
+            step,
+            f"done rank {rank}/{size}: n_atoms={n_atoms} "
+            f"stream_ok={stream_ok} psf={diag['psf_natom']} coor={diag['coor_natom']}",
+        )
     return n_atoms
 
 
