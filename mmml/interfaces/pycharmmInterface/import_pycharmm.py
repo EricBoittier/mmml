@@ -315,12 +315,13 @@ def _launcher_mpi_size() -> int:
 def _maybe_reset_block_at_import() -> None:
     """Run the default BLOCK reset once per process when safe under MPI.
 
-    Under ``mpirun -np > 1``, ranks finish this module at different times
-    (``import ase``, etc.).  ``eval_charmm_script`` during import deadlocks
-    MPI-linked CHARMM: early ranks spin in Fortran receive while late ranks
-    are still in Python.  Skip import-time ``reset_block`` for np>1; callers
-    run it after a barrier or from rank-synchronized setup (see
-    ``MMML_SKIP_CHARMM_RESET_BLOCK`` to force-skip on np=1 diagnostics).
+    Under ``mpirun`` (including ``-np 1``), import-time ``eval_charmm_script``
+    can hang on MPI-linked CHARMM (Fortran MPI worker loop with no peer).
+    With ``np > 1``, ranks also finish this module at different times
+    (``import ase``, etc.) and deadlock when early ranks enter CHARMM while
+    late ranks are still in Python.  Skip import-time ``reset_block`` under
+    ``mpirun``; callers run it after topology load or rank-synchronized setup
+    (``MMML_SKIP_CHARMM_RESET_BLOCK`` to force-skip on serial diagnostics).
     """
     if not PYCHARMM_AVAILABLE:
         return
@@ -330,7 +331,7 @@ def _maybe_reset_block_at_import() -> None:
         "yes",
     ):
         return
-    if _under_mpirun() and _launcher_mpi_size() > 1:
+    if _under_mpirun():
         return
     reset_block()
 

@@ -2332,6 +2332,9 @@ def prepare_serial_charmm_mpi_env() -> None:
         configure_mpi4py_charmm_owned_init()
     _pin_charmm_openmp_for_serial_mlpot()
     if _under_mpirun():
+        # Import-time reset_block / crystal free hang MPI-linked CHARMM even at np=1.
+        os.environ.setdefault("MMML_SKIP_CHARMM_RESET_BLOCK", "1")
+        os.environ.setdefault("MMML_SKIP_VACUUM_CHARMM_INIT", "1")
         from mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
             pin_cuda_for_spatial_mpi,
         )

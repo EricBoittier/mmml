@@ -317,6 +317,25 @@ def test_prepare_serial_charmm_mpi_env_preserves_explicit_blas_threads(monkeypat
     assert os.environ["MKL_NUM_THREADS"] == "2"
 
 
+def test_prepare_serial_charmm_mpi_env_skips_import_reset_block_under_mpirun(monkeypatch):
+    monkeypatch.delenv("MMML_SKIP_CHARMM_RESET_BLOCK", raising=False)
+    monkeypatch.delenv("MMML_SKIP_VACUUM_CHARMM_INIT", raising=False)
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.prepare_charmm_mpi_runtime",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy.pin_cuda_for_spatial_mpi",
+    ):
+        charmm_mpi.prepare_serial_charmm_mpi_env()
+    assert os.environ["MMML_SKIP_CHARMM_RESET_BLOCK"] == "1"
+    assert os.environ["MMML_SKIP_VACUUM_CHARMM_INIT"] == "1"
+
+
 def test_configure_mpi4py_charmm_owned_init(monkeypatch):
     pytest.importorskip("mpi4py")
     monkeypatch.delenv("MMML_MPI_PY_INIT", raising=False)
