@@ -207,11 +207,14 @@ def read_cgenff_prm(
     *,
     append: bool = False,
     bomlev: bool = True,
+    bomlev_level: int | None = None,
 ) -> None:
     """Read bundled CGENFF ``.prm`` with FLEX (required for append overrides).
 
     All CGENFF parameter reads must use ``flex=True`` so later ``append=True``
     swaps (zeroed/full MLpot registration) do not trigger PARMIO level -2.
+
+    Append reads use ``bomlev=-5`` by default (PARRDR nonbond rebuild warnings).
     """
     import pycharmm.read as read
 
@@ -219,12 +222,13 @@ def read_cgenff_prm(
     from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
 
     path = str(prm_path or CGENFF_PRM)
+    level = int(bomlev_level if bomlev_level is not None else (-5 if append else -2))
 
     def _read() -> None:
         read.prm(path, append=append, flex=True)
 
     if bomlev:
-        with charmm_relaxed_bomlev():
+        with charmm_relaxed_bomlev(level):
             _read()
     else:
         _read()

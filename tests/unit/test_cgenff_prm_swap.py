@@ -29,7 +29,9 @@ def test_read_cgenff_prm_uses_flex_for_append_swap():
 
     from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_prm
 
-    assert "flex=True" in inspect.getsource(read_cgenff_prm)
+    src = inspect.getsource(read_cgenff_prm)
+    assert "flex=True" in src
+    assert "-5 if append else -2" in src
     assert "read_cgenff_prm(path, append=True)" in inspect.getsource(
         cgenff_prm_swap._read_cgenff_prm
     )

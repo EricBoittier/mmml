@@ -70,6 +70,9 @@ def charmm_silent_command(*, bomlev: int = -2):
 def charmm_relaxed_bomlev(level: int = -2):
     """Relax BOMBlev/WRNLev for RTF/PRM/PSF/CARD reads; restore on exit.
 
+    Use ``level=-5`` for ``READ PARAM APPEND`` (CGENFF zeroed/full swaps) so PARMIO
+    / PARRDR level -3 nonbond rebuild warnings do not abort at default ``-2``.
+
     Do not leave ``bomlev 0`` after parameter loads — benign read warnings would
     abort the job on the next CHARMM command (e.g. MLpot registration).
     """

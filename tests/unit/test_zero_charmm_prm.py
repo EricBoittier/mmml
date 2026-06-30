@@ -42,6 +42,36 @@ def test_bonded_only_skips_nonbonded():
     assert "-0.0450" in out
 
 
+def test_zero_prm_text_omits_nonbonded_header():
+    text = (
+        "NONBONDED nbxmod  5 atom cdiel fshift vatom vdistance vfswitch -\n"
+        "cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5\n"
+        "\n"
+        "HGA1     0.0       -0.0450     1.3400 ! alkane\n"
+        "END\n"
+    )
+    out = zero_prm_text(text)
+    assert "nbxmod" not in out
+    assert "cutnb" not in out
+    assert "HGA1" in out
+    assert "0.0" in out
+    assert "-0.0450" not in out
+
+
+def test_zero_prm_text_bonded_only_omits_nonbonded_section():
+    text = (
+        "BONDS\n"
+        "HT    OT    450.0       0.9572\n"
+        "NONBONDED nbxmod  5 atom cdiel\n"
+        "HGA1     0.0       -0.0450     1.3400\n"
+        "END\n"
+    )
+    out = zero_prm_text(text, bonded_only=True)
+    assert "NONBONDED" not in out
+    assert "HGA1" not in out
+    assert "450.0" not in out
+
+
 def test_zero_nbfix():
     line = "OG2D1     CLGR1    -0.20        3.40   ! NMA"
     out = zero_prm_line(line, "NBFIX")
