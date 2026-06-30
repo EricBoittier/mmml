@@ -938,7 +938,7 @@ def test_bootstrap_topology_mpi_psf_crd_steps_all_ranks(tmp_path):
         )
 
     assert n == 2
-    assert len(calls) == 4
+    assert len(calls) == 5
     assert calls[0].startswith("read rtf card name")
     assert "read psf card name" in calls[2]
     assert "read coor card name" in calls[3]

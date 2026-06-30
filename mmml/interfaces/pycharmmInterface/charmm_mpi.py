@@ -1305,24 +1305,28 @@ def _resolve_bootstrap_topology_paths(
     return paths
 
 
-def sync_bootstrap_ranks(*, log_fn: Callable[[str, str], None] | None = None) -> None:
-    """Barrier so every rank enters cooperative CHARMM READ together."""
+def sync_bootstrap_ranks(
+    *,
+    log_fn: Callable[[str, str], None] | None = None,
+    label: str = "CHARMM READ",
+) -> None:
+    """Barrier so every rank enters the next cooperative CHARMM command together."""
     from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     rank, size = mpi_rank_size()
     if size <= 1:
         return
-    if not ensure_mpi4py_after_charmm_init(phase="bootstrap READ sync"):
-        raise RuntimeError(f"rank {rank}/{size}: mpi4py.MPI unavailable before bootstrap READ")
+    if not ensure_mpi4py_after_charmm_init(phase=f"bootstrap sync ({label})"):
+        raise RuntimeError(f"rank {rank}/{size}: mpi4py.MPI unavailable before bootstrap sync")
     if not _mpi_comm_valid():
-        raise RuntimeError(f"rank {rank}/{size}: MPI comm invalid before bootstrap READ")
+        raise RuntimeError(f"rank {rank}/{size}: MPI comm invalid before bootstrap sync")
     from mpi4py import MPI
 
     if log_fn is not None:
-        log_fn("bootstrap_sync", f"rank {rank}/{size} barrier before CHARMM READ")
+        log_fn("bootstrap_sync", f"rank {rank}/{size} barrier ({label})")
     MPI.COMM_WORLD.Barrier()
     if log_fn is not None:
-        log_fn("bootstrap_sync", f"rank {rank}/{size} barrier done")
+        log_fn("bootstrap_sync", f"rank {rank}/{size} barrier done ({label})")
 
 
 def bootstrap_charmm_step(
@@ -1341,6 +1345,8 @@ def bootstrap_charmm_step(
     n_atoms = charmm_natom_count()
     if log_fn is not None:
         log_fn(step, f"done rank {rank}/{size}: n_atoms={n_atoms}")
+    if size > 1:
+        sync_bootstrap_ranks(log_fn=log_fn, label=f"after {step}")
     return n_atoms
 
 
@@ -1397,7 +1403,7 @@ def bootstrap_topology_mpi(
         res=res_opt if mode == "restart" else None,
         log_fn=log_fn,
     )
-    sync_bootstrap_ranks(log_fn=log_fn)
+    sync_bootstrap_ranks(log_fn=log_fn, label="before READ chain")
 
     if mode == "restart":
         res_local = paths["res"]
@@ -1454,6 +1460,7 @@ def bootstrap_topology_mpi(
             ("read_prm", f"read param card name {prm} flex\n"),
             ("read_psf", f"read psf card name {psf}\n"),
             ("read_coor", f"read coor card name {crd}\n"),
+            ("update", "UPDATE\n"),
         ]
         if crystal_side_A is not None:
             side = float(crystal_side_A)
