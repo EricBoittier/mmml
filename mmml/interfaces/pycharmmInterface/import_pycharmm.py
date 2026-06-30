@@ -130,11 +130,7 @@ END
 def reset_block() -> None:
     if not PYCHARMM_AVAILABLE:
         return
-    if os.environ.get("MMML_SKIP_CHARMM_RESET_BLOCK", "").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-    ):
+    if should_skip_charmm_reset_block():
         return
     block = """BLOCK 
         CALL 1 SELE ALL END
@@ -325,14 +321,6 @@ def _maybe_reset_block_at_import() -> None:
     """
     if not PYCHARMM_AVAILABLE:
         return
-    if os.environ.get("MMML_SKIP_CHARMM_RESET_BLOCK", "").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-    ):
-        return
-    if _under_mpirun():
-        return
     reset_block()
 
 
@@ -423,9 +411,31 @@ def ensure_domdec_off_for_mlpot_energy(*, context: str = "MLpot energy") -> bool
     return ok
 
 
+def should_skip_vacuum_charmm_init() -> bool:
+    """Skip import-time / vacuum ``crystal free`` (poisons MPI-linked CHARMM as ``crys``)."""
+    flag = os.environ.get("MMML_SKIP_VACUUM_CHARMM_INIT", "").strip().lower()
+    if flag in ("1", "true", "yes"):
+        return True
+    if _under_mpirun() and charmm_lib_links_mpi():
+        return True
+    return False
+
+
+def should_skip_charmm_reset_block() -> bool:
+    """Skip import-time / vacuum ``BLOCK`` reset (hangs or aborts under ``mpirun``)."""
+    flag = os.environ.get("MMML_SKIP_CHARMM_RESET_BLOCK", "").strip().lower()
+    if flag in ("1", "true", "yes"):
+        return True
+    if _under_mpirun() and charmm_lib_links_mpi():
+        return True
+    return False
+
+
 def crystal_free_charmm() -> None:
-    """Clear periodic image state (safe to repeat)."""
+    """Clear periodic image state (safe to repeat outside MPI vacuum bootstrap)."""
     if not PYCHARMM_AVAILABLE:
+        return
+    if should_skip_vacuum_charmm_init():
         return
     try:
         pycharmm.lingo.charmm_script("crystal free")
@@ -457,6 +467,8 @@ def init_vacuum_charmm_state_mpi() -> None:
     if _vacuum_charmm_synced:
         return
     if not PYCHARMM_AVAILABLE:
+        return
+    if should_skip_vacuum_charmm_init():
         return
     if _under_mpirun():
         try:
