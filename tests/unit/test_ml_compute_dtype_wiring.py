@@ -172,10 +172,10 @@ def test_calculate_charmm_uses_cpu_context_while_jax_deferred():
     dz = np.zeros(n, dtype=np.float64)
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.jax_device_policy.jax_cpu_until_mlpot_registered",
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.jax_cpu_until_mlpot_registered",
         return_value=cpu_ctx,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.mlpot_jax_device_context",
         return_value=gpu_ctx,
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mlpot_runs_on_this_rank",
