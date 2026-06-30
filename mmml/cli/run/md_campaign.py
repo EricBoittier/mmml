@@ -136,6 +136,7 @@ _CAMPAIGN_CLI_OVERRIDE_KEYS: tuple[str, ...] = (
     "ml_max_active_dimers",
     "charmm_omp_threads",
     "skip_jit_warmup",
+    "auto_warmup_mlpot_jax",
     "handoff_pre_minimize",
 )
 

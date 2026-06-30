@@ -302,6 +302,174 @@ def run_warmup_mlpot_jax(args: argparse.Namespace) -> int:
     return 0
 
 
+def _truthy_env(name: str) -> bool:
+    return (os.environ.get(name) or "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def auto_warmup_mlpot_jax_enabled(args: argparse.Namespace) -> bool:
+    """Whether md-system / mmml-charmm-mpirun should run serial warmup-mlpot-jax."""
+    if _truthy_env("MMML_NO_AUTO_WARMUP_MLPOT_JAX"):
+        return False
+    if bool(getattr(args, "skip_jit_warmup", False)):
+        return False
+    if not bool(getattr(args, "auto_warmup_mlpot_jax", True)):
+        return False
+    if getattr(args, "checkpoint", None) is None and not (
+        os.environ.get("MMML_CKPT") or os.environ.get("MMML_CHECKPOINT")
+    ):
+        return False
+    return True
+
+
+def resolve_warmup_n_monomers_from_md_system(args: argparse.Namespace) -> int:
+    from mmml.cli.run.md_system import _composition_molecule_count
+
+    if getattr(args, "composition", None):
+        return int(_composition_molecule_count(str(args.composition)))
+    return max(1, int(getattr(args, "n_molecules", 10) or 10))
+
+
+def resolve_warmup_atoms_per_monomer_from_md_system(args: argparse.Namespace) -> int | None:
+    """Best-effort atoms/monomer for synthetic warmup geometry (no PyCHARMM)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import (
+        PBC_BURST_ML_ATOMS_PER_MONOMER,
+    )
+
+    if getattr(args, "composition", None):
+        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import parse_composition_dict
+
+        sizes: list[int] = []
+        for residue in parse_composition_dict(str(args.composition)):
+            apm = PBC_BURST_ML_ATOMS_PER_MONOMER.get(str(residue).upper())
+            if apm is None:
+                return None
+            sizes.append(int(apm))
+        return max(sizes) if sizes else None
+    residue = str(getattr(args, "residue", "MEOH") or "MEOH").upper()
+    return int(PBC_BURST_ML_ATOMS_PER_MONOMER.get(residue, 10))
+
+
+def resolve_warmup_box_side_from_md_system(args: argparse.Namespace) -> float:
+    if getattr(args, "box_size", None) is not None:
+        return float(args.box_size)
+    setup = str(getattr(args, "setup", "") or "")
+    if setup in {"free_nve", "free_nvt", "pycharmm_minimize"} and not getattr(
+        args, "composition", None
+    ):
+        return 0.0
+    try:
+        from mmml.interfaces.pycharmmInterface.packmol_placement import (
+            resolve_packmol_cube_side_from_args,
+        )
+
+        side = resolve_packmol_cube_side_from_args(args)
+        if side is not None:
+            return float(side)
+    except Exception:
+        pass
+    return 32.0
+
+
+def build_warmup_namespace_from_md_system(args: argparse.Namespace) -> argparse.Namespace | None:
+    """Map md-system args to warmup-mlpot-jax settings; None when geometry is unknown."""
+    from mmml.interfaces.pycharmmInterface.cutoffs import (
+        DEFAULT_ML_SWITCH_WIDTH,
+        DEFAULT_MM_SWITCH_ON,
+        DEFAULT_MM_SWITCH_WIDTH,
+    )
+
+    atoms_per = resolve_warmup_atoms_per_monomer_from_md_system(args)
+    if atoms_per is None:
+        return None
+    do_mm = bool(getattr(args, "include_mm", True))
+    if _truthy_env("MMML_AUTO_WARMUP_DO_MM"):
+        do_mm = True
+    elif (os.environ.get("MMML_AUTO_WARMUP_DO_MM") or "").strip().lower() in (
+        "0",
+        "false",
+        "no",
+        "off",
+    ):
+        do_mm = False
+    warmup = argparse.Namespace(
+        checkpoint=getattr(args, "checkpoint", None),
+        n_monomers=resolve_warmup_n_monomers_from_md_system(args),
+        atoms_per_monomer=int(atoms_per),
+        box_side=resolve_warmup_box_side_from_md_system(args),
+        spacing=float(getattr(args, "spacing", 5.0) or 5.0),
+        ml_batch_size=int(getattr(args, "ml_batch_size", None) or 128),
+        ml_gpu_count=int(getattr(args, "ml_gpu_count", None) or 1),
+        ml_max_active_dimers=getattr(args, "ml_max_active_dimers", None),
+        mm_switch_on=float(getattr(args, "mm_switch_on", DEFAULT_MM_SWITCH_ON)),
+        mm_switch_width=float(getattr(args, "mm_switch_width", DEFAULT_MM_SWITCH_WIDTH)),
+        ml_switch_width=float(getattr(args, "ml_switch_width", DEFAULT_ML_SWITCH_WIDTH)),
+        no_complementary_handoff=bool(getattr(args, "no_complementary_handoff", False)),
+        do_mm=do_mm,
+        compile_threads=None,
+        allow_under_mpirun=False,
+        dry_run=False,
+        quiet=bool(getattr(args, "quiet", False)),
+        verbose=bool(getattr(args, "verbose", False)),
+    )
+    return warmup
+
+
+def maybe_auto_warmup_mlpot_jax_from_md_system(args: argparse.Namespace) -> int | None:
+    """Run serial warmup-mlpot-jax before MPI CHARMM when enabled.
+
+    Returns an exit code on failure, or ``None`` when warmup was skipped.
+    """
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import _under_mpirun
+
+    if not auto_warmup_mlpot_jax_enabled(args):
+        return None
+    if _under_mpirun():
+        return None
+    warmup_ns = build_warmup_namespace_from_md_system(args)
+    if warmup_ns is None:
+        if not getattr(args, "quiet", False):
+            print(
+                "mmml: auto warmup-mlpot-jax skipped (unknown atoms/monomer for composition; "
+                "run mmml warmup-mlpot-jax manually)",
+                flush=True,
+            )
+        return None
+    if not getattr(args, "quiet", False):
+        print(
+            "mmml: auto warmup-mlpot-jax (serial JAX compile cache before CHARMM MLpot)...",
+            flush=True,
+        )
+    code = int(run_warmup_mlpot_jax(warmup_ns))
+    if code != 0:
+        print(
+            f"mmml: auto warmup-mlpot-jax failed (exit {code}); "
+            "set MMML_NO_AUTO_WARMUP_MLPOT_JAX=1 to skip or run warmup-mlpot-jax manually",
+            file=sys.stderr,
+            flush=True,
+        )
+    return code
+
+
+def maybe_auto_warmup_mlpot_jax_from_md_system_argv(argv: list[str]) -> int:
+    """Parse md-system argv and run auto warmup; return process exit code (0 if skipped)."""
+    from mmml.cli.run.md_system import (
+        _apply_backend_setup_defaults,
+        build_command,
+        parse_md_system_args,
+    )
+
+    args = parse_md_system_args(argv)
+    try:
+        _apply_backend_setup_defaults(args)
+        backend, _ = build_command(args)
+    except ValueError:
+        return 0
+    if backend != "pycharmm":
+        return 0
+    result = maybe_auto_warmup_mlpot_jax_from_md_system(args)
+    return 0 if result is None else int(result)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     return run_warmup_mlpot_jax(args)

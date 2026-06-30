@@ -294,5 +294,16 @@ if [[ "${MMML_MPI_GDB:-}" == 1 ]]; then
   mmml_gdb_run "mmml $*" "$PY" -m mmml.cli.__main__ "$@"
 fi
 
+if [[ "${1:-}" == "md-system" && "${MMML_NO_AUTO_WARMUP_MLPOT_JAX:-}" != 1 ]]; then
+  set +e
+  "$PY" -c 'import sys; from mmml.cli.run.warmup_mlpot_jax import maybe_auto_warmup_mlpot_jax_from_md_system_argv; raise SystemExit(maybe_auto_warmup_mlpot_jax_from_md_system_argv(sys.argv[1:]))' md-system "$@"
+  warm_rc=$?
+  set -e
+  if [[ "$warm_rc" -ne 0 ]]; then
+    echo "mmml-charmm-mpirun: auto warmup-mlpot-jax failed (exit $warm_rc)" >&2
+    exit "$warm_rc"
+  fi
+fi
+
 mmml_mpi_run "$PY" -m mmml.cli.__main__ "$@"
 mmml_mpi_finish "$?" "mmml $*"
