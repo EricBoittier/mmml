@@ -30,6 +30,11 @@ import numpy as np
 os.environ.setdefault("JAX_PLATFORMS", "cpu")
 import jax  # noqa: E402
 
+from mmml.utils.structure_align import (
+    plot_aligned_structures,
+    select_structure_indices,
+)
+
 
 @dataclass
 class Spike:
@@ -455,6 +460,10 @@ def run_diagnosis(
     dataset: str,
     train_npz: Path | None = None,
     json_out: Path | None = None,
+    structure_plot_out: Path | None = None,
+    structure_indices: list[int] | None = None,
+    structure_reference_index: int | None = None,
+    max_structures: int = 8,
     spike_relative_factor: float = 5.0,
     spike_jump_factor: float = 3.0,
     test_z_threshold: float = 1.5,
@@ -501,6 +510,43 @@ def run_diagnosis(
         if verbose:
             print(f"\nWrote {json_out}")
 
+    if structure_plot_out is not None:
+        if train_npz is None:
+            raise SystemExit("--structure-plot-out requires --train-npz")
+        indices = structure_indices
+        if indices is None:
+            indices = select_structure_indices(
+                suspect_samples=candidates,
+                global_outliers=global_outliers,
+                max_structures=max_structures,
+            )
+        if not indices:
+            raise SystemExit("No structure indices available for --structure-plot-out")
+        labels = []
+        suspect_by_idx = {int(row["index"]): row for row in candidates}
+        global_by_idx = {int(row["index"]): row for row in global_outliers}
+        for idx in indices:
+            if idx in suspect_by_idx:
+                row = suspect_by_idx[idx]
+                labels.append(
+                    f"idx {idx} (excl={row['exclusive_to_outlier_runs']}, E={row['energy']:.2f})"
+                )
+            elif idx in global_by_idx:
+                row = global_by_idx[idx]
+                labels.append(f"idx {idx} (global, E={row['energy']:.2f})")
+            else:
+                labels.append(f"idx {idx}")
+        plot_aligned_structures(
+            npz_path=train_npz,
+            indices=indices,
+            labels=labels,
+            reference_index=structure_reference_index,
+            out_path=structure_plot_out.resolve(),
+            title=f"{dataset} suspect structures (Kabsch-aligned)",
+        )
+        if verbose:
+            print(f"Wrote structure overlay {structure_plot_out}")
+
     return {
         "runs": runs,
         "seed_summary": seed_summary,
@@ -525,6 +571,29 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dataset", default="aco", help="Dataset subdir under eval-root (default: aco)")
     parser.add_argument("--train-npz", type=Path, default=None, help="Train NPZ for split reproduction + scoring")
     parser.add_argument("--json-out", type=Path, default=None, help="Write full JSON report")
+    parser.add_argument(
+        "--structure-plot-out",
+        type=Path,
+        default=None,
+        help="Write Kabsch-aligned ASE structure overlay (requires --train-npz)",
+    )
+    parser.add_argument(
+        "--structure-indices",
+        default=None,
+        help="Comma-separated NPZ indices to plot (default: top suspects + global outliers)",
+    )
+    parser.add_argument(
+        "--structure-reference-index",
+        type=int,
+        default=None,
+        help="Reference NPZ index for alignment (default: first plotted index)",
+    )
+    parser.add_argument(
+        "--max-structures",
+        type=int,
+        default=8,
+        help="Max structures in auto-selected overlay (default: 8)",
+    )
     parser.add_argument("--spike-relative-factor", type=float, default=5.0)
     parser.add_argument("--spike-jump-factor", type=float, default=3.0)
     parser.add_argument("--test-z-threshold", type=float, default=1.5)
@@ -537,11 +606,18 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    structure_indices = None
+    if args.structure_indices:
+        structure_indices = [int(part.strip()) for part in args.structure_indices.split(",") if part.strip()]
     run_diagnosis(
         eval_root=args.eval_root,
         dataset=args.dataset,
         train_npz=args.train_npz,
         json_out=args.json_out,
+        structure_plot_out=args.structure_plot_out,
+        structure_indices=structure_indices,
+        structure_reference_index=args.structure_reference_index,
+        max_structures=args.max_structures,
         spike_relative_factor=args.spike_relative_factor,
         spike_jump_factor=args.spike_jump_factor,
         test_z_threshold=args.test_z_threshold,
