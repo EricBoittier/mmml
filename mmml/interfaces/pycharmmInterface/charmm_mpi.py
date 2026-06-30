@@ -1476,18 +1476,40 @@ def _resolve_bootstrap_mode(
     return mode, None
 
 
-def _wait_for_shared_file(path: Path, *, timeout_s: float = 120.0) -> None:
-    """Poll until *path* exists with stable non-zero size (rank-0 write handshake)."""
+def _wait_for_shared_file(
+    path: Path,
+    *,
+    timeout_s: float = 120.0,
+    log_fn: Callable[[str, str], None] | None = None,
+    label: str = "",
+) -> None:
+    """Poll until *path* exists with non-zero size (after rank-0 staging barrier)."""
     deadline = time.monotonic() + timeout_s
-    last_size = -1
     while time.monotonic() < deadline:
         if path.is_file():
             size = path.stat().st_size
-            if size > 0 and size == last_size:
+            if size > 0:
+                if log_fn is not None and label:
+                    log_fn("bootstrap_stage", f"visible {label} size={size}")
                 return
-            last_size = size
         time.sleep(0.05)
     raise TimeoutError(f"timed out waiting for shared file: {path}")
+
+
+def _sync_cooperative_api_step(
+    label: str,
+    *,
+    log_fn: Callable[[str, str], None] | None = None,
+) -> None:
+    """MPI entry barrier so all ranks enter the next ``api_read`` call together."""
+    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+
+    rank, size = mpi_rank_size()
+    if size <= 1:
+        return
+    if log_fn is not None:
+        log_fn("bootstrap_sync", f"rank {rank}/{size} pre-api ({label})")
+    _mpi_script_barrier()
 
 
 def _cooperative_read_script(
@@ -1541,7 +1563,7 @@ def _cooperative_restart_script(
 
 
 # Bump when cooperative bootstrap I/O strategy changes (read-gate diagnostics).
-BOOTSTRAP_MPI_API = "direct-api-v4.2"
+BOOTSTRAP_MPI_API = "direct-api-v4.3"
 
 # ``eval_charmm_script`` uses ``comlyn(mxcmsz)`` (~80); stage short paths for file APIs too.
 _BOOTSTRAP_CMD_MAX_LEN = 78
@@ -1574,24 +1596,30 @@ def stage_compact_bootstrap_paths(
     size: int,
     log_fn: Callable[[str, str], None] | None = None,
 ) -> tuple[Path, dict[str, Path]]:
-    """Stage short filenames beside the PSF so each ``eval_charmm_script`` line fits ``mxcmsz``."""
+    """Stage short filenames beside the PSF (rank 0 copies, then MPI barrier)."""
     base = paths["psf"].parent.resolve()
     compact: dict[str, Path] = {}
     for key, dst_name in _COMPACT_BOOTSTRAP_FILENAMES.items():
         if key not in paths:
             continue
-        src = Path(paths[key]).expanduser().resolve()
-        dst = base / dst_name
-        if rank == 0 or (size <= 1 and not dst.is_file()):
-            if src != dst:
-                if log_fn is not None and size > 1 and rank == 0:
-                    log_fn("bootstrap_stage", f"rank 0/{size}: copy {src.name} → {dst.name}")
-                shutil.copy2(src, dst)
-        compact[key] = dst
+        compact[key] = base / dst_name
+
+    if rank == 0 or size <= 1:
+        for key, dst in compact.items():
+            src = Path(paths[key]).expanduser().resolve()
+            if src == dst:
+                continue
+            if size <= 1 and dst.is_file():
+                continue
+            if log_fn is not None and size > 1:
+                log_fn("bootstrap_stage", f"rank 0/{size}: copy {src.name} → {dst.name}")
+            shutil.copy2(src, dst)
+
     if size > 1:
         align_mpi_ranks_after_import(log_fn=log_fn, label="bootstrap stage")
-        for dst in compact.values():
-            _wait_for_shared_file(dst)
+        if rank != 0:
+            for key, dst in compact.items():
+                _wait_for_shared_file(dst, log_fn=log_fn, label=key)
     return base, compact
 
 
@@ -1755,6 +1783,7 @@ def _run_cooperative_api_bootstrap(
         log_fn(step, f"begin rank {rank}/{size}: {len(load_steps)} api read step(s)")
     with charmm_relaxed_bomlev():
         for idx, name in enumerate(load_steps, start=1):
+            _sync_cooperative_api_step(name, log_fn=log_fn)
             if name == "rtf":
                 _read_rtf_api(compact["rtf"])
             elif name == "prm":

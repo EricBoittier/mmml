@@ -124,11 +124,10 @@ If native passes and PyCHARMM fails → bug is in library-mode `eval_charmm_scri
 
 ## Bootstrap API version
 
-PyCHARMM read gate logs `bootstrap_api=...` at startup. You need **`direct-api-v4.2`**
-(RTF/PRM/PSF via ``api_read``; coords from CRD parse + ``coor.set_positions``).
-Restart mode loads coords from **CRD** when present (``--prepare-prebuilt-only`` writes
-binary ``write restart`` ``.res`` files that the ASCII parser cannot read). np>1 staging
-barriers after rank-0 copies before cooperative API READ.
+PyCHARMM read gate logs `bootstrap_api=...` at startup. You need **`direct-api-v4.3`**
+(RTF/PRM/PSF via ``api_read``; coords from CRD + ``coor.set_positions``). v4.3 fixes
+np>1 staging: rank 0 copies all files **before** the MPI barrier (rank 1 no longer enters
+the barrier mid-copy); pre-api MPI barriers synchronize each ``api_read`` entry.
 
 ## Implementation
 
