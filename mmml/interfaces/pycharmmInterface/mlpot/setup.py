@@ -171,6 +171,16 @@ class MlpotContext:
             periodic_external=bool(getattr(self, "periodic_external", False)),
             use_block=self.registration_uses_block,
         )
+        if (
+            bool(getattr(self, "use_pbc", False))
+            and not bool(getattr(self, "registration_uses_block", False))
+            and getattr(self, "cubic_box_side_A", None) is not None
+        ):
+            _finalize_pbc_mlpot_exclusions_after_param_read(
+                self.ml_selection,
+                cubic_box_side_A=float(self.cubic_box_side_A),
+                verbose=verbose,
+            )
         reattach = getattr(self.mlpot, "reattach_mlpot", None)
         if callable(reattach):
             # Do not construct a new MLpot(): __init__ rebuilds iblo/inb via update_bnbnd
@@ -1152,13 +1162,66 @@ def _build_ml_exclusion_lists(
     return ml_iblo, ml_inb
 
 
-def _install_ml_exclusions(ml_selection: Any) -> None:
-    """Add ML–ML exclusions and rebuild CHARMM nonbond lists (``upinb``)."""
+def _install_ml_exclusions(ml_selection: Any, *, update: bool = True) -> None:
+    """Add ML–ML exclusions; optionally rebuild CHARMM nonbond lists (``upinb``)."""
     pycharmm = _import_pycharmm()
     natom = int(pycharmm.coor.get_natom())
     ml_indices = ml_selection.get_atom_indexes()
     ml_iblo, ml_inb = _build_ml_exclusion_lists(ml_indices, natom=natom)
-    pycharmm.psf.set_iblo_inb(ml_iblo, ml_inb)
+    if update:
+        pycharmm.psf.set_iblo_inb(ml_iblo, ml_inb)
+    else:
+        pycharmm.psf.set_iblo_inb_no_update(ml_iblo, ml_inb)
+
+
+def _registration_pbc_box_side_A(
+    cubic_box_side_A: float | None,
+    budget_box: float | None,
+) -> float:
+    if cubic_box_side_A is not None:
+        return float(cubic_box_side_A)
+    if budget_box is not None:
+        return float(budget_box)
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        _is_cubic_box_sides,
+        _read_charmm_box_sides_A,
+    )
+
+    lx, ly, lz = _read_charmm_box_sides_A()
+    if _is_cubic_box_sides(lx, ly, lz):
+        return float((lx + ly + lz) / 3.0)
+    raise RuntimeError(
+        "PBC MLpot registration needs a cubic box side "
+        "(pass cubic_box_side_A or ensure CHARMM crystal is set)"
+    )
+
+
+def _finalize_pbc_mlpot_exclusions_after_param_read(
+    ml_selection: Any,
+    *,
+    cubic_box_side_A: float,
+    verbose: bool = False,
+) -> None:
+    """Rebuild crystal/nb lists after READ PARAM, then apply ML exclusions once.
+
+    ``read_param_file`` (append or not) always clears NONBOND/HBOND lists and IMAGE
+    atoms (``api_read.F90``). Installing ML exclusions via ``set_iblo_inb`` before
+    rebuilding PBC leaves ``upinb`` operating on a cleared image table → segfault.
+    """
+    refresh_nbonds_after_mlpot_pbc(
+        cubic_box_side_A=float(cubic_box_side_A),
+        force=True,
+    )
+    _install_ml_exclusions(ml_selection, update=False)
+    pycharmm = _import_pycharmm()
+    pycharmm.nbonds.update_bnbnd()
+    pycharmm.image.update_bimag()
+    if verbose:
+        print(
+            "MLpot PBC: rebuilt crystal/nb lists after CGENFF param read "
+            f"(L={float(cubic_box_side_A):.3f} Å)",
+            flush=True,
+        )
 
 
 def _require_mlpot_skip_iblo_support(pycharmm: Any) -> None:
@@ -1251,9 +1314,8 @@ def register_mlpot(
 
     with charmm_relaxed_bomlev(CGENFF_PRM_BOMLEV):
         skip_iblo_inb_update = False
+        uses_block = mlpot_use_block_registration(explicit=use_block_registration)
         if use_pbc:
-            # PBC all-ML: bonded-only CGENFF append must run before ML exclusions so
-            # READ PARAM APPEND does not clear NONBOND lists after iblo/inb are set.
             _require_mlpot_skip_iblo_support(pycharmm)
         if periodic_external and periodic_charmm_vdw:
             block_tag = apply_mlpot_registration_mm_off(
@@ -1272,7 +1334,15 @@ def register_mlpot(
                 use_block=use_block_registration,
             )
         if use_pbc:
-            _install_ml_exclusions(ml_selection)
+            box_side = _registration_pbc_box_side_A(cubic_box_side_A, budget_box)
+            if uses_block:
+                _install_ml_exclusions(ml_selection)
+            else:
+                _finalize_pbc_mlpot_exclusions_after_param_read(
+                    ml_selection,
+                    cubic_box_side_A=box_side,
+                    verbose=verbose,
+                )
             skip_iblo_inb_update = True
         mlpot = pycharmm.MLpot(
             ml_model=pyCModel,
@@ -1295,8 +1365,12 @@ def register_mlpot(
             )
 
             pycharmm.UpdateNonBondedScript(**vacuum_nbond_kwargs(nbxmod=5)).run()
-    uses_block = mlpot_use_block_registration(explicit=use_block_registration)
     ml_z = np.asarray(ml_Z, dtype=int)
+    reg_box = (
+        float(cubic_box_side_A)
+        if use_pbc and cubic_box_side_A is not None
+        else (float(budget_box) if use_pbc and budget_box is not None else None)
+    )
     return MlpotContext(
         mlpot=mlpot,
         pyCModel=pyCModel,
@@ -1306,7 +1380,7 @@ def register_mlpot(
         block_tag=block_tag,
         ml_Z=ml_z,
         use_pbc=bool(use_pbc),
-        cubic_box_side_A=None,
+        cubic_box_side_A=reg_box,
         ml_charge=float(ml_charge),
         ml_fq=bool(ml_fq),
         mm_internal_scale=float(mm_internal_scale),

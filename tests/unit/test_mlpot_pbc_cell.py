@@ -1054,7 +1054,7 @@ def test_build_ml_exclusion_lists_upper_triangle():
     assert inb == [3, 5, 5]
 
 
-def test_register_mlpot_pbc_installs_exclusions_after_param_swap():
+def test_register_mlpot_pbc_rebuilds_after_param_swap():
     from mmml.interfaces.pycharmmInterface.mlpot import setup as mlpot_setup
 
     call_order: list[str] = []
@@ -1063,8 +1063,8 @@ def test_register_mlpot_pbc_installs_exclusions_after_param_swap():
     fake_sel = MagicMock()
     fake_sel.get_atom_indexes.return_value = [0, 1, 2, 3]
 
-    def _install(_sel):
-        call_order.append("install_exclusions")
+    def _finalize(_sel, *, cubic_box_side_A, verbose=False):
+        call_order.append("finalize_pbc_exclusions")
 
     def _block(*args, **kwargs):
         call_order.append("block")
@@ -1077,7 +1077,9 @@ def test_register_mlpot_pbc_installs_exclusions_after_param_swap():
                 call_order.append("skip_iblo")
 
     with patch.object(mlpot_setup, "_import_pycharmm", return_value=fake_pycharmm), patch.object(
-        mlpot_setup, "_install_ml_exclusions", side_effect=_install
+        mlpot_setup,
+        "_finalize_pbc_mlpot_exclusions_after_param_read",
+        side_effect=_finalize,
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_mlpot_registration_mm_off",
         side_effect=_block,
@@ -1093,9 +1095,10 @@ def test_register_mlpot_pbc_installs_exclusions_after_param_swap():
             [1, 1, 1, 1],
             fake_sel,
             use_pbc=True,
+            cubic_box_side_A=50.0,
         )
 
-    assert call_order == ["block", "install_exclusions", "mlpot", "skip_iblo"]
+    assert call_order == ["block", "finalize_pbc_exclusions", "mlpot", "skip_iblo"]
 
 
 def test_register_mlpot_vacuum_skips_pre_block_exclusions():
