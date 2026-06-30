@@ -52,23 +52,26 @@ def zero_mlpot_psf_mm_terms(
     verbose: bool = False,
     periodic_external: bool = False,
 ) -> str:
-    """Disable CHARMM MM on ML atoms by editing the PSF (no BLOCK script).
+    """Disable CHARMM MM on ML atoms via zeroed CGENFF params (PSF connectivity kept).
 
-    - Deletes all PSF connectivity touching ML atoms (bonded terms).
-    - Zeros partial charges on ML atoms (ELEC off; MLpot also clears ML charges).
+    - Re-reads a zeroed CGENFF .prm (bonded-only when ``periodic_external`` needs
+      CHARMM IMAGE VDW; full zero otherwise).
+    - Zeros partial charges on ML atoms (ELEC off; MLpot supplies ML electrostatics).
+    - Does **not** call ``delete_connectivity`` (no DELTIC bond/angle deletion).
 
-    When ``periodic_external=True``, LJ type codes are left intact so CHARMM IMAGE
-    VDW can run; Coulomb is supplied in the Python callback (ScaFaCoS / jax-pme).
-
-    All-ML vacuum clusters rely on MLpot ML–ML ``iblo/inb`` exclusions for pair VDW.
-    Hybrid ML+MM may still need BLOCK for ML-atom VDW vs MM partners unless
-    ``MMML_MLPOT_USE_BLOCK=1``.
+    Hybrid ML+MM may still need legacy BLOCK (``MMML_MLPOT_USE_BLOCK=1``) for
+    ML–MM cross VDW when not using periodic CHARMM VDW.
     """
     if float(mm_internal_scale) > 0.0:
         raise ValueError(
             f"mm_internal_scale={mm_internal_scale} requires BLOCK registration "
             "(set MMML_MLPOT_USE_BLOCK=1 or --mlpot-use-block)"
         )
+    from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
+        apply_zeroed_cgenff_params,
+        assert_psf_bonds_present,
+    )
+
     pycharmm = _import_pycharmm()
     n_total = int(pycharmm.coor.get_natom())
     ml_indices = ml_selection.get_atom_indexes()
@@ -76,41 +79,45 @@ def zero_mlpot_psf_mm_terms(
     if n_ml <= 0:
         raise ValueError("ML selection is empty")
 
-    all_sel = pycharmm.SelectAtoms().all_atoms()
+    n_bond_before = assert_psf_bonds_present(context="MLpot registration")
+
     if n_ml >= n_total:
-        ml_sel = all_sel
         tag = "all"
         if periodic_external:
             summary = (
-                f"MLpot PSF zero MM: periodic external all-ML ({n_total} atoms; "
-                "bonded stripped, charges zeroed, CHARMM IMAGE VDW on; no BLOCK)"
+                f"MLpot zeroed CGENFF: periodic external all-ML ({n_total} atoms; "
+                f"bonded params zeroed, PSF bonds={n_bond_before}, CHARMM VDW on)"
             )
         else:
             summary = (
-                f"MLpot PSF zero MM: all-ML ({n_total} atoms; "
-                "bonded stripped, charges zeroed; no BLOCK)"
+                f"MLpot zeroed CGENFF: all-ML ({n_total} atoms; "
+                f"bonded+nonbond zeroed, PSF bonds={n_bond_before})"
             )
     else:
         tag = ml_selection.store(_ML_BLOCK_NAME)
-        ml_sel = ml_selection
         n_mm = n_total - n_ml
         if periodic_external:
             summary = (
-                f"MLpot PSF zero MM: periodic external hybrid ({n_ml} ML + {n_mm} MM; "
-                "ML bonded stripped, ML charges zeroed, CHARMM VDW on MM; no BLOCK)"
+                f"MLpot zeroed CGENFF: periodic external hybrid ({n_ml} ML + {n_mm} MM; "
+                f"ML bonded zeroed, PSF bonds={n_bond_before}, CHARMM VDW on MM)"
             )
         else:
             summary = (
-                f"MLpot PSF zero MM: hybrid ({n_ml} ML + {n_mm} MM atoms; "
-                "ML bonded stripped, ML charges zeroed; no BLOCK)"
+                f"MLpot zeroed CGENFF: hybrid ({n_ml} ML + {n_mm} MM; "
+                f"CGENFF zeroed, PSF bonds={n_bond_before})"
             )
 
-    pycharmm.psf.delete_connectivity(ml_sel, all_sel, psort=True)
+    apply_zeroed_cgenff_params(
+        bonded_only=bool(periodic_external),
+        verbose=verbose,
+    )
 
     charges = list(pycharmm.psf.get_charges())
     for idx in ml_indices:
         charges[int(idx)] = 0.0
     pycharmm.psf.set_charge(charges)
+
+    assert_psf_bonds_present(context="MLpot registration (after zeroed CGENFF)")
 
     from mmml.utils.rich_report import emit_charmm_block
 
@@ -158,15 +165,24 @@ def _run_block_script(summary: str, script: str, *, verbose: bool = False) -> No
     emit_charmm_block(summary, verbose=verbose)
 
 
-def apply_charmm_mm_block() -> None:
-    """Full CGENFF internal terms on all atoms (MM / pre-MLpot cluster minimize)."""
+def apply_charmm_mm_block(*, verbose: bool = False) -> None:
+    """Full CGENFF parameters + BLOCK COEFF 1.0 (MM / pre-MLpot cluster minimize)."""
     from mmml.interfaces.pycharmmInterface.import_pycharmm import reset_block
+    from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
+        apply_full_cgenff_params,
+    )
 
+    apply_full_cgenff_params(verbose=verbose)
     reset_block()
 
 
-def apply_bonded_mm_only_block() -> None:
+def apply_bonded_mm_only_block(*, verbose: bool = False) -> None:
     """Bonded MM terms only (BOND/ANGL/DIHE); zero VDW/ELEC for geometry recovery."""
+    from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
+        apply_full_cgenff_params,
+    )
+
+    apply_full_cgenff_params(verbose=verbose)
     block = """BLOCK
 CALL 1 SELE ALL END
 COEFF 1 1 1.0 BOND 1.0 ANGL 1.0 DIHEdral 1.0 ELEC 0.0 VDW 0.0
@@ -175,16 +191,22 @@ END
     _run_block_script(
         "CHARMM BLOCK: bonded-only (BOND/ANGL/DIHE on, ELEC/VDW off)",
         block,
+        verbose=verbose,
     )
 
 
-def apply_bonded_vdw_recovery_block() -> None:
+def apply_bonded_vdw_recovery_block(*, verbose: bool = False) -> None:
     """Bonded MM + VDW for rescue SD; ELEC off (MLpot handles electrostatics).
 
     Pair with ``NBXMOD 2`` (only 1-2 exclusions) during rescue SD. Production
     ``NBXMOD 5`` is not restored afterward — :func:`restore_workflow_nbonds` is a
     no-op so CHARMM does not rebuild ML exclusion lists (``upinb`` segfault).
     """
+    from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
+        apply_full_cgenff_params,
+    )
+
+    apply_full_cgenff_params(verbose=verbose)
     block = """BLOCK
 CALL 1 SELE ALL END
 COEFF 1 1 1.0 BOND 1.0 ANGL 1.0 DIHEdral 1.0 ELEC 0.0 VDW 1.0
@@ -193,6 +215,7 @@ END
     _run_block_script(
         "CHARMM BLOCK: bonded+VDW recovery (ELEC off)",
         block,
+        verbose=verbose,
     )
 
 
