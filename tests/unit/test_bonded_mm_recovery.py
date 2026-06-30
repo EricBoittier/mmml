@@ -1242,7 +1242,7 @@ def test_rewrite_dynamics_restart_writes_current_state(tmp_path):
 
     res = tmp_path / "equi.res"
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.write_charmm_restart_from_memory",
+        "mmml.interfaces.pycharmmInterface.charmm_restart_io.write_charmm_restart_from_memory",
     ) as writer:
         rewrite_dynamics_restart_from_current_state(res, write_unit=92)
 

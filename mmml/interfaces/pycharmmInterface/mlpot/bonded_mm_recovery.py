@@ -59,7 +59,7 @@ def rewrite_dynamics_restart_from_current_state(
         return
     path = Path(restart_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from mmml.interfaces.pycharmmInterface.charmm_restart_io import (
         write_charmm_restart_from_memory,
     )
 

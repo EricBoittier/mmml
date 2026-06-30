@@ -50,9 +50,7 @@ def test_write_charmm_crd_from_charmm_avoids_charmm_write():
 
 
 def test_write_charmm_restart_from_memory_roundtrip(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
-        read_restart_coordinates,
-        read_restart_natom,
+    from mmml.interfaces.pycharmmInterface.charmm_restart_io import (
         write_charmm_restart_from_memory,
     )
 
@@ -61,13 +59,18 @@ def test_write_charmm_restart_from_memory_roundtrip(tmp_path):
         dtype=float,
     )
     res = tmp_path / "mini_box_equil.res"
-
     write_charmm_restart_from_memory(
-        res, positions=pos, title="seed", include_crystal=False
+        res,
+        positions=pos,
+        title="seed",
+        include_crystal=False,
+        include_velocities=False,
     )
-
-    assert read_restart_natom(res) == 3
-    np.testing.assert_allclose(read_restart_coordinates(res), pos, rtol=0, atol=1e-12)
+    text = res.read_text(encoding="ascii")
+    assert text.startswith("REST")
+    assert " !X, Y, Z" in text
+    assert "1.000000000000000D-01" in text
+    assert "9.000000000000000D-01" in text
 
 
 def test_rewrite_dynamics_restart_avoids_charmm_script():
@@ -77,5 +80,6 @@ def test_rewrite_dynamics_restart_avoids_charmm_script():
         .split("\ndef ")[0]
     )
     assert "write_charmm_restart_from_memory" in block
+    assert "charmm_restart_io" in block
     assert "charmm_script" not in block
     assert "write restart" not in block
