@@ -100,6 +100,20 @@ def test_zero_mlpot_psf_mm_terms_strips_bonded_and_charges():
     assert fake_psf.set_charge.call_args.args[0] == [0.0, 0.0, 0.0]
 
 
+def test_apply_mlpot_registration_mm_off_periodic_external_uses_psf(monkeypatch):
+    sel = mock.Mock()
+    sel.get_atom_indexes.return_value = list(range(10))
+    monkeypatch.delenv("MMML_MLPOT_USE_BLOCK", raising=False)
+    with mock.patch.object(
+        block_terms, "zero_mlpot_psf_mm_terms", return_value="all"
+    ) as zero_fn, mock.patch.object(block_terms, "apply_mlpot_periodic_external_block") as block_fn:
+        tag = block_terms.apply_mlpot_registration_mm_off(sel, periodic_external=True)
+    assert tag == "all"
+    zero_fn.assert_called_once()
+    assert zero_fn.call_args.kwargs.get("periodic_external") is True
+    block_fn.assert_not_called()
+
+
 def test_mlpot_block_partial_ml_zeros_ml_block_elec_vdw():
     sel = mock.Mock()
     sel.get_atom_indexes.return_value = [0, 1, 2]

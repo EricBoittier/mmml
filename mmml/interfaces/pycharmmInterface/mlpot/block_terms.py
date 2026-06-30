@@ -50,13 +50,17 @@ def zero_mlpot_psf_mm_terms(
     *,
     mm_internal_scale: float = 0.0,
     verbose: bool = False,
+    periodic_external: bool = False,
 ) -> str:
     """Disable CHARMM MM on ML atoms by editing the PSF (no BLOCK script).
 
     - Deletes all PSF connectivity touching ML atoms (bonded terms).
     - Zeros partial charges on ML atoms (ELEC off; MLpot also clears ML charges).
 
-    All-ML clusters rely on MLpot ML–ML ``iblo/inb`` exclusions for VDW/ELEC.
+    When ``periodic_external=True``, LJ type codes are left intact so CHARMM IMAGE
+    VDW can run; Coulomb is supplied in the Python callback (ScaFaCoS / jax-pme).
+
+    All-ML vacuum clusters rely on MLpot ML–ML ``iblo/inb`` exclusions for pair VDW.
     Hybrid ML+MM may still need BLOCK for ML-atom VDW vs MM partners unless
     ``MMML_MLPOT_USE_BLOCK=1``.
     """
@@ -76,18 +80,30 @@ def zero_mlpot_psf_mm_terms(
     if n_ml >= n_total:
         ml_sel = all_sel
         tag = "all"
-        summary = (
-            f"MLpot PSF zero MM: all-ML ({n_total} atoms; "
-            "bonded stripped, charges zeroed; no BLOCK)"
-        )
+        if periodic_external:
+            summary = (
+                f"MLpot PSF zero MM: periodic external all-ML ({n_total} atoms; "
+                "bonded stripped, charges zeroed, CHARMM IMAGE VDW on; no BLOCK)"
+            )
+        else:
+            summary = (
+                f"MLpot PSF zero MM: all-ML ({n_total} atoms; "
+                "bonded stripped, charges zeroed; no BLOCK)"
+            )
     else:
         tag = ml_selection.store(_ML_BLOCK_NAME)
         ml_sel = ml_selection
         n_mm = n_total - n_ml
-        summary = (
-            f"MLpot PSF zero MM: hybrid ({n_ml} ML + {n_mm} MM atoms; "
-            "ML bonded stripped, ML charges zeroed; no BLOCK)"
-        )
+        if periodic_external:
+            summary = (
+                f"MLpot PSF zero MM: periodic external hybrid ({n_ml} ML + {n_mm} MM; "
+                "ML bonded stripped, ML charges zeroed, CHARMM VDW on MM; no BLOCK)"
+            )
+        else:
+            summary = (
+                f"MLpot PSF zero MM: hybrid ({n_ml} ML + {n_mm} MM atoms; "
+                "ML bonded stripped, ML charges zeroed; no BLOCK)"
+            )
 
     pycharmm.psf.delete_connectivity(ml_sel, all_sel, psort=True)
 
@@ -125,15 +141,11 @@ def apply_mlpot_registration_mm_off(
             mm_internal_scale=float(mm_internal_scale),
             verbose=verbose,
         )
-    if periodic_external:
-        raise ValueError(
-            "periodic external MM registration requires CHARMM BLOCK "
-            "(set MMML_MLPOT_USE_BLOCK=1 or --mlpot-use-block)"
-        )
     return zero_mlpot_psf_mm_terms(
         ml_selection,
         mm_internal_scale=float(mm_internal_scale),
         verbose=verbose,
+        periodic_external=periodic_external,
     )
 
 
