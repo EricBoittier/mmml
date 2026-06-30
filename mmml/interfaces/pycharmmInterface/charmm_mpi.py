@@ -1339,15 +1339,61 @@ def bootstrap_charmm_step(
     from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     rank, size = mpi_rank_size()
+    if size > 1:
+        sync_bootstrap_ranks(log_fn=log_fn, label=f"before {step}")
     if log_fn is not None:
         log_fn(step, f"begin rank {rank}/{size}: {script.strip()}")
     _invoke_charmm_script(script, relaxed_bomlev=True)
     n_atoms = charmm_natom_count()
     if log_fn is not None:
         log_fn(step, f"done rank {rank}/{size}: n_atoms={n_atoms}")
-    if size > 1:
-        sync_bootstrap_ranks(log_fn=log_fn, label=f"after {step}")
     return n_atoms
+
+
+def _bootstrap_via_stream_inp(
+    paths: dict[str, Path],
+    *,
+    psf: Path,
+    crystal_side_A: float | None,
+    crystal_cutnb_A: float,
+    rank: int,
+    size: int,
+    log_fn: Callable[[str, str], None] | None = None,
+) -> None:
+    """Load topology via one ``stream`` (native CHARMM input path; best for np>1)."""
+    minimal = paths["rtf"]
+    prm = paths["prm"]
+    psf = paths["psf"]
+    crd = paths["crd"]
+    inp_dir = psf.parent / "mpi_bootstrap_stream"
+    inp_path = inp_dir / f"{psf.stem}_read.inp"
+    if rank == 0:
+        inp_dir.mkdir(parents=True, exist_ok=True)
+        lines = [
+            "* MMML MPI bootstrap stream READ",
+            "bomlev -2",
+            f"read rtf card name {minimal}",
+            f"read param card name {prm} flex",
+            f"read psf card name {psf}",
+            f"read coor card name {crd}",
+        ]
+        if crystal_side_A is not None:
+            side = float(crystal_side_A)
+            lines.extend(
+                [
+                    f"crystal define cubic {side} {side} {side} 90 90 90",
+                    f"crystal build cutoff {float(crystal_cutnb_A)} noper 0",
+                ]
+            )
+        lines.append("stop")
+        inp_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    if size > 1:
+        sync_bootstrap_ranks(log_fn=log_fn, label="after stream inp write")
+    bootstrap_charmm_step(
+        "stream_inp",
+        f"stream {inp_path}\n",
+        log_fn=log_fn,
+    )
 
 
 def bootstrap_topology_mpi(
@@ -1362,9 +1408,11 @@ def bootstrap_topology_mpi(
     mode: str = "psf-crd",
     log_fn: Callable[[str, str], None] | None = None,
 ) -> int:
-    """Cooperative ``np>1`` topology bootstrap (one ``eval_charmm_script`` per sub-command).
+    """Cooperative ``np>1`` topology bootstrap.
 
     Supported ``mode`` values: ``psf-crd``, ``stream-inp``, ``restart``.
+    At ``np>1``, ``psf-crd`` is implemented as a rank-0-written ``stream`` input
+    (same as ``stream-inp``); serial ``np=1`` uses one sub-command per step.
     """
     from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
     from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
@@ -1419,33 +1467,16 @@ def bootstrap_topology_mpi(
         finally:
             if alias is not None:
                 alias.finalize()
-    elif mode == "stream-inp":
-        minimal = paths["rtf"]
-        prm = paths["prm"]
-        psf = paths["psf"]
-        crd = paths["crd"]
-        inp_path = paths.get("staging_dir", minimal.parent) / f"{psf.stem}_read.inp"
-        lines = [
-            "* MMML MPI bootstrap stream READ",
-            "bomlev -2",
-            f"read rtf card name {minimal}",
-            f"read param card name {prm} flex",
-            f"read psf card name {psf}",
-            f"read coor card name {crd}",
-        ]
-        if crystal_side_A is not None:
-            side = float(crystal_side_A)
-            lines.extend(
-                [
-                    f"crystal define cubic {side} {side} {side} 90 90 90",
-                    f"crystal build cutoff {float(crystal_cutnb_A)} noper 0",
-                ]
-            )
-        lines.append("stop")
-        inp_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        bootstrap_charmm_step(
-            "stream_inp",
-            f"stream {inp_path}\n",
+    elif mode == "stream-inp" or (mode == "psf-crd" and size > 1):
+        if mode == "psf-crd" and log_fn is not None:
+            log_fn("bootstrap", f"rank {rank}/{size}: np>1 psf-crd → stream-inp")
+        _bootstrap_via_stream_inp(
+            paths,
+            psf=psf,
+            crystal_side_A=crystal_side_A,
+            crystal_cutnb_A=crystal_cutnb_A,
+            rank=rank,
+            size=size,
             log_fn=log_fn,
         )
     else:
@@ -1460,7 +1491,6 @@ def bootstrap_topology_mpi(
             ("read_prm", f"read param card name {prm} flex\n"),
             ("read_psf", f"read psf card name {psf}\n"),
             ("read_coor", f"read coor card name {crd}\n"),
-            ("update", "UPDATE\n"),
         ]
         if crystal_side_A is not None:
             side = float(crystal_side_A)
