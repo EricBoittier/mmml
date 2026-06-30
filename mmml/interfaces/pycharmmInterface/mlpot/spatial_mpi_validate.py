@@ -166,6 +166,7 @@ def _prelaunch_ok_warning(message: str) -> bool:
         "MMML_MLPOT_SPATIAL_MPI is off",
         "spatial MPI enabled but mpi_size=",
         "Defer JAX until after MLpot SD applies under mpirun",
+        "OMP_NUM_THREADS=",
     )
     return any(fragment in message for fragment in ok_fragments)
 

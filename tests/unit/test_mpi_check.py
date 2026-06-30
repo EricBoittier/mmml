@@ -383,8 +383,8 @@ def test_mpi_check_tier3_json_reports_blocker(monkeypatch, tmp_path, capsys):
     assert tier3["ok"] is True
     assert tier3["blocked"] is True
     assert tier3["spike_doc"] == "tests/functionality/mlpot/SPATIAL_MPI_DOMDEC.md"
-    assert survey["pycharmm_local_atom_api"] is False
-    assert survey["pycharmm_ghost_atom_api"] is False
+    assert survey["pycharmm_local_atom_api"] is True
+    assert survey["pycharmm_ghost_atom_api"] is True
 
 
 def test_maybe_rerun_liquid_box_subcommand(monkeypatch, tmp_path):

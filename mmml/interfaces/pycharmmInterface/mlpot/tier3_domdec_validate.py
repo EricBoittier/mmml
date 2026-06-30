@@ -1,4 +1,4 @@
-"""Tier 3 DOMDEC + MLpot readiness survey (blocked on PyCHARMM per-rank atom API)."""
+"""Tier 3 DOMDEC + MLpot readiness survey (production blocked on open risks)."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ class Tier3DomdecReport:
     """Readiness report for DOMDEC coexistence with MLpot (Tier 3).
 
     ``ok`` means the survey itself completed. ``blocked`` means Tier 3 is not
-    production-ready because required PyCHARMM DOMDEC metadata is unavailable.
+    production-ready (DOMDEC+MLpot/JAX stability and related open questions).
     Strict mode intentionally maps a blocked survey to ``ok=False``.
     """
 
@@ -56,7 +56,7 @@ def validate_tier3_domdec_env(*, strict: bool = False) -> Tier3DomdecReport:
 
     Non-strict mode is informational: the check exits successfully once the
     survey runs, while ``blocked=True`` continues to mark production Tier 3 as
-    unavailable until PyCHARMM exposes per-rank atom ownership and ghost maps.
+    unavailable until DOMDEC+MLpot engineering risks are cleared.
     """
     survey = survey_domdec_api()
     report = Tier3DomdecReport(ok=False, blocked=True, survey=survey)
@@ -64,6 +64,11 @@ def validate_tier3_domdec_env(*, strict: bool = False) -> Tier3DomdecReport:
     if not survey.pycharmm_local_atom_api or not survey.pycharmm_ghost_atom_api:
         report.errors.append(
             "PyCHARMM does not expose per-rank local/ghost atom maps; Tier 3 DOMDEC+MLpot is blocked"
+        )
+    else:
+        report.errors.append(
+            "Tier 3 DOMDEC+MLpot production is blocked pending DOMDEC/JAX stability "
+            "and global energy reduction (see survey open_questions)"
         )
 
     if survey.mmml_disable_domdec_for_mlpot:
@@ -122,7 +127,7 @@ def render_tier3_report(report: Tier3DomdecReport) -> str:
     lines.extend(
         [
             "",
-            "Until PyCHARMM exposes per-rank atom ownership, use Tier 2:",
+            "Until Tier 3 DOMDEC+MLpot is production-ready, use Tier 2:",
             "  MMML_MLPOT_SPATIAL_MPI=1 --ml-spatial-mpi --ml-gpu-count 1",
         ]
     )

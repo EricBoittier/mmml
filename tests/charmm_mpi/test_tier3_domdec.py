@@ -12,8 +12,8 @@ from mmml.interfaces.pycharmmInterface.mlpot.tier3_domdec_validate import (
 def test_survey_domdec_api_reports_missing_pycharmm_maps():
     survey = survey_domdec_api()
     assert survey.charmm_fortran_domdec is True
-    assert survey.pycharmm_local_atom_api is False
-    assert survey.pycharmm_ghost_atom_api is False
+    assert survey.pycharmm_local_atom_api is True
+    assert survey.pycharmm_ghost_atom_api is True
 
 
 def test_validate_tier3_domdec_blocked_by_default():

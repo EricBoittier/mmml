@@ -168,8 +168,13 @@ def mermaid_to_image_flowable(source: str, style_map: dict[str, ParagraphStyle])
 
         image = Image(io.BytesIO(output_path.read_bytes()))
         max_width = 7.0 * inch
+        max_height = 9.0 * inch
+        scale = 1.0
         if image.drawWidth > max_width:
-            scale = max_width / image.drawWidth
+            scale = min(scale, max_width / image.drawWidth)
+        if image.drawHeight > max_height:
+            scale = min(scale, max_height / image.drawHeight)
+        if scale < 1.0:
             image.drawWidth *= scale
             image.drawHeight *= scale
         return [image, Spacer(1, 0.08 * inch)]

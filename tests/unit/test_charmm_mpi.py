@@ -482,7 +482,7 @@ def test_init_vacuum_charmm_deferred_under_mpirun():
     )
     source = path.read_text(encoding="utf-8")
     assert "def init_vacuum_charmm_state_mpi() -> None:" in source
-    assert "if PYCHARMM_AVAILABLE and not _under_mpirun():" in source
+    assert "if PYCHARMM_AVAILABLE and not _under_mpirun() and not _skip_import_vacuum_init():" in source
     assert "MPI.COMM_WORLD.Barrier()" in source
 
 
