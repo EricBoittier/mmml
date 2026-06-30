@@ -34,6 +34,22 @@ MMML_MPI_NP=4 ./scripts/run_mpi_pycharmm_read_gate.sh --mode psf-crd --with-crys
 
 **Hang:** last line like `[read_psf rank 2/4] begin ...` — that sub-command is the stall point.
 
+**node09 bisect (June 2026):** `np=1` passes; `np=2` hangs on the first `read_rtf` step in
+`psf-crd` mode. Root cause: per-rank SCRATCH units inside `eval_charmm_script`
+(`setup/api/api_eval.F90`) desync cooperative MPI READ. Fix: restore direct
+`maincomx` evaluation + line-splitting in vendored `pycharmm/lingo.py`, then
+**rebuild** `libcharmm.so`:
+
+```bash
+bash scripts/rebuild_charmm_mlpot.sh   # or your usual DOMDEC MPI build
+```
+
+After rebuild, re-run the matrix above. Also try `stream-inp` if rebuilding is delayed:
+
+```bash
+MMML_MPI_NP=4 ./scripts/run_mpi_pycharmm_read_gate.sh --mode stream-inp
+```
+
 ## Native CHARMM control
 
 Proves Fortran READ works on the same PSF/CRD under the same `mpirun` wrapper:

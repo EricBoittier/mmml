@@ -59,11 +59,10 @@ def _charmm_script_line(script):
     status : integer
              1 indicates success
     """
-    c_script = ctypes.create_string_buffer(script.upper().encode())
+    c_script = ctypes.create_string_buffer(script.encode())
     len_script = ctypes.c_int(len(script))
 
-    status = lib.charmm.eval_charmm_script(c_script,
-                                           ctypes.byref(len_script))
+    status = lib.charmm.eval_charmm_script(c_script, len_script)
     return status
 
 
@@ -114,15 +113,26 @@ def _clean_charmm_script(script_lines):
 def charmm_script(script):
     """Evaluate one or several lines of native CHARMM script
 
+    Multiline scripts are split and evaluated one command at a time so
+    ``eval_charmm_script`` can use the direct ``maincomx`` path (required for
+    cooperative MPI READ under DOMDEC).
+
     Returns
     -------
     success : boolean
               True indicates success
     """
-    c_script = ctypes.create_string_buffer(script.encode())
-    len_script = ctypes.c_int(len(script))
-    status = lib.charmm.eval_charmm_script(c_script, len_script)
-    return status
+    script_lines = _clean_charmm_script(script.splitlines())
+    if len(script_lines) <= 1:
+        line = script_lines[0] if script_lines else script.strip()
+        return bool(_charmm_script_line(line))
+
+    success = True
+    for script_line in script_lines:
+        line_success = _charmm_script_line(script_line)
+        success = success and (1 == line_success)
+
+    return success
 
 
 class FoundValue(ctypes.Structure):
