@@ -83,3 +83,81 @@ def test_rewrite_dynamics_restart_avoids_charmm_script():
     assert "charmm_restart_io" in block
     assert "charmm_script" not in block
     assert "write restart" not in block
+
+
+def test_dynamics_setters_use_c_api_path_buffer():
+    block = _read("pycharmm/dynamics.py").split("def set_iunwri(")[1].split(
+        "\ndef "
+    )[0]
+    assert "c_api_path_buffer" in block or "_dynamics_path_ctypes" in block
+    block = _read("mmml/interfaces/pycharmmInterface/mlpot/dynamics.py").split(
+        "def run_dynamics("
+    )[1].split("\ndef ")[0]
+    assert "_apply_dynamics_io_setters" in block
+    assert "DynamicsScript" in block
+
+
+def test_apply_dynamics_io_setters_uses_path_strings():
+    import sys
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _apply_dynamics_io_setters,
+    )
+
+    fake_dyn = SimpleNamespace(
+        set_iunrea=lambda path: True,
+        set_iunwri=lambda path: True,
+        set_iuncrd=lambda path: True,
+    )
+    calls: list[tuple[str, str]] = []
+    fake_dyn.set_iunrea = lambda path: calls.append(("iunrea", path)) or True
+    fake_dyn.set_iunwri = lambda path: calls.append(("iunwri", path)) or True
+    fake_dyn.set_iuncrd = lambda path: calls.append(("iuncrd", path)) or True
+
+    kw = {
+        "restart": True,
+        "iunrea": "/tmp/in.res",
+        "iunwri": "/tmp/out.res",
+        "iuncrd": "/tmp/out.dcd",
+        "nstep": 10,
+    }
+    with patch.dict(
+        sys.modules,
+        {"pycharmm": SimpleNamespace(dynamics=fake_dyn), "pycharmm.dynamics": fake_dyn},
+    ):
+        _apply_dynamics_io_setters(kw)
+    assert calls == [
+        ("iunrea", "/tmp/in.res"),
+        ("iunwri", "/tmp/out.res"),
+        ("iuncrd", "/tmp/out.dcd"),
+    ]
+    assert "iunrea" not in kw
+    assert "iunwri" not in kw
+    assert "iuncrd" not in kw
+
+
+def test_apply_dynamics_io_setters_keeps_integer_units():
+    import sys
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _apply_dynamics_io_setters,
+    )
+
+    fake_dyn = SimpleNamespace(
+        set_iunrea=lambda path: True,
+        set_iunwri=lambda path: True,
+        set_iuncrd=lambda path: True,
+    )
+    kw = {"iuncrd": 1, "iunwri": 2, "iunrea": -1, "nstep": 10}
+    with patch.dict(
+        sys.modules,
+        {"pycharmm": SimpleNamespace(dynamics=fake_dyn), "pycharmm.dynamics": fake_dyn},
+    ):
+        _apply_dynamics_io_setters(kw)
+    assert kw["iuncrd"] == 1
+    assert kw["iunwri"] == 2
+    assert kw["iunrea"] == -1

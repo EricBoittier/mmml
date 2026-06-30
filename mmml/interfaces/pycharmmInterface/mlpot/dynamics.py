@@ -27,6 +27,57 @@ import numpy as np
 PathLike = Union[str, Path]
 
 
+def _dynamics_io_fortran_path(
+    path: PathLike,
+    *,
+    for_write: bool,
+    append: bool = False,
+) -> tuple[str, Any | None]:
+    """Return ``(fortran_path, io_alias_or_none)`` for dynamics file open."""
+    p = Path(path)
+    try:
+        from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
+
+        fortran_path, alias = charmm_fortran_path(
+            p,
+            for_write=for_write,
+            append=append,
+        )
+        return str(fortran_path), alias
+    except ImportError:
+        return str(p.expanduser().resolve()), None
+
+
+def _apply_dynamics_io_setters(kw: dict[str, Any]) -> None:
+    """Wire restart/trajectory paths via CHARMM dynamics C API (MPI-safe).
+
+    ``DynamicsScript`` unit numbers do not always reach Fortran ``reawri`` under
+    ``mpirun``; ``dynamics_set_iuncrd`` / ``dynamics_set_iunwri`` do.
+    Integer unit values are left for ``CharmmFile`` + script ``iuncrd N`` paths.
+    """
+    try:
+        import pycharmm.dynamics as charm_dyn
+    except (ImportError, OSError):
+        return
+
+    iunrea = kw.get("iunrea")
+    if isinstance(iunrea, str):
+        if kw.get("restart"):
+            if not charm_dyn.set_iunrea(iunrea):
+                raise RuntimeError(f"dynamics iunrea open failed: {iunrea}")
+        kw.pop("iunrea", None)
+
+    for key, setter in (
+        ("iunwri", charm_dyn.set_iunwri),
+        ("iuncrd", charm_dyn.set_iuncrd),
+    ):
+        val = kw.get(key)
+        if isinstance(val, str):
+            if not setter(val):
+                raise RuntimeError(f"dynamics {key} open failed: {val}")
+            kw.pop(key, None)
+
+
 def _emit_overlap_log(
     detail: str,
     *,
@@ -59,44 +110,36 @@ class CharmmTrajectoryFiles:
     trajectory_unit: int = 1
     pressure_tensor_log_unit: int = 29
 
-    def open_for_run(self) -> tuple[list[Any], dict[str, int]]:
-        """Open CharmmFile handles; returns ``(open_files, dynamics_unit_kwargs)``."""
-        import pycharmm
-
+    def open_for_run(self) -> tuple[list[Any], dict[str, Any], list[Any]]:
+        """Open dynamics I/O; returns ``(open_files, dynamics_io_kwargs, io_aliases)``."""
         open_files: list[Any] = []
-        kw: dict[str, int] = {}
+        aliases: list[Any] = []
+        kw: dict[str, Any] = {}
         if self.restart_read is not None:
-            f = pycharmm.CharmmFile(
-                file_name=str(self.restart_read),
-                file_unit=self.restart_read_unit,
-                formatted=True,
-                read_only=True,
+            fortran_path, alias = _dynamics_io_fortran_path(
+                self.restart_read,
+                for_write=False,
             )
-            open_files.append(f)
-            kw["iunrea"] = self.restart_read_unit
+            if alias is not None:
+                aliases.append(alias)
+            kw["iunrea"] = fortran_path
         if self.restart_write is not None:
             p = Path(self.restart_write)
             p.parent.mkdir(parents=True, exist_ok=True)
-            f = pycharmm.CharmmFile(
-                file_name=str(p),
-                file_unit=self.restart_write_unit,
-                formatted=True,
-                read_only=False,
-            )
-            open_files.append(f)
-            kw["iunwri"] = self.restart_write_unit
+            fortran_path, alias = _dynamics_io_fortran_path(p, for_write=True)
+            if alias is not None:
+                aliases.append(alias)
+            kw["iunwri"] = fortran_path
         if self.trajectory is not None:
             p = Path(self.trajectory)
             p.parent.mkdir(parents=True, exist_ok=True)
-            f = pycharmm.CharmmFile(
-                file_name=str(p),
-                file_unit=self.trajectory_unit,
-                formatted=False,
-                read_only=False,
-            )
-            open_files.append(f)
-            kw["iuncrd"] = self.trajectory_unit
+            fortran_path, alias = _dynamics_io_fortran_path(p, for_write=True)
+            if alias is not None:
+                aliases.append(alias)
+            kw["iuncrd"] = fortran_path
         if self.pressure_tensor_log is not None:
+            import pycharmm
+
             p = Path(self.pressure_tensor_log)
             p.parent.mkdir(parents=True, exist_ok=True)
             f = pycharmm.CharmmFile(
@@ -107,7 +150,7 @@ class CharmmTrajectoryFiles:
             )
             open_files.append(f)
             kw["iupten"] = self.pressure_tensor_log_unit
-        return open_files, kw
+        return open_files, kw, aliases
 
     def open_trajectory_for_run(
         self,
@@ -2682,6 +2725,7 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
         clear_comparison_coordinates()
     if "echeck" in kw:
         apply_charmm_dynamics_echeck_kw(kw, float(kw["echeck"]))
+    _apply_dynamics_io_setters(kw)
     _release_charmm_dynamics_api_buffers()
     dyn = pycharmm.DynamicsScript(**kw)
     dyn.run()
@@ -3910,7 +3954,7 @@ def _cleanup_overlap_restart_slots(io: Optional[CharmmTrajectoryFiles]) -> None:
 
 def _sync_dynamics_io_units(
     kw: dict[str, Any],
-    iokw: dict[str, int],
+    iokw: dict[str, Any],
 ) -> None:
     """Drop restart/trajectory unit numbers not backed by opened CharmmFile handles."""
     for key in ("iunrea", "iunwri", "iuncrd", "iunvel"):
@@ -4011,10 +4055,11 @@ def _run_dynamics_chunk(
 ) -> Any:
     _refresh_charmm_dynamics_rng(base=rng_base, salt=rng_salt)
     open_files: list[Any] = []
+    io_aliases: list[Any] = []
     kw = dict(dynamics_kwargs)
-    iokw: dict[str, int] = {}
+    iokw: dict[str, Any] = {}
     if io is not None:
-        open_files, iokw = io.open_for_run()
+        open_files, iokw, io_aliases = io.open_for_run()
         kw.update(iokw)
     if extra_iokw:
         kw.update(extra_iokw)
@@ -4035,6 +4080,11 @@ def _run_dynamics_chunk(
     finally:
         for f in open_files:
             f.close()
+        for alias in io_aliases:
+            try:
+                alias.finalize()
+            except Exception:
+                pass
 
 
 def _cpt_stability_chunk_nstep(kw: dict[str, Any], total_nstep: int) -> int | None:

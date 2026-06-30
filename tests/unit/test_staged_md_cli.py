@@ -831,23 +831,19 @@ def test_reset_stage_restart_preserves_memory_handoff_seed(tmp_path):
     assert res.read_text(encoding="ascii") == "seeded restart\n"
 
 
-def test_charmm_trajectory_files_open_for_run_mkdirs_restart_parent(tmp_path, monkeypatch):
-    """Restart writes must create nested pretreat/ before CharmmFile open."""
+def test_charmm_trajectory_files_open_for_run_mkdirs_restart_parent(tmp_path):
+    """Restart writes must create nested pretreat/ and expose Fortran paths."""
     nested = tmp_path / "pretreat" / "mini_box_equil.res"
-    calls: list[str] = []
+    dcd = tmp_path / "pretreat" / "mini_box_equil.dcd"
 
-    class FakeCharmmFile:
-        def __init__(self, file_name, **kwargs):
-            calls.append(str(file_name))
-
-    fake_pycharmm = type("FakePyCharmm", (), {"CharmmFile": FakeCharmmFile})
-    monkeypatch.setitem(__import__("sys").modules, "pycharmm", fake_pycharmm)
-
-    io = CharmmTrajectoryFiles(restart_write=nested)
-    io.open_for_run()
+    io = CharmmTrajectoryFiles(restart_write=nested, trajectory=dcd)
+    _open_files, iokw, _aliases = io.open_for_run()
 
     assert nested.parent.is_dir()
-    assert calls == [str(nested)]
+    assert isinstance(iokw["iunwri"], str)
+    assert isinstance(iokw["iuncrd"], str)
+    assert "mini_box_equil.res" in iokw["iunwri"]
+    assert "mini_box_equil.dcd" in iokw["iuncrd"]
 
 
 def test_resolve_max_grms_before_dyn_scales_large_pbc_cluster():

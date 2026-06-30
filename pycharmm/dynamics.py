@@ -586,6 +586,13 @@ def set_fbetas(fbetas):
     return list(fbetas)
 
 
+def _dynamics_path_ctypes(filename: str) -> tuple[ctypes.Array, ctypes.c_int]:
+    """Stable path buffer for ``dynamics_set_iun*`` Fortran APIs."""
+    from pycharmm.charmm_file import c_api_path_buffer
+
+    return c_api_path_buffer(filename)
+
+
 def set_iunwri(filename):
     """Open a unit to use for writing the restart file
 
@@ -599,8 +606,7 @@ def set_iunwri(filename):
     bool
         true if successful
     """
-    fn = ctypes.c_char_p(filename.encode())
-    len_fn = ctypes.c_int(len(filename))
+    fn, len_fn = _dynamics_path_ctypes(filename)
 
     status = lib.charmm.dynamics_set_iunwri(fn, ctypes.byref(len_fn))
 
@@ -621,8 +627,7 @@ def set_iuncrd(filename):
     bool
         true if successful
     """
-    fn = ctypes.c_char_p(filename.encode())
-    len_fn = ctypes.c_int(len(filename))
+    fn, len_fn = _dynamics_path_ctypes(filename)
 
     status = lib.charmm.dynamics_set_iuncrd(fn, ctypes.byref(len_fn))
 
@@ -643,8 +648,7 @@ def set_iunrea(filename):
     bool
         true if successful
     """
-    fn = ctypes.c_char_p(filename.encode())
-    len_fn = ctypes.c_int(len(filename))
+    fn, len_fn = _dynamics_path_ctypes(filename)
 
     status = lib.charmm.dynamics_set_iunrea(fn, ctypes.byref(len_fn))
 

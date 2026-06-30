@@ -3396,7 +3396,7 @@ def test_run_dynamics_chunk_keeps_iunrea_minus_one_for_dynamics():
     with mock.patch.object(
         io,
         "open_for_run",
-        return_value=([], {"iunwri": 2}),
+        return_value=([], {"iunwri": 2}, []),
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics.run_dynamics",
         side_effect=fake_run,
@@ -3430,7 +3430,7 @@ def test_run_dynamics_chunk_uses_bomlev_minus_two():
         yield
 
     io = CharmmTrajectoryFiles(restart_write=__import__("pathlib").Path("/tmp/out.res"))
-    with mock.patch.object(io, "open_for_run", return_value=([], {})), mock.patch(
+    with mock.patch.object(io, "open_for_run", return_value=([], {}, [])), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics.run_dynamics",
         return_value=None,
     ), mock.patch(
@@ -3555,7 +3555,7 @@ def test_run_dynamics_chunk_strips_stale_iunwri(tmp_path):
     ), mock.patch.object(
         CharmmTrajectoryFiles,
         "open_for_run",
-        return_value=([], {}),
+        return_value=([], {}, []),
     ):
         _run_dynamics_chunk(
             {"nstep": 10, "restart": True, "iunwri": 2, "iunrea": 3},
