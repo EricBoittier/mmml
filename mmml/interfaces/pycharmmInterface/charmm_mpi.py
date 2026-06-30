@@ -1196,10 +1196,13 @@ def ensure_shared_minimal_rtf(psf_path: Path, prm_path: Path) -> Path:
     rank, size = mpi_rank_size()
     if rank == 0 or (size <= 1 and not out.is_file()):
         write_minimal_mass_rtf(psf_path, prm_path, out)
-    if size > 1 and _mpi_comm_valid():
-        from mpi4py import MPI
+    if size > 1:
+        if _mpi_comm_valid():
+            from mpi4py import MPI
 
-        MPI.COMM_WORLD.Barrier()
+            MPI.COMM_WORLD.Barrier()
+        else:
+            _wait_for_shared_file(out)
     return out
 
 
@@ -1517,7 +1520,7 @@ def _cooperative_restart_script(
 
 
 # Bump when cooperative bootstrap I/O strategy changes (read-gate diagnostics).
-BOOTSTRAP_MPI_API = "direct-api-v4"
+BOOTSTRAP_MPI_API = "direct-api-v4.1"
 
 # ``eval_charmm_script`` uses ``comlyn(mxcmsz)`` (~80); stage short paths for file APIs too.
 _BOOTSTRAP_CMD_MAX_LEN = 78
@@ -1548,6 +1551,7 @@ def stage_compact_bootstrap_paths(
     *,
     rank: int,
     size: int,
+    log_fn: Callable[[str, str], None] | None = None,
 ) -> tuple[Path, dict[str, Path]]:
     """Stage short filenames beside the PSF so each ``eval_charmm_script`` line fits ``mxcmsz``."""
     base = paths["psf"].parent.resolve()
@@ -1559,6 +1563,8 @@ def stage_compact_bootstrap_paths(
         dst = base / dst_name
         if rank == 0 or (size <= 1 and not dst.is_file()):
             if src != dst:
+                if log_fn is not None and size > 1 and rank == 0:
+                    log_fn("bootstrap_stage", f"rank 0/{size}: copy {src.name} → {dst.name}")
                 shutil.copy2(src, dst)
         if size > 1:
             _wait_for_shared_file(dst)
@@ -1577,15 +1583,23 @@ def _fortran_file_path(path: Path) -> str:
     return s
 
 
+def _c_path_args(path: Path):
+    """``create_string_buffer`` + length for ``api_read`` ``bind(c)`` (len is by reference)."""
+    import ctypes
+
+    fn = _fortran_file_path(path)
+    buf = ctypes.create_string_buffer(fn.encode())
+    return buf, ctypes.c_int(len(fn))
+
+
 def _read_rtf_api(path: Path) -> None:
     import ctypes
 
     import pycharmm.lib as lib
 
-    fn = _fortran_file_path(path)
-    buf = ctypes.create_string_buffer(fn.encode())
+    buf, fn_len = _c_path_args(path)
     append = ctypes.c_int(0)
-    status = lib.charmm.read_rtf_file(buf, ctypes.c_int(len(fn)), ctypes.byref(append))
+    status = lib.charmm.read_rtf_file(buf, ctypes.byref(fn_len), ctypes.byref(append))
     if int(status) != 1:
         raise RuntimeError(f"read_rtf_file failed for {path} (status={status})")
 
@@ -1595,13 +1609,12 @@ def _read_prm_api(path: Path, *, flex: bool = True) -> None:
 
     import pycharmm.lib as lib
 
-    fn = _fortran_file_path(path)
-    buf = ctypes.create_string_buffer(fn.encode())
+    buf, fn_len = _c_path_args(path)
     append = ctypes.c_int(0)
     flex_i = ctypes.c_int(1 if flex else 0)
     status = lib.charmm.read_param_file(
         buf,
-        ctypes.c_int(len(fn)),
+        ctypes.byref(fn_len),
         ctypes.byref(append),
         ctypes.byref(flex_i),
     )
@@ -1614,13 +1627,12 @@ def _read_psf_api(path: Path) -> None:
 
     import pycharmm.lib as lib
 
-    fn = _fortran_file_path(path)
-    buf = ctypes.create_string_buffer(fn.encode())
+    buf, fn_len = _c_path_args(path)
     append = ctypes.c_int(0)
     xplor = ctypes.c_int(0)
     status = lib.charmm.read_psf_card(
         buf,
-        ctypes.byref(ctypes.c_int(len(fn))),
+        ctypes.byref(fn_len),
         ctypes.byref(append),
         ctypes.byref(xplor),
     )
@@ -1886,6 +1898,7 @@ def bootstrap_topology_mpi(
         paths,
         rank=rank,
         size=size,
+        log_fn=log_fn,
     )
     if effective_mode == "restart":
         _run_cooperative_api_bootstrap(

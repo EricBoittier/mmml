@@ -124,11 +124,10 @@ If native passes and PyCHARMM fails → bug is in library-mode `eval_charmm_scri
 
 ## Bootstrap API version
 
-PyCHARMM read gate logs `bootstrap_api=...` at startup. You need **`direct-api-v4`**
-(RTF/PRM/PSF via ``api_read`` Fortran entry points; CRD/restart coords via Python
-parse + ``coor.set_positions``). Earlier ``shortpath-sequential-v3`` and
-``stream-cooperative-v2`` used ``eval_charmm_script`` for READ — on DOMDEC MPI
-library builds that path rejects ``read``/``stream``/``open`` (``Unrecognized command``).
+PyCHARMM read gate logs `bootstrap_api=...` at startup. You need **`direct-api-v4.1`**
+(RTF/PRM/PSF via ``api_read`` with ``ctypes.byref(fn_len)`` — v4.0 passed ``fn_len`` by
+value and segfaulted in ``read_rtf_file``). CRD/restart coords use Python parse +
+``coor.set_positions``.
 
 ## Implementation
 
