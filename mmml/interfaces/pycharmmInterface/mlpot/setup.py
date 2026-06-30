@@ -154,7 +154,7 @@ class MlpotContext:
 
         if self.ml_selection is not None and self.registration_uses_block:
             clear_mlpot_energy_block(self.ml_selection, block_tag=self.block_tag)
-            apply_charmm_mm_block()
+        apply_charmm_mm_block()
 
     def reregister_mlpot(self, *, verbose: bool = False, force: bool = False) -> None:
         """Re-attach MLpot + ML MM-off registration after temporary MM-only work."""
@@ -1251,8 +1251,8 @@ def register_mlpot(
     with charmm_relaxed_bomlev():
         skip_iblo_inb_update = False
         if use_pbc:
-            # PBC all-ML: ``upinb`` after BLOCK DELTIC (bond strip) can segfault in
-            # ``__nbexcl_MOD_upinb``. Rebuild lists while PSF connectivity is intact.
+            # PBC all-ML: install ML exclusions before zeroed-CGENFF swap; skip second
+            # upinb in MLpot.__init__ when lists were built with PSF connectivity intact.
             _require_mlpot_skip_iblo_support(pycharmm)
             _install_ml_exclusions(ml_selection)
             skip_iblo_inb_update = True

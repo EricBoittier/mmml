@@ -566,9 +566,9 @@ def _mlpot_covers_all_atoms(ctx: MlpotContext) -> bool:
 def _overlap_rescue_uses_charmm_block_detach(ctx: MlpotContext) -> bool:
     """True when inter/intra rescue should detach MLpot and toggle CHARMM BLOCK.
 
-    Default PSF-edit registration (``registration_uses_block=False``) strips bonded
-    MM on ML atoms; bonded terms live in JAX/MLpot. Hybrid systems still need the
-    legacy CHARMM BLOCK path on MM atoms.
+    Default param-swap registration keeps PSF bonds and uses zeroed CGENFF params
+    during MLpot; bonded recovery uses JAX/MLpot without BLOCK detach. Hybrid
+    systems with ``registration_uses_block=True`` still use the legacy BLOCK path.
     """
     if not _mlpot_covers_all_atoms(ctx):
         return True

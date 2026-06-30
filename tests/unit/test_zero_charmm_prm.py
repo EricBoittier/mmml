@@ -36,6 +36,12 @@ def test_zero_nonbonded_keeps_rmin():
     assert "-0.0450" not in out
 
 
+def test_bonded_only_skips_nonbonded():
+    line = "HGA1     0.0       -0.0450     1.3400 ! alkane"
+    out = zero_prm_line(line, "NONBONDED", skip_sections=frozenset({"NONBONDED"}))
+    assert "-0.0450" in out
+
+
 def test_zero_nbfix():
     line = "OG2D1     CLGR1    -0.20        3.40   ! NMA"
     out = zero_prm_line(line, "NBFIX")

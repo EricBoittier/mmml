@@ -77,27 +77,49 @@ def test_apply_mlpot_registration_mm_off_honors_use_block(monkeypatch):
     zero_fn.assert_not_called()
 
 
-def test_zero_mlpot_psf_mm_terms_strips_bonded_and_charges():
+def test_zero_mlpot_psf_mm_terms_zeros_params_and_charges():
     sel = mock.Mock()
     sel.get_atom_indexes.return_value = [0, 1, 2]
     fake_psf = mock.Mock()
     fake_psf.get_charges.return_value = [0.5, -0.2, 0.1]
     fake_coor = mock.Mock()
     fake_coor.get_natom.return_value = 3
-    fake_select = mock.Mock()
-    fake_select.return_value.all_atoms.return_value = mock.Mock(name="all_sel")
 
-    with mock.patch.object(block_terms, "_import_pycharmm") as imp:
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.apply_zeroed_cgenff_params"
+    ) as zero_prm_fn, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.assert_psf_bonds_present",
+        side_effect=[400, 400],
+    ) as bond_fn, mock.patch.object(block_terms, "_import_pycharmm") as imp:
         pycharmm = imp.return_value
         pycharmm.coor = fake_coor
         pycharmm.psf = fake_psf
-        pycharmm.SelectAtoms = fake_select
         tag = block_terms.zero_mlpot_psf_mm_terms(sel)
 
     assert tag == "all"
-    fake_psf.delete_connectivity.assert_called_once()
+    assert bond_fn.call_count == 2
+    zero_prm_fn.assert_called_once_with(bonded_only=False, verbose=False)
+    fake_psf.delete_connectivity = getattr(fake_psf, "delete_connectivity", mock.Mock())
+    fake_psf.delete_connectivity.assert_not_called()
     fake_psf.set_charge.assert_called_once()
     assert fake_psf.set_charge.call_args.args[0] == [0.0, 0.0, 0.0]
+
+
+def test_zero_mlpot_psf_mm_terms_periodic_external_bonded_only():
+    sel = mock.Mock()
+    sel.get_atom_indexes.return_value = [0, 1, 2]
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.apply_zeroed_cgenff_params"
+    ) as zero_prm_fn, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.assert_psf_bonds_present",
+        return_value=400,
+    ), mock.patch.object(block_terms, "_import_pycharmm") as imp:
+        imp.return_value.coor.get_natom.return_value = 3
+        imp.return_value.psf.get_charges.return_value = [0.0, 0.0, 0.0]
+        imp.return_value.psf.set_charge = mock.Mock()
+        block_terms.zero_mlpot_psf_mm_terms(sel, periodic_external=True)
+
+    zero_prm_fn.assert_called_once_with(bonded_only=True, verbose=False)
 
 
 def test_apply_mlpot_registration_mm_off_periodic_external_uses_psf(monkeypatch):
