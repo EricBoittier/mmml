@@ -355,10 +355,10 @@ def _is_restart_xyz_header(line: str, *, velocities: bool = False) -> bool:
     if not u.startswith("!"):
         return False
     if velocities:
-        return "VELOC" in u and "X" in u and "Y" in u and "Z" in u
-    if "OLD" in u:
+        return u.startswith("!VX") or "VELOC" in u
+    if "OLD" in u or u.startswith("!VX") or u.startswith("!V"):
         return False
-    return "X" in u and "Y" in u and "Z" in u and "VELOC" not in u
+    return u.startswith("!X") and "Y" in u and "Z" in u
 
 
 def read_crd_coordinates(path: Path) -> np.ndarray | None:
