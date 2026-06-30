@@ -916,6 +916,9 @@ def test_bootstrap_topology_mpi_psf_crd_steps_all_ranks(tmp_path):
         "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
         return_value=(3, 4),
     ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._bootstrap_rank_local_staging_enabled",
+        return_value=False,
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi._invoke_charmm_script",
         side_effect=lambda s, **kw: calls.append(s.strip()),
     ), mock.patch(
@@ -950,3 +953,26 @@ def test_bootstrap_topology_mpi_invalid_mode(tmp_path):
         return_value=(0, 1),
     ), pytest.raises(ValueError, match="unsupported bootstrap mode"):
         charmm_mpi.bootstrap_topology_mpi(psf, crd, mode="bad-mode")
+
+
+def test_stage_topology_files_for_rank_copies_to_uuid_dir(tmp_path, monkeypatch):
+    monkeypatch.setenv("TMPDIR", str(tmp_path))
+    psf = tmp_path / "a.psf"
+    crd = tmp_path / "a.crd"
+    prm = tmp_path / "a.prm"
+    psf.write_text("2 !NATOM\n1 DCM 1 DCM 1 C1 0 1\n2 DCM 1 DCM 1 H1 0 1\n", encoding="utf-8")
+    crd.write_text("* coords\n*\n2\n", encoding="utf-8")
+    prm.write_text("MASS -1 C1 12.0 C\nMASS -1 H1 1.0 H\n", encoding="utf-8")
+
+    staged = charmm_mpi.prepare_rank_local_bootstrap_paths(
+        psf=psf,
+        crd=crd,
+        prm=prm,
+        rank=2,
+        size=4,
+    )
+
+    assert staged["rtf"].is_file()
+    assert staged["psf"].parent == staged["crd"].parent == staged["rtf"].parent
+    assert staged["staging_dir"].name.startswith("rank2_")
+    assert staged["rtf"].read_text(encoding="utf-8").startswith("* MMML MPI bootstrap")

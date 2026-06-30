@@ -8,6 +8,8 @@ import platform
 import shutil
 import subprocess
 import sys
+import tempfile
+import uuid
 from functools import lru_cache
 from pathlib import Path
 from typing import Callable
@@ -1136,10 +1138,8 @@ def _psf_atom_types_from_path(psf_path: Path) -> set[str]:
     return types
 
 
-def ensure_shared_minimal_rtf(psf_path: Path, prm_path: Path) -> Path:
-    """Write a MASS-only RTF beside *psf_path* (same path on every MPI rank)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
-
+def write_minimal_mass_rtf(psf_path: Path, prm_path: Path, out_path: Path) -> Path:
+    """Write a MASS-only RTF for atom types in *psf_path*."""
     needed = _psf_atom_types_from_path(psf_path)
     mass_lines: list[str] = []
     seen: set[str] = set()
@@ -1152,21 +1152,152 @@ def ensure_shared_minimal_rtf(psf_path: Path, prm_path: Path) -> Path:
     if missing:
         raise ValueError(f"Missing MASS records in {prm_path}: {missing}")
 
-    out = psf_path.with_name(f"{psf_path.stem}.minimal_mass.rtf")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     lines = [
         "* MMML MPI bootstrap minimal MASS topology",
         "*",
         *mass_lines,
         "END",
     ]
+    out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return out_path.resolve()
+
+
+def ensure_shared_minimal_rtf(psf_path: Path, prm_path: Path) -> Path:
+    """Write a MASS-only RTF beside *psf_path* (same path on every MPI rank)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+
+    out = psf_path.with_name(f"{psf_path.stem}.minimal_mass.rtf")
     rank, size = mpi_rank_size()
     if rank == 0 or (size <= 1 and not out.is_file()):
-        out.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        write_minimal_mass_rtf(psf_path, prm_path, out)
     if size > 1 and _mpi_comm_valid():
         from mpi4py import MPI
 
         MPI.COMM_WORLD.Barrier()
     return out
+
+
+def _bootstrap_rank_local_staging_enabled(*, size: int) -> bool:
+    """Whether each MPI rank copies topology files to a private UUID directory."""
+    if size <= 1:
+        return False
+    flag = os.environ.get("MMML_MPI_BOOTSTRAP_RANK_LOCAL", "").strip().lower()
+    if flag in ("0", "false", "no"):
+        return False
+    if flag in ("1", "true", "yes"):
+        return True
+    return True
+
+
+def stage_topology_files_for_rank(
+    paths: dict[str, Path],
+    *,
+    rank: int,
+    log_fn: Callable[[str, str], None] | None = None,
+) -> dict[str, Path]:
+    """Copy topology artifacts to ``$TMPDIR/mmml_mpi_bootstrap/rank<R>_<uuid>/``."""
+    run_id = uuid.uuid4().hex
+    base = Path(tempfile.gettempdir()) / "mmml_mpi_bootstrap" / f"rank{rank}_{run_id}"
+    base.mkdir(parents=True, exist_ok=True)
+    staged: dict[str, Path] = {"staging_dir": base.resolve()}
+    for key, src in paths.items():
+        src = Path(src).expanduser().resolve()
+        if not src.is_file():
+            raise FileNotFoundError(f"bootstrap staging missing {key}: {src}")
+        dst = base / src.name
+        shutil.copy2(src, dst)
+        staged[key] = dst.resolve()
+    if log_fn is not None:
+        names = ", ".join(f"{k}={v}" for k, v in staged.items() if k != "staging_dir")
+        log_fn("stage", f"rank {rank}: dir={base} {names}")
+    return staged
+
+
+def prepare_rank_local_bootstrap_paths(
+    *,
+    psf: Path,
+    crd: Path,
+    prm: Path,
+    rank: int,
+    size: int,
+    rtf_path: Path | None = None,
+    res: Path | None = None,
+    log_fn: Callable[[str, str], None] | None = None,
+) -> dict[str, Path]:
+    """Stage PSF/CRD/PRM (and optional RTF/res) under a per-rank UUID directory."""
+    run_id = uuid.uuid4().hex
+    base = Path(tempfile.gettempdir()) / "mmml_mpi_bootstrap" / f"rank{rank}_{run_id}"
+    base.mkdir(parents=True, exist_ok=True)
+
+    if rtf_path is not None and Path(rtf_path).is_file():
+        minimal = _copy_bootstrap_file(base, Path(rtf_path))
+    else:
+        minimal = write_minimal_mass_rtf(psf, prm, base / f"{psf.stem}.minimal_mass.rtf")
+
+    staged: dict[str, Path] = {
+        "staging_dir": base.resolve(),
+        "rtf": minimal,
+        "prm": _copy_bootstrap_file(base, prm),
+        "psf": _copy_bootstrap_file(base, psf),
+        "crd": _copy_bootstrap_file(base, crd),
+    }
+    if res is not None and Path(res).is_file():
+        staged["res"] = _copy_bootstrap_file(base, res)
+    if log_fn is not None:
+        log_fn(
+            "stage",
+            f"rank {rank}/{size}: dir={base} "
+            f"rtf={staged['rtf']} psf={staged['psf']} crd={staged['crd']}",
+        )
+    return staged
+
+
+def _copy_bootstrap_file(base: Path, src: Path) -> Path:
+    src = Path(src).expanduser().resolve()
+    if not src.is_file():
+        raise FileNotFoundError(f"bootstrap staging missing file: {src}")
+    dst = base / src.name
+    if not dst.is_file():
+        shutil.copy2(src, dst)
+    return dst.resolve()
+
+
+def _resolve_bootstrap_topology_paths(
+    *,
+    psf: Path,
+    crd: Path,
+    prm: Path,
+    rank: int,
+    size: int,
+    rtf_path: Path | None,
+    res: Path | None,
+    log_fn: Callable[[str, str], None] | None,
+) -> dict[str, Path]:
+    if _bootstrap_rank_local_staging_enabled(size=size):
+        return prepare_rank_local_bootstrap_paths(
+            psf=psf,
+            crd=crd,
+            prm=prm,
+            rank=rank,
+            size=size,
+            rtf_path=rtf_path,
+            res=res,
+            log_fn=log_fn,
+        )
+    if rtf_path is None:
+        minimal = ensure_shared_minimal_rtf(psf, prm)
+    else:
+        minimal = Path(rtf_path).expanduser().resolve()
+    paths = {
+        "rtf": minimal,
+        "prm": prm,
+        "psf": psf,
+        "crd": crd,
+    }
+    if res is not None and Path(res).is_file():
+        paths["res"] = Path(res).expanduser().resolve()
+    return paths
 
 
 def bootstrap_charmm_step(
@@ -1222,12 +1353,28 @@ def bootstrap_topology_mpi(
         prm = Path(prm_path).expanduser().resolve()
 
     rank, size = mpi_rank_size()
+    rtf_opt = Path(rtf_path).expanduser().resolve() if rtf_path else None
+    res_opt = (
+        Path(restart_path or psf.with_suffix(".res")).expanduser().resolve()
+        if mode == "restart"
+        else None
+    )
+    if mode == "restart" and (res_opt is None or not res_opt.is_file()):
+        raise FileNotFoundError(f"Restart not found: {res_opt}")
 
     if mode == "restart":
-        res = Path(restart_path or psf.with_suffix(".res")).expanduser().resolve()
-        if not res.is_file():
-            raise FileNotFoundError(f"Restart not found: {res}")
-        fortran_path, alias = charmm_fortran_path(res, for_write=False)
+        paths = _resolve_bootstrap_topology_paths(
+            psf=psf,
+            crd=crd,
+            prm=prm,
+            rank=rank,
+            size=size,
+            rtf_path=rtf_opt,
+            res=res_opt,
+            log_fn=log_fn,
+        )
+        res_local = paths["res"]
+        fortran_path, alias = charmm_fortran_path(res_local, for_write=False)
         try:
             for step_name, script in (
                 ("open_restart", f"open read unit 20 name {fortran_path}\n"),
@@ -1240,36 +1387,39 @@ def bootstrap_topology_mpi(
             if alias is not None:
                 alias.finalize()
     elif mode == "stream-inp":
-        if rtf_path is None:
-            minimal = ensure_shared_minimal_rtf(psf, prm).resolve()
-        else:
-            minimal = Path(rtf_path).expanduser().resolve()
-        inp_dir = psf.parent / "mpi_bootstrap_stream"
-        inp_path = inp_dir / f"{psf.stem}_read.inp"
-        if rank == 0:
-            inp_dir.mkdir(parents=True, exist_ok=True)
-            lines = [
-                "* MMML MPI bootstrap stream READ",
-                "bomlev -2",
-                f"read rtf card name {minimal}",
-                f"read param card name {prm} flex",
-                f"read psf card name {psf}",
-                f"read coor card name {crd}",
-            ]
-            if crystal_side_A is not None:
-                side = float(crystal_side_A)
-                lines.extend(
-                    [
-                        f"crystal define cubic {side} {side} {side} 90 90 90",
-                        f"crystal build cutoff {float(crystal_cutnb_A)} noper 0",
-                    ]
-                )
-            lines.append("stop")
-            inp_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        if size > 1 and _mpi_comm_valid():
-            from mpi4py import MPI
-
-            MPI.COMM_WORLD.Barrier()
+        paths = _resolve_bootstrap_topology_paths(
+            psf=psf,
+            crd=crd,
+            prm=prm,
+            rank=rank,
+            size=size,
+            rtf_path=rtf_opt,
+            res=None,
+            log_fn=log_fn,
+        )
+        minimal = paths["rtf"]
+        prm = paths["prm"]
+        psf = paths["psf"]
+        crd = paths["crd"]
+        inp_path = paths.get("staging_dir", minimal.parent) / f"{psf.stem}_read.inp"
+        lines = [
+            "* MMML MPI bootstrap stream READ",
+            "bomlev -2",
+            f"read rtf card name {minimal}",
+            f"read param card name {prm} flex",
+            f"read psf card name {psf}",
+            f"read coor card name {crd}",
+        ]
+        if crystal_side_A is not None:
+            side = float(crystal_side_A)
+            lines.extend(
+                [
+                    f"crystal define cubic {side} {side} {side} 90 90 90",
+                    f"crystal build cutoff {float(crystal_cutnb_A)} noper 0",
+                ]
+            )
+        lines.append("stop")
+        inp_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         bootstrap_charmm_step(
             "stream_inp",
             f"stream {inp_path}\n",
@@ -1278,10 +1428,20 @@ def bootstrap_topology_mpi(
     else:
         if mode != "psf-crd":
             raise ValueError(f"unsupported bootstrap mode: {mode!r}")
-        if rtf_path is None:
-            minimal = ensure_shared_minimal_rtf(psf, prm).resolve()
-        else:
-            minimal = Path(rtf_path).expanduser().resolve()
+        paths = _resolve_bootstrap_topology_paths(
+            psf=psf,
+            crd=crd,
+            prm=prm,
+            rank=rank,
+            size=size,
+            rtf_path=rtf_opt,
+            res=None,
+            log_fn=log_fn,
+        )
+        minimal = paths["rtf"]
+        prm = paths["prm"]
+        psf = paths["psf"]
+        crd = paths["crd"]
         steps = [
             ("read_rtf", f"read rtf card name {minimal}\n"),
             ("read_prm", f"read param card name {prm} flex\n"),
