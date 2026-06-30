@@ -1208,6 +1208,10 @@ def _apply_mlpot_psf_mm_off_and_pbc(ctx: MlpotContext, *, verbose: bool = False)
         apply_mlpot_registration_mm_off,
     )
 
+    if bool(getattr(ctx, "use_pbc", False)) and not bool(
+        getattr(ctx, "registration_uses_block", False)
+    ):
+        _suspend_pbc_for_cgenff_param_read(verbose=verbose)
     block_tag = apply_mlpot_registration_mm_off(
         ctx.ml_selection,
         mm_internal_scale=float(ctx.mm_internal_scale),
