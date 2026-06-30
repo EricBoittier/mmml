@@ -3781,6 +3781,24 @@ def add_calculator_pre_minimize_args(parser: argparse.ArgumentParser) -> None:
         help="ASE BFGS maximum atomic displacement per step in Å (default: 0.05).",
     )
     group.add_argument(
+        "--fire-min-steps",
+        type=int,
+        default=200,
+        help="ASE FIRE steps during calculator pre-minimize / rescue (default: 200).",
+    )
+    group.add_argument(
+        "--fire-min-maxstep",
+        type=float,
+        default=0.2,
+        help="ASE FIRE max atomic displacement per step in Å (default: 0.2).",
+    )
+    group.add_argument(
+        "--rescue-fire-fmax",
+        type=float,
+        default=0.05,
+        help="FIRE force convergence threshold in eV/Å for calculator rescue (default: 0.05).",
+    )
+    group.add_argument(
         "--quiet-bfgs",
         action="store_true",
         help="Suppress ASE BFGS per-step log output during calculator pre-minimize.",

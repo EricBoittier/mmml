@@ -145,6 +145,27 @@ def test_build_pycharmm_command_no_include_mm_parses_in_pycharmm_backend():
     assert parsed.include_mm is False
 
 
+def test_build_pycharmm_command_fire_min_flags_parse_in_pycharmm_backend():
+    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+
+    cmd = build_pycharmm_command(
+        _pycharmm_args(
+            calculator_pre_minimize=True,
+            pre_min_steps=50,
+            pre_min_fmax=0.1,
+            bfgs_maxstep=0.05,
+            fire_min_steps=200,
+            fire_min_maxstep=0.2,
+            rescue_fire_fmax=0.05,
+        )
+    )
+    assert "--fire-min-steps" in cmd
+    parsed = pycharmm_mlpot.parse_args(cmd)
+    assert parsed.fire_min_steps == 200
+    assert parsed.fire_min_maxstep == pytest.approx(0.2)
+    assert parsed.rescue_fire_fmax == pytest.approx(0.05)
+
+
 def test_build_pycharmm_command_omits_residue_when_composition_set():
     cmd = build_pycharmm_command(_pycharmm_args())
     assert "--composition" in cmd
