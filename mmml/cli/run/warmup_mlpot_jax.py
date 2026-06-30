@@ -336,10 +336,10 @@ def resolve_warmup_atoms_per_monomer_from_md_system(args: argparse.Namespace) ->
     )
 
     if getattr(args, "composition", None):
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import parse_composition_dict
+        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import parse_composition
 
         sizes: list[int] = []
-        for residue in parse_composition_dict(str(args.composition)):
+        for residue, _count in parse_composition(str(args.composition)):
             apm = PBC_BURST_ML_ATOMS_PER_MONOMER.get(str(residue).upper())
             if apm is None:
                 return None
