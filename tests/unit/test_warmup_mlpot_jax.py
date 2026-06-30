@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 from unittest import mock
 
@@ -275,3 +276,108 @@ def test_serial_vs_mpirun_environment_snapshot(monkeypatch):
     assert snap["OMP_NUM_THREADS"] == "1"
     assert snap["MMML_MPI_NP"] == "1"
     assert "MMML_MLPOT_DEVICE" in snap
+
+
+def test_auto_warmup_enabled_respects_skip_flags(monkeypatch):
+    args = argparse.Namespace(
+        skip_jit_warmup=False,
+        auto_warmup_mlpot_jax=True,
+        checkpoint=Path("/tmp/ckpt.json"),
+    )
+    assert wm.auto_warmup_mlpot_jax_enabled(args) is True
+    args.skip_jit_warmup = True
+    assert wm.auto_warmup_mlpot_jax_enabled(args) is False
+    args.skip_jit_warmup = False
+    args.auto_warmup_mlpot_jax = False
+    assert wm.auto_warmup_mlpot_jax_enabled(args) is False
+    monkeypatch.setenv("MMML_NO_AUTO_WARMUP_MLPOT_JAX", "1")
+    args.auto_warmup_mlpot_jax = True
+    assert wm.auto_warmup_mlpot_jax_enabled(args) is False
+
+
+def test_build_warmup_namespace_from_md_system_dcm30():
+    args = argparse.Namespace(
+        composition="DCM:30",
+        residue="DCM",
+        n_molecules=30,
+        box_size=28.0,
+        spacing=5.0,
+        ml_batch_size=64,
+        ml_gpu_count=2,
+        ml_max_active_dimers=None,
+        mm_switch_on=8.0,
+        mm_switch_width=5.0,
+        ml_switch_width=1.5,
+        no_complementary_handoff=False,
+        include_mm=True,
+        checkpoint=Path("/tmp/ckpt"),
+        quiet=False,
+        verbose=False,
+    )
+    ns = wm.build_warmup_namespace_from_md_system(args)
+    assert ns is not None
+    assert ns.n_monomers == 30
+    assert ns.atoms_per_monomer == 5
+    assert ns.box_side == 28.0
+    assert ns.ml_gpu_count == 2
+    assert ns.do_mm is True
+
+
+def test_maybe_auto_warmup_skips_under_mpirun(monkeypatch):
+    args = argparse.Namespace(
+        skip_jit_warmup=False,
+        auto_warmup_mlpot_jax=True,
+        composition="DCM:4",
+        residue="DCM",
+        n_molecules=4,
+        box_size=20.0,
+        spacing=5.0,
+        ml_batch_size=128,
+        ml_gpu_count=1,
+        ml_max_active_dimers=None,
+        mm_switch_on=8.0,
+        mm_switch_width=5.0,
+        ml_switch_width=1.5,
+        no_complementary_handoff=False,
+        include_mm=True,
+        checkpoint=Path("/tmp/ckpt.json"),
+        quiet=True,
+        verbose=False,
+    )
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
+        return_value=True,
+    ):
+        assert wm.maybe_auto_warmup_mlpot_jax_from_md_system(args) is None
+
+
+def test_maybe_auto_warmup_runs_serial(monkeypatch):
+    args = argparse.Namespace(
+        skip_jit_warmup=False,
+        auto_warmup_mlpot_jax=True,
+        composition="DCM:4",
+        residue="DCM",
+        n_molecules=4,
+        box_size=20.0,
+        spacing=5.0,
+        ml_batch_size=128,
+        ml_gpu_count=1,
+        ml_max_active_dimers=None,
+        mm_switch_on=8.0,
+        mm_switch_width=5.0,
+        ml_switch_width=1.5,
+        no_complementary_handoff=False,
+        include_mm=True,
+        checkpoint=Path("/tmp/ckpt.json"),
+        quiet=True,
+        verbose=False,
+    )
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
+        return_value=False,
+    ), mock.patch(
+        "mmml.cli.run.warmup_mlpot_jax.run_warmup_mlpot_jax",
+        return_value=0,
+    ) as mock_run:
+        assert wm.maybe_auto_warmup_mlpot_jax_from_md_system(args) == 0
+    mock_run.assert_called_once()

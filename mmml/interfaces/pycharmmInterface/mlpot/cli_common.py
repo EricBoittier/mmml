@@ -2268,6 +2268,12 @@ def probe_and_light_resync_if_desync(
     restart_path: Path | str | None = None,
 ) -> float:
     """Run light resync when hybrid/CHARMM GRMS look desynced; else refresh in place."""
+    if verbose and context:
+        print(
+            f"{context}: first hybrid ENER FORCE "
+            "(JAX compile cache / auto warmup speeds this up)...",
+            flush=True,
+        )
     charmm_grms_after_ener_force(silent=silent_charmm)
     diag = measure_hybrid_charmm_grms(mlpot_ctx)
     _print_hybrid_charmm_grms_diag(context, diag, mlpot_ctx=mlpot_ctx)

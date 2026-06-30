@@ -1183,7 +1183,18 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "Skip JIT/XLA warmup. jaxmd/ase: generic XLA GPU compile and pre-MD hybrid "
-            "MMML eval; lambda_ti: skip first MMML energy eval per window."
+            "MMML eval; lambda_ti: skip first MMML energy eval per window; "
+            "pycharmm: skip serial auto warmup-mlpot-jax before CHARMM MLpot."
+        ),
+    )
+    parser.add_argument(
+        "--auto-warmup-mlpot-jax",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "pycharmm: run serial warmup-mlpot-jax before MPI/CHARMM to populate "
+            "JAX_COMPILATION_CACHE_DIR (default on). Also disabled by --skip-jit-warmup "
+            "or MMML_NO_AUTO_WARMUP_MLPOT_JAX=1."
         ),
     )
     parser.add_argument(
@@ -2832,6 +2843,11 @@ def run_backend(backend: str, argv: list[str], args: argparse.Namespace) -> int:
 
         _apply_charmm_omp_threads_env(args)
         prepare_serial_charmm_mpi_env()
+        from mmml.cli.run.warmup_mlpot_jax import maybe_auto_warmup_mlpot_jax_from_md_system
+
+        warm_rc = maybe_auto_warmup_mlpot_jax_from_md_system(args)
+        if warm_rc is not None and int(warm_rc) != 0:
+            return int(warm_rc)
         campaign_active = False
         if getattr(args, "config", None):
             from mmml.cli.run.md_config import config_is_campaign, load_yaml_config
