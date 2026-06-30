@@ -124,8 +124,27 @@ fi
 
 # libcharmm.so needs shared FFTW; cluster /opt static .a lacks -fPIC.
 _MMML_FFTW_PIC="${MMML_FFTW_ROOT:-${HOME}/.local/fftw-3.3.10-pic}"
-if [[ -z "${FFTW_ROOT:-}" || "${FFTW_ROOT}" == /opt/* || "${FFTW_ROOT}" == /srv/opt/* ]]; then
-  if [[ -f "${_MMML_FFTW_PIC}/lib/libfftw3.so" && -f "${_MMML_FFTW_PIC}/lib/libfftw3f.so" ]]; then
+_pic_fftw_ready() {
+  [[ -f "${_MMML_FFTW_PIC}/lib/libfftw3.so" && -f "${_MMML_FFTW_PIC}/lib/libfftw3f.so" ]]
+}
+if [[ -n "${MMML_FFTW_ROOT:-}" ]]; then
+  if _pic_fftw_ready; then
+    FFTW_ROOT="$_MMML_FFTW_PIC"
+    FFTWF_ROOT="$_MMML_FFTW_PIC"
+    echo "Using PIC/shared FFTW (MMML_FFTW_ROOT): $FFTW_ROOT" >&2
+  else
+    echo "rebuild_charmm_mlpot: MMML_FFTW_ROOT=$_MMML_FFTW_PIC but shared libs are missing." >&2
+    echo "  Expected: \$_MMML_FFTW_PIC/lib/libfftw3.so and libfftw3f.so" >&2
+    echo "  One-time build (~5–15 min):" >&2
+    echo "    bash scripts/build_fftw_pic.sh" >&2
+    echo "  Then:" >&2
+    echo "    export MMML_FFTW_ROOT=\${HOME}/.local/fftw-3.3.10-pic" >&2
+    echo "    export FFTW_ROOT=\$MMML_FFTW_ROOT FFTWF_ROOT=\$MMML_FFTW_ROOT" >&2
+    echo "    OPENMPI_ROOT=/opt/gcc-12.2.0/openmpi-4.1.4/build bash scripts/rebuild_charmm_mlpot.sh --clean" >&2
+    exit 1
+  fi
+elif [[ -z "${FFTW_ROOT:-}" || "${FFTW_ROOT}" == /opt/* || "${FFTW_ROOT}" == /srv/opt/* ]]; then
+  if _pic_fftw_ready; then
     FFTW_ROOT="$_MMML_FFTW_PIC"
     FFTWF_ROOT="$_MMML_FFTW_PIC"
     echo "Using PIC/shared FFTW: $FFTW_ROOT" >&2
@@ -510,6 +529,7 @@ if [[ "$needs_configure" == 1 ]]; then
           echo "  One-time fix on this node:" >&2
           echo "    bash scripts/build_fftw_pic.sh" >&2
           echo "    export MMML_FFTW_ROOT=\${HOME}/.local/fftw-3.3.10-pic" >&2
+          echo "    export FFTW_ROOT=\$MMML_FFTW_ROOT FFTWF_ROOT=\$MMML_FFTW_ROOT" >&2
           echo "    OPENMPI_ROOT=/opt/gcc-12.2.0/openmpi-4.1.4/build bash scripts/rebuild_charmm_mlpot.sh --clean" >&2
           exit 1
         fi
