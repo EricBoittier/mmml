@@ -5,7 +5,8 @@
 # library fails with "recompile with -fPIC". Run this once per machine, then:
 #
 #   export MMML_FFTW_ROOT=$HOME/.local/fftw-3.3.10-pic
-#   OPENMPI_ROOT=/opt/gcc-12.2.0/openmpi-4.1.4/build bash scripts/rebuild_charmm_mlpot.sh
+#   export FFTW_ROOT=$MMML_FFTW_ROOT FFTWF_ROOT=$MMML_FFTW_ROOT
+#   OPENMPI_ROOT=/opt/gcc-12.2.0/openmpi-4.1.4/build bash scripts/rebuild_charmm_mlpot.sh --clean
 #
 # Usage:
 #   bash scripts/build_fftw_pic.sh
@@ -15,11 +16,14 @@ set -euo pipefail
 
 VERSION="${FFTW_VERSION:-3.3.10}"
 PREFIX="${MMML_FFTW_ROOT:-${HOME}/.local/fftw-${VERSION}-pic}"
-SRC_DIR="${FFTW_SRC_DIR:-${TMPDIR:-/tmp}/fftw-${VERSION}-src}"
+BUILD_DIR="${FFTW_BUILD_DIR:-${HOME}/.cache/mmml-fftw-build}"
+SRC_DIR="${FFTW_SRC_DIR:-$BUILD_DIR/fftw-${VERSION}}"
 TARBALL="${FFTW_TARBALL:-fftw-${VERSION}.tar.gz}"
+TARBALL_PATH="$BUILD_DIR/$TARBALL"
 URL="https://www.fftw.org/${TARBALL}"
 
 echo "FFTW PIC build: prefix=$PREFIX"
+echo "  staging=$BUILD_DIR"
 
 if [[ -f "$PREFIX/lib/libfftw3.so" && -f "$PREFIX/lib/libfftw3f.so" ]]; then
   echo "Already built: $PREFIX/lib/libfftw3.so"
@@ -27,30 +31,61 @@ if [[ -f "$PREFIX/lib/libfftw3.so" && -f "$PREFIX/lib/libfftw3f.so" ]]; then
   exit 0
 fi
 
-mkdir -p "$(dirname "$SRC_DIR")"
-if [[ ! -d "$SRC_DIR" ]]; then
-  if [[ ! -f "${SRC_DIR%/src}/${TARBALL}" ]]; then
-    echo "Downloading $URL ..."
-    curl -fsSL "$URL" -o "${SRC_DIR%/src}/${TARBALL}"
+mkdir -p "$BUILD_DIR" "$PREFIX"
+
+_download_tarball() {
+  if [[ -f "$TARBALL_PATH" ]]; then
+    echo "Using cached tarball: $TARBALL_PATH"
+    return 0
   fi
-  tar -xzf "${SRC_DIR%/src}/${TARBALL}" -C "$(dirname "$SRC_DIR")"
-  mv "$(dirname "$SRC_DIR")/fftw-${VERSION}" "$SRC_DIR"
+  echo "Downloading $URL ..."
+  echo "  → $TARBALL_PATH"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fSL "$URL" -o "$TARBALL_PATH"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -O "$TARBALL_PATH" "$URL"
+  else
+    echo "build_fftw_pic: need curl or wget to fetch $URL" >&2
+    exit 1
+  fi
+}
+
+if [[ ! -d "$SRC_DIR" ]]; then
+  _download_tarball
+  echo "Extracting $TARBALL_PATH ..."
+  tar -xzf "$TARBALL_PATH" -C "$BUILD_DIR"
+  if [[ ! -d "$BUILD_DIR/fftw-${VERSION}" ]]; then
+    echo "build_fftw_pic: expected $BUILD_DIR/fftw-${VERSION} after extract" >&2
+    exit 1
+  fi
+  if [[ "$SRC_DIR" != "$BUILD_DIR/fftw-${VERSION}" ]]; then
+    rm -rf "$SRC_DIR"
+    mv "$BUILD_DIR/fftw-${VERSION}" "$SRC_DIR"
+  fi
 fi
 
-mkdir -p "$PREFIX"
 cd "$SRC_DIR"
 
 # Single prefix: libfftw3 (double) + libfftw3f (single via --enable-float).
-./configure \
-  --prefix="$PREFIX" \
-  --enable-shared \
-  --disable-static \
-  --enable-float \
-  --enable-threads \
-  CFLAGS="-fPIC -O2 -march=native"
+if [[ ! -f Makefile ]]; then
+  echo "Configuring FFTW in $SRC_DIR ..."
+  ./configure \
+    --prefix="$PREFIX" \
+    --enable-shared \
+    --disable-static \
+    --enable-float \
+    --enable-threads \
+    CFLAGS="-fPIC -O2"
+fi
 
 make -j"$(nproc 2>/dev/null || echo 4)"
 make install
+
+if [[ ! -f "$PREFIX/lib/libfftw3.so" || ! -f "$PREFIX/lib/libfftw3f.so" ]]; then
+  echo "build_fftw_pic: install failed — missing .so under $PREFIX/lib" >&2
+  ls -la "$PREFIX/lib" 2>/dev/null || true
+  exit 1
+fi
 
 echo ""
 echo "Done. Add to your rebuild env:"
