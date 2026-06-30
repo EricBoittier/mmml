@@ -1085,14 +1085,14 @@ def _invoke_charmm_script(
 def configure_mpi_bootstrap_env() -> None:
     """Env guards before cooperative topology READ (no import-time crystal free).
 
-    ``MMML_SKIP_CHARMM_RESET_BLOCK=1`` applies under ``mpirun`` when CHARMM is
-    MPI-linked: import-time ``reset_block`` can hang after the PyCHARMM env panel.
+    Always skip import-time ``reset_block`` for bootstrap: it runs before
+    ``bomlev -2`` is applied and aborts on an empty system (BLOCK ILLEGAL COMMAND).
+    Under ``mpirun``, import-time BLOCK can also hang on MPI-linked builds.
     """
     from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     _, size = mpi_rank_size()
-    if charmm_lib_links_mpi() and _under_mpirun():
-        os.environ.setdefault("MMML_SKIP_CHARMM_RESET_BLOCK", "1")
+    os.environ.setdefault("MMML_SKIP_CHARMM_RESET_BLOCK", "1")
     if size <= 1:
         return
     os.environ.setdefault("MMML_DEFER_MPI4PY_PACKAGE_IMPORT", "1")

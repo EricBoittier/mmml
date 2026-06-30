@@ -117,6 +117,7 @@ def main() -> int:
         sync_import_pycharmm_for_bootstrap,
     )
 
+    configure_mpi_bootstrap_env()
     prepare_serial_charmm_mpi_env()
     ok, msg = mpi4py_openmpi_mismatch()
     if not ok:
