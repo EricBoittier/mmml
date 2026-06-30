@@ -820,7 +820,16 @@ def finalize_overlap_rescue_for_dynamics(
     from mmml.interfaces.pycharmmInterface.mlpot.setup import assert_mlpot_user_active
 
     verbose = bool(getattr(getattr(config, "rescue", None), "verbose", False))
-    ctx.reregister_mlpot(verbose=verbose, reregister_params=True)
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        invalidate_mlpot_calculator_caches,
+        sync_charmm_lists_after_mini,
+    )
+
+    sync_charmm_lists_after_mini(quiet=True)
+    # Coordinate-only rescue (repack / selective rebuild): reattach MLpot without
+    # CGENFF READ PARAM — append clears PBC nb/image lists on all-ML clusters.
+    ctx.reregister_mlpot(verbose=verbose, reregister_params=False)
+    invalidate_mlpot_calculator_caches(ctx)
     grms = refresh_mlpot_energy_and_grms(
         ctx,
         context=f"{context} (post-rescue)",

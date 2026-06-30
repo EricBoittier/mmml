@@ -67,6 +67,25 @@ def test_apply_zeroed_cgenff_params_bonded_only(tmp_path: Path, monkeypatch):
     assert cgenff_prm_swap.active_cgenff_prm_mode() == "zeroed_bonded"
 
 
+def test_read_cgenff_prm_append_suspends_pbc_before_read():
+    import inspect
+
+    from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_prm
+
+    src = inspect.getsource(read_cgenff_prm)
+    assert "if append:" in src
+    assert "suspend_pbc_before_cgenff_param_append()" in src
+
+
+def test_read_cgenff_prm_replace_skips_pbc_suspend():
+    import inspect
+
+    from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_prm
+
+    src = inspect.getsource(read_cgenff_prm)
+    assert src.index("if append:") < src.index("def _read()")
+
+
 def test_assert_psf_bonds_present_raises():
     with mock.patch.object(cgenff_prm_swap, "psf_bond_count", return_value=0):
         with pytest.raises(RuntimeError, match="PSF has 0 bonds"):

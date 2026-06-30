@@ -1774,6 +1774,10 @@ def test_finalize_overlap_rescue_for_dynamics_reregisters_and_gates_grms():
         pyCModel=MagicMock(),
     )
     with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+    ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
         return_value=12.0,
     ) as refresh, patch(
@@ -1785,7 +1789,7 @@ def test_finalize_overlap_rescue_for_dynamics_reregisters_and_gates_grms():
         grms = finalize_overlap_rescue_for_dynamics(
             ctx, cfg, context="EQUI at step 2500"
         )
-    ctx.reregister_mlpot.assert_called_once_with(verbose=False)
+    ctx.reregister_mlpot.assert_called_once_with(verbose=False, reregister_params=False)
     assert refresh.call_count == 1
     assert grms == 12.0
 
@@ -1809,6 +1813,10 @@ def test_finalize_overlap_rescue_for_dynamics_aborts_on_high_grms():
         pyCModel=MagicMock(),
     )
     with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+    ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
         return_value=5000.0,
     ), patch(

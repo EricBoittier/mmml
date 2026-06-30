@@ -1240,10 +1240,16 @@ def _suspend_pbc_for_cgenff_param_read(*, verbose: bool = False) -> None:
     ``NTRANS`` still set (e.g. DCM:100 after lattice prep), ``UPIMNB`` segfaults.
     ``crystal free`` sets ``NTRANS=0`` so the param-read ``upinb`` pass is vacuum-safe;
     :func:`_finalize_pbc_mlpot_exclusions_after_param_read` restores crystal/nb lists.
-    """
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import crystal_free_charmm
 
-    crystal_free_charmm()
+    Also invoked from :func:`read_cgenff_prm` (append); this wrapper keeps the
+    registration-time log line when ``verbose=True``.
+    """
+    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+        suspend_pbc_before_cgenff_param_append,
+    )
+
+    if not suspend_pbc_before_cgenff_param_append():
+        return
     if verbose:
         print(
             "MLpot PBC: crystal free before zeroed CGENFF read "

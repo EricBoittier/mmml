@@ -95,6 +95,7 @@ def test_dynamics_setters_use_c_api_path_buffer():
 def test_dynamics_script_append_for_heat_ramp():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _dynamics_script_append_for_heat_ramp,
+        _merge_dynamics_script_append,
     )
 
     append = _dynamics_script_append_for_heat_ramp(
@@ -102,20 +103,22 @@ def test_dynamics_script_append_for_heat_ramp():
     )
     assert "ihtfrq 250" in append
     assert "teminc 0.008" in append
-
-
-def test_charmm_coordinates_are_nontrivial_detects_all_zero():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
-        charmm_coordinates_are_nontrivial,
+    merged = _merge_dynamics_script_append(
+        "dynamics timestep 0.0002 nstep 500 verlet start\n",
+        append,
     )
+    assert merged.count("\n") == 1
+    assert "ihtfrq 250" in merged.split("\n")[0]
+    assert "teminc 0.008" in merged.split("\n")[0]
 
-    assert charmm_coordinates_are_nontrivial.__doc__
-    # Logic-only: zeros fail span check when applied to array in function body.
 
-
+def test_run_dynamics_merges_heat_ramp_onto_dynamics_line():
     block = _read("mmml/interfaces/pycharmmInterface/mlpot/dynamics.py").split(
         "def run_dynamics("
     )[1].split("\ndef ")[0]
+    assert "_execute_dynamics_script" in block
+    assert "_normalize_dynamics_heat_ramp_kw" in block
+    assert "apply_heat_ramp_frequencies" in block
     assert "_apply_dynamics_io_setters" in block
     assert "DynamicsScript" in block
 

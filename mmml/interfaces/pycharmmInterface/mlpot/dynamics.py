@@ -2787,6 +2787,44 @@ def apply_charmm_dynamics_echeck_kw(kw: dict[str, Any], echeck: float) -> None:
         pass
 
 
+def _normalize_dynamics_heat_ramp_kw(kw: dict[str, Any]) -> None:
+    """Map scale-heat ramp keys to PyCHARMM script names and Fortran setters."""
+    teminc = kw.pop("TEMINC", None)
+    if teminc is not None and "teminc" not in kw:
+        kw["teminc"] = float(teminc)
+    iht = kw.get("ihtfrq")
+    if iht is not None and int(iht) > 0:
+        kw["ihtfrq"] = int(iht)
+    try:
+        import pycharmm.dynamics as charm_dyn
+
+        if "firstt" in kw:
+            charm_dyn.set_firstt(float(kw["firstt"]))
+        if "finalt" in kw:
+            charm_dyn.set_finalt(float(kw["finalt"]))
+        if "teminc" in kw:
+            charm_dyn.set_teminc(float(kw["teminc"]))
+    except (ImportError, OSError):
+        pass
+
+
+def _merge_dynamics_script_append(base_script: str, append: str) -> str:
+    """Join ``append`` onto the ``dynamics`` line (``CommandScript`` adds trailing ``\\n``)."""
+    extra = (append or "").strip()
+    if not extra:
+        return base_script
+    body = base_script.rstrip("\n").strip()
+    return f"{body} {extra}\n"
+
+
+def _execute_dynamics_script(dyn: Any, *, append: str = "") -> None:
+    """Run ``DynamicsScript`` with optional keywords on the same ``dynamics`` line."""
+    import pycharmm.lingo as lingo
+
+    script = _merge_dynamics_script_append(dyn.create_script_string(), append)
+    lingo.charmm_script(script)
+
+
 def _dynamics_script_append_for_heat_ramp(kw: dict[str, Any]) -> str:
     """Extra ``dyna`` keywords when scale-heat ramp must reach Fortran ``reawri``."""
     parts: list[str] = []
@@ -2823,11 +2861,14 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
         clear_comparison_coordinates()
     if "echeck" in kw:
         apply_charmm_dynamics_echeck_kw(kw, float(kw["echeck"]))
+    if int(kw.get("ihtfrq", 0) or 0) > 0:
+        apply_heat_ramp_frequencies(kw, nstep=nstep, ihtfrq=int(kw["ihtfrq"]))
+    _normalize_dynamics_heat_ramp_kw(kw)
     _apply_dynamics_io_setters(kw)
     heat_append = _dynamics_script_append_for_heat_ramp(kw)
     _release_charmm_dynamics_api_buffers()
     dyn = pycharmm.DynamicsScript(**kw)
-    dyn.run(append=heat_append)
+    _execute_dynamics_script(dyn, append=heat_append)
     _release_charmm_dynamics_api_buffers()
     return dyn
 

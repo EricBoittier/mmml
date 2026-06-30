@@ -1164,6 +1164,12 @@ def _handle_extent_cleanup_rescue(
     )
 
     pos = get_charmm_positions_array()
+    max_abs = float(np.max(np.abs(pos))) if pos.size else 0.0
+    if max_abs > 1000.0:
+        raise RuntimeError(
+            f"{exc}; coordinates span ±{max_abs:.0f} Å — refuse cleanup extent rescue "
+            "(integration blow-up; fix heat ihtfrq < chunk nstep or use Hoover heat)"
+        ) from exc
     offsets = monomer_offsets(int(pos.shape[0]), config.n_monomers)
     cell = _overlap_cell(
         use_pbc=config.use_pbc,
@@ -1219,6 +1225,14 @@ def _handle_extent_cleanup_rescue(
             **repack_common,
         )
     sync_charmm_positions(new_pos)
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        invalidate_mlpot_calculator_caches,
+        sync_charmm_lists_after_mini,
+    )
+
+    sync_charmm_lists_after_mini(quiet=True)
+    invalidate_mlpot_calculator_caches(mlpot_ctx)
+    mlpot_ctx.reregister_mlpot(verbose=False, reregister_params=False)
     setattr(mlpot_ctx, "_overlap_post_rescue_cold_start", True)
     return _extent_check(config, context=f"{label} after cleanup extent rescue")
 

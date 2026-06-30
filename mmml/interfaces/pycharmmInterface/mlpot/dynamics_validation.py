@@ -474,11 +474,26 @@ def charmm_dynamics_energy_is_finite() -> bool:
     return True
 
 
+def charmm_coordinates_are_bounded(*, max_abs_A: float = 2000.0) -> bool:
+    """False when any atom coordinate magnitude exceeds a sane bound."""
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import pycharmm.coor as coor
+
+    pos = coor.get_positions()
+    arr = pos[["x", "y", "z"]].to_numpy(dtype=np.float64).reshape(-1)
+    if arr.size == 0:
+        return True
+    if not np.all(np.isfinite(arr)):
+        return False
+    return float(np.max(np.abs(arr))) <= float(max_abs_A)
+
+
 def charmm_dynamics_state_is_finite() -> bool:
     """Coordinates and energy row are finite after a dynamics segment."""
     return (
         charmm_coordinates_are_finite()
         and charmm_coordinates_are_nontrivial()
+        and charmm_coordinates_are_bounded()
         and charmm_dynamics_energy_is_finite()
     )
 
@@ -493,6 +508,13 @@ def validate_charmm_dynamics_state_after_chunk(*, context: str) -> None:
                 "thermostat (scale heat needs ihtfrq < nstep per overlap chunk; "
                 "prefer --heat-thermostat hoover with overlap), shorten timestep, "
                 "or run bonded-MM mini before heat."
+            )
+        if not charmm_coordinates_are_bounded():
+            raise RuntimeError(
+                f"{context}: CHARMM coordinates exceed {2000.0:.0f} Å after dynamics "
+                "(MLpot integration blow-up). Refuse overlap rescue — ensure scale heat "
+                "passes ihtfrq/teminc on the dynamics line (not after), cap ihtfrq "
+                "< chunk nstep, or use --heat-thermostat hoover."
             )
         return
     raise RuntimeError(

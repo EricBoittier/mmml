@@ -1190,6 +1190,10 @@ def test_check_extent_cleanup_rescue_rebuilds_monomer_from_reference(tmp_path):
         "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
         side_effect=_sync_pos,
     ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.run_extent_recovery_from_prior_restart",
     ) as flyoff:
         extent, rescued = check_dynamics_overlap(
@@ -1199,6 +1203,7 @@ def test_check_extent_cleanup_rescue_rebuilds_monomer_from_reference(tmp_path):
     assert rescued is True
     assert extent < 12.0
     assert ctx._overlap_post_rescue_cold_start is True
+    ctx.reregister_mlpot.assert_called_once_with(verbose=False, reregister_params=False)
 
 
 def test_check_intra_monomer_raises_on_close_contact():

@@ -206,6 +206,49 @@ def pbc_nbond_kwargs(
 CGENFF_PRM_BOMLEV = -5
 
 
+def suspend_pbc_before_cgenff_param_append() -> bool:
+    """``crystal free`` before ``READ PARAM APPEND`` when periodic images are active.
+
+    ``read_param_file`` clears IMAGE tables but leaves ``NTRANS > 0``, so the
+  follow-up ``upinb`` → ``UPIMNB`` pass can segfault (MLpot registration,
+    overlap-rescue ``reregister_params``, etc.).
+    """
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+        PYCHARMM_AVAILABLE,
+        crystal_free_charmm,
+    )
+
+    if not PYCHARMM_AVAILABLE:
+        return False
+    try:
+        import pycharmm.image as image
+
+        if int(image.get_ntrans()) > 1:
+            crystal_free_charmm()
+            return True
+    except Exception:
+        pass
+    try:
+        import ctypes
+
+        import pycharmm.lib as lib
+
+        sx = ctypes.c_double(0.0)
+        sy = ctypes.c_double(0.0)
+        sz = ctypes.c_double(0.0)
+        lib.charmm.pbound_get_size(
+            ctypes.byref(sx),
+            ctypes.byref(sy),
+            ctypes.byref(sz),
+        )
+        if min(float(sx.value), float(sy.value), float(sz.value)) > 0.0:
+            crystal_free_charmm()
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def read_cgenff_prm(
     prm_path: str | Path | None = None,
     *,
@@ -225,6 +268,9 @@ def read_cgenff_prm(
 
     path = str(prm_path or CGENFF_PRM)
     level = int(bomlev_level if bomlev_level is not None else CGENFF_PRM_BOMLEV)
+
+    if append:
+        suspend_pbc_before_cgenff_param_append()
 
     def _read() -> None:
         read.prm(path, append=append, flex=True)
