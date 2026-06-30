@@ -388,7 +388,7 @@ class _JaxPmePowerLawHostEvaluator:
             float(self.prefactor),
         )
         smearing = float(self.sr_cutoff_A) / 5.0
-        mesh_max = int(os.environ.get("MMML_JAX_PME_MESH_MAX", "256") or "256")
+        mesh_max = int(os.environ.get("MMML_JAX_PME_MESH_MAX", "64") or "64")
         mesh_spacing = max(smearing / 8.0, float(self.box_length_A) / max(mesh_max, 8))
         lr_wavelength = smearing / 2.0
         if self.method_name == "ewald":
