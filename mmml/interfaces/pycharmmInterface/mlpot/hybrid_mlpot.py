@@ -494,13 +494,25 @@ class DecomposedMlpotCalculator:
             )
 
             side = float(self._cell)
-            e_kcal, forces = add_periodic_coulomb_to_callback(
-                pos,
-                box_side_A=side,
-                cfg=periodic_cfg,
-                energy_kcal=float(e_kcal),
-                forces_kcal=np.asarray(forces, dtype=np.float64),
-            )
+            try:
+                e_kcal, forces = add_periodic_coulomb_to_callback(
+                    pos,
+                    box_side_A=side,
+                    cfg=periodic_cfg,
+                    energy_kcal=float(e_kcal),
+                    forces_kcal=np.asarray(forces, dtype=np.float64),
+                )
+            except Exception as exc:
+                # ScaFaCoS/MPI failures inside the CHARMM callback must not zero the
+                # whole USER term (ML energy was already computed above).
+                import sys
+
+                print(
+                    f"WARN: periodic Coulomb callback failed ({exc}); "
+                    "continuing with ML-only USER energy",
+                    file=sys.stderr,
+                    flush=True,
+                )
         for i in range(n):
             dx[i] -= forces[i, 0]
             dy[i] -= forces[i, 1]

@@ -814,6 +814,13 @@ def _register_mlpot_context(
     )
 
     attach_topology_recovery_state(ctx, topology_psf)
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import assert_mlpot_user_active
+
+    assert_mlpot_user_active(
+        ctx,
+        context="MLpot registration",
+        quiet=not verbose,
+    )
     return ctx, pyCModel
 
 

@@ -137,6 +137,8 @@ class MlpotContext:
     ml_fq: bool = True
     mm_internal_scale: float = 0.0
     registration_uses_block: bool = False
+    periodic_external: bool = False
+    periodic_charmm_vdw: bool = True
     topology_psf_path: Path | None = None
     topology_fingerprint: Any = None
     pre_mlpot_iblo: list[int] | None = None
@@ -166,14 +168,19 @@ class MlpotContext:
             self.ml_selection,
             mm_internal_scale=float(self.mm_internal_scale),
             verbose=verbose,
+            periodic_external=bool(getattr(self, "periodic_external", False)),
             use_block=self.registration_uses_block,
         )
         reattach = getattr(self.mlpot, "reattach_mlpot", None)
         if callable(reattach):
             # Do not construct a new MLpot(): __init__ rebuilds iblo/inb via update_bnbnd
             # (upinb), which segfaults after long MD. Re-enable the existing callback.
-            if force and hasattr(self.mlpot, "is_set"):
-                self.mlpot.is_set = False
+            if force:
+                unset = getattr(self.mlpot, "unset_mlpot", None)
+                if callable(unset):
+                    unset()
+                elif hasattr(self.mlpot, "is_set"):
+                    self.mlpot.is_set = False
             reattach()
             return
 
@@ -204,6 +211,34 @@ class MlpotContext:
             self.mlpot.is_set = True
 
 
+def _read_mlpot_user_energy_kcal(*, force: bool = True) -> float | None:
+    """Read CHARMM USER energy (kcal/mol) after ``ENER`` or ``ENER FORCE``."""
+    import math
+
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import pycharmm
+    import pycharmm.energy as energy
+
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
+
+    script = "ENER FORCE" if force else "ENER"
+    with charmm_silent_command():
+        pycharmm.lingo.charmm_script(script)
+    try:
+        value = float(energy.get_term_by_name("USER"))
+    except (ValueError, IndexError, TypeError):
+        return None
+    if not math.isfinite(value):
+        return None
+    return value
+
+
+def _mlpot_user_missing(user: float | None, *, zero_tol_kcalmol: float) -> bool:
+    import math
+
+    return user is None or not math.isfinite(user) or abs(float(user)) <= zero_tol_kcalmol
+
+
 def assert_mlpot_user_active(
     ctx: MlpotContext,
     *,
@@ -216,24 +251,8 @@ def assert_mlpot_user_active(
     In all-ML workflows CHARMM bonded/nonbonded terms are intentionally zeroed by
     BLOCK, so a missing USER term leaves dynamics integrating a free gas.
     """
-    import math
-
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-    import pycharmm
-    import pycharmm.energy as energy
-
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
-
-    def _read_user() -> float | None:
-        with charmm_silent_command():
-            pycharmm.lingo.charmm_script("ENER")
-        try:
-            return float(energy.get_term_by_name("USER"))
-        except Exception:
-            return None
-
-    user = _read_user()
-    missing = user is None or not math.isfinite(user) or abs(user) <= zero_tol_kcalmol
+    user = _read_mlpot_user_energy_kcal(force=True)
+    missing = _mlpot_user_missing(user, zero_tol_kcalmol=zero_tol_kcalmol)
     is_set = getattr(ctx.mlpot, "is_set", True)
     if missing or is_set is False:
         if not quiet:
@@ -241,9 +260,28 @@ def assert_mlpot_user_active(
                 f"WARN: MLpot USER term missing before {context}; attempting reattach",
                 flush=True,
             )
-        ctx.reregister_mlpot(force=missing)
-        user = _read_user()
-        missing = user is None or not math.isfinite(user) or abs(user) <= zero_tol_kcalmol
+        ctx.reregister_mlpot(force=True)
+        user = _read_mlpot_user_energy_kcal(force=True)
+        missing = _mlpot_user_missing(user, zero_tol_kcalmol=zero_tol_kcalmol)
+    if missing:
+        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+            light_resync_mlpot_state,
+        )
+
+        if not quiet:
+            print(
+                f"WARN: MLpot USER still missing before {context}; "
+                "running light resync (ENER FORCE + UPDATE)",
+                flush=True,
+            )
+        light_resync_mlpot_state(
+            ctx,
+            context=f"{context} USER recovery",
+            silent_charmm=True,
+            verbose=not quiet,
+        )
+        user = _read_mlpot_user_energy_kcal(force=True)
+        missing = _mlpot_user_missing(user, zero_tol_kcalmol=zero_tol_kcalmol)
 
     if missing:
         raise RuntimeError(
@@ -1186,7 +1224,7 @@ def register_mlpot(
                 ml_selection,
                 mm_internal_scale=float(mm_internal_scale),
                 verbose=verbose,
-                periodic_external=False,
+                periodic_external=periodic_external,
                 use_block=use_block_registration,
             )
         mlpot = pycharmm.MLpot(
@@ -1226,4 +1264,6 @@ def register_mlpot(
         ml_fq=bool(ml_fq),
         mm_internal_scale=float(mm_internal_scale),
         registration_uses_block=uses_block,
+        periodic_external=bool(periodic_external),
+        periodic_charmm_vdw=bool(periodic_charmm_vdw),
     )

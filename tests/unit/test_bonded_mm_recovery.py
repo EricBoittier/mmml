@@ -613,6 +613,7 @@ def test_assert_mlpot_user_active_reattaches_when_user_missing():
     mock_energy = types.ModuleType("pycharmm.energy")
     mock_energy.get_term_by_name = MagicMock()
     mock_energy.get_term_by_name.side_effect = [0.0, -123.4]
+    mlpot.unset_mlpot = MagicMock()
     with patch.dict(
         sys.modules,
         {
@@ -628,6 +629,7 @@ def test_assert_mlpot_user_active_reattaches_when_user_missing():
         user = assert_mlpot_user_active(ctx, context="test", quiet=True)
 
     ctx.mlpot.reattach_mlpot.assert_called_once()
+    ctx.mlpot.unset_mlpot.assert_called_once()
     assert user == pytest.approx(-123.4)
 
 
@@ -661,9 +663,9 @@ def test_assert_mlpot_user_active_forces_stale_python_is_set():
     mock_energy.get_term_by_name = MagicMock(side_effect=[0.0, -123.4])
 
     def _reattach() -> None:
-        assert mlpot.is_set is False
         mlpot.is_set = True
 
+    mlpot.unset_mlpot = MagicMock()
     mlpot.reattach_mlpot.side_effect = _reattach
     with patch.dict(
         sys.modules,
@@ -680,6 +682,7 @@ def test_assert_mlpot_user_active_forces_stale_python_is_set():
         user = assert_mlpot_user_active(ctx, context="test", quiet=True)
 
     ctx.mlpot.reattach_mlpot.assert_called_once()
+    ctx.mlpot.unset_mlpot.assert_called_once()
     assert mlpot.is_set is True
     assert user == pytest.approx(-123.4)
 
