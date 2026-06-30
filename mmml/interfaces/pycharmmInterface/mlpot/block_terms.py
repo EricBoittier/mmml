@@ -37,8 +37,8 @@ def mlpot_use_block_registration(*, explicit: bool | None = None) -> bool:
     """True when MLpot registration should run CHARMM BLOCK (legacy path).
 
     Default (unset env / ``explicit=None``): **False** — zero MM on ML atoms via
-    PSF edits (:func:`zero_mlpot_psf_mm_terms`) instead of ``eval_charmm_script``.
-    Opt in with ``MMML_MLPOT_USE_BLOCK=1`` or ``--mlpot-use-block``.
+    :func:`zero_mlpot_psf_mm_terms` (BLOCK COEFF; PSF connectivity preserved).
+    Opt in to explicit-only BLOCK with ``MMML_MLPOT_USE_BLOCK=1`` or ``--mlpot-use-block``.
     """
     if explicit is not None:
         return bool(explicit)
@@ -52,71 +52,40 @@ def zero_mlpot_psf_mm_terms(
     verbose: bool = False,
     periodic_external: bool = False,
 ) -> str:
-    """Disable CHARMM MM on ML atoms by editing the PSF (no BLOCK script).
+    """Disable CHARMM MM on ML atoms while keeping PSF connectivity (no DELTIC).
 
-    - Deletes all PSF connectivity touching ML atoms (bonded terms).
-    - Zeros partial charges on ML atoms (ELEC off; MLpot also clears ML charges).
+    Uses CHARMM BLOCK COEFF to zero BOND/ANGL/DIHE/ELEC/VDW on ML atoms instead of
+    ``delete_connectivity`` (which removes bonds/angles from the PSF and breaks
+    VMD / topology-recovery checkpoints).  ML atom partial charges are zeroed in
+    the PSF; MLpot USER supplies ML electrostatics.
 
-    When ``periodic_external=True``, LJ type codes are left intact so CHARMM IMAGE
-    VDW can run; Coulomb is supplied in the Python callback (ScaFaCoS / jax-pme).
-
-    All-ML vacuum clusters rely on MLpot ML–ML ``iblo/inb`` exclusions for pair VDW.
-    Hybrid ML+MM may still need BLOCK for ML-atom VDW vs MM partners unless
-    ``MMML_MLPOT_USE_BLOCK=1``.
+    When ``periodic_external=True``, CHARMM IMAGE VDW stays on for MM/ML LJ;
+    Coulomb is supplied in the Python callback (ScaFaCoS / jax-pme).
     """
     if float(mm_internal_scale) > 0.0:
         raise ValueError(
             f"mm_internal_scale={mm_internal_scale} requires BLOCK registration "
             "(set MMML_MLPOT_USE_BLOCK=1 or --mlpot-use-block)"
         )
+    if periodic_external:
+        return apply_mlpot_periodic_external_block(
+            ml_selection,
+            mm_internal_scale=0.0,
+            verbose=verbose,
+        )
+
+    tag = apply_mlpot_energy_block(
+        ml_selection,
+        mm_internal_scale=0.0,
+        verbose=verbose,
+    )
+
     pycharmm = _import_pycharmm()
-    n_total = int(pycharmm.coor.get_natom())
     ml_indices = ml_selection.get_atom_indexes()
-    n_ml = len(ml_indices)
-    if n_ml <= 0:
-        raise ValueError("ML selection is empty")
-
-    all_sel = pycharmm.SelectAtoms().all_atoms()
-    if n_ml >= n_total:
-        ml_sel = all_sel
-        tag = "all"
-        if periodic_external:
-            summary = (
-                f"MLpot PSF zero MM: periodic external all-ML ({n_total} atoms; "
-                "bonded stripped, charges zeroed, CHARMM IMAGE VDW on; no BLOCK)"
-            )
-        else:
-            summary = (
-                f"MLpot PSF zero MM: all-ML ({n_total} atoms; "
-                "bonded stripped, charges zeroed; no BLOCK)"
-            )
-    else:
-        tag = ml_selection.store(_ML_BLOCK_NAME)
-        ml_sel = ml_selection
-        n_mm = n_total - n_ml
-        if periodic_external:
-            summary = (
-                f"MLpot PSF zero MM: periodic external hybrid ({n_ml} ML + {n_mm} MM; "
-                "ML bonded stripped, ML charges zeroed, CHARMM VDW on MM; no BLOCK)"
-            )
-        else:
-            summary = (
-                f"MLpot PSF zero MM: hybrid ({n_ml} ML + {n_mm} MM atoms; "
-                "ML bonded stripped, ML charges zeroed; no BLOCK)"
-            )
-
-    pycharmm.psf.delete_connectivity(ml_sel, all_sel, psort=True)
-
     charges = list(pycharmm.psf.get_charges())
     for idx in ml_indices:
         charges[int(idx)] = 0.0
     pycharmm.psf.set_charge(charges)
-
-    from mmml.utils.rich_report import emit_charmm_block
-
-    emit_charmm_block(summary, verbose=verbose)
-    if verbose:
-        print(summary, flush=True)
     return tag
 
 

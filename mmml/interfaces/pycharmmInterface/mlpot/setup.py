@@ -1251,8 +1251,8 @@ def register_mlpot(
     with charmm_relaxed_bomlev():
         skip_iblo_inb_update = False
         if use_pbc:
-            # PBC all-ML: ``upinb`` after BLOCK DELTIC (bond strip) can segfault in
-            # ``__nbexcl_MOD_upinb``. Rebuild lists while PSF connectivity is intact.
+            # PBC all-ML: install ML exclusions before BLOCK; skip second upinb in
+            # MLpot.__init__ when lists were built with PSF connectivity intact.
             _require_mlpot_skip_iblo_support(pycharmm)
             _install_ml_exclusions(ml_selection)
             skip_iblo_inb_update = True
@@ -1293,7 +1293,8 @@ def register_mlpot(
             )
 
             pycharmm.UpdateNonBondedScript(**vacuum_nbond_kwargs(nbxmod=5)).run()
-    uses_block = mlpot_use_block_registration(explicit=use_block_registration)
+    # BLOCK COEFF zeros ML-atom MM terms on every registration path (connectivity kept).
+    uses_block = True
     ml_z = np.asarray(ml_Z, dtype=int)
     return MlpotContext(
         mlpot=mlpot,
