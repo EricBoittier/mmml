@@ -534,7 +534,7 @@ def test_with_mlpot_detached_unset_and_reregister():
     assert result == 42
 
 
-def test_reregister_mlpot_reattaches_without_new_mlpot_or_nbond_rebuild():
+def test_reregister_mlpot_default_reattach_only():
     from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     mlpot = MagicMock()
@@ -553,6 +553,30 @@ def test_reregister_mlpot_reattaches_without_new_mlpot_or_nbond_rebuild():
         return_value="all",
     ) as apply_block:
         ctx.reregister_mlpot()
+
+    apply_block.assert_not_called()
+    mlpot.reattach_mlpot.assert_called_once_with()
+
+
+def test_reregister_mlpot_applies_params_when_requested():
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+
+    mlpot = MagicMock()
+    ctx = MlpotContext(
+        mlpot=mlpot,
+        pyCModel=MagicMock(),
+        params=None,
+        model=None,
+        ml_selection=MagicMock(),
+        ml_Z=np.array([6, 1, 1, 1], dtype=int),
+        use_pbc=True,
+        cubic_box_side_A=31.0,
+    )
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup._apply_mlpot_psf_mm_off_and_pbc",
+        return_value="all",
+    ) as apply_block:
+        ctx.reregister_mlpot(reregister_params=True)
 
     apply_block.assert_called_once_with(ctx, verbose=False)
     mlpot.reattach_mlpot.assert_called_once_with()

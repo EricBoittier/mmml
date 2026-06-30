@@ -422,7 +422,7 @@ def _with_mlpot_detached(ctx: "MlpotContext", fn):
     try:
         return fn()
     finally:
-        ctx.reregister_mlpot()
+        ctx.reregister_mlpot(reregister_params=True)
 
 
 @dataclass

@@ -820,7 +820,7 @@ def finalize_overlap_rescue_for_dynamics(
     from mmml.interfaces.pycharmmInterface.mlpot.setup import assert_mlpot_user_active
 
     verbose = bool(getattr(getattr(config, "rescue", None), "verbose", False))
-    ctx.reregister_mlpot(verbose=verbose)
+    ctx.reregister_mlpot(verbose=verbose, reregister_params=True)
     grms = refresh_mlpot_energy_and_grms(
         ctx,
         context=f"{context} (post-rescue)",
@@ -1009,7 +1009,7 @@ def _reregister_mlpot_after_topology_reload(ctx: MlpotContext) -> None:
     # ``_reload_pre_mlpot_topology`` already rebuilt CHARMM PBC/vacuum nbonds with
     # MLpot detached. A fresh ``register_mlpot`` or ``refresh_nbonds_after_mlpot_pbc``
     # (``update_bnbnd`` / ``upinb``) segfaults for all-ML PBC clusters.
-    ctx.reregister_mlpot()
+    ctx.reregister_mlpot(reregister_params=True)
     sync_charmm_positions(positions)
 
 

@@ -161,13 +161,13 @@ class MlpotContext:
         *,
         verbose: bool = False,
         force: bool = False,
-        reregister_params: bool = True,
+        reregister_params: bool = False,
     ) -> None:
-        """Re-attach MLpot after temporary MM-only work or calculator mini.
+        """Re-attach MLpot after temporary MM-only work or coordinate updates.
 
-        Set ``reregister_params=False`` when CGENFF/BLOCK state is unchanged
-        (e.g. ASE FIRE/BFGS moved coordinates only). ``READ PARAM APPEND`` always
-        clears PBC IMAGE/NBOND lists and must not run without a full rebuild.
+        Default ``reregister_params=False``: only re-enable the MLpot callback.
+        Set ``reregister_params=True`` after ``unset()`` / full CGENFF restore
+        (``READ PARAM APPEND`` clears PBC lists and needs a rebuild).
         """
         if self.ml_selection is None or self.ml_Z is None:
             raise RuntimeError("MlpotContext missing ml_selection or ml_Z for reregister")
@@ -306,7 +306,7 @@ def assert_mlpot_user_active(
                 f"WARN: MLpot USER term missing before {context}; attempting reattach",
                 flush=True,
             )
-        ctx.reregister_mlpot(force=True)
+        ctx.reregister_mlpot(force=True, reregister_params=True)
         user = _read_mlpot_user_energy_kcal(force=True)
         missing = _mlpot_user_missing(user, zero_tol_kcalmol=zero_tol_kcalmol)
     if missing:

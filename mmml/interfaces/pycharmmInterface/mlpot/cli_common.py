@@ -2166,7 +2166,7 @@ def light_resync_mlpot_state(
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
 
-    mlpot_ctx.reregister_mlpot(verbose=verbose)
+    mlpot_ctx.reregister_mlpot(verbose=verbose, reregister_params=False)
     if getattr(mlpot_ctx, "use_pbc", False):
         pyCModel = getattr(mlpot_ctx, "pyCModel", None)
         if pyCModel is not None:
@@ -2985,25 +2985,19 @@ def refresh_mlpot_energy_and_grms(
     reregister: bool = True,
     verbose: bool = False,
 ) -> float:
-    """Re-apply MLpot BLOCK, run ``ENER FORCE``, return hybrid GRMS (kcal/mol/Å).
+    """Re-apply MLpot callback, run ``ENER FORCE``, return hybrid GRMS (kcal/mol/Å).
 
     When ``mlpot_ctx`` is set, GRMS comes from JAX ``spherical_fn`` at the current
     CHARMM coordinates (not CHARMM ``get_grms()``, which can be stale after SD).
 
-    CHARMM SD can leave a stale GRMS from the minimizer while MLpot USER forces
-    are not fully synchronized. Call before pre-dynamics gates and after MLpot mini.
-
-    ``silent_charmm`` (default True) runs ``ENER FORCE`` at PRNLev/WRNLev 0 so gate
-    checks do not spam nonbond list banners; Python ``context`` lines still print.
-
-    Set ``reregister=False`` for evaluate-npz frame loops where MLpot BLOCK is
-    already active (avoids repeated Rich BLOCK banners and redundant ``upinb``).
+    ``reregister=True`` (default) reattaches the MLpot callback only — it does **not**
+    re-read CGENFF parameters (``READ PARAM APPEND`` clears PBC lists).
     """
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
 
     if mlpot_ctx is not None and reregister:
-        mlpot_ctx.reregister_mlpot(verbose=verbose)
+        mlpot_ctx.reregister_mlpot(verbose=verbose, reregister_params=False)
     if silent_charmm:
         from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
 
