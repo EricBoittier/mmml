@@ -290,6 +290,77 @@ def test_best_minimization_frame_tracks_lowest_energy():
     frame.record("step_2")
     assert frame.best_energy_label == "step_1"
     assert frame.best_energy_ev == pytest.approx(80.0)
+    assert frame.best_lex_label == "step_1"
+
+
+def test_restore_best_on_abort_uses_force_not_energy():
+    atoms = MagicMock()
+    atoms.get_forces.side_effect = [
+        np.array([[40.0, 0.0, 0.0]]),
+        np.array([[38.0, 0.0, 0.0]]),
+        np.array([[67.0, 0.0, 0.0]]),
+        np.array([[38.0, 0.0, 0.0]]),
+    ]
+    atoms.get_potential_energy.side_effect = [
+        -2179.33,
+        -2179.76,
+        -2180.91,
+        -2179.76,
+    ]
+    atoms.get_positions.side_effect = [
+        np.zeros((1, 3)),
+        np.ones((1, 3)),
+        np.full((1, 3), 9.0),
+        np.ones((1, 3)),
+    ]
+    frame = _BestMinimizationFrame(atoms)
+    frame.record("initial")
+    frame.record("step_1")
+    frame.record("step_4")
+    frame.restore_best(on_abort=True)
+    assert frame.restored_label() == "step_1"
+    np.testing.assert_array_equal(atoms.set_positions.call_args.args[0], np.ones((1, 3)))
+
+
+def test_historical_best_restores_when_later_mini_regresses():
+    from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+        CalculatorMiniHistoricalBest,
+        _maybe_restore_calculator_mini_historical_best,
+        _update_calculator_mini_historical_best,
+    )
+
+    ctx = MagicMock()
+    ctx.calculator_mini_historical_best = CalculatorMiniHistoricalBest(
+        positions=np.ones((1, 3)),
+        fmax_ev_a=38.0,
+        energy_ev=-2179.76,
+        grms_kcalmol_A=51.0,
+        label="step_1",
+        context="Pre-SD",
+    )
+    atoms = MagicMock()
+    _update_calculator_mini_historical_best(
+        ctx,
+        np.full((1, 3), 9.0),
+        fmax_ev_a=67.0,
+        energy_ev=-2180.91,
+        grms_kcalmol_A=70.0,
+        label="step_4",
+        context="Pre-SD",
+    )
+    fmax, energy, grms, restored = _maybe_restore_calculator_mini_historical_best(
+        ctx,
+        atoms,
+        fmax_ev_a=67.0,
+        energy_ev=-2180.91,
+        grms_kcalmol_A=70.0,
+        context_prefix="Pre-SD",
+        verbose=False,
+    )
+    assert restored is True
+    assert fmax == pytest.approx(38.0)
+    assert grms == pytest.approx(51.0)
+    atoms.set_positions.assert_called_once()
 
 
 def test_run_hybrid_calculator_fire_stops_on_spike():

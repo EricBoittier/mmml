@@ -264,16 +264,43 @@ def ase_optimizer_dual_unit_logfile(stream: TextIO | None = None) -> str | _Dual
 
 
 class _BestMinimizationFrame:
-    """Track lowest-fmax geometry during ASE minimization (see jaxmd pre-min)."""
+    """Track best force/energy/lex frames during ASE minimization."""
 
     def __init__(self, atoms: Any) -> None:
         self.atoms = atoms
         self.best_force_positions: np.ndarray | None = None
         self.best_force_fmax = float("inf")
+        self.best_force_energy_ev = float("inf")
         self.best_force_label = ""
         self.best_energy_positions: np.ndarray | None = None
         self.best_energy_ev = float("inf")
+        self.best_energy_fmax = float("inf")
         self.best_energy_label = ""
+        self.best_lex_positions: np.ndarray | None = None
+        self.best_lex_fmax = float("inf")
+        self.best_lex_energy_ev = float("inf")
+        self.best_lex_label = ""
+        self._restored_label = ""
+
+    @staticmethod
+    def _lex_better(
+        fmax_a: float,
+        energy_a: float,
+        fmax_b: float,
+        energy_b: float,
+        *,
+        fmax_tol: float = 1e-6,
+        energy_tol: float = 1e-8,
+    ) -> bool:
+        if not np.isfinite(fmax_a) or not np.isfinite(energy_a):
+            return False
+        if not np.isfinite(fmax_b) or not np.isfinite(energy_b):
+            return True
+        if fmax_a < fmax_b - fmax_tol:
+            return True
+        if abs(fmax_a - fmax_b) <= fmax_tol and energy_a < energy_b - energy_tol:
+            return True
+        return False
 
     def record(self, label: str) -> None:
         try:
@@ -290,15 +317,28 @@ class _BestMinimizationFrame:
         if np.isfinite(fmax) and fmax < self.best_force_fmax:
             self.best_force_positions = positions
             self.best_force_fmax = fmax
+            self.best_force_energy_ev = energy if np.isfinite(energy) else float("inf")
             self.best_force_label = label
         if np.isfinite(energy) and energy < self.best_energy_ev:
             self.best_energy_positions = positions
             self.best_energy_ev = energy
+            self.best_energy_fmax = fmax if np.isfinite(fmax) else float("inf")
             self.best_energy_label = label
+        if self._lex_better(
+            fmax,
+            energy,
+            self.best_lex_fmax,
+            self.best_lex_energy_ev,
+        ):
+            self.best_lex_positions = positions
+            self.best_lex_fmax = fmax
+            self.best_lex_energy_ev = energy
+            self.best_lex_label = label
 
     def restore_best_force(self) -> float:
         if self.best_force_positions is not None:
             self.atoms.set_positions(self.best_force_positions)
+            self._restored_label = self.best_force_label
         if np.isfinite(self.best_force_fmax):
             return float(self.best_force_fmax)
         return float(np.abs(self.atoms.get_forces()).max())
@@ -306,15 +346,207 @@ class _BestMinimizationFrame:
     def restore_best_energy(self) -> float:
         if self.best_energy_positions is not None:
             self.atoms.set_positions(self.best_energy_positions)
+            self._restored_label = self.best_energy_label
         if np.isfinite(self.best_energy_ev):
             return float(self.best_energy_ev)
         return float(self.atoms.get_potential_energy())
 
-    def restore_best(self, *, prefer_energy: bool = False) -> None:
-        if prefer_energy and self.best_energy_positions is not None:
-            self.restore_best_energy()
+    def restore_best_lex(self) -> None:
+        if self.best_lex_positions is not None:
+            self.atoms.set_positions(self.best_lex_positions)
+            self._restored_label = self.best_lex_label
             return
         self.restore_best_force()
+
+    def restore_best(self, *, on_abort: bool = False) -> None:
+        """Restore tracked frame: force-best on guard abort, lex-best otherwise."""
+        if on_abort:
+            self.restore_best_force()
+            return
+        self.restore_best_lex()
+
+    def restored_label(self) -> str:
+        return str(self._restored_label or self.best_lex_label or self.best_force_label)
+
+    def restored_fmax_ev_a(self) -> float:
+        label = self.restored_label()
+        if label == self.best_force_label:
+            return float(self.best_force_fmax)
+        if label == self.best_energy_label:
+            return float(self.best_energy_fmax)
+        if label == self.best_lex_label:
+            return float(self.best_lex_fmax)
+        return float(np.abs(self.atoms.get_forces()).max())
+
+    def restored_energy_ev(self) -> float:
+        label = self.restored_label()
+        if label == self.best_force_label:
+            return float(self.best_force_energy_ev)
+        if label == self.best_energy_label:
+            return float(self.best_energy_ev)
+        if label == self.best_lex_label:
+            return float(self.best_lex_energy_ev)
+        return float(self.atoms.get_potential_energy())
+
+
+@dataclass
+class CalculatorMiniHistoricalBest:
+    """Best hybrid-calculator mini geometry seen in this MLpot session."""
+
+    positions: np.ndarray | None = None
+    fmax_ev_a: float = float("inf")
+    energy_ev: float = float("inf")
+    grms_kcalmol_A: float = float("inf")
+    label: str = ""
+    context: str = ""
+
+
+def _get_calculator_mini_historical_best(mlpot_ctx: Any) -> CalculatorMiniHistoricalBest:
+    hist = getattr(mlpot_ctx, "calculator_mini_historical_best", None)
+    if hist is None:
+        hist = CalculatorMiniHistoricalBest()
+        mlpot_ctx.calculator_mini_historical_best = hist
+    return hist
+
+
+def _update_calculator_mini_historical_best(
+    mlpot_ctx: Any,
+    positions: np.ndarray,
+    *,
+    fmax_ev_a: float,
+    energy_ev: float,
+    grms_kcalmol_A: float,
+    label: str,
+    context: str,
+) -> None:
+    hist = _get_calculator_mini_historical_best(mlpot_ctx)
+    if not _BestMinimizationFrame._lex_better(
+        float(fmax_ev_a),
+        float(energy_ev),
+        float(hist.fmax_ev_a),
+        float(hist.energy_ev),
+    ):
+        return
+    hist.positions = np.asarray(positions, dtype=np.float64).copy()
+    hist.fmax_ev_a = float(fmax_ev_a)
+    hist.energy_ev = float(energy_ev)
+    hist.grms_kcalmol_A = float(grms_kcalmol_A)
+    hist.label = str(label)
+    hist.context = str(context)
+
+
+def _maybe_restore_calculator_mini_historical_best(
+    mlpot_ctx: Any,
+    atoms: Any,
+    *,
+    fmax_ev_a: float,
+    energy_ev: float,
+    grms_kcalmol_A: float,
+    context_prefix: str,
+    verbose: bool,
+) -> tuple[float, float, float, bool]:
+    """Roll back to session-best mini geometry when the current frame regressed."""
+    hist = _get_calculator_mini_historical_best(mlpot_ctx)
+    if hist.positions is None:
+        return float(fmax_ev_a), float(energy_ev), float(grms_kcalmol_A), False
+    if _BestMinimizationFrame._lex_better(
+        float(fmax_ev_a),
+        float(energy_ev),
+        float(hist.fmax_ev_a),
+        float(hist.energy_ev),
+    ):
+        return float(fmax_ev_a), float(energy_ev), float(grms_kcalmol_A), False
+    if verbose:
+        print(
+            f"{context_prefix}: restoring session-best calculator mini "
+            f"({hist.label or hist.context}, fmax={hist.fmax_ev_a:.6f} eV/Å, "
+            f"E={hist.energy_ev:.6f} eV, GRMS={hist.grms_kcalmol_A:.4f} kcal/mol/Å)",
+            flush=True,
+        )
+    atoms.set_positions(np.asarray(hist.positions, dtype=np.float64))
+    return float(hist.fmax_ev_a), float(hist.energy_ev), float(hist.grms_kcalmol_A), True
+
+
+def _commit_hybrid_calculator_mini_result(
+    mlpot_ctx: Any,
+    atoms: Any,
+    best_frame: _BestMinimizationFrame,
+    *,
+    context_prefix: str,
+    grms0: float | None,
+    stopped_on_spike: bool,
+    optimizer_name: str,
+    step_count: int,
+    verbose: bool,
+) -> float:
+    """Sync CHARMM, update historical best, and return hybrid GRMS (kcal/mol/Å)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        invalidate_mlpot_calculator_caches,
+        sync_charmm_lists_after_mini,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+
+    sync_charmm_positions(np.asarray(atoms.get_positions(), dtype=np.float64))
+    sync_charmm_lists_after_mini(quiet=True)
+    invalidate_mlpot_calculator_caches(mlpot_ctx)
+    mlpot_ctx.reregister_mlpot(verbose=False, reregister_params=False)
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms_after_ener_force
+
+    charmm_grms_after_ener_force()
+    grms1 = mlpot_hybrid_grms_from_calculator(mlpot_ctx)
+    if grms1 is None or not np.isfinite(grms1):
+        raise RuntimeError("hybrid GRMS unavailable after calculator minimize")
+
+    try:
+        fmax = float(np.abs(atoms.get_forces()).max())
+    except Exception:
+        fmax = float("inf")
+    try:
+        energy_ev = float(atoms.get_potential_energy())
+    except Exception:
+        energy_ev = float("inf")
+
+    _update_calculator_mini_historical_best(
+        mlpot_ctx,
+        np.asarray(atoms.get_positions(), dtype=np.float64),
+        fmax_ev_a=fmax,
+        energy_ev=energy_ev,
+        grms_kcalmol_A=float(grms1),
+        label=best_frame.restored_label(),
+        context=context_prefix,
+    )
+    fmax, energy_ev, grms1, restored_hist = _maybe_restore_calculator_mini_historical_best(
+        mlpot_ctx,
+        atoms,
+        fmax_ev_a=fmax,
+        energy_ev=energy_ev,
+        grms_kcalmol_A=float(grms1),
+        context_prefix=context_prefix,
+        verbose=verbose,
+    )
+    if restored_hist:
+        sync_charmm_positions(np.asarray(atoms.get_positions(), dtype=np.float64))
+        sync_charmm_lists_after_mini(quiet=True)
+        invalidate_mlpot_calculator_caches(mlpot_ctx)
+        mlpot_ctx.reregister_mlpot(verbose=False, reregister_params=False)
+        charmm_grms_after_ener_force()
+        grms1 = mlpot_hybrid_grms_from_calculator(mlpot_ctx)
+        if grms1 is None or not np.isfinite(grms1):
+            raise RuntimeError("hybrid GRMS unavailable after historical restore")
+
+    if verbose:
+        grms_txt = f"{grms0:.4f}" if grms0 is not None and np.isfinite(grms0) else "?"
+        spike_note = " (spike abort)" if stopped_on_spike else ""
+        energy_txt = format_energy_ev_kcal(energy_ev) if np.isfinite(energy_ev) else "?"
+        print(
+            f"{context_prefix} hybrid calculator {optimizer_name} done{spike_note}: "
+            f"GRMS {grms_txt} -> {float(grms1):.4f} kcal/mol/Å, "
+            f"E={energy_txt}, fmax={fmax:.6f} eV/Å, "
+            f"steps={step_count}",
+            flush=True,
+        )
+    mlpot_ctx.sd_watchdog_baseline_grms = float(grms1)
+    return float(grms1)
 
 
 def _hybrid_mlpot_ase_calculator_class():
@@ -683,47 +915,33 @@ def minimize_hybrid_calculator_before_sd(
         context_prefix=context_prefix,
         initial_fmax_ev_a=initial_fmax,
     )
-    restored_fmax = best_frame.restore_best_force()
+    best_frame.restore_best(on_abort=stopped_on_spike)
     if config.verbose and (
         stopped_on_spike
         or (
-            best_frame.best_force_label
-            and best_frame.best_force_label not in ("initial", "final")
+            best_frame.restored_label()
+            and best_frame.restored_label() not in ("initial", "final")
         )
     ):
         print(
-            f"{context_prefix} hybrid calculator BFGS: restored best-force frame "
-            f"({best_frame.best_force_label}, fmax={best_frame.best_force_fmax:.6f} eV/Å)",
+            f"{context_prefix} hybrid calculator BFGS: restored best frame "
+            f"({best_frame.restored_label()}, fmax={best_frame.restored_fmax_ev_a():.6f} eV/Å, "
+            f"E={best_frame.restored_energy_ev():.6f} eV)",
             flush=True,
         )
 
-    sync_charmm_positions(np.asarray(atoms.get_positions(), dtype=np.float64))
-    sync_charmm_lists_after_mini(quiet=True)
-    invalidate_mlpot_calculator_caches(mlpot_ctx)
-    mlpot_ctx.reregister_mlpot(verbose=False, reregister_params=False)
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms_after_ener_force
-
-    charmm_grms_after_ener_force()
-
-    grms1 = mlpot_hybrid_grms_from_calculator(mlpot_ctx)
-    if grms1 is None or not np.isfinite(grms1):
-        raise RuntimeError("hybrid GRMS unavailable after calculator minimize")
-    if config.verbose:
-        fmax = float(np.abs(atoms.get_forces()).max())
-        spike_note = " (spike abort)" if stopped_on_spike else ""
-        try:
-            e_final = float(atoms.get_potential_energy())
-            energy_txt = format_energy_ev_kcal(e_final)
-        except Exception:
-            energy_txt = "?"
-        print(
-            f"{context_prefix} hybrid calculator BFGS done{spike_note}: "
-            f"GRMS {grms_txt} -> {grms1:.4f} kcal/mol/Å, "
-            f"E={energy_txt}, fmax={fmax:.6f} eV/Å, "
-            f"steps={opt.get_number_of_steps()}",
-            flush=True,
-        )
-    mlpot_ctx.sd_watchdog_baseline_grms = float(grms1)
+    opt_name = "BFGSLineSearch" if config.use_bfgs_line_search else "BFGS"
+    grms1 = _commit_hybrid_calculator_mini_result(
+        mlpot_ctx,
+        atoms,
+        best_frame,
+        context_prefix=context_prefix,
+        grms0=grms0,
+        stopped_on_spike=stopped_on_spike,
+        optimizer_name=opt_name,
+        step_count=int(opt.get_number_of_steps()),
+        verbose=config.verbose,
+    )
     return HybridMinimizeResult(grms=float(grms1), ran=True)
 
 
@@ -810,48 +1028,32 @@ def minimize_hybrid_calculator_fire_before_sd(
         initial_energy_ev=initial_energy,
         initial_grms_kcalmol_A=grms0,
     )
-    best_frame.restore_best(prefer_energy=stopped_on_spike)
+    best_frame.restore_best(on_abort=stopped_on_spike)
     if config.verbose and (
         stopped_on_spike
         or (
-            best_frame.best_force_label
-            and best_frame.best_force_label not in ("initial", "final")
+            best_frame.restored_label()
+            and best_frame.restored_label() not in ("initial", "final")
         )
     ):
         print(
             f"{context_prefix} hybrid calculator FIRE: restored best frame "
-            f"({best_frame.best_force_label}, fmax={best_frame.best_force_fmax:.6f} eV/Å, "
-            f"E={best_frame.best_energy_ev:.6f} eV)",
+            f"({best_frame.restored_label()}, fmax={best_frame.restored_fmax_ev_a():.6f} eV/Å, "
+            f"E={best_frame.restored_energy_ev():.6f} eV)",
             flush=True,
         )
 
-    sync_charmm_positions(np.asarray(atoms.get_positions(), dtype=np.float64))
-    sync_charmm_lists_after_mini(quiet=True)
-    invalidate_mlpot_calculator_caches(mlpot_ctx)
-    mlpot_ctx.reregister_mlpot(verbose=False, reregister_params=False)
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms_after_ener_force
-
-    charmm_grms_after_ener_force()
-    grms1 = mlpot_hybrid_grms_from_calculator(mlpot_ctx)
-    if grms1 is None or not np.isfinite(grms1):
-        raise RuntimeError("hybrid GRMS unavailable after calculator FIRE")
-    if config.verbose:
-        fmax = float(np.abs(atoms.get_forces()).max())
-        grms_txt = f"{grms0:.4f}" if grms0 is not None and np.isfinite(grms0) else "?"
-        spike_note = " (spike abort)" if stopped_on_spike else ""
-        try:
-            e_final = float(atoms.get_potential_energy())
-            energy_txt = format_energy_ev_kcal(e_final)
-        except Exception:
-            energy_txt = "?"
-        print(
-            f"{context_prefix} hybrid calculator FIRE done{spike_note}: "
-            f"GRMS {grms_txt} -> {grms1:.4f} kcal/mol/Å, "
-            f"E={energy_txt}, fmax={fmax:.6f} eV/Å, "
-            f"steps={opt.get_number_of_steps()}",
-            flush=True,
-        )
-    mlpot_ctx.sd_watchdog_baseline_grms = float(grms1)
+    grms1 = _commit_hybrid_calculator_mini_result(
+        mlpot_ctx,
+        atoms,
+        best_frame,
+        context_prefix=context_prefix,
+        grms0=grms0,
+        stopped_on_spike=stopped_on_spike,
+        optimizer_name="FIRE",
+        step_count=int(opt.get_number_of_steps()),
+        verbose=config.verbose,
+    )
     return HybridMinimizeResult(grms=float(grms1), ran=True)
 
 
