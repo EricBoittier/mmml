@@ -13,11 +13,15 @@ from mmml.interfaces.pycharmmInterface.mlpot import cgenff_prm_swap
 def test_zeroed_cgenff_prm_paths():
     full = cgenff_prm_swap.cgenff_prm_path()
     assert full.name == "par_all36_cgenff.prm"
+    assert "mmml/data/charmm" in str(full).replace("\\", "/")
     assert cgenff_prm_swap.zeroed_cgenff_prm_path().name == "zeroed_par_all36_cgenff.prm"
     assert (
         cgenff_prm_swap.zeroed_cgenff_prm_path(bonded_only=True).name
         == "zeroed_bonded_par_all36_cgenff.prm"
     )
+    repo = Path(__file__).resolve().parents[2]
+    assert (repo / "mmml/data/charmm/par_all36_cgenff.prm").is_file()
+    assert full.is_file()
 
 
 def test_apply_full_cgenff_params_reads_and_checks_bonds():

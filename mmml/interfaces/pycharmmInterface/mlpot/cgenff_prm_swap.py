@@ -10,7 +10,8 @@ _active_mode: _CgenffPrmMode | None = None
 
 
 def _cgenff_data_dir() -> Path:
-    return Path(__file__).resolve().parents[2] / "data" / "charmm"
+    # .../mmml/interfaces/pycharmmInterface/mlpot/cgenff_prm_swap.py -> mmml/data/charmm
+    return Path(__file__).resolve().parents[3] / "data" / "charmm"
 
 
 def cgenff_prm_path() -> Path:
