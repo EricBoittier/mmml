@@ -153,8 +153,8 @@ def get_params_model(
     checkpoint_meta = {
         "Checkpoint": str(restart),
         "name": Path(restart).name,
-        "epoch": restored["epoch"],
-        "best_loss": restored["best_loss"],
+        "epoch": int(restored["epoch"]),
+        "best_loss": float(np.asarray(restored["best_loss"])),
         "Save Time": modification_date,
     }
     if not quiet:
