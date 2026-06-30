@@ -742,12 +742,16 @@ def main(argv: list[str] | None = None) -> int:
             if not free_space and L is not None
             else None
         )
+        include_mm = bool(getattr(args, "include_mm", True))
         warmup_hybrid_spherical_cutoff(
             spherical_cutoff_calculator,
             atomic_numbers=jnp.asarray(z, dtype=jnp.int32),
             positions=jnp.asarray(atoms.get_positions(), dtype=jnp.float32),
             n_monomers=n_molecules,
             cutoff_params=cutoff,
+            doML=True,
+            doMM=include_mm,
+            doML_dimer=True,
             box=box_warm,
             mm_pair_idx=mm_pair_idx,
             mm_pair_mask=mm_pair_mask,

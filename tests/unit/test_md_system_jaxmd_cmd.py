@@ -100,3 +100,13 @@ def test_build_command_jaxmd_forwards_default_cutoffs_from_namespace() -> None:
     assert argv[argv.index("--mm-switch-width") + 1] == str(DEFAULT_MM_SWITCH_WIDTH)
     assert argv[argv.index("--ml-switch-width") + 1] == str(DEFAULT_ML_SWITCH_WIDTH)
     assert "--handoff-pre-minimize" not in argv
+
+
+def test_jaxmd_warmup_forwards_include_mm_flag() -> None:
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2]
+    jaxmd_src = (root / "mmml/cli/run/md_pbc_suite/jaxmd.py").read_text(encoding="utf-8")
+    warmup_block = jaxmd_src.split("warmup_hybrid_spherical_cutoff(", 1)[1][:400]
+    assert "doMM=include_mm" in warmup_block
+    assert 'getattr(args, "include_mm", True)' in jaxmd_src
