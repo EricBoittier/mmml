@@ -1256,6 +1256,41 @@ def test_cooperative_psf_read_eval_calls_mpi_charmm_script(tmp_path):
     assert eval_mock.call_args.kwargs["expect_psf_natom_min"] == 1
 
 
+def test_cooperative_stream_topology_read_prefers_inp_api(tmp_path):
+    base = tmp_path / "artifacts"
+    base.mkdir()
+    compact = {
+        "rtf": base / "bs_rtf.rtf",
+        "prm": base / "bs_read.prm",
+        "psf": base / "bs_read.psf",
+        "artifact_stem": "dcm_20mer",
+    }
+    for p in (compact["rtf"], compact["prm"], compact["psf"]):
+        p.write_text("x", encoding="utf-8")
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        return_value=(0, 2),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._eval_charmm_inp_file_available",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._invoke_charmm_inp_file",
+        return_value=True,
+    ) as inp_mock, mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.mpi_charmm_script",
+    ) as script_mock, mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_natom_count",
+        return_value=100,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._bootstrap_workdir",
+        return_value=mock.MagicMock(__enter__=mock.MagicMock(), __exit__=mock.MagicMock()),
+    ):
+        charmm_mpi._cooperative_stream_topology_read(compact)
+
+    inp_mock.assert_called_once()
+    script_mock.assert_not_called()
+
+
 def test_cooperative_direct_api_step_all_ranks_by_default():
     path = Path("/tmp/bs_read.rtf")
     with mock.patch(

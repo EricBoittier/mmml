@@ -132,49 +132,55 @@ If native passes and PyCHARMM fails → bug is in library-mode `eval_charmm_scri
 
 ## Bootstrap API version
 
-PyCHARMM read gate logs `bootstrap_api=...` at startup. You need **`direct-api-v4.9`**
-(at ``np>1``: single ``stream bs_load.inp`` eval for RTF/PRM/PSF; Python CRD for coords).
+PyCHARMM read gate logs `bootstrap_api=...` at startup. You need **`direct-api-v4.10`**
+(at ``np>1``: ``eval_charmm_inp_file(bs_load.inp)`` when rebuilt; else multiline READ
+fallback; Python CRD for coords).
 
-### Why v4.8 per-line eval failed on node09
+### Why v4.9 ``stream`` failed on node09
 
-v4.8 ran separate ``eval read …`` calls for RTF, PRM, PSF. Each call returned OK but
-``psf=0`` — **separate Python ``eval_charmm_script`` entries desync MPI** between lines.
-Native CHARMM processes one ``.inp`` in a single Fortran loop; **v4.9** matches that with
-one ``stream bs_load.inp`` command (inp holds the full READ chain; no ``mxcmsz`` limit).
+Library-mode ``eval_charmm_script('stream bs_load.inp')`` reports
+``Unrecognized command: stre`` — the ``stream`` command is not linked in
+``KEY_LIBRARY`` builds. **v4.10** adds ``eval_charmm_inp_file`` to ``api_eval.F90``:
+all ranks call it once; Fortran reads the ``.inp`` line-by-line in one session
+(same as native ``charmm -i``).
 
 | Version | Topology at ``np>1`` | node09 |
 |---------|---------------------|--------|
-| v4.7 | direct RTF/PRM + eval PSF | eval OK, ``psf=0`` |
 | v4.8 | eval RTF/PRM/PSF (3 lines) | eval OK, ``psf=0`` |
-| v4.9 | **one ``stream bs_load.inp``** | target |
+| v4.9 | ``stream bs_load.inp`` | ``Unrecognized command: stre`` |
+| v4.10 | **`eval_charmm_inp_file`** | target (requires rebuild) |
 | native | one ``.inp`` under mpirun | PASS |
 
-Bisect: ``MMML_MPI_BOOTSTRAP_EVAL_LINES=1`` (v4.8), ``MMML_MPI_BOOTSTRAP_HYBRID_READ=1`` (v4.7).
+Bisect: ``MMML_MPI_BOOTSTRAP_EVAL_LINES=1`` (v4.8).
 
-### Prerequisite: ``maincomx`` in ``libcharmm.so``
+### Prerequisite: ``eval_charmm_inp_file`` in ``libcharmm.so``
 
 ```bash
+grep -c "eval_charmm_inp_file" setup/api/api_eval.F90   # expect >=1
 grep -c "call maincomx" setup/charmm/source/api/api_eval.F90   # expect >=1
-grep -c "status='SCRATCH'" setup/charmm/source/api/api_eval.F90  # expect 0
-```
+bash scripts/rebuild_charmm_mlpot.sh --clean
 
-If SCRATCH path is present → ``bash scripts/rebuild_charmm_mlpot.sh --clean``
+python -c "import pycharmm.lib as l; print('eval_charmm_inp_file', hasattr(l.charmm,'eval_charmm_inp_file'))"
+# → eval_charmm_inp_file True
+```
 
 ### Cluster validation (node09)
 
 ```bash
 git pull
-grep BOOTSTRAP_MPI_API mmml/interfaces/pycharmmInterface/charmm_mpi.py  # direct-api-v4.9
+grep BOOTSTRAP_MPI_API mmml/interfaces/pycharmmInterface/charmm_mpi.py  # direct-api-v4.10
 
 MMML_MPI_NP=1 ./scripts/run_mpi_pycharmm_read_gate.sh
 MMML_MPI_NP=2 ./scripts/run_native_charmm_read_gate.sh
 MMML_MPI_NP=2 ./scripts/run_mpi_pycharmm_read_gate.sh --mode psf-crd
 ```
 
-**Pass:** ``2 stream read step(s)``, ``stream-read all_ranks=1``, ``step 1/2 stream psf=100`` on
-both ranks, then ``PASS read_gate: n_atoms=100``.
+**Pass:** ``eval_charmm_inp_file=1`` in log, ``step 1/2 inp psf=100`` on both ranks,
+then ``PASS read_gate: n_atoms=100``.
 
-If ``Unrecognized command: stre`` → rebuild ``libcharmm.so``. Use ``MMML_QUIET=0`` for CHARMM text.
+If ``eval_charmm_inp_file=0`` → rebuild ``libcharmm.so`` (see above).
+If ``Unrecognized command: stre`` → stale v4.9; ``git pull`` and rebuild.
+Use ``MMML_QUIET=0`` for CHARMM text.
 
 If pass → Tier 3 smoke (live ENER, not callback-only):
 

@@ -1466,7 +1466,7 @@ def _bootstrap_eval_topology_read() -> bool:
 
 
 def _bootstrap_stream_topology_read() -> bool:
-    """At ``np>1``, one ``stream`` eval processes the full READ chain (native-style)."""
+    """At ``np>1``, one ``eval_charmm_inp_file`` / multiline READ chain (native-style)."""
     from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     _, size = mpi_rank_size()
@@ -1598,22 +1598,50 @@ def _archive_bootstrap_stream_inp(
         log_fn("bootstrap_stage", f"archived stream inp {archived}")
 
 
+def _eval_charmm_inp_file_available() -> bool:
+    """True when ``libcharmm`` exports ``eval_charmm_inp_file`` (v4.10 rebuild)."""
+    try:
+        import pycharmm.lib as lib
+
+        return callable(getattr(lib.charmm, "eval_charmm_inp_file", None))
+    except Exception:
+        return False
+
+
+def _invoke_charmm_inp_file(path: Path) -> bool:
+    """Process a ``.inp`` in one Fortran loop (cooperative MPI READ)."""
+    import ctypes
+
+    import pycharmm.lib as lib
+
+    buf, fn_len = _c_path_args(path)
+    fn = lib.charmm.eval_charmm_inp_file
+    fn.restype = ctypes.c_int
+    return int(fn(buf, fn_len)) == 1
+
+
+def _cooperative_inp_script_text(compact: dict[str, Path]) -> str:
+    """READ chain for multiline fallback (no ``stream`` command in library mode)."""
+    lines = [
+        "bomlev -2",
+        f"read rtf card name {compact['rtf'].name}",
+        f"read param card name {compact['prm'].name} flex",
+        f"read psf card name {compact['psf'].name}",
+    ]
+    return "\n".join(lines) + "\n"
+
+
 def _cooperative_stream_topology_read(
     compact: dict[str, Path],
     *,
     log_fn: Callable[[str, str], None] | None = None,
 ) -> None:
-    """Single ``stream`` eval for RTF/PRM/PSF — avoids per-line ``eval`` MPI desync."""
+    """Load RTF/PRM/PSF from shared ``bs_load.inp`` on all ranks (one Fortran session)."""
     from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     rank, size = mpi_rank_size()
     base = compact["psf"].parent.resolve()
     inp_path = base / _STREAM_BOOTSTRAP_INP
-    cmd = f"stream {_STREAM_BOOTSTRAP_INP}\n"
-    if len(cmd.strip()) > _BOOTSTRAP_CMD_MAX_LEN:
-        raise RuntimeError(
-            f"stream bootstrap command exceeds mxcmsz ({len(cmd.strip())}>{_BOOTSTRAP_CMD_MAX_LEN})"
-        )
 
     if rank == 0 or size <= 1:
         _write_cooperative_stream_inp(compact, inp_path)
@@ -1625,31 +1653,45 @@ def _cooperative_stream_topology_read(
     if size > 1:
         _wait_for_shared_file(inp_path, log_fn=log_fn, label="stream_inp")
 
+    use_inp_api = _eval_charmm_inp_file_available()
     if log_fn is not None and size > 1:
         log_fn(
             "bootstrap_sync",
-            f"rank {rank}/{size} stream-read all_ranks=1",
+            f"rank {rank}/{size} inp-read all_ranks=1 "
+            f"eval_charmm_inp_file={int(use_inp_api)}",
         )
 
     quiet = (os.environ.get("MMML_QUIET") or "").strip().lower() in ("1", "true", "yes")
     with _bootstrap_workdir(base):
-        ok = mpi_charmm_script(
-            cmd,
-            relaxed_bomlev=False,
-            quiet=quiet,
-            barriers="none",
-        )
+        if use_inp_api:
+            ok = _invoke_charmm_inp_file(inp_path)
+        else:
+            ok = mpi_charmm_script(
+                _cooperative_inp_script_text(compact),
+                relaxed_bomlev=False,
+                quiet=quiet,
+                barriers="none",
+            )
     if not ok:
+        hint = (
+            "rebuild libcharmm.so (eval_charmm_inp_file in api_eval.F90)"
+            if not use_inp_api
+            else "Set MMML_QUIET=0 for CHARMM error text"
+        )
         raise RuntimeError(
-            f"stream bootstrap failed on rank {rank}/{size}: {cmd.strip()!r}. "
-            "Set MMML_QUIET=0; if CHARMM reports 'Unrecognized command: stre', "
-            "rebuild libcharmm.so (maincomx api_eval patch)."
+            f"inp bootstrap failed on rank {rank}/{size}: {inp_path}. {hint}"
         )
     n_psf = charmm_natom_count()
     if n_psf <= 0:
+        rebuild = (
+            " Rebuild libcharmm.so if eval_charmm_inp_file is missing "
+            "(v4.10 api_eval patch)."
+            if not use_inp_api
+            else ""
+        )
         raise RuntimeError(
-            f"stream bootstrap left psf_natom=0 on rank {rank}/{size}. "
-            f"Inp={inp_path}. Set MMML_QUIET=0 for CHARMM error text."
+            f"inp bootstrap left psf_natom=0 on rank {rank}/{size}. "
+            f"Inp={inp_path}. Set MMML_QUIET=0 for CHARMM error text.{rebuild}"
         )
 
 
@@ -1758,7 +1800,7 @@ def _cooperative_restart_script(
 
 
 # Bump when cooperative bootstrap I/O strategy changes (read-gate diagnostics).
-BOOTSTRAP_MPI_API = "direct-api-v4.9"
+BOOTSTRAP_MPI_API = "direct-api-v4.10"
 
 # ``eval_charmm_script`` uses ``comlyn(mxcmsz)`` (~80); stage short paths for file APIs too.
 _BOOTSTRAP_CMD_MAX_LEN = 78
@@ -1968,7 +2010,7 @@ def _run_cooperative_api_bootstrap(
     crystal_cutnb_A: float,
     log_fn: Callable[[str, str], None] | None = None,
 ) -> int:
-    """Cooperative topology at ``np>1``: ``stream`` READ + Python CRD coords."""
+    """Cooperative topology at ``np>1``: shared ``bs_load.inp`` READ + Python CRD coords."""
     from contextlib import nullcontext
 
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
@@ -1986,7 +2028,7 @@ def _run_cooperative_api_bootstrap(
         load_steps = ("rtf", "prm", "psf", coor_source)
     if log_fn is not None:
         if stream_topology:
-            mode = "stream"
+            mode = "inp"
         elif eval_topology:
             mode = "eval"
         elif hybrid_topology:

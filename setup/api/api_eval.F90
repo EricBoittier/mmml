@@ -92,6 +92,68 @@ contains
     eval_charmm_script = 1
   end function eval_charmm_script
 
+  !> @brief evaluate all commands in a CHARMM input file (native stream loop).
+  !
+  ! Library builds omit the ``stream`` command; this processes a ``.inp`` in one
+  ! Fortran session so cooperative MPI READ stays synchronized across lines.
+  integer(c_int) function eval_charmm_inp_file(c_filename, c_len) bind(C)
+    use, intrinsic :: iso_c_binding, only: c_int, c_char
+
+    use api_util, only: c2f_string
+    use comand, only: comlen, comlyn
+    use dimens_fcm, only: mxcmsz
+
+    implicit none
+
+    character(kind=c_char), dimension(*) :: c_filename
+    integer(c_int), value :: c_len
+
+    character(len=:), allocatable :: fn_str, raw, work
+    integer :: iunit, ios, ntrim
+    logical :: lused
+
+    eval_charmm_inp_file = 0
+    fn_str = c2f_string(c_filename, c_len)
+
+    open(newunit=iunit, file=trim(fn_str), status='old', action='read', iostat=ios)
+    if (ios /= 0) return
+
+    do
+       read(iunit, '(A)', iostat=ios) raw
+       if (ios /= 0) exit
+       work = adjustl(raw)
+       if (len_trim(work) == 0) cycle
+       if (work(1:1) == '*') cycle
+       if (work(1:1) == '!') cycle
+
+       ntrim = len_trim(work)
+       do while (ntrim > 0 .and. work(ntrim:ntrim) == '-')
+          read(iunit, '(A)', iostat=ios) raw
+          if (ios /= 0) exit
+          work = trim(work(1:ntrim - 1)) // ' ' // trim(adjustl(raw))
+          ntrim = len_trim(work)
+       end do
+
+       if (len_trim(work) == 0) cycle
+       if (len_trim(work) > mxcmsz) then
+          comlen = mxcmsz
+       else
+          comlen = len_trim(work)
+       end if
+
+       comlyn(1:comlen) = work(1:comlen)
+       if (comlen < mxcmsz) comlyn((comlen + 1):mxcmsz) = ' '
+       comlen = len(trim(comlyn))
+
+       lused = .false.
+       call miscom(comlyn, mxcmsz, comlen, lused)
+       if (.not. lused) call maincomx(comlyn, comlen, lused)
+    end do
+
+    close(iunit)
+    eval_charmm_inp_file = 1
+  end function eval_charmm_inp_file
+
   function eval_get_param(name, len_name, val, len_val) result(is_found) bind(c)
     use, intrinsic :: iso_c_binding, only: c_char, c_int, c_null_char
 
