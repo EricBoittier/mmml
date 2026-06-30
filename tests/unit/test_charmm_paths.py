@@ -157,6 +157,8 @@ def test_bootstrap_charmm_env_sets_os_environ(tmp_path, monkeypatch):
     monkeypatch.setenv("CHARMM_LIB_DIR", str(chm))
     assert os.environ["CHARMM_HOME"] == str(chm)
     assert os.environ["CHARMM_LIB_DIR"] == str(chm)
+    monkeypatch.delenv("CHARMM_HOME", raising=False)
+    monkeypatch.delenv("CHARMM_LIB_DIR", raising=False)
 
 
 def test_charmm_lib_available_without_explicit_env(tmp_path, monkeypatch):
@@ -175,6 +177,8 @@ def test_charmm_lib_available_without_explicit_env(tmp_path, monkeypatch):
     monkeypatch.setenv("CHARMM_LIB_DIR", str(chm))
     assert os.environ["CHARMM_HOME"] == str(chm)
     assert os.environ["CHARMM_LIB_DIR"] == str(chm)
+    monkeypatch.delenv("CHARMM_HOME", raising=False)
+    monkeypatch.delenv("CHARMM_LIB_DIR", raising=False)
 
 
 def test_fortran_path_needs_alias_detects_uppercase(tmp_path):

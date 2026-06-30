@@ -49,7 +49,15 @@ def test_create_lr_solver_jax_pme():
 
 
 @pytest.mark.parametrize("method", ["ewald", "pme", "p3m"])
-def test_compute_jax_pme_coulomb_matches_common_helper(method: str):
+def test_compute_jax_pme_coulomb_matches_common_helper(method: str, monkeypatch):
+    from mmml.interfaces.pycharmmInterface.long_range_backend import (
+        _cached_jax_pme_calculator,
+        _cached_jax_pme_power_law_evaluator,
+    )
+
+    monkeypatch.setenv("MMML_JAX_PME_MESH_MAX", "64")
+    _cached_jax_pme_calculator.cache_clear()
+    _cached_jax_pme_power_law_evaluator.cache_clear()
     system = ion_dimer_system(separation_A=5.0, box_length_A=30.0)
     ref = jax_pme_coulomb_energy_forces(system, method=method)  # type: ignore[arg-type]
     out = compute_jax_pme_coulomb(

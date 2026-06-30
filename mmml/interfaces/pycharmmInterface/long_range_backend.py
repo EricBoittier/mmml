@@ -347,6 +347,13 @@ def _cached_jax_pme_calculator(
     )
 
 
+def jax_pme_mesh_spacing_A(sr_cutoff_A: float, box_length_A: float) -> float:
+    """Real-space mesh spacing for jax-pme PME/P3M (capped for CI memory)."""
+    smearing = float(sr_cutoff_A) / 5.0
+    mesh_max = int(os.environ.get("MMML_JAX_PME_MESH_MAX", "64") or "64")
+    return max(smearing / 8.0, float(box_length_A) / max(mesh_max, 8))
+
+
 @dataclass(frozen=True)
 class _JaxPmePowerLawHostEvaluator:
     method_name: JaxPmeMethod
@@ -388,8 +395,7 @@ class _JaxPmePowerLawHostEvaluator:
             float(self.prefactor),
         )
         smearing = float(self.sr_cutoff_A) / 5.0
-        mesh_max = int(os.environ.get("MMML_JAX_PME_MESH_MAX", "64") or "64")
-        mesh_spacing = max(smearing / 8.0, float(self.box_length_A) / max(mesh_max, 8))
+        mesh_spacing = jax_pme_mesh_spacing_A(float(self.sr_cutoff_A), float(self.box_length_A))
         lr_wavelength = smearing / 2.0
         if self.method_name == "ewald":
             inputs = calc.prepare(

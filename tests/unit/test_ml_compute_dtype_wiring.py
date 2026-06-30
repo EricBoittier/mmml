@@ -181,6 +181,9 @@ def test_calculate_charmm_uses_cpu_context_while_jax_deferred():
         "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mlpot_runs_on_this_rank",
         return_value=True,
     ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        return_value=False,
+    ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ):
         calc.calculate_charmm(

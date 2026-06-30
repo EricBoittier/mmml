@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -32,3 +33,16 @@ def mock_charmm_quiet_output_for_unit_tests(monkeypatch):
         "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
         _noop_charmm_quiet_output,
     )
+
+
+@pytest.fixture(autouse=True)
+def _clear_stub_charmm_lib_env(monkeypatch):
+    """Drop CHARMM_HOME/LIB_DIR when they point at pytest stub libs (file too short)."""
+    lib_dir = os.environ.get("CHARMM_LIB_DIR")
+    if lib_dir:
+        stub = Path(lib_dir)
+        lib = stub / "libcharmm.so" if stub.is_dir() else stub
+        if lib.is_file() and lib.stat().st_size < 4096:
+            monkeypatch.delenv("CHARMM_HOME", raising=False)
+            monkeypatch.delenv("CHARMM_LIB_DIR", raising=False)
+    yield

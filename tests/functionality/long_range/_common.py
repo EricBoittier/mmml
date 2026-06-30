@@ -244,7 +244,9 @@ def jax_pme_coulomb_energy_forces(
     calc_map = {"ewald": Ewald, "pme": PME, "p3m": P3M}
     calc = calc_map[method](prefactor=jpref.kcalmol_A)
     smearing = sr_cutoff_A / 5.0
-    mesh_spacing = smearing / 8.0
+    from mmml.interfaces.pycharmmInterface.long_range_backend import jax_pme_mesh_spacing_A
+
+    mesh_spacing = jax_pme_mesh_spacing_A(sr_cutoff_A, L)
     lr_wavelength = smearing / 2.0
 
     if method == "ewald":
