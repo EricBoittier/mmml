@@ -276,6 +276,22 @@ def _callback_smoke(args: argparse.Namespace) -> int:
         _log("callback", "skipped (need np>=2; re-run under mpirun with MMML_MPI_NP=2)")
         return 0
 
+    # All ranks must run ML (not rank-0 bridge). Calculator sets spatial_mpi=True but
+    # mpi_bridge.mlpot_runs_on_this_rank() keys off MMML_MLPOT_SPATIAL_MPI env.
+    from mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
+        spatial_mpi_enabled,
+        sync_spatial_mpi_env,
+    )
+
+    sync_spatial_mpi_env(explicit=True)
+    if not spatial_mpi_enabled():
+        print(
+            "FAIL callback smoke: MMML_MLPOT_SPATIAL_MPI must be enabled at np>1 "
+            "(all ranks run spatial ML; rank-0 bridge leaves workers with empty PSF path)",
+            file=sys.stderr,
+        )
+        return 1
+
     # Log first so output from all ranks confirms they are alive before heavy imports.
     _log("callback", "starting — heavy imports next, may take 1–2 min on first run")
 
@@ -398,7 +414,15 @@ def _callback_smoke(args: argparse.Namespace) -> int:
 
     failures: list[str] = []
     if not captured.get("use_spatial"):
-        failures.append(f"rank {rank}: use_spatial=False (expected True at np>{size-1})")
+        hint = ""
+        if rank > 0 and not captured:
+            hint = (
+                " — rank-0 bridge ran (only rank 0 executed ML); "
+                "ensure MMML_MLPOT_SPATIAL_MPI=1 on all ranks"
+            )
+        failures.append(
+            f"rank {rank}: use_spatial=False (expected True at np>{size - 1}){hint}"
+        )
     owned = captured.get("owned_mono", -1)
     if owned != expected_owned:
         failures.append(
@@ -411,11 +435,30 @@ def _callback_smoke(args: argparse.Namespace) -> int:
     if failures:
         for f in failures:
             print(f"FAIL callback smoke: {f}", file=sys.stderr)
+        local_ok = 0
+    else:
+        local_ok = 1
+
+    # Do not print PASS on rank 0 until every rank succeeded (avoid misleading output).
+    try:
+        from mpi4py import MPI
+
+        ok_buf = np.array([local_ok], dtype=np.int32)
+        ok_all = np.zeros(1, dtype=np.int32)
+        MPI.COMM_WORLD.Allreduce(ok_buf, ok_all, op=MPI.MIN)
+        global_ok = int(ok_all[0]) == 1
+    except Exception:
+        global_ok = local_ok == 1
+
+    if not global_ok:
         return 1
 
     if rank == 0:
+        ev2kcal = float(getattr(calc, "ev2kcal", 23.0605))
+        expected_e = ev2kcal * sum(r + 1 for r in range(size))
         print(
             f"PASS callback smoke: np={size} energy={float(energy_val):.4f} "
+            f"(allreduce expect ~{expected_e:.4f}) "
             f"use_spatial={captured['use_spatial']} "
             f"owned_mono_per_rank={captured['owned_mono']} "
             f"(DOMDEC ctypes ownership path confirmed)"
