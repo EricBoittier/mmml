@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Sequence
 
@@ -115,6 +115,21 @@ def _freeze_atom_indices(ctx: Any, ml_atom_indices: Sequence[int]) -> np.ndarray
     )
 
 
+def _apply_frozen_positions_to_fire_state(
+    state: Any,
+    *,
+    pos0_frozen: jnp.ndarray | None,
+    freeze_idx: jnp.ndarray,
+) -> Any:
+    """Restore fixed atom coordinates on a jax-md ``FireDescentState`` (dataclass)."""
+    if pos0_frozen is None or int(freeze_idx.size) == 0:
+        return state
+    return replace(
+        state,
+        position=state.position.at[freeze_idx].set(pos0_frozen),
+    )
+
+
 def _run_jax_bonded_fire(
     positions: np.ndarray,
     system: Any,
@@ -168,8 +183,11 @@ def _run_jax_bonded_fire(
 
     for step in range(1, max(1, int(nstep)) + 1):
         state = step_fn(state)
-        if pos0_frozen is not None and int(freeze_idx.size) > 0:
-            state = state._replace(position=state.position.at[freeze_idx].set(pos0_frozen))
+        state = _apply_frozen_positions_to_fire_state(
+            state,
+            pos0_frozen=pos0_frozen,
+            freeze_idx=freeze_idx,
+        )
         grms = bonded_forces_grms_kcalmol_A(np.asarray(force_fn(state.position)))
         if step % max(1, int(nprint)) == 0 and verbose:
             print(
@@ -217,6 +235,14 @@ def minimize_bonded_jax_recovery(
         ml_atom_indices=ml_indices,
     )
     try:
+        n_bonds = int(np.asarray(system.topology.bonds).shape[0])
+        if n_bonds <= 0:
+            if config.verbose:
+                print(
+                    "Bonded JAX mini skipped: no MM bonded terms (all-ML cluster)",
+                    flush=True,
+                )
+            return 0.0
         nstep = int(config.nstep_jax if config.nstep_jax is not None else config.nstep_sd)
         freeze_indices = _freeze_atom_indices(ctx, ml_indices)
         new_positions, grms = _run_jax_bonded_fire(

@@ -625,6 +625,9 @@ def test_assert_mlpot_user_active_reattaches_when_user_missing():
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_mlpot_registration_mm_off",
         return_value="all",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
+        return_value=False,
     ):
         user = assert_mlpot_user_active(ctx, context="test", quiet=True)
 
@@ -720,6 +723,9 @@ def test_assert_mlpot_user_active_forces_stale_python_is_set():
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_mlpot_registration_mm_off",
         return_value="all",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
+        return_value=False,
     ):
         user = assert_mlpot_user_active(ctx, context="test", quiet=True)
 

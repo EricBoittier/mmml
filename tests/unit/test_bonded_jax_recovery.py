@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
+import jax.numpy as jnp
 
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     BondedMmMiniConfig,
@@ -92,3 +93,35 @@ def test_resolve_recovery_psf_source_prefers_topology_psf(tmp_path):
     source = resolve_recovery_psf_source(ctx, topology_psf=psf)
     assert source.path == psf.resolve()
     assert source.temporary is False
+
+
+def test_apply_frozen_positions_to_fire_state_uses_dataclass_replace():
+    """jax-md ``FireDescentState`` is a dataclass; ``_replace`` is not available."""
+    from jax_md import minimize as jax_minimize
+    from jax_md import space
+
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_jax_recovery import (
+        _apply_frozen_positions_to_fire_state,
+    )
+
+    def force_fn(pos):
+        return -pos
+
+    _, shift_fn = space.free()
+    init_fn, _step_fn = jax_minimize.fire_descent(
+        force_fn,
+        shift_fn,
+        dt_start=0.05,
+        dt_max=0.05,
+    )
+    state = init_fn(jnp.zeros((3, 3)))
+    freeze_idx = jnp.asarray([0, 1], dtype=jnp.int32)
+    pos0_frozen = jnp.ones((2, 3))
+    updated = _apply_frozen_positions_to_fire_state(
+        state,
+        pos0_frozen=pos0_frozen,
+        freeze_idx=freeze_idx,
+    )
+    assert np.allclose(np.asarray(updated.position[0]), 1.0)
+    assert np.allclose(np.asarray(updated.position[1]), 1.0)
+    assert np.allclose(np.asarray(updated.position[2]), 0.0)
