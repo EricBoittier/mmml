@@ -964,9 +964,14 @@ def test_bootstrap_topology_mpi_psf_crd_serial_steps(tmp_path):
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.sync_bootstrap_ranks",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.mpi_charmm_script",
-        side_effect=lambda s, **kw: calls.append(s),
-    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._read_rtf_api",
+    ) as rtf_mock, mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._read_prm_api",
+    ) as prm_mock, mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._read_psf_api",
+    ) as psf_mock, mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._load_coor_from_crd_api",
+    ) as crd_mock, mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_natom_diagnostics",
         return_value={"psf_natom": 2, "coor_natom": 2, "psf_loaded": True},
     ), mock.patch(
@@ -984,8 +989,10 @@ def test_bootstrap_topology_mpi_psf_crd_serial_steps(tmp_path):
         )
 
     assert n == 2
-    assert len(calls) == 4
-    assert all("bs_read" in c or "bs_rtf" in c for c in calls)
+    rtf_mock.assert_called_once()
+    prm_mock.assert_called_once()
+    psf_mock.assert_called_once()
+    crd_mock.assert_called_once()
     assert (tmp_path / "bs_read.psf").is_file()
     assert (tmp_path / "bs_read.crd").is_file()
 
@@ -1024,9 +1031,14 @@ def test_bootstrap_topology_mpi_psf_crd_np_gt1_uses_cooperative_read(tmp_path, m
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi._wait_for_shared_file",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.mpi_charmm_script",
-        side_effect=lambda s, **kw: calls.append(s),
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._read_rtf_api",
     ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._read_prm_api",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._read_psf_api",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._load_coor_from_crd_api",
+    ) as crd_mock, mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_natom_diagnostics",
         return_value={"psf_natom": 2, "coor_natom": 2, "psf_loaded": True},
     ), mock.patch(
@@ -1044,8 +1056,7 @@ def test_bootstrap_topology_mpi_psf_crd_np_gt1_uses_cooperative_read(tmp_path, m
         )
 
     assert n == 2
-    assert len(calls) == 4
-    assert "read psf card name bs_read.psf" in calls[2]
+    crd_mock.assert_called_once()
 
 
 def test_bootstrap_topology_mpi_np_gt1_auto_restart_when_res_exists(tmp_path):
@@ -1076,9 +1087,14 @@ def test_bootstrap_topology_mpi_np_gt1_auto_restart_when_res_exists(tmp_path):
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi._wait_for_shared_file",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.mpi_charmm_script",
-        side_effect=lambda s, **kw: calls.append(s),
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._read_rtf_api",
     ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._read_prm_api",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._read_psf_api",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._load_coor_from_restart_api",
+    ) as res_mock, mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_natom_diagnostics",
         return_value={"psf_natom": 2, "coor_natom": 2, "psf_loaded": True},
     ), mock.patch(
@@ -1096,9 +1112,7 @@ def test_bootstrap_topology_mpi_np_gt1_auto_restart_when_res_exists(tmp_path):
         )
 
     assert n == 2
-    assert len(calls) == 6
-    assert "read restart unit 20" in calls[4]
-    assert "UPDATE" not in "".join(calls)
+    res_mock.assert_called_once()
 
 
 def test_bootstrap_topology_mpi_invalid_mode(tmp_path):

@@ -1517,10 +1517,11 @@ def _cooperative_restart_script(
 
 
 # Bump when cooperative bootstrap I/O strategy changes (read-gate diagnostics).
-BOOTSTRAP_MPI_API = "shortpath-sequential-v3"
+BOOTSTRAP_MPI_API = "direct-api-v4"
 
-# ``eval_charmm_script`` uses ``comlyn(mxcmsz)`` (~80); long absolute paths truncate.
+# ``eval_charmm_script`` uses ``comlyn(mxcmsz)`` (~80); stage short paths for file APIs too.
 _BOOTSTRAP_CMD_MAX_LEN = 78
+_BOOTSTRAP_FPATH_MAX_LEN = 240
 
 _COMPACT_BOOTSTRAP_FILENAMES = {
     "rtf": "bs_rtf.rtf",
@@ -1563,6 +1564,184 @@ def stage_compact_bootstrap_paths(
             _wait_for_shared_file(dst)
         compact[key] = dst
     return base, compact
+
+
+def _fortran_file_path(path: Path) -> str:
+    """Absolute path string for ``api_read`` Fortran ``open`` (stage when too long)."""
+    s = str(path.expanduser().resolve())
+    if len(s) > _BOOTSTRAP_FPATH_MAX_LEN:
+        raise RuntimeError(
+            f"bootstrap file path exceeds Fortran open budget "
+            f"({len(s)}>{_BOOTSTRAP_FPATH_MAX_LEN}): {s!r}"
+        )
+    return s
+
+
+def _read_rtf_api(path: Path) -> None:
+    import ctypes
+
+    import pycharmm.lib as lib
+
+    fn = _fortran_file_path(path)
+    buf = ctypes.create_string_buffer(fn.encode())
+    append = ctypes.c_int(0)
+    status = lib.charmm.read_rtf_file(buf, ctypes.c_int(len(fn)), ctypes.byref(append))
+    if int(status) != 1:
+        raise RuntimeError(f"read_rtf_file failed for {path} (status={status})")
+
+
+def _read_prm_api(path: Path, *, flex: bool = True) -> None:
+    import ctypes
+
+    import pycharmm.lib as lib
+
+    fn = _fortran_file_path(path)
+    buf = ctypes.create_string_buffer(fn.encode())
+    append = ctypes.c_int(0)
+    flex_i = ctypes.c_int(1 if flex else 0)
+    status = lib.charmm.read_param_file(
+        buf,
+        ctypes.c_int(len(fn)),
+        ctypes.byref(append),
+        ctypes.byref(flex_i),
+    )
+    if int(status) != 1:
+        raise RuntimeError(f"read_param_file failed for {path} (status={status})")
+
+
+def _read_psf_api(path: Path) -> None:
+    import ctypes
+
+    import pycharmm.lib as lib
+
+    fn = _fortran_file_path(path)
+    buf = ctypes.create_string_buffer(fn.encode())
+    append = ctypes.c_int(0)
+    xplor = ctypes.c_int(0)
+    status = lib.charmm.read_psf_card(
+        buf,
+        ctypes.byref(ctypes.c_int(len(fn))),
+        ctypes.byref(append),
+        ctypes.byref(xplor),
+    )
+    if int(status) != 1:
+        raise RuntimeError(f"read_psf_card failed for {path} (status={status})")
+
+
+def _load_coor_from_crd_api(crd_path: Path) -> None:
+    import pandas as pd
+    import pycharmm.coor as coor
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_crd_coordinates,
+    )
+
+    pos = read_crd_coordinates(crd_path)
+    if pos is None:
+        raise RuntimeError(f"failed to parse CRD coordinates: {crd_path}")
+    n_psf = charmm_natom_count()
+    if pos.shape[0] != n_psf:
+        raise RuntimeError(
+            f"CRD atom count {pos.shape[0]} != PSF atom count {n_psf} ({crd_path})"
+        )
+    coor.set_positions(pd.DataFrame(pos, columns=["x", "y", "z"]))
+
+
+def _load_coor_from_restart_api(res_path: Path) -> None:
+    import pandas as pd
+    import pycharmm.coor as coor
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_restart_coordinates,
+    )
+
+    pos = read_restart_coordinates(res_path)
+    if pos is None:
+        raise RuntimeError(f"failed to parse restart coordinates: {res_path}")
+    n_psf = charmm_natom_count()
+    if pos.shape[0] != n_psf:
+        raise RuntimeError(
+            f"restart atom count {pos.shape[0]} != PSF atom count {n_psf} ({res_path})"
+        )
+    coor.set_positions(pd.DataFrame(pos, columns=["x", "y", "z"]))
+
+
+def _apply_bootstrap_crystal(
+    *,
+    crystal_side_A: float,
+    crystal_cutnb_A: float,
+    step: str,
+    log_fn: Callable[[str, str], None] | None,
+) -> None:
+    """Optional PBC after load (still uses ``eval_charmm_script`` — may fail on some builds)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+
+    rank, size = mpi_rank_size()
+    side = float(crystal_side_A)
+    lines = [
+        f"crystal define cubic {side} {side} {side} 90 90 90",
+        f"crystal build cutoff {float(crystal_cutnb_A)} noper 0",
+    ]
+    if log_fn is not None:
+        log_fn(step, f"rank {rank}/{size}: crystal ({len(lines)} eval cmd(s))")
+    for line in lines:
+        mpi_charmm_script(line + "\n", relaxed_bomlev=_bootstrap_relaxed_bomlev())
+
+
+def _run_cooperative_api_bootstrap(
+    step: str,
+    compact: dict[str, Path],
+    *,
+    coor_source: str,
+    crystal_side_A: float | None,
+    crystal_cutnb_A: float,
+    log_fn: Callable[[str, str], None] | None = None,
+) -> int:
+    """Cooperative topology load via ``api_read`` + Python coor (no ``eval`` READ)."""
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+
+    rank, size = mpi_rank_size()
+    load_steps = ("rtf", "prm", "psf", coor_source)
+    if log_fn is not None:
+        log_fn(step, f"begin rank {rank}/{size}: {len(load_steps)} api read step(s)")
+    with charmm_relaxed_bomlev():
+        for idx, name in enumerate(load_steps, start=1):
+            if name == "rtf":
+                _read_rtf_api(compact["rtf"])
+            elif name == "prm":
+                _read_prm_api(compact["prm"])
+            elif name == "psf":
+                _read_psf_api(compact["psf"])
+            elif name == "crd":
+                _load_coor_from_crd_api(compact["crd"])
+            elif name == "restart":
+                _load_coor_from_restart_api(compact["res"])
+            else:
+                raise ValueError(f"unknown bootstrap load step: {name!r}")
+            if log_fn is not None:
+                diag = charmm_natom_diagnostics()
+                log_fn(
+                    step,
+                    f"  api {idx}/{len(load_steps)} rank {rank}/{size}: "
+                    f"{name} psf={diag['psf_natom']} coor={diag['coor_natom']}",
+                )
+    if crystal_side_A is not None:
+        _apply_bootstrap_crystal(
+            crystal_side_A=crystal_side_A,
+            crystal_cutnb_A=crystal_cutnb_A,
+            step=step,
+            log_fn=log_fn,
+        )
+    diag = charmm_natom_diagnostics()
+    n_atoms = int(diag["psf_natom"])
+    if log_fn is not None:
+        log_fn(
+            step,
+            f"done rank {rank}/{size}: n_atoms={n_atoms} "
+            f"psf={diag['psf_natom']} coor={diag['coor_natom']}",
+        )
+    return n_atoms
 
 
 def _bootstrap_relaxed_bomlev() -> bool:
@@ -1703,50 +1882,31 @@ def bootstrap_topology_mpi(
     if size > 1:
         align_mpi_ranks_after_import(log_fn=log_fn)
 
-    workdir, compact = stage_compact_bootstrap_paths(
+    _, compact = stage_compact_bootstrap_paths(
         paths,
         rank=rank,
         size=size,
     )
-    with _bootstrap_workdir(workdir):
-        if effective_mode == "restart":
-            restart_script = _cooperative_restart_script(
-                compact,
-                crystal_side_A=crystal_side_A,
-                crystal_cutnb_A=crystal_cutnb_A,
-            )
-            _run_cooperative_bootstrap_script(
-                "read_restart",
-                restart_script,
-                paths=compact,
-                log_fn=log_fn,
-            )
-        elif effective_mode == "stream-inp":
-            read_script = _cooperative_read_script(
-                compact,
-                crystal_side_A=crystal_side_A,
-                crystal_cutnb_A=crystal_cutnb_A,
-            )
-            _run_cooperative_bootstrap_script(
-                "stream_inp",
-                read_script,
-                paths=compact,
-                log_fn=log_fn,
-            )
-        elif effective_mode == "psf-crd":
-            read_script = _cooperative_read_script(
-                compact,
-                crystal_side_A=crystal_side_A,
-                crystal_cutnb_A=crystal_cutnb_A,
-            )
-            _run_cooperative_bootstrap_script(
-                "read_psf_crd",
-                read_script,
-                paths=compact,
-                log_fn=log_fn,
-            )
-        else:
-            raise ValueError(f"unsupported bootstrap mode: {mode!r}")
+    if effective_mode == "restart":
+        _run_cooperative_api_bootstrap(
+            "read_restart",
+            compact,
+            coor_source="restart",
+            crystal_side_A=crystal_side_A,
+            crystal_cutnb_A=crystal_cutnb_A,
+            log_fn=log_fn,
+        )
+    elif effective_mode in ("stream-inp", "psf-crd"):
+        _run_cooperative_api_bootstrap(
+            "read_psf_crd" if effective_mode == "psf-crd" else "stream_inp",
+            compact,
+            coor_source="crd",
+            crystal_side_A=crystal_side_A,
+            crystal_cutnb_A=crystal_cutnb_A,
+            log_fn=log_fn,
+        )
+    else:
+        raise ValueError(f"unsupported bootstrap mode: {mode!r}")
 
     n_final = charmm_natom_count()
     if n_final <= 0:
