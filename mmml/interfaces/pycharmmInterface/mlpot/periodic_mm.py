@@ -71,9 +71,18 @@ def resolve_lr_solver_arg(args: Any | None) -> str | None:
 
 
 def resolve_periodic_charmm_vdw(args: Any | None) -> bool:
-    """Whether periodic_external keeps CHARMM IMAGE VDW on (default True)."""
+    """Whether periodic_external keeps CHARMM IMAGE VDW on (default True).
+
+    With ``--no-include-mm`` (ML-only), CHARMM IMAGE VDW double-counts Lennard-Jones
+    already in the MLpot USER term unless the user explicitly enables it.
+    """
     if args is None:
         return True
+    explicit = getattr(args, "_cli_explicit", None) or set()
+    if "periodic_charmm_vdw" in explicit:
+        return bool(getattr(args, "periodic_charmm_vdw", True))
+    if not bool(getattr(args, "include_mm", True)):
+        return False
     return bool(getattr(args, "periodic_charmm_vdw", True))
 
 

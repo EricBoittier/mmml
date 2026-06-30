@@ -1156,8 +1156,10 @@ def _handle_extent_cleanup_rescue(
         sync_charmm_positions,
     )
     from mmml.utils.geometry_checks import (
+        coords_pathological_for_repack,
         find_worst_monomer_extent,
         rebuild_monomers_from_reference,
+        repack_monomers_clear_overlap,
         repack_selected_monomers_clear_overlap,
     )
 
@@ -1186,22 +1188,36 @@ def _handle_extent_cleanup_rescue(
         ) from exc
 
     flagged = [int(violation.monomer)]
+    extent_cap = float(config.max_monomer_extent_A)
+    repack_common = dict(
+        min_distance=config.min_distance_A,
+        spacing=config.repack_spacing_A,
+        margin=config.separate_margin_A,
+        seed=config.recovery_seed,
+        cell=cell,
+        template_positions=ref_pos,
+        max_monomer_radius_A=extent_cap if extent_cap > 0.0 else None,
+    )
     print(
         f"{exc}\nCleanup extent rescue: rebuild monomer {violation.monomer + 1} "
         f"from {ref_path.name}, minimize, cold restart...",
         flush=True,
     )
     new_pos = rebuild_monomers_from_reference(pos, ref_pos, offsets, flagged)
-    new_pos = repack_selected_monomers_clear_overlap(
-        new_pos,
-        offsets,
-        flagged,
-        min_distance=config.min_distance_A,
-        spacing=config.repack_spacing_A,
-        margin=config.separate_margin_A,
-        seed=config.recovery_seed,
-        cell=cell,
-    )
+    if coords_pathological_for_repack(new_pos, offsets, max_monomer_extent_A=extent_cap):
+        print(
+            "Cleanup extent rescue: pathological coordinates detected — "
+            "full repack from reference geometry",
+            flush=True,
+        )
+        new_pos = repack_monomers_clear_overlap(ref_pos.copy(), offsets, **repack_common)
+    else:
+        new_pos = repack_selected_monomers_clear_overlap(
+            new_pos,
+            offsets,
+            flagged,
+            **repack_common,
+        )
     sync_charmm_positions(new_pos)
     setattr(mlpot_ctx, "_overlap_post_rescue_cold_start", True)
     return _extent_check(config, context=f"{label} after cleanup extent rescue")

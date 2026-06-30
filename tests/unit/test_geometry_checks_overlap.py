@@ -20,6 +20,7 @@ find_worst_intermonomer_overlap = _geom.find_worst_intermonomer_overlap
 separate_intermonomer_overlaps = _geom.separate_intermonomer_overlaps
 repack_monomers_clear_overlap = _geom.repack_monomers_clear_overlap
 repack_selected_monomers_clear_overlap = _geom.repack_selected_monomers_clear_overlap
+coords_pathological_for_repack = _geom.coords_pathological_for_repack
 
 
 def test_find_worst_intermonomer_overlap_reports_closest_pair():
@@ -189,3 +190,58 @@ def test_repack_monomers_clear_overlap_pbc_dense():
         out, offsets, min_distance=1.5, cell=cell, context="repack_pbc"
     )
     assert dmin >= 1.5
+
+
+def test_repack_monomers_caps_corrupted_internal_radius_for_pbc_pad():
+    """Fly-off coords must not inflate PBC repack pad to astronomical values."""
+    good = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [20.0, 0.0, 0.0],
+            [21.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    corrupted = good.copy()
+    corrupted[2] = np.array([3.2e8, 0.0, 0.0])
+    offsets = np.array([0, 2, 4], dtype=int)
+    cell = np.diag([40.0, 40.0, 40.0])
+    out = repack_monomers_clear_overlap(
+        corrupted,
+        offsets,
+        min_distance=2.0,
+        spacing=4.0,
+        margin=0.0,
+        seed=1,
+        cell=cell,
+        template_positions=good,
+        max_monomer_radius_A=6.0,
+    )
+    assert np.all(np.isfinite(out))
+    dmin = assert_no_intermonomer_atom_overlap(
+        out, offsets, min_distance=2.0, cell=cell, context="corrupted_repack"
+    )
+    assert dmin >= 2.0
+
+
+def test_coords_pathological_for_repack_detects_nonfinite_and_huge_radius():
+    offsets = np.array([0, 2, 4], dtype=int)
+    ok = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [10.0, 0.0, 0.0],
+            [11.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    assert not coords_pathological_for_repack(ok, offsets, max_monomer_extent_A=12.0)
+
+    bad = ok.copy()
+    bad[2, 0] = 1.0e8
+    assert coords_pathological_for_repack(bad, offsets, max_monomer_extent_A=12.0)
+
+    nan = ok.copy()
+    nan[0, 0] = np.nan
+    assert coords_pathological_for_repack(nan, offsets, max_monomer_extent_A=12.0)

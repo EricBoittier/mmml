@@ -127,6 +127,22 @@ def test_build_periodic_mm_config_charmm_vdw_flag():
     assert cfg.charmm_vdw is False
 
 
+def test_resolve_periodic_charmm_vdw_off_when_no_include_mm():
+    from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm import (
+        resolve_periodic_charmm_vdw,
+    )
+
+    args = argparse.Namespace(include_mm=False, periodic_charmm_vdw=True)
+    assert resolve_periodic_charmm_vdw(args) is False
+
+    args_explicit = argparse.Namespace(
+        include_mm=False,
+        periodic_charmm_vdw=True,
+        _cli_explicit={"periodic_charmm_vdw"},
+    )
+    assert resolve_periodic_charmm_vdw(args_explicit) is True
+
+
 def test_periodic_mm_status_line_no_vdw():
     from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm import (
         PeriodicMmConfig,

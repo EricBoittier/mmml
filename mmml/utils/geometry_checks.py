@@ -247,6 +247,54 @@ def _monomer_internal_templates(
     return templates, radii
 
 
+def _cap_monomer_radii(
+    radii: list[float],
+    *,
+    max_monomer_radius_A: float | None,
+) -> list[float]:
+    """Clamp per-monomer radii used for PBC repack padding/spacing."""
+    if max_monomer_radius_A is None or float(max_monomer_radius_A) <= 0.0:
+        return radii
+    cap = float(max_monomer_radius_A)
+    return [cap if not np.isfinite(float(r)) else min(float(r), cap) for r in radii]
+
+
+def _resolve_repack_templates_and_radii(
+    positions: np.ndarray,
+    monomer_offsets: np.ndarray,
+    *,
+    template_positions: np.ndarray | None = None,
+    max_monomer_radius_A: float | None = None,
+) -> tuple[list[np.ndarray], list[float]]:
+    """Templates/radii for repack; optional reference geometry and radius cap."""
+    source = (
+        np.asarray(template_positions, dtype=float)
+        if template_positions is not None
+        else np.asarray(positions, dtype=float)
+    )
+    templates, radii = _monomer_internal_templates(source, monomer_offsets)
+    return templates, _cap_monomer_radii(
+        radii, max_monomer_radius_A=max_monomer_radius_A
+    )
+
+
+def coords_pathological_for_repack(
+    positions: np.ndarray,
+    monomer_offsets: np.ndarray,
+    *,
+    max_monomer_extent_A: float,
+) -> bool:
+    """True when coordinates are non-finite or monomer radii exceed extent limit."""
+    pos = np.asarray(positions, dtype=float)
+    if not np.all(np.isfinite(pos)):
+        return True
+    limit = float(max_monomer_extent_A)
+    if limit <= 0.0:
+        return False
+    _, radii = _monomer_internal_templates(pos, monomer_offsets)
+    return any(not np.isfinite(float(r)) or float(r) > limit for r in radii)
+
+
 def _mic_com_distance(
     com_i: np.ndarray,
     com_j: np.ndarray,
@@ -393,6 +441,8 @@ def repack_monomers_clear_overlap(
     margin: float = 0.2,
     seed: int | None = None,
     cell: Any | None = None,
+    template_positions: np.ndarray | None = None,
+    max_monomer_radius_A: float | None = None,
 ) -> np.ndarray:
     """Rebuild monomer placement: preserve internal geometry, re-place COMs apart.
 
@@ -407,7 +457,12 @@ def repack_monomers_clear_overlap(
     if n_monomers <= 1:
         return pos.copy()
 
-    templates, radii = _monomer_internal_templates(pos, offsets)
+    templates, radii = _resolve_repack_templates_and_radii(
+        pos,
+        offsets,
+        template_positions=template_positions,
+        max_monomer_radius_A=max_monomer_radius_A,
+    )
     max_radius = float(max(radii)) if radii else 0.0
     threshold = float(min_distance)
     extra = float(max(0.0, margin))
@@ -466,6 +521,8 @@ def repack_selected_monomers_clear_overlap(
     margin: float = 0.2,
     seed: int | None = None,
     cell: Any | None = None,
+    template_positions: np.ndarray | None = None,
+    max_monomer_radius_A: float | None = None,
 ) -> np.ndarray:
     """Patch only selected monomers: rigid internal geometry, new COM placement.
 
@@ -486,9 +543,16 @@ def repack_selected_monomers_clear_overlap(
             margin=margin,
             seed=seed,
             cell=cell,
+            template_positions=template_positions,
+            max_monomer_radius_A=max_monomer_radius_A,
         )
 
-    templates, _radii = _monomer_internal_templates(pos, offsets)
+    templates, _radii = _resolve_repack_templates_and_radii(
+        pos,
+        offsets,
+        template_positions=template_positions,
+        max_monomer_radius_A=max_monomer_radius_A,
+    )
     cell_mat = _cell_matrix(cell)
     threshold = float(min_distance)
     extra = float(max(0.0, margin))
@@ -529,6 +593,8 @@ def repack_selected_monomers_clear_overlap(
             margin=margin,
             seed=seed,
             cell=cell,
+            template_positions=template_positions,
+            max_monomer_radius_A=max_monomer_radius_A,
         )
 
     if cell_mat is not None:
