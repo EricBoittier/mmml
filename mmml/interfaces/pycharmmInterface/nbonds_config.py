@@ -215,17 +215,26 @@ def suspend_pbc_before_cgenff_param_append() -> bool:
     """
     from mmml.interfaces.pycharmmInterface.import_pycharmm import (
         PYCHARMM_AVAILABLE,
-        crystal_free_charmm,
+        crystal_free_charmm_for_param_append,
     )
 
     if not PYCHARMM_AVAILABLE:
         return False
+
+    def _suspend() -> bool:
+        if not crystal_free_charmm_for_param_append():
+            return False
+        print(
+            "MMML: crystal free before CGENFF READ PARAM APPEND (PBC suspend)",
+            flush=True,
+        )
+        return True
+
     try:
         import pycharmm.image as image
 
         if int(image.get_ntrans()) > 1:
-            crystal_free_charmm()
-            return True
+            return _suspend()
     except Exception:
         pass
     try:
@@ -242,8 +251,7 @@ def suspend_pbc_before_cgenff_param_append() -> bool:
             ctypes.byref(sz),
         )
         if min(float(sx.value), float(sy.value), float(sz.value)) > 0.0:
-            crystal_free_charmm()
-            return True
+            return _suspend()
     except Exception:
         pass
     return False

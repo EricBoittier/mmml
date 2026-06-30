@@ -443,6 +443,31 @@ def crystal_free_charmm() -> None:
         pass
 
 
+def crystal_free_charmm_for_param_append() -> bool:
+    """MPI-safe ``crystal free`` before ``READ PARAM APPEND``.
+
+    Unlike :func:`crystal_free_charmm`, this bypasses
+    :func:`should_skip_vacuum_charmm_init` (import-time vacuum bootstrap only).
+    Under ``mpirun``, uses cooperative :func:`~charmm_mpi.mpi_charmm_script`.
+    """
+    if not PYCHARMM_AVAILABLE:
+        return False
+    try:
+        from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
+        from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+            _under_mpirun,
+            mpi_charmm_script,
+        )
+
+        if _under_mpirun():
+            mpi_charmm_script("crystal free\n", quiet=True)
+        else:
+            run_charmm_script_quiet("crystal free")
+        return True
+    except Exception:
+        return False
+
+
 def force_charmm_vacuum_mode() -> None:
     """Vacuum helpers: defer domdec off to MLpot energy; crystal free may repeat."""
     crystal_free_charmm()

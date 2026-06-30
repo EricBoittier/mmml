@@ -70,11 +70,17 @@ def test_apply_zeroed_cgenff_params_bonded_only(tmp_path: Path, monkeypatch):
 def test_read_cgenff_prm_append_suspends_pbc_before_read():
     import inspect
 
-    from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_prm
+    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+        read_cgenff_prm,
+        suspend_pbc_before_cgenff_param_append,
+    )
 
     src = inspect.getsource(read_cgenff_prm)
     assert "if append:" in src
     assert "suspend_pbc_before_cgenff_param_append()" in src
+    suspend_src = inspect.getsource(suspend_pbc_before_cgenff_param_append)
+    assert "crystal_free_charmm_for_param_append" in suspend_src
+    assert "crystal_free_charmm(" not in suspend_src
 
 
 def test_read_cgenff_prm_replace_skips_pbc_suspend():

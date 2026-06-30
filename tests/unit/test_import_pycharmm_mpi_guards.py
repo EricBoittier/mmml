@@ -14,6 +14,15 @@ def test_crystal_free_skips_under_mpi_linked_mpirun():
     assert "should_skip_vacuum_charmm_init()" in crystal
 
 
+def test_crystal_free_for_param_append_bypasses_vacuum_skip():
+    source = Path("mmml/interfaces/pycharmmInterface/import_pycharmm.py").read_text(
+        encoding="utf-8"
+    )
+    fn = source.split("def crystal_free_charmm_for_param_append")[1].split("\ndef ")[0]
+    assert "if should_skip_vacuum_charmm_init()" not in fn
+    assert "mpi_charmm_script" in fn
+
+
 def test_reset_block_skips_under_mpi_linked_mpirun():
     source = Path("mmml/interfaces/pycharmmInterface/import_pycharmm.py").read_text(
         encoding="utf-8"
