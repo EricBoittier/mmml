@@ -542,7 +542,7 @@ def run_diagnosis(
             labels=labels,
             reference_index=structure_reference_index,
             out_path=structure_plot_out.resolve(),
-            title=f"{dataset} suspect structures (Kabsch-aligned)",
+            title=f"{dataset} suspect structures (aligned, side by side)",
         )
         if verbose:
             print(f"Wrote structure overlay {structure_plot_out}")

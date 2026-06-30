@@ -1,14 +1,18 @@
-"""Kabsch alignment and ASE overlays for NPZ training structures."""
+"""Kabsch alignment and ASE structure panels for NPZ training structures."""
 
 from __future__ import annotations
 
+from collections import defaultdict
 from pathlib import Path
 from typing import Sequence
 
 import matplotlib.pyplot as plt
 import numpy as np
 from ase import Atoms
+from ase.data import chemical_symbols, covalent_radii
 from ase.visualize.plot import plot_atoms
+
+BOND_FACTOR = 1.2
 
 
 def kabsch_rotation(mobile: np.ndarray, target: np.ndarray) -> np.ndarray:
@@ -54,9 +58,63 @@ def load_npz_structure(npz_path: Path, index: int) -> Atoms:
     return Atoms(numbers=z_full[:natoms_real], positions=r_full[:natoms_real])
 
 
-def _default_palette(n: int) -> list[str]:
-    cmap = plt.get_cmap("tab10")
-    return [cmap(i % 10) for i in range(n)]
+def _bond_cutoff(z_i: int, z_j: int) -> float:
+    return BOND_FACTOR * (float(covalent_radii[z_i]) + float(covalent_radii[z_j]))
+
+
+def bond_lengths_per_element(atoms: Atoms) -> dict[int, list[float]]:
+    """Collect bonded pair lengths keyed by participating atomic number."""
+    positions = np.asarray(atoms.get_positions(), dtype=np.float64)
+    numbers = np.asarray(atoms.get_atomic_numbers(), dtype=np.int32)
+    by_element: dict[int, list[float]] = defaultdict(list)
+
+    for i in range(len(numbers)):
+        for j in range(i + 1, len(numbers)):
+            length = float(np.linalg.norm(positions[i] - positions[j]))
+            if length > _bond_cutoff(int(numbers[i]), int(numbers[j])):
+                continue
+            by_element[int(numbers[i])].append(length)
+            by_element[int(numbers[j])].append(length)
+    return dict(by_element)
+
+
+def _element_label(z: int) -> str:
+    if 0 < z < len(chemical_symbols):
+        return chemical_symbols[z]
+    return f"Z{z}"
+
+
+def _prepare_aligned_atoms(
+    npz_path: Path,
+    indices: Sequence[int],
+    reference_index: int,
+) -> tuple[list[Atoms], list[float]]:
+    reference = load_npz_structure(npz_path, reference_index)
+    ref_positions = np.asarray(reference.get_positions(), dtype=np.float64)
+    ref_numbers = reference.get_atomic_numbers()
+
+    aligned_atoms: list[Atoms] = []
+    rmsds: list[float] = []
+    for idx in indices:
+        atoms = load_npz_structure(npz_path, idx)
+        if len(atoms) != len(reference):
+            raise ValueError(
+                f"Structure {idx} has {len(atoms)} atoms but reference {reference_index} has {len(reference)}"
+            )
+        if not np.array_equal(atoms.get_atomic_numbers(), ref_numbers):
+            raise ValueError(
+                f"Atomic numbers differ between structure {idx} and reference {reference_index}"
+            )
+        positions = np.asarray(atoms.get_positions(), dtype=np.float64)
+        if idx == reference_index:
+            aligned_positions = positions
+            rmsd = 0.0
+        else:
+            aligned_positions = align_positions(positions, ref_positions)
+            rmsd = structure_rmsd(positions, ref_positions)
+        aligned_atoms.append(Atoms(numbers=atoms.get_atomic_numbers(), positions=aligned_positions))
+        rmsds.append(rmsd)
+    return aligned_atoms, rmsds
 
 
 def plot_aligned_structures(
@@ -69,10 +127,9 @@ def plot_aligned_structures(
     title: str | None = None,
     rotation: str = "90x,0y,0z",
     radii: float = 0.35,
-    reference_color: str = "#333333",
     show: bool = False,
 ) -> plt.Figure:
-    """Align NPZ structures to a reference and superimpose with ASE ``plot_atoms``."""
+    """Plot Kabsch-aligned structures side by side with bond-length histograms below."""
     if not indices:
         raise ValueError("indices must not be empty")
 
@@ -81,66 +138,93 @@ def plot_aligned_structures(
         reference_index = unique_indices[0]
     reference_index = int(reference_index)
 
-    reference = load_npz_structure(npz_path, reference_index)
-    ref_positions = np.asarray(reference.get_positions(), dtype=np.float64)
-
     if labels is None:
         labels = [f"idx {idx}" for idx in unique_indices]
     elif len(labels) != len(unique_indices):
         raise ValueError(f"labels length {len(labels)} != indices length {len(unique_indices)}")
 
-    fig, ax = plt.subplots(figsize=(7, 6))
-    plot_atoms(
-        Atoms(numbers=reference.get_atomic_numbers(), positions=ref_positions),
-        ax=ax,
-        rotation=rotation,
-        radii=radii,
-        colors=[reference_color] * len(reference),
-    )
+    aligned_atoms, rmsds = _prepare_aligned_atoms(npz_path, unique_indices, reference_index)
+    elements = sorted({int(z) for atoms in aligned_atoms for z in atoms.get_atomic_numbers()})
+    n_struct = len(unique_indices)
+    n_elem = max(len(elements), 1)
+    n_cols = max(n_struct, n_elem)
 
-    palette = _default_palette(len(unique_indices))
-    legend_handles: list[plt.Line2D] = []
-    ref_label = next((lab for idx, lab in zip(unique_indices, labels) if idx == reference_index), f"idx {reference_index}")
-    legend_handles.append(
-        plt.Line2D([0], [0], marker="o", color="w", markerfacecolor=reference_color, markersize=8, label=f"ref {ref_label}")
+    fig, axes = plt.subplots(
+        2,
+        n_cols,
+        figsize=(3.4 * n_cols, 7.5),
+        gridspec_kw={"height_ratios": [2.2, 1.0]},
     )
+    if n_cols == 1:
+        axes = np.asarray([[axes[0]], [axes[1]]])
 
-    for color, idx, label in zip(palette, unique_indices, labels):
-        if idx == reference_index:
+    for col in range(n_cols):
+        if col >= n_struct:
+            axes[0, col].axis("off")
             continue
-        atoms = load_npz_structure(npz_path, idx)
-        if len(atoms) != len(reference):
-            raise ValueError(
-                f"Structure {idx} has {len(atoms)} atoms but reference {reference_index} has {len(reference)}"
-            )
-        if not np.array_equal(atoms.get_atomic_numbers(), reference.get_atomic_numbers()):
-            raise ValueError(
-                f"Atomic numbers differ between structure {idx} and reference {reference_index}"
-            )
+        atoms = aligned_atoms[col]
+        plot_atoms(atoms, ax=axes[0, col], rotation=rotation, radii=radii)
+        subtitle = labels[col]
+        if rmsds[col] > 0.0:
+            subtitle = f"{subtitle}\nRMSD {rmsds[col]:.3f} Å"
+        if unique_indices[col] == reference_index:
+            subtitle = f"{subtitle}\n(reference)"
+        axes[0, col].set_title(subtitle, fontsize=10)
 
-        aligned = align_positions(np.asarray(atoms.get_positions()), ref_positions)
-        rmsd = structure_rmsd(np.asarray(atoms.get_positions()), ref_positions)
-        plot_atoms(
-            Atoms(numbers=atoms.get_atomic_numbers(), positions=aligned),
-            ax=ax,
-            rotation=rotation,
-            radii=radii * 0.85,
-            colors=[color] * len(atoms),
-        )
-        legend_handles.append(
-            plt.Line2D(
-                [0],
-                [0],
-                marker="o",
-                color="w",
-                markerfacecolor=color,
-                markersize=8,
-                label=f"{label} (RMSD {rmsd:.3f} Å)",
-            )
-        )
+    bond_data_by_structure = [bond_lengths_per_element(atoms) for atoms in aligned_atoms]
+    hist_colors = plt.get_cmap("tab10")
 
-    ax.legend(handles=legend_handles, loc="best", fontsize=9)
-    ax.set_title(title or "Aligned NPZ structures")
+    for col in range(n_cols):
+        ax = axes[1, col]
+        if col >= n_elem:
+            ax.axis("off")
+            continue
+        z = elements[col]
+        symbol = _element_label(z)
+        series: list[np.ndarray] = []
+        series_labels: list[str] = []
+        for struct_i, bonds_by_elem in enumerate(bond_data_by_structure):
+            lengths = bonds_by_elem.get(z, [])
+            if not lengths:
+                continue
+            series.append(np.asarray(lengths, dtype=np.float64))
+            short_label = labels[struct_i].split("\n", maxsplit=1)[0]
+            if len(short_label) > 22:
+                short_label = short_label[:19] + "..."
+            series_labels.append(short_label)
+
+        if not series:
+            ax.text(0.5, 0.5, "no bonded pairs", ha="center", va="center", transform=ax.transAxes)
+            ax.set_title(f"{symbol} bonds")
+            ax.set_xlabel("length (Å)")
+            continue
+
+        bins = np.linspace(
+            min(arr.min() for arr in series),
+            max(arr.max() for arr in series),
+            12,
+        )
+        if bins[0] == bins[-1]:
+            bins = np.linspace(bins[0] - 0.05, bins[-1] + 0.05, 12)
+
+        for struct_i, (arr, lab) in enumerate(zip(series, series_labels)):
+            ax.hist(
+                arr,
+                bins=bins,
+                alpha=0.55,
+                color=hist_colors(struct_i % 10),
+                label=lab,
+                edgecolor="white",
+                linewidth=0.5,
+            )
+        ax.set_title(f"{symbol} bond lengths")
+        ax.set_xlabel("length (Å)")
+        ax.set_ylabel("count")
+        if len(series) > 1:
+            ax.legend(fontsize=7, loc="best")
+
+    if title:
+        fig.suptitle(title, fontsize=12, y=0.98)
     fig.tight_layout()
 
     if out_path is not None:

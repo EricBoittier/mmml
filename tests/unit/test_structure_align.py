@@ -7,7 +7,7 @@ import pytest
 
 from mmml.utils.structure_align import (
     align_positions,
-    kabsch_rotation,
+    bond_lengths_per_element,
     load_npz_structure,
     plot_aligned_structures,
     select_structure_indices,
@@ -81,6 +81,16 @@ def test_load_npz_structure_trims_padding(tmp_path: Path) -> None:
     atoms = load_npz_structure(npz_path, 0)
     assert len(atoms) == 3
     assert atoms.get_atomic_numbers().tolist() == z.tolist()
+
+
+def test_bond_lengths_per_element_counts_h_h_bond() -> None:
+    from ase import Atoms
+
+    atoms = Atoms("H2", positions=[[0, 0, 0], [0, 0, 0.74]])
+    bonds = bond_lengths_per_element(atoms)
+    assert 1 in bonds
+    assert len(bonds[1]) == 2
+    assert bonds[1][0] == pytest.approx(0.74, abs=1e-6)
 
 
 def test_select_structure_indices_priority() -> None:
