@@ -118,16 +118,16 @@ MMML_MPI_NP=2 ./scripts/run_native_charmm_read_gate.sh
 MMML_MPI_NP=2 ./scripts/run_native_charmm_read_gate.sh --with-restart
 ```
 
-Log lines now include `stream_ok=`, `psf=`, and `coor=` counts after each stream step.
+Log lines now include per-command `psf=` and `coor=` counts after each READ step.
 
 If native passes and PyCHARMM fails → bug is in library-mode `eval_charmm_script`, not fabric.
 
 ## Bootstrap API version
 
-PyCHARMM read gate logs `bootstrap_api=...` at startup. You need **`stream-cooperative-v2`**
-(not legacy multiline `6 line(s)`) for the np>1 stream fix. If `git pull` is up to date but
-the log still shows `6 line(s)`, the stream patch is not on your branch yet — sync from the
-commit that adds `_run_cooperative_stream_bootstrap` in `charmm_mpi.py`.
+PyCHARMM read gate logs `bootstrap_api=...` at startup. You need **`shortpath-sequential-v3`**
+(not `stream-cooperative-v2`, which used ``stream`` via ``eval_charmm_script`` — invalid in
+library mode). The v3 path stages short filenames beside the PSF and issues one READ command
+per ``eval_charmm_script`` call (fits ``mxcmsz`` ~80 char limit).
 
 ## Implementation
 
