@@ -1384,6 +1384,29 @@ def align_mpi_ranks_after_import(
         log_fn("bootstrap_sync", f"rank {rank}/{size} align done ({label})")
 
 
+def _deferred_bootstrap_reset_block(
+    *,
+    rank: int,
+    size: int,
+    log_fn: Callable[[str, str], None] | None = None,
+) -> None:
+    """Run BLOCK before READ when import-time ``reset_block`` was skipped (MPI bootstrap)."""
+    if not charmm_lib_links_mpi():
+        return
+    skip = os.environ.get("MMML_SKIP_CHARMM_RESET_BLOCK", "").strip().lower()
+    if skip not in ("1", "true", "yes"):
+        return
+    block = (
+        "BLOCK \n"
+        "CALL 1 SELE ALL END\n"
+        "  COEFF 1 1 1.0 \n"
+        "END\n"
+    )
+    if log_fn is not None:
+        log_fn("bootstrap_sync", f"rank {rank}/{size} deferred reset_block")
+    mpi_charmm_script(block, relaxed_bomlev=True)
+
+
 def _bootstrap_force_psf_crd() -> bool:
     flag = os.environ.get("MMML_MPI_BOOTSTRAP_FORCE_PSF_CRD", "").strip().lower()
     return flag in ("1", "true", "yes")
@@ -1687,6 +1710,7 @@ def bootstrap_topology_mpi(
     )
     if size > 1:
         align_mpi_ranks_after_import(log_fn=log_fn)
+    _deferred_bootstrap_reset_block(rank=rank, size=size, log_fn=log_fn)
 
     if effective_mode == "restart":
         res_local = paths["res"]

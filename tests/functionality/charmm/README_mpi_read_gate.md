@@ -52,7 +52,8 @@ split multiline scripts into separate ``eval_charmm_script`` calls or MPI ranks 
 
 **Hang after PyCHARMM env panel at ``np=1``:** import-time ``reset_block`` on MPI-linked
 ``libcharmm.so``. The read gate sets ``MMML_SKIP_CHARMM_RESET_BLOCK=1`` before import
-(``configure_mpi_bootstrap_env``). Manual bisect: export that flag and re-run.
+(``configure_mpi_bootstrap_env``); bootstrap then runs a **deferred** ``reset_block`` on
+all ranks immediately before READ. Manual bisect: export that skip flag and re-run.
 
 **node09 bisect (June 2026):** `np=1` passes; `np=2` hangs on the first `read_rtf` step in
 `psf-crd` mode. Root cause: per-rank SCRATCH units inside `eval_charmm_script`
