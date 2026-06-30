@@ -40,6 +40,15 @@ import pycharmm.lib as lib
 import pycharmm.script
 
 
+def _resolve_read_path(filename: str) -> str:
+    try:
+        from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
+    except ImportError:
+        return filename
+    fortran_path, _alias = charmm_fortran_path(filename, for_write=False)
+    return fortran_path
+
+
 # read a topology file given a bytes filename
 def rtf(filename, **kwargs):
     """Read a topology file
@@ -50,11 +59,26 @@ def rtf(filename, **kwargs):
     **kwargs
         additional keyword arguments
     """
-    rtf_script = pycharmm.script.CommandScript('read',
-                                               rtf='card',
-                                               name=filename,
-                                               **kwargs)
-    rtf_script.run()
+    import ctypes
+
+    import pycharmm.lib as lib
+
+    fortran_path = _resolve_read_path(filename)
+    append = 1 if kwargs.get("append") else 0
+    fn = ctypes.c_char_p(fortran_path.encode())
+    len_fn = ctypes.c_int(len(fortran_path))
+    status = int(
+        lib.charmm.read_rtf_file(
+            fn,
+            ctypes.byref(len_fn),
+            ctypes.c_int(append),
+        )
+    )
+    if status != 1:
+        raise RuntimeError(
+            f"read_rtf_file failed for {filename!r} "
+            f"(staging={fortran_path!r}, status={status})"
+        )
 
 
 def prm(filename, **kwargs):
@@ -65,11 +89,28 @@ def prm(filename, **kwargs):
     ----------
     filename : str
     """
-    prm_script = pycharmm.script.CommandScript('read',
-                                               param='card',
-                                               name=filename,
-                                               **kwargs)
-    prm_script.run()
+    import ctypes
+
+    import pycharmm.lib as lib
+
+    fortran_path = _resolve_read_path(filename)
+    append = 1 if kwargs.get("append") else 0
+    flex = 1 if kwargs.get("flex") else 0
+    fn = ctypes.c_char_p(fortran_path.encode())
+    len_fn = ctypes.c_int(len(fortran_path))
+    status = int(
+        lib.charmm.read_param_file(
+            fn,
+            ctypes.byref(len_fn),
+            ctypes.c_int(append),
+            ctypes.c_int(flex),
+        )
+    )
+    if status != 1:
+        raise RuntimeError(
+            f"read_param_file failed for {filename!r} "
+            f"(staging={fortran_path!r}, status={status})"
+        )
 
 
 def psf_card(filename, **kwargs):

@@ -64,15 +64,31 @@ def coor_pdb(filename, title='', **kwargs):
     **kwargs: dict
         extra settings to pass to the CHARMM command
     """
+    import ctypes
+
+    import pycharmm
+    import pycharmm.lib as lib
+
+    comparison = bool(kwargs.get("comparison", False))
     fortran_path, alias = _resolve_write_path(filename)
     try:
-        write_command = pycharmm.script.WriteScript(
-            fortran_path,
-            title,
-            coor='pdb',
-            **kwargs,
+        selection = pycharmm.SelectAtoms().all_atoms()
+        fn = ctypes.c_char_p(fortran_path.encode())
+        len_fn = ctypes.c_int(len(fortran_path))
+        c_comp = ctypes.c_int(1 if comparison else 0)
+        status = int(
+            lib.charmm.write_coor_pdb(
+                fn,
+                ctypes.byref(len_fn),
+                selection.as_ctypes(),
+                ctypes.byref(c_comp),
+            )
         )
-        write_command.run()
+        if status != 1:
+            raise RuntimeError(
+                f"write_coor_pdb failed for {filename!r} "
+                f"(staging={fortran_path!r}, status={status})"
+            )
     finally:
         if alias is not None:
             alias.finalize()
@@ -90,6 +106,16 @@ def coor_card(filename, title='', **kwargs):
     **kwargs: dict 
         extra settings to pass to the CHARMM command
     """
+    try:
+        from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+            write_charmm_crd_from_charmm,
+        )
+    except ImportError:
+        pass
+    else:
+        write_charmm_crd_from_charmm(filename, title=title or "COORD")
+        return
+
     fortran_path, alias = _resolve_write_path(filename)
     try:
         write_command = pycharmm.script.WriteScript(

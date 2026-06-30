@@ -548,6 +548,67 @@ def _write_vmd_pdb_from_positions(
     return p
 
 
+def write_charmm_crd_from_charmm(
+    path: PathLike,
+    *,
+    title: str = "COORD",
+    positions: np.ndarray | None = None,
+) -> Path:
+    """Write a CHARMM EXT CRD without ``WRITE COOR`` (MPI-safe).
+
+    MPI-linked ``libcharmm.so`` under ``mpirun`` can abort in Fortran ``parse.F90``
+    on ``WRITE COOR CARD`` (same gfortrantmp EOF failure as ``WRITE COOR PDB``).
+    """
+    import pycharmm.atom_info as atom_info
+    import pycharmm.psf as psf
+
+    if positions is not None:
+        sync_charmm_positions(positions)
+
+    p = Path(path).expanduser().resolve()
+    p.parent.mkdir(parents=True, exist_ok=True)
+
+    natom = int(psf.get_natom())
+    if natom <= 0:
+        raise RuntimeError(f"CRD write: PSF has no atoms ({p})")
+
+    coords = (
+        np.asarray(positions, dtype=float)
+        if positions is not None
+        else get_charmm_positions_array()
+    )
+    if coords.shape != (natom, 3):
+        raise ValueError(
+            f"CRD write: positions shape {coords.shape} != ({natom}, 3)"
+        )
+
+    atom_indices = list(range(natom))
+    res_names = atom_info.get_res_names(atom_indices)
+    res_ids = atom_info.get_res_ids(atom_indices)
+    atypes = psf.get_atype()
+    seg_ids = atom_info.get_seg_ids(atom_indices)
+
+    lines: list[str] = []
+    if title:
+        lines.append(f"* {title}")
+    lines.append("*")
+    lines.append(f"        {natom}  EXT")
+    for i in range(natom):
+        iatom = i + 1
+        try:
+            ires = int(str(res_ids[i]).strip())
+        except ValueError:
+            ires = iatom
+        x, y, z = (float(coords[i, 0]), float(coords[i, 1]), float(coords[i, 2]))
+        lines.append(
+            f"{iatom:10d}{ires:10d}  {res_names[i]:<4}  {atypes[i]:<4}  "
+            f"{x:20.10f}{y:20.10f}{z:20.10f}  {seg_ids[i]:<4}  {ires:10d}  "
+            f"{1.0:20.10f}"
+        )
+    p.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return p
+
+
 def resolve_topology_psf_for_mlpot_reload(
     psf_path: PathLike,
     *,
