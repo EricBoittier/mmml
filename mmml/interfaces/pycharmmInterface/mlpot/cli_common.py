@@ -2426,7 +2426,10 @@ def prepare_mlpot_hybrid_state_for_sd(
         if calculator_fire_fmax_ev_a is not None
         else float(calculator_minimize_fmax_ev_a)
     )
-    safe_grms = resolve_calculator_mini_safe_grms(args=workflow_args)
+    safe_grms = resolve_calculator_mini_safe_grms(
+        args=workflow_args,
+        context="pre_sd",
+    )
     ran_calculator_mini = False
     ran_calculator_fire = False
     ran_bonded_recovery = False
@@ -3781,6 +3784,36 @@ def add_calculator_pre_minimize_args(parser: argparse.ArgumentParser) -> None:
         "--quiet-bfgs",
         action="store_true",
         help="Suppress ASE BFGS per-step log output during calculator pre-minimize.",
+    )
+    group.add_argument(
+        "--calculator-safe-grms",
+        type=float,
+        default=None,
+        metavar="KCAL",
+        help=(
+            "Hybrid GRMS (kcal/mol/Å) to stop pre-SD ASE FIRE/BFGS early (default: 30; "
+            "0 disables)."
+        ),
+    )
+    group.add_argument(
+        "--pre-min-safe-grms",
+        type=float,
+        default=None,
+        metavar="KCAL",
+        help=(
+            "Alias/fallback for --calculator-safe-grms during pre-minimize / pre-dynamics "
+            "FIRE/BFGS (default: inherit calculator-safe-grms or 30; 0 disables)."
+        ),
+    )
+    group.add_argument(
+        "--geometry-packing-safe-grms",
+        type=float,
+        default=None,
+        metavar="KCAL",
+        help=(
+            "Hybrid GRMS (kcal/mol/Å) to stop geometry-packing FIRE/BFGS early "
+            "(default: inherit calculator-safe-grms or 30; 0 disables)."
+        ),
     )
 
 

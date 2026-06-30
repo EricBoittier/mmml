@@ -820,7 +820,10 @@ def run_density_prep_ladder(
             calc_fmax = float(getattr(args, "pre_min_fmax", 0.05) or 0.05)
             fire_steps = int(getattr(args, "fire_min_steps", 200) or 200)
             fire_fmax = float(getattr(args, "rescue_fire_fmax", calc_fmax) or calc_fmax)
-            safe_grms = resolve_calculator_mini_safe_grms(args=args)
+            safe_grms = resolve_calculator_mini_safe_grms(
+                args=args,
+                context="density_prep",
+            )
             fire_config = HybridCalculatorFireConfig(
                 max_steps=fire_steps,
                 fmax_ev_a=fire_fmax,
@@ -1387,7 +1390,10 @@ def run_geometry_packing_recovery(
             getattr(args, "geometry_packing_fire_bfgs_crossover_grms", 30.0) or 30.0
         )
         bfgs_first = bool(np.isfinite(grms) and float(grms) > fire_bfgs_crossover)
-        safe_grms = resolve_calculator_mini_safe_grms(args=args)
+        safe_grms = resolve_calculator_mini_safe_grms(
+            args=args,
+            context="geometry_packing",
+        )
         fire_config = HybridCalculatorFireConfig(
             max_steps=int(calculator_fire_steps),
             fmax_ev_a=fire_fmax,

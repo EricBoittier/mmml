@@ -387,6 +387,25 @@ def test_run_geometry_packing_recovery_skips_bfgs_when_grms_already_low(monkeypa
     assert bfgs_calls == []
 
 
+def test_build_pycharmm_command_forwards_safe_grms_flags():
+    from mmml.cli.run.md_system import build_pycharmm_command
+    from tests.unit.test_md_system_pycharmm_cmd import _pycharmm_args
+
+    cmd = build_pycharmm_command(
+        _pycharmm_args(
+            calculator_safe_grms=28.0,
+            pre_min_safe_grms=22.0,
+            geometry_packing_safe_grms=18.0,
+        )
+    )
+    assert "--calculator-safe-grms" in cmd
+    assert "28.0" in cmd
+    assert "--pre-min-safe-grms" in cmd
+    assert "22.0" in cmd
+    assert "--geometry-packing-safe-grms" in cmd
+    assert "18.0" in cmd
+
+
 def test_build_pycharmm_command_forwards_liquid_prep():
     from mmml.cli.run.md_system import build_pycharmm_command
     from tests.unit.test_md_system_pycharmm_cmd import _pycharmm_args

@@ -423,12 +423,37 @@ def test_run_hybrid_calculator_fire_stops_on_spike():
 
 def test_resolve_calculator_mini_safe_grms_reads_yaml_keys():
     args = MagicMock()
-    args.calculator_safe_grms = None
+    args.calculator_safe_grms = 30.0
     args.pre_min_safe_grms = 25.0
-    args.geometry_packing_safe_grms = None
-    assert resolve_calculator_mini_safe_grms(args=args) == pytest.approx(25.0)
+    args.geometry_packing_safe_grms = 15.0
+    assert resolve_calculator_mini_safe_grms(args=args, context="pre_sd") == pytest.approx(30.0)
+    assert resolve_calculator_mini_safe_grms(
+        args=args, context="pre_dynamics"
+    ) == pytest.approx(25.0)
+    assert resolve_calculator_mini_safe_grms(
+        args=args, context="geometry_packing"
+    ) == pytest.approx(15.0)
     args.pre_min_safe_grms = 0.0
-    assert resolve_calculator_mini_safe_grms(args=args) is None
+    assert resolve_calculator_mini_safe_grms(args=args, context="pre_dynamics") is None
+
+
+def test_parse_md_system_args_accepts_safe_grms_yaml_keys(tmp_path):
+    from mmml.cli.run.md_system import parse_md_system_args
+
+    cfg = tmp_path / "safe_grms.yaml"
+    cfg.write_text(
+        "defaults:\n"
+        "  calculator_safe_grms: 28.0\n"
+        "  pre_min_safe_grms: 22.0\n"
+        "  geometry_packing_safe_grms: 18.0\n",
+        encoding="utf-8",
+    )
+    args = parse_md_system_args(
+        ["--config", str(cfg), "--checkpoint", "/tmp/x.json", "--composition", "DCM:10"]
+    )
+    assert args.calculator_safe_grms == pytest.approx(28.0)
+    assert args.pre_min_safe_grms == pytest.approx(22.0)
+    assert args.geometry_packing_safe_grms == pytest.approx(18.0)
 
 
 def test_run_hybrid_calculator_bfgs_stops_on_safe_grms():

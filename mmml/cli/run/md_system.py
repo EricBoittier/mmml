@@ -999,6 +999,36 @@ def build_parser() -> argparse.ArgumentParser:
         default=True,
         help="lambda_ti: MMML-calculator BFGS after CHARMM (default on).",
     )
+    parser.add_argument(
+        "--calculator-safe-grms",
+        type=float,
+        default=None,
+        metavar="KCAL",
+        help=(
+            "Hybrid GRMS (kcal/mol/Å) to stop pre-SD ASE FIRE/BFGS early (default: 30; "
+            "0 disables)."
+        ),
+    )
+    parser.add_argument(
+        "--pre-min-safe-grms",
+        type=float,
+        default=None,
+        metavar="KCAL",
+        help=(
+            "Alias/fallback for --calculator-safe-grms during pre-minimize / pre-dynamics "
+            "FIRE/BFGS (default: inherit calculator-safe-grms or 30; 0 disables)."
+        ),
+    )
+    parser.add_argument(
+        "--geometry-packing-safe-grms",
+        type=float,
+        default=None,
+        metavar="KCAL",
+        help=(
+            "Hybrid GRMS (kcal/mol/Å) to stop geometry-packing FIRE/BFGS early "
+            "(default: inherit calculator-safe-grms or 30; 0 disables)."
+        ),
+    )
     parser.add_argument("--charmm-sd-steps", type=int, default=25)
     parser.add_argument("--charmm-abnr-steps", type=int, default=100)
     parser.add_argument("--charmm-tolenr", type=float, default=1e-3)
@@ -2455,6 +2485,26 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     cmd.extend(["--min-com-restraint-k", str(getattr(args, "min_com_restraint_k", 1.0))])
     if args.charmm_pre_minimize is False:
         cmd.append("--no-charmm-pre-minimize")
+    _append_optional(cmd, "--calculator-safe-grms", getattr(args, "calculator_safe_grms", None))
+    _append_optional(cmd, "--pre-min-safe-grms", getattr(args, "pre_min_safe_grms", None))
+    _append_optional(
+        cmd,
+        "--geometry-packing-safe-grms",
+        getattr(args, "geometry_packing_safe_grms", None),
+    )
+    _append_boolean_optional_flag(
+        cmd,
+        "--calculator-pre-minimize",
+        bool(getattr(args, "calculator_pre_minimize", True)),
+    )
+    _append_optional(cmd, "--pre-min-steps", getattr(args, "pre_min_steps", None))
+    _append_optional(cmd, "--pre-min-fmax", getattr(args, "pre_min_fmax", None))
+    _append_optional(cmd, "--bfgs-maxstep", getattr(args, "bfgs_maxstep", None))
+    _append_optional(cmd, "--fire-min-steps", getattr(args, "fire_min_steps", None))
+    _append_optional(cmd, "--fire-min-maxstep", getattr(args, "fire_min_maxstep", None))
+    _append_optional(cmd, "--rescue-fire-fmax", getattr(args, "rescue_fire_fmax", None))
+    if bool(getattr(args, "quiet_bfgs", False)):
+        cmd.append("--quiet-bfgs")
     cmd.extend(["--charmm-sd-steps", str(args.charmm_sd_steps)])
     cmd.extend(["--charmm-abnr-steps", str(args.charmm_abnr_steps)])
     cmd.extend(["--charmm-tolenr", str(args.charmm_tolenr)])

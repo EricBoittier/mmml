@@ -5,7 +5,14 @@ from __future__ import annotations
 import re
 import sys
 from dataclasses import dataclass
-from typing import Any, TextIO
+from typing import Any, Literal, TextIO
+
+CalculatorMiniSafeGrmsContext = Literal[
+    "pre_sd",
+    "pre_dynamics",
+    "density_prep",
+    "geometry_packing",
+]
 
 import numpy as np
 
@@ -80,19 +87,27 @@ class HybridCalculatorFireConfig:
     safe_grms_kcalmol_A: float | None = 30.0
 
 
+_SAFE_GRMS_CONTEXT_KEYS: dict[CalculatorMiniSafeGrmsContext, tuple[str, ...]] = {
+    "pre_sd": ("calculator_safe_grms", "pre_min_safe_grms"),
+    "pre_dynamics": ("pre_min_safe_grms", "calculator_safe_grms"),
+    "density_prep": ("pre_min_safe_grms", "calculator_safe_grms"),
+    "geometry_packing": ("geometry_packing_safe_grms", "calculator_safe_grms"),
+}
+
+
 def resolve_calculator_mini_safe_grms(
     *,
     explicit: float | None = None,
     args: Any | None = None,
     default: float = 30.0,
+    context: CalculatorMiniSafeGrmsContext = "pre_sd",
 ) -> float | None:
     """Hybrid GRMS (kcal/mol/Å) at which ASE FIRE/BFGS may stop early."""
-    for value in (
-        explicit,
-        getattr(args, "calculator_safe_grms", None) if args is not None else None,
-        getattr(args, "pre_min_safe_grms", None) if args is not None else None,
-        getattr(args, "geometry_packing_safe_grms", None) if args is not None else None,
-    ):
+    keys = _SAFE_GRMS_CONTEXT_KEYS.get(context, _SAFE_GRMS_CONTEXT_KEYS["pre_sd"])
+    candidates: list[Any] = [explicit]
+    if args is not None:
+        candidates.extend(getattr(args, key, None) for key in keys)
+    for value in candidates:
         if value is None:
             continue
         try:
@@ -1190,7 +1205,7 @@ def run_pre_dynamics_hybrid_calculator_prep(
         or 0.05
     )
     calc_fmax = float(getattr(args, "pre_min_fmax", 0.05) or 0.05)
-    safe_grms = resolve_calculator_mini_safe_grms(args=args)
+    safe_grms = resolve_calculator_mini_safe_grms(args=args, context="pre_dynamics")
     fire = coerce_hybrid_minimize_result(
         minimize_hybrid_calculator_fire_before_sd(
             mlpot_ctx,
