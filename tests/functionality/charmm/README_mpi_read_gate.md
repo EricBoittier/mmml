@@ -36,10 +36,9 @@ At ``np>1``, bootstrap uses **shared artifact paths** by default (cooperative MP
 READ). Optional per-rank UUID copies: ``MMML_MPI_BOOTSTRAP_RANK_LOCAL=1`` (each
 rank reads independently — usually leaves ``n_atoms=0`` on DOMDEC builds).
 
-After staging (if any), all ranks **barrier before and after each READ sub-command**
-so cooperative MPI stays in lockstep. Expect interleaved
-``[bootstrap_sync ...] barrier done (after read_rtf)`` lines, then
-``n_atoms=100`` after ``read_psf`` or ``update``.
+**Do not** use ``mpi4py`` barriers between READ sub-commands (``MMML_MPI_BOOTSTRAP_BARRIER=1``
+is bisect-only). Default bootstrap sends one multiline ``mpi_charmm_script`` call
+with no Python barriers — same pattern as serial ``np=1`` smoke load.
 
 **Hang:** last line like `[read_psf rank 2/4] begin ...` — that sub-command is the stall point.
 

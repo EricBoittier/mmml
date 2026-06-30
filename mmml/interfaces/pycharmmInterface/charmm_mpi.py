@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import uuid
 from functools import lru_cache
 from pathlib import Path
@@ -1310,7 +1311,16 @@ def sync_bootstrap_ranks(
     log_fn: Callable[[str, str], None] | None = None,
     label: str = "CHARMM READ",
 ) -> None:
-    """Barrier so every rank enters the next cooperative CHARMM command together."""
+    """Optional mpi4py barrier (bisect only — **not** used during cooperative READ).
+
+    ``mpi4py.MPI.Barrier`` between ``eval_charmm_script`` calls can desync CHARMM's
+    Fortran MPI worker loop and leave ``n_atoms=0`` after READ.  Default bootstrap
+    uses one multiline ``mpi_charmm_script`` call with no Python barriers instead.
+    Opt in with ``MMML_MPI_BOOTSTRAP_BARRIER=1``.
+    """
+    flag = os.environ.get("MMML_MPI_BOOTSTRAP_BARRIER", "").strip().lower()
+    if flag not in ("1", "true", "yes"):
+        return
     from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     rank, size = mpi_rank_size()
@@ -1329,6 +1339,68 @@ def sync_bootstrap_ranks(
         log_fn("bootstrap_sync", f"rank {rank}/{size} barrier done ({label})")
 
 
+def _wait_for_shared_file(path: Path, *, timeout_s: float = 120.0) -> None:
+    """Poll until *path* exists with stable non-zero size (rank-0 write handshake)."""
+    deadline = time.monotonic() + timeout_s
+    last_size = -1
+    while time.monotonic() < deadline:
+        if path.is_file():
+            size = path.stat().st_size
+            if size > 0 and size == last_size:
+                return
+            last_size = size
+        time.sleep(0.05)
+    raise TimeoutError(f"timed out waiting for shared file: {path}")
+
+
+def _cooperative_read_script(
+    paths: dict[str, Path],
+    *,
+    crystal_side_A: float | None,
+    crystal_cutnb_A: float,
+) -> str:
+    """Multiline READ chain for one barrier-free ``mpi_charmm_script`` call."""
+    minimal = paths["rtf"]
+    prm = paths["prm"]
+    psf = paths["psf"]
+    crd = paths["crd"]
+    lines = [
+        f"read rtf card name {minimal}",
+        f"read param card name {prm} flex",
+        f"read psf card name {psf}",
+        f"read coor card name {crd}",
+    ]
+    if crystal_side_A is not None:
+        side = float(crystal_side_A)
+        lines.extend(
+            [
+                f"crystal define cubic {side} {side} {side} 90 90 90",
+                f"crystal build cutoff {float(crystal_cutnb_A)} noper 0",
+            ]
+        )
+    return "\n".join(lines) + "\n"
+
+
+def _run_cooperative_bootstrap_script(
+    step: str,
+    script: str,
+    *,
+    log_fn: Callable[[str, str], None] | None = None,
+) -> int:
+    """Run CHARMM script on all ranks without mpi4py barriers (workshop pattern)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+
+    rank, size = mpi_rank_size()
+    n_lines = max(1, script.count("\n"))
+    if log_fn is not None:
+        log_fn(step, f"begin rank {rank}/{size}: {n_lines} line(s)")
+    mpi_charmm_script(script, relaxed_bomlev=True)
+    n_atoms = charmm_natom_count()
+    if log_fn is not None:
+        log_fn(step, f"done rank {rank}/{size}: n_atoms={n_atoms}")
+    return n_atoms
+
+
 def bootstrap_charmm_step(
     step: str,
     script: str,
@@ -1339,11 +1411,10 @@ def bootstrap_charmm_step(
     from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     rank, size = mpi_rank_size()
-    if size > 1:
-        sync_bootstrap_ranks(log_fn=log_fn, label=f"before {step}")
+    sync_bootstrap_ranks(log_fn=log_fn, label=f"before {step}")
     if log_fn is not None:
         log_fn(step, f"begin rank {rank}/{size}: {script.strip()}")
-    _invoke_charmm_script(script, relaxed_bomlev=True)
+    mpi_charmm_script(script, relaxed_bomlev=True)
     n_atoms = charmm_natom_count()
     if log_fn is not None:
         log_fn(step, f"done rank {rank}/{size}: n_atoms={n_atoms}")
@@ -1388,8 +1459,8 @@ def _bootstrap_via_stream_inp(
         lines.append("stop")
         inp_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     if size > 1:
-        sync_bootstrap_ranks(log_fn=log_fn, label="after stream inp write")
-    bootstrap_charmm_step(
+        _wait_for_shared_file(inp_path)
+    _run_cooperative_bootstrap_script(
         "stream_inp",
         f"stream {inp_path}\n",
         log_fn=log_fn,
@@ -1411,8 +1482,8 @@ def bootstrap_topology_mpi(
     """Cooperative ``np>1`` topology bootstrap.
 
     Supported ``mode`` values: ``psf-crd``, ``stream-inp``, ``restart``.
-    At ``np>1``, ``psf-crd`` is implemented as a rank-0-written ``stream`` input
-    (same as ``stream-inp``); serial ``np=1`` uses one sub-command per step.
+    At ``np>1``, READ uses one multiline ``mpi_charmm_script`` call with **no**
+    mpi4py barriers (same pattern as serial ``np=1`` smoke load).
     """
     from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
     from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
@@ -1457,19 +1528,30 @@ def bootstrap_topology_mpi(
         res_local = paths["res"]
         fortran_path, alias = charmm_fortran_path(res_local, for_write=False)
         try:
-            for step_name, script in (
-                ("open_restart", f"open read unit 20 name {fortran_path}\n"),
-                ("read_restart", "read restart unit 20\n"),
-                ("close_restart", "close unit 20\n"),
-                ("update", "UPDATE\n"),
-            ):
-                bootstrap_charmm_step(step_name, script, log_fn=log_fn)
+            restart_script = (
+                f"open read unit 20 name {fortran_path}\n"
+                "read restart unit 20\n"
+                "close unit 20\n"
+                "UPDATE\n"
+            )
+            if size > 1:
+                _run_cooperative_bootstrap_script(
+                    "read_restart",
+                    restart_script,
+                    log_fn=log_fn,
+                )
+            else:
+                for step_name, script in (
+                    ("open_restart", f"open read unit 20 name {fortran_path}\n"),
+                    ("read_restart", "read restart unit 20\n"),
+                    ("close_restart", "close unit 20\n"),
+                    ("update", "UPDATE\n"),
+                ):
+                    bootstrap_charmm_step(step_name, script, log_fn=log_fn)
         finally:
             if alias is not None:
                 alias.finalize()
-    elif mode == "stream-inp" or (mode == "psf-crd" and size > 1):
-        if mode == "psf-crd" and log_fn is not None:
-            log_fn("bootstrap", f"rank {rank}/{size}: np>1 psf-crd → stream-inp")
+    elif mode == "stream-inp":
         _bootstrap_via_stream_inp(
             paths,
             psf=psf,
@@ -1477,6 +1559,17 @@ def bootstrap_topology_mpi(
             crystal_cutnb_A=crystal_cutnb_A,
             rank=rank,
             size=size,
+            log_fn=log_fn,
+        )
+    elif mode == "psf-crd" and size > 1:
+        read_script = _cooperative_read_script(
+            paths,
+            crystal_side_A=crystal_side_A,
+            crystal_cutnb_A=crystal_cutnb_A,
+        )
+        _run_cooperative_bootstrap_script(
+            "read_psf_crd",
+            read_script,
             log_fn=log_fn,
         )
     else:

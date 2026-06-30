@@ -877,7 +877,7 @@ def test_mmml_charmm_mpirun_dispatches_native_executable(tmp_path):
     assert f"mmml {fake_charmm}" not in combined
 
 
-def test_bootstrap_charmm_step_syncs_before_step_at_np_gt1():
+def test_bootstrap_charmm_step_skips_barrier_by_default():
     calls: list[str] = []
 
     with mock.patch(
@@ -886,7 +886,7 @@ def test_bootstrap_charmm_step_syncs_before_step_at_np_gt1():
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.sync_bootstrap_ranks",
     ) as sync_mock, mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi._invoke_charmm_script",
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.mpi_charmm_script",
         side_effect=lambda s, **kw: calls.append(s),
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_natom_count",
@@ -896,6 +896,25 @@ def test_bootstrap_charmm_step_syncs_before_step_at_np_gt1():
 
     assert n == 100
     assert calls == ["read psf card name foo.psf\n"]
+    sync_mock.assert_not_called()
+
+
+def test_bootstrap_charmm_step_barrier_when_opt_in(monkeypatch):
+    monkeypatch.setenv("MMML_MPI_BOOTSTRAP_BARRIER", "1")
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        return_value=(1, 2),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.sync_bootstrap_ranks",
+    ) as sync_mock, mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.mpi_charmm_script",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_natom_count",
+        return_value=1,
+    ):
+        charmm_mpi.bootstrap_charmm_step("read_psf", "read psf card name foo.psf\n")
+
     sync_mock.assert_called_once_with(log_fn=None, label="before read_psf")
 
 
@@ -941,7 +960,7 @@ def test_bootstrap_topology_mpi_psf_crd_serial_steps(tmp_path):
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.sync_bootstrap_ranks",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi._invoke_charmm_script",
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.mpi_charmm_script",
         side_effect=lambda s, **kw: calls.append(s.strip()),
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_natom_count",
@@ -964,7 +983,7 @@ def test_bootstrap_topology_mpi_psf_crd_serial_steps(tmp_path):
     assert "read coor card name" in calls[3]
 
 
-def test_bootstrap_topology_mpi_psf_crd_np_gt1_uses_stream(tmp_path):
+def test_bootstrap_topology_mpi_psf_crd_np_gt1_uses_cooperative_read(tmp_path):
     psf = tmp_path / "x.psf"
     crd = tmp_path / "x.crd"
     prm = tmp_path / "x.prm"
@@ -988,8 +1007,8 @@ def test_bootstrap_topology_mpi_psf_crd_np_gt1_uses_stream(tmp_path):
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.sync_bootstrap_ranks",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi._invoke_charmm_script",
-        side_effect=lambda s, **kw: calls.append(s.strip()),
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.mpi_charmm_script",
+        side_effect=lambda s, **kw: calls.append(s),
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_natom_count",
         return_value=2,
@@ -1006,12 +1025,9 @@ def test_bootstrap_topology_mpi_psf_crd_np_gt1_uses_stream(tmp_path):
 
     assert n == 2
     assert len(calls) == 1
-    assert calls[0].startswith("stream ")
-    inp_path = psf.parent / "mpi_bootstrap_stream" / "x_read.inp"
-    assert inp_path.is_file()
-    text = inp_path.read_text(encoding="utf-8")
-    assert "read psf card name" in text
-    assert "read coor card name" in text
+    assert "read rtf card name" in calls[0]
+    assert "read psf card name" in calls[0]
+    assert "read coor card name" in calls[0]
 
 
 def test_bootstrap_topology_mpi_invalid_mode(tmp_path):
