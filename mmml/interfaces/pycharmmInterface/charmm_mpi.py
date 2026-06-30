@@ -1442,6 +1442,23 @@ def _bootstrap_rank0_drive() -> bool:
     return flag in ("1", "true", "yes")
 
 
+def _bootstrap_all_ranks_read() -> bool:
+    """Bisect-only: every rank calls ``api_read`` (v4.5 hung on ``read_psf_card`` at np>1)."""
+    flag = os.environ.get("MMML_MPI_BOOTSTRAP_ALL_RANKS_READ", "").strip().lower()
+    return flag in ("1", "true", "yes")
+
+
+def _bootstrap_rank0_topology_read() -> bool:
+    """Bisect-only (v4.6): rank 0 alone calls ``api_read`` — PSF hung waiting for workers."""
+    flag = os.environ.get("MMML_MPI_BOOTSTRAP_RANK0_TOPOLOGY_READ", "").strip().lower()
+    if flag not in ("1", "true", "yes"):
+        return False
+    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+
+    _, size = mpi_rank_size()
+    return size > 1
+
+
 def _resolve_bootstrap_mode(
     mode: str,
     *,
@@ -1496,20 +1513,59 @@ def _wait_for_shared_file(
     raise TimeoutError(f"timed out waiting for shared file: {path}")
 
 
-def _sync_cooperative_api_step(
+def _cooperative_direct_api_step(
     label: str,
+    fn: Callable[[Path], None],
+    path: Path,
     *,
     log_fn: Callable[[str, str], None] | None = None,
 ) -> None:
-    """MPI entry barrier so all ranks enter the next ``api_read`` call together."""
+    """Run one ``api_read`` step on every rank (RTF/PRM only — no ``atmini``)."""
     from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     rank, size = mpi_rank_size()
-    if size <= 1:
-        return
-    if log_fn is not None:
-        log_fn("bootstrap_sync", f"rank {rank}/{size} pre-api ({label})")
-    _mpi_script_barrier()
+    rank0_only = _bootstrap_rank0_topology_read()
+    if log_fn is not None and size > 1:
+        log_fn(
+            "bootstrap_sync",
+            f"rank {rank}/{size} api-read ({label}) "
+            f"rank0_only={int(rank0_only)}",
+        )
+    if not rank0_only or rank == 0:
+        fn(path)
+    if rank0_only and size > 1:
+        _mpi_script_barrier()
+
+
+def _cooperative_psf_read_eval(
+    psf_path: Path,
+    *,
+    log_fn: Callable[[str, str], None] | None = None,
+) -> None:
+    """PSF via ``maincomx`` READ at ``np>1`` — ``atmini`` needs all ranks in Fortran."""
+    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+
+    rank, size = mpi_rank_size()
+    cmd = f"read psf card name {psf_path.name}\n"
+    stripped = cmd.strip()
+    if len(stripped) > _BOOTSTRAP_CMD_MAX_LEN:
+        raise RuntimeError(
+            f"bootstrap PSF READ command exceeds mxcmsz budget "
+            f"({len(stripped)}>{_BOOTSTRAP_CMD_MAX_LEN}): {stripped!r}"
+        )
+    if log_fn is not None and size > 1:
+        log_fn(
+            "bootstrap_sync",
+            f"rank {rank}/{size} eval-read (psf) all_ranks=1",
+        )
+    with _bootstrap_workdir(psf_path.parent):
+        ok = mpi_charmm_script(
+            cmd,
+            relaxed_bomlev=_bootstrap_relaxed_bomlev(),
+            barriers="none",
+        )
+    if not ok:
+        raise RuntimeError(f"read psf card eval failed for {psf_path}")
 
 
 def _cooperative_read_script(
@@ -1563,7 +1619,7 @@ def _cooperative_restart_script(
 
 
 # Bump when cooperative bootstrap I/O strategy changes (read-gate diagnostics).
-BOOTSTRAP_MPI_API = "direct-api-v4.5"
+BOOTSTRAP_MPI_API = "direct-api-v4.7"
 
 # ``eval_charmm_script`` uses ``comlyn(mxcmsz)`` (~80); stage short paths for file APIs too.
 _BOOTSTRAP_CMD_MAX_LEN = 78
@@ -1773,23 +1829,36 @@ def _run_cooperative_api_bootstrap(
     crystal_cutnb_A: float,
     log_fn: Callable[[str, str], None] | None = None,
 ) -> int:
-    """Cooperative topology load via ``api_read`` + Python coor (no ``eval`` READ)."""
+    """Cooperative topology load: direct ``api_read`` RTF/PRM, eval PSF at ``np>1``."""
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
     from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     rank, size = mpi_rank_size()
     load_steps = ("rtf", "prm", "psf", coor_source)
+    hybrid_psf = size > 1 and not _bootstrap_all_ranks_read()
     if log_fn is not None:
-        log_fn(step, f"begin rank {rank}/{size}: {len(load_steps)} api read step(s)")
+        mode = "hybrid" if hybrid_psf else "api"
+        log_fn(
+            step,
+            f"begin rank {rank}/{size}: {len(load_steps)} {mode} read step(s)",
+        )
     with charmm_relaxed_bomlev():
         for idx, name in enumerate(load_steps, start=1):
-            _sync_cooperative_api_step(name, log_fn=log_fn)
+            step_label = name
             if name == "rtf":
-                _read_rtf_api(compact["rtf"])
+                _cooperative_direct_api_step(
+                    name, _read_rtf_api, compact["rtf"], log_fn=log_fn
+                )
             elif name == "prm":
-                _read_prm_api(compact["prm"])
+                _cooperative_direct_api_step(
+                    name, _read_prm_api, compact["prm"], log_fn=log_fn
+                )
             elif name == "psf":
-                _read_psf_api(compact["psf"])
+                if hybrid_psf:
+                    step_label = "eval-psf"
+                    _cooperative_psf_read_eval(compact["psf"], log_fn=log_fn)
+                else:
+                    _read_psf_api(compact["psf"])
             elif name == "crd":
                 _load_coor_from_crd_api(compact["crd"])
             elif name == "restart":
@@ -1800,12 +1869,14 @@ def _run_cooperative_api_bootstrap(
                 )
             else:
                 raise ValueError(f"unknown bootstrap load step: {name!r}")
+            if name in ("crd", "restart") and size > 1:
+                _mpi_script_barrier()
             if log_fn is not None:
                 diag = charmm_natom_diagnostics()
                 log_fn(
                     step,
-                    f"  api {idx}/{len(load_steps)} rank {rank}/{size}: "
-                    f"{name} psf={diag['psf_natom']} coor={diag['coor_natom']}",
+                    f"  step {idx}/{len(load_steps)} rank {rank}/{size}: "
+                    f"{step_label} psf={diag['psf_natom']} coor={diag['coor_natom']}",
                 )
     if crystal_side_A is not None:
         _apply_bootstrap_crystal(
