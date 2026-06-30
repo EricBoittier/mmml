@@ -132,32 +132,35 @@ If native passes and PyCHARMM fails → bug is in library-mode `eval_charmm_scri
 
 ## Bootstrap API version
 
-PyCHARMM read gate logs `bootstrap_api=...` at startup. You need **`direct-api-v4.7`**
-(hybrid at ``np>1``: direct ``api_read`` for RTF/PRM, **all-ranks** ``eval_charmm_script``
-``read psf card`` for PSF, Python CRD parse for coords).
+PyCHARMM read gate logs `bootstrap_api=...` at startup. You need **`direct-api-v4.8`**
+(at ``np>1``: **all** topology steps RTF/PRM/PSF via ``maincomx`` eval READ with
+staged short basenames; Python CRD parse for coords).
 
-### Why PSF needs a different path than RTF/PRM
+### Why v4.7 hybrid failed on node09
 
-| Step | Direct ``api_read`` (ctypes) | ``eval_charmm_script`` → ``maincomx`` READ |
-|------|------------------------------|---------------------------------------------|
-| RTF/PRM | Works at ``np>1`` (no ``atmini``) | Native control uses this |
-| PSF | ``read_psf_card`` → ``atmini`` + ``psfsum`` | Rank 0 disk I/O; all ranks in Fortran; MPI broadcast |
+v4.7 used direct ``api_read`` for RTF/PRM then eval PSF. Eval returned success but
+``psf=0`` on all ranks — mixing ctypes I/O with ``maincomx`` READ does not MPI-sync
+parameter/topology state the way native CHARMM does. **v4.8** runs RTF/PRM/PSF
+entirely through eval READ (same as native control).
 
-**v4.5** (all ranks → ``read_psf_card``): hang — every rank opens PSF and enters ``atmini`` independently.
-
-**v4.6** (rank 0 only → ``read_psf_card``): hang — ``atmini`` waits for workers that never entered Fortran.
-
-**v4.7** (all ranks → ``eval read psf``): matches native CHARMM; rank 0 reads disk inside ``maincomx``.
+| Version | Topology at ``np>1`` | node09 result |
+|---------|---------------------|---------------|
+| v4.5 | all ranks direct ``api_read`` | hang at PSF |
+| v4.6 | rank-0-only direct ``api_read`` | hang at PSF |
+| v4.7 | direct RTF/PRM + eval PSF | eval OK, ``psf=0`` |
+| v4.8 | eval RTF/PRM/PSF (all ranks) | target |
+| native | eval READ chain | PASS |
 
 Bisect env vars:
 
-- ``MMML_MPI_BOOTSTRAP_ALL_RANKS_READ=1`` — revert PSF to direct ``read_psf_card`` (v4.5)
-- ``MMML_MPI_BOOTSTRAP_RANK0_TOPOLOGY_READ=1`` — rank-0-only direct api for RTF/PRM/PSF (v4.6)
+- ``MMML_MPI_BOOTSTRAP_HYBRID_READ=1`` — revert to v4.7 (direct RTF/PRM + eval PSF)
+- ``MMML_MPI_BOOTSTRAP_ALL_RANKS_READ=1`` — all direct ``api_read`` (v4.5)
+- ``MMML_MPI_BOOTSTRAP_RANK0_TOPOLOGY_READ=1`` — rank-0-only direct api (v4.6)
 
 ### Prerequisite: ``maincomx`` in ``libcharmm.so``
 
 ```bash
-grep -c "call maincomx" setup/charmm/source/api/api_eval.F90   # expect 1
+grep -c "call maincomx" setup/charmm/source/api/api_eval.F90   # expect >=1
 grep -c "status='SCRATCH'" setup/charmm/source/api/api_eval.F90  # expect 0
 ```
 
@@ -167,24 +170,23 @@ If SCRATCH path is present → ``bash scripts/rebuild_charmm_mlpot.sh --clean``
 
 ```bash
 git pull
-grep BOOTSTRAP_MPI_API mmml/interfaces/pycharmmInterface/charmm_mpi.py  # direct-api-v4.7
+grep BOOTSTRAP_MPI_API mmml/interfaces/pycharmmInterface/charmm_mpi.py  # direct-api-v4.8
 
 MMML_MPI_NP=1 ./scripts/run_mpi_pycharmm_read_gate.sh
 MMML_MPI_NP=2 ./scripts/run_native_charmm_read_gate.sh
 MMML_MPI_NP=2 ./scripts/run_mpi_pycharmm_read_gate.sh --mode psf-crd
 ```
 
-**Pass:** both ranks log ``step 3/4 ... eval-psf psf=100`` and ``PASS read_gate: n_atoms=100``.
+**Pass:** log shows ``4 eval read step(s)`` and ``step 3/4 ... eval-psf psf=100`` on
+**both** ranks, then ``PASS read_gate: n_atoms=100``.
 
-If eval PSF fails with ``Unrecognized command: read`` → rebuild ``libcharmm.so``.
+If eval steps still leave ``psf=0``: ``MMML_QUIET=0 MMML_MPI_NP=2 ...`` for CHARMM errors.
 
-If eval PSF completes but rank 1 ``psf=0`` → escalate to full eval chain (all four READ lines via ``mpi_charmm_script``).
-
-If pass → Tier 3 smoke:
+If pass → Tier 3 smoke (live ENER, not callback-only):
 
 ```bash
 MMML_MPI_NP=2 ./scripts/mmml-charmm-mpirun.sh python \
-  tests/functionality/mlpot/10_domdec_spatial_mpi_smoke.py
+  tests/functionality/mlpot/10_domdec_spatial_mpi_smoke.py --charmm-ener
 ```
 
 ## Implementation
