@@ -23,17 +23,19 @@ _platform_tag() {
 }
 
 _default_openmpi_root() {
-  if [[ -d /opt/gcc-14.2.0/openmpi-5.0.5/build/bin ]]; then
-    echo /opt/gcc-14.2.0/openmpi-5.0.5/build
-  elif [[ "$(uname -s)" == "Darwin" && -d /opt/homebrew/opt/open-mpi/bin ]]; then
-    echo /opt/homebrew/opt/open-mpi
-  elif [[ "$(uname -s)" == "Darwin" && -d /opt/homebrew/bin ]]; then
-    echo /opt/homebrew
-  elif [[ -d /usr/bin/mpicc ]]; then
-    echo /usr
-  else
-    echo /usr
-  fi
+  local candidate
+  for candidate in \
+    /opt/gcc-14.2.0/openmpi-5.0.5/build \
+    /opt/gcc-12.2.0/openmpi-4.1.4/build \
+    /opt/homebrew/opt/open-mpi \
+    /opt/homebrew \
+    /usr; do
+    if [[ -x "$candidate/bin/mpicc" ]]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+  echo /usr
 }
 
 _auto_find_fftw_root() {
