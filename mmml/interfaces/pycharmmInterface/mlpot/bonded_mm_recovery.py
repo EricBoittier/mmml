@@ -57,8 +57,6 @@ def rewrite_dynamics_restart_from_current_state(
     del write_unit
     if restart_path is None:
         return
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-
     path = Path(restart_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (

@@ -663,8 +663,6 @@ def write_charmm_restart_from_memory(
     MPI-linked ``libcharmm.so`` under ``mpirun`` can abort in Fortran ``parse.F90`` on
     ``write restart`` (gfortrantmp EOF on unit 90) even when PSF/PDB C API writes work.
     """
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-
     from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
     p = Path(path).expanduser().resolve()
