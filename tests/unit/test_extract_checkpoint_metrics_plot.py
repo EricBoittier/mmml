@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 
 from mmml.cli.misc.extract_checkpoint_metrics import (
+    plot_learning_curve_scaling,
     plot_training_comparison,
     plot_training_metrics,
 )
@@ -48,12 +49,71 @@ def test_plot_training_metrics_ef_only(tmp_path: Path) -> None:
 
 def test_plot_training_comparison(tmp_path: Path) -> None:
     runs = [
-        ("dcm1-aaaa-bbbb", _synthetic_metrics(30)),
-        ("dcm1-cccc-dddd", _synthetic_metrics(35)),
+        ("n800/r1", _synthetic_metrics(30)),
+        ("n800/r2", _synthetic_metrics(35)),
+        ("n1600/r1", _synthetic_metrics(32)),
     ]
     out = tmp_path / "compare.png"
-    plot_training_comparison(runs, out, ef_only=True, verbose=False)
-    assert out.is_file()
+    written = plot_training_comparison(runs, out, ef_only=True, verbose=False)
+    assert len(written) == 3
+    assert (tmp_path / "compare_valid_loss.png").is_file()
+    assert (tmp_path / "compare_valid_energy_mae.png").is_file()
+    assert (tmp_path / "compare_valid_forces_mae.png").is_file()
+
+
+def test_plot_training_comparison_with_table(tmp_path: Path) -> None:
+    runs = [
+        ("n800/r1", _synthetic_metrics(30)),
+        ("n800/r2", _synthetic_metrics(35)),
+    ]
+    table = [
+        ["n_train", "r1 E", "r2 E", "r1 F", "r2 F"],
+        ["800", "0.50", "0.62", "0.10", "0.11"],
+    ]
+    out = tmp_path / "compare_table.png"
+    written = plot_training_comparison(
+        runs,
+        out,
+        ef_only=True,
+        verbose=False,
+        summary_table=table,
+        plot_style="nature",
+    )
+    assert len(written) == 4
+    table_path = tmp_path / "compare_table_summary_table.png"
+    assert table_path.is_file()
+    assert table_path.stat().st_size > 10_000
+
+
+def test_plot_learning_curve_scaling(tmp_path: Path) -> None:
+    runs = [
+        {
+            "parent": "n800",
+            "name": "r1",
+            "summary": {
+                "n_train": 800,
+                "repeat": 1,
+                "training_final": {"valid_loss": 2.0, "valid_energy_mae": 0.05, "valid_forces_mae": 0.04},
+                "test_eval": {"energy_mae_kcal_mol": 0.6, "forces_mae_kcal_mol": 1.0},
+            },
+        },
+        {
+            "parent": "n3200",
+            "name": "r1",
+            "summary": {
+                "n_train": 3200,
+                "repeat": 1,
+                "training_final": {"valid_loss": 0.5, "valid_energy_mae": 0.02, "valid_forces_mae": 0.01},
+                "test_eval": {"energy_mae_kcal_mol": 0.3, "forces_mae_kcal_mol": 0.2},
+            },
+        },
+    ]
+    out = tmp_path / "scaling.png"
+    written = plot_learning_curve_scaling(runs, out, verbose=False, plot_style="nature")
+    assert len(written) == 5
+    energy_path = tmp_path / "scaling_test_energy_mae.png"
+    assert energy_path.is_file()
+    assert energy_path.stat().st_size > 5_000
 
 
 def test_warmup_trim_allows_plot_with_spikes(tmp_path: Path) -> None:
