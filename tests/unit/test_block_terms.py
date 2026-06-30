@@ -77,42 +77,27 @@ def test_apply_mlpot_registration_mm_off_honors_use_block(monkeypatch):
     zero_fn.assert_not_called()
 
 
-def test_zero_mlpot_psf_mm_terms_zeros_via_block_and_charges():
+def test_zero_mlpot_psf_mm_terms_strips_bonded_and_charges():
     sel = mock.Mock()
     sel.get_atom_indexes.return_value = [0, 1, 2]
     fake_psf = mock.Mock()
     fake_psf.get_charges.return_value = [0.5, -0.2, 0.1]
+    fake_coor = mock.Mock()
+    fake_coor.get_natom.return_value = 3
+    fake_select = mock.Mock()
+    fake_select.return_value.all_atoms.return_value = mock.Mock(name="all_sel")
 
-    with mock.patch.object(
-        block_terms, "apply_mlpot_energy_block", return_value="all"
-    ) as block_fn, mock.patch.object(block_terms, "_import_pycharmm") as imp:
+    with mock.patch.object(block_terms, "_import_pycharmm") as imp:
         pycharmm = imp.return_value
+        pycharmm.coor = fake_coor
         pycharmm.psf = fake_psf
+        pycharmm.SelectAtoms = fake_select
         tag = block_terms.zero_mlpot_psf_mm_terms(sel)
 
     assert tag == "all"
-    block_fn.assert_called_once()
-    fake_psf.delete_connectivity = getattr(fake_psf, "delete_connectivity", None)
-    if hasattr(fake_psf, "delete_connectivity"):
-        assert not fake_psf.delete_connectivity.called
+    fake_psf.delete_connectivity.assert_called_once()
     fake_psf.set_charge.assert_called_once()
     assert fake_psf.set_charge.call_args.args[0] == [0.0, 0.0, 0.0]
-
-
-def test_zero_mlpot_psf_mm_terms_periodic_external_uses_periodic_block():
-    sel = mock.Mock()
-    with mock.patch.object(
-        block_terms, "apply_mlpot_periodic_external_block", return_value="all"
-    ) as periodic_fn, mock.patch.object(
-        block_terms, "apply_mlpot_energy_block"
-    ) as block_fn, mock.patch.object(block_terms, "_import_pycharmm") as imp:
-        imp.return_value.psf.get_charges.return_value = [0.0, 0.0]
-        imp.return_value.psf.set_charge = mock.Mock()
-        tag = block_terms.zero_mlpot_psf_mm_terms(sel, periodic_external=True)
-
-    assert tag == "all"
-    periodic_fn.assert_called_once()
-    block_fn.assert_not_called()
 
 
 def test_apply_mlpot_registration_mm_off_periodic_external_uses_psf(monkeypatch):
