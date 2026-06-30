@@ -1028,8 +1028,7 @@ def _handle_inter_monomer_rescue(
 ) -> float:
     print(
         f"{exc}\nAttempting MLpot overlap rescue "
-        f"(bonded+VDW SD={config.rescue.nstep_sd}, "
-        f"ABNR={config.rescue.nstep_abnr})...",
+        f"(SD={config.rescue.nstep_sd}, ABNR={config.rescue.nstep_abnr})...",
         flush=True,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (

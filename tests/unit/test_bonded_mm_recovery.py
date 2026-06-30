@@ -1159,7 +1159,7 @@ def test_run_inter_overlap_rescue_all_ml_uses_bonded_vdw_path(tmp_path):
     inter.assert_called_once()
 
 
-def test_all_ml_inter_overlap_rescue_uses_bonded_vdw_sd():
+def test_all_ml_inter_overlap_rescue_uses_mlpot_sd_when_no_block():
     from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         _run_all_ml_inter_overlap_rescue,
     )
@@ -1170,6 +1170,42 @@ def test_all_ml_inter_overlap_rescue_uses_bonded_vdw_sd():
     from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     ctx = MagicMock(spec=MlpotContext)
+    ctx.registration_uses_block = False
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        min_distance_A=1.5,
+        n_monomers=200,
+        use_pbc=True,
+        pyCModel=MagicMock(),
+        rescue=OverlapRescueConfig(nstep_sd=200, nstep_abnr=100, verbose=False),
+    )
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.apply_charmm_position_noise",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._mlpot_covers_all_atoms",
+        return_value=True,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_mlpot_overlap_rescue",
+    ) as mlpot_rescue, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_overlap_rescue",
+    ) as charmm_rescue:
+        _run_all_ml_inter_overlap_rescue(ctx, cfg)
+    mlpot_rescue.assert_called_once()
+    charmm_rescue.assert_not_called()
+
+
+def test_all_ml_inter_overlap_rescue_uses_bonded_vdw_sd_with_block_registration():
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        _run_all_ml_inter_overlap_rescue,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        DynamicsOverlapConfig,
+        OverlapRescueConfig,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+
+    ctx = MagicMock(spec=MlpotContext)
+    ctx.registration_uses_block = True
     cfg = DynamicsOverlapConfig(
         action="rescue",
         min_distance_A=1.5,
@@ -1181,10 +1217,16 @@ def test_all_ml_inter_overlap_rescue_uses_bonded_vdw_sd():
     with patch(
         "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.apply_charmm_position_noise",
     ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._mlpot_covers_all_atoms",
+        return_value=True,
+    ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_overlap_rescue",
-    ) as bonded_rescue:
+    ) as bonded_rescue, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_mlpot_overlap_rescue",
+    ) as mlpot_rescue:
         _run_all_ml_inter_overlap_rescue(ctx, cfg)
     bonded_rescue.assert_called_once_with(ctx, cfg.rescue)
+    mlpot_rescue.assert_not_called()
 
 
 def test_run_inter_overlap_rescue_calls_bonded_vdw_rescue():

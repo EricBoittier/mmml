@@ -287,7 +287,9 @@ def _run_mlpot_recovery_mini(
     pyCModel: Any,
     context: str,
     nstep: int | None = None,
+    nstep_abnr: int | None = None,
     clear_restraints: bool = True,
+    calculator_pre_minimize: bool = True,
 ) -> None:
     """MLpot SD mini (all-ML and hybrid polish after bonded-MM)."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
@@ -298,12 +300,16 @@ def _run_mlpot_recovery_mini(
 
     steps = max(1, int(nstep if nstep is not None else bonded_cfg.nstep_sd))
     if bonded_cfg.verbose:
-        print(f"{context}: MLpot SD mini ({steps} steps)", flush=True)
+        abnr_txt = ""
+        if nstep_abnr is not None and int(nstep_abnr) > 0:
+            abnr_txt = f", ABNR={int(nstep_abnr)}"
+        print(f"{context}: MLpot SD mini ({steps} steps{abnr_txt})", flush=True)
     if clear_restraints:
         clear_mmfp_restraints()
     minimize_with_mlpot(
         MinimizeWithMlpotConfig(
             nstep=steps,
+            nstep_abnr=nstep_abnr,
             nprint=bonded_cfg.nprint,
             tolenr=bonded_cfg.tolenr,
             tolgrd=bonded_cfg.tolgrd,
@@ -312,7 +318,30 @@ def _run_mlpot_recovery_mini(
             mlpot_ctx=ctx,
             save=False,
             skip_if_crd_exists=False,
+            calculator_pre_minimize=calculator_pre_minimize,
+            pre_sd_bonded_recovery_energy_kcalmol=None,
+            pre_sd_bonded_recovery_grms_kcalmol_A=None,
         )
+    )
+
+
+def _run_mlpot_overlap_rescue(
+    ctx: MlpotContext,
+    bonded_cfg: BondedMmMiniConfig,
+    *,
+    rescue: Any,
+    pyCModel: Any,
+    context: str = "Inter overlap rescue",
+) -> None:
+    """MLpot SD/ABNR overlap rescue without CHARMM BLOCK toggle or MLpot detach."""
+    _run_mlpot_recovery_mini(
+        ctx,
+        bonded_cfg,
+        pyCModel=pyCModel,
+        context=context,
+        nstep=int(rescue.nstep_sd),
+        nstep_abnr=int(rescue.nstep_abnr),
+        calculator_pre_minimize=False,
     )
 
 
@@ -534,6 +563,18 @@ def _mlpot_covers_all_atoms(ctx: MlpotContext) -> bool:
         return False
 
 
+def _overlap_rescue_uses_charmm_block_detach(ctx: MlpotContext) -> bool:
+    """True when inter/intra rescue should detach MLpot and toggle CHARMM BLOCK.
+
+    Default PSF-edit registration (``registration_uses_block=False``) strips bonded
+    MM on ML atoms; bonded terms live in JAX/MLpot. Hybrid systems still need the
+    legacy CHARMM BLOCK path on MM atoms.
+    """
+    if not _mlpot_covers_all_atoms(ctx):
+        return True
+    return bool(getattr(ctx, "registration_uses_block", False))
+
+
 def apply_charmm_position_noise(
     *,
     amplitude_A: float,
@@ -619,19 +660,13 @@ def _run_all_ml_intra_overlap_rescue(
     config: Any,
     bonded_cfg: BondedMmMiniConfig,
 ) -> None:
-    """Intra-monomer rescue: preflight, CHARMM bonded SD (inplace BLOCK toggle)."""
+    """Intra-monomer rescue: preflight, then JAX bonded mini or legacy CHARMM BLOCK SD."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import minimize_bonded_mm_recovery
 
     _preflight_intra_overlap_rescue(config, bonded_cfg)
     sd_steps = int(
         getattr(config, "intra_rescue_sd_steps", None) or bonded_cfg.nstep_sd
     )
-    if bonded_cfg.verbose:
-        print(
-            f"Intra overlap rescue: bonded-MM SD {sd_steps} steps "
-            "(inplace BLOCK toggle, MLpot detached)",
-            flush=True,
-        )
     bonded_cfg = BondedMmMiniConfig(
         nstep_sd=sd_steps,
         nprint=bonded_cfg.nprint,
@@ -642,7 +677,29 @@ def _run_all_ml_intra_overlap_rescue(
         backend=bonded_cfg.backend,
         nstep_jax=bonded_cfg.nstep_jax,
     )
-    minimize_bonded_mm_recovery(ctx, bonded_cfg)
+    if _overlap_rescue_uses_charmm_block_detach(ctx):
+        if bonded_cfg.verbose:
+            print(
+                f"Intra overlap rescue: bonded-MM SD {sd_steps} steps "
+                "(inplace BLOCK toggle, MLpot detached)",
+                flush=True,
+            )
+        minimize_bonded_mm_recovery(ctx, bonded_cfg)
+        return
+    if bonded_cfg.verbose:
+        print(
+            f"Intra overlap rescue: MLpot SD {sd_steps} steps "
+            "(MLpot stays attached, no CHARMM BLOCK)",
+            flush=True,
+        )
+    _run_mlpot_recovery_mini(
+        ctx,
+        bonded_cfg,
+        pyCModel=_resolve_pyCModel(ctx, config),
+        context="Intra overlap rescue",
+        nstep=sd_steps,
+        calculator_pre_minimize=False,
+    )
 
 
 def _run_bonded_vdw_sd_without_mlpot(
@@ -711,7 +768,7 @@ def _run_all_ml_inter_overlap_rescue(
     ctx: MlpotContext,
     config: Any,
 ) -> None:
-    """Inter-monomer rescue: optional noise, then CHARMM bonded+VDW SD/ABNR."""
+    """Inter-monomer rescue: optional noise, then MLpot SD/ABNR or legacy CHARMM BLOCK SD."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import minimize_overlap_rescue
 
     rescue = config.rescue
@@ -725,13 +782,27 @@ def _run_all_ml_inter_overlap_rescue(
                 flush=True,
             )
         apply_charmm_position_noise(amplitude_A=noise, seed=seed)
+    if _overlap_rescue_uses_charmm_block_detach(ctx):
+        if rescue.verbose:
+            print(
+                f"Inter overlap rescue: bonded+VDW SD {int(rescue.nstep_sd)} steps "
+                f"(ABNR={int(rescue.nstep_abnr)}; inplace BLOCK toggle, MLpot detached)",
+                flush=True,
+            )
+        minimize_overlap_rescue(ctx, rescue)
+        return
     if rescue.verbose:
         print(
-            f"Inter overlap rescue: bonded+VDW SD {int(rescue.nstep_sd)} steps "
-            f"(ABNR={int(rescue.nstep_abnr)}; inplace BLOCK toggle, MLpot detached)",
+            f"Inter overlap rescue: MLpot SD {int(rescue.nstep_sd)} steps "
+            f"(ABNR={int(rescue.nstep_abnr)}; MLpot stays attached, no CHARMM BLOCK)",
             flush=True,
         )
-    minimize_overlap_rescue(ctx, rescue)
+    _run_mlpot_overlap_rescue(
+        ctx,
+        _bonded_cfg_from_overlap_config(config),
+        rescue=rescue,
+        pyCModel=_resolve_pyCModel(ctx, config),
+    )
 
 
 def finalize_overlap_rescue_for_dynamics(
