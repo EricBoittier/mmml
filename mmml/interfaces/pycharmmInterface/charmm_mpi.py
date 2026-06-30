@@ -1531,6 +1531,16 @@ def _cooperative_stream_inp_path(psf: Path, step: str) -> Path:
     return psf.parent / "mpi_bootstrap_stream" / f"{psf.stem}_{step}.inp"
 
 
+def _bootstrap_relaxed_bomlev() -> bool:
+    """Serial bootstrap uses strict bomlev so READ failures are visible."""
+    if (os.environ.get("MMML_QUIET") or "").strip().lower() in ("1", "true", "yes"):
+        return True
+    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+
+    _, size = mpi_rank_size()
+    return size > 1
+
+
 def _run_cooperative_stream_bootstrap(
     step: str,
     paths: dict[str, Path],
@@ -1557,7 +1567,7 @@ def _run_cooperative_stream_bootstrap(
         log_fn(step, f"begin rank {rank}/{size}: stream {inp_path}{drive}")
     stream_ok = mpi_charmm_script(
         f"stream {inp_path}\n",
-        relaxed_bomlev=True,
+        relaxed_bomlev=_bootstrap_relaxed_bomlev(),
         rank0_drive=_bootstrap_rank0_drive(),
     )
     diag = charmm_natom_diagnostics()
@@ -1583,7 +1593,7 @@ def _run_cooperative_bootstrap_script(
 
     rank, size = mpi_rank_size()
     body = [ln for ln in script.strip().splitlines() if ln.strip()]
-    if size > 1 and paths is not None and len(body) > 1:
+    if paths is not None and len(body) > 1:
         return _run_cooperative_stream_bootstrap(
             step,
             paths,
@@ -1595,7 +1605,10 @@ def _run_cooperative_bootstrap_script(
     n_lines = max(1, len(body))
     if log_fn is not None:
         log_fn(step, f"begin rank {rank}/{size}: {n_lines} line(s)")
-    mpi_charmm_script(script if script.endswith("\n") else script + "\n", relaxed_bomlev=True)
+    mpi_charmm_script(
+        script if script.endswith("\n") else script + "\n",
+        relaxed_bomlev=_bootstrap_relaxed_bomlev(),
+    )
     n_atoms = charmm_natom_count()
     if log_fn is not None:
         log_fn(step, f"done rank {rank}/{size}: n_atoms={n_atoms}")
@@ -1616,7 +1629,7 @@ def bootstrap_charmm_step(
         sync_bootstrap_ranks(log_fn=log_fn, label=f"before {step}")
     if log_fn is not None:
         log_fn(step, f"begin rank {rank}/{size}: {script.strip()}")
-    mpi_charmm_script(script, relaxed_bomlev=True)
+    mpi_charmm_script(script, relaxed_bomlev=_bootstrap_relaxed_bomlev())
     n_atoms = charmm_natom_count()
     if log_fn is not None:
         log_fn(step, f"done rank {rank}/{size}: n_atoms={n_atoms}")
@@ -1721,23 +1734,12 @@ def bootstrap_topology_mpi(
                 crystal_side_A=crystal_side_A,
                 crystal_cutnb_A=crystal_cutnb_A,
             )
-            if size > 1:
-                _run_cooperative_bootstrap_script(
-                    "read_restart",
-                    restart_script,
-                    paths=paths,
-                    log_fn=log_fn,
-                )
-            else:
-                for step_name, script in (
-                    ("read_rtf", f"read rtf card name {paths['rtf']}\n"),
-                    ("read_prm", f"read param card name {paths['prm']} flex\n"),
-                    ("read_psf", f"read psf card name {paths['psf']}\n"),
-                    ("open_restart", f"open read unit 20 name {fortran_path}\n"),
-                    ("read_restart", "read restart unit 20\n"),
-                    ("close_restart", "close unit 20\n"),
-                ):
-                    bootstrap_charmm_step(step_name, script, log_fn=log_fn)
+            _run_cooperative_bootstrap_script(
+                "read_restart",
+                restart_script,
+                paths=paths,
+                log_fn=log_fn,
+            )
         finally:
             if alias is not None:
                 alias.finalize()
@@ -1751,7 +1753,7 @@ def bootstrap_topology_mpi(
             size=size,
             log_fn=log_fn,
         )
-    elif effective_mode == "psf-crd" and size > 1:
+    elif effective_mode == "psf-crd":
         read_script = _cooperative_read_script(
             paths,
             crystal_side_A=crystal_side_A,
@@ -1764,34 +1766,7 @@ def bootstrap_topology_mpi(
             log_fn=log_fn,
         )
     else:
-        if effective_mode != "psf-crd":
-            raise ValueError(f"unsupported bootstrap mode: {mode!r}")
-        minimal = paths["rtf"]
-        prm = paths["prm"]
-        psf = paths["psf"]
-        crd = paths["crd"]
-        steps = [
-            ("read_rtf", f"read rtf card name {minimal}\n"),
-            ("read_prm", f"read param card name {prm} flex\n"),
-            ("read_psf", f"read psf card name {psf}\n"),
-            ("read_coor", f"read coor card name {crd}\n"),
-        ]
-        if crystal_side_A is not None:
-            side = float(crystal_side_A)
-            steps.extend(
-                [
-                    (
-                        "crystal_define",
-                        f"crystal define cubic {side} {side} {side} 90 90 90\n",
-                    ),
-                    (
-                        "crystal_build",
-                        f"crystal build cutoff {float(crystal_cutnb_A)} noper 0\n",
-                    ),
-                ]
-            )
-        for step_name, script in steps:
-            bootstrap_charmm_step(step_name, script, log_fn=log_fn)
+        raise ValueError(f"unsupported bootstrap mode: {mode!r}")
 
     n_final = charmm_natom_count()
     if n_final <= 0:
