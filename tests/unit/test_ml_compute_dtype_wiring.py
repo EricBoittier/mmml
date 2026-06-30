@@ -183,6 +183,10 @@ def test_calculate_charmm_uses_cpu_context_while_jax_deferred():
     ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
         return_value=False,
+    ), patch.object(
+        calc,
+        "_requires_callback_pbc_box",
+        return_value=False,
     ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ):

@@ -3607,7 +3607,11 @@ def test_prepare_post_rescue_overlap_handoff_sets_single_dyna_start():
         "restart": True,
         "iunrea": 3,
     }
-    ctx = mock.Mock(use_pbc=True, charmm_cubic_box_side_A=180.0)
+    ctx = mock.Mock(
+        use_pbc=True,
+        charmm_cubic_box_side_A=180.0,
+        _overlap_post_rescue_cold_start=False,
+    )
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
     ) as ensure_crystal:
@@ -3637,7 +3641,11 @@ def test_post_rescue_bath_target_prefers_hoover_reft_for_cpt_prod():
         "restart": True,
         "iunrea": 3,
     }
-    ctx = mock.Mock(use_pbc=True, charmm_cubic_box_side_A=40.0)
+    ctx = mock.Mock(
+        use_pbc=True,
+        charmm_cubic_box_side_A=40.0,
+        _overlap_post_rescue_cold_start=False,
+    )
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
     ):
