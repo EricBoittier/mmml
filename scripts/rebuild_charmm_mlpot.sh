@@ -122,6 +122,17 @@ fi
 
 [[ -z "$FFTWF_ROOT" ]] && FFTWF_ROOT="$FFTW_ROOT"
 
+# libcharmm.so needs shared FFTW; cluster /opt static .a lacks -fPIC.
+_MMML_FFTW_PIC="${MMML_FFTW_ROOT:-${HOME}/.local/fftw-3.3.10-pic}"
+if [[ -z "${FFTW_ROOT:-}" || "${FFTW_ROOT}" == /opt/* || "${FFTW_ROOT}" == /srv/opt/* ]]; then
+  if [[ -f "${_MMML_FFTW_PIC}/lib/libfftw3.so" && -f "${_MMML_FFTW_PIC}/lib/libfftw3f.so" ]]; then
+    FFTW_ROOT="$_MMML_FFTW_PIC"
+    FFTWF_ROOT="$_MMML_FFTW_PIC"
+    echo "Using PIC/shared FFTW: $FFTW_ROOT" >&2
+  fi
+fi
+unset _MMML_FFTW_PIC
+
 if [[ "$(uname -s)" == "Darwin" ]]; then
   LIB_BASENAME="libcharmm.dylib"
 else
@@ -163,6 +174,8 @@ Environment:
   OPENMPI_ROOT      OpenMPI prefix (default: auto-detect; Linux cluster: /opt/gcc-14.2.0/openmpi-5.0.5/build)
   FFTW_ROOT         Double-precision FFTW prefix (libfftw3); falls back to EBROOTFFTW.
   FFTWF_ROOT        Single-precision FFTW prefix (libfftw3f); defaults to FFTW_ROOT.
+  MMML_FFTW_ROOT    User PIC/shared FFTW prefix (default: ~/.local/fftw-3.3.10-pic).
+                    Build once: bash scripts/build_fftw_pic.sh
                     On clusters that split precisions (e.g. fftw-X.Y.Z vs fftw-X.Y.Z-dp),
                     set FFTW_ROOT=.../fftw-X.Y.Z-dp and FFTWF_ROOT=.../fftw-X.Y.Z .
 EOF
@@ -477,6 +490,19 @@ if [[ "$needs_configure" == 1 ]]; then
     else
       echo "rebuild_charmm_mlpot: warning: libfftw3f (single) not found under ${_fftwf_lib_dir:-$FFTWF_ROOT/lib}" >&2
       echo "  COLFFT/DOMDEC requires single-precision FFTW. Set FFTWF_ROOT=/path/to/sp-fftw." >&2
+    fi
+    if [[ "$NATIVE_EXEC" != 1 ]]; then
+      for _lib_name in FFTW_LIB FFTWF_LIB; do
+        _lib_val="${!_lib_name:-}"
+        if [[ "$_lib_val" == *.a ]]; then
+          echo "rebuild_charmm_mlpot: $_lib_name is static ($_lib_val) — cannot link into libcharmm.so (needs -fPIC)." >&2
+          echo "  One-time fix on this node:" >&2
+          echo "    bash scripts/build_fftw_pic.sh" >&2
+          echo "    export MMML_FFTW_ROOT=\${HOME}/.local/fftw-3.3.10-pic" >&2
+          echo "    OPENMPI_ROOT=/opt/gcc-12.2.0/openmpi-4.1.4/build bash scripts/rebuild_charmm_mlpot.sh --clean" >&2
+          exit 1
+        fi
+      done
     fi
   fi
   cmake "${CMAKE_ARGS[@]}"
