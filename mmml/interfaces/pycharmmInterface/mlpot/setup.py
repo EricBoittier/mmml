@@ -1247,8 +1247,9 @@ def register_mlpot(
         n_ml, pbc=bool(use_pbc), box_side_A=budget_box
     )
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from mmml.interfaces.pycharmmInterface.nbonds_config import CGENFF_PRM_BOMLEV
 
-    with charmm_relaxed_bomlev():
+    with charmm_relaxed_bomlev(CGENFF_PRM_BOMLEV):
         skip_iblo_inb_update = False
         if use_pbc:
             # PBC all-ML: install ML exclusions before zeroed-CGENFF swap; skip second

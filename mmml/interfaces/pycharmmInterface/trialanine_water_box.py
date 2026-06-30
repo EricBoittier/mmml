@@ -170,7 +170,9 @@ def build_trialanine_water_box_in_charmm(
         last_patch="CT3",
         setup_ic=True,
     )
-    ic.prm_fill(replace_all=True)
+    from mmml.interfaces.pycharmmInterface.nbonds_config import ic_prm_fill
+
+    ic_prm_fill(replace_all=True)
     ic.build()
 
     peptide = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float).copy()
@@ -197,11 +199,12 @@ def build_trialanine_water_box_in_charmm(
     # Load CGENFF after the protein segment is built — loading both PRMs before
     # ic.build() triggers DRUDE particle generation and aborts on some builds.
     from mmml.interfaces.pycharmmInterface.nbonds_config import (
+        CGENFF_PRM_BOMLEV,
         _rtf_path_without_drude_autogen,
         read_cgenff_prm,
     )
 
-    with charmm_relaxed_bomlev():
+    with charmm_relaxed_bomlev(CGENFF_PRM_BOMLEV):
         read.rtf(_rtf_path_without_drude_autogen(CGENFF_RTF))
         read_cgenff_prm(bomlev=False)
 

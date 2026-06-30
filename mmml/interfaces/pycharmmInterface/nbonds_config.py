@@ -202,6 +202,10 @@ def pbc_nbond_kwargs(
     return kw
 
 
+# CGENFF flex/append reads and IC prm_fill can emit PARRDR level -3; bomlev -2 aborts.
+CGENFF_PRM_BOMLEV = -5
+
+
 def read_cgenff_prm(
     prm_path: str | Path | None = None,
     *,
@@ -211,10 +215,8 @@ def read_cgenff_prm(
 ) -> None:
     """Read bundled CGENFF ``.prm`` with FLEX (required for append overrides).
 
-    All CGENFF parameter reads must use ``flex=True`` so later ``append=True``
-    swaps (zeroed/full MLpot registration) do not trigger PARMIO level -2.
-
-    Append reads use ``bomlev=-5`` by default (PARRDR nonbond rebuild warnings).
+    All CGENFF parameter reads use ``flex=True`` and ``bomlev=-5`` by default
+    (PARRDR/PARMIO warnings during flex load and append swaps).
     """
     import pycharmm.read as read
 
@@ -222,7 +224,7 @@ def read_cgenff_prm(
     from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
 
     path = str(prm_path or CGENFF_PRM)
-    level = int(bomlev_level if bomlev_level is not None else (-5 if append else -2))
+    level = int(bomlev_level if bomlev_level is not None else CGENFF_PRM_BOMLEV)
 
     def _read() -> None:
         read.prm(path, append=append, flex=True)
@@ -234,6 +236,16 @@ def read_cgenff_prm(
         _read()
 
 
+def ic_prm_fill(*, replace_all: bool = True) -> None:
+    """Fill IC table from the parameter file under relaxed bomlev."""
+    import pycharmm.ic as ic
+
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+
+    with charmm_relaxed_bomlev(CGENFF_PRM_BOMLEV):
+        ic.prm_fill(replace_all=replace_all)
+
+
 def read_cgenff_toppar(*, enable_drude: bool = False) -> None:
     """Load CGENFF RTF/PRM under relaxed BOMBlev; restore the prior level on exit."""
     import pycharmm.read as read
@@ -241,7 +253,7 @@ def read_cgenff_toppar(*, enable_drude: bool = False) -> None:
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
     from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_RTF
 
-    with charmm_relaxed_bomlev():
+    with charmm_relaxed_bomlev(CGENFF_PRM_BOMLEV):
         if enable_drude:
             read.rtf(CGENFF_RTF)
         else:

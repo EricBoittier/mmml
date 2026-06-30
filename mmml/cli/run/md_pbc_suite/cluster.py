@@ -73,7 +73,7 @@ def _build_psf_ordered_cluster(
     sequence = " ".join([residue] * n_molecules)
 
     from mmml.interfaces.pycharmmInterface.mlpot.setup import prepare_charmm_vacuum
-    from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
+    from mmml.interfaces.pycharmmInterface.nbonds_config import ic_prm_fill, read_cgenff_toppar
 
     pycharmm.lingo.charmm_script("DELETE ATOM SELE ALL END")
     reset_block()
@@ -82,7 +82,7 @@ def _build_psf_ordered_cluster(
 
     read.sequence_string(sequence)
     gen.new_segment(seg_name="CLST", setup_ic=True)
-    ic.prm_fill(replace_all=True)
+    ic_prm_fill(replace_all=True)
     ic.build()
 
     pos_df = coor.get_positions()
@@ -252,7 +252,7 @@ def build_minimized_monomer_for_packmol(
     coords, atom_names, z = _generate_residue_with_make_res_recipe(residue)
 
     from mmml.interfaces.pycharmmInterface.mlpot.setup import prepare_charmm_vacuum
-    from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
+    from mmml.interfaces.pycharmmInterface.nbonds_config import ic_prm_fill, read_cgenff_toppar
 
     pycharmm.lingo.charmm_script("DELETE ATOM SELE ALL END")
     reset_block()
@@ -260,7 +260,7 @@ def build_minimized_monomer_for_packmol(
     read_cgenff_toppar(enable_drude=False)
     read.sequence_string(residue)
     gen.new_segment(seg_name="CLST", setup_ic=True)
-    ic.prm_fill(replace_all=True)
+    ic_prm_fill(replace_all=True)
     ic.build()
 
     psf_names = [str(x) for x in np.asarray(psf.get_atype(), dtype=str)]

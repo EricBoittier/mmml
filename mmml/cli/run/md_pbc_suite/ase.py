@@ -128,7 +128,9 @@ def _generate_residue_with_make_res_recipe(
     _read_cgenff_toppar()
     read.sequence_string(residue)
     gen.new_segment(seg_name="TMP", setup_ic=True)
-    ic.prm_fill(replace_all=True)
+    from mmml.interfaces.pycharmmInterface.nbonds_config import ic_prm_fill
+
+    ic_prm_fill(replace_all=True)
     ic.build()
 
     initial = np.array(coor.get_positions().to_numpy(dtype=float), dtype=float, copy=True)
@@ -350,7 +352,9 @@ def _build_cluster_psf_topology_only(
     _read_cgenff_toppar()
     read.sequence_string(sequence)
     gen.new_segment(seg_name="CLST", setup_ic=True)
-    ic.prm_fill(replace_all=True)
+    from mmml.interfaces.pycharmmInterface.nbonds_config import ic_prm_fill
+
+    ic_prm_fill(replace_all=True)
     ic.build()
 
     z = np.asarray(get_Z_from_psf(), dtype=int)
@@ -388,7 +392,9 @@ def _build_cluster_psf_from_composition(
     _read_cgenff_toppar()
     read.sequence_string(sequence)
     gen.new_segment(seg_name="CLST", setup_ic=True)
-    ic.prm_fill(replace_all=True)
+    from mmml.interfaces.pycharmmInterface.nbonds_config import ic_prm_fill
+
+    ic_prm_fill(replace_all=True)
     ic.build()
 
     z = np.asarray(get_Z_from_psf(), dtype=int)

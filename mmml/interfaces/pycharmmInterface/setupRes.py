@@ -91,15 +91,18 @@ def generate_residue(resid) -> None:
     s = """DELETE ATOM SELE ALL END"""
     pycharmm.lingo.charmm_script(s)
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+        CGENFF_PRM_BOMLEV,
+        ic_prm_fill,
+        read_cgenff_prm,
+    )
 
-    with charmm_relaxed_bomlev():
+    with charmm_relaxed_bomlev(CGENFF_PRM_BOMLEV):
         read.rtf(CGENFF_RTF)
-        from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_prm
-
         read_cgenff_prm(bomlev=False)
     read.sequence_string(resid)
     gen.new_segment(seg_name=resid, setup_ic=True)
-    ic.prm_fill(replace_all=True)
+    ic_prm_fill(replace_all=True)
     reset_block()
 
 
