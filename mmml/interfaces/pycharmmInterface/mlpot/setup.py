@@ -734,7 +734,7 @@ def save_cluster_topology_for_vmd(
     stem: str = "model",
     title: str = "cluster",
 ) -> dict[str, Path]:
-    """Save PSF + PDB for VMD (connectivity preserved; MLpot uses BLOCK, not PSF deletes).
+    """Save PSF + PDB for VMD (connectivity preserved; MLpot uses zeroed CGENFF params).
 
     Load in VMD with: ``vmd model.psf model.pdb`` (or a trajectory).
     Also writes a composition fingerprint sidecar for safe inplace recovery.

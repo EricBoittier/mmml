@@ -1,4 +1,4 @@
-"""CHARMM BLOCK coefficients for MM-only vs MLpot (keep PSF connectivity intact)."""
+"""CHARMM BLOCK coefficients and CGENFF param swap for MM-only vs MLpot."""
 
 from __future__ import annotations
 

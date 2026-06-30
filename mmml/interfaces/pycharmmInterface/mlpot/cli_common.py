@@ -52,8 +52,8 @@ def add_charmm_output_args(parser: argparse.ArgumentParser) -> None:
         "--mlpot-use-block",
         action="store_true",
         help=(
-            "Register MLpot via CHARMM BLOCK (legacy). Default: PSF edits zero MM on "
-            "ML atoms (bonded stripped, charges zeroed; no BLOCK eval_charmm_script)."
+            "Register MLpot via CHARMM BLOCK (legacy). Default: zeroed CGENFF .prm "
+            "keeps PSF bonds; ML atom charges zeroed (no DELTIC / no BLOCK script)."
         ),
     )
     group.add_argument(

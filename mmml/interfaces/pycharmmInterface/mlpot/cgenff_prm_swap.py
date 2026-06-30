@@ -9,10 +9,12 @@ _CgenffPrmMode = Literal["full", "zeroed", "zeroed_bonded"]
 _active_mode: _CgenffPrmMode | None = None
 
 
-def cgenff_prm_path() -> Path:
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
+def _cgenff_data_dir() -> Path:
+    return Path(__file__).resolve().parents[2] / "data" / "charmm"
 
-    return Path(CGENFF_PRM)
+
+def cgenff_prm_path() -> Path:
+    return _cgenff_data_dir() / "par_all36_cgenff.prm"
 
 
 def zeroed_cgenff_prm_path(*, bonded_only: bool = False) -> Path:
