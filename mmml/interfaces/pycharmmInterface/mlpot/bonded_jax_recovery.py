@@ -242,7 +242,7 @@ def minimize_bonded_jax_recovery(
                     "Bonded JAX mini skipped: no MM bonded terms (all-ML cluster)",
                     flush=True,
                 )
-            return 0.0
+            return None
         nstep = int(config.nstep_jax if config.nstep_jax is not None else config.nstep_sd)
         freeze_indices = _freeze_atom_indices(ctx, ml_indices)
         new_positions, grms = _run_jax_bonded_fire(

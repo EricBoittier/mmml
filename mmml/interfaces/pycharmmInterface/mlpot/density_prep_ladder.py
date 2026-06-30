@@ -683,21 +683,54 @@ def run_density_prep_ladder(
 
         step_label = f"round{round_idx + 1}:bonded_mm"
         try:
+            from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+                _mlpot_covers_all_atoms,
+                _run_mlpot_recovery_mini,
+            )
             from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
                 bonded_mm_mini_config_from_namespace,
                 minimize_bonded_mm_recovery,
             )
+            from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint_diagnostics import (
+                print_geometry_checkpoint_diff,
+            )
 
-            minimize_bonded_mm_recovery(
-                mlpot_ctx,
-                bonded_mm_mini_config_from_namespace(
-                    args,
-                    nstep_sd=bonded_steps,
-                    tolenr=float(getattr(args, "charmm_tolenr", 1e-3)),
-                    tolgrd=float(getattr(args, "charmm_tolgrd", 1e-3)),
-                    verbose=not quiet,
-                    show_energy=False,
-                ),
+            pos_before = np.asarray(get_charmm_positions_array(), dtype=np.float64, copy=True)
+            bonded_cfg = bonded_mm_mini_config_from_namespace(
+                args,
+                nstep_sd=bonded_steps,
+                tolenr=float(getattr(args, "charmm_tolenr", 1e-3)),
+                tolgrd=float(getattr(args, "charmm_tolgrd", 1e-3)),
+                verbose=not quiet,
+                show_energy=False,
+            )
+            if _mlpot_covers_all_atoms(mlpot_ctx):
+                if not quiet:
+                    print(
+                        f"{step_label}: all-ML cluster — skipping CHARMM bonded-MM SD "
+                        "(CGENFF bonded on ML atoms distorts PhysNet geometry); "
+                        "using MLpot SD recovery instead",
+                        flush=True,
+                    )
+                _run_mlpot_recovery_mini(
+                    mlpot_ctx,
+                    bonded_cfg,
+                    pyCModel=pyCModel,
+                    context=f"Density prep ladder ({step_label})",
+                    nstep=bonded_steps,
+                    calculator_pre_minimize=False,
+                )
+            else:
+                minimize_bonded_mm_recovery(
+                    mlpot_ctx,
+                    bonded_cfg,
+                    topology_psf=getattr(mlpot_ctx, "topology_psf_path", None),
+                )
+            print_geometry_checkpoint_diff(
+                pos_before,
+                get_charmm_positions_array(),
+                step_label=step_label,
+                mlpot_ctx=mlpot_ctx,
             )
             result.steps_applied.append(step_label)
             grms = _refresh_after_step(step_label)

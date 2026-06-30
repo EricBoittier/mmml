@@ -548,6 +548,10 @@ def minimize_bonded_mm_recovery(
     if not isinstance(ctx, MlpotContext) and not hasattr(ctx, "mock_calls"):
         raise TypeError("ctx must be MlpotContext")
 
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+
+    pos_before = np.asarray(get_charmm_positions_array(), dtype=np.float64, copy=True)
+
     backend = str(getattr(config, "backend", "auto")).lower()
     if backend in ("auto", "jax"):
         from mmml.interfaces.pycharmmInterface.mlpot.bonded_jax_recovery import (
@@ -561,6 +565,12 @@ def minimize_bonded_mm_recovery(
                 topology_psf=topology_psf,
             )
             if grms is not None:
+                _print_bonded_recovery_geometry_diff(
+                    pos_before,
+                    ctx,
+                    topology_psf=topology_psf,
+                    label="bonded-MM recovery (JAX)",
+                )
                 return grms
         except Exception as exc:
             if backend == "jax":
@@ -570,7 +580,54 @@ def minimize_bonded_mm_recovery(
                     f"Bonded JAX recovery skipped ({exc}); falling back to CHARMM SD",
                     flush=True,
                 )
-    return _minimize_bonded_charmm_recovery(ctx, config)
+
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        _mlpot_covers_all_atoms,
+    )
+
+    if _mlpot_covers_all_atoms(ctx):
+        if config.verbose:
+            print(
+                "Bonded-MM CHARMM SD skipped: all-ML cluster "
+                "(CGENFF bonded on ML atoms distorts PhysNet geometry; "
+                "use MLpot SD recovery instead)",
+                flush=True,
+            )
+        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+            charmm_grms_after_ener_force,
+        )
+
+        return charmm_grms_after_ener_force()
+
+    grms = _minimize_bonded_charmm_recovery(ctx, config)
+    _print_bonded_recovery_geometry_diff(
+        pos_before,
+        ctx,
+        topology_psf=topology_psf,
+        label="bonded-MM recovery (CHARMM SD)",
+    )
+    return grms
+
+
+def _print_bonded_recovery_geometry_diff(
+    pos_before: np.ndarray,
+    ctx: "MlpotContext",
+    *,
+    topology_psf: PathLike | None,
+    label: str,
+) -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint_diagnostics import (
+        print_geometry_checkpoint_diff,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+
+    print_geometry_checkpoint_diff(
+        pos_before,
+        get_charmm_positions_array(),
+        step_label=label,
+        mlpot_ctx=ctx,
+        topology_psf=topology_psf,
+    )
 
 
 def _minimize_bonded_charmm_recovery(

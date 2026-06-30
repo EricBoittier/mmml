@@ -178,15 +178,18 @@ def _save_geometry_checkpoint(
     *,
     title: str,
     positions: Any | None = None,
+    save_psf: bool = True,
 ) -> dict[str, Path]:
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import save_minimization_results
 
     directory.mkdir(parents=True, exist_ok=True)
     pdb_path = directory / f"{stem}.pdb"
     crd_path = directory / f"{stem}.crd"
+    psf_path = directory / f"{stem}.psf" if save_psf else None
     written = save_minimization_results(
         pdb_path=pdb_path,
         crd_path=crd_path,
+        psf_path=psf_path,
         positions=positions,
         title=title,
         show_energy=False,

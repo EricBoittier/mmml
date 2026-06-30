@@ -30,13 +30,20 @@ def test_minimize_bonded_mm_recovery_uses_jax_when_auto_succeeds():
     ctx = MagicMock()
     cfg = BondedMmMiniConfig(nstep_sd=10, backend="auto", verbose=False)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_jax_recovery.minimize_bonded_jax_recovery",
-        return_value=3.5,
-    ) as jax_mini:
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        return_value=np.zeros((2, 3)),
+    ):
         with patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._minimize_bonded_charmm_recovery",
-        ) as charmm_mini:
-            grms = minimize_bonded_mm_recovery(ctx, cfg)
+            "mmml.interfaces.pycharmmInterface.mlpot.bonded_jax_recovery.minimize_bonded_jax_recovery",
+            return_value=3.5,
+        ) as jax_mini:
+            with patch(
+                "mmml.interfaces.pycharmmInterface.mlpot.dynamics._minimize_bonded_charmm_recovery",
+            ) as charmm_mini:
+                with patch(
+                    "mmml.interfaces.pycharmmInterface.mlpot.dynamics._print_bonded_recovery_geometry_diff",
+                ):
+                    grms = minimize_bonded_mm_recovery(ctx, cfg)
     assert grms == pytest.approx(3.5)
     jax_mini.assert_called_once()
     charmm_mini.assert_not_called()
@@ -46,14 +53,25 @@ def test_minimize_bonded_mm_recovery_falls_back_to_charmm_on_jax_error():
     ctx = MagicMock()
     cfg = BondedMmMiniConfig(nstep_sd=10, backend="auto", verbose=False)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_jax_recovery.minimize_bonded_jax_recovery",
-        side_effect=RuntimeError("no psf"),
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        return_value=np.zeros((2, 3)),
     ):
         with patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._minimize_bonded_charmm_recovery",
-            return_value=2.0,
-        ) as charmm_mini:
-            grms = minimize_bonded_mm_recovery(ctx, cfg)
+            "mmml.interfaces.pycharmmInterface.mlpot.bonded_jax_recovery.minimize_bonded_jax_recovery",
+            side_effect=RuntimeError("no psf"),
+        ):
+            with patch(
+                "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._mlpot_covers_all_atoms",
+                return_value=False,
+            ):
+                with patch(
+                    "mmml.interfaces.pycharmmInterface.mlpot.dynamics._minimize_bonded_charmm_recovery",
+                    return_value=2.0,
+                ) as charmm_mini:
+                    with patch(
+                        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._print_bonded_recovery_geometry_diff",
+                    ):
+                        grms = minimize_bonded_mm_recovery(ctx, cfg)
     assert grms == pytest.approx(2.0)
     charmm_mini.assert_called_once()
 
@@ -65,12 +83,35 @@ def test_minimize_bonded_mm_recovery_backend_charmm_skips_jax():
         "mmml.interfaces.pycharmmInterface.mlpot.bonded_jax_recovery.minimize_bonded_jax_recovery",
     ) as jax_mini:
         with patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._minimize_bonded_charmm_recovery",
-            return_value=1.0,
-        ) as charmm_mini:
-            minimize_bonded_mm_recovery(ctx, cfg)
+            "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._mlpot_covers_all_atoms",
+            return_value=False,
+        ):
+            with patch(
+                "mmml.interfaces.pycharmmInterface.mlpot.dynamics._minimize_bonded_charmm_recovery",
+                return_value=1.0,
+            ) as charmm_mini:
+                with patch(
+                    "mmml.interfaces.pycharmmInterface.mlpot.dynamics._print_bonded_recovery_geometry_diff",
+                ):
+                    minimize_bonded_mm_recovery(ctx, cfg)
     jax_mini.assert_not_called()
     charmm_mini.assert_called_once()
+
+
+def test_minimize_bonded_jax_recovery_all_ml_returns_none_for_charmm_fallback():
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_jax_recovery import (
+        minimize_bonded_jax_recovery,
+    )
+
+    ctx = MagicMock(ml_selection=MagicMock(get_atom_indexes=lambda: list(range(4))))
+    cfg = BondedMmMiniConfig(nstep_sd=10, backend="auto", verbose=False)
+    system = MagicMock()
+    system.topology.bonds = np.zeros((0, 2), dtype=np.int32)
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_jax_recovery.load_bonded_system_for_recovery",
+        return_value=(system, MagicMock(cleanup=lambda: None)),
+    ):
+        assert minimize_bonded_jax_recovery(ctx, cfg) is None
 
 
 def test_bonded_forces_grms_kcalmol_A():
