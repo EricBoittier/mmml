@@ -531,6 +531,25 @@ def plot_training_metrics(
         print(f"Saved: {output_path}")
 
 
+_LEARNING_CURVE_SUMMARY_METRICS = (
+    ("valid_loss", "Validation loss"),
+    ("valid_energy_mae", "Valid energy MAE (kcal/mol)"),
+    ("valid_forces_mae", "Valid forces MAE (kcal/mol/Å)"),
+    ("test_energy_mae", "Test energy MAE (kcal/mol)"),
+    ("test_forces_mae", "Test forces MAE (kcal/mol/Å)"),
+)
+
+
+def _learning_curve_metric_output_path(output_path: Path, metric_key: str) -> Path:
+    """Map a base output path to one file per metric (``stem_metric.png``)."""
+    output_path = Path(output_path)
+    if output_path.suffix:
+        stem = output_path.with_suffix("")
+        return stem.parent / f"{stem.name}_{metric_key}{output_path.suffix}"
+    output_path.mkdir(parents=True, exist_ok=True)
+    return output_path / f"{metric_key}.png"
+
+
 def plot_training_comparison(
     runs: Sequence[Union[tuple[str, Dict[str, np.ndarray]], ComparisonRunSpec]],
     output_path: Path,
@@ -544,8 +563,8 @@ def plot_training_comparison(
     summary_table_title: str = "Hold-out test MAE (kcal/mol)",
     color_by_group: bool = True,
     linestyle_by_repeat: bool = True,
-) -> None:
-    """Overlay valid metrics from multiple checkpoint runs."""
+) -> list[Path]:
+    """Overlay valid metrics from multiple checkpoint runs (one figure per panel)."""
     style = _apply_training_plot_style(plot_style)
     specs = _normalize_comparison_runs(runs)
     if not specs:
@@ -559,28 +578,13 @@ def plot_training_comparison(
     if not ef_only:
         panels = panels + (("valid_dipole_mae", "Valid dipole MAE (e·Å)", 1.0),)
 
-    use_table_panel = summary_table is not None
-    ncols = 2
-    if use_table_panel:
-        nrows = 2
-        fig, axes = plt.subplots(nrows, ncols, figsize=(6.8 * ncols, 4.8 * nrows), constrained_layout=True)
-        axes_flat = np.atleast_1d(axes).ravel()
-        curve_axes = axes_flat[: len(panels)]
-        table_ax = axes_flat[len(panels)]
-        for ax in axes_flat[len(panels) + 1 :]:
-            ax.axis("off")
-    else:
-        nrows = int(np.ceil(len(panels) / ncols))
-        fig, axes = plt.subplots(nrows, ncols, figsize=(6.5 * ncols, 4.5 * nrows), constrained_layout=True)
-        axes_flat = np.atleast_1d(axes).ravel()
-        curve_axes = axes_flat
-        table_ax = None
-
     group_colors, linestyles, groups = _comparison_group_styles(specs, style)
     fallback_colors = comparison_colors(style, len(specs))
+    written: list[Path] = []
 
-    for ax, (key, panel_title, scale) in zip(curve_axes, panels):
+    for key, panel_title, scale in panels:
         panel_arrays: List[np.ndarray] = []
+        fig, ax = plt.subplots(figsize=(6.5, 4.5), constrained_layout=True)
         for idx, spec in enumerate(specs):
             metrics = spec.metrics
             mask = _valid_metric_mask(metrics)
@@ -610,45 +614,58 @@ def plot_training_comparison(
         ax.set_title(panel_title)
         if log_scale and panel_arrays:
             _set_positive_log_ylim(ax, panel_arrays)
-
-    if not use_table_panel:
-        for ax in axes_flat[len(panels) :]:
-            ax.axis("off")
         if specs:
-            curve_axes[0].legend(fontsize=8, loc="best")
-    else:
-        assert table_ax is not None
+            ax.legend(fontsize=8, loc="best")
+
+        suptitle_kw: dict = {"fontsize": 14, "fontweight": "bold"}
+        if style.suptitle_color:
+            suptitle_kw["color"] = style.suptitle_color
+        fig.suptitle(title, **suptitle_kw)
+
+        panel_path = _learning_curve_metric_output_path(output_path, key)
+        panel_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(panel_path, dpi=220, bbox_inches="tight")
+        plt.close(fig)
+        written.append(panel_path)
+        if verbose:
+            print(f"Saved: {panel_path}")
+
+    if summary_table is not None:
+        fig, ax = plt.subplots(figsize=(6.5, 4.5), constrained_layout=True)
         _render_summary_table(
-            table_ax,
-            summary_table or [],
+            ax,
+            summary_table,
             title=summary_table_title,
             style=style,
         )
         if color_by_group or linestyle_by_repeat:
-            _add_group_repeat_legend(table_ax, group_colors, groups)
+            _add_group_repeat_legend(ax, group_colors, groups)
+        suptitle_kw: dict = {"fontsize": 14, "fontweight": "bold"}
+        if style.suptitle_color:
+            suptitle_kw["color"] = style.suptitle_color
+        fig.suptitle(title, **suptitle_kw)
+        table_path = _learning_curve_metric_output_path(output_path, "summary_table")
+        table_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(table_path, dpi=220, bbox_inches="tight")
+        plt.close(fig)
+        written.append(table_path)
+        if verbose:
+            print(f"Saved: {table_path}")
 
-    suptitle_kw: dict = {"fontsize": 14, "fontweight": "bold"}
-    if style.suptitle_color:
-        suptitle_kw["color"] = style.suptitle_color
-    fig.suptitle(title, **suptitle_kw)
-    output_path = Path(output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(output_path, dpi=220, bbox_inches="tight")
-    plt.close(fig)
-    if verbose:
-        print(f"Saved: {output_path}")
+    if not written:
+        raise ValueError("No comparison panels produced")
+    return written
 
 
 @dataclass(frozen=True)
 class ScalingPoint:
     n_train: int
     repeat: int
-    inv_sqrt_n: float
     values: Dict[str, float]
 
 
 def collect_scaling_points(runs: Sequence[dict]) -> list[ScalingPoint]:
-    """Collect final validation/test metrics for 1/√n_train scaling plots."""
+    """Collect final validation/test metrics for learning-curve summary plots."""
     points: list[ScalingPoint] = []
     for run in runs:
         summary = run.get("summary", {})
@@ -681,7 +698,7 @@ def collect_scaling_points(runs: Sequence[dict]) -> list[ScalingPoint]:
                 continue
             scale = EV_TO_KCAL_MOL if key in {"valid_energy_mae", "valid_forces_mae"} else 1.0
             number = float(val) * scale
-            if np.isfinite(number) and number > 0:
+            if np.isfinite(number):
                 clean[key] = number
         if not clean:
             continue
@@ -689,7 +706,6 @@ def collect_scaling_points(runs: Sequence[dict]) -> list[ScalingPoint]:
             ScalingPoint(
                 n_train=int(n_train),
                 repeat=int(repeat),
-                inv_sqrt_n=1.0 / np.sqrt(float(n_train)),
                 values=clean,
             )
         )
@@ -700,43 +716,53 @@ def plot_learning_curve_scaling(
     runs: Sequence[dict],
     output_path: Path,
     *,
-    title: str = "Learning-curve scaling",
+    title: str = "Learning-curve summary",
     plot_style: str | PlotStyle | None = DEFAULT_PLOT_STYLE,
     verbose: bool = True,
-) -> None:
-    """Plot log10(final metrics) versus 1/√n_train for sweep summary."""
+) -> list[Path]:
+    """Plot final metrics versus n_train; one figure per metric in original units."""
     style = _apply_training_plot_style(plot_style)
     points = collect_scaling_points(runs)
     if not points:
         raise ValueError("No scaling points available for plot")
 
-    metric_panels = (
-        ("valid_loss", "log10 validation loss"),
-        ("valid_energy_mae", "log10 valid energy MAE (kcal/mol)"),
-        ("valid_forces_mae", "log10 valid forces MAE (kcal/mol/Å)"),
-        ("test_energy_mae", "log10 test energy MAE (kcal/mol)"),
-        ("test_forces_mae", "log10 test forces MAE (kcal/mol/Å)"),
-    )
-
-    ncols = 3
-    nrows = int(np.ceil(len(metric_panels) / ncols))
-    fig, axes = plt.subplots(nrows, ncols, figsize=(4.6 * ncols, 4.0 * nrows), constrained_layout=True)
-    axes_flat = np.atleast_1d(axes).ravel()
-
     repeats = sorted({point.repeat for point in points})
     repeat_colors = comparison_colors(style, max(len(repeats), 1))
     repeat_color = {rep: repeat_colors[i % len(repeat_colors)] for i, rep in enumerate(repeats)}
 
-    for ax, (metric_key, ylabel) in zip(axes_flat, metric_panels):
+    legend_handles = [
+        Line2D(
+            [0],
+            [0],
+            marker="o",
+            linestyle="",
+            color=repeat_color[rep],
+            label=f"repeat {rep}",
+        )
+        for rep in repeats
+    ]
+    legend_handles.append(
+        Line2D(
+            [0],
+            [0],
+            color=style.colors.get("valid", "#333333"),
+            marker="o",
+            label="mean ± σ",
+        )
+    )
+
+    written: list[Path] = []
+    for metric_key, ylabel in _LEARNING_CURVE_SUMMARY_METRICS:
         metric_points = [p for p in points if metric_key in p.values]
         if not metric_points:
-            ax.axis("off")
             continue
+
+        fig, ax = plt.subplots(figsize=(5.2, 4.2), constrained_layout=True)
 
         for point in metric_points:
             ax.scatter(
-                point.inv_sqrt_n,
-                np.log10(point.values[metric_key]),
+                point.n_train,
+                point.values[metric_key],
                 color=repeat_color.get(point.repeat, "#333333"),
                 s=42,
                 alpha=0.9,
@@ -746,17 +772,14 @@ def plot_learning_curve_scaling(
             )
 
         by_n: dict[int, list[float]] = defaultdict(list)
-        inv_sqrt_by_n: dict[int, float] = {}
         for point in metric_points:
-            by_n[point.n_train].append(np.log10(point.values[metric_key]))
-            inv_sqrt_by_n[point.n_train] = point.inv_sqrt_n
+            by_n[point.n_train].append(point.values[metric_key])
 
         n_sorted = sorted(by_n)
-        xs = [inv_sqrt_by_n[n] for n in n_sorted]
         means = [float(np.mean(by_n[n])) for n in n_sorted]
         stds = [float(np.std(by_n[n])) if len(by_n[n]) > 1 else 0.0 for n in n_sorted]
         ax.errorbar(
-            xs,
+            n_sorted,
             means,
             yerr=stds,
             color=style.colors.get("valid", "#333333"),
@@ -768,41 +791,28 @@ def plot_learning_curve_scaling(
             zorder=4,
         )
 
-        ax.set_xlabel("1/√n_train")
+        ax.set_xlabel("n_train")
         ax.set_ylabel(ylabel)
-        ax.set_title(ylabel.replace("log10 ", ""), fontsize=9)
-        ax.invert_xaxis()
-        if ax is axes_flat[0]:
-            handles = [
-                Line2D(
-                    [0],
-                    [0],
-                    marker="o",
-                    linestyle="",
-                    color=repeat_color[rep],
-                    label=f"repeat {rep}",
-                )
-                for rep in repeats
-            ]
-            handles.append(
-                Line2D([0], [0], color=style.colors.get("valid", "#333333"), marker="o", label="mean ± σ")
-            )
-            ax.legend(handles=handles, fontsize=7, loc="best")
+        ax.legend(handles=legend_handles, fontsize=7, loc="best")
+        if metric_key == "valid_loss":
+            _set_positive_log_ylim(ax, [np.asarray(means)])
 
-    for ax in axes_flat[len(metric_panels) :]:
-        ax.axis("off")
+        suptitle_kw: dict = {"fontsize": 12, "fontweight": "bold"}
+        if style.suptitle_color:
+            suptitle_kw["color"] = style.suptitle_color
+        fig.suptitle(f"{title}\n{ylabel}", **suptitle_kw)
 
-    suptitle_kw: dict = {"fontsize": 14, "fontweight": "bold"}
-    if style.suptitle_color:
-        suptitle_kw["color"] = style.suptitle_color
-    fig.suptitle(title, **suptitle_kw)
+        metric_path = _learning_curve_metric_output_path(output_path, metric_key)
+        metric_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(metric_path, dpi=220, bbox_inches="tight")
+        plt.close(fig)
+        written.append(metric_path)
+        if verbose:
+            print(f"Saved: {metric_path}")
 
-    output_path = Path(output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(output_path, dpi=220, bbox_inches="tight")
-    plt.close(fig)
-    if verbose:
-        print(f"Saved: {output_path}")
+    if not written:
+        raise ValueError("No metrics with data available for plot")
+    return written
 
 
 def print_metrics_summary(metrics: Dict[str, np.ndarray], ckpt_dir: Path):

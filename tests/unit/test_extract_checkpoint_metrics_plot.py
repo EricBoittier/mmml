@@ -54,8 +54,11 @@ def test_plot_training_comparison(tmp_path: Path) -> None:
         ("n1600/r1", _synthetic_metrics(32)),
     ]
     out = tmp_path / "compare.png"
-    plot_training_comparison(runs, out, ef_only=True, verbose=False)
-    assert out.is_file()
+    written = plot_training_comparison(runs, out, ef_only=True, verbose=False)
+    assert len(written) == 3
+    assert (tmp_path / "compare_valid_loss.png").is_file()
+    assert (tmp_path / "compare_valid_energy_mae.png").is_file()
+    assert (tmp_path / "compare_valid_forces_mae.png").is_file()
 
 
 def test_plot_training_comparison_with_table(tmp_path: Path) -> None:
@@ -68,7 +71,7 @@ def test_plot_training_comparison_with_table(tmp_path: Path) -> None:
         ["800", "0.50", "0.62", "0.10", "0.11"],
     ]
     out = tmp_path / "compare_table.png"
-    plot_training_comparison(
+    written = plot_training_comparison(
         runs,
         out,
         ef_only=True,
@@ -76,8 +79,10 @@ def test_plot_training_comparison_with_table(tmp_path: Path) -> None:
         summary_table=table,
         plot_style="nature",
     )
-    assert out.is_file()
-    assert out.stat().st_size > 10_000
+    assert len(written) == 4
+    table_path = tmp_path / "compare_table_summary_table.png"
+    assert table_path.is_file()
+    assert table_path.stat().st_size > 10_000
 
 
 def test_plot_learning_curve_scaling(tmp_path: Path) -> None:
@@ -104,8 +109,11 @@ def test_plot_learning_curve_scaling(tmp_path: Path) -> None:
         },
     ]
     out = tmp_path / "scaling.png"
-    plot_learning_curve_scaling(runs, out, verbose=False, plot_style="nature")
-    assert out.is_file()
+    written = plot_learning_curve_scaling(runs, out, verbose=False, plot_style="nature")
+    assert len(written) == 5
+    energy_path = tmp_path / "scaling_test_energy_mae.png"
+    assert energy_path.is_file()
+    assert energy_path.stat().st_size > 5_000
 
 
 def test_warmup_trim_allows_plot_with_spikes(tmp_path: Path) -> None:
