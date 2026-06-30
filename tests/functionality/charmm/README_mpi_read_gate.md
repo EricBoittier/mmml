@@ -33,8 +33,10 @@ MMML_MPI_NP=4 ./scripts/run_mpi_pycharmm_read_gate.sh --mode psf-crd --with-crys
 **Pass:** `PASS read_gate: mode=... np=N n_atoms=100`
 
 At ``np>1``, bootstrap copies RTF/PRM/PSF/CRD (and restart when used) to a
-per-rank UUID directory under ``$TMPDIR/mmml_mpi_bootstrap/`` before READ.
-Disable with ``MMML_MPI_BOOTSTRAP_RANK_LOCAL=0`` (cooperative same-path mode).
+per-rank UUID directory under ``$TMPDIR/mmml_mpi_bootstrap/`` before READ, then
+**barriers** so all ranks enter ``read_rtf`` together (required for cooperative
+MPI READ). You should see ``[bootstrap_sync rank */N] barrier done`` before
+``[read_rtf ...] begin``.
 
 **Hang:** last line like `[read_psf rank 2/4] begin ...` — that sub-command is the stall point.
 

@@ -919,6 +919,8 @@ def test_bootstrap_topology_mpi_psf_crd_steps_all_ranks(tmp_path):
         "mmml.interfaces.pycharmmInterface.charmm_mpi._bootstrap_rank_local_staging_enabled",
         return_value=False,
     ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.sync_bootstrap_ranks",
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi._invoke_charmm_script",
         side_effect=lambda s, **kw: calls.append(s.strip()),
     ), mock.patch(

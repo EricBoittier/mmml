@@ -1300,6 +1300,26 @@ def _resolve_bootstrap_topology_paths(
     return paths
 
 
+def sync_bootstrap_ranks(*, log_fn: Callable[[str, str], None] | None = None) -> None:
+    """Barrier so every rank enters cooperative CHARMM READ together."""
+    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+
+    rank, size = mpi_rank_size()
+    if size <= 1:
+        return
+    if not ensure_mpi4py_after_charmm_init(phase="bootstrap READ sync"):
+        raise RuntimeError(f"rank {rank}/{size}: mpi4py.MPI unavailable before bootstrap READ")
+    if not _mpi_comm_valid():
+        raise RuntimeError(f"rank {rank}/{size}: MPI comm invalid before bootstrap READ")
+    from mpi4py import MPI
+
+    if log_fn is not None:
+        log_fn("bootstrap_sync", f"rank {rank}/{size} barrier before CHARMM READ")
+    MPI.COMM_WORLD.Barrier()
+    if log_fn is not None:
+        log_fn("bootstrap_sync", f"rank {rank}/{size} barrier done")
+
+
 def bootstrap_charmm_step(
     step: str,
     script: str,
@@ -1362,17 +1382,19 @@ def bootstrap_topology_mpi(
     if mode == "restart" and (res_opt is None or not res_opt.is_file()):
         raise FileNotFoundError(f"Restart not found: {res_opt}")
 
+    paths = _resolve_bootstrap_topology_paths(
+        psf=psf,
+        crd=crd,
+        prm=prm,
+        rank=rank,
+        size=size,
+        rtf_path=rtf_opt,
+        res=res_opt if mode == "restart" else None,
+        log_fn=log_fn,
+    )
+    sync_bootstrap_ranks(log_fn=log_fn)
+
     if mode == "restart":
-        paths = _resolve_bootstrap_topology_paths(
-            psf=psf,
-            crd=crd,
-            prm=prm,
-            rank=rank,
-            size=size,
-            rtf_path=rtf_opt,
-            res=res_opt,
-            log_fn=log_fn,
-        )
         res_local = paths["res"]
         fortran_path, alias = charmm_fortran_path(res_local, for_write=False)
         try:
@@ -1387,16 +1409,6 @@ def bootstrap_topology_mpi(
             if alias is not None:
                 alias.finalize()
     elif mode == "stream-inp":
-        paths = _resolve_bootstrap_topology_paths(
-            psf=psf,
-            crd=crd,
-            prm=prm,
-            rank=rank,
-            size=size,
-            rtf_path=rtf_opt,
-            res=None,
-            log_fn=log_fn,
-        )
         minimal = paths["rtf"]
         prm = paths["prm"]
         psf = paths["psf"]
@@ -1428,16 +1440,6 @@ def bootstrap_topology_mpi(
     else:
         if mode != "psf-crd":
             raise ValueError(f"unsupported bootstrap mode: {mode!r}")
-        paths = _resolve_bootstrap_topology_paths(
-            psf=psf,
-            crd=crd,
-            prm=prm,
-            rank=rank,
-            size=size,
-            rtf_path=rtf_opt,
-            res=None,
-            log_fn=log_fn,
-        )
         minimal = paths["rtf"]
         prm = paths["prm"]
         psf = paths["psf"]
