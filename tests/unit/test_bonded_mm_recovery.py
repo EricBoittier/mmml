@@ -549,14 +549,35 @@ def test_reregister_mlpot_reattaches_without_new_mlpot_or_nbond_rebuild():
         cubic_box_side_A=31.0,
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_mlpot_registration_mm_off",
+        "mmml.interfaces.pycharmmInterface.mlpot.setup._apply_mlpot_psf_mm_off_and_pbc",
         return_value="all",
     ) as apply_block:
         ctx.reregister_mlpot()
 
-    apply_block.assert_called_once_with(
-        ctx.ml_selection, mm_internal_scale=0.0, verbose=False
+    apply_block.assert_called_once_with(ctx, verbose=False)
+    mlpot.reattach_mlpot.assert_called_once_with()
+
+
+def test_reregister_mlpot_skips_param_read_when_reregister_params_false():
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+
+    mlpot = MagicMock()
+    ctx = MlpotContext(
+        mlpot=mlpot,
+        pyCModel=MagicMock(),
+        params=None,
+        model=None,
+        ml_selection=MagicMock(),
+        ml_Z=np.array([6, 1, 1, 1], dtype=int),
+        use_pbc=True,
+        cubic_box_side_A=31.0,
     )
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup._apply_mlpot_psf_mm_off_and_pbc",
+    ) as apply_block:
+        ctx.reregister_mlpot(reregister_params=False)
+
+    apply_block.assert_not_called()
     mlpot.reattach_mlpot.assert_called_once_with()
 
 
