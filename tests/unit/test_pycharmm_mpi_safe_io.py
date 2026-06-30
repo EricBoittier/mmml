@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import patch
+
+import numpy as np
 
 
 def _read(path: str) -> str:
@@ -28,6 +31,23 @@ def test_write_coor_pdb_uses_c_api_not_write_script():
     assert "write_coor_pdb" in block
     assert "WriteScript" not in block
     assert "c_api_path_buffer" in block
+
+
+def test_write_coor_card_avoids_write_script_when_mmml_available():
+    block = _read("pycharmm/write.py").split("def coor_card(")[1].split("\ndef ")[0]
+    assert "write_charmm_crd_from_charmm" in block
+    assert "WriteScript" in block  # fallback when mmml not importable
+
+
+def test_write_charmm_crd_from_charmm_avoids_charmm_write():
+    block = (
+        _read("mmml/interfaces/pycharmmInterface/mlpot/setup.py")
+        .split("def write_charmm_crd_from_charmm(")[1]
+        .split("\ndef ")[0]
+    )
+    assert "coor_card" not in block
+    assert "WriteScript" not in block
+    assert " EXT" in block
 
 
 def test_write_charmm_restart_from_memory_roundtrip(tmp_path):
@@ -62,18 +82,3 @@ def test_rewrite_dynamics_restart_avoids_charmm_script():
     assert "write_charmm_restart_from_memory" in block
     assert "charmm_script" not in block
     assert "write restart" not in block
-
-    block = _read("pycharmm/write.py").split("def coor_card(")[1].split("\ndef ")[0]
-    assert "write_charmm_crd_from_charmm" in block
-    assert "WriteScript" in block  # fallback when mmml not importable
-
-
-def test_write_charmm_crd_from_charmm_avoids_charmm_write():
-    block = (
-        _read("mmml/interfaces/pycharmmInterface/mlpot/setup.py")
-        .split("def write_charmm_crd_from_charmm(")[1]
-        .split("\ndef ")[0]
-    )
-    assert "coor_card" not in block
-    assert "WriteScript" not in block
-    assert " EXT" in block
