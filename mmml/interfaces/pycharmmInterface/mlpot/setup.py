@@ -495,6 +495,38 @@ def write_charmm_psf(path: PathLike) -> Path:
     return p
 
 
+def _write_vmd_pdb_from_positions(
+    path: PathLike,
+    positions: np.ndarray,
+    *,
+    title: str = "cluster",
+) -> Path:
+    """Write a VMD-compatible PDB without CHARMM ``WRITE COOR`` (MPI-safe).
+
+    MPI-linked ``libcharmm.so`` under ``mpirun`` can abort in Fortran ``parse.F90``
+    on ``WRITE COOR PDB`` immediately after ``WRITE PSF`` (gfortrantmp EOF on unit 90).
+    ASE writes coordinates in PSF atom order using ``get_Z_from_psf()``.
+    """
+    import ase
+    import ase.io
+
+    from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+
+    p = Path(path).expanduser().resolve()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    numbers = np.asarray(get_Z_from_psf(), dtype=int)
+    coords = np.asarray(positions, dtype=float)
+    if coords.shape != (len(numbers), 3):
+        raise ValueError(
+            f"PDB write: positions shape {coords.shape} != ({len(numbers)}, 3)"
+        )
+    atoms = ase.Atoms(numbers=numbers, positions=coords)
+    if title:
+        atoms.info["title"] = str(title)
+    ase.io.write(str(p), atoms, format="proteindatabank")
+    return p
+
+
 def resolve_topology_psf_for_mlpot_reload(
     psf_path: PathLike,
     *,
@@ -541,28 +573,34 @@ def save_cluster_topology_for_vmd(
     Also writes a composition fingerprint sidecar for safe inplace recovery.
     """
     import pycharmm.psf as psf
-    import pycharmm.write as write
 
+    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
     from mmml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
         capture_topology_fingerprint_from_charmm,
         save_topology_sidecar,
         topology_fingerprint_path,
     )
+    from mmml.interfaces.pycharmmInterface.mpi_rank_io import is_mpi_rank_zero
 
     sync_charmm_positions(positions)
     out = Path(out_dir).expanduser().resolve()
-    out.mkdir(parents=True, exist_ok=True)
+    _rank, size = mpi_rank_size()
+    rank0 = is_mpi_rank_zero() or size <= 1
+    if rank0:
+        out.mkdir(parents=True, exist_ok=True)
     psf_path = write_charmm_psf(out / f"{stem}.psf")
     pdb_path = out / f"{stem}.pdb"
-    write.coor_pdb(str(pdb_path), title=title)
+    if rank0:
+        _write_vmd_pdb_from_positions(pdb_path, positions, title=title)
     fingerprint = capture_topology_fingerprint_from_charmm()
     pre_iblo, pre_inb = psf.get_iblo_inb()
-    save_topology_sidecar(
-        topology_fingerprint_path(psf_path),
-        fingerprint,
-        pre_mlpot_iblo=pre_iblo if pre_inb else None,
-        pre_mlpot_inb=pre_inb if pre_inb else None,
-    )
+    if rank0:
+        save_topology_sidecar(
+            topology_fingerprint_path(psf_path),
+            fingerprint,
+            pre_mlpot_iblo=pre_iblo if pre_inb else None,
+            pre_mlpot_inb=pre_inb if pre_inb else None,
+        )
     return {"psf": psf_path, "pdb": pdb_path.resolve()}
 
 
