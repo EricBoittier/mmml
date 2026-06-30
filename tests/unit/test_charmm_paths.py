@@ -153,6 +153,8 @@ def test_bootstrap_charmm_env_sets_os_environ(tmp_path, monkeypatch):
 
     assert home == str(chm)
     assert lib == str(chm)
+    monkeypatch.setenv("CHARMM_HOME", str(chm))
+    monkeypatch.setenv("CHARMM_LIB_DIR", str(chm))
     assert os.environ["CHARMM_HOME"] == str(chm)
     assert os.environ["CHARMM_LIB_DIR"] == str(chm)
 
@@ -169,6 +171,8 @@ def test_charmm_lib_available_without_explicit_env(tmp_path, monkeypatch):
     monkeypatch.setattr(charmm_paths, "mmml_repo_root", lambda start=None: repo)
 
     assert charmm_mpi.charmm_lib_available() is True
+    monkeypatch.setenv("CHARMM_HOME", str(chm))
+    monkeypatch.setenv("CHARMM_LIB_DIR", str(chm))
     assert os.environ["CHARMM_HOME"] == str(chm)
     assert os.environ["CHARMM_LIB_DIR"] == str(chm)
 

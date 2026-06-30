@@ -331,10 +331,10 @@ Observed on `pc-bach` (June 2026):
 Conclusion: true multi-rank DOMDEC testing must start from a CHARMM-native/prebuilt state. Do not use simultaneous PyCHARMM `read.rtf()` / topology generation on all ranks as the Tier 3 entry point.
 
 **Supported `np>1` topology entry (June 2026):** `bootstrap_topology_mpi()` in
-[`charmm_mpi.py`](../../mmml/interfaces/pycharmmInterface/charmm_mpi.py). Bisect
-hangs with [`tests/functionality/charmm/mpi_pycharmm_read_gate.py`](../../tests/functionality/charmm/mpi_pycharmm_read_gate.py)
-and [`scripts/run_mpi_pycharmm_read_gate.sh`](../../scripts/run_mpi_pycharmm_read_gate.sh).
-See [`tests/functionality/charmm/README_mpi_read_gate.md`](../../tests/functionality/charmm/README_mpi_read_gate.md).
+[`charmm_mpi.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/charmm_mpi.py). Bisect
+hangs with [`tests/functionality/charmm/mpi_pycharmm_read_gate.py`](https://github.com/EricBoittier/mmml/blob/main/tests/functionality/charmm/mpi_pycharmm_read_gate.py)
+and [`scripts/run_mpi_pycharmm_read_gate.sh`](https://github.com/EricBoittier/mmml/blob/main/scripts/run_mpi_pycharmm_read_gate.sh).
+See [`tests/functionality/charmm/README_mpi_read_gate.md`](https://github.com/EricBoittier/mmml/blob/main/tests/functionality/charmm/README_mpi_read_gate.md).
 
 Next Tier 3 path:
 
@@ -366,7 +366,7 @@ Verify with `bash scripts/verify_charmm_domdec_build.sh`.
 CGENFF `NBFIX` warnings on older c47 are harmless at `bomlev -2`.
 
 Tier 3 native input uses a **single continued ENERGY command** per vendored
-[`setup/charmm/doc/domdec.info`](../../setup/charmm/doc/domdec.info) (Syntax + Example 1).
+[`setup/charmm/doc/domdec.info`](https://github.com/EricBoittier/mmml/blob/main/setup/charmm/doc/domdec.info) (Syntax + Example 1).
 ``energy.info`` attaches DOMDec via ``[ domdec-spec ]`` on ENERGY — not a separate
 ``nbonds`` block plus bare ``energy``:
 

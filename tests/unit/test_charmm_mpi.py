@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from contextlib import nullcontext
 from pathlib import Path
 from unittest import mock
 
@@ -972,6 +973,9 @@ def test_bootstrap_topology_mpi_psf_crd_serial_steps(tmp_path):
     calls: list[str] = []
 
     with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        return_value=nullcontext(),
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
         return_value=(0, 1),
     ), mock.patch(
@@ -1034,6 +1038,9 @@ def test_bootstrap_topology_mpi_psf_crd_np_gt1_uses_cooperative_read(tmp_path, m
     calls: list[str] = []
 
     with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        return_value=nullcontext(),
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
         return_value=(0, 2),
     ), mock.patch(
@@ -1093,6 +1100,9 @@ def test_bootstrap_topology_mpi_np_gt1_auto_restart_when_res_exists(tmp_path):
     calls: list[str] = []
 
     with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        return_value=nullcontext(),
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
         return_value=(0, 2),
     ), mock.patch(
@@ -1150,6 +1160,9 @@ def test_bootstrap_topology_mpi_np_gt1_all_ranks_read_bisect_uses_direct_psf(
     rtf.write_text("* minimal\n", encoding="utf-8")
 
     with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        return_value=nullcontext(),
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
         return_value=(0, 2),
     ), mock.patch(
