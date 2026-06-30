@@ -588,12 +588,16 @@ def run_density_prep_ladder(
             break
         result.rounds = round_idx + 1
         journal.begin_round(round_idx, grms)
-        pos = get_charmm_positions_array()
+        round_grms_start = float(grms)
+        round_pos_start = np.asarray(get_charmm_positions_array(), dtype=np.float64).copy()
+        pos = round_pos_start
 
         step_label = f"round{round_idx + 1}:monomer_repack"
         try:
+            pos_before = np.asarray(get_charmm_positions_array(), dtype=np.float64, copy=True)
+            grms_before = float(grms)
             new_pos = _step_monomer_repack(
-                pos,
+                pos_before,
                 atoms_per_list=list(atoms_per_list),
                 box_side=box_side,
                 min_distance=min_overlap,
@@ -611,8 +615,22 @@ def run_density_prep_ladder(
                 quiet=quiet,
                 report_resync=False,
             )
-            result.steps_applied.append(step_label)
-            grms = _refresh_after_step(step_label)
+            grms_after = float(_refresh_after_step(step_label))
+            if _geometry_prep_regressed(grms_before, grms_after):
+                if not quiet:
+                    print(
+                        f"{step_label}: rollback monomer_repack "
+                        f"(GRMS {grms_before:.1f} -> {grms_after:.1f} kcal/mol/Å)",
+                        flush=True,
+                    )
+                grms = _rollback_charmm_geometry(pos_before, mlpot_ctx, quiet=quiet)
+                journal.skip_step(
+                    step_label,
+                    f"GRMS regressed {grms_before:.1f} -> {grms_after:.1f} kcal/mol/Å",
+                )
+            else:
+                grms = grms_after
+                result.steps_applied.append(step_label)
         except Exception as exc:
             journal.skip_step(step_label, str(exc))
 
@@ -622,10 +640,11 @@ def run_density_prep_ladder(
         if charmm_pbc and composition is not None:
             step_label = f"round{round_idx + 1}:mc_density"
             try:
-                pos = get_charmm_positions_array()
+                pos_before = np.asarray(get_charmm_positions_array(), dtype=np.float64, copy=True)
+                grms_before = float(grms)
                 new_pos, new_side = _step_mc_density(
                     args,
-                    pos,
+                    pos_before,
                     atoms_per_list=list(atoms_per_list),
                     composition=composition,
                     box_side=box_side,
@@ -643,8 +662,22 @@ def run_density_prep_ladder(
                     quiet=quiet,
                     report_resync=False,
                 )
-                result.steps_applied.append(step_label)
-                grms = _refresh_after_step(step_label)
+                grms_after = float(_refresh_after_step(step_label))
+                if _geometry_prep_regressed(grms_before, grms_after):
+                    if not quiet:
+                        print(
+                            f"{step_label}: rollback mc_density "
+                            f"(GRMS {grms_before:.1f} -> {grms_after:.1f} kcal/mol/Å)",
+                            flush=True,
+                        )
+                    grms = _rollback_charmm_geometry(pos_before, mlpot_ctx, quiet=quiet)
+                    journal.skip_step(
+                        step_label,
+                        f"GRMS regressed {grms_before:.1f} -> {grms_after:.1f} kcal/mol/Å",
+                    )
+                else:
+                    grms = grms_after
+                    result.steps_applied.append(step_label)
             except Exception as exc:
                 journal.skip_step(step_label, str(exc))
 
@@ -655,6 +688,10 @@ def run_density_prep_ladder(
             for nocoords, tag in ((True, "lattice_box"), (False, "lattice_full")):
                 step_label = f"round{round_idx + 1}:{tag}"
                 try:
+                    pos_before = np.asarray(
+                        get_charmm_positions_array(), dtype=np.float64
+                    ).copy()
+                    grms_before = float(grms)
                     from mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
                         run_charmm_lattice_abnr,
                     )
@@ -671,8 +708,22 @@ def run_density_prep_ladder(
                         box_side = float(new_side)
                         mlpot_ctx.cubic_box_side_A = box_side
                         mlpot_ctx.charmm_cubic_box_side_A = box_side
-                    result.steps_applied.append(step_label)
-                    grms = _refresh_after_step(step_label)
+                    grms_after = float(_refresh_after_step(step_label))
+                    if _geometry_prep_regressed(grms_before, grms_after):
+                        if not quiet:
+                            print(
+                                f"{step_label}: rollback {tag} "
+                                f"(GRMS {grms_before:.1f} -> {grms_after:.1f} kcal/mol/Å)",
+                                flush=True,
+                            )
+                        grms = _rollback_charmm_geometry(pos_before, mlpot_ctx, quiet=quiet)
+                        journal.skip_step(
+                            step_label,
+                            f"GRMS regressed {grms_before:.1f} -> {grms_after:.1f} kcal/mol/Å",
+                        )
+                    else:
+                        grms = grms_after
+                        result.steps_applied.append(step_label)
                 except Exception as exc:
                     journal.skip_step(step_label, str(exc))
                 if grms <= max_grms:
@@ -696,6 +747,7 @@ def run_density_prep_ladder(
             )
 
             pos_before = np.asarray(get_charmm_positions_array(), dtype=np.float64, copy=True)
+            grms_before = float(refresh_mlpot_energy_and_grms(mlpot_ctx, context=""))
             bonded_cfg = bonded_mm_mini_config_from_namespace(
                 args,
                 nstep_sd=bonded_steps,
@@ -732,8 +784,22 @@ def run_density_prep_ladder(
                 step_label=step_label,
                 mlpot_ctx=mlpot_ctx,
             )
-            result.steps_applied.append(step_label)
-            grms = _refresh_after_step(step_label)
+            grms_after = float(_refresh_after_step(step_label))
+            if _geometry_prep_regressed(grms_before, grms_after):
+                if not quiet:
+                    print(
+                        f"{step_label}: rollback bonded_mm "
+                        f"(GRMS {grms_before:.1f} -> {grms_after:.1f} kcal/mol/Å)",
+                        flush=True,
+                    )
+                grms = _rollback_charmm_geometry(pos_before, mlpot_ctx, quiet=quiet)
+                journal.skip_step(
+                    step_label,
+                    f"GRMS regressed {grms_before:.1f} -> {grms_after:.1f} kcal/mol/Å",
+                )
+            else:
+                grms = grms_after
+                result.steps_applied.append(step_label)
         except Exception as exc:
             journal.skip_step(step_label, str(exc))
 
@@ -834,6 +900,15 @@ def run_density_prep_ladder(
             grms = _refresh_after_step(step_label)
         except Exception as exc:
             journal.skip_step(step_label, str(exc))
+
+        if _geometry_prep_regressed(round_grms_start, float(grms)):
+            if not quiet:
+                print(
+                    f"round{round_idx + 1}: rollback entire round "
+                    f"(GRMS {round_grms_start:.1f} -> {float(grms):.1f} kcal/mol/Å)",
+                    flush=True,
+                )
+            grms = _rollback_charmm_geometry(round_pos_start, mlpot_ctx, quiet=quiet)
 
     result.final_grms = float(grms)
     result.reason = "grms_ok" if grms <= max_grms else "grms_still_high"
@@ -1386,6 +1461,50 @@ def run_geometry_packing_recovery(
                 grms = runner()
             except Exception as exc:
                 journal.skip_step(f"{context_prefix} calculator mini", str(exc))
+
+    if (
+        grms_limit is not None
+        and float(grms) > float(grms_limit)
+        and getattr(mlpot_ctx, "pyCModel", None) is not None
+    ):
+        step_label = f"{context_prefix}:mlpot_sd"
+        try:
+            from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+                _run_mlpot_recovery_mini,
+            )
+            from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+                BondedMmMiniConfig,
+            )
+
+            if verbose:
+                from mmml.utils.prep_ladder_report import emit_prep_phase
+
+                emit_prep_phase(
+                    context_prefix,
+                    "MLpot SD recovery",
+                    metrics=_metrics(grms),
+                    note=(
+                        f"GRMS {float(grms):.1f} still > {float(grms_limit):.1f} "
+                        "after repack/calculator; running short MLpot SD"
+                    ),
+                    quiet=quiet,
+                )
+            _run_mlpot_recovery_mini(
+                mlpot_ctx,
+                BondedMmMiniConfig(
+                    nstep_sd=int(getattr(args, "bonded_mm_mini_steps", 200) or 200),
+                    nprint=max(1, int(getattr(args, "nprint", 10) or 10)),
+                    verbose=verbose,
+                ),
+                pyCModel=mlpot_ctx.pyCModel,
+                context=str(step_label),
+                calculator_pre_minimize=False,
+            )
+            grms = float(refresh_mlpot_energy_and_grms(mlpot_ctx, context=""))
+            journal.record_step(step_label, _metrics(grms))
+            _record_cleanup_step(step_label, grms)
+        except Exception as exc:
+            journal.skip_step(step_label, str(exc))
 
     if _geometry_prep_regressed(initial_grms, float(grms), ratio=1.05, min_delta=10.0):
         if verbose:

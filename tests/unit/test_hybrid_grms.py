@@ -242,9 +242,10 @@ def test_light_resync_reregisters_and_updates():
     assert grms == pytest.approx(3.0)
 
 
-def test_prepare_mlpot_hybrid_state_aborts_when_grms_stays_high():
+def test_prepare_mlpot_hybrid_state_proceeds_for_geometry_stress_above_limit():
     ctx = mock.Mock()
     ctx.sd_watchdog_baseline_grms = None
+    ctx.pyCModel = mock.Mock()
     ctx.use_pbc = False
     workflow_args = argparse.Namespace(quiet=True, composition="DCM:2")
 
@@ -280,20 +281,21 @@ def test_prepare_mlpot_hybrid_state_aborts_when_grms_stays_high():
             mock.Mock(hybrid=470.0, charmm=1.1, ratio=427.0, kind="geometry_stress"),
         ],
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_bonded_mm_recovery",
-    ) as bonded:
-        with pytest.raises(RuntimeError, match="refusing MLpot SD"):
-            prepare_mlpot_hybrid_state_for_sd(
-                ctx,
-                grms_limit=50.0,
-                energy_limit=None,
-                bonded_recovery_nstep=50,
-                verbose=False,
-                allow_high_grms=False,
-            )
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_mlpot_recovery_mini",
+    ) as mlpot_mini:
+        hybrid, user = prepare_mlpot_hybrid_state_for_sd(
+            ctx,
+            grms_limit=50.0,
+            energy_limit=None,
+            bonded_recovery_nstep=50,
+            verbose=False,
+            allow_high_grms=False,
+        )
 
     packing.assert_called_once()
-    bonded.assert_not_called()
+    mlpot_mini.assert_called_once()
+    assert hybrid == pytest.approx(470.0)
+    assert user == pytest.approx(-1000.0)
 
 
 def test_prepare_mlpot_hybrid_state_runs_packing_recovery_for_geometry_stress():

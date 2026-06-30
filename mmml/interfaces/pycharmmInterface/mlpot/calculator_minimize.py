@@ -642,7 +642,7 @@ def minimize_hybrid_calculator_before_sd(
             print(
                 f"{context_prefix}: skip calculator BFGS "
                 f"(GRMS {float(grms0):.1f} > {float(max_start):.1f} kcal/mol/Å); "
-                "run bonded-MM recovery first",
+                "MLpot SD / geometry recovery runs next",
                 flush=True,
             )
         mlpot_ctx.sd_watchdog_baseline_grms = float(grms0)
@@ -665,7 +665,7 @@ def minimize_hybrid_calculator_before_sd(
                 f"{context_prefix}: skip calculator BFGS "
                 f"(initial fmax {initial_fmax:.1f} > "
                 f"{float(config.max_initial_fmax_ev_a):.1f} eV/Å); "
-                "run bonded-MM recovery first",
+                "MLpot SD / geometry recovery runs next",
                 flush=True,
             )
         mlpot_ctx.sd_watchdog_baseline_grms = (

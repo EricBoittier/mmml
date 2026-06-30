@@ -2444,7 +2444,7 @@ def prepare_mlpot_hybrid_state_for_sd(
                 print(
                     f"{context_prefix}: defer calculator BFGS ({phase}) "
                     f"(GRMS {hybrid_grms:.1f} > {max_start_grms:.1f} kcal/mol/Å); "
-                    "bonded-MM recovery first",
+                    "MLpot SD / geometry recovery runs next",
                     flush=True,
                 )
             return
@@ -2540,8 +2540,79 @@ def prepare_mlpot_hybrid_state_for_sd(
         )
         user_hot = energy_limit is not None and user > float(energy_limit)
 
+    def _run_mlpot_sd_recovery(*, note: str) -> None:
+        """Short MLpot SD pass for all-ML / geometry_stress (bonded-MM ineffective)."""
+        nonlocal hybrid_grms, user, diag, grms_hot, user_hot, ran_bonded_recovery
+        pyCModel = getattr(mlpot_ctx, "pyCModel", None)
+        if pyCModel is None:
+            if verbose:
+                print(
+                    f"{context_prefix}: skip MLpot SD recovery ({note}; no pyCModel)",
+                    flush=True,
+                )
+            return
+        from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+            _run_mlpot_recovery_mini,
+        )
+        from mmml.utils.prep_ladder_report import PrepMetrics, emit_prep_phase
+
+        emit_prep_phase(
+            context_prefix,
+            "MLpot SD recovery",
+            metrics=PrepMetrics.from_mlpot(
+                mlpot_ctx,
+                hybrid_grms=hybrid_grms,
+                charmm_grms=float(diag.charmm),
+                diag_kind=str(diag.kind),
+            ),
+            note=f"{note} ({bonded_recovery_nstep} steps)",
+            quiet=not verbose,
+        )
+        _run_mlpot_recovery_mini(
+            mlpot_ctx,
+            BondedMmMiniConfig(
+                nstep_sd=int(bonded_recovery_nstep),
+                nprint=max(1, int(bonded_recovery_nprint)),
+                tolenr=float(bonded_recovery_tolenr),
+                tolgrd=float(bonded_recovery_tolgrd),
+                verbose=bonded_recovery_verbose,
+                show_energy=bonded_recovery_show_energy,
+                backend=str(bonded_recovery_backend),
+            ),
+            pyCModel=pyCModel,
+            context=f"{context_prefix} MLpot SD recovery",
+            nstep=int(bonded_recovery_nstep),
+            calculator_pre_minimize=False,
+        )
+        ran_bonded_recovery = True
+        user = assert_mlpot_user_active(
+            mlpot_ctx,
+            context=f"{context_prefix} MLpot SD (post recovery mini)",
+            quiet=not verbose,
+        )
+        charmm_grms_after_ener_force()
+        diag = measure_hybrid_charmm_grms(mlpot_ctx)
+        _print_hybrid_charmm_grms_diag(
+            f"{context_prefix} post-MLpot-recovery hybrid GRMS" if verbose else "",
+            diag,
+            mlpot_ctx=mlpot_ctx,
+            quiet=not verbose,
+        )
+        hybrid_grms = float(diag.hybrid)
+        grms_hot = grms_limit is not None and hybrid_grms > float(grms_limit)
+        user_hot = energy_limit is not None and user > float(energy_limit)
+
     def _run_bonded_recovery() -> None:
         nonlocal hybrid_grms, user, diag, grms_hot, user_hot, ran_bonded_recovery
+        from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+            _mlpot_covers_all_atoms,
+        )
+
+        if _mlpot_covers_all_atoms(mlpot_ctx):
+            _run_mlpot_sd_recovery(
+                note="all-ML cluster (bonded-MM CHARMM SD skipped)",
+            )
+            return
         reasons: list[str] = []
         if user_hot:
             reasons.append(f"USER={user:.1f} kcal/mol > {float(energy_limit):.1f}")
@@ -2735,15 +2806,13 @@ def prepare_mlpot_hybrid_state_for_sd(
     if calculator_minimize and not ran_geometry_packing:
         _run_calculator_mini("pre-recovery")
 
-    if (grms_hot or user_hot) and diag.kind != "geometry_stress":
-        _run_bonded_recovery()
-    elif (grms_hot or user_hot) and diag.kind == "geometry_stress" and not ran_geometry_packing:
-        if verbose:
-            print(
-                f"{context_prefix}: geometry_stress — skipping bonded-MM recovery "
-                "(ineffective for ML clash stress)",
-                flush=True,
+    if (grms_hot or user_hot):
+        if diag.kind == "geometry_stress" and not ran_bonded_recovery:
+            _run_mlpot_sd_recovery(
+                note="geometry_stress (ML clash; bonded-MM ineffective)",
             )
+        elif diag.kind != "geometry_stress" and not ran_geometry_packing:
+            _run_bonded_recovery()
 
     still_hot = grms_limit is not None and hybrid_grms > float(grms_limit)
     if calculator_minimize and not ran_calculator_mini and not ran_geometry_packing and (
@@ -2778,12 +2847,18 @@ def prepare_mlpot_hybrid_state_for_sd(
             f"{context_prefix}: hybrid GRMS {hybrid_grms:.2f} kcal/mol/Å > "
             f"{float(grms_limit):.1f} after resync/recovery"
         )
-        if ran_calculator_mini or ran_calculator_fire:
-            msg += ", bonded-MM recovery, and hybrid calculator BFGS/FIRE"
-        msg += "; refusing MLpot SD. Try more pretreat/--mini-nstep, a composition checkpoint, or MMML_MLPOT_ALLOW_HIGH_GRMS (not recommended)."
-        if not allow_high_grms:
+        if ran_calculator_mini or ran_calculator_fire or ran_bonded_recovery:
+            msg += ", recovery, and hybrid calculator BFGS/FIRE"
+        if diag.kind == "geometry_stress":
+            msg += "; proceeding with MLpot SD (geometry_stress — SD is the recovery path)"
+            if verbose:
+                print(msg, flush=True)
+        elif not allow_high_grms:
+            msg += "; refusing MLpot SD. Try more pretreat/--mini-nstep, a composition checkpoint, or MMML_MLPOT_ALLOW_HIGH_GRMS (not recommended)."
             raise RuntimeError(msg)
-        print(f"WARN: {msg}", flush=True)
+        else:
+            msg += "; proceeding (MMML_MLPOT_ALLOW_HIGH_GRMS)."
+            print(f"WARN: {msg}", flush=True)
 
     if mlpot_ctx.sd_watchdog_baseline_grms is None:
         mlpot_ctx.sd_watchdog_baseline_grms = float(hybrid_grms)
