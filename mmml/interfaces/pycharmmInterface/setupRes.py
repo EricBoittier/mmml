@@ -94,7 +94,9 @@ def generate_residue(resid) -> None:
 
     with charmm_relaxed_bomlev():
         read.rtf(CGENFF_RTF)
-        read.prm(CGENFF_PRM)
+        from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_prm
+
+        read_cgenff_prm(bomlev=False)
     read.sequence_string(resid)
     gen.new_segment(seg_name=resid, setup_ic=True)
     ic.prm_fill(replace_all=True)

@@ -198,11 +198,12 @@ def build_trialanine_water_box_in_charmm(
     # ic.build() triggers DRUDE particle generation and aborts on some builds.
     from mmml.interfaces.pycharmmInterface.nbonds_config import (
         _rtf_path_without_drude_autogen,
+        read_cgenff_prm,
     )
 
     with charmm_relaxed_bomlev():
         read.rtf(_rtf_path_without_drude_autogen(CGENFF_RTF))
-        read.prm(str(CGENFF_PRM))
+        read_cgenff_prm(bomlev=False)
 
     read.sequence_string(" ".join(["TIP3"] * n_waters))
     generate.new_segment(seg_name="SOLV", setup_ic=False)

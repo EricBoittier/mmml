@@ -202,19 +202,47 @@ def pbc_nbond_kwargs(
     return kw
 
 
+def read_cgenff_prm(
+    prm_path: str | Path | None = None,
+    *,
+    append: bool = False,
+    bomlev: bool = True,
+) -> None:
+    """Read bundled CGENFF ``.prm`` with FLEX (required for append overrides).
+
+    All CGENFF parameter reads must use ``flex=True`` so later ``append=True``
+    swaps (zeroed/full MLpot registration) do not trigger PARMIO level -2.
+    """
+    import pycharmm.read as read
+
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
+
+    path = str(prm_path or CGENFF_PRM)
+
+    def _read() -> None:
+        read.prm(path, append=append, flex=True)
+
+    if bomlev:
+        with charmm_relaxed_bomlev():
+            _read()
+    else:
+        _read()
+
+
 def read_cgenff_toppar(*, enable_drude: bool = False) -> None:
     """Load CGENFF RTF/PRM under relaxed BOMBlev; restore the prior level on exit."""
     import pycharmm.read as read
 
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM, CGENFF_RTF
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_RTF
 
     with charmm_relaxed_bomlev():
         if enable_drude:
             read.rtf(CGENFF_RTF)
         else:
             read.rtf(_rtf_path_without_drude_autogen(CGENFF_RTF))
-        read.prm(CGENFF_PRM)
+        read_cgenff_prm(bomlev=False)
 
 
 def _rtf_path_without_drude_autogen(rtf_path: str | Path) -> str:

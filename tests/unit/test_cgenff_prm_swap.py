@@ -24,13 +24,15 @@ def test_zeroed_cgenff_prm_paths():
     assert full.is_file()
 
 
-def test_read_cgenff_prm_uses_append_without_flex():
+def test_read_cgenff_prm_uses_flex_for_append_swap():
     import inspect
 
-    src = inspect.getsource(cgenff_prm_swap._read_cgenff_prm)
-    assert "append=True" in src
-    assert "flex=False" in src
-    assert "flex=True" not in src
+    from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_prm
+
+    assert "flex=True" in inspect.getsource(read_cgenff_prm)
+    assert "read_cgenff_prm(path, append=True)" in inspect.getsource(
+        cgenff_prm_swap._read_cgenff_prm
+    )
 
 
 def test_apply_full_cgenff_params_reads_and_checks_bonds():

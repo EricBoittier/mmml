@@ -28,9 +28,7 @@ def zeroed_cgenff_prm_path(*, bonded_only: bool = False) -> Path:
 
 
 def _read_cgenff_prm(path: Path) -> None:
-    import pycharmm.read as read
-
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_prm
 
     if not path.is_file():
         raise FileNotFoundError(
@@ -43,10 +41,7 @@ def _read_cgenff_prm(path: Path) -> None:
             "mmml/data/charmm/par_all36_cgenff.prm "
             "mmml/data/charmm/zeroed_bonded_par_all36_cgenff.prm --bonded-only"
         )
-    with charmm_relaxed_bomlev():
-        # Must match :func:`read_cgenff_toppar` (``read.prm`` without ``flex``).
-        # APPEND + FLEX after a non-flex read triggers PARMIO level -2 abort.
-        read.prm(str(path), append=True, flex=False)
+    read_cgenff_prm(path, append=True)
 
 
 def psf_bond_count() -> int:
