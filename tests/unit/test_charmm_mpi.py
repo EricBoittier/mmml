@@ -1034,8 +1034,8 @@ def test_bootstrap_topology_mpi_psf_crd_np_gt1_uses_cooperative_read(tmp_path, m
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi._read_prm_api",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi._cooperative_eval_read_step",
-    ) as eval_mock, mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._cooperative_stream_topology_read",
+    ) as stream_mock, mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi._load_coor_from_crd_api",
     ) as crd_mock, mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_natom_diagnostics",
@@ -1055,7 +1055,7 @@ def test_bootstrap_topology_mpi_psf_crd_np_gt1_uses_cooperative_read(tmp_path, m
         )
 
     assert n == 2
-    assert eval_mock.call_count == 3
+    stream_mock.assert_called_once()
     crd_mock.assert_called_once()
 
 
@@ -1091,8 +1091,8 @@ def test_bootstrap_topology_mpi_np_gt1_auto_restart_when_res_exists(tmp_path):
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi._read_prm_api",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi._cooperative_eval_read_step",
-    ) as eval_mock, mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._cooperative_stream_topology_read",
+    ) as stream_mock, mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi._load_coor_from_crd_api",
     ) as crd_mock, mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_natom_diagnostics",
@@ -1112,7 +1112,7 @@ def test_bootstrap_topology_mpi_np_gt1_auto_restart_when_res_exists(tmp_path):
         )
 
     assert n == 2
-    assert eval_mock.call_count == 3
+    stream_mock.assert_called_once()
     crd_mock.assert_called_once()
 
 

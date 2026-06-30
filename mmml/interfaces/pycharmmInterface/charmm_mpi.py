@@ -1455,13 +1455,28 @@ def _bootstrap_hybrid_topology_read() -> bool:
 
 
 def _bootstrap_eval_topology_read() -> bool:
-    """At ``np>1``, load RTF/PRM/PSF via ``maincomx`` READ (matches native CHARMM)."""
+    """Bisect v4.8: per-line ``eval`` READ (desyncs MPI between lines on some builds)."""
+    flag = os.environ.get("MMML_MPI_BOOTSTRAP_EVAL_LINES", "").strip().lower()
+    if flag not in ("1", "true", "yes"):
+        return False
     from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     _, size = mpi_rank_size()
-    if size <= 1 or _bootstrap_all_ranks_read() or _bootstrap_hybrid_topology_read():
+    return size > 1 and not _bootstrap_all_ranks_read() and not _bootstrap_hybrid_topology_read()
+
+
+def _bootstrap_stream_topology_read() -> bool:
+    """At ``np>1``, one ``stream`` eval processes the full READ chain (native-style)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+
+    _, size = mpi_rank_size()
+    if size <= 1:
         return False
-    return True
+    return not (
+        _bootstrap_all_ranks_read()
+        or _bootstrap_hybrid_topology_read()
+        or _bootstrap_eval_topology_read()
+    )
 
 
 def _bootstrap_rank0_topology_read() -> bool:
@@ -1551,6 +1566,91 @@ def _cooperative_direct_api_step(
         fn(path)
     if rank0_only and size > 1:
         _mpi_script_barrier()
+
+
+_STREAM_BOOTSTRAP_INP = "bs_load.inp"
+
+
+def _write_cooperative_stream_inp(compact: dict[str, Path], dest: Path) -> None:
+    """Write a short-basename READ chain for ``stream bs_load.inp`` (no ``mxcmsz`` limit)."""
+    lines = [
+        "* MMML MPI cooperative bootstrap",
+        "bomlev -2",
+        f"read rtf card name {compact['rtf'].name}",
+        f"read param card name {compact['prm'].name} flex",
+        f"read psf card name {compact['psf'].name}",
+    ]
+    dest.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _archive_bootstrap_stream_inp(
+    inp_path: Path,
+    *,
+    psf_stem: str,
+    log_fn: Callable[[str, str], None] | None = None,
+) -> None:
+    """Copy stream inp beside PSF for read-gate failure diagnostics."""
+    diag_dir = inp_path.parent / "mpi_bootstrap_stream"
+    diag_dir.mkdir(parents=True, exist_ok=True)
+    archived = diag_dir / f"{psf_stem}_read_restart.inp"
+    shutil.copy2(inp_path, archived)
+    if log_fn is not None:
+        log_fn("bootstrap_stage", f"archived stream inp {archived}")
+
+
+def _cooperative_stream_topology_read(
+    compact: dict[str, Path],
+    *,
+    log_fn: Callable[[str, str], None] | None = None,
+) -> None:
+    """Single ``stream`` eval for RTF/PRM/PSF — avoids per-line ``eval`` MPI desync."""
+    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+
+    rank, size = mpi_rank_size()
+    base = compact["psf"].parent.resolve()
+    inp_path = base / _STREAM_BOOTSTRAP_INP
+    cmd = f"stream {_STREAM_BOOTSTRAP_INP}\n"
+    if len(cmd.strip()) > _BOOTSTRAP_CMD_MAX_LEN:
+        raise RuntimeError(
+            f"stream bootstrap command exceeds mxcmsz ({len(cmd.strip())}>{_BOOTSTRAP_CMD_MAX_LEN})"
+        )
+
+    if rank == 0 or size <= 1:
+        _write_cooperative_stream_inp(compact, inp_path)
+        _archive_bootstrap_stream_inp(
+            inp_path,
+            psf_stem=str(compact.get("artifact_stem", "bootstrap")),
+            log_fn=log_fn if rank == 0 else None,
+        )
+    if size > 1:
+        _wait_for_shared_file(inp_path, log_fn=log_fn, label="stream_inp")
+
+    if log_fn is not None and size > 1:
+        log_fn(
+            "bootstrap_sync",
+            f"rank {rank}/{size} stream-read all_ranks=1",
+        )
+
+    quiet = (os.environ.get("MMML_QUIET") or "").strip().lower() in ("1", "true", "yes")
+    with _bootstrap_workdir(base):
+        ok = mpi_charmm_script(
+            cmd,
+            relaxed_bomlev=False,
+            quiet=quiet,
+            barriers="none",
+        )
+    if not ok:
+        raise RuntimeError(
+            f"stream bootstrap failed on rank {rank}/{size}: {cmd.strip()!r}. "
+            "Set MMML_QUIET=0; if CHARMM reports 'Unrecognized command: stre', "
+            "rebuild libcharmm.so (maincomx api_eval patch)."
+        )
+    n_psf = charmm_natom_count()
+    if n_psf <= 0:
+        raise RuntimeError(
+            f"stream bootstrap left psf_natom=0 on rank {rank}/{size}. "
+            f"Inp={inp_path}. Set MMML_QUIET=0 for CHARMM error text."
+        )
 
 
 def _cooperative_eval_read_step(
@@ -1658,7 +1758,7 @@ def _cooperative_restart_script(
 
 
 # Bump when cooperative bootstrap I/O strategy changes (read-gate diagnostics).
-BOOTSTRAP_MPI_API = "direct-api-v4.8"
+BOOTSTRAP_MPI_API = "direct-api-v4.9"
 
 # ``eval_charmm_script`` uses ``comlyn(mxcmsz)`` (~80); stage short paths for file APIs too.
 _BOOTSTRAP_CMD_MAX_LEN = 78
@@ -1868,20 +1968,26 @@ def _run_cooperative_api_bootstrap(
     crystal_cutnb_A: float,
     log_fn: Callable[[str, str], None] | None = None,
 ) -> int:
-    """Cooperative topology: eval READ RTF/PRM/PSF at ``np>1``, Python CRD coords."""
+    """Cooperative topology at ``np>1``: ``stream`` READ + Python CRD coords."""
     from contextlib import nullcontext
 
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
     from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     rank, size = mpi_rank_size()
-    load_steps = ("rtf", "prm", "psf", coor_source)
+    stream_topology = _bootstrap_stream_topology_read()
     eval_topology = _bootstrap_eval_topology_read()
     hybrid_topology = (
         size > 1 and not _bootstrap_all_ranks_read() and _bootstrap_hybrid_topology_read()
     )
+    if stream_topology:
+        load_steps: tuple[str, ...] = ("stream", coor_source)
+    else:
+        load_steps = ("rtf", "prm", "psf", coor_source)
     if log_fn is not None:
-        if eval_topology:
+        if stream_topology:
+            mode = "stream"
+        elif eval_topology:
             mode = "eval"
         elif hybrid_topology:
             mode = "hybrid"
@@ -1905,7 +2011,9 @@ def _run_cooperative_api_bootstrap(
         with topology_ctx:
             for idx, name in enumerate(load_steps, start=1):
                 step_label = name
-                if eval_topology and name in eval_cmds:
+                if stream_topology and name == "stream":
+                    _cooperative_stream_topology_read(compact, log_fn=log_fn)
+                elif eval_topology and name in eval_cmds:
                     step_label = f"eval-{name}"
                     _cooperative_eval_read_step(
                         name,
@@ -2128,6 +2236,7 @@ def bootstrap_topology_mpi(
         size=size,
         log_fn=log_fn,
     )
+    compact["artifact_stem"] = psf.stem
     if effective_mode == "restart":
         coor_src = _bootstrap_coor_source(effective_mode, compact, log_fn=log_fn)
         _run_cooperative_api_bootstrap(
