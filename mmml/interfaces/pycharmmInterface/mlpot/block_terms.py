@@ -91,7 +91,7 @@ def zero_mlpot_psf_mm_terms(
 
     pycharmm.psf.delete_connectivity(ml_sel, all_sel, psort=True)
 
-    charges = list(pycharmm.psf.get_charge())
+    charges = list(pycharmm.psf.get_charges())
     for idx in ml_indices:
         charges[int(idx)] = 0.0
     pycharmm.psf.set_charge(charges)

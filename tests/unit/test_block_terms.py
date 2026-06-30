@@ -81,7 +81,7 @@ def test_zero_mlpot_psf_mm_terms_strips_bonded_and_charges():
     sel = mock.Mock()
     sel.get_atom_indexes.return_value = [0, 1, 2]
     fake_psf = mock.Mock()
-    fake_psf.get_charge.return_value = [0.5, -0.2, 0.1]
+    fake_psf.get_charges.return_value = [0.5, -0.2, 0.1]
     fake_coor = mock.Mock()
     fake_coor.get_natom.return_value = 3
     fake_select = mock.Mock()
