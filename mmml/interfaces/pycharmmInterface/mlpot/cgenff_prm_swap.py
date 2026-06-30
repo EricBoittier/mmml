@@ -44,7 +44,9 @@ def _read_cgenff_prm(path: Path) -> None:
             "mmml/data/charmm/zeroed_bonded_par_all36_cgenff.prm --bonded-only"
         )
     with charmm_relaxed_bomlev():
-        read.prm(str(path), append=True, flex=True)
+        # Must match :func:`read_cgenff_toppar` (``read.prm`` without ``flex``).
+        # APPEND + FLEX after a non-flex read triggers PARMIO level -2 abort.
+        read.prm(str(path), append=True, flex=False)
 
 
 def psf_bond_count() -> int:

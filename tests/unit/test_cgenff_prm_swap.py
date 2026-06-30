@@ -24,6 +24,15 @@ def test_zeroed_cgenff_prm_paths():
     assert full.is_file()
 
 
+def test_read_cgenff_prm_uses_append_without_flex():
+    import inspect
+
+    src = inspect.getsource(cgenff_prm_swap._read_cgenff_prm)
+    assert "append=True" in src
+    assert "flex=False" in src
+    assert "flex=True" not in src
+
+
 def test_apply_full_cgenff_params_reads_and_checks_bonds():
     with mock.patch.object(cgenff_prm_swap, "_read_cgenff_prm") as read_fn, mock.patch.object(
         cgenff_prm_swap, "assert_psf_bonds_present", return_value=400
