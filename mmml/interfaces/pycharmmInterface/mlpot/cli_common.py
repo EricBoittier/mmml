@@ -49,6 +49,14 @@ def add_charmm_output_args(parser: argparse.ArgumentParser) -> None:
         help="Enable profiling of MLpot callbacks and JAX/XLA compilation timers",
     )
     group.add_argument(
+        "--mlpot-use-block",
+        action="store_true",
+        help=(
+            "Register MLpot via CHARMM BLOCK (legacy). Default: PSF edits zero MM on "
+            "ML atoms (bonded stripped, charges zeroed; no BLOCK eval_charmm_script)."
+        ),
+    )
+    group.add_argument(
         "--nprint",
         type=int,
         default=50,

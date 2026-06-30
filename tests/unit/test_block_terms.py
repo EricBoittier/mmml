@@ -43,6 +43,63 @@ def test_mlpot_internal_block_coeff_scaled():
     assert block_terms._mlpot_internal_block_coeff_line(0.0) == block_terms._ML_SELF_ZERO
 
 
+def test_mlpot_use_block_registration_defaults_false(monkeypatch):
+    monkeypatch.delenv("MMML_MLPOT_USE_BLOCK", raising=False)
+    assert block_terms.mlpot_use_block_registration() is False
+    monkeypatch.setenv("MMML_MLPOT_USE_BLOCK", "1")
+    assert block_terms.mlpot_use_block_registration() is True
+
+
+def test_apply_mlpot_registration_mm_off_uses_psf_by_default(monkeypatch):
+    sel = mock.Mock()
+    sel.get_atom_indexes.return_value = list(range(10))
+    monkeypatch.delenv("MMML_MLPOT_USE_BLOCK", raising=False)
+    with mock.patch.object(
+        block_terms, "zero_mlpot_psf_mm_terms", return_value="all"
+    ) as zero_fn, mock.patch.object(block_terms, "apply_mlpot_energy_block") as block_fn:
+        tag = block_terms.apply_mlpot_registration_mm_off(sel)
+    assert tag == "all"
+    zero_fn.assert_called_once()
+    block_fn.assert_not_called()
+
+
+def test_apply_mlpot_registration_mm_off_honors_use_block(monkeypatch):
+    sel = mock.Mock()
+    monkeypatch.delenv("MMML_MLPOT_USE_BLOCK", raising=False)
+    with mock.patch.object(
+        block_terms, "zero_mlpot_psf_mm_terms"
+    ) as zero_fn, mock.patch.object(
+        block_terms, "apply_mlpot_energy_block", return_value="all"
+    ) as block_fn:
+        tag = block_terms.apply_mlpot_registration_mm_off(sel, use_block=True)
+    assert tag == "all"
+    block_fn.assert_called_once()
+    zero_fn.assert_not_called()
+
+
+def test_zero_mlpot_psf_mm_terms_strips_bonded_and_charges():
+    sel = mock.Mock()
+    sel.get_atom_indexes.return_value = [0, 1, 2]
+    fake_psf = mock.Mock()
+    fake_psf.get_charge.return_value = [0.5, -0.2, 0.1]
+    fake_coor = mock.Mock()
+    fake_coor.get_natom.return_value = 3
+    fake_select = mock.Mock()
+    fake_select.return_value.all_atoms.return_value = mock.Mock(name="all_sel")
+
+    with mock.patch.object(block_terms, "_import_pycharmm") as imp:
+        pycharmm = imp.return_value
+        pycharmm.coor = fake_coor
+        pycharmm.psf = fake_psf
+        pycharmm.SelectAtoms = fake_select
+        tag = block_terms.zero_mlpot_psf_mm_terms(sel)
+
+    assert tag == "all"
+    fake_psf.delete_connectivity.assert_called_once()
+    fake_psf.set_charge.assert_called_once()
+    assert fake_psf.set_charge.call_args.args[0] == [0.0, 0.0, 0.0]
+
+
 def test_mlpot_block_partial_ml_zeros_ml_block_elec_vdw():
     sel = mock.Mock()
     sel.get_atom_indexes.return_value = [0, 1, 2]

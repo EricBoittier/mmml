@@ -136,6 +136,7 @@ class MlpotContext:
     ml_charge: float = 0.0
     ml_fq: bool = True
     mm_internal_scale: float = 0.0
+    registration_uses_block: bool = False
     topology_psf_path: Path | None = None
     topology_fingerprint: Any = None
     pre_mlpot_iblo: list[int] | None = None
@@ -149,22 +150,23 @@ class MlpotContext:
             clear_mlpot_energy_block,
         )
 
-        if self.ml_selection is not None:
+        if self.ml_selection is not None and self.registration_uses_block:
             clear_mlpot_energy_block(self.ml_selection, block_tag=self.block_tag)
         apply_charmm_mm_block()
 
     def reregister_mlpot(self, *, verbose: bool = False, force: bool = False) -> None:
-        """Re-attach MLpot + ML BLOCK after temporary MM-only work."""
+        """Re-attach MLpot + ML MM-off registration after temporary MM-only work."""
         from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
-            apply_mlpot_energy_block,
+            apply_mlpot_registration_mm_off,
         )
 
         if self.ml_selection is None or self.ml_Z is None:
             raise RuntimeError("MlpotContext missing ml_selection or ml_Z for reregister")
-        self.block_tag = apply_mlpot_energy_block(
+        self.block_tag = apply_mlpot_registration_mm_off(
             self.ml_selection,
             mm_internal_scale=float(self.mm_internal_scale),
             verbose=verbose,
+            use_block=self.registration_uses_block,
         )
         reattach = getattr(self.mlpot, "reattach_mlpot", None)
         if callable(reattach):
@@ -1111,12 +1113,13 @@ def register_mlpot(
     mm_nonbond_mode: str = "jax_mic",
     periodic_charmm_vdw: bool = True,
     verbose: bool = False,
+    use_block_registration: bool | None = None,
     **kwargs: Any,
 ) -> MlpotContext:
     """Register ``pycharmm.MLpot`` and return a context manager-like handle."""
     from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
-        apply_mlpot_energy_block,
-        apply_mlpot_periodic_external_block,
+        apply_mlpot_registration_mm_off,
+        mlpot_use_block_registration,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import validate_mlpot_system_size
     from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm import resolve_mm_nonbond_mode
@@ -1171,16 +1174,20 @@ def register_mlpot(
             _install_ml_exclusions(ml_selection)
             skip_iblo_inb_update = True
         if periodic_external and periodic_charmm_vdw:
-            block_tag = apply_mlpot_periodic_external_block(
+            block_tag = apply_mlpot_registration_mm_off(
                 ml_selection,
                 mm_internal_scale=float(mm_internal_scale),
                 verbose=verbose,
+                periodic_external=True,
+                use_block=use_block_registration,
             )
         else:
-            block_tag = apply_mlpot_energy_block(
+            block_tag = apply_mlpot_registration_mm_off(
                 ml_selection,
                 mm_internal_scale=float(mm_internal_scale),
                 verbose=verbose,
+                periodic_external=False,
+                use_block=use_block_registration,
             )
         mlpot = pycharmm.MLpot(
             ml_model=pyCModel,
@@ -1203,6 +1210,7 @@ def register_mlpot(
             )
 
             pycharmm.UpdateNonBondedScript(**vacuum_nbond_kwargs(nbxmod=5)).run()
+    uses_block = mlpot_use_block_registration(explicit=use_block_registration)
     ml_z = np.asarray(ml_Z, dtype=int)
     return MlpotContext(
         mlpot=mlpot,
@@ -1217,4 +1225,5 @@ def register_mlpot(
         ml_charge=float(ml_charge),
         ml_fq=bool(ml_fq),
         mm_internal_scale=float(mm_internal_scale),
+        registration_uses_block=uses_block,
     )

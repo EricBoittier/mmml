@@ -733,6 +733,11 @@ def _register_mlpot_context(
         ),
         cubic_box_side_A=ml_cell,
         verbose=bool(getattr(args, "verbose", False)) if args is not None else False,
+        use_block_registration=(
+            True
+            if args is not None and bool(getattr(args, "mlpot_use_block", False))
+            else None
+        ),
     )
     from mmml.interfaces.pycharmmInterface.jax_device_policy import apply_mlpot_jax_platform_env
 

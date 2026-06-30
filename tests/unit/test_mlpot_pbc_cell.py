@@ -1005,7 +1005,7 @@ def test_register_mlpot_pbc_installs_exclusions_before_block():
     with patch.object(mlpot_setup, "_import_pycharmm", return_value=fake_pycharmm), patch.object(
         mlpot_setup, "_install_ml_exclusions", side_effect=_install
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_mlpot_energy_block",
+        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_mlpot_registration_mm_off",
         side_effect=_block,
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits.validate_mlpot_system_size",
@@ -1045,7 +1045,7 @@ def test_register_mlpot_vacuum_skips_pre_block_exclusions():
     with patch.object(mlpot_setup, "_import_pycharmm", return_value=fake_pycharmm), patch.object(
         mlpot_setup, "_install_ml_exclusions"
     ) as mock_install, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_mlpot_energy_block",
+        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_mlpot_registration_mm_off",
         side_effect=_block,
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits.validate_mlpot_system_size",
@@ -1081,7 +1081,7 @@ def test_register_mlpot_pbc_requires_skip_iblo_parameter():
         MLpot = _OldMLpot
 
     with patch.object(mlpot_setup, "_import_pycharmm", return_value=_FakePycharmm()), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_mlpot_energy_block",
+        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_mlpot_registration_mm_off",
         return_value="all",
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits.validate_mlpot_system_size",
