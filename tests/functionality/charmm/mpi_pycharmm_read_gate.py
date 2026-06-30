@@ -127,6 +127,7 @@ def main() -> int:
     configure_mpi_bootstrap_env()
     _log("gate", f"mode={args.mode} np={size} bootstrap_api={BOOTSTRAP_MPI_API} psf={args.psf.resolve()}")
     sync_import_pycharmm_for_bootstrap(tag="read_gate")
+    _log("gate", "import_pycharmm done; starting bootstrap")
 
     crystal = float(args.box_side) if args.with_crystal else None
     try:

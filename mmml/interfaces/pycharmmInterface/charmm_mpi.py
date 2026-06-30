@@ -1083,13 +1083,19 @@ def _invoke_charmm_script(
 
 
 def configure_mpi_bootstrap_env() -> None:
-    """Env guards before cooperative ``np>1`` topology READ (no import-time crystal free)."""
+    """Env guards before cooperative topology READ (no import-time crystal free).
+
+    ``MMML_SKIP_CHARMM_RESET_BLOCK=1`` applies at **all** world sizes when CHARMM is
+    MPI-linked: import-time ``reset_block`` under ``mpirun -np 1`` can hang after the
+    PyCHARMM env panel (Fortran MPI worker not ready for BLOCK during module load).
+    """
     from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     _, size = mpi_rank_size()
+    if charmm_lib_links_mpi():
+        os.environ.setdefault("MMML_SKIP_CHARMM_RESET_BLOCK", "1")
     if size <= 1:
         return
-    os.environ.setdefault("MMML_SKIP_CHARMM_RESET_BLOCK", "1")
     os.environ.setdefault("MMML_DEFER_MPI4PY_PACKAGE_IMPORT", "1")
     os.environ.setdefault("MMML_QUIET", "1")
 
