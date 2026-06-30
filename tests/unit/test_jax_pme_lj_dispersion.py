@@ -64,7 +64,15 @@ def test_jax_pme_lj_dispersion_two_atom_dimer():
 
 
 @pytest.mark.parametrize("method", ["ewald", "pme"])
-def test_jax_pme_lj_methods_agree_ewald_reference(method: str):
+def test_jax_pme_lj_methods_agree_ewald_reference(method: str, monkeypatch):
+    from mmml.interfaces.pycharmmInterface.long_range_backend import (
+        _cached_jax_pme_calculator,
+        _cached_jax_pme_power_law_evaluator,
+    )
+
+    monkeypatch.setenv("MMML_JAX_PME_MESH_MAX", "64")
+    _cached_jax_pme_calculator.cache_clear()
+    _cached_jax_pme_power_law_evaluator.cache_clear()
     ep = 0.15
     sig = 3.2
     r = 4.5
