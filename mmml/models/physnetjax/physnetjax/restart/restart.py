@@ -12,6 +12,7 @@ from pathlib import Path
 import e3x
 import jax
 import jax.numpy as jnp
+import numpy as np
 import orbax
 import orbax.checkpoint
 
