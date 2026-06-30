@@ -1330,9 +1330,6 @@ def sync_bootstrap_ranks(
     rank, size = mpi_rank_size()
     if size <= 1:
         return
-    flag = os.environ.get("MMML_MPI_BOOTSTRAP_BARRIER", "").strip().lower()
-    if flag not in ("1", "true", "yes"):
-        return
     if not ensure_mpi4py_after_charmm_init(phase=f"bootstrap sync ({label})"):
         raise RuntimeError(f"rank {rank}/{size}: mpi4py.MPI unavailable before bootstrap sync")
     if not _mpi_comm_valid():
@@ -1344,6 +1341,63 @@ def sync_bootstrap_ranks(
     MPI.COMM_WORLD.Barrier()
     if log_fn is not None:
         log_fn("bootstrap_sync", f"rank {rank}/{size} barrier done ({label})")
+
+
+def align_mpi_ranks_after_import(
+    *,
+    log_fn: Callable[[str, str], None] | None = None,
+    label: str = "after import_pycharmm",
+) -> None:
+    """One Python barrier so all ranks finish staggered ``import_pycharmm`` before CHARMM I/O."""
+    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+
+    rank, size = mpi_rank_size()
+    if size <= 1:
+        return
+    if log_fn is not None:
+        log_fn("bootstrap_sync", f"rank {rank}/{size} align ({label})")
+    _mpi_script_barrier()
+    if log_fn is not None:
+        log_fn("bootstrap_sync", f"rank {rank}/{size} align done ({label})")
+
+
+def _bootstrap_force_psf_crd() -> bool:
+    flag = os.environ.get("MMML_MPI_BOOTSTRAP_FORCE_PSF_CRD", "").strip().lower()
+    return flag in ("1", "true", "yes")
+
+
+def _resolve_bootstrap_mode(
+    mode: str,
+    *,
+    psf: Path,
+    restart_path: str | Path | None,
+    size: int,
+    rank: int,
+    log_fn: Callable[[str, str], None] | None = None,
+) -> tuple[str, Path | None]:
+    """Return ``(effective_mode, res_path)``; at ``np>1`` prefer restart when ``.res`` exists."""
+    if mode != "psf-crd" or size <= 1 or _bootstrap_force_psf_crd():
+        if mode == "restart":
+            res = Path(restart_path or psf.with_suffix(".res")).expanduser().resolve()
+            return mode, res
+        return mode, None
+
+    res = Path(restart_path or psf.with_suffix(".res")).expanduser().resolve()
+    if res.is_file():
+        if log_fn is not None:
+            log_fn(
+                "bootstrap",
+                f"rank {rank}/{size}: np>1 psf-crd → restart ({res})",
+            )
+        return "restart", res
+
+    if log_fn is not None:
+        log_fn(
+            "bootstrap",
+            f"rank {rank}/{size}: np>1 psf-crd (no restart at {res}; "
+            "cooperative PSF/CRD READ often leaves n_atoms=0 on DOMDEC MPI builds)",
+        )
+    return mode, None
 
 
 def _wait_for_shared_file(path: Path, *, timeout_s: float = 120.0) -> None:
@@ -1418,7 +1472,8 @@ def bootstrap_charmm_step(
     from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     rank, size = mpi_rank_size()
-    sync_bootstrap_ranks(log_fn=log_fn, label=f"before {step}")
+    if _bootstrap_barrier_enabled():
+        sync_bootstrap_ranks(log_fn=log_fn, label=f"before {step}")
     if log_fn is not None:
         log_fn(step, f"begin rank {rank}/{size}: {script.strip()}")
     mpi_charmm_script(script, relaxed_bomlev=True)
@@ -1489,8 +1544,9 @@ def bootstrap_topology_mpi(
     """Cooperative ``np>1`` topology bootstrap.
 
     Supported ``mode`` values: ``psf-crd``, ``stream-inp``, ``restart``.
-    At ``np>1``, READ uses one multiline ``mpi_charmm_script`` call with **no**
-    mpi4py barriers (same pattern as serial ``np=1`` smoke load).
+    At ``np>1``, ``psf-crd`` auto-switches to ``restart`` when a sidecar ``.res``
+    exists (from ``--prepare-prebuilt-only``). Set
+    ``MMML_MPI_BOOTSTRAP_FORCE_PSF_CRD=1`` to bisect cooperative PSF/CRD READ.
     """
     from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
     from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
@@ -1511,12 +1567,15 @@ def bootstrap_topology_mpi(
 
     rank, size = mpi_rank_size()
     rtf_opt = Path(rtf_path).expanduser().resolve() if rtf_path else None
-    res_opt = (
-        Path(restart_path or psf.with_suffix(".res")).expanduser().resolve()
-        if mode == "restart"
-        else None
+    effective_mode, res_opt = _resolve_bootstrap_mode(
+        mode,
+        psf=psf,
+        restart_path=restart_path,
+        size=size,
+        rank=rank,
+        log_fn=log_fn,
     )
-    if mode == "restart" and (res_opt is None or not res_opt.is_file()):
+    if effective_mode == "restart" and (res_opt is None or not res_opt.is_file()):
         raise FileNotFoundError(f"Restart not found: {res_opt}")
 
     paths = _resolve_bootstrap_topology_paths(
@@ -1526,12 +1585,13 @@ def bootstrap_topology_mpi(
         rank=rank,
         size=size,
         rtf_path=rtf_opt,
-        res=res_opt if mode == "restart" else None,
+        res=res_opt if effective_mode == "restart" else None,
         log_fn=log_fn,
     )
-    sync_bootstrap_ranks(log_fn=log_fn, label="before READ chain")
+    if size > 1:
+        align_mpi_ranks_after_import(log_fn=log_fn)
 
-    if mode == "restart":
+    if effective_mode == "restart":
         res_local = paths["res"]
         fortran_path, alias = charmm_fortran_path(res_local, for_write=False)
         try:
@@ -1558,7 +1618,7 @@ def bootstrap_topology_mpi(
         finally:
             if alias is not None:
                 alias.finalize()
-    elif mode == "stream-inp":
+    elif effective_mode == "stream-inp":
         _bootstrap_via_stream_inp(
             paths,
             psf=psf,
@@ -1568,7 +1628,7 @@ def bootstrap_topology_mpi(
             size=size,
             log_fn=log_fn,
         )
-    elif mode == "psf-crd" and size > 1:
+    elif effective_mode == "psf-crd" and size > 1:
         read_script = _cooperative_read_script(
             paths,
             crystal_side_A=crystal_side_A,
@@ -1580,7 +1640,7 @@ def bootstrap_topology_mpi(
             log_fn=log_fn,
         )
     else:
-        if mode != "psf-crd":
+        if effective_mode != "psf-crd":
             raise ValueError(f"unsupported bootstrap mode: {mode!r}")
         minimal = paths["rtf"]
         prm = paths["prm"]
@@ -1611,7 +1671,10 @@ def bootstrap_topology_mpi(
 
     n_final = charmm_natom_count()
     if n_final <= 0:
-        raise RuntimeError(f"rank {rank}/{size}: empty CHARMM state after bootstrap ({mode})")
+        raise RuntimeError(
+            f"rank {rank}/{size}: empty CHARMM state after bootstrap "
+            f"(requested={mode!r} effective={effective_mode!r})"
+        )
     return n_final
 
 

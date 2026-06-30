@@ -32,13 +32,19 @@ MMML_MPI_NP=4 ./scripts/run_mpi_pycharmm_read_gate.sh --mode psf-crd --with-crys
 
 **Pass:** `PASS read_gate: mode=... np=N n_atoms=100`
 
+At ``np>1``, ``--mode psf-crd`` **auto-switches to restart** when
+``artifacts/.../dcm_20mer.res`` exists (written by ``--prepare-prebuilt-only``).
+Cooperative PyCHARMM PSF/CRD READ at ``np>1`` often leaves ``n_atoms=0`` on
+DOMDEC MPI builds; use restart (default) or bisect with
+``MMML_MPI_BOOTSTRAP_FORCE_PSF_CRD=1``.
+
 At ``np>1``, bootstrap uses **shared artifact paths** by default (cooperative MPI
 READ). Optional per-rank UUID copies: ``MMML_MPI_BOOTSTRAP_RANK_LOCAL=1`` (each
 rank reads independently — usually leaves ``n_atoms=0`` on DOMDEC builds).
 
 **Do not** use ``mpi4py`` barriers between READ sub-commands (``MMML_MPI_BOOTSTRAP_BARRIER=1``
 is bisect-only). Default bootstrap sends one multiline ``mpi_charmm_script`` call
-with no Python barriers — same pattern as serial ``np=1`` smoke load.
+with no Python barriers between READ lines — same pattern as serial ``np=1`` smoke load.
 
 **Hang:** last line like `[read_psf rank 2/4] begin ...` — that sub-command is the stall point.
 

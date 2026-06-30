@@ -983,7 +983,8 @@ def test_bootstrap_topology_mpi_psf_crd_serial_steps(tmp_path):
     assert "read coor card name" in calls[3]
 
 
-def test_bootstrap_topology_mpi_psf_crd_np_gt1_uses_cooperative_read(tmp_path):
+def test_bootstrap_topology_mpi_psf_crd_np_gt1_uses_cooperative_read(tmp_path, monkeypatch):
+    monkeypatch.setenv("MMML_MPI_BOOTSTRAP_FORCE_PSF_CRD", "1")
     psf = tmp_path / "x.psf"
     crd = tmp_path / "x.crd"
     prm = tmp_path / "x.prm"
@@ -1007,6 +1008,8 @@ def test_bootstrap_topology_mpi_psf_crd_np_gt1_uses_cooperative_read(tmp_path):
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.sync_bootstrap_ranks",
     ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.align_mpi_ranks_after_import",
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.mpi_charmm_script",
         side_effect=lambda s, **kw: calls.append(s),
     ), mock.patch(
@@ -1028,6 +1031,51 @@ def test_bootstrap_topology_mpi_psf_crd_np_gt1_uses_cooperative_read(tmp_path):
     assert "read rtf card name" in calls[0]
     assert "read psf card name" in calls[0]
     assert "read coor card name" in calls[0]
+
+
+def test_bootstrap_topology_mpi_np_gt1_auto_restart_when_res_exists(tmp_path):
+    psf = tmp_path / "x.psf"
+    crd = tmp_path / "x.crd"
+    prm = tmp_path / "x.prm"
+    res = tmp_path / "x.res"
+    psf.write_text("2 !NATOM\n1 DCM 1 DCM 1 C1 0 1\n2 DCM 1 DCM 1 H1 0 1\n", encoding="utf-8")
+    crd.write_text("* coords\n*\n2\n", encoding="utf-8")
+    prm.write_text("MASS -1 C1 12.0 C\nMASS -1 H1 1.0 H\n", encoding="utf-8")
+    res.write_text("dummy restart\n", encoding="utf-8")
+
+    calls: list[str] = []
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        return_value=(1, 2),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._bootstrap_rank_local_staging_enabled",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.align_mpi_ranks_after_import",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_paths.charmm_fortran_path",
+        return_value=(str(res), None),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.mpi_charmm_script",
+        side_effect=lambda s, **kw: calls.append(s),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_natom_count",
+        return_value=2,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._mpi_comm_valid",
+        return_value=False,
+    ):
+        n = charmm_mpi.bootstrap_topology_mpi(
+            psf,
+            crd,
+            prm_path=prm,
+            mode="psf-crd",
+        )
+
+    assert n == 2
+    assert len(calls) == 1
+    assert "read restart unit 20" in calls[0]
 
 
 def test_bootstrap_topology_mpi_invalid_mode(tmp_path):

@@ -503,11 +503,11 @@ def _load_prebuilt(args: argparse.Namespace) -> tuple["np.ndarray", "np.ndarray"
     rank, size = _mpi_info()
     psf_path, crd_path, res_path = _prebuilt_paths(args)
     if size > 1:
-        use_restart = os.environ.get("MMML_MPI_LOAD_RESTART", "").strip().lower() in (
-            "1",
-            "true",
-            "yes",
-        )
+        flag = os.environ.get("MMML_MPI_LOAD_RESTART", "").strip().lower()
+        if flag in ("0", "false", "no"):
+            use_restart = False
+        else:
+            use_restart = True
         mode = "restart" if use_restart else "psf-crd"
         _log("load", f"MPI bootstrap_topology_mpi begin mode={mode}")
         n_atoms = bootstrap_topology_mpi(
