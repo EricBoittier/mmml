@@ -469,17 +469,8 @@ class DecomposedMlpotCalculator:
                 except Exception:
                     pass
             parent = getattr(self, "_parent_model", None)
-            if parent is not None and parent._defer_jax_pme_gpu_promote():
-                parent._jax_pme_hybrid_first_ener_done = True
-                if parent._defer_jax_until_after_sd and not parent._jax_on_gpu:
-                    parent.promote_jax_factory_to_gpu()
-                    self._spherical_forward_fn = None
-                    self._forward_cache_key = None
-                    if parent._spherical_fn is not None:
-                        self.spherical_fn = parent._spherical_fn
-                    if parent._get_update_fn is not None:
-                        self._get_update_fn = parent._get_update_fn
-                        self._cached_update_fn = None
+            if parent is not None:
+                parent._maybe_promote_deferred_jax_on_hybrid_eval(self)
         forces, e_kcal = broadcast_mlpot_result(forces, e_kcal, n)
         self.last_ml_forces = np.asarray(forces, dtype=np.float64, copy=True)
         parent = getattr(self, "_parent_model", None)
@@ -706,6 +697,26 @@ class DecomposedMlpotModel:
                 f"doML_dimer={self._pending_do_ml_dimer})",
                 flush=True,
             )
+
+    def _maybe_promote_deferred_jax_on_hybrid_eval(
+        self,
+        calc: DecomposedMlpotCalculator,
+    ) -> None:
+        """Promote deferred JAX to GPU after the first hybrid ENER (MPI defer path)."""
+        if not self._defer_jax_until_after_sd or self._jax_on_gpu:
+            return
+        if self._defer_jax_pme_gpu_promote():
+            self._jax_pme_hybrid_first_ener_done = True
+        self.promote_jax_factory_to_gpu()
+        if not self._jax_on_gpu:
+            return
+        calc._spherical_forward_fn = None
+        calc._forward_cache_key = None
+        if self._spherical_fn is not None:
+            calc.spherical_fn = self._spherical_fn
+        if self._get_update_fn is not None:
+            calc._get_update_fn = self._get_update_fn
+            calc._cached_update_fn = None
 
     def promote_jax_factory_to_gpu(self) -> None:
         """Rebuild ``spherical_fn`` on GPU after MLpot SD (MPI defer path)."""
@@ -1096,6 +1107,30 @@ def _warmup_value_and_grad_for_model(
             _run_forward,
             block=lambda out: block_jax_values(out[0], out[1]),
         )
+
+
+def maybe_warmup_deferred_decomposed_mlpot(
+    model: DecomposedMlpotModel,
+    positions: np.ndarray,
+    *,
+    cell: Union[float, bool] | None = None,
+    n_monomers: int,
+    verbose: bool = False,
+) -> None:
+    """Promote and JIT-compile deferred JAX after MLpot SD (MPI-linked CHARMM)."""
+    if int(n_monomers) <= 1:
+        return
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+        defer_jax_warmup_until_after_mlpot_sd,
+    )
+
+    if not defer_jax_warmup_until_after_mlpot_sd():
+        return
+    if not isinstance(model, DecomposedMlpotModel):
+        return
+    if not model._defer_jax_until_after_sd or model._jax_on_gpu:
+        return
+    warmup_decomposed_mlpot(model, positions, cell=cell, verbose=verbose)
 
 
 def warmup_decomposed_mlpot(

@@ -1925,6 +1925,18 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     else None
                 ),
             )
+            from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+                maybe_warmup_deferred_decomposed_mlpot,
+            )
+
+            _ml_cell = float(box_side) if charmm_pbc and box_side is not None else None
+            maybe_warmup_deferred_decomposed_mlpot(
+                pyCModel,
+                get_charmm_positions_array(),
+                cell=_ml_cell,
+                n_monomers=n_mol,
+                verbose=not args.quiet,
+            )
 
         dyn_stages = [s for s in _STAGE_ORDER if s in stages and s != "mini"]
         if not dyn_stages:
@@ -2220,6 +2232,19 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             expected_z=z,
             context="staged dynamics",
             quiet=bool(args.quiet),
+        )
+
+        from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+            maybe_warmup_deferred_decomposed_mlpot,
+        )
+
+        _ml_cell = float(box_side) if charmm_pbc and box_side is not None else None
+        maybe_warmup_deferred_decomposed_mlpot(
+            pyCModel,
+            get_charmm_positions_array(),
+            cell=_ml_cell,
+            n_monomers=n_mol,
+            verbose=not args.quiet,
         )
 
         if dynamics_constrain:

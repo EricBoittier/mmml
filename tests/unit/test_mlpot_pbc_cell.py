@@ -17,6 +17,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
     DecomposedMlpotCalculator,
     DecomposedMlpotModel,
     build_decomposed_mlpot_model,
+    maybe_warmup_deferred_decomposed_mlpot,
     warmup_decomposed_mlpot,
 )
 
@@ -199,6 +200,76 @@ def test_decomposed_mlpot_sd_defer_uses_cpu_until_promote():
         assert model._jax_on_gpu is True
         assert model._pending_factory is None
         assert mock_unpack.call_count == 2
+
+
+def test_maybe_promote_deferred_jax_on_hybrid_eval_without_jax_pme():
+    """periodic_external / ScaFaCoS (no jax-pme mesh) must promote on first hybrid ENER."""
+    z = np.array([6, 1, 1, 6, 1, 1], dtype=int)
+    model = DecomposedMlpotModel(
+        MagicMock(),
+        CutoffParameters(),
+        2,
+        z,
+        cell=40.0,
+        do_mm=False,
+        defer_jax_until_after_sd=True,
+    )
+    model._jax_on_gpu = False
+    calc = MagicMock(spec=DecomposedMlpotCalculator)
+    calc._spherical_forward_fn = "cached"
+    calc._forward_cache_key = ("k",)
+    calc.spherical_fn = MagicMock()
+    calc._get_update_fn = None
+    calc._cached_update_fn = "cached_update"
+
+    with patch.object(model, "promote_jax_factory_to_gpu") as mock_promote:
+        model._maybe_promote_deferred_jax_on_hybrid_eval(calc)
+
+    mock_promote.assert_called_once()
+    assert calc._spherical_forward_fn is None
+    assert calc._forward_cache_key is None
+
+
+def test_maybe_warmup_deferred_decomposed_mlpot_skips_when_already_on_gpu():
+    z = np.zeros(8, dtype=int)
+    model = DecomposedMlpotModel(
+        MagicMock(), CutoffParameters(), 2, z, defer_jax_until_after_sd=True
+    )
+    model._jax_on_gpu = True
+    r = np.zeros((8, 3), dtype=float)
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.defer_jax_warmup_until_after_mlpot_sd",
+        return_value=True,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.warmup_decomposed_mlpot",
+    ) as mock_warmup:
+        maybe_warmup_deferred_decomposed_mlpot(
+            model, r, n_monomers=2, verbose=False
+        )
+
+    mock_warmup.assert_not_called()
+
+
+def test_maybe_warmup_deferred_decomposed_mlpot_calls_warmup_when_deferred():
+    z = np.zeros(8, dtype=int)
+    model = DecomposedMlpotModel(
+        MagicMock(), CutoffParameters(), 2, z, defer_jax_until_after_sd=True
+    )
+    model._jax_on_gpu = False
+    r = np.zeros((8, 3), dtype=float)
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.defer_jax_warmup_until_after_mlpot_sd",
+        return_value=True,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.warmup_decomposed_mlpot",
+    ) as mock_warmup:
+        maybe_warmup_deferred_decomposed_mlpot(
+            model, r, cell=40.0, n_monomers=2, verbose=True
+        )
+
+    mock_warmup.assert_called_once_with(model, r, cell=40.0, verbose=True)
 
 
 def test_setup_calculator_defer_skips_terminal_xla_gpu_warmup():
