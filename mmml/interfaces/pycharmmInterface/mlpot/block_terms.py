@@ -37,8 +37,8 @@ def mlpot_use_block_registration(*, explicit: bool | None = None) -> bool:
     """True when MLpot registration should run CHARMM BLOCK (legacy path).
 
     Default (unset env / ``explicit=None``): **False** — zero MM on ML atoms via
-    :func:`zero_mlpot_psf_mm_terms` (BLOCK COEFF; PSF connectivity preserved).
-    Opt in to explicit-only BLOCK with ``MMML_MLPOT_USE_BLOCK=1`` or ``--mlpot-use-block``.
+    PSF edits (:func:`zero_mlpot_psf_mm_terms`) instead of ``eval_charmm_script``.
+    Opt in with ``MMML_MLPOT_USE_BLOCK=1`` or ``--mlpot-use-block``.
     """
     if explicit is not None:
         return bool(explicit)
