@@ -1563,7 +1563,7 @@ def _cooperative_restart_script(
 
 
 # Bump when cooperative bootstrap I/O strategy changes (read-gate diagnostics).
-BOOTSTRAP_MPI_API = "direct-api-v4.3"
+BOOTSTRAP_MPI_API = "direct-api-v4.4"
 
 # ``eval_charmm_script`` uses ``comlyn(mxcmsz)`` (~80); stage short paths for file APIs too.
 _BOOTSTRAP_CMD_MAX_LEN = 78
@@ -1617,9 +1617,9 @@ def stage_compact_bootstrap_paths(
 
     if size > 1:
         align_mpi_ranks_after_import(log_fn=log_fn, label="bootstrap stage")
-        if rank != 0:
-            for key, dst in compact.items():
-                _wait_for_shared_file(dst, log_fn=log_fn, label=key)
+        for key, dst in compact.items():
+            _wait_for_shared_file(dst, log_fn=log_fn, label=key)
+        align_mpi_ranks_after_import(log_fn=log_fn, label="bootstrap files ready")
     return base, compact
 
 
