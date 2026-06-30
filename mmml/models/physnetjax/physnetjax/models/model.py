@@ -708,7 +708,10 @@ class PhysNet(nn.Module):
         )(x)
         
         if self.use_energy_bias:
-            atomic_energies += energy_bias[atomic_numbers][..., None, None, None]
+            # jnp.take: fancy indexing breaks under JIT when params are numpy (JSON ckpt).
+            atomic_energies += jnp.take(
+                jnp.asarray(energy_bias), atomic_numbers
+            )[..., None, None, None]
         
         atomic_energies *= atom_mask[..., None, None, None]
 

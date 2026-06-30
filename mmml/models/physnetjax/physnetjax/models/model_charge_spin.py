@@ -478,7 +478,9 @@ class PhysNetChargeSpin(nn.Module):
                 (self.max_atomic_number + 1,),
                 DTYPE,
             )
-            energy_per_atom = energy_per_atom + energy_bias[atomic_numbers]
+            energy_per_atom = energy_per_atom + jnp.take(
+                jnp.asarray(energy_bias), atomic_numbers
+            )
         
         # Mask padding atoms
         energy_per_atom = energy_per_atom * atom_mask
