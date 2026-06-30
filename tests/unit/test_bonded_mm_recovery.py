@@ -633,6 +633,48 @@ def test_assert_mlpot_user_active_reattaches_when_user_missing():
     assert user == pytest.approx(-123.4)
 
 
+def test_rebind_mlpot_calculator_from_pycmodel_updates_callback():
+    import ctypes
+    import sys
+    import types
+
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        MlpotContext,
+        rebind_mlpot_calculator_from_pycmodel,
+    )
+
+    calc = MagicMock()
+    calc.calculate_charmm = MagicMock(return_value=-42.0)
+    pyCModel = MagicMock()
+    pyCModel.get_pycharmm_calculator.return_value = calc
+    mlpot = MagicMock()
+    mlpot.ml_Natoms = 2
+    mlpot.ml_indices = np.array([0, 1], dtype=int)
+    mlpot.ml_Z = np.array([6, 1], dtype=int)
+    mlpot.func_type = ctypes.CFUNCTYPE(ctypes.c_double)
+    ctx = MlpotContext(
+        mlpot=mlpot,
+        pyCModel=pyCModel,
+        params=None,
+        model=None,
+        ml_selection=MagicMock(),
+        ml_Z=np.array([6, 1], dtype=int),
+    )
+    mock_py = types.ModuleType("pycharmm")
+    mock_py.lib = MagicMock()
+    mock_py.lib.charmm = MagicMock()
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup._import_pycharmm",
+        return_value=mock_py,
+    ):
+        ok = rebind_mlpot_calculator_from_pycmodel(ctx, verbose=False)
+    assert ok is True
+    pyCModel.get_pycharmm_calculator.assert_called_once()
+    mock_py.lib.charmm.mlpot_set_func.assert_called_once()
+    mock_py.lib.charmm.mlpot_set_properties.assert_called_once()
+    assert mlpot.is_set is True
+
+
 def test_assert_mlpot_user_active_forces_stale_python_is_set():
     import sys
     import types

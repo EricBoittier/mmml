@@ -154,7 +154,7 @@ class MlpotContext:
 
         if self.ml_selection is not None and self.registration_uses_block:
             clear_mlpot_energy_block(self.ml_selection, block_tag=self.block_tag)
-        apply_charmm_mm_block()
+            apply_charmm_mm_block()
 
     def reregister_mlpot(self, *, verbose: bool = False, force: bool = False) -> None:
         """Re-attach MLpot + ML MM-off registration after temporary MM-only work."""
@@ -182,9 +182,11 @@ class MlpotContext:
                 elif hasattr(self.mlpot, "is_set"):
                     self.mlpot.is_set = False
             reattach()
+            rebind_mlpot_calculator_from_pycmodel(self, verbose=verbose)
             return
 
         self._reattach_mlpot_compat()
+        rebind_mlpot_calculator_from_pycmodel(self, verbose=verbose)
 
     def _reattach_mlpot_compat(self) -> None:
         """Compatibility path for PyCHARMM MLpot builds without ``reattach_mlpot``."""
@@ -239,6 +241,47 @@ def _mlpot_user_missing(user: float | None, *, zero_tol_kcalmol: float) -> bool:
     return user is None or not math.isfinite(user) or abs(float(user)) <= zero_tol_kcalmol
 
 
+def rebind_mlpot_calculator_from_pycmodel(
+    ctx: MlpotContext,
+    *,
+    verbose: bool = False,
+) -> bool:
+    """Point CHARMM MLpot at the current ``pyCModel`` calculator (post-JAX finalize).
+
+    Deferred registration binds a stub calculator at ``MLpot.__init__``; after
+    ``_finalize_jax_factory`` / warmup, ``get_pycharmm_calculator()`` returns a
+    fresh ``DecomposedMlpotCalculator`` while Fortran may still call the stale stub.
+    """
+    import ctypes
+
+    pyCModel = ctx.pyCModel
+    mlpot = ctx.mlpot
+    if pyCModel is None or mlpot is None:
+        return False
+    get_calc = getattr(pyCModel, "get_pycharmm_calculator", None)
+    if not callable(get_calc):
+        return False
+
+    pycharmm = _import_pycharmm()
+    calc = get_calc()
+    mlpot.calculator = calc
+    mlpot.energy_func = mlpot.func_type(calc.calculate_charmm)
+    pycharmm.lib.charmm.mlpot_set_func(mlpot.energy_func)
+    mlidx = (ctypes.c_int * mlpot.ml_Natoms)()
+    mlidx[:] = mlpot.ml_indices + 1
+    mlidz = (ctypes.c_int * mlpot.ml_Natoms)()
+    mlidz[:] = mlpot.ml_Z
+    nml = (ctypes.c_int * 1)(mlpot.ml_Natoms)
+    pycharmm.lib.charmm.mlpot_set_properties(nml, mlidx, mlidz)
+    mlpot.is_set = True
+    if verbose:
+        print(
+            "MLpot: rebound CHARMM callback to current pyCModel calculator",
+            flush=True,
+        )
+    return True
+
+
 def assert_mlpot_user_active(
     ctx: MlpotContext,
     *,
@@ -251,6 +294,7 @@ def assert_mlpot_user_active(
     In all-ML workflows CHARMM bonded/nonbonded terms are intentionally zeroed by
     BLOCK, so a missing USER term leaves dynamics integrating a free gas.
     """
+    rebind_mlpot_calculator_from_pycmodel(ctx, verbose=not quiet)
     user = _read_mlpot_user_energy_kcal(force=True)
     missing = _mlpot_user_missing(user, zero_tol_kcalmol=zero_tol_kcalmol)
     is_set = getattr(ctx.mlpot, "is_set", True)
@@ -280,6 +324,7 @@ def assert_mlpot_user_active(
             silent_charmm=True,
             verbose=not quiet,
         )
+        rebind_mlpot_calculator_from_pycmodel(ctx, verbose=not quiet)
         user = _read_mlpot_user_energy_kcal(force=True)
         missing = _mlpot_user_missing(user, zero_tol_kcalmol=zero_tol_kcalmol)
 
