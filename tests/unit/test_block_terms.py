@@ -98,14 +98,14 @@ def test_zero_mlpot_psf_mm_terms_zeros_params_and_charges():
 
     assert tag == "all"
     assert bond_fn.call_count == 2
-    zero_prm_fn.assert_called_once_with(bonded_only=False, verbose=False)
+    zero_prm_fn.assert_called_once_with(bonded_only=True, verbose=False)
     fake_psf.delete_connectivity = getattr(fake_psf, "delete_connectivity", mock.Mock())
     fake_psf.delete_connectivity.assert_not_called()
     fake_psf.set_charge.assert_called_once()
     assert fake_psf.set_charge.call_args.args[0] == [0.0, 0.0, 0.0]
 
 
-def test_zero_mlpot_psf_mm_terms_periodic_external_bonded_only():
+def test_zero_mlpot_psf_mm_terms_periodic_external_also_bonded_only():
     sel = mock.Mock()
     sel.get_atom_indexes.return_value = [0, 1, 2]
     with mock.patch(

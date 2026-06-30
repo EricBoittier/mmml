@@ -41,13 +41,14 @@ def test_read_cgenff_prm_uses_flex_for_append_swap():
     )
 
 
-def test_apply_full_cgenff_params_reads_and_checks_bonds():
+def test_apply_full_cgenff_params_reads_bonded_restore_and_checks_bonds():
+    bonded = cgenff_prm_swap.bonded_cgenff_prm_path()
     with mock.patch.object(cgenff_prm_swap, "_read_cgenff_prm") as read_fn, mock.patch.object(
         cgenff_prm_swap, "assert_psf_bonds_present", return_value=400
     ) as bond_fn:
         cgenff_prm_swap.apply_full_cgenff_params(verbose=False)
 
-    read_fn.assert_called_once()
+    read_fn.assert_called_once_with(bonded)
     bond_fn.assert_called_once()
     assert cgenff_prm_swap.active_cgenff_prm_mode() == "full"
 

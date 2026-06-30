@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from scripts.zero_charmm_prm import zero_prm_line, zero_prm_text
+from scripts.zero_charmm_prm import bonded_only_prm_text, zero_prm_line, zero_prm_text
 
 
 def test_zero_bond_keeps_r0():
@@ -96,6 +96,20 @@ def test_comments_and_sections_passthrough():
     assert "0.9572" in out
     assert "55.0" not in out
     assert "104.52" in out
+
+
+def test_extract_bonded_only_keeps_constants():
+    text = (
+        "BONDS\n"
+        "HT    OT    450.0       0.9572\n"
+        "NONBONDED nbxmod  5 atom cdiel\n"
+        "HGA1     0.0       -0.0450     1.3400\n"
+        "END\n"
+    )
+    out = bonded_only_prm_text(text, zero_constants=False)
+    assert "NONBONDED" not in out
+    assert "HGA1" not in out
+    assert "450.0" in out
 
 
 def test_zero_cgenff_prm_file(tmp_path: Path):

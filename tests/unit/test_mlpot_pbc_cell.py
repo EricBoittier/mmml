@@ -1054,7 +1054,7 @@ def test_build_ml_exclusion_lists_upper_triangle():
     assert inb == [3, 5, 5]
 
 
-def test_register_mlpot_pbc_installs_exclusions_before_block():
+def test_register_mlpot_pbc_installs_exclusions_after_param_swap():
     from mmml.interfaces.pycharmmInterface.mlpot import setup as mlpot_setup
 
     call_order: list[str] = []
@@ -1095,7 +1095,7 @@ def test_register_mlpot_pbc_installs_exclusions_before_block():
             use_pbc=True,
         )
 
-    assert call_order == ["install_exclusions", "block", "mlpot", "skip_iblo"]
+    assert call_order == ["block", "install_exclusions", "mlpot", "skip_iblo"]
 
 
 def test_register_mlpot_vacuum_skips_pre_block_exclusions():
