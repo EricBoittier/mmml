@@ -1075,7 +1075,9 @@ def test_bootstrap_topology_mpi_np_gt1_auto_restart_when_res_exists(tmp_path):
 
     assert n == 2
     assert len(calls) == 1
+    assert "read psf card name" in calls[0]
     assert "read restart unit 20" in calls[0]
+    assert "UPDATE" not in calls[0]
 
 
 def test_bootstrap_topology_mpi_invalid_mode(tmp_path):

@@ -34,8 +34,9 @@ MMML_MPI_NP=4 ./scripts/run_mpi_pycharmm_read_gate.sh --mode psf-crd --with-crys
 
 At ``np>1``, ``--mode psf-crd`` **auto-switches to restart** when
 ``artifacts/.../dcm_20mer.res`` exists (written by ``--prepare-prebuilt-only``).
-Cooperative PyCHARMM PSF/CRD READ at ``np>1`` often leaves ``n_atoms=0`` on
-DOMDEC MPI builds; use restart (default) or bisect with
+Restart bootstrap runs **RTF/PRM/PSF + read restart** (no ``UPDATE`` at load;
+lists sync later via ``ENER``/``setup_charmm_environment``). Cooperative PyCHARMM
+PSF/CRD-only READ at ``np>1`` often leaves ``n_atoms=0`` — bisect with
 ``MMML_MPI_BOOTSTRAP_FORCE_PSF_CRD=1``.
 
 At ``np>1``, bootstrap uses **shared artifact paths** by default (cooperative MPI

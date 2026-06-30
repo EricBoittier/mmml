@@ -1442,6 +1442,36 @@ def _cooperative_read_script(
     return "\n".join(lines) + "\n"
 
 
+def _cooperative_restart_script(
+    paths: dict[str, Path],
+    *,
+    fortran_path: str,
+    crystal_side_A: float | None,
+    crystal_cutnb_A: float,
+) -> str:
+    """RTF/PRM/PSF then ``read restart`` (coords); no ``UPDATE`` (nbonds not ready yet)."""
+    minimal = paths["rtf"]
+    prm = paths["prm"]
+    psf = paths["psf"]
+    lines = [
+        f"read rtf card name {minimal}",
+        f"read param card name {prm} flex",
+        f"read psf card name {psf}",
+        f"open read unit 20 name {fortran_path}",
+        "read restart unit 20",
+        "close unit 20",
+    ]
+    if crystal_side_A is not None:
+        side = float(crystal_side_A)
+        lines.extend(
+            [
+                f"crystal define cubic {side} {side} {side} 90 90 90",
+                f"crystal build cutoff {float(crystal_cutnb_A)} noper 0",
+            ]
+        )
+    return "\n".join(lines) + "\n"
+
+
 def _run_cooperative_bootstrap_script(
     step: str,
     script: str,
@@ -1518,7 +1548,6 @@ def _bootstrap_via_stream_inp(
                     f"crystal build cutoff {float(crystal_cutnb_A)} noper 0",
                 ]
             )
-        lines.append("stop")
         inp_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     if size > 1:
         _wait_for_shared_file(inp_path)
@@ -1595,11 +1624,11 @@ def bootstrap_topology_mpi(
         res_local = paths["res"]
         fortran_path, alias = charmm_fortran_path(res_local, for_write=False)
         try:
-            restart_script = (
-                f"open read unit 20 name {fortran_path}\n"
-                "read restart unit 20\n"
-                "close unit 20\n"
-                "UPDATE\n"
+            restart_script = _cooperative_restart_script(
+                paths,
+                fortran_path=fortran_path,
+                crystal_side_A=crystal_side_A,
+                crystal_cutnb_A=crystal_cutnb_A,
             )
             if size > 1:
                 _run_cooperative_bootstrap_script(
@@ -1609,10 +1638,12 @@ def bootstrap_topology_mpi(
                 )
             else:
                 for step_name, script in (
+                    ("read_rtf", f"read rtf card name {paths['rtf']}\n"),
+                    ("read_prm", f"read param card name {paths['prm']} flex\n"),
+                    ("read_psf", f"read psf card name {paths['psf']}\n"),
                     ("open_restart", f"open read unit 20 name {fortran_path}\n"),
                     ("read_restart", "read restart unit 20\n"),
                     ("close_restart", "close unit 20\n"),
-                    ("update", "UPDATE\n"),
                 ):
                     bootstrap_charmm_step(step_name, script, log_fn=log_fn)
         finally:
