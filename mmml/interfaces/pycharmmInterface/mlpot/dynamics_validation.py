@@ -280,19 +280,25 @@ def _restart_section_values(path: Path, section_marker: str) -> list[float]:
     values: list[float] = []
     in_section = False
     marker = section_marker.strip()
+    velocities = "VELOC" in marker.upper()
     for raw in lines:
         line = raw.strip()
         if not line:
             continue
-        if line.startswith(marker) or (
-            marker.upper() in line.upper() and line.startswith("!")
-        ):
-            in_section = True
-            continue
-        if in_section and line.startswith("!"):
-            break
         if not in_section:
+            if line.startswith(marker) or (
+                marker.upper() in line.upper() and line.startswith("!")
+            ):
+                in_section = True
+                continue
+            if marker.upper().startswith("!X") and _is_restart_xyz_header(
+                line, velocities=velocities
+            ):
+                in_section = True
+                continue
             continue
+        if line.startswith("!"):
+            break
         for match in _FORTRAN_FLOAT_RE.finditer(line):
             values.append(_parse_fortran_d_float(match.group()))
     return values
@@ -329,9 +335,10 @@ def read_restart_coordinates(path: Path) -> np.ndarray | None:
 
 
 def _parse_crd_xyz(parts: Sequence[str]) -> tuple[float, float, float] | None:
-    if len(parts) >= 6:
+    # PyCHARMM write.coor_card EXT: index resid resname atomname x y z ...
+    if len(parts) >= 7:
         try:
-            return float(parts[3]), float(parts[4]), float(parts[5])
+            return float(parts[4]), float(parts[5]), float(parts[6])
         except ValueError:
             pass
     if len(parts) >= 5:
@@ -340,6 +347,18 @@ def _parse_crd_xyz(parts: Sequence[str]) -> tuple[float, float, float] | None:
         except ValueError:
             pass
     return None
+
+
+def _is_restart_xyz_header(line: str, *, velocities: bool = False) -> bool:
+    """Match ``!X, Y, Z`` / ``!X,Y,Z`` (and velocity variant) restart section headers."""
+    u = line.strip().upper().replace(" ", "")
+    if not u.startswith("!"):
+        return False
+    if velocities:
+        return "VELOC" in u and "X" in u and "Y" in u and "Z" in u
+    if "OLD" in u:
+        return False
+    return "X" in u and "Y" in u and "Z" in u and "VELOC" not in u
 
 
 def read_crd_coordinates(path: Path) -> np.ndarray | None:
