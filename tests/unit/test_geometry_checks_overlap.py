@@ -245,3 +245,71 @@ def test_coords_pathological_for_repack_detects_nonfinite_and_huge_radius():
     nan = ok.copy()
     nan[0, 0] = np.nan
     assert coords_pathological_for_repack(nan, offsets, max_monomer_extent_A=12.0)
+
+
+def test_repack_applies_random_rotations_by_default():
+    """Repack should randomize monomer orientation, not only translate COMs."""
+    pos = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [2.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [10.0, 0.0, 0.0],
+            [12.0, 0.0, 0.0],
+            [10.0, 1.0, 0.0],
+        ],
+        dtype=float,
+    )
+    offsets = np.array([0, 3, 6], dtype=int)
+    out_a = repack_monomers_clear_overlap(
+        pos,
+        offsets,
+        min_distance=1.5,
+        spacing=6.0,
+        margin=0.0,
+        seed=11,
+    )
+    out_b = repack_monomers_clear_overlap(
+        pos,
+        offsets,
+        min_distance=1.5,
+        spacing=6.0,
+        margin=0.0,
+        seed=22,
+    )
+    internal_a = out_a[0:3] - out_a[0:3].mean(axis=0)
+    internal_b = out_b[0:3] - out_b[0:3].mean(axis=0)
+    assert not np.allclose(internal_a, internal_b, atol=1.0e-6)
+    dmin = assert_no_intermonomer_atom_overlap(
+        out_a, offsets, min_distance=1.5, context="repack_rot"
+    )
+    assert dmin >= 1.5
+
+
+def test_repack_random_rotations_can_be_disabled():
+    pos = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.5, 0.0, 0.0],
+            [2.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    offsets = np.array([0, 2, 4], dtype=int)
+    template = pos.copy()
+    out = repack_monomers_clear_overlap(
+        pos,
+        offsets,
+        min_distance=1.5,
+        spacing=4.0,
+        margin=0.0,
+        seed=7,
+        template_positions=template,
+        random_rotations=False,
+    )
+    for mi in range(2):
+        s, e = int(offsets[mi]), int(offsets[mi + 1])
+        internal = out[s:e] - out[s:e].mean(axis=0)
+        ref_internal = template[s:e] - template[s:e].mean(axis=0)
+        assert np.allclose(internal, ref_internal, atol=1.0e-9)

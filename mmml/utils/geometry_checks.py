@@ -278,6 +278,34 @@ def _resolve_repack_templates_and_radii(
     )
 
 
+def _random_rotation_matrices(n: int, rng: np.random.Generator) -> np.ndarray:
+    """Return ``n`` uniform SO(3) rotation matrices (shape ``(n, 3, 3)``)."""
+    from scipy.spatial.transform import Rotation
+
+    return Rotation.random(int(n), random_state=rng).as_matrix()
+
+
+def _rotate_internal_template(
+    template: np.ndarray,
+    rotation: np.ndarray,
+) -> np.ndarray:
+    """Apply a rigid rotation to COM-centered monomer internal coordinates."""
+    internal = np.asarray(template, dtype=float)
+    return (np.asarray(rotation, dtype=float) @ internal.T).T
+
+
+def _oriented_repack_template(
+    template: np.ndarray,
+    *,
+    random_rotations: bool,
+    rng: np.random.Generator,
+) -> np.ndarray:
+    if not random_rotations:
+        return template
+    rot = _random_rotation_matrices(1, rng)[0]
+    return _rotate_internal_template(template, rot)
+
+
 def coords_pathological_for_repack(
     positions: np.ndarray,
     monomer_offsets: np.ndarray,
@@ -443,13 +471,16 @@ def repack_monomers_clear_overlap(
     cell: Any | None = None,
     template_positions: np.ndarray | None = None,
     max_monomer_radius_A: float | None = None,
+    random_rotations: bool = True,
 ) -> np.ndarray:
     """Rebuild monomer placement: preserve internal geometry, re-place COMs apart.
 
-    Each monomer is translated as a rigid body.  COMs are placed with at least
-    ``spacing`` (or a derived minimum from ``min_distance`` and monomer radii).
-    For periodic boxes, COMs are distributed in the primary cell; monomers are
-    wrapped after rebuild.  A short rigid push pass polishes any remaining contacts.
+    Each monomer is translated as a rigid body; by default each also receives a
+    uniform random SO(3) rotation about its COM before placement.  COMs are placed
+    with at least ``spacing`` (or a derived minimum from ``min_distance`` and
+    monomer radii).  For periodic boxes, COMs are distributed in the primary cell;
+    monomers are wrapped after rebuild.  A short rigid push pass polishes any
+    remaining contacts.
     """
     pos = np.asarray(positions, dtype=float)
     offsets = np.asarray(monomer_offsets, dtype=int)
@@ -494,7 +525,12 @@ def repack_monomers_clear_overlap(
     new_pos = np.zeros_like(pos)
     for mi in range(n_monomers):
         s, e = int(offsets[mi]), int(offsets[mi + 1])
-        new_pos[s:e] = templates[mi] + coms[mi]
+        internal = _oriented_repack_template(
+            templates[mi],
+            random_rotations=random_rotations,
+            rng=rng,
+        )
+        new_pos[s:e] = internal + coms[mi]
 
     if cell_mat is not None:
         new_pos = wrap_monomers_primary_cell(new_pos, offsets, cell_mat)
@@ -523,12 +559,13 @@ def repack_selected_monomers_clear_overlap(
     cell: Any | None = None,
     template_positions: np.ndarray | None = None,
     max_monomer_radius_A: float | None = None,
+    random_rotations: bool = True,
 ) -> np.ndarray:
     """Patch only selected monomers: rigid internal geometry, new COM placement.
 
     Fixed monomers keep their coordinates. Selected monomers are rebuilt from
-    COM-centered internal templates and pushed apart from neighbors until
-    ``min_distance`` is met (only selected monomers move).
+    COM-centered internal templates (optionally randomly rotated) and pushed apart
+    from neighbors until ``min_distance`` is met (only selected monomers move).
     """
     pos = np.asarray(positions, dtype=float).copy()
     offsets = np.asarray(monomer_offsets, dtype=int)
@@ -545,6 +582,7 @@ def repack_selected_monomers_clear_overlap(
             cell=cell,
             template_positions=template_positions,
             max_monomer_radius_A=max_monomer_radius_A,
+            random_rotations=random_rotations,
         )
 
     templates, _radii = _resolve_repack_templates_and_radii(
@@ -557,11 +595,17 @@ def repack_selected_monomers_clear_overlap(
     threshold = float(min_distance)
     extra = float(max(0.0, margin))
     move_only = frozenset(selected)
+    rng = np.random.default_rng(None if seed is None else int(seed))
 
     for mi in selected:
         s, e = int(offsets[mi]), int(offsets[mi + 1])
         com = pos[s:e].mean(axis=0)
-        pos[s:e] = templates[mi] + com
+        internal = _oriented_repack_template(
+            templates[mi],
+            random_rotations=random_rotations,
+            rng=rng,
+        )
+        pos[s:e] = internal + com
 
     max_passes = max(1, n_monomers * 4)
     for _ in range(max_passes):
@@ -595,6 +639,7 @@ def repack_selected_monomers_clear_overlap(
             cell=cell,
             template_positions=template_positions,
             max_monomer_radius_A=max_monomer_radius_A,
+            random_rotations=random_rotations,
         )
 
     if cell_mat is not None:
