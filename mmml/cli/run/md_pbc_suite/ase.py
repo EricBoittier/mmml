@@ -1007,36 +1007,22 @@ def _run_charmm_minimize(
     try:
         if quiet:
             pyci.pycharmm_quiet()
-        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import apply_pbc_nbonds
+        from mmml.interfaces.pycharmmInterface.nbonds_config import apply_vacuum_nbonds
 
         use_pbc_charmm = cubic_box_side_A is not None and float(cubic_box_side_A) > 0.0
         if use_pbc_charmm:
-            from mmml.interfaces.pycharmmInterface.pycharmmCommands import pbcset
-            from mmml.interfaces.pycharmmInterface.setupBox import _ensure_crystal_image_str
-
-            _ensure_crystal_image_str()
-            L = float(cubic_box_side_A)
-            pyci.pycharmm.lingo.charmm_script(pbcset.format(SIDELENGTH=L))
-            # IMAGE before NBONDS; CUTIM >= CUTNB or CHARMM errors (CUTNB larger than CUTIM).
-            pyci.pycharmm.lingo.charmm_script(
-                "open read unit 10 card name crystal_image.str\n"
-                f"crystal defi cubic {L} {L} {L} 90. 90. 90.\n"
-                "CRYSTAL READ UNIT 10 CARD\n"
-                "image byres xcen 0.0 ycen 0.0 zcen 0.0 sele all end\n"
+            from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+                apply_pbc_nbonds,
+                prepare_charmm_pbc,
             )
 
-        if use_pbc_charmm:
+            L = float(cubic_box_side_A)
+            prepare_charmm_pbc(L)
             cuts = apply_pbc_nbonds(nbxmod=nbxmod, cubic_box_side_A=L)
             if cuts.was_capped and not quiet:
                 print(cuts.summary_line(), flush=True)
-            nbond_kw = cuts.as_pbc_nbond_kwargs(nbxmod=nbxmod)
         else:
-            from mmml.interfaces.pycharmmInterface.nbonds_config import (
-                vacuum_nbond_kwargs,
-            )
-
-            nbond_kw = vacuum_nbond_kwargs(nbxmod=nbxmod)
-        pyci.pycharmm.NonBondedScript(**nbond_kw).run()
+            apply_vacuum_nbonds(nbxmod=nbxmod)
         if show_energy:
             print("CHARMM energy before minimization:")
             pyci.pycharmm_quiet()
