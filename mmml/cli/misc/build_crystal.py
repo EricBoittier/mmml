@@ -84,7 +84,7 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="RHO",
         help=(
             "Scale unit cell after build to this mass density (g/cm³). "
-            "Solid DCM ≈ 1.36; liquid DCM ≈ 1.326"
+            "Liquid DCM ≈ 1.326; experimental Pbcn crystal (COD 2100015) ≈ 1.97"
         ),
     )
     parser.add_argument(

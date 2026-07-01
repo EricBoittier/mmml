@@ -1,0 +1,113 @@
+#------------------------------------------------------------------------------
+#$Date: 2025-08-19 13:01:59 +0300 (Tue, 19 Aug 2025) $
+#$Revision: 301802 $
+#$URL: file:///home/coder/svn-repositories/_RELOADED_COD/cod-reloaded/cif/2/10/00/2100015.cif $
+#------------------------------------------------------------------------------
+#
+# This file is available in the Crystallography Open Database (COD),
+# http://www.crystallography.net/
+#
+# All data on this site have been placed in the public domain by the
+# contributors.
+#
+data_2100015
+loop_
+_publ_author_name
+'Marcin Podsiad{\l}o'
+'Kamil F. Dziubek'
+'Andrzej Katrusiak'
+_publ_section_title
+;
+In-situ high-pressure crystallization and compression
+of halogen contacts in dichloromethane
+;
+_journal_name_full               'Acta Crystallographica, Section B'
+_journal_page_first              595
+_journal_page_last               600
+_journal_paper_doi               10.1107/S0108768105017374
+_journal_volume                  61
+_journal_year                    2005
+_chemical_formula_moiety         'C H2 Cl2'
+_chemical_formula_sum            'C H2 Cl2'
+_chemical_formula_weight         84.93
+_chemical_melting_point          176
+_chemical_name_common            dichloromethane
+_space_group_IT_number           60
+_space_group_name_Hall           '-P 2n 2ab'
+_space_group_name_H-M_alt        'P b c n'
+_symmetry_cell_setting           orthorhombic
+_symmetry_space_group_name_Hall  '-P 2n 2ab'
+_symmetry_space_group_name_H-M   'P b c n'
+_cell_angle_alpha                90.00
+_cell_angle_beta                 90.00
+_cell_angle_gamma                90.00
+_cell_formula_units_Z            4
+_cell_length_a                   3.9240(10)
+_cell_length_b                   7.793(2)
+_cell_length_c                   9.335(2)
+_cell_measurement_pressure       1.63(5)E6
+_cell_measurement_temperature    293(2)
+_cell_volume                     285.46(12)
+_diffrn_ambient_temperature      293(2)
+_exptl_crystal_density_diffrn    1.972
+_cod_depositor_comments
+;
+The following automatic conversions were performed:
+'_symmetry_cell_setting' value 'Orthorhombic' changed to 'orthorhombic'
+according to '/home/saulius/struct/CIF-dictionaries/cif_core.dic'
+dictionary named 'cif_core.dic' version 2.4.1 from 2010-06-29.
+
+Automatic conversion script
+Id: cif_fix_enum 1527 2010-12-29 10:47:43Z saulius 
+;
+_cod_database_code               2100015
+loop_
+_symmetry_equiv_pos_as_xyz
+'x, y, z'
+'-x+1/2, -y+1/2, z+1/2'
+'-x, y, -z+1/2'
+'x+1/2, -y+1/2, -z'
+'-x, -y, -z'
+'x-1/2, y-1/2, -z-1/2'
+'x, -y, z-1/2'
+'-x-1/2, y-1/2, z'
+loop_
+_atom_site_label
+_atom_site_fract_x
+_atom_site_fract_y
+_atom_site_fract_z
+_atom_site_U_iso_or_equiv
+_atom_site_adp_type
+_atom_site_calc_flag
+_atom_site_refinement_flags
+_atom_site_occupancy
+_atom_site_disorder_assembly
+_atom_site_disorder_group
+_atom_site_type_symbol
+Cl1 0.1903(4) 0.14808(17) 0.1156(4) 0.0404(19) Uani d . 1 . . Cl
+C1 0.0000 0.0202(8) 0.2500 0.028(9) Uani d S 1 . . C
+H1 0.181(19) -0.071(9) 0.31(2) 0.08(3) Uiso d . 1 . . H
+loop_
+_atom_site_aniso_label
+_atom_site_aniso_U_11
+_atom_site_aniso_U_22
+_atom_site_aniso_U_33
+_atom_site_aniso_U_12
+_atom_site_aniso_U_13
+_atom_site_aniso_U_23
+Cl1 0.0467(9) 0.0424(8) 0.032(6) -0.0098(4) -0.0013(11) 0.0025(9)
+C1 0.049(4) 0.029(3) 0.01(3) 0.000 -0.005(7) 0.000
+loop_
+_geom_bond_atom_site_label_1
+_geom_bond_atom_site_label_2
+_geom_bond_site_symmetry_2
+_geom_bond_distance
+_geom_bond_publ_flag
+Cl1 C1 . 1.769(4) ?
+C1 H1 . 1.13(12) ?
+loop_
+_cod_related_entry_id
+_cod_related_entry_database
+_cod_related_entry_code
+1 ChemSpider 6104
+2 PubChem 6344

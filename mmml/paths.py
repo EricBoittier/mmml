@@ -32,3 +32,8 @@ def crystal_image_str_source() -> Path:
 def default_dcm_molecule_xyz() -> Path:
     """Bundled DCM (CH2Cl2) monomer XYZ for ``build-crystal`` / PyXtal."""
     return bundled_file("data", "molecules", "dcm.xyz")
+
+
+def default_dcm_crystal_cif() -> Path:
+    """Experimental DCM crystal (Pbcn, COD 2100015 / CCDC doi:10.5517/cc9lyjb)."""
+    return bundled_file("data", "structures", "dcm_pbcn_cod2100015.cif")

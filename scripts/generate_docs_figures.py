@@ -249,40 +249,51 @@ def _fallback_crystal_atoms() -> Atoms:
 
 
 def figure_build_crystal(out: Path) -> bool:
-    """PyXtal DCM cell scaled to solid density when available; else ASE fallback."""
+    """Experimental DCM Pbcn cell (COD 2100015) when ASE can read it; else PyXtal/ASE fallback."""
     try:
-        from mmml.interfaces.pyxtal_placement import (
-            MolecularCrystalBuildRequest,
-            build_molecular_crystal_random,
-            have_pyxtal,
-            scale_atoms_cell_to_density,
-        )
-        from mmml.paths import default_dcm_molecule_xyz
+        from ase.io import read
 
-        if have_pyxtal():
-            dcm_xyz = str(default_dcm_molecule_xyz())
-            result = build_molecular_crystal_random(
-                MolecularCrystalBuildRequest(
-                    molecules=[dcm_xyz],
-                    stoichiometry=[4],
-                    space_group=14,
-                    dimension=3,
-                    factor=1.0,
-                    seed=42,
-                    max_attempts=40,
-                )
-            )
-            atoms = result.atoms
-            scale_atoms_cell_to_density(atoms, 1.36)
-            title = "build-crystal: DCM (Z=4, SG 14) at ρ=1.36 g/cm³"
+        from mmml.paths import default_dcm_crystal_cif
+
+        cif = default_dcm_crystal_cif()
+        if cif.is_file():
+            atoms = read(str(cif))
+            title = "build-crystal: DCM Pbcn (COD 2100015, ρ≈1.97 g/cm³)"
             rotation = "15x,70y,0z"
         else:
-            raise ImportError("pyxtal not installed")
+            raise FileNotFoundError(cif)
     except Exception as exc:
-        print(f"build-crystal figure: using ASE fallback ({exc})", file=sys.stderr)
-        atoms = _fallback_crystal_atoms()
-        title = "build-crystal: benzene dimer in periodic cell (illustrative)"
-        rotation = "30x,55y,0z"
+        print(f"build-crystal figure: using PyXtal/ASE fallback ({exc})", file=sys.stderr)
+        try:
+            from mmml.interfaces.pyxtal_placement import (
+                MolecularCrystalBuildRequest,
+                build_molecular_crystal_random,
+                have_pyxtal,
+            )
+            from mmml.paths import default_dcm_molecule_xyz
+
+            if have_pyxtal():
+                result = build_molecular_crystal_random(
+                    MolecularCrystalBuildRequest(
+                        molecules=[str(default_dcm_molecule_xyz())],
+                        stoichiometry=[4],
+                        space_group=60,
+                        dimension=3,
+                        factor=1.0,
+                        seed=42,
+                        max_attempts=40,
+                    )
+                )
+                atoms = result.atoms
+                title = "build-crystal: DCM (Z=4, Pbcn) PyXtal placement"
+                rotation = "15x,70y,0z"
+            else:
+                raise ImportError("pyxtal not installed")
+        except Exception as exc2:
+            print(f"build-crystal figure: benzene dimer fallback ({exc2})", file=sys.stderr)
+            atoms = _fallback_crystal_atoms()
+            title = "build-crystal: benzene dimer in periodic cell (illustrative)"
+            rotation = "30x,55y,0z"
 
     _save_structure_figure(
         atoms,

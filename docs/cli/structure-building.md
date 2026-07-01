@@ -109,43 +109,56 @@ offsets = [(4, 4, 4), (12, 4, 6), (6, 11, 5), (14, 12, 8)]
 Builds molecular crystals with space-group symmetry via PyXtal; exports ASE-readable
 structures for optimization or `md-system` handoff.
 
-### DCM (CH₂Cl₂) at solid density
+### DCM (CH₂Cl₂) — experimental crystal
 
-PyXtal does not resolve `C(Cl)Cl` from its molecule database. Use the bundled
-monomer XYZ (or `mmml make-res --res DCM` → export XYZ). After PyXtal placement,
-`--target-density-g-cm3` uniformly scales the unit cell to the requested mass
-density.
+The deposited structure at
+[CCDC doi:10.5517/cc9lyjb](https://www.ccdc.cam.ac.uk/structures/search?id=doi:10.5517/cc9lyjb&sid=DataCite)
+(Podsiadło *et al.*, *Acta Cryst.* B **2005**, 61, 595; COD
+[2100015](https://www.crystallography.net/2100015.html)) is orthorhombic **Pbcn**
+(SG 60), Z=4, measured at **1.63 GPa / 293 K**:
 
-| Phase | Typical ρ (g/cm³) | MMML knob |
-|-------|-------------------|-----------|
-| Liquid DCM | 1.326 | `liquid-box`, `md-system` solvent props |
-| Solid DCM | 1.36 | `build-crystal --target-density-g-cm3 1.36` |
+| Quantity | Value |
+|----------|-------|
+| *a*, *b*, *c* | 3.924, 7.793, 9.335 Å |
+| ρ (experimental) | **1.972 g/cm³** |
+| Low-*T* phase (153 K, 0.1 MPa) | same SG; *a*≈4.25, *b*≈8.14, *c*≈9.49 Å ([Kawaguchi *et al.* 1973](https://doi.org/10.1246/bcsj.46.62)) |
+
+MMML ships the CIF as `default_dcm_crystal_cif()`. For handoff, read it with ASE
+(no PyXtal required). PyXtal random placement can approximate the same SG with
+`--spg 60 --z 4` and optional `--target-density-g-cm3 1.972`.
+
+| Phase | Typical ρ (g/cm³) | MMML source |
+|-------|-------------------|-------------|
+| Liquid DCM | 1.326 | `liquid-box`, `md-system` |
+| Crystal (this CIF) | 1.972 | bundled CIF / scale PyXtal build |
 
 ```bash
-# Install PyXtal
+# Experimental unit cell → extxyz (recommended seed)
+python -c "
+from ase.io import read, write
+from mmml.paths import default_dcm_crystal_cif
+write('dcm_expt.extxyz', read(default_dcm_crystal_cif()))
+"
+
+# PyXtal placement in Pbcn, scaled to experimental density
 uv sync --extra chem
-
-# DCM crystal, space group 14, Z=4, scaled to solid density
 mmml build-crystal \\
   -m "$(python -c 'from mmml.paths import default_dcm_molecule_xyz; print(default_dcm_molecule_xyz())')" \\
-  --spg 14 --z 4 \\
-  --target-density-g-cm3 1.36 \\
+  --spg 60 --z 4 \\
+  --target-density-g-cm3 1.972 \\
   --seed 42 \\
-  -o dcm_solid.extxyz
+  -o dcm_pyxtal.extxyz
 
-# Larger periodic box for MD handoff
+# Supercell for larger periodic MD boxes
 mmml build-crystal \\
   -m "$(python -c 'from mmml.paths import default_dcm_molecule_xyz; print(default_dcm_molecule_xyz())')" \\
-  --spg 14 --z 4 --supercell 2,2,2 \\
-  --target-density-g-cm3 1.36 \\
+  --spg 60 --z 4 --supercell 2,2,2 \\
+  --target-density-g-cm3 1.972 \\
   -o dcm_super.extxyz
-
-# NPZ reference for md-system / cluster builders
-mmml build-crystal \\
-  -m "$(python -c 'from mmml.paths import default_dcm_molecule_xyz; print(default_dcm_molecule_xyz())')" \\
-  --spg 14 --z 4 --target-density-g-cm3 1.36 \\
-  -o dcm_seed.npz
 ```
+
+PyXtal does not resolve `C(Cl)Cl` SMILES — use the bundled monomer XYZ or
+`mmml make-res --res DCM` export.
 
 ### Other examples
 
@@ -154,11 +167,11 @@ mmml build-crystal -m c1ccccc1 --spg 14 --z 2 -o benzene.extxyz
 mmml build-crystal -m monomer.xyz --spg 4 --supercell 2,2,2 -o super.cif
 ```
 
-![DCM crystal / periodic cell (ρ=1.36 g/cm³)](../images/structures/build-crystal.png)
+![DCM crystal / periodic cell (experimental Pbcn)](../images/structures/build-crystal.png)
 
-With `uv sync --extra chem`, the doc figure uses a real PyXtal DCM draw (SG 14,
-Z=4) scaled to 1.36 g/cm³. Without PyXtal, the script falls back to an
-illustrative ASE periodic cell.
+The doc figure uses the bundled COD 2100015 coordinates when ASE is available.
+Without the CIF, the generator falls back to PyXtal (Pbcn) or an illustrative
+benzene dimer cell.
 
 See also: [PyXtal tests on GitHub](https://github.com/EricBoittier/mmml/blob/main/tests/functionality/pyxtal/README.md).
 
