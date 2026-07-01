@@ -46,10 +46,20 @@ def test_reset_block_skips_on_empty_psf_at_import():
     assert "reset_block()" in maybe
 
 
-def test_get_mm_energy_forces_uses_force_static_mm_eval_for_cell_fallback():
+def test_get_mm_energy_forces_returns_single_fn_for_dynamic_pairs():
     source = Path("mmml/interfaces/pycharmmInterface/mmml_calculator.py").read_text(
         encoding="utf-8"
     )
     block = source.split("def get_MM_energy_forces_fns")[1].split("\n    _cached_mm_fn")[0]
-    assert "force_static_mm_eval=True" in block
-    assert "if isinstance(mm_fn_cell, tuple):" in block
+    assert "return mm_fn_jaxmd, update_fn" in block
+    assert "force_static_mm_eval" not in block
+    assert "mm_fn_cell" not in block
+
+
+def test_calculate_mm_contributions_requires_pairs_for_dynamic_nbrs():
+    source = Path("mmml/interfaces/pycharmmInterface/mmml_calculator.py").read_text(
+        encoding="utf-8"
+    )
+    block = source.split("def calculate_mm_contributions")[1].split("\n    if _HAVE_ASE")[0]
+    assert "MM pair indices are required for PBC dynamic neighbor lists" in block
+    assert "_legacy_static_mm_fn" in block

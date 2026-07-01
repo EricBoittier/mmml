@@ -450,10 +450,8 @@ def test_runtime_box_is_forwarded_to_lazy_mm_builder():
         assert get_update_fn is not None
         assert get_update_fn(r0, CutoffParameters(), box=box) is fake_update_fn
 
-    assert len(calls) == 2
+    assert len(calls) == 1
     assert calls[0].get("use_jax_md_neighbor_list", True) is True
-    assert calls[1].get("force_static_mm_eval") is True
-    assert calls[1].get("use_jax_md_neighbor_list") is False
     for call in calls:
         np.testing.assert_allclose(np.asarray(call["pbc_cell"]), np.asarray(box))
 

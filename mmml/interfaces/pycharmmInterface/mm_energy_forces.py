@@ -930,8 +930,6 @@ def build_mm_energy_forces_fn(
         _dimer_lookup_arr = jnp.array(_dimer_lookup_arr)
         pair_dimer_idx = None
         n_pairs_per_dimer_arr = np.zeros(len(_dp), dtype=np.int32)
-        if force_static_mm_eval:
-            _use_dynamic_nbrs = False
     elif _use_jax_md_nbrs:
         _mm_switch_width_dist = mm_switch_on + mm_switch_width
         nbrs_init = _neighbor_fn_cell[0].allocate(np.asarray(R))
