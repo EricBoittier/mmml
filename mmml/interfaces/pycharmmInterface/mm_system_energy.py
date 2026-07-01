@@ -514,6 +514,9 @@ def nonbonded_energy_and_forces(
     eps_tbl = jnp.asarray(nbond_data.epsilon, dtype=jnp.float64)
     rm_tbl = jnp.asarray(nbond_data.rmin, dtype=jnp.float64)
     e14_scale = jnp.asarray(e14_scale_np, dtype=jnp.float64)
+    vfswitch_coeffs = charmm_vfswitch_coeffs(settings)
+    fswitch_coeffs = charmm_fswitch_coeffs(settings)
+    c2of = settings.c2ofnb
 
     def _pair_terms(positions_arg: Array) -> tuple[Array, Array, Array]:
         ri = positions_arg[pi]
@@ -521,7 +524,7 @@ def nonbonded_energy_and_forces(
         disp = jax.vmap(lambda a, b: mic_displacement(a, b, cell_j))(ri, rj)
         r = jnp.linalg.norm(disp, axis=-1)
         r_sq = r * r
-        switch = charmm_switch_factor(r_sq, settings)
+        within_ctof = r_sq < c2of
 
         ep_i = eps_tbl[pi]
         ep_j = eps_tbl[pj]
@@ -530,20 +533,25 @@ def nonbonded_energy_and_forces(
         sig = rm_i + rm_j
         ep = jnp.sqrt(ep_i * ep_j)
 
-        r_safe = jnp.maximum(r, 1e-10)
-        sig_r6 = (sig / r_safe) ** 6
-        vdw_r12 = ep * (sig_r6 * sig_r6)
-        vdw_full = ep * (sig_r6 * sig_r6 - 2.0 * sig_r6)
-        vdw = vdw_r12 if use_jax_pme_dispersion else vdw_full
-
         qq = q[pi] * q[pj] * e14_scale / settings.eps
-        elec = COULOMB_KCAL * qq / r_safe
+        vdw = _pair_vdw_energy(
+            r,
+            ep,
+            sig,
+            settings,
+            vfswitch_coeffs,
+            use_jax_pme_dispersion=use_jax_pme_dispersion,
+        )
+        elec = _pair_elec_energy(r, qq, settings, fswitch_coeffs)
 
-        vdw_sw = jnp.sum(switch * vdw)
+        vdw = jnp.where(within_ctof, vdw, 0.0)
+        elec = jnp.where(within_ctof, elec, 0.0)
+
+        vdw_sw = jnp.sum(vdw)
         if use_jax_pme:
             elec_sw = jnp.array(0.0, dtype=pos.dtype)
         else:
-            elec_sw = jnp.sum(switch * elec)
+            elec_sw = jnp.sum(elec)
         return vdw_sw, elec_sw, vdw_sw + elec_sw
 
     def _energy(positions_arg: Array) -> Array:
