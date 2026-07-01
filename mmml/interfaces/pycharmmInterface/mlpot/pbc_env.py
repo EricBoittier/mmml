@@ -281,24 +281,49 @@ def _ensure_crystal_image_str() -> None:
     )
 
 
+def _image_setup_byres_all(
+    center_x: float = 0.0,
+    center_y: float = 0.0,
+    center_z: float = 0.0,
+) -> None:
+    """``image byres ... sele all end`` via the KEY_LIBRARY C API."""
+    import pycharmm.image as image
+    import pycharmm.psf as psf
+
+    seen: set[str] = set()
+    for resname in psf.get_res():
+        name = (resname or "").strip()
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        if not image.setup_residue(center_x, center_y, center_z, name):
+            raise RuntimeError(f"CHARMM image centering failed for residue {name!r}")
+    image.update_bimag()
+
+
 def prepare_charmm_pbc(cubic_box_side_A: float) -> None:
     """Install CHARMM crystal + IMAGE for a cubic cell."""
+    import pycharmm.crystal as crystal
+
     from mmml.interfaces.pycharmmInterface.charmm_mpi import mpi_charmm_script
+    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+        PBC_NBOND_BOX_MARGIN_A,
+        VACUUM_CUTNB,
+    )
     from mmml.interfaces.pycharmmInterface.pycharmmCommands import pbcset
 
     L = float(cubic_box_side_A)
     if L <= 0.0:
         raise ValueError(f"cubic box side must be > 0, got {L}")
 
-    _ensure_crystal_image_str()
+    # SET BOXTYPE/FFTX/... still parse on KEY_LIBRARY builds; open/crystal do not.
     mpi_charmm_script(pbcset.format(SIDELENGTH=L), quiet=True)
-    mpi_charmm_script(
-        "open read unit 10 card name crystal_image.str\n"
-        f"crystal defi cubic {L} {L} {L} 90. 90. 90.\n"
-        "CRYSTAL READ UNIT 10 CARD\n"
-        "image byres xcen 0.0 ycen 0.0 zcen 0.0 sele all end\n",
-        quiet=True,
-    )
+    if not crystal.define_cubic(L):
+        raise RuntimeError(f"crystal.define_cubic failed for L={L} Å")
+    build_cut = min(float(VACUUM_CUTNB), max(L / 2.0 - PBC_NBOND_BOX_MARGIN_A, 6.0))
+    if not crystal.build(build_cut):
+        raise RuntimeError(f"crystal.build failed for cutoff={build_cut} Å (L={L})")
+    _image_setup_byres_all(0.0, 0.0, 0.0)
 
 
 def apply_pbc_nbonds(
@@ -314,11 +339,10 @@ def apply_pbc_nbonds(
     """
     from mmml.interfaces.pycharmmInterface.nbonds_config import (
         PbcNbondCutoffs,
+        apply_nbonds_kwargs,
         pbc_nbond_cutoffs,
         scale_vacuum_switch_cutoffs,
     )
-
-    import pycharmm
 
     if cubic_box_side_A is not None:
         cuts = pbc_nbond_cutoffs(cubic_box_side_A, cutnb_max=cutnb)
@@ -333,10 +357,9 @@ def apply_pbc_nbonds(
             ctofnb=ctofnb,
             ctexnb=float(cutnb),
         )
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import mpi_charmm_script
+    from mmml.interfaces.pycharmmInterface.nbonds_config import apply_nbonds_kwargs
 
-    nb_script = pycharmm.NonBondedScript(**cuts.as_pbc_nbond_kwargs(nbxmod=nbxmod))
-    mpi_charmm_script(nb_script.create_script_string(), quiet=True)
+    apply_nbonds_kwargs(cuts.as_pbc_nbond_kwargs(nbxmod=nbxmod))
     return cuts
 
 

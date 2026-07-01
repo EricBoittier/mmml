@@ -141,6 +141,23 @@ def test_env_beats_charmmsetup(tmp_path):
     assert lib == str(env_dir)
 
 
+def test_stale_charmmsetup_home_falls_back_to_repo_default(tmp_path):
+    repo = tmp_path / "repo"
+    chm = repo / "setup" / "charmm"
+    chm.mkdir(parents=True)
+    (chm / "libcharmm.so").write_bytes(b"stub")
+    (repo / "CHARMMSETUP").write_text(
+        "export CHARMM_HOME=/nonexistent/charmm\n"
+        "export CHARMM_LIB_DIR=/nonexistent/charmm\n",
+        encoding="utf-8",
+    )
+
+    home, lib = charmm_paths.resolve_charmm_paths(repo_root=repo, env={})
+
+    assert home == str(chm)
+    assert lib == str(chm)
+
+
 def test_bootstrap_charmm_env_sets_os_environ(tmp_path, monkeypatch):
     repo = tmp_path / "repo"
     chm = repo / "setup" / "charmm"

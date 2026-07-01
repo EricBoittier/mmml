@@ -114,6 +114,16 @@ def _resolve_one(
     return default
 
 
+def _valid_charmm_home(path: str) -> bool:
+    """True when *path* exists (directory) or contains a ``libcharmm`` shared lib."""
+    if not path:
+        return False
+    p = Path(path)
+    if p.is_dir():
+        return True
+    return find_charmm_lib_in_dir(p) is not None
+
+
 def resolve_charmm_paths(
     *,
     repo_root: Path | None = None,
@@ -132,8 +142,12 @@ def resolve_charmm_paths(
     default_home_s = str(default_home) if default_home else ""
 
     home = _resolve_one("CHARMM_HOME", env=environ, setup=setup, default=default_home_s)
+    if home and not _valid_charmm_home(home) and default_home_s:
+        home = default_home_s
 
     lib = _resolve_lib_dir(env=environ, setup=setup, default=default_home_s)
+    if lib and not _valid_charmm_home(lib) and default_home_s:
+        lib = default_home_s
 
     return home, lib
 

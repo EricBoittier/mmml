@@ -331,11 +331,35 @@ def _rtf_path_without_drude_autogen(rtf_path: str | Path) -> str:
     return path
 
 
+def apply_nbonds_kwargs(kw: dict[str, Any]) -> None:
+    """Apply nonbond settings via the KEY_LIBRARY C API (no ``nbonds`` script).
+
+    ``libcharmm.so`` built with ``as_library=ON`` does not link the ``nbonds``
+    parser command; use :mod:`pycharmm.nbonds` setters instead. ``nbxmod`` has no
+    C setter — it is dropped here (CGENFF ``NONBONDED nbxmod`` from READ PARAM).
+    """
+    import pycharmm.nbonds as nbonds
+
+    cfg = dict(kw)
+    cfg.pop("nbxmod", None)
+    cutim = cfg.pop("cutim", None)
+    inbfrq = cfg.pop("inbfrq", None)
+    imgfrq = cfg.pop("imgfrq", None)
+    cfg.pop("ctexnb", None)  # CHARMM bumps ctexnb internally when cutnb/cutim change
+
+    nbonds.configure(**cfg)
+    if cutim is not None:
+        nbonds.set_cutim(float(cutim))
+    if inbfrq is not None:
+        nbonds.set_inbfrq(int(inbfrq))
+    if imgfrq is not None:
+        nbonds.set_imgfrq(int(imgfrq))
+    nbonds.update_bnbnd()
+
+
 def apply_vacuum_nbonds(*, nbxmod: int = 5) -> None:
     """Apply ASE-style vacuum nonbonds (domdec off, no crystal)."""
     from mmml.interfaces.pycharmmInterface.mlpot.setup import prepare_charmm_vacuum
 
-    import pycharmm
-
     prepare_charmm_vacuum()
-    pycharmm.NonBondedScript(**vacuum_nbond_kwargs(nbxmod=nbxmod)).run()
+    apply_nbonds_kwargs(vacuum_nbond_kwargs(nbxmod=nbxmod))
