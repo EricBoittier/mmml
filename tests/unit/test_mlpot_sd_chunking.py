@@ -356,7 +356,7 @@ def test_minimize_with_mlpot_refreshes_grms_after_sync():
     ) as sync_lists, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.materialize_deferred_mlpot_jax_before_sd",
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.materialize_deferred_mlpot_jax_before_sd",
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_mlpot_sd_then_abnr",
         return_value=MlpotSdChunkResult(completed=True),
@@ -397,7 +397,7 @@ def test_minimize_with_mlpot_raises_when_sd_watchdog_aborts():
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.prepare_mlpot_hybrid_state_for_sd",
         return_value=(12.0, -100.0),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.materialize_deferred_mlpot_jax_before_sd",
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.materialize_deferred_mlpot_jax_before_sd",
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_mlpot_sd_then_abnr",
         return_value=MlpotSdChunkResult(completed=False),
@@ -430,7 +430,7 @@ def test_minimize_with_mlpot_continues_after_rollback():
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.prepare_mlpot_hybrid_state_for_sd",
         return_value=(12.0, -100.0),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.materialize_deferred_mlpot_jax_before_sd",
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.materialize_deferred_mlpot_jax_before_sd",
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_mlpot_sd_then_abnr",
         return_value=MlpotSdChunkResult(

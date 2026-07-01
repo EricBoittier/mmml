@@ -29,8 +29,13 @@ def test_build_mm_energy_forces_fn_force_static_cell_list_sets_pair_lambda():
     fake_psf = MagicMock()
     fake_psf.get_charges.return_value = np.zeros(n_atoms, dtype=np.float64)
     fake_psf.get_iac.return_value = np.ones(n_atoms, dtype=np.int32)
+    fake_param = MagicMock()
+    fake_param.get_atc.return_value = ["CG321", "HGA2"]
 
     with patch(
+        "mmml.interfaces.pycharmmInterface.mm_energy_forces._cgenff_params_loaded",
+        return_value=True,
+    ), patch(
         "mmml.interfaces.pycharmmInterface.mm_energy_forces.have_jax_md",
         return_value=False,
     ), patch(
@@ -48,38 +53,40 @@ def test_build_mm_energy_forces_fn_force_static_cell_list_sets_pair_lambda():
     ), patch(
         "mmml.interfaces.pycharmmInterface.mm_energy_forces.pick_static_rebuild_backend",
         return_value="cell_list",
-    ), patch("pycharmm.psf", fake_psf), patch(
+    ), patch("pycharmm.psf", fake_psf), patch("pycharmm.param", fake_param), patch(
         "mmml.interfaces.pycharmmInterface.mm_energy_forces.open",
-        side_effect=OSError("skip prm read"),
+        side_effect=[
+            ["ATOM foo bar CG321 -0.1\n"],
+            ["CG321 0.0 -0.1 3.5\n"],
+        ],
     ), patch(
         "mmml.interfaces.pycharmmInterface.mm_energy_forces._get_actual_psf_charges",
         return_value=np.zeros(n_atoms, dtype=np.float64),
     ), patch(
         "mmml.interfaces.pycharmmInterface.mm_energy_forces.CGENFF_PRM",
         "/dev/null",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mm_energy_forces.CGENFF_RTF",
+        "/dev/null",
     ):
-        # CGENFF param loading uses open(); provide minimal atc via patched internals.
-        with patch(
-            "mmml.interfaces.pycharmmInterface.mm_energy_forces.np.array",
-            wraps=np.array,
-        ):
-            mm_fn = build_mm_energy_forces_fn(
-                R,
-                total_atoms=n_atoms,
-                n_monomers=n_mono,
-                monomer_offsets=offsets,
-                atoms_per_monomer_list=atoms_per,
-                lambda_monomer=lambda_m,
-                ml_switch_width=1.0,
-                mm_switch_on=6.0,
-                mm_switch_width=4.0,
-                pbc_cell=box,
-                use_jax_md_neighbor_list=False,
-                mm_nl_backend="cell_list",
-                force_static_mm_eval=True,
-                lr_solver="mic",
-                debug=False,
-            )
+        mm_fn = build_mm_energy_forces_fn(
+            R,
+            total_atoms=n_atoms,
+            n_monomers=n_mono,
+            monomer_offsets=offsets,
+            atoms_per_monomer_list=atoms_per,
+            lambda_monomer=lambda_m,
+            ml_switch_width=1.0,
+            mm_switch_on=6.0,
+            mm_switch_width=4.0,
+            pbc_cell=box,
+            use_jax_md_neighbor_list=False,
+            mm_nl_backend="cell_list",
+            force_static_mm_eval=True,
+            lr_solver="mic",
+            defer_xla_gpu_warmup=True,
+            debug=False,
+        )
 
     assert callable(mm_fn)
     energy, forces = jax.device_get(mm_fn(jnp.asarray(R)))
