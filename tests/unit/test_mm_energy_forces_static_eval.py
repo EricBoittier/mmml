@@ -32,10 +32,12 @@ def test_build_mm_energy_forces_fn_force_static_cell_list_sets_pair_lambda():
     fake_param = MagicMock()
     fake_param.get_atc.return_value = ["CG321", "HGA2"]
 
+    rtf_mock = MagicMock()
+    rtf_mock.readlines.return_value = ["ATOM foo bar CG321 -0.1\n"]
+    prm_mock = MagicMock()
+    prm_mock.readlines.return_value = ["CG321 0.0 -0.1 3.5\n"]
+
     with patch(
-        "mmml.interfaces.pycharmmInterface.mm_energy_forces._cgenff_params_loaded",
-        return_value=True,
-    ), patch(
         "mmml.interfaces.pycharmmInterface.mm_energy_forces.have_jax_md",
         return_value=False,
     ), patch(
@@ -55,10 +57,7 @@ def test_build_mm_energy_forces_fn_force_static_cell_list_sets_pair_lambda():
         return_value="cell_list",
     ), patch("pycharmm.psf", fake_psf), patch("pycharmm.param", fake_param), patch(
         "mmml.interfaces.pycharmmInterface.mm_energy_forces.open",
-        side_effect=[
-            ["ATOM foo bar CG321 -0.1\n"],
-            ["CG321 0.0 -0.1 3.5\n"],
-        ],
+        side_effect=[rtf_mock, prm_mock],
     ), patch(
         "mmml.interfaces.pycharmmInterface.mm_energy_forces._get_actual_psf_charges",
         return_value=np.zeros(n_atoms, dtype=np.float64),
