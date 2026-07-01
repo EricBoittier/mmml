@@ -124,3 +124,15 @@ defaults:
 ```
 
 Liquid DCM boxes also need `L/2` safely above CHARMM `cutnb` — see [liquid-box workflow](liquid-box-workflow.md).
+
+## Example dimer scans (DCM / ACO + all LR backends)
+
+Rigid COM-distance scans for **DCM:2** and **ACO:2** compare `mic`, **jax-pme** (ewald/pme/p3m), and `periodic_external` backends (jax-pme, nvalchemiops, ScaFaCoS):
+
+```bash
+export MMML_CKPT=/path/to/checkpoint
+./scripts/run_dcm_aco_dimer_lr_scans.sh
+uv run python scripts/plot_dimer_lr_scan_compare.py --root artifacts/dimer_lr_scans
+```
+
+Full tables and single-scan examples: [tests/functionality/dimer_scans/README.md](https://github.com/EricBoittier/mmml/blob/main/tests/functionality/dimer_scans/README.md).

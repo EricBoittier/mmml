@@ -15,6 +15,14 @@ Examples
 --------
   export MMML_CKPT=/path/to/dcm_ckpt
   ./scripts/mmml-charmm-mpirun.sh python scripts/scan_mlpot_dimer_2d_pycharmm.py \\
+    DCM:2 --scan-1d --scan-tag pbc_jax_pme_ewald \\
+    --box-size 36 --mlpot-pbc --lr-solver jax_pme --jax-pme-method ewald \\
+    --output-dir artifacts/dimer_lr_scans
+
+  # Full DCM + ACO solver sweep:
+  ./scripts/run_dcm_aco_dimer_lr_scans.sh
+
+  ./scripts/mmml-charmm-mpirun.sh python scripts/scan_mlpot_dimer_2d_pycharmm.py \\
     DCM:3 --output-dir artifacts/pycharmm_mlpot/dimer_2d_scan/dcm3
 
   ./scripts/mmml-charmm-mpirun.sh python scripts/scan_mlpot_dimer_2d_pycharmm.py \\
@@ -23,7 +31,7 @@ Examples
 
   # Multiple compositions (one NPZ each):
   ./scripts/mmml-charmm-mpirun.sh python scripts/scan_mlpot_dimer_2d_pycharmm.py \\
-    --batch-compositions DCM:3,ACO:3 --checkpoint "$MMML_CKPT"
+    --batch-compositions DCM:2,ACO:2 --checkpoint "$MMML_CKPT"
 """
 
 from __future__ import annotations
@@ -48,6 +56,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
         add_charmm_output_args,
         add_cluster_args,
+        add_mlpot_lr_nonbond_args,
         add_packmol_cache_args,
     )
 
@@ -134,8 +143,6 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="For dimers (N=2): scan COM distance along d01 only (faster 1D sweep)",
     )
     p.add_argument("--mlpot-pbc", action="store_true", default=False)
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import add_mlpot_lr_nonbond_args
-
     add_mlpot_lr_nonbond_args(p)
     p.add_argument("--no-mm", action="store_true", help="Skip MM terms in decomposed eval")
     # p.add_argument("--quiet", action="store_true")

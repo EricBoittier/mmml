@@ -111,6 +111,7 @@ nav:
       - Long-range solver tutorial: long-range-solver-tutorial.md
   - MLpot:
       - Cutoffs, regions & LR solvers: hybrid-potential-regions.md
+      - Dimer scans (DCM / ACO): functionality/dimer_scans/README.md
       - Settings: mlpot-settings.md
       - Calculator profiling: calculator-profiling.md
       - Medium PBC (500–2000 monomers): mlpot-medium-pbc.md

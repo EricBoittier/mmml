@@ -40,23 +40,27 @@ def _load_npz_meta(path: Path) -> dict[str, Any]:
         if "jax_pme_method" in data
         else "",
     }
-    d1 = np.asarray(data["scan_2d_d01_A"], dtype=float)
+    d1 = np.asarray(data["scan_2d_d01_A"], dtype=float).reshape(-1)
     hybrid = np.asarray(data["scan_2d_hybrid_energy_kcal"], dtype=float)
     ml2b = np.asarray(data["scan_2d_ml_2b_E_kcal"], dtype=float)
     mm = np.asarray(data["scan_2d_mm_E_kcal"], dtype=float) if "scan_2d_mm_E_kcal" in data else None
-    # 1D slice: first column for scan_1d, else diagonal for square grids
-    if hybrid.ndim == 1 or hybrid.shape[1] == 1:
-        y_hybrid = hybrid.reshape(-1)
-        y_ml2b = ml2b.reshape(-1)
-        y_mm = mm.reshape(-1) if mm is not None else None
-        x = d1.reshape(-1)
-    else:
-        n = min(hybrid.shape)
+
+    def _slice_1d(grid: np.ndarray) -> np.ndarray:
+        if grid.ndim == 1:
+            return grid.reshape(-1)
+        if grid.shape[0] == 1:
+            return grid[0]
+        if grid.shape[1] == 1:
+            return grid[:, 0]
+        n = min(grid.shape)
         idx = np.arange(n)
-        y_hybrid = hybrid[idx, idx]
-        y_ml2b = ml2b[idx, idx]
-        y_mm = mm[idx, idx] if mm is not None else None
-        x = d1
+        return grid[idx, idx]
+
+    y_hybrid = _slice_1d(hybrid)
+    y_ml2b = _slice_1d(ml2b)
+    y_mm = _slice_1d(mm) if mm is not None else None
+    n = int(y_hybrid.shape[0])
+    x = d1[:n] if d1.shape[0] >= n else d1
     return {
         **meta,
         "d01_A": x,
@@ -149,6 +153,7 @@ def main(argv: list[str] | None = None) -> int:
 
     root = args.root.expanduser().resolve()
     out_dir = (args.output_dir or (root / "plots")).expanduser().resolve()
+    out_dir.mkdir(parents=True, exist_ok=True)
     files = discover_npz_files(root)
     if not files:
         print(f"No scan NPZ files under {root}")
