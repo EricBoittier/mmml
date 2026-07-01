@@ -2399,23 +2399,7 @@ def probe_and_light_resync_if_desync(
                 "(PBC + MPI-linked CHARMM deferred JAX)",
                 flush=True,
             )
-        pyCModel = getattr(mlpot_ctx, "pyCModel", None)
-        prefer_calc = (
-            pyCModel is not None
-            and getattr(pyCModel, "_spherical_fn", None) is not None
-        )
-        diag = measure_hybrid_charmm_grms(
-            mlpot_ctx,
-            prefer_calculator=prefer_calc,
-        )
-        _print_hybrid_charmm_grms_diag(
-            context,
-            diag,
-            mlpot_ctx=mlpot_ctx,
-            quiet=not verbose,
-        )
-        hybrid = float(diag.hybrid)
-        return hybrid if np.isfinite(hybrid) else 0.0
+        return float("nan")
 
     if verbose and context:
         print(

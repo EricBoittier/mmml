@@ -1334,7 +1334,10 @@ def ensure_ml_exclusions_before_mlpot_charmm_energy(
             pycharmm.image.update_bimag()
         return nnb
 
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from mmml.interfaces.pycharmmInterface.charmm_levels import (
+        charmm_quiet_output,
+        charmm_relaxed_bomlev,
+    )
     from mmml.interfaces.pycharmmInterface.charmm_mpi import (
         recover_mpi_for_charmm_after_jax,
     )
@@ -1362,7 +1365,8 @@ def ensure_ml_exclusions_before_mlpot_charmm_energy(
         flush=True,
     )
     with charmm_relaxed_bomlev():
-        pycharmm.nbonds.update_bnbnd()
+        with charmm_quiet_output():
+            pycharmm.nbonds.update_bnbnd()
     pycharmm.image.update_bimag()
     recover_mpi_for_charmm_after_jax(phase=f"after {context} PBC upinb")
     return nnb
@@ -1523,8 +1527,11 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
         flush=True,
     )
     pycharmm = _import_pycharmm()
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_quiet_output
+
     with charmm_relaxed_bomlev():
-        pycharmm.nbonds.update_bnbnd()
+        with charmm_quiet_output():
+            pycharmm.nbonds.update_bnbnd()
     pycharmm.image.update_bimag()
     recover_mpi_for_charmm_after_jax(
         phase="after MLpot PBC upinb during registration",

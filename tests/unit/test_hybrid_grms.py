@@ -151,9 +151,12 @@ def test_resolve_mlpot_grms_falls_back_to_charmm_without_ctx():
 
 
 def test_probe_and_light_resync_if_desync_runs_resync():
-    ctx = mock.Mock()
+    ctx = mock.Mock(use_pbc=False)
 
     with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
+        return_value=False,
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.measure_hybrid_charmm_grms",
@@ -174,9 +177,12 @@ def test_probe_and_light_resync_if_desync_runs_resync():
 
 
 def test_probe_and_light_resync_skips_resync_for_geometry_stress():
-    ctx = mock.Mock()
+    ctx = mock.Mock(use_pbc=False)
 
     with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
+        return_value=False,
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.measure_hybrid_charmm_grms",
@@ -196,9 +202,12 @@ def test_probe_and_light_resync_skips_resync_for_geometry_stress():
 
 
 def test_probe_and_light_resync_skips_resync_when_hybrid_relaxed():
-    ctx = mock.Mock()
+    ctx = mock.Mock(use_pbc=False)
 
     with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
+        return_value=False,
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.measure_hybrid_charmm_grms",
@@ -227,21 +236,18 @@ def test_probe_skips_ener_force_before_first_mlpot_sd():
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
     ) as ener, mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.measure_hybrid_charmm_grms",
-        return_value=mock.Mock(
-            hybrid=8.0,
-            charmm=2.0,
-            ratio=4.0,
-            kind="ok",
-        ),
     ) as measure, mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.light_resync_mlpot_state",
-    ) as resync:
+    ) as resync, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common._print_hybrid_charmm_grms_diag",
+    ) as emit:
         grms = probe_and_light_resync_if_desync(ctx, context="sync", verbose=True)
 
     ener.assert_not_called()
     resync.assert_not_called()
-    measure.assert_called_once_with(ctx, prefer_calculator=False)
-    assert grms == pytest.approx(8.0)
+    measure.assert_not_called()
+    emit.assert_not_called()
+    assert np.isnan(grms)
 
 
 def test_light_resync_reregisters_and_updates():
