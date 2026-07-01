@@ -43,23 +43,22 @@ fi
 
 SKIP_PERIODIC="${SKIP_PERIODIC:-0}"
 
-_common_scan_args() {
-  echo \
-    --checkpoint "$MMML_CKPT" \
-    --output-dir "$OUT_ROOT" \
-    --scan-1d \
-    --scan-2d-min "$SCAN_MIN" \
-    --scan-2d-max "$SCAN_MAX" \
-    --scan-2d-steps "$SCAN_STEPS" \
-    --mm-switch-on 8.0 \
-    --mm-switch-width 5.0 \
-    --ml-switch-width 1.5 \
-    --packmol-sphere \
-    --packmol-radius "$PACKMOL_R" \
-    --packmol-tolerance 1.0 \
-    --skip-energy-show \
-    --seed 42
-}
+_common_scan_args=(
+  --checkpoint "$MMML_CKPT"
+  --output-dir "$OUT_ROOT"
+  --scan-1d
+  --scan-2d-min "$SCAN_MIN"
+  --scan-2d-max "$SCAN_MAX"
+  --scan-2d-steps "$SCAN_STEPS"
+  --mm-switch-on 8.0
+  --mm-switch-width 5.0
+  --ml-switch-width 1.5
+  --packmol-sphere
+  --packmol-radius "$PACKMOL_R"
+  --packmol-tolerance 1.0
+  --skip-energy-show
+  --seed 42
+)
 
 _run_scan() {
   local comp="$1"
@@ -67,11 +66,10 @@ _run_scan() {
   shift 2
   echo ""
   echo "=== ${comp}  scan_tag=${tag} ==="
-  # shellcheck disable=SC2068
   "$MPIRUN" python scripts/scan_mlpot_dimer_2d_pycharmm.py \
     --composition "$comp" \
     --scan-tag "$tag" \
-    $(_common_scan_args) \
+    "${_common_scan_args[@]}" \
     "$@"
 }
 
@@ -84,14 +82,11 @@ _have_scafacos() {
 }
 
 for comp in "${COMPOSITIONS[@]}"; do
-  # --- Vacuum / free-space (MIC only meaningful inside pair loop) ---
   _run_scan "$comp" "vacuum_mic" --free-space --lr-solver mic
 
-  # --- Periodic box: jax_mic + MIC ---
   _run_scan "$comp" "pbc_mic" \
     --box-size "$BOX_SIZE" --mlpot-pbc --lr-solver mic
 
-  # --- jax_mic + jax-pme methods ---
   for method in ewald pme p3m; do
     _run_scan "$comp" "pbc_jax_pme_${method}" \
       --box-size "$BOX_SIZE" --mlpot-pbc \
@@ -106,7 +101,6 @@ for comp in "${COMPOSITIONS[@]}"; do
     continue
   fi
 
-  # --- periodic_external full-box Coulomb backends ---
   _run_scan "$comp" "pbc_periodic_external_jax_pme_pme" \
     --box-size "$BOX_SIZE" --mlpot-pbc \
     --mm-nonbond-mode periodic_external \
