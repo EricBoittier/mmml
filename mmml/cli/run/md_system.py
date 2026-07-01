@@ -379,7 +379,7 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="N",
         help=(
             "pycharmm: heating velocity rescale every N steps when --heat-thermostat "
-            "scale (0 = match --dyn-nprint). Ignored for hoover."
+            "scale (0 = match --dyn-freq-cadence, else --dyn-nprint). Ignored for hoover."
         ),
     )
     parser.add_argument(
