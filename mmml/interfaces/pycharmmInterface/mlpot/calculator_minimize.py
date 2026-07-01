@@ -539,24 +539,27 @@ def _commit_hybrid_calculator_mini_result(
     from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
     sync_charmm_positions(np.asarray(atoms.get_positions(), dtype=np.float64))
-    sync_charmm_lists_after_mini(quiet=True)
-    invalidate_mlpot_calculator_caches(mlpot_ctx)
-    mlpot_ctx.reregister_mlpot(verbose=False, reregister_params=False)
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms_after_ener_force
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         mlpot_skip_charmm_ener_force_before_first_sd,
+        prime_charmm_hybrid_energy_before_mlpot_sd,
     )
 
-    charmm_grms_after_ener_force()
-    if mlpot_skip_charmm_ener_force_before_first_sd(mlpot_ctx):
-        setattr(mlpot_ctx, "_mlpot_pre_sd_ener_probed", True)
-        from mmml.interfaces.pycharmmInterface.charmm_mpi import (
-            recover_mpi_for_charmm_after_jax,
+    defer_pre_sd_ener = mlpot_skip_charmm_ener_force_before_first_sd(mlpot_ctx)
+    if not defer_pre_sd_ener:
+        sync_charmm_lists_after_mini(quiet=True)
+    invalidate_mlpot_calculator_caches(mlpot_ctx)
+    mlpot_ctx.reregister_mlpot(verbose=False, reregister_params=False)
+    if defer_pre_sd_ener:
+        # Defer path: skip UPDATE (upinb) here; materialize will prime USER+enbond.
+        prime_charmm_hybrid_energy_before_mlpot_sd(
+            mlpot_ctx,
+            verbose=verbose,
+            context=f"{context_prefix} post-calculator mini",
         )
+    else:
+        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms_after_ener_force
 
-        recover_mpi_for_charmm_after_jax(
-            phase="after calculator mini CHARMM ENER (pre-MLpot SD)",
-        )
+        charmm_grms_after_ener_force()
     grms1 = mlpot_hybrid_grms_from_calculator(mlpot_ctx)
     if grms1 is None or not np.isfinite(grms1):
         raise RuntimeError("hybrid GRMS unavailable after calculator minimize")

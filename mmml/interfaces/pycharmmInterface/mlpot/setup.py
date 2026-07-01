@@ -315,7 +315,7 @@ def mlpot_skip_charmm_ener_force_before_first_sd(mlpot_ctx: Any) -> bool:
 
 def mlpot_sd_charmm_ener_already_primed(mlpot_ctx: Any) -> bool:
     """True when a prior ``ENER FORCE`` primed CHARMM after calculator prep."""
-    return bool(getattr(mlpot_ctx, "_mlpot_pre_sd_ener_probed", False))
+    return getattr(mlpot_ctx, "_mlpot_pre_sd_ener_probed", None) is True
 
 
 def prime_charmm_hybrid_energy_before_mlpot_sd(
@@ -326,15 +326,18 @@ def prime_charmm_hybrid_energy_before_mlpot_sd(
 ) -> float | None:
     """Run one hybrid ``ENER FORCE`` under ``mpirun`` after JAX warmup (defer path).
 
-  JAX callback warmup alone does not exercise Fortran ``enbond`` in the same
-  process layout as ``steepd``. On the MPI+PBC defer path, serial ``python``
-  must not call ``ENER`` here (``upinb`` risk); under ``mpirun`` one probe
-  after callback JIT validates USER + ``enbond`` before the first SD step.
+    JAX callback warmup alone does not exercise Fortran ``enbond`` in the same
+    process layout as ``steepd``. On the MPI+PBC defer path, serial ``python``
+    must not call ``ENER`` here (``upinb`` risk); under ``mpirun`` one probe
+    after callback JIT validates USER + ``enbond`` before the first SD step.
     """
     if not mlpot_skip_charmm_ener_force_before_first_sd(mlpot_ctx):
         return None
     if mlpot_sd_charmm_ener_already_primed(mlpot_ctx):
-        return None
+        user = _read_mlpot_user_energy_kcal(force=False)
+        if not _mlpot_user_missing(user, zero_tol_kcalmol=1.0e-12):
+            return None
+        setattr(mlpot_ctx, "_mlpot_pre_sd_ener_probed", False)
     from mmml.interfaces.pycharmmInterface.charmm_mpi import (
         _under_mpirun,
         recover_mpi_for_charmm_after_jax,

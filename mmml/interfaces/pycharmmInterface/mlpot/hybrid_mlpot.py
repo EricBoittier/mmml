@@ -1283,7 +1283,7 @@ def materialize_deferred_mlpot_jax_before_sd(
     if not getattr(pyCModel, "_defer_jax_until_after_sd", False):
         return False
 
-    if getattr(mlpot_ctx, "_mlpot_sd_jax_materialized", False):
+    if getattr(mlpot_ctx, "_mlpot_sd_jax_materialized", None) is True:
         rebind_mlpot_calculator_from_pycmodel(mlpot_ctx, verbose=False)
         prime_charmm_hybrid_energy_before_mlpot_sd(
             mlpot_ctx,
@@ -1337,33 +1337,41 @@ def materialize_deferred_mlpot_jax_before_sd(
     if isinstance(calc, _DeferredDecomposedMlpotCalculator):
         calc = calc._ensure_real()
     if isinstance(calc, DecomposedMlpotCalculator) and calc.spherical_fn is not None:
-        box, mm_pair_idx, mm_pair_mask, use_mm_pairs = _resolve_mlpot_warmup_box_pairs(
-            pyCModel,
-            pos,
-            use_pbc=use_pbc,
-            box_A=float(box_A) if box_A is not None else None,
-        )
-        print(
-            "Pre-MLpot SD: warming CHARMM callback spherical_forward JIT "
-            "(same path as steepd gete)",
-            flush=True,
-        )
-        _warmup_value_and_grad_for_model(
-            pyCModel,
-            pos,
-            box=box,
-            mm_pair_idx=mm_pair_idx,
-            mm_pair_mask=mm_pair_mask,
-            use_mm_pairs=use_mm_pairs,
-        )
-        recover_mpi_for_charmm_after_jax(
-            phase="after pre-MLpot SD callback forward warmup",
-        )
-        did_work = True
-        print(
-            "Pre-MLpot SD: callback forward JIT ready",
-            flush=True,
-        )
+        if getattr(pyCModel, "_pre_sd_callback_forward_warmup_done", False):
+            if verbose:
+                print(
+                    "Pre-MLpot SD: callback forward JIT already warm (skip)",
+                    flush=True,
+                )
+        else:
+            box, mm_pair_idx, mm_pair_mask, use_mm_pairs = _resolve_mlpot_warmup_box_pairs(
+                pyCModel,
+                pos,
+                use_pbc=use_pbc,
+                box_A=float(box_A) if box_A is not None else None,
+            )
+            print(
+                "Pre-MLpot SD: warming CHARMM callback spherical_forward JIT "
+                "(same path as steepd gete)",
+                flush=True,
+            )
+            _warmup_value_and_grad_for_model(
+                pyCModel,
+                pos,
+                box=box,
+                mm_pair_idx=mm_pair_idx,
+                mm_pair_mask=mm_pair_mask,
+                use_mm_pairs=use_mm_pairs,
+            )
+            recover_mpi_for_charmm_after_jax(
+                phase="after pre-MLpot SD callback forward warmup",
+            )
+            pyCModel._pre_sd_callback_forward_warmup_done = True
+            did_work = True
+            print(
+                "Pre-MLpot SD: callback forward JIT ready",
+                flush=True,
+            )
 
     setattr(mlpot_ctx, "_mlpot_sd_jax_materialized", True)
     prime_charmm_hybrid_energy_before_mlpot_sd(

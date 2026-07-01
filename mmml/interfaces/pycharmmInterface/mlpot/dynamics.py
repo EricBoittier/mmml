@@ -1288,6 +1288,18 @@ def _run_minimize_in_chunks(
                     tag_style="bold blue",
                     quiet=False,
                 )
+        if chunk_index == 1 and config.mlpot_ctx is not None:
+            from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+                recover_mpi_for_charmm_after_jax,
+            )
+            from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+                mlpot_skip_charmm_ener_force_before_first_sd,
+            )
+
+            if mlpot_skip_charmm_ener_force_before_first_sd(config.mlpot_ctx):
+                recover_mpi_for_charmm_after_jax(
+                    phase="immediately before MLpot SD steepd",
+                )
         with charmm_quiet_output():
             run_fn(**kw)
         remaining -= step
