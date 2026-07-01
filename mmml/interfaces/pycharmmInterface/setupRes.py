@@ -40,6 +40,14 @@ import pycharmm.settings as settings
 import pycharmm.lingo
 
 
+try:
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import apply_charmm_verbosity
+
+    apply_charmm_verbosity(prnlev=5, warnlev=5, bomlev=-2)
+except Exception:
+    pass
+
+
 problem_symbols = ["HO", "CA", "CM", ]
 
 
@@ -201,30 +209,35 @@ def generate_coordinates(skip_energy_show: bool = False, validate: bool = True) 
 
 
 def mini(nbxmod=5, skip_energy_show: bool = False):
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+
     print("*" * 5, "Minimizing", "*" * 5)
-    pycharmm_quiet()
-    # Specify nonbonded python object called my_nbonds - this just sets it up
-    # equivalant CHARMM scripting command: nbonds cutnb 18 ctonnb 13 ctofnb 17 cdie eps 1 atom vatom fswitch vfswitch
-    my_nbonds = pycharmm.NonBondedScript(
-        cutnb=18.0,
-        ctonnb=13.0,
-        ctofnb=17.0,
-        eps=1.0,
-        cdie=True,
-        atom=True,
-        vatom=True,
-        fswitch=True,
-        vfswitch=True,
-        nbxmod=nbxmod,  # remove all exclusions
-    )
+    # ``NonBondedScript.run()`` can emit ``nbon`` warnings; default BOMLEV 0 aborts
+    # under pytest / notebook imports that never ran ``apply_charmm_verbosity``.
+    with charmm_relaxed_bomlev(-2):
+        pycharmm_quiet()
+        # Specify nonbonded python object called my_nbonds - this just sets it up
+        # equivalant CHARMM scripting command: nbonds cutnb 18 ctonnb 13 ctofnb 17 cdie eps 1 atom vatom fswitch vfswitch
+        my_nbonds = pycharmm.NonBondedScript(
+            cutnb=18.0,
+            ctonnb=13.0,
+            ctofnb=17.0,
+            eps=1.0,
+            cdie=True,
+            atom=True,
+            vatom=True,
+            fswitch=True,
+            vfswitch=True,
+            nbxmod=nbxmod,  # remove all exclusions
+        )
 
-    # Implement these non-bonded parameters by "running" them.
-    my_nbonds.run()
+        # Implement these non-bonded parameters by "running" them.
+        my_nbonds.run()
 
-    # equivalent CHARMM scripting command: minimize abnr nstep 1000 tole 1e-3 tolgr 1e-3
-    minimize.run_abnr(nstep=1000, tolenr=1e-3, tolgrd=1e-3)
-    # equivalent CHARMM scripting command: energy
-    _show_energy(skip_energy_show)
+        # equivalent CHARMM scripting command: minimize abnr nstep 1000 tole 1e-3 tolgr 1e-3
+        minimize.run_abnr(nstep=1000, tolenr=1e-3, tolgrd=1e-3)
+        # equivalent CHARMM scripting command: energy
+        _show_energy(skip_energy_show)
 
 
 def write_psf(resid: str) -> None:
