@@ -19,6 +19,7 @@ the jax-pme screened real-space kernel within ``sr_cutoff_A``.
 from __future__ import annotations
 
 import atexit
+import math
 import os
 import sys
 import time
@@ -321,6 +322,107 @@ def _mean_switch_scale_jax(
     return jnp.mean(jnp.stack(scales))
 
 
+@dataclass(frozen=True)
+class _ComSwitchJitKey:
+    monomer_offsets: tuple[int, ...]
+    ml_switch_width: float
+    mm_switch_on: float
+    mm_switch_width: float
+    complementary_handoff: bool
+    mm_r_min: float  # ``nan`` when unset
+
+
+def _com_switch_jit_key(
+    monomer_offsets: np.ndarray,
+    *,
+    ml_switch_width: float,
+    mm_switch_on: float,
+    mm_switch_width: float,
+    complementary_handoff: bool,
+    mm_r_min: float | None,
+) -> _ComSwitchJitKey:
+    offsets = tuple(int(v) for v in np.asarray(monomer_offsets, dtype=np.int64).reshape(-1))
+    return _ComSwitchJitKey(
+        monomer_offsets=offsets,
+        ml_switch_width=float(ml_switch_width),
+        mm_switch_on=float(mm_switch_on),
+        mm_switch_width=float(mm_switch_width),
+        complementary_handoff=bool(complementary_handoff),
+        mm_r_min=float("nan") if mm_r_min is None else float(mm_r_min),
+    )
+
+
+@lru_cache(maxsize=128)
+def _cached_com_switch_value_and_grad_fn(key: _ComSwitchJitKey):
+    """JIT ``value_and_grad`` of mean COM switch (stable across host hybrid LR calls)."""
+    import jax
+
+    offsets = np.asarray(key.monomer_offsets, dtype=np.int64)
+    mm_r_min = None if math.isnan(key.mm_r_min) else float(key.mm_r_min)
+
+    def mean_switch(positions, cell):
+        return _mean_switch_scale_jax(
+            positions,
+            offsets,
+            cell,
+            ml_switch_width=key.ml_switch_width,
+            mm_switch_on=key.mm_switch_on,
+            mm_switch_width=key.mm_switch_width,
+            complementary_handoff=key.complementary_handoff,
+            mm_r_min=mm_r_min,
+        )
+
+    return jax.jit(jax.value_and_grad(mean_switch))
+
+
+def reset_com_switch_jit_cache() -> None:
+    """Clear COM-switch JIT cache (tests only)."""
+    _cached_com_switch_value_and_grad_fn.cache_clear()
+
+
+def _com_switch_value_and_grad(
+    positions_A: np.ndarray,
+    monomer_offsets: np.ndarray,
+    pbc_cell: np.ndarray,
+    *,
+    ml_switch_width: float,
+    mm_switch_on: float,
+    mm_switch_width: float,
+    complementary_handoff: bool,
+    mm_r_min: float | None,
+) -> tuple[float, np.ndarray]:
+    """Mean COM switch scalar and ``∇s`` w.r.t. atom positions (host numpy)."""
+    import jax
+    import jax.numpy as jnp
+
+    key = _com_switch_jit_key(
+        monomer_offsets,
+        ml_switch_width=ml_switch_width,
+        mm_switch_on=mm_switch_on,
+        mm_switch_width=mm_switch_width,
+        complementary_handoff=complementary_handoff,
+        mm_r_min=mm_r_min,
+    )
+    pos_j = jnp.asarray(positions_A, dtype=jnp.float64)
+    cell_j = jnp.asarray(pbc_cell, dtype=jnp.float64)
+    switch_scale, grad_s = _cached_com_switch_value_and_grad_fn(key)(pos_j, cell_j)
+    jax.block_until_ready(switch_scale)
+    jax.block_until_ready(grad_s)
+    return float(switch_scale), np.asarray(grad_s, dtype=np.float64)
+
+
+def _apply_lr_com_switch(
+    lr_energy_kcalmol: float,
+    lr_forces_kcalmol_A: np.ndarray,
+    switch_scale: float,
+    grad_s: np.ndarray,
+) -> tuple[float, np.ndarray, float]:
+    lr_f = np.asarray(lr_forces_kcalmol_A, dtype=np.float64)
+    scaled_e = switch_scale * float(lr_energy_kcalmol)
+    scaled_f = switch_scale * lr_f - float(lr_energy_kcalmol) * grad_s
+    return scaled_e, scaled_f, float(switch_scale)
+
+
 def _scale_lr_with_com_switch(
     positions_A: np.ndarray,
     monomer_offsets: np.ndarray,
@@ -333,6 +435,7 @@ def _scale_lr_with_com_switch(
     mm_switch_width: float,
     complementary_handoff: bool,
     mm_r_min: float | None,
+    com_switch: tuple[float, np.ndarray] | None = None,
 ) -> tuple[float, np.ndarray, float]:
     """Apply ``E = s·E_lr``, ``F = s·F_lr − E_lr·∇s`` (COM mean switch)."""
     pos = np.asarray(positions_A, dtype=np.float64)
@@ -340,29 +443,20 @@ def _scale_lr_with_com_switch(
     if pbc_cell is None:
         return float(lr_energy_kcalmol), lr_f, 1.0
 
-    import jax
-    import jax.numpy as jnp
-
-    cell = jnp.asarray(pbc_cell, dtype=jnp.float64)
-    pos_j = jnp.asarray(pos, dtype=jnp.float64)
-
-    def mean_switch(p):
-        return _mean_switch_scale_jax(
-            p,
+    if com_switch is None:
+        switch_scale, grad_s = _com_switch_value_and_grad(
+            pos,
             monomer_offsets,
-            cell,
+            np.asarray(pbc_cell, dtype=np.float64),
             ml_switch_width=ml_switch_width,
             mm_switch_on=mm_switch_on,
             mm_switch_width=mm_switch_width,
             complementary_handoff=complementary_handoff,
             mm_r_min=mm_r_min,
         )
-
-    switch_scale = float(mean_switch(pos_j))
-    grad_s = np.asarray(jax.grad(mean_switch)(pos_j), dtype=np.float64)
-    scaled_e = switch_scale * float(lr_energy_kcalmol)
-    scaled_f = switch_scale * lr_f - float(lr_energy_kcalmol) * grad_s
-    return scaled_e, scaled_f, switch_scale
+    else:
+        switch_scale, grad_s = com_switch
+    return _apply_lr_com_switch(lr_energy_kcalmol, lr_f, switch_scale, grad_s)
 
 
 def _intra_monomer_jax_pme_power_law(
@@ -593,6 +687,7 @@ def hybrid_jax_pme_coulomb_correction(
     complementary_handoff: bool = True,
     mm_r_min: float | None = None,
     subtract_pair_mic_sr: bool = False,
+    com_switch: tuple[float, np.ndarray] | None = None,
 ) -> HybridJaxPmeCorrectionResult:
     """Periodic Coulomb correction: jax-pme full box minus intra-monomer terms."""
     pos = np.asarray(positions_A, dtype=np.float64)
@@ -679,7 +774,7 @@ def hybrid_jax_pme_coulomb_correction(
     lr_e = lr_e - mic_e
     lr_f = np.asarray(lr_f - mic_f, dtype=np.float64)
 
-    t0 = _profile_start()
+    t0 = _profile_start() if com_switch is None else None
     scaled_e, scaled_f, switch_scale = _scale_lr_with_com_switch(
         pos,
         offsets,
@@ -691,8 +786,10 @@ def hybrid_jax_pme_coulomb_correction(
         mm_switch_width=mm_switch_width,
         complementary_handoff=complementary_handoff,
         mm_r_min=mm_r_min,
+        com_switch=com_switch,
     )
-    _record_profile("switch_scale", t0)
+    if com_switch is None:
+        _record_profile("switch_scale", t0)
 
     return HybridJaxPmeCorrectionResult(
         energy_kcalmol=scaled_e,
