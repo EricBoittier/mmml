@@ -12,36 +12,24 @@ mmml cross-check --help
 ## Options
 
 ```text
-usage: mmml cross-check [-h] [-c CONFIG] [-i STRUCTURES] [-o OUTPUT_DIR]
-                        [--reference-npz REFERENCE_NPZ]
-                        [--reference REFERENCE] [--backend BACKEND_NAMES]
-                        [--checkpoint CHECKPOINT] [--functional FUNCTIONAL]
-                        [--basis BASIS] [--max-frames MAX_FRAMES]
-                        [--stride STRIDE] [--charge CHARGE] [--spin SPIN]
-                        [--multiplicity MULTIPLICITY] [--no-plots]
-                        [--no-save-backend-npz]
-                        [--orca-template ORCA_TEMPLATE]
-                        [--molpro-template MOLPRO_TEMPLATE]
+usage: mmml cross-check [-h] [-c CONFIG] [-i STRUCTURES] [-o OUTPUT_DIR] [--reference-npz REFERENCE_NPZ] [--reference REFERENCE] [--backend BACKEND_NAMES] [--checkpoint CHECKPOINT] [--functional FUNCTIONAL] [--basis BASIS] [--max-frames MAX_FRAMES] [--stride STRIDE]
+                        [--charge CHARGE] [--spin SPIN] [--multiplicity MULTIPLICITY] [--no-plots] [--no-save-backend-npz] [--orca-template ORCA_TEMPLATE] [--molpro-template MOLPRO_TEMPLATE]
 
 Supplementary QC cross-check (PySCF, ORCA QM, xTB, Molpro, ML).
 
 options:
   -h, --help            show this help message and exit
-  -c, --config CONFIG   YAML config file (see
-                        examples/cross_check/cross_check.example.yaml)
+  -c, --config CONFIG   YAML config file (see examples/cross_check/cross_check.example.yaml)
   -i, --input, --structures STRUCTURES
                         Input NPZ or XYZ with structures to evaluate
   -o, --output-dir OUTPUT_DIR
                         Output directory (default: cross_check_out)
   --reference-npz REFERENCE_NPZ
-                        Use existing reference NPZ instead of running a
-                        reference backend
+                        Use existing reference NPZ instead of running a reference backend
   --reference REFERENCE
-                        Reference backend name when --reference-npz is not set
-                        (default: pyscf)
+                        Reference backend name when --reference-npz is not set (default: pyscf)
   --backend BACKEND_NAMES
-                        Backend to evaluate (repeatable): pyscf, ml, orca,
-                        xtb, molpro
+                        Backend to evaluate (repeatable): pyscf, ml, orca, xtb, molpro
   --checkpoint CHECKPOINT
                         ML checkpoint (shorthand for --backend ml)
   --functional, --xc FUNCTIONAL
@@ -53,18 +41,14 @@ options:
   --charge CHARGE       Total charge (default: 0)
   --spin SPIN           2*spin for PySCF (default: 0)
   --multiplicity MULTIPLICITY
-                        Spin multiplicity for ORCA/Molpro/xTB (default:
-                        spin+1)
+                        Spin multiplicity for ORCA/Molpro/xTB (default: spin+1)
   --no-plots            Skip matplotlib comparison plots
   --no-save-backend-npz
                         Do not write per-backend NPZ files
   --orca-template ORCA_TEMPLATE
-                        Custom ORCA input template with
-                        {xyz},{method},{basis},{charge},{mult} placeholders
+                        Custom ORCA input template with {xyz},{method},{basis},{charge},{mult} placeholders
   --molpro-template MOLPRO_TEMPLATE
-                        Custom Molpro input template with
-                        {geometry},{basis},{method},{charge},{mult}
-                        placeholders
+                        Custom Molpro input template with {geometry},{basis},{method},{charge},{mult} placeholders
 
 Run supplementary QC cross-checks against a reference (PySCF, ORCA QM, xTB, Molpro, ML).
 

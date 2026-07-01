@@ -12,8 +12,7 @@ mmml make-box --help
 ## Options
 
 ```text
-usage: mmml make-box [-h] [--n N] [--res RES] [--side_length SIDE_LENGTH]
-                     [--pdb PDB] [--solvent SOLVENT] [--density DENSITY]
+usage: mmml make-box [-h] [--n N] [--res RES] [--side_length SIDE_LENGTH] [--pdb PDB] [--solvent SOLVENT] [--density DENSITY]
 
 options:
   -h, --help            show this help message and exit

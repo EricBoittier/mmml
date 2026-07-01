@@ -12,12 +12,7 @@ mmml compare-npz --help
 ## Options
 
 ```text
-usage: mmml compare-npz [-h] [--reference REFERENCE]
-                        [--predictions PREDICTIONS] [--checkpoint CHECKPOINT]
-                        [--data DATA] [-o OUTPUT_DIR]
-                        [--max-frames MAX_FRAMES] [--stride STRIDE]
-                        [--cutoff CUTOFF] [--use-dcmnet-dipole]
-                        [--energy-unit ENERGY_UNIT] [--force-unit FORCE_UNIT]
+usage: mmml compare-npz [-h] [--reference REFERENCE] [--predictions PREDICTIONS] [--checkpoint CHECKPOINT] [--data DATA] [-o OUTPUT_DIR] [--max-frames MAX_FRAMES] [--stride STRIDE] [--cutoff CUTOFF] [--use-dcmnet-dipole] [--energy-unit ENERGY_UNIT] [--force-unit FORCE_UNIT]
                         [--no-plots] [--save-predictions]
 
 Compare reference and model NPZ data (metrics + plots).
@@ -39,8 +34,7 @@ options:
   --cutoff CUTOFF       Model cutoff override for checkpoint inference
   --use-dcmnet-dipole   Use DCMNet dipole from joint checkpoint
   --energy-unit ENERGY_UNIT
-                        Energy unit label for plots (default: infer from
-                        reference NPZ)
+                        Energy unit label for plots (default: infer from reference NPZ)
   --force-unit FORCE_UNIT
                         Force unit label for plots (default: eV/Å)
   --no-plots            Skip matplotlib plots

@@ -22,8 +22,7 @@ Run MD with the electric-field equivariant model (trained via mmml ef-train). De
 options:
   -h, --help            show this help message and exit
   --backend, -b {ase,jax}
-                        ase (default): ASE integrator; jax: JIT jax_md single-
-                        replica runner
+                        ase (default): ASE integrator; jax: JIT jax_md single-replica runner
 
 Backends:
   ase  ASE Langevin / Velocity-Verlet with AseCalculatorEF. Supports electric-field
