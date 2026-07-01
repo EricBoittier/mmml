@@ -225,6 +225,12 @@ def restore_charmm_state_from_restart(
     )
 
     vel = read_restart_velocities(path)
+    if vel is None:
+        from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+            _read_restart_velocities_akma,
+        )
+
+        vel = _read_restart_velocities_akma(path)
     if vel is not None and vel.shape[0] == n:
         sync_charmm_velocities_akma(vel)
 

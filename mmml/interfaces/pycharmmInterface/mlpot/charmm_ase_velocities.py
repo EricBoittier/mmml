@@ -60,13 +60,21 @@ def charmm_velocities_akma() -> np.ndarray | None:
     return arr
 
 
-def charmm_synced_velocities_akma() -> np.ndarray | None:
-    """Return the last AKMA velocities written by :func:`sync_charmm_velocities_akma`."""
+def last_synced_velocities_akma_raw() -> np.ndarray | None:
+    """Last AKMA array from :func:`sync_charmm_velocities_akma` (no temperature gate)."""
     global _last_synced_velocities_akma
     if _last_synced_velocities_akma is None:
         return None
-    vel = np.asarray(_last_synced_velocities_akma, dtype=np.float64)
-    if velocities_are_cold(vel):
+    vel = np.asarray(_last_synced_velocities_akma, dtype=np.float64).reshape(-1, 3)
+    if vel.size == 0 or not np.all(np.isfinite(vel)):
+        return None
+    return vel
+
+
+def charmm_synced_velocities_akma() -> np.ndarray | None:
+    """Return the last AKMA velocities written by :func:`sync_charmm_velocities_akma`."""
+    vel = last_synced_velocities_akma_raw()
+    if vel is None or velocities_are_cold(vel):
         return None
     return vel
 
@@ -326,6 +334,27 @@ def sync_charmm_velocities_akma(velocities_akma: np.ndarray) -> None:
     sync_comparison_velocities_akma(v)
 
 
+def _maxwell_boltzmann_akma_numpy(
+    masses_amu: np.ndarray,
+    temperature_K: float,
+    *,
+    rng: np.random.Generator | None = None,
+) -> np.ndarray:
+    """Draw Maxwell-Boltzmann AKMA velocities without ASE/CHARMM readback."""
+    m = np.asarray(masses_amu, dtype=np.float64).reshape(-1)
+    if m.size == 0:
+        raise ValueError("masses_amu must be non-empty")
+    temp = clamp_velocity_assignment_temp_k(temperature_K)
+    gen = rng if rng is not None else np.random.default_rng()
+    kT_kcal = _KCALMOL_PER_K * temp
+    std_ang_fs = np.sqrt(
+        kT_kcal / (_AMU_ANG_PS2_TO_KCALMOL * np.maximum(m, 1.0e-12))
+    )
+    v_ang_fs = gen.normal(0.0, std_ang_fs[:, None], size=(m.shape[0], 3))
+    v_ang_fs -= v_ang_fs.mean(axis=0, keepdims=True)
+    return ase_to_charmm_akma_velocities(v_ang_fs, m)
+
+
 def assign_maxwell_boltzmann_velocities_via_ase(
     temperature_K: float,
     *,
@@ -333,8 +362,11 @@ def assign_maxwell_boltzmann_velocities_via_ase(
     remove_rotation: bool = True,
     seed: int | None = None,
     quiet: bool = False,
-) -> float:
-    """Assign Maxwell-Boltzmann velocities at ``temperature_K``; return estimated T."""
+) -> tuple[float, np.ndarray]:
+    """Assign Maxwell-Boltzmann velocities at ``temperature_K``.
+
+    Returns ``(estimated_T, v_akma)``.
+    """
     from ase.md.velocitydistribution import (
         MaxwellBoltzmannDistribution,
         Stationary,
@@ -371,7 +403,108 @@ def assign_maxwell_boltzmann_velocities_via_ase(
             f"(measured T≈{txt} K)",
             flush=True,
         )
-    return float(measured if measured is not None else temp)
+    return float(measured if measured is not None else temp), v_akma
+
+
+def assign_bussi_fallback_velocities(
+    temperature_K: float,
+    *,
+    seed: int | None = None,
+    quiet: bool = False,
+) -> tuple[float, np.ndarray]:
+    """Assign warm AKMA velocities for Bussi (ASE, then in-memory numpy fallback)."""
+    temp = clamp_velocity_assignment_temp_k(temperature_K)
+    try:
+        return assign_maxwell_boltzmann_velocities_via_ase(
+            temp,
+            seed=seed,
+            quiet=quiet,
+        )
+    except Exception as exc:
+        if not quiet:
+            print(
+                f"ASE Maxwell-Boltzmann assign failed ({exc}); "
+                f"drawing in-memory Maxwell-Boltzmann at {temp:.2f} K",
+                flush=True,
+            )
+        masses = charmm_masses_amu()
+        rng = np.random.default_rng(seed)
+        v_akma = _maxwell_boltzmann_akma_numpy(masses, temp, rng=rng)
+        sync_charmm_velocities_akma(v_akma)
+        measured = estimate_kinetic_temperature_k(v_akma, masses)
+        if not quiet:
+            txt = f"{measured:.2f}" if measured is not None else "?"
+            print(
+                f"In-memory Maxwell-Boltzmann velocities at {temp:.2f} K "
+                f"(measured T≈{txt} K)",
+                flush=True,
+            )
+        return float(measured if measured is not None else temp), v_akma
+
+
+def _read_restart_velocities_akma(path: Path | str | None) -> np.ndarray | None:
+    """Load finite ``!VELOCITIES`` from restart candidates (staging + overlap slots)."""
+    if path is None:
+        return None
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_restart_velocities,
+    )
+
+    for candidate in resolve_restart_velocities_read_paths(path):
+        if not candidate.is_file() or candidate.stat().st_size <= 0:
+            continue
+        vel = read_restart_velocities(candidate)
+        if vel is None or not np.all(np.isfinite(vel)):
+            continue
+        if float(np.max(np.abs(vel))) < 1.0e-8:
+            continue
+        return np.asarray(vel, dtype=np.float64).reshape(-1, 3)
+    return None
+
+
+def ensure_bussi_velocities_after_overlap_recovery(
+    restart_path: Path | str | None,
+    *,
+    temperature_K: float,
+    quiet: bool = True,
+) -> bool:
+    """Rehydrate AKMA velocities after overlap rescue / CGENFF reregister."""
+    if capture_charmm_velocities_for_bussi(restart_path=restart_path) is not None:
+        return True
+    vel = _read_restart_velocities_akma(restart_path)
+    if vel is not None:
+        sync_charmm_velocities_akma(vel)
+        return True
+    assign_bussi_fallback_velocities(temperature_K, quiet=quiet)
+    return last_synced_velocities_akma_raw() is not None
+
+
+def _resolve_bussi_rescale_velocities(
+    *,
+    restart_path: Path | str | None,
+    temperature_K: float,
+    quiet: bool,
+) -> np.ndarray:
+    """Best-effort AKMA velocities for one Bussi rescale (never returns ``None``)."""
+    temp = clamp_velocity_assignment_temp_k(temperature_K)
+    vel = capture_charmm_velocities_for_bussi(restart_path=restart_path)
+    if vel is not None:
+        return np.asarray(vel, dtype=np.float64).reshape(-1, 3)
+    vel = _read_restart_velocities_akma(restart_path)
+    if vel is not None:
+        sync_charmm_velocities_akma(vel)
+        return vel
+    raw = last_synced_velocities_akma_raw()
+    if raw is not None:
+        return raw
+    if not quiet:
+        print(
+            f"ASE Bussi rescale: no readable velocities; "
+            f"assigning Maxwell-Boltzmann at {temp:.2f} K",
+            flush=True,
+        )
+    _, vel = assign_bussi_fallback_velocities(temp, quiet=quiet)
+    return np.asarray(vel, dtype=np.float64).reshape(-1, 3)
 
 
 def _dynamics_would_start_cold(kw: dict[str, Any]) -> bool:
@@ -475,48 +608,18 @@ def apply_bussi_velocity_rescale(
     elapsed_ps = interval * dt_ps
     taut = float(taut_ps) if taut_ps is not None else elapsed_ps
     masses = charmm_masses_amu()
-    v_akma = capture_charmm_velocities_for_bussi(restart_path=restart_path)
-    if v_akma is None:
-        if not quiet:
-            print(
-                f"ASE Bussi rescale: no readable velocities; "
-                f"assigning Maxwell-Boltzmann at {temp:.2f} K",
-                flush=True,
-            )
-        assign_maxwell_boltzmann_velocities_via_ase(temp, quiet=quiet)
-        v_akma = charmm_synced_velocities_akma()
-        if v_akma is None and restart_path is not None:
-            from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
-                read_restart_velocities,
-            )
-
-            for candidate in resolve_restart_velocities_read_paths(restart_path):
-                if not candidate.is_file() or candidate.stat().st_size <= 0:
-                    continue
-                vel = read_restart_velocities(candidate)
-                if vel is not None and not velocities_are_cold(vel):
-                    sync_charmm_velocities_akma(vel)
-                    v_akma = vel
-                    break
-        if v_akma is None:
-            v_akma = capture_charmm_velocities_for_bussi(restart_path=restart_path)
-    if v_akma is None:
-        assign_maxwell_boltzmann_velocities_via_ase(temp, quiet=quiet)
-        v_akma = charmm_synced_velocities_akma() or charmm_velocities_akma_for_thermostat()
-    if v_akma is None:
-        global _last_synced_velocities_akma
-        if _last_synced_velocities_akma is not None:
-            v_akma = np.asarray(_last_synced_velocities_akma, dtype=np.float64)
-    if v_akma is None:
-        raise RuntimeError("apply_bussi_velocity_rescale: CHARMM velocities unavailable")
+    v_akma = _resolve_bussi_rescale_velocities(
+        restart_path=restart_path,
+        temperature_K=temp,
+        quiet=quiet,
+    )
     dof = resolve_bussi_degrees_of_freedom(ndegf)
     ke = estimate_kinetic_energy_kcalmol(v_akma, masses)
     if ke is None or ke <= 0.0:
-        assign_maxwell_boltzmann_velocities_via_ase(temp, quiet=quiet)
-        v_akma = charmm_velocities_akma_for_thermostat()
+        _, v_akma = assign_bussi_fallback_velocities(temp, quiet=quiet)
         ke = estimate_kinetic_energy_kcalmol(v_akma, masses)
-        if ke is None:
-            raise RuntimeError("apply_bussi_velocity_rescale: kinetic energy still zero")
+        if ke is None or ke <= 0.0:
+            ke = target_kinetic_energy_kcalmol(temp, dof)
     target_ke = target_kinetic_energy_kcalmol(temp, dof)
     alpha = calculate_bussi_rescale_alpha(
         ke,
