@@ -13,6 +13,9 @@ _KCALMOL_PER_K = 0.0019872041
 
 # Hard floor for every Maxwell-Boltzmann / CHARMM ASSVEL draw (K).
 MIN_VELOCITY_ASSIGNMENT_TEMP_K = 10.0
+MAX_BUSSI_RESCALE_ALPHA = 3.0
+
+_last_synced_velocities_akma: np.ndarray | None = None
 
 
 def clamp_velocity_assignment_temp_k(temperature_K: float) -> float:
@@ -53,6 +56,34 @@ def charmm_velocities_akma() -> np.ndarray | None:
     if arr.ndim != 2 or arr.shape[1] != 3:
         return None
     return arr
+
+
+def charmm_velocities_akma_for_thermostat() -> np.ndarray | None:
+    """Best-effort AKMA velocities for Bussi / mirror (main, COMP, last sync)."""
+    vel = charmm_velocities_akma()
+    if vel is not None and not velocities_are_cold(vel):
+        return vel
+    try:
+        from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+            comparison_matches_main_positions,
+            comparison_velocities_akma,
+        )
+
+        comp = comparison_velocities_akma()
+        if (
+            comp is not None
+            and not comparison_matches_main_positions()
+            and not velocities_are_cold(comp)
+        ):
+            return comp
+    except Exception:
+        pass
+    global _last_synced_velocities_akma
+    if _last_synced_velocities_akma is not None and not velocities_are_cold(
+        _last_synced_velocities_akma
+    ):
+        return np.asarray(_last_synced_velocities_akma, dtype=np.float64)
+    return vel
 
 
 def ase_to_charmm_akma_velocities(
@@ -171,11 +202,13 @@ def _pycharmm_coor_module():
 
 def sync_charmm_velocities_akma(velocities_akma: np.ndarray) -> None:
     """Write AKMA velocities into CHARMM main and COMP sets."""
+    global _last_synced_velocities_akma
     from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
         sync_comparison_velocities_akma,
     )
 
     v = np.asarray(velocities_akma, dtype=np.float64).reshape(-1, 3)
+    _last_synced_velocities_akma = v.copy()
     coor = _pycharmm_coor_module()
 
     if hasattr(coor, "set_velocity"):
@@ -331,14 +364,14 @@ def apply_bussi_velocity_rescale(
     elapsed_ps = interval * dt_ps
     taut = float(taut_ps) if taut_ps is not None else elapsed_ps
     masses = charmm_masses_amu()
-    v_akma = charmm_velocities_akma()
+    v_akma = charmm_velocities_akma_for_thermostat()
     if v_akma is None:
         raise RuntimeError("apply_bussi_velocity_rescale: CHARMM velocities unavailable")
     dof = resolve_bussi_degrees_of_freedom(ndegf)
     ke = estimate_kinetic_energy_kcalmol(v_akma, masses)
     if ke is None or ke <= 0.0:
         assign_maxwell_boltzmann_velocities_via_ase(temp, quiet=quiet)
-        v_akma = charmm_velocities_akma()
+        v_akma = charmm_velocities_akma_for_thermostat()
         ke = estimate_kinetic_energy_kcalmol(v_akma, masses)
         if ke is None:
             raise RuntimeError("apply_bussi_velocity_rescale: kinetic energy still zero")
@@ -351,6 +384,24 @@ def apply_bussi_velocity_rescale(
         elapsed_time_ps=elapsed_ps,
         rng=rng,
     )
+    t_before = estimate_kinetic_temperature_k(v_akma, masses, ndegf=dof)
+    if (
+        not np.isfinite(alpha)
+        or alpha <= 0.0
+        or alpha > MAX_BUSSI_RESCALE_ALPHA
+        or alpha < 1.0 / MAX_BUSSI_RESCALE_ALPHA
+    ):
+        if t_before is not None and float(t_before) >= MIN_VELOCITY_ASSIGNMENT_TEMP_K:
+            alpha = float(np.sqrt(max(temp, MIN_VELOCITY_ASSIGNMENT_TEMP_K) / float(t_before)))
+        alpha = float(
+            np.clip(alpha if np.isfinite(alpha) and alpha > 0.0 else 1.0, 1.0 / MAX_BUSSI_RESCALE_ALPHA, MAX_BUSSI_RESCALE_ALPHA)
+        )
+        if not quiet:
+            print(
+                f"ASE Bussi rescale: capped α={alpha:.4f} "
+                f"(T_before≈{t_before:.2f} K → target {temp:.2f} K)",
+                flush=True,
+            )
     v_akma = np.asarray(v_akma, dtype=np.float64) * float(alpha)
     sync_charmm_velocities_akma(v_akma)
     measured = estimate_kinetic_temperature_k(v_akma, masses, ndegf=dof)

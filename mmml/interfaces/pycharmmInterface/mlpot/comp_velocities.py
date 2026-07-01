@@ -159,11 +159,11 @@ def comparison_velocities_akma() -> np.ndarray | None:
 def sync_comparison_velocities_from_main() -> bool:
     """Copy readable main-set velocities into COMP; return False when unavailable."""
     from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
-        charmm_velocities_akma,
+        charmm_velocities_akma_for_thermostat,
         velocities_are_cold,
     )
 
-    vel = charmm_velocities_akma()
+    vel = charmm_velocities_akma_for_thermostat()
     if vel is None or velocities_are_cold(vel):
         return False
     sync_comparison_velocities_akma(vel)

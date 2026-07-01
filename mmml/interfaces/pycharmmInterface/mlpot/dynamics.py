@@ -1960,9 +1960,9 @@ def _apply_bussi_in_memory_continuation_kw(kw: dict[str, Any]) -> None:
     kw["restart"] = False
     kw["new"] = False
     kw["start"] = False
-    # Bussi rescale keeps velocities in the main set; iasvel=0 reads COMP and can
-    # treat comparison coordinates as AKMA velocities (COMP_AND_HEATING.md).
-    kw["iasvel"] = 1
+    # Continue in-memory velocities via COMP (mirrored from main before ``dyna``).
+    # ``iasvel=1`` re-draws Boltzmann every sub-chunk and drifts the box.
+    kw["iasvel"] = 0
     kw["iasors"] = 0
     kw["ihtfrq"] = 0
     kw.pop("TEMINC", None)
@@ -1990,11 +1990,12 @@ def apply_bussi_heat_ramp_overlap_chunk(
     )
     chunk_kw["finalt"] = float(ramp_spec["finalt"])
     chunk_kw["tstruct"] = float(chunk_kw["firstt"])
-    chunk_kw["iasvel"] = 1
+    chunk_kw["iasvel"] = 0
     chunk_kw["iasors"] = 0
     chunk_kw["start"] = False
     chunk_kw["ihtfrq"] = 0
     chunk_kw.pop("TEMINC", None)
+    chunk_kw["_skip_ase_cold_velocity_assign"] = True
 
 
 def _apply_overlap_chunk_bussi_heat_ramp(
@@ -3353,6 +3354,7 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     skip_ase_cold = bool(kw.pop("_skip_ase_cold_velocity_assign", False))
     quiet_ase = bool(kw.pop("_quiet_ase_velocity_assign", False))
     restart_read_path = kw.pop("_restart_read_path", None)
+    bussi_active = _bussi_heat_ramp_active(kw)
     _ensure_bussi_heat_continuation_iasvel(kw)
     _strip_non_charmm_dynamics_keywords(kw)
     nstep = int(kw.get("nstep", 0) or 0)
@@ -3395,6 +3397,12 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
         dyn = pycharmm.DynamicsScript(**kw)
         _execute_dynamics_script(dyn, append=heat_append)
     _release_charmm_dynamics_api_buffers()
+    if bussi_active and int(kw.get("iasvel", 0) or 0) == 0:
+        from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+            sync_comparison_velocities_from_main,
+        )
+
+        sync_comparison_velocities_from_main()
     return dyn
 
 
@@ -4645,12 +4653,15 @@ def _bussi_heat_ramp_active(kw: dict[str, Any]) -> bool:
 
 
 def _ensure_bussi_heat_continuation_iasvel(chunk_kw: dict[str, Any]) -> None:
-    """Keep ``iasvel=1`` on Bussi in-memory continuation (never COMP-as-velocity)."""
+    """Bussi continuation: ``iasvel=0`` + COMP mirror (not re-Boltzmann each chunk)."""
     if not _bussi_heat_ramp_active(chunk_kw):
         return
-    chunk_kw["iasvel"] = 1
+    if bool(chunk_kw.get("start")):
+        return
+    chunk_kw["iasvel"] = 0
     chunk_kw["start"] = False
     chunk_kw["iasors"] = 0
+    chunk_kw["_skip_ase_cold_velocity_assign"] = True
 
 
 def _python_heat_ramp_active(kw: dict[str, Any]) -> bool:
@@ -4690,9 +4701,7 @@ def _apply_overlap_chunk_dynamics_kw(
             chunk_kw["iasors"] = 0
             return
         if int(chunk_index) > 0 and _bussi_heat_ramp_active(chunk_kw):
-            chunk_kw["start"] = False
-            chunk_kw["iasvel"] = 1
-            chunk_kw["iasors"] = 0
+            _ensure_bussi_heat_continuation_iasvel(chunk_kw)
             return
         chunk_kw["start"] = False
         chunk_kw["iasvel"] = 0
@@ -4728,9 +4737,7 @@ def _apply_overlap_chunk_dynamics_kw(
             chunk_kw["start"] = False
             chunk_kw["iasors"] = 0
         elif _bussi_heat_ramp_active(chunk_kw) and int(chunk_index) > 0:
-            chunk_kw["iasvel"] = 1
-            chunk_kw["start"] = False
-            chunk_kw["iasors"] = 0
+            _ensure_bussi_heat_continuation_iasvel(chunk_kw)
         else:
             chunk_kw["iasvel"] = 0 if chunk_index > 0 else 1
             chunk_kw["start"] = False

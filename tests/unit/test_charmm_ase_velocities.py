@@ -150,13 +150,13 @@ def test_sync_charmm_velocities_akma_always_mirrors_comp():
     np.testing.assert_allclose(sync_comp.call_args[0][0], vel)
 
 
-def test_run_dynamics_ensures_bussi_iasvel_one():
+def test_run_dynamics_ensures_bussi_iasvel_zero():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics
 
     kw = {
         "nstep": 10,
         "start": False,
-        "iasvel": 0,
+        "iasvel": 1,
         "_heat_thermostat": "bussi",
         "_bussi_ramp": {"firstt": 10.0, "finalt": 50.0, "teminc": 1.0, "ihtfrq": 50},
         "_bussi_rescale_interval": 50,
@@ -170,7 +170,9 @@ def test_run_dynamics_ensures_bussi_iasvel_one():
         return_value=True,
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.mirror_comparison_velocities_for_dynamics",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_main",
     ):
         run_dynamics(kw)
     passed_kw = run_capi.call_args[0][0]
-    assert passed_kw["iasvel"] == 1
+    assert passed_kw["iasvel"] == 0

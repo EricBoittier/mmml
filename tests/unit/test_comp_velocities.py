@@ -209,7 +209,7 @@ def test_coor_get_comparison_capi():
     "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_akma",
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_velocities_akma",
+    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_velocities_akma_for_thermostat",
 )
 @patch(
     "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
@@ -228,7 +228,7 @@ def test_sync_comparison_velocities_from_main_warm(mock_cold, mock_vel, mock_syn
 
 
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_velocities_akma",
+    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_velocities_akma_for_thermostat",
     return_value=None,
 )
 def test_sync_comparison_velocities_from_main_missing(mock_vel):

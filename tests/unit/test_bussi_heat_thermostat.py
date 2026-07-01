@@ -87,7 +87,7 @@ def test_apply_bussi_velocity_rescale_syncs_charmm():
         "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_masses_amu",
         return_value=masses,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_velocities_akma",
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_velocities_akma_for_thermostat",
         side_effect=[v_akma, v_akma * 1.1],
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
@@ -125,7 +125,7 @@ def test_resolve_heat_thermostat_keeps_bussi_after_pretreat(monkeypatch):
     assert resolve_heat_thermostat(args) == "bussi"
 
 
-def test_apply_bussi_in_memory_continuation_keeps_iasvel_one():
+def test_apply_bussi_in_memory_continuation_keeps_iasvel_zero():
     kw = {
         "firstt": 10.0,
         "finalt": 50.0,
@@ -134,7 +134,7 @@ def test_apply_bussi_in_memory_continuation_keeps_iasvel_one():
     }
     prepare_bussi_heat_dynamics_kw(kw, nstep=50, ihtfrq=50, timestep_ps=0.0001)
     _apply_bussi_in_memory_continuation_kw(kw)
-    assert kw["iasvel"] == 1
+    assert kw["iasvel"] == 0
     assert kw["start"] is False
     assert kw["_skip_ase_cold_velocity_assign"] is True
 
@@ -150,11 +150,11 @@ def test_ensure_bussi_heat_continuation_iasvel_for_overlap_chunk():
         "timestep": 0.0001,
         "nstep": 50,
         "start": False,
-        "iasvel": 0,
+        "iasvel": 1,
     }
     prepare_bussi_heat_dynamics_kw(kw, nstep=50, ihtfrq=50, timestep_ps=0.0001)
     _apply_overlap_chunk_dynamics_kw(kw, chunk_index=1, has_restart_read=False)
-    assert kw["iasvel"] == 1
+    assert kw["iasvel"] == 0
     assert kw["start"] is False
     _ensure_bussi_heat_continuation_iasvel(kw)
-    assert kw["iasvel"] == 1
+    assert kw["iasvel"] == 0
