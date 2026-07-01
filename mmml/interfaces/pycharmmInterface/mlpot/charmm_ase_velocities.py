@@ -11,7 +11,7 @@ _AMU_ANG_PS2_TO_KCALMOL = 0.001036427219371
 _KCALMOL_PER_K = 0.0019872041
 
 # Hard floor for every Maxwell-Boltzmann / CHARMM ASSVEL draw (K).
-MIN_VELOCITY_ASSIGNMENT_TEMP_K = 50.0
+MIN_VELOCITY_ASSIGNMENT_TEMP_K = 10.0
 
 
 def clamp_velocity_assignment_temp_k(temperature_K: float) -> float:

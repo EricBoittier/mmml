@@ -271,7 +271,7 @@ def test_resolve_heat_firstt_finalt_defaults():
 
     args = argparse.Namespace(heat_firstt=None, heat_finalt=None)
     assert resolve_heat_firstt_finalt(args, default_temp=300.0) == (60.0, 300.0)
-    assert resolve_heat_firstt_finalt(args, default_temp=40.0) == (50.0, 40.0)
+    assert resolve_heat_firstt_finalt(args, default_temp=40.0) == (10.0, 40.0)
 
 
 def test_resolve_heat_firstt_finalt_dcm9_soft():
@@ -280,7 +280,7 @@ def test_resolve_heat_firstt_finalt_dcm9_soft():
     )
 
     args = argparse.Namespace(heat_firstt=0.0, heat_finalt=240.0)
-    assert resolve_heat_firstt_finalt(args, default_temp=300.0) == (50.0, 240.0)
+    assert resolve_heat_firstt_finalt(args, default_temp=300.0) == (48.0, 240.0)
 
 
 def test_resolve_stage_ps_handles_explicit_none():

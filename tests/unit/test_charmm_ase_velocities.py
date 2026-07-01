@@ -52,7 +52,7 @@ def test_resolve_assignment_temperature_k_uses_heat_floor_for_corrupt_kw():
 
 
 def test_clamp_velocity_assignment_temp_k_enforces_floor():
-    assert clamp_velocity_assignment_temp_k(8.0) == pytest.approx(50.0)
+    assert clamp_velocity_assignment_temp_k(8.0) == pytest.approx(10.0)
     assert clamp_velocity_assignment_temp_k(300.0) == pytest.approx(300.0)
 
 
@@ -61,10 +61,10 @@ def test_clamp_velocity_assignment_dynamics_kw_clamps_firstt_on_start():
         clamp_velocity_assignment_dynamics_kw,
     )
 
-    kw = {"start": True, "iasvel": 1, "firstt": 8.0, "tbath": 40.0}
+    kw = {"start": True, "iasvel": 1, "firstt": 5.0, "tbath": 40.0}
     clamp_velocity_assignment_dynamics_kw(kw)
-    assert kw["firstt"] == pytest.approx(50.0)
-    assert kw["tbath"] == pytest.approx(50.0)
+    assert kw["firstt"] == pytest.approx(10.0)
+    assert kw["tbath"] == pytest.approx(40.0)
 
 
 def test_maybe_assign_velocities_via_ase_if_cold_skips_when_warm():

@@ -403,7 +403,7 @@ def resolve_nve_boltzmann_temp(
     Defaults to ``0.2 × --temperature`` (same as heat FIRSTT) when
     ``--nve-boltzmann-temp`` is unset. Never below
     :data:`~mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.MIN_VELOCITY_ASSIGNMENT_TEMP_K`
-    (50 K).
+    (10 K).
     """
     from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         clamp_velocity_assignment_temp_k,
