@@ -353,6 +353,15 @@ def restore_charmm_cubic_crystal_lattice(
     return side
 
 
+def _free_charmm_crystal_if_available() -> bool:
+    """``CRYSTAL FREE`` when the KEY_LIBRARY export exists."""
+    import pycharmm.crystal as crystal
+
+    if crystal.crystal_free_available():
+        return bool(crystal.free_crystal())
+    return False
+
+
 def reinstall_charmm_crystal_for_lattice_abnr(
     cubic_box_side_A: float,
     *,
@@ -365,39 +374,45 @@ def reinstall_charmm_crystal_for_lattice_abnr(
     After coords+box lattice minimization or MC-density handoffs, ``XUCELL`` can
     remain populated while ``pbound_get_size`` reads zero and the crystal metric
     matrix is not usable for box-only (``NOCO``) lattice work.  A light
-    :func:`restore_charmm_cubic_crystal_lattice` is not always enough; ``crystal
-    free`` + redefine, or full :func:`prepare_charmm_pbc` when safe, may be required.
+    :func:`restore_charmm_cubic_crystal_lattice` (no ``pbcset``) can still leave
+    ``charmm_crystal_lattice_ready()`` true while ``MBUILD`` dies on a singular
+    metric — lattice ABNR therefore uses full :func:`prepare_charmm_pbc` when safe.
     """
     side = float(cubic_box_side_A)
     if side <= 0.0:
         raise ValueError(f"cubic box side must be > 0, got {side}")
 
-    import pycharmm.crystal as crystal
-
-    def _restore(*, free_first: bool) -> None:
-        if free_first and crystal.crystal_free_available():
-            crystal.free_crystal()
-        restore_charmm_cubic_crystal_lattice(
-            side,
-            nbxmod=nbxmod,
-            quiet=quiet,
-        )
-
-    for free_first in (False, True):
-        _restore(free_first=free_first)
-        if charmm_crystal_lattice_ready():
-            return side
-
     if allow_prepare_pbc:
+        _free_charmm_crystal_if_available()
         prepare_charmm_pbc(side)
         apply_pbc_nbonds(nbxmod=nbxmod, cubic_box_side_A=side)
-        if charmm_crystal_lattice_ready():
-            return side
+    else:
+        def _restore(*, free_first: bool) -> None:
+            if free_first:
+                _free_charmm_crystal_if_available()
+            restore_charmm_cubic_crystal_lattice(
+                side,
+                nbxmod=nbxmod,
+                quiet=quiet,
+            )
 
-    raise RuntimeError(
-        "CHARMM crystal metric not lattice-ready after reinstall; "
-        f"cannot run lattice ABNR safely (L={side:.3f} Å)"
-    )
+        for free_first in (False, True):
+            _restore(free_first=free_first)
+            if charmm_crystal_lattice_ready():
+                return side
+
+    if not charmm_crystal_lattice_ready():
+        raise RuntimeError(
+            "CHARMM crystal metric not lattice-ready after reinstall; "
+            f"cannot run lattice ABNR safely (L={side:.3f} Å)"
+        )
+
+    if not quiet:
+        print(
+            f"CHARMM crystal lattice restored: L={side:.3f} Å",
+            flush=True,
+        )
+    return side
 
 
 def ensure_charmm_crystal_for_cpt(
