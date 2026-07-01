@@ -375,6 +375,9 @@ def test_minimize_bonded_recovery_uses_bonded_only_block():
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
         return_value=1.0,
     ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        return_value=np.zeros((4, 3)),
+    ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
     ):
         imp.return_value = (MagicMock(), MagicMock(), MagicMock(), MagicMock())
@@ -555,7 +558,10 @@ def test_reregister_mlpot_default_reattach_only():
     with patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup._apply_mlpot_psf_mm_off_and_pbc",
         return_value="all",
-    ) as apply_block:
+    ) as apply_block, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
+        return_value=False,
+    ):
         ctx.reregister_mlpot()
 
     apply_block.assert_not_called()
@@ -579,7 +585,10 @@ def test_reregister_mlpot_applies_params_when_requested():
     with patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup._apply_mlpot_psf_mm_off_and_pbc",
         return_value="all",
-    ) as apply_block:
+    ) as apply_block, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
+        return_value=False,
+    ):
         ctx.reregister_mlpot(reregister_params=True)
 
     apply_block.assert_called_once_with(ctx, verbose=False)
@@ -602,7 +611,10 @@ def test_reregister_mlpot_skips_param_read_when_reregister_params_false():
     )
     with patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup._apply_mlpot_psf_mm_off_and_pbc",
-    ) as apply_block:
+    ) as apply_block, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
+        return_value=False,
+    ):
         ctx.reregister_mlpot(reregister_params=False)
 
     apply_block.assert_not_called()

@@ -263,6 +263,8 @@ def test_pretreat_handoff_panel_tolerates_inactive_pbound(tmp_path: Path) -> Non
 
 
 def test_charmm_crystal_lattice_ready_requires_pbound_not_xucell_only() -> None:
+    import sys
+
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         charmm_crystal_lattice_ready,
     )
@@ -270,17 +272,15 @@ def test_charmm_crystal_lattice_ready_requires_pbound_not_xucell_only() -> None:
     mock_image = mock.MagicMock()
     mock_image.get_ntrans.return_value = 8
     with mock.patch(
-        "pycharmm.image",
-        mock_image,
-        create=True,
-    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_box_sides_A",
         return_value=(0.0, 0.0, 0.0),
-    ):
+    ), mock.patch.dict(sys.modules, {"pycharmm.image": mock_image}):
         assert charmm_crystal_lattice_ready() is False
 
 
 def test_charmm_crystal_abnr_ready_accepts_ucell_when_pbound_inactive() -> None:
+    import sys
+
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         charmm_crystal_abnr_ready,
     )
@@ -288,16 +288,12 @@ def test_charmm_crystal_abnr_ready_accepts_ucell_when_pbound_inactive() -> None:
     mock_image = mock.MagicMock()
     mock_image.get_ntrans.return_value = 8
     with mock.patch(
-        "pycharmm.image",
-        mock_image,
-        create=True,
-    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_lattice_ready",
         return_value=False,
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_ucell_lengths_A",
         return_value=(50.0, 50.0, 50.0),
-    ):
+    ), mock.patch.dict(sys.modules, {"pycharmm.image": mock_image}):
         assert charmm_crystal_abnr_ready(50.0) is True
 
 
@@ -348,7 +344,7 @@ def test_reinstall_charmm_crystal_for_lattice_abnr_restore_only_when_prepare_dis
             allow_prepare_pbc=False,
         )
     assert side == pytest.approx(43.616)
-    assert mock_restore.call_count == 2
+    assert mock_restore.call_count == 1
     mock_prepare.assert_not_called()
 
 
