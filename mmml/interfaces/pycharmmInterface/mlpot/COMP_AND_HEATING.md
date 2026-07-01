@@ -199,18 +199,24 @@ file while it still holds fresh velocities. A synced in-memory cache
 grep -E 'Bussi rescale|readable velocities|IASVEL|IASORS|heat\.a\.res|heat\.b\.res|mmml-charmm-io' your.log
 ```
 
-Healthy Bussi heat after chunk 0:
-
-```
-ASE Bussi rescale toward 14.00 K (T_after≈14.xx K, α=...)
-overlap (...): Bussi schedule step 50: T_target=14.00 K, T_live≈...
-```
-
 Red flags:
 
 ```
+NOTE: The comparison coordinate values will be used for the initial velocities
+DYNA> ... TEMPerature 1.E+09 or higher at step 0
+```
+
+Healthy Bussi continuation (sub-chunk 2+):
+
+```
+IASVEL = 0   (init_velocities passed via C API; not COMP positions)
+(no COMP-as-velocity NOTE, or NOTE with sane T at step 0)
+```
+
+Other red flags:
+
+```
 ASE Bussi rescale: no readable velocities          # OK if followed by MB / in-memory draw
-ASE Maxwell-Boltzmann assign failed (...); drawing in-memory Maxwell-Boltzmann
 apply_bussi_velocity_rescale: CHARMM velocities unavailable   # should not appear
 ```
 

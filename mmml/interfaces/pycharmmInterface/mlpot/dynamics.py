@@ -3274,13 +3274,19 @@ def _sync_tstruct_with_bath_kw(kw: dict[str, Any]) -> None:
 
 def _normalize_dynamics_heat_ramp_kw(kw: dict[str, Any]) -> None:
     """Map scale-heat ramp keys to PyCHARMM script names and Fortran setters."""
+    bussi = _bussi_heat_ramp_active(kw)
+    if bussi:
+        kw.pop("TEMINC", None)
+        kw.pop("teminc", None)
     _sync_tstruct_with_bath_kw(kw)
     teminc = kw.pop("TEMINC", None)
-    if teminc is not None and "teminc" not in kw:
+    if teminc is not None and "teminc" not in kw and not bussi:
         kw["teminc"] = float(teminc)
     iht = kw.get("ihtfrq")
     if iht is not None and int(iht) > 0:
         kw["ihtfrq"] = int(iht)
+    if bussi:
+        return
     try:
         import pycharmm.dynamics as charm_dyn
 
@@ -3323,7 +3329,59 @@ def _dynamics_c_api_available() -> bool:
         return False
 
 
-def _run_dynamics_via_c_api(kw: dict[str, Any], *, heat_append: str = "") -> Any:
+def _requires_init_velocities_handoff(kw: dict[str, Any]) -> bool:
+    """True when CHARMM would read COMP as velocities (``iasvel=0`` + lingering START)."""
+    return not bool(kw.get("start")) and int(kw.get("iasvel", 0) or 0) == 0
+
+
+def _init_velocities_dict_from_akma(v_akma: np.ndarray) -> dict[str, np.ndarray]:
+    """Build PyCHARMM ``init_velocities`` dict from AKMA ``(N, 3)`` array."""
+    v = np.asarray(v_akma, dtype=np.float64).reshape(-1, 3)
+    return {
+        "vx": v[:, 0].copy(),
+        "vy": v[:, 1].copy(),
+        "vz": v[:, 2].copy(),
+    }
+
+
+def _resolve_dynamics_init_velocities(
+    kw: dict[str, Any],
+    *,
+    restart_read_path: Path | str | None,
+) -> dict[str, np.ndarray] | None:
+    """Warm AKMA velocities for ``iasvel=0`` continuation (bypasses COMP-as-positions)."""
+    if not _requires_init_velocities_handoff(kw):
+        return None
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        capture_charmm_velocities_for_bussi,
+        ensure_bussi_velocities_after_overlap_recovery,
+        resolve_assignment_temperature_k,
+    )
+
+    restart = restart_read_path
+    v = capture_charmm_velocities_for_bussi(restart_path=restart)
+    if v is None:
+        temp = resolve_assignment_temperature_k(kw, default_K=300.0)
+        ensure_bussi_velocities_after_overlap_recovery(
+            restart,
+            temperature_K=temp,
+            quiet=bool(kw.get("_quiet_bussi_rescale", False)),
+        )
+        v = capture_charmm_velocities_for_bussi(restart_path=restart)
+    if v is None:
+        raise RuntimeError(
+            "run_dynamics: iasvel=0 continuation requires warm init velocities "
+            "(COMP may hold coordinates; pass init_velocities via C API)"
+        )
+    return _init_velocities_dict_from_akma(v)
+
+
+def _run_dynamics_via_c_api(
+    kw: dict[str, Any],
+    *,
+    heat_append: str = "",
+    init_velocities: dict[str, np.ndarray] | None = None,
+) -> Any:
     """Run ``dynopt`` with a keyword line (KEY_LIBRARY; leap/hoover/cpt flags)."""
     import pycharmm
     import pycharmm.dynamics as charm_dyn
@@ -3331,7 +3389,11 @@ def _run_dynamics_via_c_api(kw: dict[str, Any], *, heat_append: str = "") -> Any
     dyn = pycharmm.DynamicsScript(**kw)
     script = _merge_dynamics_script_append(dyn.create_script_string(), heat_append)
     command_line = charm_dyn.flatten_dynamics_script(script)
-    charm_dyn.run_with_command_line(command_line, **kw)
+    charm_dyn.run_with_command_line(
+        command_line,
+        init_velocities=init_velocities,
+        **kw,
+    )
     return dyn
 
 
@@ -3382,6 +3444,10 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
         kw,
         restart_read_path=restart_read_path,
     )
+    init_velocities = _resolve_dynamics_init_velocities(
+        kw,
+        restart_read_path=restart_read_path,
+    )
     if not skip_ase_cold:
         maybe_assign_velocities_via_ase_if_cold(kw, quiet=quiet_ase)
     if "echeck" in kw:
@@ -3395,7 +3461,11 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     heat_append = _dynamics_script_append_for_heat_ramp(kw)
     _release_charmm_dynamics_api_buffers()
     if _dynamics_c_api_available():
-        dyn = _run_dynamics_via_c_api(kw, heat_append=heat_append)
+        dyn = _run_dynamics_via_c_api(
+            kw,
+            heat_append=heat_append,
+            init_velocities=init_velocities,
+        )
     else:
         dyn = pycharmm.DynamicsScript(**kw)
         _execute_dynamics_script(dyn, append=heat_append)

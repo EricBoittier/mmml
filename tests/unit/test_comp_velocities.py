@@ -107,6 +107,10 @@ def test_mirror_comparison_velocities_for_dynamics_syncs_when_iasvel_zero(mock_s
 
 
 @patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_matches_main_positions",
+    return_value=True,
+)
+@patch(
     "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_restart",
     return_value=False,
 )
@@ -118,18 +122,18 @@ def test_mirror_comparison_velocities_for_dynamics_syncs_when_iasvel_zero(mock_s
     "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_main",
     return_value=False,
 )
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.clear_comparison_coordinates")
-def test_mirror_comparison_velocities_for_dynamics_leaves_comp_when_no_source(
-    mock_clear, mock_main, mock_comp, mock_restart
+def test_mirror_comparison_velocities_for_dynamics_raises_when_comp_is_positions(
+    mock_main, mock_comp, mock_restart, mock_match
 ):
     kw = {"iasvel": 0, "start": False}
-    mirror_comparison_velocities_for_dynamics(kw, restart_read_path="/tmp/fake.res")
-    mock_main.assert_called_once()
-    mock_comp.assert_called_once()
-    mock_restart.assert_called_once()
-    mock_clear.assert_not_called()
+    with pytest.raises(RuntimeError, match="COMP holds main coordinates"):
+        mirror_comparison_velocities_for_dynamics(kw, restart_read_path="/tmp/fake.res")
 
 
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_matches_main_positions",
+    return_value=False,
+)
 @patch(
     "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_main",
     return_value=False,
@@ -138,7 +142,9 @@ def test_mirror_comparison_velocities_for_dynamics_leaves_comp_when_no_source(
     "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_comparison",
     return_value=True,
 )
-def test_mirror_comparison_velocities_for_dynamics_uses_warm_comp(mock_comp, mock_main):
+def test_mirror_comparison_velocities_for_dynamics_uses_warm_comp(
+    mock_comp, mock_main, mock_match
+):
     mirror_comparison_velocities_for_dynamics({"iasvel": 0, "start": False})
     mock_main.assert_called_once()
     mock_comp.assert_called_once()

@@ -230,6 +230,9 @@ def mirror_comparison_velocities_for_dynamics(
     PyCHARMM may omit ``start=False`` so CHARMM keeps START and reads COMP as
     velocities. Zeroing COMP at overlap chunk boundaries yields T≈0; prefer
     main-set, in-memory COMP, or restart-file velocities instead.
+
+    In-memory continuation should also pass ``init_velocities`` via the dynamics
+    C API (see ``run_dynamics``); this mirror is a COMP backup for script paths.
     """
     if bool(kw.get("start")) or int(kw.get("iasvel", 1) or 0) != 0:
         return
@@ -238,9 +241,19 @@ def mirror_comparison_velocities_for_dynamics(
     if sync_comparison_velocities_from_main():
         return
     if sync_comparison_velocities_from_comparison():
+        if comparison_matches_main_positions():
+            raise RuntimeError(
+                "mirror_comparison_velocities_for_dynamics: COMP matches main "
+                "coordinates (positions misread as AKMA velocities)"
+            )
         return
     if sync_comparison_velocities_from_restart(restart_read_path):
         return
+    if comparison_matches_main_positions():
+        raise RuntimeError(
+            "mirror_comparison_velocities_for_dynamics: COMP holds main coordinates "
+            "with no warm velocity source (would yield T≫target)"
+        )
 
 
 def force_magnitudes_kcalmol_A() -> np.ndarray:
