@@ -395,8 +395,11 @@ def estimate_kinetic_temperature_k(
     v = np.asarray(velocities_akma, dtype=np.float64).reshape(-1, 3)
     if not np.all(np.isfinite(v)):
         return None
-    if masses_amu is None:
-        masses_amu = charmm_masses_amu()
+    try:
+        if masses_amu is None:
+            masses_amu = charmm_masses_amu()
+    except Exception:
+        return None
     m = np.asarray(masses_amu, dtype=np.float64).reshape(-1)
     if v.shape[0] != m.shape[0] or v.shape[0] == 0:
         return None
@@ -877,7 +880,7 @@ def apply_bussi_velocity_rescale(
         fallback_paths=fallback_paths,
     )
     dof = resolve_bussi_degrees_of_freedom(ndegf)
-    if velocities_are_pathological(v_akma, masses, ndegf=dof):
+    if velocities_are_pathological(v_akma, masses_amu=masses, ndegf=dof):
         if not quiet:
             print(
                 f"ASE Bussi rescale: rejecting pathological velocities; "
