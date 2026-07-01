@@ -2212,12 +2212,17 @@ def classify_hybrid_charmm_grms_mismatch(
     warn_ratio: float = 2.0,
     desync_max_ratio: float = 10.0,
     charmm_bonded_ok_max: float = 5.0,
+    hybrid_desync_ok_max: float = 15.0,
 ) -> GrmsMismatchKind:
     """Classify hybrid/CHARMM GRMS disagreement for resync vs geometry recovery.
 
     Hybrid GRMS from the JAX calculator is authoritative for MLpot.  CHARMM
     ``get_grms()`` often stays ~1 kcal/mol/Å with ELEC/VDW blocked on ML atoms,
-    so a high CHARMM/hybrid ratio with low hybrid is healthy, not desync.
+    so a high hybrid/CHARMM ratio with low CHARMM is healthy, not desync.
+
+    When hybrid is modest (``<= hybrid_desync_ok_max``) but CHARMM GRMS is very
+    high, treat as ``desync_suspected`` (stale ``get_grms()`` after deferred
+    ENER or a session-best geometry rollback), not ``both_high``.
     """
     if not (np.isfinite(hybrid) and np.isfinite(charmm)):
         return "unknown"
@@ -2227,6 +2232,8 @@ def classify_hybrid_charmm_grms_mismatch(
         return "ok"
     if charmm <= charmm_bonded_ok_max:
         return "geometry_stress"
+    if hybrid <= hybrid_desync_ok_max and charmm > charmm_bonded_ok_max:
+        return "desync_suspected"
     ratio = float(max(hybrid / charmm, charmm / hybrid))
     if ratio <= warn_ratio:
         return "ok"
@@ -2242,6 +2249,7 @@ def measure_hybrid_charmm_grms(
     warn_ratio: float = 2.0,
     desync_max_ratio: float = 10.0,
     charmm_bonded_ok_max: float = 5.0,
+    hybrid_desync_ok_max: float = 15.0,
 ) -> HybridCharmmGrmsDiag:
     """Measure hybrid and CHARMM GRMS and classify their mismatch."""
     hybrid = float("nan")
@@ -2263,6 +2271,7 @@ def measure_hybrid_charmm_grms(
         warn_ratio=warn_ratio,
         desync_max_ratio=desync_max_ratio,
         charmm_bonded_ok_max=charmm_bonded_ok_max,
+        hybrid_desync_ok_max=hybrid_desync_ok_max,
     )
     return HybridCharmmGrmsDiag(hybrid=hybrid, charmm=charmm, ratio=ratio, kind=kind)
 
@@ -3125,11 +3134,12 @@ def prepare_mlpot_hybrid_state_for_sd(
     if mlpot_ctx.sd_watchdog_baseline_grms is None:
         mlpot_ctx.sd_watchdog_baseline_grms = float(hybrid_grms)
 
-    if (
-        not skip_pre_sd_ener
-        and (ran_calculator_mini or ran_calculator_fire or ran_bonded_recovery or ran_geometry_packing or ran_monomer_physnet_mini)
-    ):
-        setattr(mlpot_ctx, "_mlpot_pre_sd_ener_probed", False)
+    if ran_calculator_mini or ran_calculator_fire or ran_bonded_recovery or ran_geometry_packing or ran_monomer_physnet_mini:
+        from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+            invalidate_mlpot_pre_sd_ener_probe,
+        )
+
+        invalidate_mlpot_pre_sd_ener_probe(mlpot_ctx)
 
     return float(hybrid_grms), float(user)
 

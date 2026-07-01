@@ -13,6 +13,8 @@ from tests.unit.conftest import write_minimal_restart
 from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
     attempt_overlap_early_abort_recovery,
     build_extent_recovery_candidates,
+    build_flyoff_recovery_candidates,
+    try_recovery_from_checkpoint_ladder,
     build_geometry_recovery_candidates,
     discover_resume_restart,
     first_valid_geometry_crd_path,
@@ -304,6 +306,45 @@ def test_build_extent_recovery_candidates_skips_heat_segment_tails(tmp_path):
     ladder = build_extent_recovery_candidates(cfg)
     assert ladder == [baseline, crd, equi]
     assert heat_seg not in ladder
+
+
+def test_build_flyoff_recovery_candidates_includes_heat_segments(tmp_path):
+    baseline = tmp_path / "baseline.res"
+    crd = tmp_path / "03_bonded_mm_after_mini_dcm.crd"
+    heat_seg = tmp_path / "heat.0.res"
+    equi = tmp_path / "equi.res"
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        n_monomers=2,
+        geometry_baseline_restart=baseline,
+        prior_segment_restart=heat_seg,
+        geometry_fallback_restarts=(crd, heat_seg, equi),
+    )
+    ladder = build_flyoff_recovery_candidates(cfg)
+    assert ladder == [baseline, heat_seg, crd, equi]
+
+
+def test_try_recovery_from_checkpoint_ladder_tries_multiple(tmp_path):
+    bad = tmp_path / "heat.0.res"
+    good = tmp_path / "baseline.res"
+    write_minimal_restart(bad)
+    write_minimal_restart(good)
+    calls: list[str] = []
+
+    def acceptable() -> bool:
+        calls.append("check")
+        return len(calls) >= 2
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_restart"
+    ) as restore:
+        path = try_recovery_from_checkpoint_ladder(
+            [bad, good],
+            label="test ladder",
+            is_acceptable=acceptable,
+        )
+    assert path == good.resolve()
+    assert restore.call_count == 2
 
 
 def test_restore_geometry_from_ladder_extent_prefers_crd_over_heat_segment(

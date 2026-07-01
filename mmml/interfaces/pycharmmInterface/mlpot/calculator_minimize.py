@@ -538,12 +538,17 @@ def _commit_hybrid_calculator_mini_result(
         sync_charmm_lists_after_mini,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        invalidate_mlpot_pre_sd_ener_probe,
         mlpot_skip_charmm_ener_force_before_first_sd,
         prime_charmm_hybrid_energy_before_mlpot_sd,
         sync_charmm_positions,
     )
 
     defer_pre_sd_ener = mlpot_skip_charmm_ener_force_before_first_sd(mlpot_ctx)
+
+    def _invalidate_deferred_ener_probe() -> None:
+        if defer_pre_sd_ener:
+            invalidate_mlpot_pre_sd_ener_probe(mlpot_ctx)
 
     def _prime_or_ener_force(*, context_suffix: str) -> None:
         if defer_pre_sd_ener:
@@ -557,6 +562,7 @@ def _commit_hybrid_calculator_mini_result(
             cli_common.charmm_grms_after_ener_force()
 
     sync_charmm_positions(np.asarray(atoms.get_positions(), dtype=np.float64))
+    _invalidate_deferred_ener_probe()
     if not defer_pre_sd_ener:
         sync_charmm_lists_after_mini(quiet=True)
     invalidate_mlpot_calculator_caches(mlpot_ctx)
@@ -595,6 +601,7 @@ def _commit_hybrid_calculator_mini_result(
     )
     if restored_hist:
         sync_charmm_positions(np.asarray(atoms.get_positions(), dtype=np.float64))
+        _invalidate_deferred_ener_probe()
         if not defer_pre_sd_ener:
             sync_charmm_lists_after_mini(quiet=True)
         invalidate_mlpot_calculator_caches(mlpot_ctx)

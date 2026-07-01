@@ -434,7 +434,7 @@ def run_extent_recovery_from_prior_restart(
     """Restore a fly-off checkpoint, then run bonded + MLpot recovery."""
     from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
         build_extent_recovery_candidates,
-        restore_geometry_from_ladder,
+        try_recovery_from_checkpoint_ladder,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
@@ -451,13 +451,25 @@ def run_extent_recovery_from_prior_restart(
         raise RuntimeError(
             "fly-off recovery: no geometry checkpoint candidates configured"
         )
+
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        flyoff_checkpoint_geometry_acceptable,
+    )
+
+    def _acceptable() -> bool:
+        return flyoff_checkpoint_geometry_acceptable(ctx, config)
+
     try:
-        restored = restore_geometry_from_ladder(ladder, label="Fly-off recovery")
+        restored = try_recovery_from_checkpoint_ladder(
+            ladder,
+            label="Fly-off recovery",
+            is_acceptable=_acceptable,
+        )
     except RuntimeError as exc:
         names = ", ".join(p.name for p in ladder) or "(none)"
         raise RuntimeError(
-            f"fly-off recovery: could not restore geometry from checkpoint ladder "
-            f"({names}): {exc}"
+            f"fly-off recovery: could not restore acceptable geometry from checkpoint "
+            f"ladder ({names}): {exc}"
         ) from exc
     bonded_cfg = _bonded_cfg_from_overlap_config(config)
     pos = get_charmm_positions_array()

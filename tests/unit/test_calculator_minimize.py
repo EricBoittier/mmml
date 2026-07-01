@@ -579,6 +579,8 @@ def test_commit_hybrid_calculator_mini_defer_path_restores_historical_best():
         "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.mlpot_hybrid_grms_from_calculator",
         return_value=0.5,
     ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.invalidate_mlpot_pre_sd_ener_probe",
+    ) as invalidate_probe, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize._update_calculator_mini_historical_best",
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize._maybe_restore_calculator_mini_historical_best",
@@ -602,6 +604,7 @@ def test_commit_hybrid_calculator_mini_defer_path_restores_historical_best():
     assert grms == pytest.approx(0.5)
     sync_lists.assert_not_called()
     assert prime.call_count == 2
+    assert invalidate_probe.call_count == 2
     ener_force.assert_not_called()
 
 

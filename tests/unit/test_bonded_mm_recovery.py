@@ -1770,9 +1770,12 @@ def test_run_extent_recovery_passes_restart_coords_to_all_ml_path(tmp_path):
         rescue=OverlapRescueConfig(nstep_sd=10, verbose=False),
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.restore_geometry_from_ladder",
+        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.try_recovery_from_checkpoint_ladder",
         return_value=restart,
     ) as restore, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.flyoff_checkpoint_geometry_acceptable",
+        return_value=True,
+    ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.build_extent_recovery_candidates",
         return_value=[],
     ), patch(

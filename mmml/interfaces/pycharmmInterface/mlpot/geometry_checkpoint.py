@@ -206,6 +206,134 @@ def build_extent_recovery_candidates(overlap: Any) -> list[Path]:
     return ordered
 
 
+def build_flyoff_recovery_candidates(overlap: Any) -> list[Path]:
+    """Broader checkpoint ladder for fly-off recovery (includes heat segment tails).
+
+    Unlike :func:`build_extent_recovery_candidates`, heat segment checkpoints
+    (``heat.N.res``) are retained so dynamics can rewind to a pre-fly-off frame.
+    """
+    seen: set[str] = set()
+    ordered: list[Path] = []
+
+    def add(path: Path | str | None) -> None:
+        if path is None:
+            return
+        p = Path(path)
+        if is_overlap_scratch_restart_path(p):
+            return
+        if is_pretreat_mm_restart_path(p):
+            return
+        if is_handoff_seed_restart_path(p):
+            return
+        key = str(p.expanduser())
+        if key in seen:
+            return
+        seen.add(key)
+        ordered.append(p)
+
+    if overlap.geometry_baseline_restart is not None:
+        add(overlap.geometry_baseline_restart)
+    prior = getattr(overlap, "prior_segment_restart", None)
+    if prior is not None:
+        add(prior)
+    for cand in overlap.geometry_fallback_restarts:
+        add(cand)
+    return ordered
+
+
+def iter_valid_recovery_sources(
+    candidates: list[Path] | tuple[Path, ...],
+) -> list[Path]:
+    """All usable restart/CRD sources in ``candidates`` order (not just the first)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        restart_coordinates_are_unsafe,
+        restart_has_nonfinite_coordinates,
+    )
+    import sys
+
+    seen: set[str] = set()
+    ordered: list[Path] = []
+    for cand in candidates:
+        p = Path(cand)
+        if is_geometry_recovery_crd_path(p):
+            if p.is_file() and p.stat().st_size > 0:
+                key = str(p.resolve())
+                if key not in seen:
+                    seen.add(key)
+                    ordered.append(p.resolve())
+            continue
+        valid = _valid_restart_file(p)
+        if valid is None:
+            continue
+        if restart_has_nonfinite_coordinates(valid):
+            print(
+                f"WARN: Invalidating corrupt restart file {valid} (non-finite or all zero coords)",
+                file=sys.stderr,
+                flush=True,
+            )
+            valid.rename(valid.with_suffix(".res.corrupt"))
+            continue
+        if restart_coordinates_are_unsafe(valid):
+            print(
+                f"WARN: Skipping restart {valid.name} with unphysical coordinates "
+                f"(>|2000| Å) in geometry ladder",
+                file=sys.stderr,
+                flush=True,
+            )
+            continue
+        key = str(valid.resolve())
+        if key in seen:
+            continue
+        seen.add(key)
+        ordered.append(valid.resolve())
+    return ordered
+
+
+def try_recovery_from_checkpoint_ladder(
+    candidates: list[Path] | tuple[Path, ...],
+    *,
+    label: str = "checkpoint recovery",
+    is_acceptable: Any,
+) -> Path:
+    """Load each checkpoint in order until ``is_acceptable()`` returns True."""
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        restore_charmm_state_from_crd,
+        restore_charmm_state_from_restart,
+    )
+
+    sources = iter_valid_recovery_sources(candidates)
+    if not sources:
+        tried = ", ".join(Path(p).name for p in candidates) or "(none)"
+        raise RuntimeError(
+            f"{label}: no valid restart/CRD in checkpoint ladder ({tried})"
+        )
+
+    last_reject = ""
+    for path in sources:
+        try:
+            if is_geometry_recovery_crd_path(path):
+                restore_charmm_state_from_crd(path)
+            else:
+                restore_charmm_state_from_restart(path)
+            print(f"{label}: loaded {path.name}, checking geometry...", flush=True)
+            if bool(is_acceptable()):
+                print(f"{label}: accepted checkpoint {path.name}", flush=True)
+                return path
+            last_reject = path.name
+            print(
+                f"{label}: rejected {path.name} (extent/GRMS still bad)",
+                flush=True,
+            )
+        except Exception as exc:
+            print(f"{label}: failed to load {path.name}: {exc}", flush=True)
+
+    raise RuntimeError(
+        f"{label}: no acceptable geometry among {len(sources)} checkpoint(s)"
+        + (f" (last tried: {last_reject})" if last_reject else "")
+    )
+
+
 def resolve_extent_recovery_source(
     candidates: list[Path] | tuple[Path, ...],
 ) -> Path | None:

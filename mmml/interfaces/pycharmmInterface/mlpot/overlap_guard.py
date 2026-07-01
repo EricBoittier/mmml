@@ -810,6 +810,87 @@ def _extent_check(
     )
 
 
+def flyoff_checkpoint_geometry_acceptable(
+    mlpot_ctx: "MlpotContext",
+    config: DynamicsOverlapConfig,
+    *,
+    max_hybrid_grms_kcalmol_A: float = 50.0,
+) -> bool:
+    """True when restored coordinates pass extent and hybrid GRMS gates."""
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        measure_hybrid_charmm_grms,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        invalidate_mlpot_calculator_caches,
+        sync_charmm_lists_after_mini,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        invalidate_mlpot_pre_sd_ener_probe,
+    )
+
+    sync_charmm_lists_after_mini(quiet=True)
+    invalidate_mlpot_calculator_caches(mlpot_ctx)
+    mlpot_ctx.reregister_mlpot(verbose=False, reregister_params=False)
+    invalidate_mlpot_pre_sd_ener_probe(mlpot_ctx)
+    try:
+        _extent_check(config, context="checkpoint ladder probe")
+    except RuntimeError:
+        return False
+    diag = measure_hybrid_charmm_grms(mlpot_ctx)
+    if not np.isfinite(diag.hybrid) or float(diag.hybrid) > float(max_hybrid_grms_kcalmol_A):
+        return False
+    return str(diag.kind) != "both_high"
+
+
+def _try_flyoff_checkpoint_ladder_rescue(
+    config: DynamicsOverlapConfig,
+    *,
+    label: str,
+    exc: RuntimeError,
+    mlpot_ctx: "MlpotContext",
+) -> float:
+    """Walk prior restart checkpoints until extent + hybrid GRMS are acceptable."""
+    from mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery import (
+        polish_after_extent_repack,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+        build_flyoff_recovery_candidates,
+        try_recovery_from_checkpoint_ladder,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        invalidate_mlpot_pre_sd_ener_probe,
+    )
+
+    candidates = build_flyoff_recovery_candidates(config)
+    if not candidates:
+        raise exc
+
+    print(
+        f"{exc}\nTrying pre-fly-off checkpoint ladder "
+        f"({len(candidates)} candidate path(s))...",
+        flush=True,
+    )
+
+    def _acceptable() -> bool:
+        return flyoff_checkpoint_geometry_acceptable(mlpot_ctx, config)
+
+    path = try_recovery_from_checkpoint_ladder(
+        candidates,
+        label=f"{label} checkpoint ladder",
+        is_acceptable=_acceptable,
+    )
+    setattr(mlpot_ctx, "_mlpot_pbc_exclusions_upinb_done", False)
+    setattr(mlpot_ctx, "_overlap_extent_polish_mlpot_sd_done", False)
+    invalidate_mlpot_pre_sd_ener_probe(mlpot_ctx)
+    polish_after_extent_repack(
+        mlpot_ctx,
+        config,
+        label=f"{label} after {path.name}",
+    )
+    setattr(mlpot_ctx, "_overlap_post_rescue_cold_start", True)
+    return _extent_check(config, context=f"{label} after checkpoint ladder ({path.name})")
+
+
 def save_stabilized_overlap_rescue_snapshot(
     mlpot_ctx: "MlpotContext",
     config: DynamicsOverlapConfig,
@@ -1247,7 +1328,33 @@ def _handle_extent_cleanup_rescue(
         label=f"{label} after monomer repack",
     )
     setattr(mlpot_ctx, "_overlap_post_rescue_cold_start", True)
-    return _extent_check(config, context=f"{label} after cleanup extent rescue")
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        measure_hybrid_charmm_grms,
+    )
+
+    diag = measure_hybrid_charmm_grms(mlpot_ctx)
+    if float(diag.hybrid) > 50.0 or str(diag.kind) == "both_high":
+        try:
+            return _try_flyoff_checkpoint_ladder_rescue(
+                config,
+                label=label,
+                exc=RuntimeError(
+                    f"monomer repack polish left hybrid GRMS {diag.hybrid:.2f} "
+                    f"kcal/mol/Å (CHARMM {diag.charmm:.2f}, kind={diag.kind})"
+                ),
+                mlpot_ctx=mlpot_ctx,
+            )
+        except RuntimeError:
+            pass
+    try:
+        return _extent_check(config, context=f"{label} after cleanup extent rescue")
+    except RuntimeError as check_exc:
+        return _try_flyoff_checkpoint_ladder_rescue(
+            config,
+            label=label,
+            exc=RuntimeError(f"{check_exc}; monomer repack polish did not restore extent"),
+            mlpot_ctx=mlpot_ctx,
+        )
 
 
 def _escalate_extent_rescue(
@@ -1273,6 +1380,16 @@ def _escalate_extent_rescue(
             if not isinstance(ladder_exc, RuntimeError):
                 raise
             exc = ladder_exc
+
+    try:
+        return _try_flyoff_checkpoint_ladder_rescue(
+            config,
+            label=label,
+            exc=exc,
+            mlpot_ctx=mlpot_ctx,
+        )
+    except RuntimeError:
+        pass
 
     try:
         return _handle_extent_cleanup_rescue(

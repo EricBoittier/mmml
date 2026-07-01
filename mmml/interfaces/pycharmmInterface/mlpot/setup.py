@@ -331,6 +331,11 @@ def mlpot_sd_charmm_ener_already_primed(mlpot_ctx: Any) -> bool:
     return getattr(mlpot_ctx, "_mlpot_pre_sd_ener_probed", None) is True
 
 
+def invalidate_mlpot_pre_sd_ener_probe(mlpot_ctx: Any) -> None:
+    """Clear deferred-path ENER prime so the next probe runs at current coordinates."""
+    setattr(mlpot_ctx, "_mlpot_pre_sd_ener_probed", False)
+
+
 def prime_charmm_hybrid_energy_before_mlpot_sd(
     mlpot_ctx: Any,
     *,
