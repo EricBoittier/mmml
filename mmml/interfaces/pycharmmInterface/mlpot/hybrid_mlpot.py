@@ -1188,9 +1188,11 @@ def materialize_deferred_mlpot_jax_before_sd(
     segfaults. Materialize the callback and run one ``ENER FORCE`` outside SD
     first (with ``recover_mpi_for_charmm_after_jax`` between JAX and Fortran).
 
-    When ``sync_lists`` is set, run CHARMM ``ENER`` + ``UPDATE`` after the probe
-    so ``inbfrq=0`` SD starts from fresh NB/MLpot lists (avoids ``enbond``
-    segfaults on stale pair buffers after prep/coordinate moves).
+    When ``sync_lists`` is set, run CHARMM ``ENER`` + ``UPDATE`` after the probe.
+    Do **not** enable before the first MLpot SD step with MLpot registered: ``UPDATE``
+    still drives ``upinb`` / ``UPIMNB`` and can segfault on large PBC all-ML systems
+    (especially right after deferred JAX materialize). Post-chunk SD sync uses
+    :func:`sync_charmm_lists_after_mini` separately after coordinates move.
     """
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,

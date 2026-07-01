@@ -938,9 +938,10 @@ def _non_pbc_dyn_freq_kwargs(*, inbfrq: int = 50) -> dict[str, int]:
 def sync_charmm_lists_after_mini(*, quiet: bool = False) -> None:
     """Refresh NB/MLpot pair lists from current coordinates after mini (``inbfrq=0``).
 
-    MLpot SD keeps ``inbfrq=0`` to avoid ``mlpot_update`` issues; the first NVE
-    ``UPDECI`` otherwise jumps from stale lists.  Uses CHARMM ``UPDATE`` only (no
-    ``update_bnbnd`` / ``upinb`` — unsafe with MLpot registered).
+    MLpot SD keeps ``inbfrq=0`` to avoid per-step ``mlpot_update``; the first NVE
+    ``UPDECI`` otherwise jumps from stale lists.  Uses CHARMM ``UPDATE`` (which still
+    invokes ``upinb`` / ``UPIMNB`` on PBC builds — avoid calling this before the
+    first MLpot SD step right after deferred JAX materialize).
     """
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
 
@@ -1257,7 +1258,6 @@ def _run_minimize_in_chunks(
                 config.mlpot_ctx,
                 verbose=config.verbose,
                 force_ener_probe=True,
-                sync_lists=True,
             )
             from mmml.interfaces.pycharmmInterface.charmm_mpi import (
                 recover_mpi_for_charmm_after_jax,
@@ -5847,7 +5847,6 @@ def minimize_with_mlpot(
                 config.mlpot_ctx,
                 verbose=config.verbose,
                 force_ener_probe=True,
-                sync_lists=True,
             )
         with charmm_mlpot_sd_jax_cpu_guard(pyC_model):
             sd_result = _run_mlpot_sd_then_abnr(
