@@ -1835,25 +1835,23 @@ def test_overlap_post_rescue_handoff_uses_readyn_restart(tmp_path, capsys):
     def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
         calls.append((dict(kw), _io))
         if _io is not None and _io.restart_write is not None:
-            Path(_io.restart_write).write_text("REST 500 0\n", encoding="utf-8")
+            _write_test_restart(Path(_io.restart_write), 500 * len(calls))
         return mock.Mock()
 
     def track_overlap(_cfg, *, context, step, mlpot_ctx=None):
         return (5.0, int(step) == 500)
 
     def fake_materialize(chunk_io, chunk_kw, **kwargs):
-        slot_a = tmp_path / "heat.a.res"
-        slot_a.write_text(
-            "REST    48     0\n"
-            "\n"
-            " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
-            "          25         500         500         500          10           0\n",
-            encoding="utf-8",
+        write_path = (
+            Path(chunk_io.restart_write)
+            if chunk_io is not None and chunk_io.restart_write is not None
+            else tmp_path / "heat.a.res"
         )
+        _write_test_restart(write_path, int(kwargs.get("steps_done", 500)))
         chunk_kw["restart"] = True
         chunk_kw["iasvel"] = 0
         return CharmmTrajectoryFiles(
-            restart_read=slot_a,
+            restart_read=write_path,
             restart_write=chunk_io.restart_write if chunk_io is not None else None,
         )
 
@@ -1898,7 +1896,7 @@ def test_overlap_post_rescue_handoff_uses_readyn_restart(tmp_path, capsys):
     assert calls[0][0]["restart"] is False
     assert calls[1][0]["restart"] is True
     assert calls[1][0]["iasvel"] == 0
-    assert calls[2][0]["restart"] is False
+    assert calls[2][0]["restart"] is True
     finalize.assert_called_once()
     materialize.assert_called_once()
     post_rescue.assert_not_called()
