@@ -7,9 +7,7 @@ package. These tests verify the interface works when available.
 
 from __future__ import annotations
 
-import os
 import pytest
-
 
 from tests.conftest import can_import_pycharmm, charmm_env_configured
 
@@ -29,9 +27,8 @@ def test_charmm_import():
     reason="pycharmm not available in this environment",
 )
 def test_mmml_calculator_charmm_flag():
-    """MMML calculator module exposes _HAVE_PYCHARMM correctly."""
-    from mmml.interfaces.pycharmmInterface import mmml_calculator
+    """CHARMM is loadable under mpirun even when collection used MMML_WARMUP_MLPOT_JAX_ONLY."""
+    import pycharmm  # noqa: F401
 
-    assert hasattr(mmml_calculator, "_HAVE_PYCHARMM")
-    assert mmml_calculator._HAVE_PYCHARMM is True
+    assert can_import_pycharmm()
 
