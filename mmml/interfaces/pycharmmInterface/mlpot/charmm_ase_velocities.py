@@ -16,6 +16,8 @@ _KCALMOL_PER_K = 0.0019872041
 # Hard floor for every Maxwell-Boltzmann / CHARMM ASSVEL draw (K).
 MIN_VELOCITY_ASSIGNMENT_TEMP_K = 10.0
 MAX_BUSSI_RESCALE_ALPHA = 3.0
+# Reject restart/COMP reads that look like coordinates or integration blow-up.
+MAX_REASONABLE_VELOCITY_TEMP_K = 5000.0
 
 _last_synced_velocities_akma: np.ndarray | None = None
 
@@ -304,11 +306,11 @@ def capture_charmm_velocities_for_bussi(
     (current scratch + paired slot + staging + *fallback_paths*), then warm COMP.
     """
     raw = last_synced_velocities_akma_raw()
-    if raw is not None and not velocities_are_cold(raw):
+    if raw is not None and not velocities_are_cold(raw) and not velocities_are_pathological(raw):
         return raw
 
     vel = charmm_velocities_akma()
-    if vel is not None and not velocities_are_cold(vel):
+    if vel is not None and not velocities_are_cold(vel) and not velocities_are_pathological(vel):
         sync_charmm_velocities_akma(vel)
         return vel
 
@@ -427,6 +429,25 @@ def velocities_are_cold(
         # Non-zero AKMA components but CHARMM masses unavailable (unit tests / early import).
         return False
     return float(temp) < float(min_temperature_K)
+
+
+def velocities_are_pathological(
+    velocities_akma: np.ndarray | None = None,
+    *,
+    masses_amu: np.ndarray | None = None,
+    ndegf: int | None = None,
+    max_temperature_K: float = MAX_REASONABLE_VELOCITY_TEMP_K,
+) -> bool:
+    """True when AKMA velocities imply an unphysical kinetic temperature."""
+    if velocities_akma is None:
+        return False
+    v = np.asarray(velocities_akma, dtype=np.float64).reshape(-1, 3)
+    if v.size == 0 or not np.all(np.isfinite(v)):
+        return True
+    temp = estimate_kinetic_temperature_k(velocities_akma, masses_amu, ndegf=ndegf)
+    if temp is None:
+        return float(np.max(np.abs(v))) > 1.0e6
+    return float(temp) > float(max_temperature_K)
 
 
 def resolve_assignment_temperature_k(
@@ -656,6 +677,14 @@ def _read_restart_velocities_akma(
             continue
         if velocities_are_cold(vel):
             continue
+        from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+            restart_velocities_match_coordinates,
+        )
+
+        if restart_velocities_match_coordinates(candidate, vel):
+            continue
+        if velocities_are_pathological(vel):
+            continue
         try:
             cand_key = str(candidate.resolve())
         except OSError:
@@ -848,6 +877,14 @@ def apply_bussi_velocity_rescale(
         fallback_paths=fallback_paths,
     )
     dof = resolve_bussi_degrees_of_freedom(ndegf)
+    if velocities_are_pathological(v_akma, masses, ndegf=dof):
+        if not quiet:
+            print(
+                f"ASE Bussi rescale: rejecting pathological velocities; "
+                f"assigning Maxwell-Boltzmann at {temp:.2f} K",
+                flush=True,
+            )
+        _, v_akma = assign_bussi_fallback_velocities(temp, quiet=quiet)
     ke = estimate_kinetic_energy_kcalmol(v_akma, masses)
     if ke is None or ke <= 0.0:
         _, v_akma = assign_bussi_fallback_velocities(temp, quiet=quiet)

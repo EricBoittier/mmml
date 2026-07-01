@@ -5289,7 +5289,7 @@ def _run_dynamics_chunk(
         kw.pop("iunrea", None)
         if "iunrea" in iokw:
             kw["iunrea"] = iokw["iunrea"]
-    elif "iunrea" not in iokw:
+    else:
         kw.pop("iunrea", None)
         kw["iunrea"] = -1
     _sync_dynamics_io_units(kw, iokw)
@@ -5324,6 +5324,8 @@ def _run_dynamics_chunk(
                 fallback_paths=bussi_restart_fallbacks,
                 quiet=bool(kw.get("_quiet_bussi_rescale", False)),
             )
+            if restart_path is not None:
+                kw["_post_dyna_last_restart_path"] = str(restart_path)
 
 
 def _cpt_stability_chunk_nstep(kw: dict[str, Any], total_nstep: int) -> int | None:
