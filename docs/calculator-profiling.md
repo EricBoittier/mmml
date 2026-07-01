@@ -88,11 +88,13 @@ JAX_PLATFORMS=cpu MMML_JAX_COMPILE_TIMERS=1 \
 JAX_PLATFORMS=cpu uv run python tests/functionality/long_range/11_calculator_primitive_benchmark.py \
   --legacy-intra
 
-# Add MLpot spherical_cutoff + mlpot_spherical_forward (needs checkpoint)
+# Add MLpot spherical_cutoff + mlpot_spherical_forward (needs checkpoint; slow on CPU)
 JAX_PLATFORMS=cpu uv run python tests/functionality/long_range/11_calculator_primitive_benchmark.py \
   --checkpoint examples/ckpts_json/DESdimers_params.json \
   --n-monomers 12 --json artifacts/calculator_primitive_benchmark.json
 ```
+
+Do not pipe through `tail` — output is buffered and long CPU compiles look hung. For MLpot warmup only, use `mmml warmup-mlpot-jax` instead.
 
 Output columns: `compile_s`, `run_s` (from two-pass warmup), `steady_ms` (mean of extra reps).
 
