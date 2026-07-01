@@ -98,19 +98,40 @@ def _build_minimized_trialanine() -> None:
 
 
 def _atom_names_in_psf_order() -> list[str]:
+    from collections import Counter
     from pathlib import Path
 
     pdb_path = Path("pdb/initial.pdb")
     if not pdb_path.is_file():
         raise FileNotFoundError(f"Expected {pdb_path} after setupRes.generate_coordinates")
-    names: list[str] = []
+    raw_names: list[str] = []
+    resnums: list[int] = []
     for line in pdb_path.read_text(encoding="utf-8", errors="replace").splitlines():
         if not line.startswith("ATOM"):
             continue
-        names.append(line[12:16].strip())
-    if not names:
+        raw_names.append(line[12:16].strip())
+        resnums.append(int(line[22:26]))
+    if not raw_names:
         raise RuntimeError(f"No ATOM records in {pdb_path}")
-    return names
+
+    duplicates = {name for name, count in Counter(raw_names).items() if count > 1}
+    unique: list[str] = []
+    used: set[str] = set()
+    for name, rnum in zip(raw_names, resnums):
+        if name not in duplicates:
+            uname = name
+        else:
+            suffix = str(rnum)
+            uname = f"{name[: 4 - len(suffix)]}{suffix}"[:4]
+        base = uname
+        nudge = 1
+        while uname in used:
+            suffix = f"{rnum}{nudge}"
+            uname = f"{base[: 4 - len(suffix)]}{suffix}"[:4]
+            nudge += 1
+        used.add(uname)
+        unique.append(uname)
+    return unique
 
 
 def _format_rtf_block() -> str:
@@ -143,9 +164,8 @@ def _format_rtf_block() -> str:
         name = str(names[idx]).strip()
         cg_type = _map_atype(str(atypes[idx]))
         charge = float(charges[idx])
-        group = "GROUP" if idx == 0 or idx % 8 == 0 else ""
-        if group:
-            lines.append(group)
+        if idx == 0 or idx % 8 == 0:
+            lines.append("GROUP")
         lines.append(f"ATOM {name:<4} {cg_type:<6} {charge:7.2f}")
 
     bond_chunks: list[str] = []
@@ -154,11 +174,6 @@ def _format_rtf_block() -> str:
     for i in range(0, len(bond_chunks), 8):
         chunk = bond_chunks[i : i + 8]
         lines.append("BOND " + " ".join(f"{tok:<4}" for tok in chunk))
-
-    # Placeholder ICs — ``ic_prm_fill`` supplies equilibrium values at build time.
-    for a, b in bonds:
-        i, j = names[a - 1], names[b - 1]
-        lines.append(f"IC {i:<4} {j:<4} {i:<4} {j:<4} 0.0 0.0 0.0 0.0 0.0")
 
     lines.append("PATC FIRS NONE LAST NONE")
     lines.append("")
