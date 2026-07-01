@@ -4014,6 +4014,43 @@ def _overlap_chunk_io(
     )
 
 
+def _bussi_overlap_skip_scratch_restart_write(
+    *,
+    mem_handoff: bool,
+    chunk_kw: dict[str, Any],
+    chunk_index: int,
+    n_chunks: int,
+) -> bool:
+    """Skip scratch ``WRIDYN`` on intermediate Bussi in-memory overlap legs.
+
+    ``READYN``/``WRIDYN`` on ``heat.a/.b.res`` between micro-chunks clears live
+    velocities and can segfault ``dynopt`` on the next in-process leg.  Only the
+    final overlap chunk writes the stage ``heat.res`` checkpoint.
+    """
+    if not mem_handoff or not _bussi_heat_ramp_active(chunk_kw):
+        return False
+    if int(n_chunks) <= 1:
+        return False
+    return int(chunk_index) < int(n_chunks) - 1
+
+
+def _drop_chunk_io_restart_write(
+    chunk_io: Optional[CharmmTrajectoryFiles],
+) -> Optional[CharmmTrajectoryFiles]:
+    if chunk_io is None or chunk_io.restart_write is None:
+        return chunk_io
+    return CharmmTrajectoryFiles(
+        restart_read=chunk_io.restart_read,
+        restart_write=None,
+        trajectory=chunk_io.trajectory,
+        pressure_tensor_log=chunk_io.pressure_tensor_log,
+        restart_read_unit=chunk_io.restart_read_unit,
+        restart_write_unit=chunk_io.restart_write_unit,
+        trajectory_unit=chunk_io.trajectory_unit,
+        pressure_tensor_log_unit=chunk_io.pressure_tensor_log_unit,
+    )
+
+
 def _drop_trajectory_io(io: Optional[CharmmTrajectoryFiles]) -> Optional[CharmmTrajectoryFiles]:
     """Return an equivalent I/O descriptor without opening a DCD trajectory."""
     if io is None or io.trajectory is None:
@@ -6185,6 +6222,14 @@ def run_dynamics_with_io(
                         verbose=False,
                     )
                 if chunk_io is None or chunk_io.restart_write is None:
+                    chunk_kw.pop("iunwri", None)
+                elif _bussi_overlap_skip_scratch_restart_write(
+                    mem_handoff=mem_handoff,
+                    chunk_kw=chunk_kw,
+                    chunk_index=chunk_index,
+                    n_chunks=n_chunks,
+                ):
+                    chunk_io = _drop_chunk_io_restart_write(chunk_io)
                     chunk_kw.pop("iunwri", None)
 
                 _harmonize_overlap_chunk_frequencies(

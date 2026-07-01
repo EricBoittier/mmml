@@ -436,6 +436,55 @@ def test_read_restart_velocities_akma_falls_back_to_prior_restart(tmp_path):
     assert vel[0, 0] == pytest.approx(80.0)
 
 
+def test_read_restart_velocities_akma_skips_natom_mismatch(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        _read_restart_velocities_akma,
+    )
+
+    wrong = tmp_path / "pretreat.res"
+    _write_restart_with_velocities(wrong, 100.0)
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_psf_natom",
+        return_value=990,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._restart_file_matches_psf",
+        return_value=False,
+    ):
+        assert _read_restart_velocities_akma(
+            None,
+            fallback_paths=[wrong],
+            quiet=True,
+        ) is None
+
+
+def test_bussi_overlap_skip_scratch_restart_write():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _bussi_overlap_skip_scratch_restart_write,
+        prepare_bussi_heat_dynamics_kw,
+    )
+
+    kw = {"firstt": 10.0, "finalt": 300.0, "timestep": 0.0001, "nstep": 50}
+    prepare_bussi_heat_dynamics_kw(kw, nstep=50, ihtfrq=50, timestep_ps=0.0001)
+    assert _bussi_overlap_skip_scratch_restart_write(
+        mem_handoff=True,
+        chunk_kw=kw,
+        chunk_index=0,
+        n_chunks=8,
+    )
+    assert _bussi_overlap_skip_scratch_restart_write(
+        mem_handoff=True,
+        chunk_kw=kw,
+        chunk_index=6,
+        n_chunks=8,
+    )
+    assert not _bussi_overlap_skip_scratch_restart_write(
+        mem_handoff=True,
+        chunk_kw=kw,
+        chunk_index=7,
+        n_chunks=8,
+    )
+
+
 def test_apply_bussi_velocity_rescale_syncs_charmm():
     masses = np.array([12.0, 1.0, 1.0], dtype=float)
     v_akma = np.ones((3, 3), dtype=float) * 100.0

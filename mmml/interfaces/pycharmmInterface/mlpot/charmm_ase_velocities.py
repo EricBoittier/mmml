@@ -41,6 +41,41 @@ def charmm_masses_amu() -> np.ndarray:
     return np.asarray(pycharmm.select.get_property("mass"), dtype=np.float64)
 
 
+def charmm_psf_natom() -> int | None:
+    """Atom count from the loaded PSF, or ``None`` when unavailable."""
+    try:
+        pycharmm = _import_pycharmm()
+        n = int(pycharmm.psf.get_natom())
+        return n if n > 0 else None
+    except Exception:
+        return None
+
+
+def _velocity_array_matches_psf(vel: np.ndarray) -> bool:
+    """True when *vel* row count matches the loaded PSF."""
+    v = np.asarray(vel, dtype=np.float64).reshape(-1, 3)
+    if v.shape[0] <= 0:
+        return False
+    n_psf = charmm_psf_natom()
+    if n_psf is None:
+        return True
+    return int(v.shape[0]) == int(n_psf)
+
+
+def _restart_file_matches_psf(path: Path) -> bool:
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_restart_natom,
+    )
+
+    n_psf = charmm_psf_natom()
+    if n_psf is None:
+        return True
+    n_res = read_restart_natom(path)
+    if n_res is None:
+        return False
+    return int(n_res) == int(n_psf)
+
+
 def charmm_velocities_akma() -> np.ndarray | None:
     """Main-set velocities as ``(N, 3)`` in CHARMM AKMA units, or ``None``.
 
@@ -283,13 +318,21 @@ def capture_charmm_velocities_for_bussi(
         quiet=quiet,
     )
     if vel is not None:
-        sync_charmm_velocities_akma(vel)
-        return vel
+        try:
+            sync_charmm_velocities_akma(vel)
+        except ValueError:
+            vel = None
+        else:
+            return vel
 
     vel = charmm_velocities_akma_for_thermostat()
     if vel is not None and not velocities_are_cold(vel):
-        sync_charmm_velocities_akma(vel)
-        return vel
+        try:
+            sync_charmm_velocities_akma(vel)
+        except ValueError:
+            vel = None
+        else:
+            return vel
     try:
         from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
             comparison_matches_main_positions,
@@ -299,11 +342,14 @@ def capture_charmm_velocities_for_bussi(
         comp = comparison_velocities_akma()
         if (
             comp is not None
+            and _velocity_array_matches_psf(comp)
             and not comparison_matches_main_positions()
             and not velocities_are_cold(comp)
         ):
             sync_charmm_velocities_akma(comp)
             return comp
+    except ValueError:
+        pass
     except Exception:
         pass
     return None
@@ -439,6 +485,12 @@ def sync_charmm_velocities_akma(velocities_akma: np.ndarray) -> None:
     )
 
     v = np.asarray(velocities_akma, dtype=np.float64).reshape(-1, 3)
+    if not _velocity_array_matches_psf(v):
+        n_psf = charmm_psf_natom()
+        raise ValueError(
+            f"sync_charmm_velocities_akma: velocity rows ({v.shape[0]}) != "
+            f"PSF atoms ({n_psf})"
+        )
     _last_synced_velocities_akma = v.copy()
     coor = _pycharmm_coor_module()
 
@@ -593,8 +645,12 @@ def _read_restart_velocities_akma(
     for candidate in ladder:
         if not candidate.is_file() or candidate.stat().st_size <= 0:
             continue
+        if not _restart_file_matches_psf(candidate):
+            continue
         vel = read_restart_velocities(candidate)
         if vel is None or not np.all(np.isfinite(vel)):
+            continue
+        if not _velocity_array_matches_psf(vel):
             continue
         if float(np.max(np.abs(vel))) < 1.0e-8:
             continue
