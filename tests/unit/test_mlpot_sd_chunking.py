@@ -715,6 +715,11 @@ def test_materialize_deferred_mlpot_jax_before_sd_skips_charmm_ener_after_fresh_
         "mmml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
         return_value=True,
     ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.assert_mpi_launcher_for_mlpot_sd",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
+        return_value=True,
+    ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=np.zeros((6, 3)),
     ), patch(
