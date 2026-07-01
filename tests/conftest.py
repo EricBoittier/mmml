@@ -12,6 +12,23 @@ from tests.functionality.pycharmmETC._paths import PYCHARMMETC_DIR
 
 _TESTS_ROOT = Path(__file__).resolve().parent
 
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Avoid blocking ``dlopen(libcharmm)`` while collecting tests.
+
+    MPI-linked CHARMM can hang for minutes (or forever) when pytest imports
+    ``mmml_calculator`` / ``hybrid_mlpot`` in a plain serial shell.  Live
+    PyCHARMM jobs use ``mmml-charmm-mpirun.sh`` or import CHARMM inside the
+    test body after bootstrap.  Override with ``MMML_WARMUP_MLPOT_JAX_ONLY=0``.
+    """
+    if os.environ.get("MMML_WARMUP_MLPOT_JAX_ONLY", "").strip().lower() in (
+        "0",
+        "false",
+        "no",
+    ):
+        return
+    os.environ.setdefault("MMML_WARMUP_MLPOT_JAX_ONLY", "1")
+
 # Committed inputs copied into each isolated PyCHARMM workdir when present.
 _PYCHARMM_SEED_PDBS = (
     "initial.pdb",

@@ -1,4 +1,9 @@
-"""Unit-test fixtures (no libcharmm.so required)."""
+"""Unit-test fixtures (no libcharmm.so required).
+
+Serial pytest sets ``MMML_WARMUP_MLPOT_JAX_ONLY=1`` in ``tests/conftest.py`` so
+collecting tests that import ``hybrid_mlpot`` does not ``dlopen`` MPI-linked
+``libcharmm`` (which can block indefinitely outside ``mpirun``).
+"""
 
 from __future__ import annotations
 

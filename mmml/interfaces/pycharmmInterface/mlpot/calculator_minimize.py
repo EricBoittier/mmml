@@ -657,7 +657,6 @@ def _promote_mlpot_jax_for_calculator_mini(mlpot_ctx: Any, *, verbose: bool) -> 
         DecomposedMlpotModel,
         warmup_decomposed_mlpot,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
     defer_mesh = (
         isinstance(pyCModel, DecomposedMlpotModel)
@@ -675,11 +674,20 @@ def _promote_mlpot_jax_for_calculator_mini(mlpot_ctx: Any, *, verbose: bool) -> 
     if callable(promote):
         was_gpu = bool(getattr(pyCModel, "_jax_on_gpu", False))
         promote()
-        if isinstance(pyCModel, DecomposedMlpotModel) and (
-            not was_gpu or not pyCModel._jax_warmup_done
+        if (
+            isinstance(pyCModel, DecomposedMlpotModel)
+            and (not was_gpu or not pyCModel._jax_warmup_done)
+            and int(getattr(pyCModel, "_n_monomers", 0) or 0) > 1
         ):
-            n_mono = int(getattr(pyCModel, "_n_monomers", 0) or 0)
-            if n_mono > 1:
+            from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+                get_charmm_positions_array,
+            )
+
+            try:
+                pos = get_charmm_positions_array()
+            except Exception:
+                pos = None
+            if pos is not None and pos.size and not np.allclose(pos, 0.0):
                 cell = getattr(mlpot_ctx, "cubic_box_side_A", None)
                 if cell is None:
                     cell = getattr(mlpot_ctx, "charmm_cubic_box_side_A", None)
@@ -687,7 +695,7 @@ def _promote_mlpot_jax_for_calculator_mini(mlpot_ctx: Any, *, verbose: bool) -> 
                     cell = pyCModel._cell
                 warmup_decomposed_mlpot(
                     pyCModel,
-                    get_charmm_positions_array(),
+                    pos,
                     cell=cell,
                     verbose=False,
                 )

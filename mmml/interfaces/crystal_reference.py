@@ -119,15 +119,22 @@ def comparison_table_markdown(
     *,
     literature_citation: str,
     built_caption: str,
+    charmm: CrystalMetrics | None = None,
+    charmm_caption: str = "",
 ) -> str:
-    """Markdown table: literature vs optional PyXtal build."""
-    lines = [
-        literature_citation,
-        "",
-        "| Quantity | Literature | PyXtal build | Δ (build − lit) |",
-        "|----------|------------|--------------|-----------------|",
-    ]
-    if built is None:
+    """Markdown table: literature vs optional make-res+CIF and PyXtal builds."""
+    if charmm is not None:
+        header = (
+            "| Quantity | Literature | make-res+CIF | Δ (CIF−lit) | "
+            "PyXtal build | Δ (PyXtal−lit) |"
+        )
+        sep = "|----------|------------|--------------|-------------|--------------|----------------|"
+    else:
+        header = "| Quantity | Literature | PyXtal build | Δ (build − lit) |"
+        sep = "|----------|------------|--------------|-----------------|"
+
+    lines = [literature_citation, "", header, sep]
+    if built is None and charmm is None:
         lines.extend(
             [
                 f"| Space group | {literature.space_group or '—'} | — | — |",
@@ -147,46 +154,89 @@ def comparison_table_markdown(
         )
         return "\n".join(lines)
 
-    lit, bld = literature, built
-    rows: list[tuple[str, str, str, str]] = [
-        (
-            "Space group",
-            str(lit.space_group or "—"),
-            str(bld.space_group or "—"),
-            "—",
-        ),
-        (
-            "N atoms",
-            str(lit.natoms),
-            str(bld.natoms),
-            _pct_delta(float(bld.natoms), float(lit.natoms)),
-        ),
-    ]
-    for axis, lv, bv in zip(("a", "b", "c"), lit.lengths_a, bld.lengths_a):
-        rows.append((f"*{axis}* (Å)", f"{lv:.3f}", f"{bv:.3f}", _pct_delta(bv, lv)))
-    for name, lv, bv in zip(
-        ("α", "β", "γ"), lit.angles_deg, bld.angles_deg
-    ):
-        rows.append((f"{name} (°)", f"{lv:.1f}", f"{bv:.1f}", _pct_delta(bv, lv)))
-    rows.append(
-        (
-            "Volume (Å³)",
-            f"{lit.volume_a3:.1f}",
-            f"{bld.volume_a3:.1f}",
-            _pct_delta(bld.volume_a3, lit.volume_a3),
+    lit = literature
+    bld = built
+    ch = charmm
+
+    def _fmt3(val: float | None) -> str:
+        return f"{val:.3f}" if val is not None else "—"
+
+    def _fmt1(val: float | None) -> str:
+        return f"{val:.1f}" if val is not None else "—"
+
+    def _delta(built_val: float | None, ref: float) -> str:
+        return _pct_delta(built_val, ref) if built_val is not None else "—"
+
+    sg_lit = str(lit.space_group or "—")
+    sg_ch = str(ch.space_group or "—") if ch else "—"
+    sg_bld = str(bld.space_group or "—") if bld else "—"
+    if charmm is not None:
+        lines.append(f"| Space group | {sg_lit} | {sg_ch} | — | {sg_bld} | — |")
+        lines.append(
+            f"| N atoms | {lit.natoms} | {ch.natoms} | "
+            f"{_pct_delta(float(ch.natoms), float(lit.natoms))} | "
+            f"{bld.natoms if bld else '—'} | "
+            f"{_delta(float(bld.natoms) if bld else None, float(lit.natoms))} |"
         )
-    )
-    rows.append(
-        (
-            "ρ (g/cm³)",
-            f"{lit.density_g_cm3:.3f}",
-            f"{bld.density_g_cm3:.3f}",
-            _pct_delta(bld.density_g_cm3, lit.density_g_cm3),
+    else:
+        lines.append(f"| Space group | {sg_lit} | {sg_bld} | — |")
+        lines.append(
+            f"| N atoms | {lit.natoms} | {bld.natoms if bld else '—'} | "
+            f"{_delta(float(bld.natoms) if bld else None, float(lit.natoms))} |"
         )
-    )
-    for qty, lval, bval, delta in rows:
-        lines.append(f"| {qty} | {lval} | {bval} | {delta} |")
-    lines.extend(["", f"_{built_caption}_", ""])
+
+    ch_lengths = ch.lengths_a if ch else (None, None, None)
+    bld_lengths = bld.lengths_a if bld else (None, None, None)
+    for axis, lv, cv, bv in zip(("a", "b", "c"), lit.lengths_a, ch_lengths, bld_lengths):
+        if charmm is not None:
+            lines.append(
+                f"| *{axis}* (Å) | {lv:.3f} | {_fmt3(cv)} | {_delta(cv, lv)} | "
+                f"{_fmt3(bv)} | {_delta(bv, lv)} |"
+            )
+        elif bld is not None:
+            lines.append(
+                f"| *{axis}* (Å) | {lv:.3f} | {bv:.3f} | {_pct_delta(bv, lv)} |"
+            )
+
+    ch_angles = ch.angles_deg if ch else (None, None, None)
+    bld_angles = bld.angles_deg if bld else (None, None, None)
+    for name, lv, cv, bv in zip(("α", "β", "γ"), lit.angles_deg, ch_angles, bld_angles):
+        if charmm is not None:
+            lines.append(
+                f"| {name} (°) | {lv:.1f} | {_fmt1(cv)} | {_delta(cv, lv)} | "
+                f"{_fmt1(bv)} | {_delta(bv, lv)} |"
+            )
+        elif bld is not None:
+            lines.append(
+                f"| {name} (°) | {lv:.1f} | {bv:.1f} | {_pct_delta(bv, lv)} |"
+            )
+
+    if charmm is not None:
+        lines.append(
+            f"| Volume (Å³) | {lit.volume_a3:.1f} | {ch.volume_a3:.1f} | "
+            f"{_pct_delta(ch.volume_a3, lit.volume_a3)} | "
+            f"{_fmt1(bld.volume_a3 if bld else None)} | "
+            f"{_delta(bld.volume_a3 if bld else None, lit.volume_a3)} |"
+        )
+        lines.append(
+            f"| ρ (g/cm³) | {lit.density_g_cm3:.3f} | {ch.density_g_cm3:.3f} | "
+            f"{_pct_delta(ch.density_g_cm3, lit.density_g_cm3)} | "
+            f"{_fmt3(bld.density_g_cm3 if bld else None)} | "
+            f"{_delta(bld.density_g_cm3 if bld else None, lit.density_g_cm3)} |"
+        )
+    elif bld is not None:
+        lines.append(
+            f"| Volume (Å³) | {lit.volume_a3:.1f} | {bld.volume_a3:.1f} | "
+            f"{_pct_delta(bld.volume_a3, lit.volume_a3)} |"
+        )
+        lines.append(
+            f"| ρ (g/cm³) | {lit.density_g_cm3:.3f} | {bld.density_g_cm3:.3f} | "
+            f"{_pct_delta(bld.density_g_cm3, lit.density_g_cm3)} |"
+        )
+
+    captions = [c for c in (charmm_caption, built_caption) if c]
+    if captions:
+        lines.extend(["", *(f"_{c}_" for c in captions), ""])
     return "\n".join(lines)
 
 
@@ -227,13 +277,17 @@ def _pyxtal_built_benzene(seed: int = 7) -> CrystalMetrics:
 
 
 def literature_comparison_markdown(*, use_live_pyxtal: bool = False) -> str:
-    """Full markdown section comparing bundled COD structures to PyXtal builds."""
+    """Full markdown section comparing bundled COD structures to CHARMM + PyXtal."""
+    from mmml.interfaces.crystal_charmm import charmm_crystal_metrics_from_preset
+
     dcm_lit = metrics_from_cif(
         default_dcm_crystal_cif(), space_group=60, label="COD 2100015"
     )
     benz_lit = metrics_from_cif(
         default_benzene_crystal_cif(), space_group=14, label="COD 4501704"
     )
+    dcm_charmm = charmm_crystal_metrics_from_preset("dcm")
+    benz_charmm = charmm_crystal_metrics_from_preset("benz")
     if use_live_pyxtal and have_pyxtal():
         dcm_built = _pyxtal_built_dcm()
         benz_built = _pyxtal_built_benzene()
@@ -244,10 +298,10 @@ def literature_comparison_markdown(*, use_live_pyxtal: bool = False) -> str:
     parts = [
         "### Literature cross-check (auto-generated)",
         "",
-        "Side-by-side metrics for bundled experimental CIFs vs a **single** PyXtal "
-        "`from_random` trial (fixed seeds) with `--target-density-g-cm3` matched to "
-        "the literature ρ. Unit-cell axes can differ in setting/orientation even when "
-        "space group and density agree.",
+        "Bundled experimental CIFs vs **make-res+CIF** (exact literature unit cell, "
+        "CHARMM atom names) and a single PyXtal `from_random` trial (fixed seeds) "
+        "with ρ scaled to literature. PyXtal unit-cell axes can differ in "
+        "setting/orientation even when space group and density agree.",
         "",
         "Regenerate: `uv run python scripts/generate_crystal_lit_compare.py`",
         "",
@@ -256,10 +310,14 @@ def literature_comparison_markdown(*, use_live_pyxtal: bool = False) -> str:
         comparison_table_markdown(
             dcm_lit,
             dcm_built,
+            charmm=dcm_charmm,
             literature_citation=(
                 "Podsiadło *et al.*, *Acta Cryst.* B **2005**, 61, 595 "
                 "([CCDC doi:10.5517/cc9lyjb](https://www.ccdc.cam.ac.uk/structures/search?id=doi:10.5517/cc9lyjb&sid=DataCite)); "
                 "Pbcn, Z=4, 1.63 GPa / 293 K."
+            ),
+            charmm_caption=(
+                "make-res+CIF: `mmml build-crystal --literature dcm` (unit cell)."
             ),
             built_caption=(
                 "PyXtal: `-m default_dcm_molecule_xyz()`, `--spg 60 --z 4 --seed 42`, "
@@ -271,10 +329,14 @@ def literature_comparison_markdown(*, use_live_pyxtal: bool = False) -> str:
         comparison_table_markdown(
             benz_lit,
             benz_built,
+            charmm=benz_charmm,
             literature_citation=(
                 "Katrusiak *et al.*, *Cryst. Growth Des.* **2010**, 10, 3461 "
                 "([doi:10.1021/cg1002594](https://doi.org/10.1021/cg1002594)); "
                 "P2₁/c, Z=2, ~0.97 GPa / 295 K."
+            ),
+            charmm_caption=(
+                "make-res+CIF: `mmml build-crystal --literature benz` (unit cell)."
             ),
             built_caption=(
                 "PyXtal: `-m benzene` (not `c1ccccc1`), `--spg 14 --z 2 --seed 7`, "

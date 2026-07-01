@@ -69,7 +69,7 @@ def test_literature_comparison_markdown_runs():
     assert "COD 2100015" in md
     assert "COD 4501704" in md
     assert "Literature cross-check" in md
-    assert "| PyXtal build |" in md
+    assert "make-res+CIF" in md
 
 
 def test_generate_crystal_lit_compare_script():

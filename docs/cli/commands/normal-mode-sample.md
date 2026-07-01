@@ -12,13 +12,18 @@ mmml normal-mode-sample --help
 ## Options
 
 ```text
-usage: mmml normal-mode-sample [-h] -i INPUT [-o OUTPUT] [--amplitude AMPLITUDE] [--amplitudes AMPLITUDES [AMPLITUDES ...]] [--freq-min FREQ_MIN] [--include-equilibrium] [--samples-per-mode {1,2}] [--max-samples N]
+usage: mmml normal-mode-sample [-h] -i INPUT [-o OUTPUT]
+                               [--amplitude AMPLITUDE]
+                               [--amplitudes AMPLITUDES [AMPLITUDES ...]]
+                               [--freq-min FREQ_MIN] [--include-equilibrium]
+                               [--samples-per-mode {1,2}] [--max-samples N]
 
 Sample geometries along vibrational modes from pyscf-dft harmonic output.
 
 options:
   -h, --help            show this help message and exit
-  -i, --input INPUT     Path to pyscf-dft output .h5 (must contain harmonic group)
+  -i, --input INPUT     Path to pyscf-dft output .h5 (must contain harmonic
+                        group)
   -o, --output OUTPUT   Output NPZ path (default: sampled.npz)
   --amplitude AMPLITUDE
                         Displacement amplitude in Angstrom (default: 0.1)
@@ -29,7 +34,8 @@ options:
                         Add equilibrium geometry as first sample
   --samples-per-mode {1,2}
                         2 for +/- amplitude (default), 1 for + only
-  --max-samples N       Maximum number of structures to generate (default: no limit)
+  --max-samples N       Maximum number of structures to generate (default: no
+                        limit)
 
 CLI for normal mode sampling from pyscf-dft harmonic output.
 

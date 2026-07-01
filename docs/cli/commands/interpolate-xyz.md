@@ -23,7 +23,8 @@ positional arguments:
 options:
   -h, --help           show this help message and exit
   -o, --output OUTPUT  Output NPZ path (default: interpolated.npz)
-  --steps N            Number of interpolation segments (N+1 frames written; default: 1000)
+  --steps N            Number of interpolation segments (N+1 frames written;
+                       default: 1000)
 
 CLI: interpolate between two XYZ geometries in internal (Z-matrix) coordinates.
 

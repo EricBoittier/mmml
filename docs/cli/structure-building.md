@@ -20,7 +20,7 @@ uv run python scripts/generate_docs_figures.py
 |---------|-------|--------|---------|
 | [`make-res`](commands/make-res.md) | CGENFF residue name | `pdb/`, `psf/`, `xyz/` | PyCHARMM |
 | [`make-box`](commands/make-box.md) | Residue + count + box length | Packed periodic box | Packmol + PyCHARMM |
-| [`build-crystal`](commands/build-crystal.md) | SMILES / XYZ / formula | `.xyz`, `.cif`, `.npz` | PyXtal (+ optional ASE relax) |
+| [`build-crystal`](commands/build-crystal.md) | Literature CIF + make-res or SMILES/XYZ | `.pdb`, `.xyz`, `.cif`, `.npz` | CIF mapper / PyXtal |
 
 ---
 
@@ -106,8 +106,8 @@ offsets = [(4, 4, 4), (12, 4, 6), (6, 11, 5), (14, 12, 8)]
 
 ## `mmml build-crystal`
 
-Builds molecular crystals with space-group symmetry via PyXtal; exports ASE-readable
-structures for optimization or `md-system` handoff.
+Build molecular crystals for MD: **literature CIF + make-res** (CHARMM atom
+names, simulation supercell) or PyXtal random placement with space-group symmetry.
 
 ### DCM (CH₂Cl₂) — experimental crystal
 
@@ -123,17 +123,35 @@ The deposited structure at
 | ρ (experimental) | **1.972 g/cm³** |
 | Low-*T* phase (153 K, 0.1 MPa) | same SG; *a*≈4.25, *b*≈8.14, *c*≈9.49 Å ([Kawaguchi *et al.* 1973](https://doi.org/10.1246/bcsj.46.62)) |
 
-MMML ships the CIF as `default_dcm_crystal_cif()`. For handoff, read it with ASE
-(no PyXtal required). PyXtal random placement can approximate the same SG with
-`--spg 60 --z 4` and optional `--target-density-g-cm3 1.972`.
+MMML ships the CIF as `default_dcm_crystal_cif()`. For MD, build a **simulation
+supercell** with CHARMM atom names from `make-res` and literature geometry from
+the bundled CIF (no PyXtal required). Supercell repeats default to ≥28 Å per
+edge (≈2× CHARMM `cutnb`), preserving experimental density.
 
 | Phase | Typical ρ (g/cm³) | MMML source |
 |-------|-------------------|-------------|
 | Liquid DCM | 1.326 | `liquid-box`, `md-system` |
-| Crystal (this CIF) | 1.972 | bundled CIF / scale PyXtal build |
+| Crystal (this CIF) | 1.972 | `--literature dcm` / bundled CIF |
 
 ```bash
-# Experimental unit cell → extxyz (recommended seed)
+# 1) CHARMM residue with correct atom names (once per force field)
+mmml make-res --res DCM --skip-energy-show
+
+# 2) Literature unit cell → simulation supercell (auto repeats for box size)
+mmml build-crystal --literature dcm \\
+  --monomer-pdb pdb/dcm.pdb \\
+  -o pdb/dcm_crystal.pdb
+
+# Explicit supercell and ASE handoff
+mmml build-crystal --literature dcm --supercell 4,4,3 \\
+  -o dcm_super.extxyz
+```
+
+PyXtal random placement (`-m` + `--spg 60`) is optional when you want an
+alternate trial cell with the same space group and target density:
+
+```bash
+# Experimental unit cell only (ASE)
 python -c "
 from ase.io import read, write
 from mmml.paths import default_dcm_crystal_cif
@@ -148,13 +166,6 @@ mmml build-crystal \\
   --target-density-g-cm3 1.972 \\
   --seed 42 \\
   -o dcm_pyxtal.extxyz
-
-# Supercell for larger periodic MD boxes
-mmml build-crystal \\
-  -m "$(python -c 'from mmml.paths import default_dcm_molecule_xyz; print(default_dcm_molecule_xyz())')" \\
-  --spg 60 --z 4 --supercell 2,2,2 \\
-  --target-density-g-cm3 1.972 \\
-  -o dcm_super.extxyz
 ```
 
 PyXtal does not resolve `C(Cl)Cl` SMILES — use the bundled monomer XYZ or
@@ -167,7 +178,14 @@ High-pressure benzene I is monoclinic **P2₁/c** (SG 14), Z=2
 Katrusiak *et al.*, *Cryst. Growth Des.* **2010**, 10, 3461).
 MMML ships `default_benzene_crystal_cif()`.
 
-PyXtal accepts the molecule name **`benzene`** (not SMILES `c1ccccc1`).
+```bash
+mmml make-res --res BENZ --skip-energy-show
+mmml build-crystal --literature benz --monomer-pdb pdb/benz.pdb \\
+  -o pdb/benz_crystal.pdb
+```
+
+PyXtal accepts the molecule name **`benzene`** (not SMILES `c1ccccc1`) for
+random placement:
 
 ```bash
 # Experimental unit cell
@@ -185,7 +203,7 @@ mmml build-crystal -m benzene --spg 14 --z 2 \\
 <!-- CRYSTAL_LIT_COMPARE_START -->
 ### Literature cross-check (auto-generated)
 
-Side-by-side metrics for bundled experimental CIFs vs a **single** PyXtal `from_random` trial (fixed seeds) with `--target-density-g-cm3` matched to the literature ρ. Unit-cell axes can differ in setting/orientation even when space group and density agree.
+Bundled experimental CIFs vs **make-res+CIF** (exact literature unit cell, CHARMM atom names) and a single PyXtal `from_random` trial (fixed seeds) with ρ scaled to literature. PyXtal unit-cell axes can differ in setting/orientation even when space group and density agree.
 
 Regenerate: `uv run python scripts/generate_crystal_lit_compare.py`
 
@@ -193,38 +211,40 @@ Regenerate: `uv run python scripts/generate_crystal_lit_compare.py`
 
 Podsiadło *et al.*, *Acta Cryst.* B **2005**, 61, 595 ([CCDC doi:10.5517/cc9lyjb](https://www.ccdc.cam.ac.uk/structures/search?id=doi:10.5517/cc9lyjb&sid=DataCite)); Pbcn, Z=4, 1.63 GPa / 293 K.
 
-| Quantity | Literature | PyXtal build | Δ (build − lit) |
-|----------|------------|--------------|-----------------|
-| Space group | 60 | 60 | — |
-| N atoms | 20 | 20 | +0.0% |
-| *a* (Å) | 3.924 | 7.773 | +98.1% |
-| *b* (Å) | 7.793 | 6.651 | -14.7% |
-| *c* (Å) | 9.335 | 5.521 | -40.9% |
-| α (°) | 90.0 | 90.0 | +0.0% |
-| β (°) | 90.0 | 90.0 | +0.0% |
-| γ (°) | 90.0 | 90.0 | +0.0% |
-| Volume (Å³) | 285.5 | 285.5 | +0.0% |
-| ρ (g/cm³) | 1.976 | 1.976 | -0.0% |
+| Quantity | Literature | make-res+CIF | Δ (CIF−lit) | PyXtal build | Δ (PyXtal−lit) |
+|----------|------------|--------------|-------------|--------------|----------------|
+| Space group | 60 | 60 | — | 60 | — |
+| N atoms | 20 | 20 | +0.0% | 20 | +0.0% |
+| *a* (Å) | 3.924 | 3.924 | +0.0% | 7.773 | +98.1% |
+| *b* (Å) | 7.793 | 7.793 | +0.0% | 6.651 | -14.7% |
+| *c* (Å) | 9.335 | 9.335 | +0.0% | 5.521 | -40.9% |
+| α (°) | 90.0 | 90.0 | +0.0% | 90.0 | +0.0% |
+| β (°) | 90.0 | 90.0 | +0.0% | 90.0 | +0.0% |
+| γ (°) | 90.0 | 90.0 | +0.0% | 90.0 | +0.0% |
+| Volume (Å³) | 285.5 | 285.5 | +0.0% | 285.5 | +0.0% |
+| ρ (g/cm³) | 1.976 | 1.976 | +0.0% | 1.976 | -0.0% |
 
+_make-res+CIF: `mmml build-crystal --literature dcm` (unit cell)._
 _PyXtal: `-m default_dcm_molecule_xyz()`, `--spg 60 --z 4 --seed 42`, ρ scaled to literature._
 
 #### Benzene (C₆H₆) — [COD 4501704](https://www.crystallography.net/cod/4501704.html)
 
 Katrusiak *et al.*, *Cryst. Growth Des.* **2010**, 10, 3461 ([doi:10.1021/cg1002594](https://doi.org/10.1021/cg1002594)); P2₁/c, Z=2, ~0.97 GPa / 295 K.
 
-| Quantity | Literature | PyXtal build | Δ (build − lit) |
-|----------|------------|--------------|-----------------|
-| Space group | 14 | 14 | — |
-| N atoms | 24 | 24 | +0.0% |
-| *a* (Å) | 5.522 | 5.175 | -6.3% |
-| *b* (Å) | 5.440 | 11.337 | +108.4% |
-| *c* (Å) | 7.673 | 3.813 | -50.3% |
-| α (°) | 90.0 | 90.0 | +0.0% |
-| β (°) | 110.6 | 74.7 | -32.4% |
-| γ (°) | 90.0 | 90.0 | +0.0% |
-| Volume (Å³) | 215.8 | 215.8 | -0.0% |
-| ρ (g/cm³) | 1.202 | 1.202 | -0.0% |
+| Quantity | Literature | make-res+CIF | Δ (CIF−lit) | PyXtal build | Δ (PyXtal−lit) |
+|----------|------------|--------------|-------------|--------------|----------------|
+| Space group | 14 | 14 | — | 14 | — |
+| N atoms | 24 | 24 | +0.0% | 24 | +0.0% |
+| *a* (Å) | 5.522 | 5.522 | +0.0% | 5.175 | -6.3% |
+| *b* (Å) | 5.440 | 5.440 | +0.0% | 11.337 | +108.4% |
+| *c* (Å) | 7.673 | 7.673 | +0.0% | 3.813 | -50.3% |
+| α (°) | 90.0 | 90.0 | +0.0% | 90.0 | +0.0% |
+| β (°) | 110.6 | 110.6 | +0.0% | 74.7 | -32.4% |
+| γ (°) | 90.0 | 90.0 | +0.0% | 90.0 | +0.0% |
+| Volume (Å³) | 215.8 | 215.8 | +0.0% | 215.8 | -0.0% |
+| ρ (g/cm³) | 1.202 | 1.202 | +0.0% | 1.202 | -0.0% |
 
+_make-res+CIF: `mmml build-crystal --literature benz` (unit cell)._
 _PyXtal: `-m benzene` (not `c1ccccc1`), `--spg 14 --z 2 --seed 7`, ρ scaled to literature._
 <!-- CRYSTAL_LIT_COMPARE_END -->
 

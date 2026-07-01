@@ -22,7 +22,8 @@ mmml env --help
 ```text
 usage: mmml env [-h] [--json] [--export]
 
-Show resolved MMML paths (checkpoint, CHARMM, preset locations) and suggested export lines for MMML_CKPT.
+Show resolved MMML paths (checkpoint, CHARMM, preset locations) and suggested
+export lines for MMML_CKPT.
 
 options:
   -h, --help  show this help message and exit

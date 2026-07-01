@@ -15,7 +15,10 @@ mmml evaluate --help
 ## Options
 
 ```text
-usage: mmml evaluate [-h] --model MODEL [MODEL ...] --data DATA [--properties PROPERTIES [PROPERTIES ...]] [--batch-size BATCH_SIZE] [--output OUTPUT] [--report] [--save-predictions] [--verbose] [--quiet]
+usage: mmml evaluate [-h] --model MODEL [MODEL ...] --data DATA
+                     [--properties PROPERTIES [PROPERTIES ...]]
+                     [--batch-size BATCH_SIZE] [--output OUTPUT] [--report]
+                     [--save-predictions] [--verbose] [--quiet]
 
 Evaluate MMML models
 

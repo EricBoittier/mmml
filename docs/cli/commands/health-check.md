@@ -12,17 +12,24 @@ mmml health-check --help
 ## Options
 
 ```text
-usage: mmml health-check [-h] [--only CHECK [CHECK ...]] [--skip CHECK [CHECK ...]] [--live] [--checkpoint CHECKPOINT] [--live-residue LIVE_RESIDUE] [--live-n-molecules LIVE_N_MOLECULES] [--require-gpu] [--json] [--strict] [--prelaunch] [--tier2]
+usage: mmml health-check [-h] [--only CHECK [CHECK ...]]
+                         [--skip CHECK [CHECK ...]] [--live]
+                         [--checkpoint CHECKPOINT]
+                         [--live-residue LIVE_RESIDUE]
+                         [--live-n-molecules LIVE_N_MOLECULES] [--require-gpu]
+                         [--json] [--strict] [--prelaunch] [--tier2]
 
 Validate MMML interface health before PyCHARMM / MLpot jobs: imports, JAX devices, libcharmm, MLpot symbols, Packmol, checkpoint, MPI.
 
 options:
   -h, --help            show this help message and exit
   --only CHECK [CHECK ...]
-                        Run subset of: core, jax, charmm, mlpot, packmol, checkpoint, mpi, live
+                        Run subset of: core, jax, charmm, mlpot, packmol,
+                        checkpoint, mpi, live
   --skip CHECK [CHECK ...]
                         Skip checks from the default set.
-  --live                Run live MLpot registration + CHARMM energy (implies charmm + checkpoint).
+  --live                Run live MLpot registration + CHARMM energy (implies
+                        charmm + checkpoint).
   --checkpoint CHECKPOINT
                         PhysNet checkpoint (default: MMML_CKPT).
   --live-residue LIVE_RESIDUE
@@ -32,8 +39,10 @@ options:
   --require-gpu         Fail if JAX does not see a CUDA device.
   --json                Emit machine-readable JSON.
   --strict              Treat warnings as errors.
-  --prelaunch           Relax MPI prelaunch warnings (serial health-check before mpirun).
-  --tier2               Also run spatial-MPI GPU checks inside the mpi section.
+  --prelaunch           Relax MPI prelaunch warnings (serial health-check
+                        before mpirun).
+  --tier2               Also run spatial-MPI GPU checks inside the mpi
+                        section.
 
 Examples:
   # Fast preflight on a GPU node (no CHARMM energy eval):

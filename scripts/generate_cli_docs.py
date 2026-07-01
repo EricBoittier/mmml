@@ -203,36 +203,31 @@ mmml env --json
 ```
 """,
     "build-crystal": """
-Build molecular crystals with PyXtal (`uv sync --extra chem`). For **DCM**
-(CH₂Cl₂), prefer the deposited experimental structure
-([CCDC doi:10.5517/cc9lyjb](https://www.ccdc.cam.ac.uk/structures/search?id=doi:10.5517/cc9lyjb&sid=DataCite);
-COD [2100015](https://www.crystallography.net/2100015.html)) — **Pbcn**, Z=4,
-ρ≈**1.97 g/cm³** at 1.63 GPa / 293 K. PyXtal cannot build from `C(Cl)Cl` SMILES;
-use the bundled monomer XYZ or CIF.
+Build molecular crystals for MD. **Recommended for DCM and benzene:** literature
+CIF + `make-res` atom names (`--literature dcm|benz`) — exact experimental unit
+cell, tiled to a simulation supercell (≥28 Å edges by default) at literature ρ.
 
 ```bash
-# Experimental crystal → extxyz / NPZ handoff (no PyXtal)
-python -c "
-from ase.io import read, write
-from mmml.paths import default_dcm_crystal_cif
-atoms = read(default_dcm_crystal_cif())
-write('dcm_expt.extxyz', atoms)
-"
+mmml make-res --res DCM --skip-energy-show
+mmml build-crystal --literature dcm --monomer-pdb pdb/dcm.pdb -o pdb/dcm_crystal.pdb
+mmml build-crystal --literature dcm --supercell 4,4,3 -o dcm_super.extxyz
+```
 
-# PyXtal random placement in the same space group (SG 60 = Pbcn)
+PyXtal (`uv sync --extra chem`) is optional for random placement in the same
+space group. DCM crystal: [COD 2100015](https://www.crystallography.net/2100015.html)
+(Pbcn, ρ≈1.97 g/cm³). Benzene: [COD 4501704](https://www.crystallography.net/cod/4501704.html)
+(P2₁/c, ρ≈1.20 g/cm³).
+
+```bash
 mmml build-crystal \\
   -m "$(python -c 'from mmml.paths import default_dcm_molecule_xyz; print(default_dcm_molecule_xyz())')" \\
-  --spg 60 --z 4 \\
-  --target-density-g-cm3 1.972 \\
-  -o dcm_pyxtal.extxyz
-
-# Benzene (PyXtal molecule name `benzene`, not SMILES)
+  --spg 60 --z 4 --target-density-g-cm3 1.972 -o dcm_pyxtal.extxyz
 mmml build-crystal -m benzene --spg 14 --z 2 --target-density-g-cm3 1.202 -o benzene.extxyz
 ```
 
 Liquid DCM boxes use **1.326 g/cm³** (`liquid-box`, `md-system`).
 
-Literature vs PyXtal comparison tables (DCM + benzene) are in the
+Literature vs make-res+CIF vs PyXtal tables are in the
 [structure building guide](../structure-building.md#literature-cross-check-auto-generated).
 """,
 }

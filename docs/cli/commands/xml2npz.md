@@ -12,7 +12,11 @@ mmml xml2npz --help
 ## Options
 
 ```text
-usage: mmml xml2npz [-h] -o OUTPUT [--padding PADDING] [--no-variables] [--first-geometry] [--recursive] [--validate] [--no-validate] [--strict] [--summary SUMMARY] [--quiet] [--verbose] [--continue-on-error] [--max-files MAX_FILES] inputs [inputs ...]
+usage: mmml xml2npz [-h] -o OUTPUT [--padding PADDING] [--no-variables]
+                    [--first-geometry] [--recursive] [--validate]
+                    [--no-validate] [--strict] [--summary SUMMARY] [--quiet]
+                    [--verbose] [--continue-on-error] [--max-files MAX_FILES]
+                    inputs [inputs ...]
 
 Convert Molpro XML files to standardized NPZ format
 
@@ -24,7 +28,8 @@ options:
   -o, --output OUTPUT   Output NPZ file path
   --padding PADDING     Number of atoms to pad to (default: 60)
   --no-variables        Exclude Molpro internal variables from output
-  --first-geometry      Use first geometry from files with multiple geometries (default: use last/final)
+  --first-geometry      Use first geometry from files with multiple geometries
+                        (default: use last/final)
   --recursive, -r       Recursively search directories for XML files
   --validate            Validate output NPZ file against schema
   --no-validate         Skip validation (faster but not recommended)

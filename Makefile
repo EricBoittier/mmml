@@ -195,19 +195,19 @@ docs-build:
 	uv run python scripts/generate_cli_docs.py
 	uv run python scripts/generate_docs_figures.py
 	uv run python scripts/generate_crystal_lit_compare.py
-	uv run mkdocs build
+	uv run --extra dev mkdocs build
 
 docs-strict:
 	uv run python scripts/generate_cli_docs.py
 	uv run python scripts/generate_docs_figures.py
 	uv run python scripts/generate_crystal_lit_compare.py
-	uv run mkdocs build --strict
+	uv run --extra dev mkdocs build --strict
 
 docs-pdf:
 	uv run --extra dev --with reportlab python scripts/build_docs_pdf.py
 
 docs-serve:
-	uv run mkdocs serve
+	uv run --extra dev mkdocs serve
 
 # ==============================================================================
 # Cleanup

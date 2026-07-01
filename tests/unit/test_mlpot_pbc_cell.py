@@ -224,7 +224,10 @@ def test_maybe_promote_deferred_jax_on_hybrid_eval_without_jax_pme():
     calc._get_update_fn = None
     calc._cached_update_fn = "cached_update"
 
-    with patch.object(model, "promote_jax_factory_to_gpu") as mock_promote:
+    def _fake_promote() -> None:
+        model._jax_on_gpu = True
+
+    with patch.object(model, "promote_jax_factory_to_gpu", side_effect=_fake_promote) as mock_promote:
         model._maybe_promote_deferred_jax_on_hybrid_eval(calc)
 
     mock_promote.assert_called_once()
