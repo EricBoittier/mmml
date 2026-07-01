@@ -890,9 +890,19 @@ def _patch_natom_counter_fields(
     spans = _integer_field_spans_with_gap(line)
     if not spans:
         return line
+    ints, tail = _leading_integer_fields(line)
+    lead = len(line) - len(line.lstrip())
+    int_len = (len(line) - len(tail) - lead) if tail else len(line.strip())
+    strict_i10 = bool(ints) and int_len == 10 * len(ints)
+    if strict_i10:
+        body = line[lead : lead + int_len]
+        for idx, value in sorted(updates.items(), reverse=True):
+            body = _replace_i10_field(body, int(idx), int(value))
+        if tail:
+            return line[:lead] + body + line[lead + int_len :]
+        return line[:lead] + body + line[lead + int_len :]
     need = max(int(k) for k in updates) + 1
     if len(spans) < need:
-        lead = len(line) - len(line.lstrip())
         body = line[lead:]
         for idx, value in sorted(updates.items(), reverse=True):
             body = _replace_i10_field(body, int(idx), int(value))
