@@ -36,7 +36,6 @@ class SelectiveMonomerPhysnetMiniConfig:
     fmax_ev_a: float = 0.05
     bfgs_maxstep: float = 0.05
     verbose: bool = True
-    restore_template: bool = True
     quiet_bfgs: bool = False
 
 
@@ -70,7 +69,6 @@ def selective_monomer_physnet_mini_config_from_args(
             or 0.05
         ),
         verbose=bool(verbose),
-        restore_template=bool(getattr(args, "monomer_physnet_mini_restore_template", True)),
         quiet_bfgs=bool(quiet_bfgs or getattr(args, "quiet_bfgs", False)),
     )
 
@@ -94,15 +92,108 @@ def _monomer_offsets(atoms_per_list: list[int]) -> np.ndarray:
     return monomer_offsets_from_atoms_per(atoms_per_list)
 
 
-def _reference_positions_for_template(mlpot_ctx: Any) -> np.ndarray | None:
-    for attr in ("geometry_mini_positions", "geometry_baseline_positions"):
-        raw = getattr(mlpot_ctx, attr, None)
-        if raw is None:
-            continue
-        arr = np.asarray(raw, dtype=np.float64)
-        if arr.size and np.all(np.isfinite(arr)):
-            return arr
-    return None
+def build_monomer_template_recovery_candidates(
+    mlpot_ctx: Any,
+    *,
+    restart_path: Path | str | None = None,
+) -> list[Path]:
+    """Disk restart/CRD ladder for flagged-monomer template restore."""
+    from types import SimpleNamespace
+
+    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+        build_extent_recovery_candidates,
+        resolve_geometry_checkpoint_ladder,
+    )
+
+    candidates: list[Path] = []
+    seen: set[str] = set()
+
+    def add(path: Path | str | None) -> None:
+        if path is None:
+            return
+        p = Path(path).expanduser()
+        key = str(p.resolve()) if p.exists() else str(p)
+        if key in seen:
+            return
+        seen.add(key)
+        candidates.append(p)
+
+    add(restart_path)
+    add(getattr(mlpot_ctx, "_monomer_template_restart_path", None))
+
+    args = getattr(mlpot_ctx, "workflow_args", None)
+    if args is not None:
+        for attr in (
+            "restart_path",
+            "pretreat_restart",
+            "from_crd",
+            "mini_crd",
+            "geometry_baseline_res",
+        ):
+            add(getattr(args, attr, None))
+
+        paths = getattr(args, "_artifact_paths", None) or getattr(args, "paths", None)
+        if isinstance(paths, dict):
+            tag = str(getattr(args, "tag", "") or "")
+            n_heat = max(1, int(getattr(args, "n_heat_segments", 1) or 1))
+            ladder_paths = resolve_geometry_checkpoint_ladder(
+                paths,
+                tag,
+                n_heat_segments=n_heat,
+            )
+            baseline = paths.get("geometry_baseline_res")
+            overlap_ns = SimpleNamespace(
+                geometry_baseline_restart=baseline,
+                geometry_fallback_restarts=tuple(ladder_paths),
+                prior_segment_restart=(
+                    getattr(args, "restart_path", None)
+                    or getattr(args, "pretreat_restart", None)
+                ),
+            )
+            for cand in build_extent_recovery_candidates(overlap_ns):
+                add(cand)
+
+    return candidates
+
+
+def resolve_monomer_template_reference_positions(
+    mlpot_ctx: Any,
+    *,
+    restart_path: Path | str | None = None,
+    n_atoms: int | None = None,
+) -> tuple[np.ndarray, Path] | None:
+    """Restart/CRD ladder, then in-memory mini/baseline snapshots on ``mlpot_ctx``."""
+    from mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery import (
+        resolve_extent_reference_positions,
+    )
+
+    candidates = build_monomer_template_recovery_candidates(
+        mlpot_ctx,
+        restart_path=restart_path,
+    )
+    try:
+        ref, source = resolve_extent_reference_positions(candidates, mlpot_ctx)
+    except RuntimeError:
+        return None
+    ref_arr = np.asarray(ref, dtype=np.float64)
+    if n_atoms is not None and int(ref_arr.shape[0]) != int(n_atoms):
+        return None
+    if ref_arr.size == 0 or not np.all(np.isfinite(ref_arr)):
+        return None
+    return ref_arr, source
+
+
+def remember_monomer_template_restart_path(
+    mlpot_ctx: Any,
+    restart_path: Path | str | None,
+) -> None:
+    if restart_path is None:
+        return
+    setattr(
+        mlpot_ctx,
+        "_monomer_template_restart_path",
+        Path(restart_path).expanduser().resolve(),
+    )
 
 
 def _monomer_ase_calculator(
@@ -140,6 +231,7 @@ def run_selective_monomer_physnet_mini(
     config: SelectiveMonomerPhysnetMiniConfig | None = None,
     context_prefix: str = "Selective monomer PhysNet",
     flagged: tuple[int, ...] | list[int] | None = None,
+    restart_path: Path | str | None = None,
 ) -> SelectiveMonomerPhysnetMiniResult:
     """BFGS flagged monomers with an isolated PhysNet calc; rest of the box stays fixed."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
@@ -214,16 +306,27 @@ def run_selective_monomer_physnet_mini(
                 flush=True,
             )
 
-    if config.restore_template:
-        ref = _reference_positions_for_template(mlpot_ctx)
-        if ref is not None and ref.shape == pos.shape:
-            pos = rebuild_monomers_from_reference(pos, ref, offsets, list(selected))
-            if config.verbose:
-                print(
-                    f"{context_prefix}: restored internal template for monomer(s) "
-                    f"{list(selected)} at current COM",
-                    flush=True,
-                )
+    remember_monomer_template_restart_path(mlpot_ctx, restart_path)
+    ref_info = resolve_monomer_template_reference_positions(
+        mlpot_ctx,
+        restart_path=restart_path,
+        n_atoms=int(pos.shape[0]),
+    )
+    if ref_info is not None:
+        ref, source = ref_info
+        pos = rebuild_monomers_from_reference(pos, ref, offsets, list(selected))
+        if config.verbose:
+            print(
+                f"{context_prefix}: restored monomer(s) {list(selected)} from "
+                f"{source} at current COM",
+                flush=True,
+            )
+    elif config.verbose:
+        print(
+            f"{context_prefix}: no restart/template reference available; "
+            f"PhysNet BFGS from current coordinates",
+            flush=True,
+        )
 
     checkpoint = resolve_mlpot_checkpoint_path(mlpot_ctx)
     import ase

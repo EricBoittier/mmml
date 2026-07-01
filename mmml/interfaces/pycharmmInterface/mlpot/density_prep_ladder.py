@@ -1351,9 +1351,15 @@ def run_geometry_packing_recovery(
 
     from mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini import (
         monomer_physnet_mini_enabled,
+        remember_monomer_template_restart_path,
         run_selective_monomer_physnet_mini,
         selective_monomer_physnet_mini_config_from_args,
     )
+
+    pretreat_restart = getattr(args, "pretreat_restart", None) or getattr(
+        args, "restart_path", None
+    )
+    remember_monomer_template_restart_path(mlpot_ctx, pretreat_restart)
 
     if monomer_physnet_mini_enabled(args):
         step_label = f"{context_prefix}:monomer_physnet_mini"
@@ -1366,6 +1372,7 @@ def run_geometry_packing_recovery(
                     quiet_bfgs=quiet_bfgs,
                 ),
                 context_prefix=f"{context_prefix} (monomer PhysNet)",
+                restart_path=pretreat_restart,
             )
             if result.ran:
                 grms = float(result.grms)

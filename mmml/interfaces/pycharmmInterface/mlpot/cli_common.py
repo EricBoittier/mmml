@@ -2477,6 +2477,12 @@ def prepare_mlpot_hybrid_state_for_sd(
     if allow_high_grms is None:
         allow_high_grms = bool(os.environ.get("MMML_MLPOT_ALLOW_HIGH_GRMS"))
 
+    from mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini import (
+        remember_monomer_template_restart_path,
+    )
+
+    remember_monomer_template_restart_path(mlpot_ctx, restart_path)
+
     skip_pre_sd_ener = mlpot_skip_charmm_ener_force_before_first_sd(mlpot_ctx)
     if skip_pre_sd_ener:
         user = 0.0
@@ -2661,6 +2667,7 @@ def prepare_mlpot_hybrid_state_for_sd(
                 quiet_bfgs=quiet_bfgs,
             ),
             context_prefix=f"{context_prefix} ({phase} monomer PhysNet)",
+            restart_path=restart_path,
         )
         if not result.ran:
             return
@@ -4115,16 +4122,6 @@ def add_calculator_pre_minimize_args(parser: argparse.ArgumentParser) -> None:
         type=float,
         default=None,
         help="Monomer BFGS maxstep in Å (default: inherit --bfgs-maxstep).",
-    )
-    group.add_argument(
-        "--no-monomer-physnet-mini-restore-template",
-        dest="monomer_physnet_mini_restore_template",
-        action="store_false",
-        default=True,
-        help=(
-            "Do not reset flagged monomer internals from geometry_mini_positions "
-            "before monomer PhysNet BFGS."
-        ),
     )
 
 

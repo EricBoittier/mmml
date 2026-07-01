@@ -11,6 +11,7 @@ import pytest
 from mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini import (
     SelectiveMonomerPhysnetMiniConfig,
     monomer_physnet_mini_enabled,
+    resolve_monomer_template_reference_positions,
     run_selective_monomer_physnet_mini,
     selective_monomer_physnet_mini_config_from_args,
 )
@@ -76,7 +77,6 @@ def test_config_from_args_inherits_pre_min():
         monomer_physnet_mini_maxstep=None,
         pre_min_fmax=0.02,
         bfgs_maxstep=0.03,
-        monomer_physnet_mini_restore_template=True,
         quiet_bfgs=True,
     )
     cfg = selective_monomer_physnet_mini_config_from_args(args, verbose=False)
@@ -84,6 +84,16 @@ def test_config_from_args_inherits_pre_min():
     assert cfg.min_abs_grms == pytest.approx(20.0)
     assert cfg.fmax_ev_a == pytest.approx(0.02)
     assert cfg.bfgs_maxstep == pytest.approx(0.03)
+
+
+def test_resolve_monomer_template_reference_positions_uses_memory_mini():
+    ref = np.arange(18, dtype=float).reshape(6, 3)
+    ctx = _ctx(positions=np.zeros((6, 3)), mini_positions=ref)
+    resolved = resolve_monomer_template_reference_positions(ctx, n_atoms=6)
+    assert resolved is not None
+    arr, source = resolved
+    np.testing.assert_allclose(arr, ref)
+    assert source.name == "<in-memory-mini>"
 
 
 def test_run_selective_monomer_physnet_mini_skips_without_flagged(monkeypatch):
@@ -175,7 +185,6 @@ def test_run_selective_monomer_physnet_mini_runs_bfgs_on_flagged(monkeypatch):
     cfg = SelectiveMonomerPhysnetMiniConfig(
         verbose=False,
         quiet_bfgs=True,
-        restore_template=False,
     )
     result = run_selective_monomer_physnet_mini(ctx, config=cfg, context_prefix="test")
 
@@ -226,7 +235,6 @@ def test_run_selective_monomer_physnet_mini_explicit_flagged(monkeypatch):
         config=SelectiveMonomerPhysnetMiniConfig(
             verbose=False,
             quiet_bfgs=True,
-            restore_template=False,
         ),
         flagged=(0,),
         context_prefix="test",
