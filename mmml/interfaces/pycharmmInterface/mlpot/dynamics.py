@@ -1831,6 +1831,7 @@ def apply_hoover_cpt_heat_ramp_overlap_chunk(
     chunk_kw["firstt"] = target
     chunk_kw["finalt"] = float(ramp_spec["finalt"])
     chunk_kw["tbath"] = float(ramp_spec["finalt"])
+    chunk_kw["tstruct"] = target
     chunk_kw["hoover reft"] = target
     # Chunk 0 at segment start: single dyna with ``start`` + ``iasvel=1`` (see
     # ``_configure_heat_dynamics_start``).  Later chunks / retries keep RAM vel.
@@ -1888,6 +1889,7 @@ def apply_heat_ramp_overlap_chunk(
         step=int(steps_done),
     )
     chunk_kw["finalt"] = float(ramp_spec["finalt"])
+    chunk_kw["tstruct"] = float(chunk_kw["firstt"])
     # ``ihtfrq`` / ``TEMINC`` for this chunk's ``nstep`` come from
     # ``apply_heat_ramp_frequencies`` (called immediately before this helper).
     chunk_kw["iasvel"] = 1
@@ -1920,6 +1922,7 @@ def apply_heat_segment_ramp_kwargs(
     kw["firstt"] = seg_firstt
     kw["finalt"] = seg_finalt
     kw["tbath"] = seg_finalt
+    kw["tstruct"] = seg_firstt
     if "hoover reft" in kw:
         kw["hoover reft"] = seg_firstt
     iht = max(1, min(int(ihtfrq), max(1, int(nstep))))
@@ -2490,6 +2493,7 @@ def build_heat_dynamics(
             "firstt": heat_firstt,
             "finalt": heat_finalt,
             "tbath": heat_finalt,
+            "tstruct": heat_firstt,
         }
     )
     apply_heat_ramp_frequencies(kw, nstep=nstep, ihtfrq=ihtfrq)
@@ -2560,6 +2564,7 @@ def build_hoover_heat_dynamics(
             "firstt": heat_firstt,
             "finalt": heat_finalt,
             "tbath": heat_finalt,
+            "tstruct": heat_firstt,
             "verlet": True,
         }
     )
@@ -2731,6 +2736,7 @@ def _apply_npt_cpt_kwargs(
         kw["tmass"] = tmass
         if firstt is not None:
             kw["firstt"] = firstt
+            kw["tstruct"] = float(firstt)
     elif thermostat == "berendsen":
         kw["tcons"] = True
         kw["tcoupling"] = tcoupling
@@ -2763,6 +2769,7 @@ def _apply_hoover_nvt_kwargs(
     )
     if firstt is not None:
         kw["firstt"] = firstt
+        kw["tstruct"] = float(firstt)
 
 
 def build_nvt_equilibration_dynamics(
@@ -3046,8 +3053,26 @@ def apply_charmm_dynamics_echeck_kw(kw: dict[str, Any], echeck: float) -> None:
         pass
 
 
+def _sync_tstruct_with_bath_kw(kw: dict[str, Any]) -> None:
+    """Set ``tstruct`` explicitly for CHARMM velocity assignment.
+
+    PyCHARMM default ``TSTRUC=-999`` assigns at ``1.25 * FIRSTT`` (see
+    ``pycharmm.dynamics.set_tstruc``), which can overshoot or fight ASE/MMML
+    bath targets during heat handoffs and overlap chunk restarts.
+    """
+    if "firstt" in kw:
+        kw["tstruct"] = float(kw["firstt"])
+    elif "hoover reft" in kw:
+        kw["tstruct"] = float(kw["hoover reft"])
+    elif "treference" in kw:
+        kw["tstruct"] = float(kw["treference"])
+    elif "tbath" in kw:
+        kw["tstruct"] = float(kw["tbath"])
+
+
 def _normalize_dynamics_heat_ramp_kw(kw: dict[str, Any]) -> None:
     """Map scale-heat ramp keys to PyCHARMM script names and Fortran setters."""
+    _sync_tstruct_with_bath_kw(kw)
     teminc = kw.pop("TEMINC", None)
     if teminc is not None and "teminc" not in kw:
         kw["teminc"] = float(teminc)
@@ -3063,6 +3088,8 @@ def _normalize_dynamics_heat_ramp_kw(kw: dict[str, Any]) -> None:
             charm_dyn.set_finalt(float(kw["finalt"]))
         if "teminc" in kw:
             charm_dyn.set_teminc(float(kw["teminc"]))
+        if "tstruct" in kw:
+            charm_dyn.set_tstruc(float(kw["tstruct"]))
     except (ImportError, OSError):
         pass
 
@@ -3926,6 +3953,7 @@ def _prepare_post_rescue_bath_and_crystal(
         chunk_kw["hoover reft"] = bath
     chunk_kw["firstt"] = bath
     chunk_kw["tbath"] = bath
+    chunk_kw["tstruct"] = bath
     use_pbc = bool(chunk_kw.get("cpt")) or (
         mlpot_ctx is not None and bool(getattr(mlpot_ctx, "use_pbc", False))
     )

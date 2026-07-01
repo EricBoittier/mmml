@@ -1031,6 +1031,7 @@ def _configure_equi_dynamics_start(
     kw["start"] = True
     kw["iasvel"] = 1
     kw["firstt"] = target
+    kw["tstruct"] = target
     kw.pop("iunrea", None)
     kw["iunrea"] = -1
     if not quiet:
