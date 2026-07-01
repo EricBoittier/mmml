@@ -185,16 +185,34 @@ def comparison_matches_main_positions(*, atol: float = 1.0e-4) -> bool:
         return False
 
 
+def comparison_comp_looks_like_spatial_coords(vel: np.ndarray) -> bool:
+    """True when COMP x/y/z look like Cartesian Å, not AKMA velocity components."""
+    v = np.asarray(vel, dtype=np.float64).reshape(-1, 3)
+    if v.size == 0:
+        return False
+    max_abs = float(np.max(np.abs(v)))
+    if max_abs > 9000.0:
+        return True
+    rms = float(np.sqrt(np.mean(np.square(v))))
+    return rms > 500.0
+
+
 def sync_comparison_velocities_from_comparison() -> bool:
     """True when COMP already holds warm AKMA velocities (post-dyna / handoff)."""
     from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         velocities_are_cold,
+        velocities_are_pathological,
     )
 
     if comparison_matches_main_positions():
         return False
     vel = comparison_velocities_akma()
-    if vel is None or velocities_are_cold(vel):
+    if (
+        vel is None
+        or velocities_are_cold(vel)
+        or velocities_are_pathological(vel)
+        or comparison_comp_looks_like_spatial_coords(vel)
+    ):
         return False
     return True
 

@@ -304,6 +304,50 @@ def test_sync_comparison_velocities_from_comparison_warm(mock_comp, mock_cold, m
 )
 @patch(
     "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
+    return_value=False,
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_pathological",
+    return_value=True,
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_velocities_akma",
+)
+def test_sync_comparison_velocities_from_comparison_rejects_pathological(
+    mock_comp, mock_path, mock_cold, mock_pos
+):
+    mock_comp.return_value = np.array([[1.0e6, 0.0, 0.0], [0.0, 2.0e6, 0.0]])
+    assert sync_comparison_velocities_from_comparison() is False
+
+
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_matches_main_positions",
+    return_value=False,
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
+    return_value=False,
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_pathological",
+    return_value=False,
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_velocities_akma",
+)
+def test_sync_comparison_velocities_from_comparison_rejects_spatial_coords(
+    mock_comp, mock_path, mock_cold, mock_pos
+):
+    mock_comp.return_value = np.array([[9999.0, 0.0, 0.0], [0.0, 9999.0, 0.0]])
+    assert sync_comparison_velocities_from_comparison() is False
+
+
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_matches_main_positions",
+    return_value=False,
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
     return_value=True,
 )
 @patch(

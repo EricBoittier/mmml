@@ -113,6 +113,9 @@ def test_run_dynamics_passes_init_velocities_for_iasvel_zero_continuation():
             "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.mirror_comparison_velocities_for_dynamics",
         ),
         patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
+        ),
+        patch(
             "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
         ),
     ):

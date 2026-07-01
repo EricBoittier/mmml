@@ -1968,6 +1968,7 @@ def _apply_bussi_in_memory_continuation_kw(kw: dict[str, Any]) -> None:
     kw.pop("TEMINC", None)
     kw.pop("teminc", None)
     kw["_skip_ase_cold_velocity_assign"] = True
+    # Prefer synced-cache velocities for ``init_velocities`` (C API), not COMP-only.
     kw["_bussi_comp_only_handoff"] = True
     kw.pop("iunrea", None)
     kw["iunrea"] = -1
@@ -3272,12 +3273,33 @@ def _sync_tstruct_with_bath_kw(kw: dict[str, Any]) -> None:
         kw["tstruct"] = float(kw["tbath"])
 
 
+def _clear_stale_charmm_heat_bath_fortran_state() -> None:
+    """Zero lingering Fortran heat-bath globals between Bussi micro-chunks."""
+    try:
+        import pycharmm.dynamics as charm_dyn
+
+        charm_dyn.set_firstt(0.0)
+        charm_dyn.set_finalt(0.0)
+        charm_dyn.set_teminc(0.0)
+        charm_dyn.set_tstruc(0.0)
+    except (ImportError, OSError):
+        pass
+
+
 def _normalize_dynamics_heat_ramp_kw(kw: dict[str, Any]) -> None:
     """Map scale-heat ramp keys to PyCHARMM script names and Fortran setters."""
     bussi = _bussi_heat_ramp_active(kw)
     if bussi:
         kw.pop("TEMINC", None)
         kw.pop("teminc", None)
+        if int(kw.get("iasvel", 0) or 0) == 0 or not bool(kw.get("start")):
+            _strip_bussi_in_memory_heat_bath_keywords(kw)
+            _clear_stale_charmm_heat_bath_fortran_state()
+            return
+        kw.pop("finalt", None)
+        kw.pop("FINALT", None)
+        for key in ("twindh", "twindl"):
+            kw.pop(key, None)
     _sync_tstruct_with_bath_kw(kw)
     teminc = kw.pop("TEMINC", None)
     if teminc is not None and "teminc" not in kw and not bussi:
@@ -3355,24 +3377,10 @@ def _resolve_dynamics_init_velocities(
         return None
     from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         _resolve_bussi_rescale_velocities,
-        last_synced_velocities_akma_raw,
         resolve_assignment_temperature_k,
         velocities_are_cold,
         velocities_are_pathological,
     )
-
-    if bool(kw.get("_bussi_comp_only_handoff")):
-        raw = last_synced_velocities_akma_raw()
-        if raw is not None:
-            v = np.asarray(raw, dtype=np.float64).reshape(-1, 3)
-            if (
-                v.size > 0
-                and np.all(np.isfinite(v))
-                and float(np.max(np.abs(v))) >= 1.0e-8
-                and not velocities_are_cold(v)
-                and not velocities_are_pathological(v)
-            ):
-                return None
 
     temp = resolve_assignment_temperature_k(kw, default_K=300.0)
     ramp = kw.get("_bussi_ramp")
@@ -3497,11 +3505,31 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
         fallback_paths=bussi_restart_fallbacks,
     )
     _strip_non_charmm_dynamics_keywords(kw)
-    # Populate COMP before the cold check: ``iasvel=0`` dyna reads COMP, not main.
-    mirror_comparison_velocities_for_dynamics(
-        kw,
-        restart_read_path=restart_read_path,
-    )
+    if init_velocities is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+            sync_charmm_velocities_akma,
+        )
+
+        v = np.column_stack(
+            [
+                np.asarray(init_velocities["vx"], dtype=np.float64),
+                np.asarray(init_velocities["vy"], dtype=np.float64),
+                np.asarray(init_velocities["vz"], dtype=np.float64),
+            ]
+        )
+        sync_charmm_velocities_akma(v)
+        if int(kw.get("iasvel", 0) or 0) == 0:
+            from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+                sync_comparison_velocities_akma,
+            )
+
+            sync_comparison_velocities_akma(v)
+    else:
+        # Populate COMP before the cold check: ``iasvel=0`` dyna reads COMP, not main.
+        mirror_comparison_velocities_for_dynamics(
+            kw,
+            restart_read_path=restart_read_path,
+        )
     if not skip_ase_cold:
         maybe_assign_velocities_via_ase_if_cold(kw, quiet=quiet_ase)
     if "echeck" in kw:

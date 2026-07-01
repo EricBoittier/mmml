@@ -311,6 +311,8 @@ def test_run_dynamics_clears_comparison_coords_when_iasvel_zero_no_start():
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.mirror_comparison_velocities_for_dynamics",
     ) as mirror_comp, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
+    ) as sync_vel, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.maybe_assign_velocities_via_ase_if_cold",
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
@@ -321,7 +323,8 @@ def test_run_dynamics_clears_comparison_coords_when_iasvel_zero_no_start():
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._execute_dynamics_script",
     ) as exec_dyn, patch.dict(sys.modules, {"pycharmm": fake_pycharmm}):
         run_dynamics({"iasvel": 0, "start": False, "nstep": 10})
-    mirror_comp.assert_called_once()
+    sync_vel.assert_called_once()
+    mirror_comp.assert_not_called()
     exec_dyn.assert_called_once()
     assert release_bufs.call_count == 2
 

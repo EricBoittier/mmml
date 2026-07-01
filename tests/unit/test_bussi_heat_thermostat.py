@@ -723,12 +723,45 @@ def test_apply_bussi_in_memory_continuation_keeps_iasvel_zero():
     assert "tstruct" not in kw
 
 
-def test_resolve_dynamics_init_velocities_bussi_comp_only_skips_c_api():
+def test_normalize_dynamics_heat_ramp_kw_strips_bussi_continuation_bath():
+    from unittest.mock import patch
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _normalize_dynamics_heat_ramp_kw,
+        prepare_bussi_heat_dynamics_kw,
+    )
+
+    kw = {
+        "firstt": 20.0,
+        "finalt": 100.0,
+        "tstruct": 20.0,
+        "tbath": 20.0,
+        "twindh": 10.0,
+        "twindl": -10.0,
+        "timestep": 0.0001,
+        "nstep": 50,
+        "start": False,
+        "iasvel": 0,
+    }
+    prepare_bussi_heat_dynamics_kw(kw, nstep=50, ihtfrq=50, timestep_ps=0.0001)
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._clear_stale_charmm_heat_bath_fortran_state",
+    ) as clear_fortran:
+        _normalize_dynamics_heat_ramp_kw(kw)
+    clear_fortran.assert_called_once()
+    assert "firstt" not in kw
+    assert "finalt" not in kw
+    assert "tstruct" not in kw
+    assert "twindh" not in kw
+
+
+def test_resolve_dynamics_init_velocities_bussi_comp_only_uses_rescale_ladder():
     from unittest.mock import patch
 
     import numpy as np
 
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _init_velocities_dict_from_akma,
         _resolve_dynamics_init_velocities,
     )
 
@@ -740,14 +773,15 @@ def test_resolve_dynamics_init_velocities_bussi_comp_only_skips_c_api():
         "_heat_thermostat": "bussi",
     }
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.last_synced_velocities_akma_raw",
-        return_value=warm,
-    ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._resolve_bussi_rescale_velocities",
+        return_value=warm,
     ) as resolve:
         out = _resolve_dynamics_init_velocities(kw, restart_read_path=None)
-    assert out is None
-    resolve.assert_not_called()
+    resolve.assert_called_once()
+    expected = _init_velocities_dict_from_akma(warm)
+    assert np.allclose(out["vx"], expected["vx"])
+    assert np.allclose(out["vy"], expected["vy"])
+    assert np.allclose(out["vz"], expected["vz"])
 
 
 def test_ensure_bussi_heat_continuation_iasvel_for_overlap_chunk():
