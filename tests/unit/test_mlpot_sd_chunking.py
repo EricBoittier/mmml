@@ -620,7 +620,6 @@ def test_run_minimize_in_chunks_materializes_deferred_jax_before_first_sd():
     materialize.assert_called_once_with(
         ctx,
         verbose=False,
-        force_ener_probe=True,
     )
 
 
@@ -670,7 +669,6 @@ def test_materialize_deferred_mlpot_jax_before_sd_skips_update_sync_by_default()
         assert (
             materialize_deferred_mlpot_jax_before_sd(
                 ctx,
-                force_ener_probe=True,
             )
             is False
         )
@@ -680,7 +678,7 @@ def test_materialize_deferred_mlpot_jax_before_sd_skips_update_sync_by_default()
     sync_lists.assert_not_called()
 
 
-def test_materialize_deferred_mlpot_jax_before_sd_probes_after_fresh_jax_materialize():
+def test_materialize_deferred_mlpot_jax_before_sd_skips_charmm_ener_after_fresh_jax_materialize():
     from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
     from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
         DecomposedMlpotModel,
@@ -728,8 +726,8 @@ def test_materialize_deferred_mlpot_jax_before_sd_probes_after_fresh_jax_materia
     ):
         assert materialize_deferred_mlpot_jax_before_sd(ctx) is True
 
-    probe.assert_called_once()
-    assert recover.call_count == 3
+    probe.assert_not_called()
+    assert recover.call_count == 2
     sync_lists.assert_not_called()
 
 
@@ -766,7 +764,6 @@ def test_materialize_deferred_mlpot_jax_before_sd_skips_probe_after_calculator_p
         assert (
             materialize_deferred_mlpot_jax_before_sd(
                 ctx,
-                force_ener_probe=True,
             )
             is False
         )
