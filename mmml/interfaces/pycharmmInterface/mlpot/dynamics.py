@@ -5103,6 +5103,135 @@ def _run_cpt_stability_subchunked(
     return last_dyn
 
 
+def _run_bussi_heat_subchunked(
+    kw: dict[str, Any],
+    io: Optional[CharmmTrajectoryFiles],
+    *,
+    overlap_context: str,
+    rng_base: int | None,
+    chunk_nstep: int,
+    total_nstep: int | None = None,
+    extra_iokw: dict[str, int] | None = None,
+    rng_salt_base: int = 0,
+    loose_pbc: bool = False,
+    log_banner: bool = True,
+    global_step_offset: int = 0,
+    quiet_bussi: bool = False,
+) -> Any:
+    """Integrate Verlet heat in short segments with ASE Bussi rescales between them."""
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        apply_bussi_velocity_rescale,
+        estimate_kinetic_temperature_k,
+        charmm_masses_amu,
+        charmm_velocities_akma,
+    )
+
+    spec = bussi_heat_ramp_spec_from_kw(kw)
+    if spec is None:
+        raise RuntimeError("_run_bussi_heat_subchunked: missing Bussi ramp metadata")
+    total = int(total_nstep if total_nstep is not None else kw.get("nstep", 0))
+    interval = int(spec["ihtfrq"])
+    timestep_ps = float(kw.get("timestep", 0.00025) or 0.00025)
+    taut_ps = float(kw.get("_bussi_taut_ps", interval * timestep_ps))
+    steps_done = 0
+    last_dyn = None
+    n_subchunks = (total + chunk_nstep - 1) // chunk_nstep
+    if log_banner and n_subchunks > 1:
+        print(
+            f"{overlap_context}: Bussi heat chunking — {total} steps in "
+            f"{n_subchunks} segment(s) of ≤{chunk_nstep} "
+            f"(ASE stochastic rescale every {interval} steps; CHARMM ihtfrq=0)",
+            flush=True,
+        )
+    while steps_done < total:
+        n = min(chunk_nstep, total - steps_done)
+        sub_kw = dict(kw)
+        sub_kw["nstep"] = n
+        if steps_done > 0:
+            _apply_bussi_in_memory_continuation_kw(sub_kw)
+        _harmonize_overlap_chunk_frequencies(
+            sub_kw,
+            n,
+            loose_pbc=loose_pbc,
+            global_step_start=int(global_step_offset) + steps_done,
+        )
+        suppress_sub_traj = bool(sub_kw.get("_suppress_trajectory", False))
+        sub_io = _drop_trajectory_io(io) if suppress_sub_traj or "nsavc" not in sub_kw else io
+        sub_traj_iokw = (
+            extra_iokw
+            if (
+                extra_iokw
+                and steps_done == 0
+                and "nsavc" in sub_kw
+                and not suppress_sub_traj
+            )
+            else {}
+        )
+        last_dyn = _run_dynamics_chunk(
+            sub_kw,
+            sub_io,
+            extra_iokw=sub_traj_iokw,
+            rng_base=rng_base,
+            rng_salt=rng_salt_base + steps_done,
+        )
+        global_after = int(global_step_offset) + steps_done + n
+        target_k = heat_ramp_bath_target_K(
+            firstt=float(spec["firstt"]),
+            finalt=float(spec["finalt"]),
+            teminc=float(spec["teminc"]),
+            ihtfrq=interval,
+            step=global_after,
+        )
+        apply_bussi_velocity_rescale(
+            target_k,
+            timestep_ps=timestep_ps,
+            rescale_interval_steps=n,
+            taut_ps=taut_ps,
+            quiet=quiet_bussi,
+        )
+        if not quiet_bussi:
+            live = estimate_kinetic_temperature_k(
+                charmm_velocities_akma(),
+                charmm_masses_amu(),
+            )
+            if live is not None:
+                print(
+                    f"{overlap_context}: Bussi schedule step {global_after}: "
+                    f"T_target={target_k:.2f} K, T_live≈{live:.2f} K",
+                    flush=True,
+                )
+        steps_done += n
+    return last_dyn
+
+
+def _run_bussi_heat_chunked_dynamics(
+    kw: dict[str, Any],
+    io: Optional[CharmmTrajectoryFiles],
+    *,
+    overlap_context: str,
+    rng_base: int | None,
+    chunk_nstep: int,
+) -> Any:
+    """Integrate Bussi heat in micro-chunks with post-segment rescales."""
+    from mmml.interfaces.pycharmmInterface.mlpot.force_checkpoint import (
+        maybe_record_forces,
+    )
+
+    total = int(kw.get("nstep", 0))
+    last_dyn = _run_bussi_heat_subchunked(
+        kw,
+        io,
+        overlap_context=overlap_context,
+        rng_base=rng_base,
+        chunk_nstep=chunk_nstep,
+        total_nstep=total,
+        log_banner=True,
+        quiet_bussi=bool(kw.get("_quiet_bussi_rescale", False)),
+    )
+    maybe_record_forces(total, ml_forces=None)
+    return last_dyn
+
+
 def _run_cpt_stability_chunked_dynamics(
     kw: dict[str, Any],
     io: Optional[CharmmTrajectoryFiles],
@@ -5195,6 +5324,34 @@ def run_dynamics_with_io(
             restart_write=io.restart_write if io is not None else None,
         )
     if not guard_active or total_nstep <= 0:
+        bussi_chunk = _bussi_heat_chunk_nstep(kw, total_nstep)
+        if bussi_chunk is not None:
+            last_dyn = _run_bussi_heat_chunked_dynamics(
+                kw,
+                io,
+                overlap_context=overlap_context,
+                rng_base=rng_base,
+                chunk_nstep=bussi_chunk,
+            )
+            integrated = int(total_nstep)
+            completed = True
+            if io is not None and io.restart_write is not None:
+                from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+                    resolve_integrated_restart_step,
+                )
+
+                restart_step = resolve_integrated_restart_step(
+                    Path(io.restart_write),
+                    expected_nstep=total_nstep,
+                )
+                if restart_step is not None:
+                    integrated = int(restart_step)
+                    completed = integrated >= max(1, int(total_nstep * 0.95))
+            return _overlap_dynamics_result(
+                last_dyn,
+                integrated_step=integrated,
+                completed_full=completed,
+            )
         cpt_chunk = _cpt_stability_chunk_nstep(kw, total_nstep)
         if cpt_chunk is not None:
             last_dyn = _run_cpt_stability_chunked_dynamics(
@@ -5667,6 +5824,11 @@ def run_dynamics_with_io(
                 cpt_sub_chunk = (
                     _cpt_stability_chunk_nstep(chunk_kw, chunk_nstep)
                     if bool(chunk_kw.get("cpt"))
+                    else None
+                )
+                bussi_sub_chunk = (
+                    _bussi_heat_chunk_nstep(chunk_kw, chunk_nstep)
+                    if cpt_sub_chunk is None
                     else None
                 )
                 if cpt_sub_chunk is not None:
