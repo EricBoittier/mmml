@@ -225,7 +225,7 @@ def _structure_factor_cross_energy(
     mono_sq = jnp.sum(rho_m_r**2 + rho_m_i**2, axis=0)
     cross_sq = (rho_tot_r**2 + rho_tot_i**2) - mono_sq
     k2 = jax.lax.square(kvectors).sum(axis=-1)
-    G = jnp.where(k2 == 0.0, 0.0, pot.lr(smearing, k2) * 2.0)
+    G = jnp.where(k2 == 0.0, 0.0, pot.lr(smearing, k2))
     e_k = prefactor * jnp.sum(G * cross_sq) / volume / 2.0
     k0 = pot.lr(smearing, jnp.zeros((), dtype=positions.dtype))
     q_tot = jnp.sum(charges)

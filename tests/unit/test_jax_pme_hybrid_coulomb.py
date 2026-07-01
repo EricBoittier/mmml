@@ -97,9 +97,25 @@ def test_hybrid_correction_is_full_minus_intra_scaled():
         rtol=1e-10,
     )
     expected_f = full.forces_kcalmol_A - intra.forces_kcalmol_A
+    from mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
+        _scale_lr_with_com_switch,
+    )
+
+    _, expected_scaled_f, _ = _scale_lr_with_com_switch(
+        system.positions_A,
+        offsets,
+        expected_unscaled,
+        expected_f,
+        pbc_cell=cell,
+        ml_switch_width=1.0,
+        mm_switch_on=6.0,
+        mm_switch_width=2.0,
+        complementary_handoff=True,
+        mm_r_min=None,
+    )
     np.testing.assert_allclose(
         corr.forces_kcalmol_A,
-        corr.switch_scale * expected_f,
+        expected_scaled_f,
         rtol=0,
         atol=1e-6,
     )

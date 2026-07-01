@@ -41,6 +41,7 @@ nav:
   - CLI:
       - Overview: cli/index.md
       - Tab completion: cli/completion.md
+      - Structure building: cli/structure-building.md
       # CLI_NAV_START
       - Structure & boxes:
           - make-res: cli/commands/make-res.md

@@ -193,10 +193,12 @@ deadcode-fix:
 
 docs-build:
 	uv run python scripts/generate_cli_docs.py
+	uv run python scripts/generate_docs_figures.py
 	uv run mkdocs build
 
 docs-strict:
 	uv run python scripts/generate_cli_docs.py
+	uv run python scripts/generate_docs_figures.py
 	uv run mkdocs build --strict
 
 docs-pdf:

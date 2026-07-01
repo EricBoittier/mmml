@@ -108,6 +108,16 @@ CLI_NAV_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
 )
 
 RELATED_DOCS: dict[str, list[tuple[str, str]]] = {
+    "make-res": [
+        ("Structure building guide", "../structure-building.md"),
+    ],
+    "make-box": [
+        ("Structure building guide", "../structure-building.md"),
+        ("Liquid box workflow", "../../liquid-box-workflow.md"),
+    ],
+    "build-crystal": [
+        ("Structure building guide", "../structure-building.md"),
+    ],
     "md-system": [
         ("md-system YAML configs", "../../md-system-configs.md"),
         ("Cross-backend handoff", "../../handoff.md"),
@@ -126,6 +136,22 @@ RELATED_DOCS: dict[str, list[tuple[str, str]]] = {
     "commands": [("CLI overview", "../index.md")],
     "examples": [("CLI overview", "../index.md")],
     "env": [("CLI overview", "../index.md")],
+}
+
+# Static figures under docs/images/ (see scripts/generate_docs_figures.py).
+COMMAND_FIGURES: dict[str, list[tuple[str, str]]] = {
+    "make-res": [
+        ("Acetone monomer (ACO)", "../../images/structures/make-res-aco.png"),
+    ],
+    "make-box": [
+        ("Packed acetone box (illustrative)", "../../images/structures/make-box-acetone.png"),
+    ],
+    "build-crystal": [
+        ("Benzene crystal / periodic cell", "../../images/structures/build-crystal.png"),
+    ],
+    "liquid-box": [
+        ("Density prep ladder (schematic)", "../../images/plots/liquid-box-density-ladder.png"),
+    ],
 }
 
 META_BODY: dict[str, str] = {
@@ -205,6 +231,19 @@ def _status_banner(spec) -> str:
     return f"!!! warning \"{spec.status}\"\n    {spec.status.capitalize()} command.{rep}{note}\n\n"
 
 
+def _figures_section(name: str) -> str:
+    figs = COMMAND_FIGURES.get(name)
+    if not figs:
+        return ""
+    lines = ["## Example structures", ""]
+    for caption, href in figs:
+        lines.append(f"![{caption}]({href})")
+        lines.append("")
+    lines.append("More detail: [Structure building guide](../structure-building.md).")
+    lines.append("")
+    return "\n".join(lines)
+
+
 def _related_section(name: str) -> str:
     links = RELATED_DOCS.get(name)
     if not links:
@@ -268,6 +307,7 @@ def _render_command_page(spec, *, get_subcommand_parser, parser_available) -> st
             ]
         )
 
+    lines.append(_figures_section(name))
     lines.append(_related_section(name))
     lines.append(
         f"---\n\n"

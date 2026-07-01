@@ -24,6 +24,7 @@ jobs:
       - name: Build docs
         run: |
           python scripts/generate_cli_docs.py --check
+          python scripts/generate_docs_figures.py --check
           mkdocs build --strict
 
   pdf:
@@ -57,6 +58,7 @@ jobs:
           MMML_MERMAID_PUPPETEER_CONFIG: mermaid-puppeteer-config.json
         run: |
           python scripts/generate_cli_docs.py --check
+          python scripts/generate_docs_figures.py --check
           python scripts/build_docs_pdf.py
       - name: Upload PDF artifact
         uses: actions/upload-artifact@v4

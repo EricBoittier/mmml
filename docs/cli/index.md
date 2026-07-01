@@ -51,7 +51,11 @@ See [Tab completion](completion.md) for per-shell setup and fallbacks when
 ## Command index
 
 Browse the sidebar under **CLI** for a page per subcommand (options pulled from
-each command's `argparse` help). Highlights:
+each command's `argparse` help). Structure builders (`make-res`, `make-box`,
+`build-crystal`) include ASE structure figures — see
+[Structure building](structure-building.md).
+
+Highlights:
 
 **Structure & boxes** — `make-res`, `make-box`, `build-crystal`, `liquid-box`
 

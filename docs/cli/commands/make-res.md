@@ -34,6 +34,15 @@ Examples:
   mmml make-res --res ACO
 ```
 
+## Example structures
+
+![Acetone monomer (ACO)](../../images/structures/make-res-aco.png)
+
+More detail: [Structure building guide](../structure-building.md).
+
+## Related docs
+
+- [Structure building guide](../structure-building.md)
 
 ---
 

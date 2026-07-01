@@ -21,6 +21,7 @@ mmml completion --help
 
 Implementation: `mmml.cli.completion`
 
+
 ## Related docs
 
 - [Tab completion guide](../completion.md)

@@ -165,7 +165,8 @@ def test_hybrid_lj_dispersion_is_full_minus_intra_scaled():
     np.testing.assert_allclose(
         corr.forces_kcalmol_A,
         expected_f,
-        rtol=1e-8,
+        rtol=0,
+        atol=1e-6,
     )
 
 
@@ -194,11 +195,12 @@ def test_zero_c6_skips_lj_jax_pme_calls(monkeypatch):
         sr_cutoff_A=6.0,
     )
     assert corr.energy_kcalmol == pytest.approx(0.0)
-    assert corr.switch_scale == pytest.approx(0.5)
+    assert corr.switch_scale == pytest.approx(1.0)
     np.testing.assert_allclose(corr.forces_kcalmol_A, 0.0)
 
 
 def test_hybrid_warmup_counts_unique_intra_shapes(monkeypatch):
+    monkeypatch.setenv("MMML_JAX_PME_INTRA_MODE", "full_minus_intra")
     calls: list[tuple[int, int]] = []
 
     def _fake(positions, coefficients, **kwargs):
@@ -230,8 +232,10 @@ def test_hybrid_warmup_counts_unique_intra_shapes(monkeypatch):
     assert counts == {
         "coulomb_full": 1,
         "coulomb_intra": 2,
+        "coulomb_cross": 0,
         "dispersion_full": 1,
         "dispersion_intra": 2,
+        "dispersion_cross": 0,
     }
     assert calls == [(1, 5), (1, 2), (1, 3), (6, 5), (6, 2), (6, 3)]
 

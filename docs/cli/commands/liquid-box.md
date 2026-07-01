@@ -247,6 +247,12 @@ Geometry cleanup (one-shot recovery):
                         (default: False)
 ```
 
+## Example structures
+
+![Density prep ladder (schematic)](../../images/plots/liquid-box-density-ladder.png)
+
+More detail: [Structure building guide](../structure-building.md).
+
 ## Related docs
 
 - [Liquid box workflow](../../liquid-box-workflow.md)

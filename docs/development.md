@@ -27,7 +27,9 @@ Per-command CLI pages are generated from `mmml/cli/registry.py` before each buil
 
 ```bash
 uv run python scripts/generate_cli_docs.py
+uv run python scripts/generate_docs_figures.py
 uv run python scripts/generate_cli_docs.py --check   # CI: fail if stale
+uv run python scripts/generate_docs_figures.py --check
 ```
 
 Build with the same strict checks used in CI:

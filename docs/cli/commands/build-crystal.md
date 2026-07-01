@@ -69,6 +69,15 @@ ASE optimization (optional):
   --quiet-opt           Suppress ASE optimizer log output (default: False)
 ```
 
+## Example structures
+
+![Benzene crystal / periodic cell](../../images/structures/build-crystal.png)
+
+More detail: [Structure building guide](../structure-building.md).
+
+## Related docs
+
+- [Structure building guide](../structure-building.md)
 
 ---
 

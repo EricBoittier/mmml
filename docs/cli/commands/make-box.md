@@ -25,6 +25,16 @@ options:
   --density DENSITY
 ```
 
+## Example structures
+
+![Packed acetone box (illustrative)](../../images/structures/make-box-acetone.png)
+
+More detail: [Structure building guide](../structure-building.md).
+
+## Related docs
+
+- [Structure building guide](../structure-building.md)
+- [Liquid box workflow](../../liquid-box-workflow.md)
 
 ---
 

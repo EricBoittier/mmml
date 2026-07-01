@@ -82,6 +82,7 @@ CLI flags (minimal smoke):
     mmml cross-check -i water.xyz --reference pyscf --backend xtb --max-frames 1
 ```
 
+
 ## Related docs
 
 - [QC cross-check](../../qc-cross-check.md)

@@ -60,6 +60,8 @@ flowchart TD
   CERT --> B1
 ```
 
+![Density prep ladder (schematic)](images/plots/liquid-box-density-ladder.png)
+
 ---
 
 ## Artifact layout
