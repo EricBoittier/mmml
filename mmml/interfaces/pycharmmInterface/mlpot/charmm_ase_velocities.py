@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from hashlib import sha256
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 import numpy as np
 
@@ -79,10 +79,35 @@ def charmm_synced_velocities_akma() -> np.ndarray | None:
     return vel
 
 
-def resolve_restart_velocities_read_paths(
-    path: Path | str | None,
-) -> list[Path]:
-    """Candidate restart paths that may hold ``!VELOCITIES`` (staging + overlap slots)."""
+def _staging_alias_for_restart(path: Path) -> Path | None:
+    """Fortran staging copy for *path* under ``/tmp/mmml-charmm-io/<hash>/``."""
+    try:
+        from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_io_staging_root
+
+        resolved = path.expanduser().resolve()
+        tag = sha256(str(resolved).encode()).hexdigest()[:16]
+        return charmm_io_staging_root() / tag / resolved.name.lower()
+    except OSError:
+        try:
+            tag = sha256(str(path.expanduser()).encode()).hexdigest()[:16]
+            from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_io_staging_root
+
+            return charmm_io_staging_root() / tag / path.name.lower()
+        except Exception:
+            return None
+
+
+def _overlap_final_restart_path(path: Path) -> Path:
+    """Map ``heat.a.res`` / ``heat.b.res`` scratch slots to ``heat.res``."""
+    p = Path(path)
+    low = p.name.lower()
+    if low.endswith(".a.res") or low.endswith(".b.res"):
+        return p.with_name(f"{p.name[:-6]}.res")
+    return p
+
+
+def _expand_restart_velocity_candidates(path: Path | str | None) -> list[Path]:
+    """Restart paths that may hold ``!VELOCITIES`` for one logical checkpoint."""
     if path is None:
         return []
     p = Path(path).expanduser()
@@ -103,26 +128,107 @@ def resolve_restart_velocities_read_paths(
         candidates.append(resolved)
 
     _add(p)
-    if p.suffix.lower() == ".res":
-        try:
-            from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
-                overlap_restart_slot_paths,
-            )
+    _add(_staging_alias_for_restart(p))
+    if p.suffix.lower() != ".res":
+        return candidates
+    try:
+        from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
+            alternate_overlap_scratch,
+            overlap_restart_slot_paths,
+        )
 
-            slot_a, slot_b = overlap_restart_slot_paths(p)
-            _add(slot_a)
-            _add(slot_b)
-        except Exception:
-            pass
-        try:
-            from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_io_staging_root
-
-            tag = sha256(str(p.resolve()).encode()).hexdigest()[:16]
-            staging = charmm_io_staging_root() / tag / p.name.lower()
-            _add(staging)
-        except Exception:
-            pass
+        alt = alternate_overlap_scratch(p)
+        if alt is not None:
+            _add(alt)
+            _add(_staging_alias_for_restart(alt))
+        final = _overlap_final_restart_path(p)
+        _add(final)
+        _add(_staging_alias_for_restart(final))
+        slot_a, slot_b = overlap_restart_slot_paths(final)
+        _add(slot_a)
+        _add(slot_b)
+        _add(_staging_alias_for_restart(slot_a))
+        _add(_staging_alias_for_restart(slot_b))
+    except Exception:
+        pass
     return candidates
+
+
+def resolve_restart_velocities_read_paths(
+    path: Path | str | None,
+    *,
+    extra_paths: Path | str | Sequence[Path | str] | None = None,
+) -> list[Path]:
+    """Candidate restart paths that may hold ``!VELOCITIES`` (staging + overlap slots).
+
+    When *path* is an overlap scratch slot (``heat.a.res``), also searches the paired
+    slot, stage ``heat.res``, and each file's CHARMM staging alias.  Optional
+    *extra_paths* append prior-segment / baseline checkpoints (same expansion rules).
+    """
+    ordered: list[Path] = []
+    seen: set[str] = set()
+
+    def _extend(paths: list[Path]) -> None:
+        for candidate in paths:
+            key = str(candidate)
+            if key in seen:
+                continue
+            seen.add(key)
+            ordered.append(candidate)
+
+    _extend(_expand_restart_velocity_candidates(path))
+    if extra_paths is not None:
+        extras = (
+            [extra_paths]
+            if isinstance(extra_paths, (str, Path))
+            else list(extra_paths)
+        )
+        for extra in extras:
+            _extend(_expand_restart_velocity_candidates(extra))
+    return ordered
+
+
+def resolve_bussi_restart_velocity_ladder(
+    path: Path | str | None,
+    *,
+    fallback_paths: Path | str | Sequence[Path | str] | None = None,
+) -> list[Path]:
+    """Ordered restart ladder for Bussi velocity reads (newest checkpoint first)."""
+    return resolve_restart_velocities_read_paths(
+        path,
+        extra_paths=fallback_paths,
+    )
+
+
+def bussi_restart_fallback_paths_from_overlap(
+    overlap: Any | None,
+    *,
+    final_restart: Path | str | None = None,
+    restart_read: Path | str | None = None,
+) -> list[Path]:
+    """Prior checkpoints to search when the current overlap scratch lacks ``!VX``."""
+    ordered: list[Path] = []
+    seen: set[str] = set()
+
+    def _add(path: Path | str | None) -> None:
+        if path is None:
+            return
+        p = Path(path).expanduser()
+        key = str(p)
+        if key in seen:
+            return
+        seen.add(key)
+        ordered.append(p)
+
+    _add(final_restart)
+    _add(restart_read)
+    if overlap is None:
+        return ordered
+    for attr in ("prior_segment_restart", "geometry_baseline_restart"):
+        _add(getattr(overlap, attr, None))
+    for cand in getattr(overlap, "geometry_fallback_restarts", ()) or ():
+        _add(cand)
+    return ordered
 
 
 def charmm_velocities_akma_for_thermostat() -> np.ndarray | None:
@@ -154,13 +260,13 @@ def charmm_velocities_akma_for_thermostat() -> np.ndarray | None:
 def capture_charmm_velocities_for_bussi(
     *,
     restart_path: Path | str | None = None,
+    fallback_paths: Path | str | Sequence[Path | str] | None = None,
+    quiet: bool = True,
 ) -> np.ndarray | None:
     """Load AKMA velocities into main/COMP/cache for Bussi.
 
-    Order: warm synced cache, live main-set (post-``dyna``), warm restart
-    ``!VELOCITIES`` / ``!VX,VY,VZ``, then warm COMP.  Stale or cold restart
-    snapshots must not overwrite live CHARMM velocities (WRIDYN can omit ``!VX``
-    or carry segment-local zeros while integrated ``dyna`` still holds warm KE).
+    Order: warm synced cache, live main-set (post-``dyna``), warm restart ladder
+    (current scratch + paired slot + staging + *fallback_paths*), then warm COMP.
     """
     raw = last_synced_velocities_akma_raw()
     if raw is not None and not velocities_are_cold(raw):
@@ -171,8 +277,12 @@ def capture_charmm_velocities_for_bussi(
         sync_charmm_velocities_akma(vel)
         return vel
 
-    vel = _read_restart_velocities_akma(restart_path)
-    if vel is not None and not velocities_are_cold(vel):
+    vel = _read_restart_velocities_akma(
+        restart_path,
+        fallback_paths=fallback_paths,
+        quiet=quiet,
+    )
+    if vel is not None:
         sync_charmm_velocities_akma(vel)
         return vel
 
@@ -456,15 +566,31 @@ def assign_bussi_fallback_velocities(
         return float(measured if measured is not None else temp), v_akma
 
 
-def _read_restart_velocities_akma(path: Path | str | None) -> np.ndarray | None:
-    """Load finite ``!VELOCITIES`` from restart candidates (staging + overlap slots)."""
-    if path is None:
+def _read_restart_velocities_akma(
+    path: Path | str | None,
+    *,
+    fallback_paths: Path | str | Sequence[Path | str] | None = None,
+    quiet: bool = True,
+) -> np.ndarray | None:
+    """Load warm ``!VELOCITIES`` / ``!VX,VY,VZ`` from a restart ladder."""
+    if path is None and not fallback_paths:
         return None
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_restart_velocities,
     )
 
-    for candidate in resolve_restart_velocities_read_paths(path):
+    ladder = resolve_bussi_restart_velocity_ladder(
+        path,
+        fallback_paths=fallback_paths,
+    )
+    primary_key: str | None = None
+    if path is not None:
+        try:
+            primary_key = str(Path(path).expanduser().resolve())
+        except OSError:
+            primary_key = str(Path(path).expanduser())
+
+    for candidate in ladder:
         if not candidate.is_file() or candidate.stat().st_size <= 0:
             continue
         vel = read_restart_velocities(candidate)
@@ -472,6 +598,24 @@ def _read_restart_velocities_akma(path: Path | str | None) -> np.ndarray | None:
             continue
         if float(np.max(np.abs(vel))) < 1.0e-8:
             continue
+        if velocities_are_cold(vel):
+            continue
+        try:
+            cand_key = str(candidate.resolve())
+        except OSError:
+            cand_key = str(candidate)
+        if (
+            not quiet
+            and primary_key is not None
+            and cand_key != primary_key
+        ):
+            temp = estimate_kinetic_temperature_k(vel)
+            txt = f"{temp:.2f}" if temp is not None else "?"
+            print(
+                f"ASE Bussi: velocities from prior restart {candidate.name} "
+                f"(T≈{txt} K)",
+                flush=True,
+            )
         return np.asarray(vel, dtype=np.float64).reshape(-1, 3)
     return None
 
@@ -481,11 +625,20 @@ def ensure_bussi_velocities_after_overlap_recovery(
     *,
     temperature_K: float,
     quiet: bool = True,
+    fallback_paths: Path | str | Sequence[Path | str] | None = None,
 ) -> bool:
     """Rehydrate AKMA velocities after overlap rescue / CGENFF reregister."""
-    if capture_charmm_velocities_for_bussi(restart_path=restart_path) is not None:
+    if capture_charmm_velocities_for_bussi(
+        restart_path=restart_path,
+        fallback_paths=fallback_paths,
+        quiet=quiet,
+    ) is not None:
         return True
-    vel = _read_restart_velocities_akma(restart_path)
+    vel = _read_restart_velocities_akma(
+        restart_path,
+        fallback_paths=fallback_paths,
+        quiet=quiet,
+    )
     if vel is not None:
         sync_charmm_velocities_akma(vel)
         return True
@@ -498,13 +651,22 @@ def _resolve_bussi_rescale_velocities(
     restart_path: Path | str | None,
     temperature_K: float,
     quiet: bool,
+    fallback_paths: Path | str | Sequence[Path | str] | None = None,
 ) -> np.ndarray:
     """Best-effort AKMA velocities for one Bussi rescale (never returns ``None``)."""
     temp = clamp_velocity_assignment_temp_k(temperature_K)
-    vel = capture_charmm_velocities_for_bussi(restart_path=restart_path)
+    vel = capture_charmm_velocities_for_bussi(
+        restart_path=restart_path,
+        fallback_paths=fallback_paths,
+        quiet=quiet,
+    )
     if vel is not None:
         return np.asarray(vel, dtype=np.float64).reshape(-1, 3)
-    vel = _read_restart_velocities_akma(restart_path)
+    vel = _read_restart_velocities_akma(
+        restart_path,
+        fallback_paths=fallback_paths,
+        quiet=quiet,
+    )
     if vel is not None:
         sync_charmm_velocities_akma(vel)
         return vel
@@ -611,6 +773,7 @@ def apply_bussi_velocity_rescale(
     quiet: bool = False,
     rng: np.random.Generator | None = None,
     restart_path: Path | str | None = None,
+    fallback_paths: Path | str | Sequence[Path | str] | None = None,
 ) -> tuple[float, float]:
     """Rescale CHARMM velocities toward ``temperature_K`` using Bussi dynamics.
 
@@ -626,6 +789,7 @@ def apply_bussi_velocity_rescale(
         restart_path=restart_path,
         temperature_K=temp,
         quiet=quiet,
+        fallback_paths=fallback_paths,
     )
     dof = resolve_bussi_degrees_of_freedom(ndegf)
     ke = estimate_kinetic_energy_kcalmol(v_akma, masses)

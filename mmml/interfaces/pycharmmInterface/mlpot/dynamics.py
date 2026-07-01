@@ -3350,6 +3350,7 @@ def _resolve_dynamics_init_velocities(
     kw: dict[str, Any],
     *,
     restart_read_path: Path | str | None,
+    fallback_paths: list[Path] | None = None,
 ) -> dict[str, np.ndarray] | None:
     """Warm AKMA velocities for ``iasvel=0`` continuation (bypasses COMP-as-positions)."""
     if not _requires_init_velocities_handoff(kw):
@@ -3365,6 +3366,7 @@ def _resolve_dynamics_init_velocities(
         restart_path=restart_read_path,
         temperature_K=temp,
         quiet=bool(kw.get("_quiet_bussi_rescale", False)),
+        fallback_paths=fallback_paths,
     )
     v = np.asarray(v, dtype=np.float64).reshape(-1, 3)
     if v.size == 0 or float(np.max(np.abs(v))) < 1.0e-8 or velocities_are_cold(v):
@@ -3439,6 +3441,7 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     post_dyna_restart_write = kw.pop("_post_dyna_restart_write", None)
     post_dyna_restart_target = kw.pop("_post_dyna_restart_write_target", None)
     post_dyna_io_aliases = kw.pop("_post_dyna_io_aliases", None) or []
+    bussi_restart_fallbacks = kw.pop("_bussi_restart_fallback_paths", None)
     bussi_active = _bussi_heat_ramp_active(kw)
     _ensure_bussi_heat_continuation_iasvel(kw)
     _strip_non_charmm_dynamics_keywords(kw)
