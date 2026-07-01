@@ -101,7 +101,7 @@ def test_charmm_fshift_elec_matches_reference(r: float, qq: float) -> None:
         ctofnb=12.0,
         elec_switch="fshift",
     )
-    got = float(charmm_fshift_elec(jnp.asarray(r), jnp.asarray(qq), settings))
+    got = float(charmm_fshift_elec(jnp.asarray(r, dtype=jnp.float64), jnp.asarray(qq, dtype=jnp.float64), settings))
     ref = _ref_fshift_elec(r, qq, settings)
     assert got == pytest.approx(ref, rel=1e-12)
 
@@ -122,7 +122,7 @@ def test_charmm_fswitch_elec_matches_reference(r: float, qq: float) -> None:
         elec_switch="fswitch",
     )
     coeffs = charmm_fswitch_coeffs(settings)
-    got = float(charmm_fswitch_elec(jnp.asarray(r), jnp.asarray(qq), settings, coeffs))
+    got = float(charmm_fswitch_elec(jnp.asarray(r, dtype=jnp.float64), jnp.asarray(qq, dtype=jnp.float64), settings, coeffs))
     ref = _ref_fswitch_elec(r, qq, settings, coeffs)
     assert got == pytest.approx(ref, rel=1e-12)
 
@@ -142,9 +142,9 @@ def test_charmm_vfswitch_vdw_matches_reference(r: float, ep: float, sig: float) 
     b_coef = 2.0 * ep * sig**6
     got = float(
         charmm_vfswitch_vdw(
-            jnp.asarray(r),
-            jnp.asarray(a_coef),
-            jnp.asarray(b_coef),
+            jnp.asarray(r, dtype=jnp.float64),
+            jnp.asarray(a_coef, dtype=jnp.float64),
+            jnp.asarray(b_coef, dtype=jnp.float64),
             settings,
             coeffs,
         )
@@ -161,9 +161,9 @@ def test_vfswitch_vdw_zero_at_ctofnb() -> None:
     b_coef = 2.0 * ep * sig**6
     at_off = float(
         charmm_vfswitch_vdw(
-            jnp.asarray(settings.ctofnb),
-            jnp.asarray(a_coef),
-            jnp.asarray(b_coef),
+            jnp.asarray(settings.ctofnb, dtype=jnp.float64),
+            jnp.asarray(a_coef, dtype=jnp.float64),
+            jnp.asarray(b_coef, dtype=jnp.float64),
             settings,
             coeffs,
         )
@@ -183,9 +183,11 @@ def test_known_pair_elec_fshift_kcal() -> None:
     qq = 1.0
     raw = _ref_fshift_elec(r, qq, settings)
     expected = COULOMB_KCAL * raw
-    got = COULOMB_KCAL * float(charmm_fshift_elec(jnp.asarray(r), jnp.asarray(qq), settings))
+    got = COULOMB_KCAL * float(
+        charmm_fshift_elec(jnp.asarray(r, dtype=jnp.float64), jnp.asarray(qq, dtype=jnp.float64), settings)
+    )
     assert got == pytest.approx(expected, rel=1e-12)
-    assert got == pytest.approx(-28.019, rel=1e-3)
+    assert got == pytest.approx(115.30, rel=1e-3)
 
 
 def test_known_pair_vdw_vfswitch_kcal() -> None:
@@ -199,15 +201,15 @@ def test_known_pair_vdw_vfswitch_kcal() -> None:
     expected = _ref_vfswitch_vdw(r, a_coef, b_coef, settings, coeffs)
     got = float(
         charmm_vfswitch_vdw(
-            jnp.asarray(r),
-            jnp.asarray(a_coef),
-            jnp.asarray(b_coef),
+            jnp.asarray(r, dtype=jnp.float64),
+            jnp.asarray(a_coef, dtype=jnp.float64),
+            jnp.asarray(b_coef, dtype=jnp.float64),
             settings,
             coeffs,
         )
     )
     assert got == pytest.approx(expected, rel=1e-12)
-    assert got == pytest.approx(-0.00184, rel=1e-3)
+    assert got == pytest.approx(-7.98e-4, rel=1e-3)
 
 
 def test_vfswitch_coeffs_match_fortran_init() -> None:

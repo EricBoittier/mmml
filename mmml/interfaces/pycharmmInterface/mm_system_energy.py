@@ -208,6 +208,8 @@ def charmm_fshift_elec(r: Array, qq: Array, settings: CharmmNbondSettings) -> Ar
 
     ``qq`` is ``q_i * q_j / eps`` (no Coulomb constant); multiply by ``COULOMB_KCAL``.
     """
+    r = jnp.asarray(r, dtype=jnp.float64)
+    qq = jnp.asarray(qq, dtype=jnp.float64)
     r_safe = jnp.maximum(r, 1e-10)
     r_sq = r_safe * r_safe
     r1 = 1.0 / r_safe
@@ -222,6 +224,8 @@ def charmm_fswitch_elec(
     coeffs: CharmmFswitchCoeffs,
 ) -> Array:
     """CHARMM cdie force switch (``CFSWIT`` / PyCHARMM ``fswitch``)."""
+    r = jnp.asarray(r, dtype=jnp.float64)
+    qq = jnp.asarray(qq, dtype=jnp.float64)
     r_safe = jnp.maximum(r, 1e-10)
     r_sq = r_safe * r_safe
     r1 = 1.0 / r_safe
@@ -245,6 +249,9 @@ def charmm_vfswitch_vdw(
 
     ``a_coef`` = ``epsilon * sigma^12``, ``b_coef`` = ``2 * epsilon * sigma^6``.
     """
+    r = jnp.asarray(r, dtype=jnp.float64)
+    a_coef = jnp.asarray(a_coef, dtype=jnp.float64)
+    b_coef = jnp.asarray(b_coef, dtype=jnp.float64)
     r_safe = jnp.maximum(r, 1e-10)
     r_sq = r_safe * r_safe
     r1 = 1.0 / r_safe
