@@ -814,6 +814,7 @@ def hybrid_jax_pme_lj_dispersion_correction(
     mm_switch_width: float = 1.0,
     complementary_handoff: bool = True,
     mm_r_min: float | None = None,
+    com_switch: tuple[float, np.ndarray] | None = None,
 ) -> HybridJaxPmeCorrectionResult:
     """Periodic r⁻⁶ LJ tail: jax-pme full box minus intra-monomer dispersion."""
     pos = np.asarray(positions_A, dtype=np.float64)
@@ -890,6 +891,7 @@ def hybrid_jax_pme_lj_dispersion_correction(
         mm_switch_width=mm_switch_width,
         complementary_handoff=complementary_handoff,
         mm_r_min=mm_r_min,
+        com_switch=com_switch,
     )
     return HybridJaxPmeCorrectionResult(
         energy_kcalmol=scaled_e,
