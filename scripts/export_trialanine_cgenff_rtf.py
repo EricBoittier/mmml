@@ -17,6 +17,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 OUT_RTF = REPO / "mmml" / "data" / "charmm" / "top_trialanine_cgenff.rtf"
 OUT_RES = REPO / "mmml" / "data" / "charmm" / "CGENFF.RES"
+RESI_NAME = "TRIALAN"  # ACE–ALA×3–CT3 (CHARMM RESI names ≤ 8 characters)
 
 # Protein → CGENFF atom-type map (bonded params live in ``par_all36_cgenff.prm``).
 _PROTEIN_TO_CGENFF = {
@@ -157,7 +158,7 @@ def _format_rtf_block() -> str:
         "* TRIALANINE — ACE–ALA×3–CT3 capped tri-alanine (CGENFF atom types)",
         "* Regenerate: ./scripts/mmml-charmm-mpirun.sh python scripts/export_trialanine_cgenff_rtf.py",
         "",
-        "RESI TRIALANINE     0.00 ! C12H22N4O5, ACE–ALA×3–CT3 capped tri-alanine",
+        f"RESI {RESI_NAME:<8}  0.00 ! C12H22N4O5, ACE–ALA×3–CT3 capped tri-alanine (TRIALANINE)",
     ]
 
     for idx in range(n):
@@ -181,9 +182,9 @@ def _format_rtf_block() -> str:
 
 
 def _ensure_cgenff_res_entry() -> None:
-    entry = "RESI TRIALANINE     0.00 ! ACE–ALA×3–CT3 capped tri-alanine (mmml bundle)"
+    entry = f"RESI {RESI_NAME:<8}  0.00 ! ACE–ALA×3–CT3 capped tri-alanine (TRIALANINE bundle)"
     text = OUT_RES.read_text(encoding="utf-8")
-    if "RESI TRIALANINE" in text:
+    if f"RESI {RESI_NAME}" in text or "RESI TRIALANINE" in text:
         return
     lines = text.splitlines()
     insert_at = next(
