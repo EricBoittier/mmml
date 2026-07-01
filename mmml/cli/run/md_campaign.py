@@ -558,6 +558,9 @@ def build_benchmark_md_system_argv(
             argv.extend(["--heat-ihtfrq", str(heat_ihtfrq)])
         argv.extend(["--heat-firstt", str(job.get("heat_firstt", cfg["heat_firstt"]))])
         argv.extend(["--heat-finalt", str(job.get("heat_finalt", cfg["heat_finalt"]))])
+        heat_mode = job.get("heat_mode", cfg.get("heat_mode"))
+        if heat_mode is not None:
+            argv.extend(["--heat-mode", str(heat_mode)])
         if str(job["backend"]) == "pycharmm":
             if _pycharmm_bonded_mm_mini_enabled(cfg, job):
                 argv.append("--bonded-mm-mini")

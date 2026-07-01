@@ -127,6 +127,16 @@ def add_charmm_output_args(parser: argparse.ArgumentParser) -> None:
         ),
     )
     group.add_argument(
+        "--heat-mode",
+        choices=("ramp", "hold"),
+        default="ramp",
+        help=(
+            "Heat-stage temperature protocol: ramp=gradual FIRSTT→FINALT (default); "
+            "hold=Boltzmann assign at target T then NVT hold (no ramp; for restarts "
+            "or thermalize setups with good minimized geometry)."
+        ),
+    )
+    group.add_argument(
         "--heat-hoover-tmass",
         type=int,
         default=None,
@@ -415,6 +425,14 @@ def resolve_nve_boltzmann_temp(
     return clamp_velocity_assignment_temp_k(float(default_temp) * 0.2)
 
 
+def resolve_heat_mode(args: argparse.Namespace) -> str:
+    """Return ``ramp`` or ``hold`` for the heat-stage temperature protocol."""
+    mode = str(getattr(args, "heat_mode", "ramp") or "ramp").strip().lower()
+    if mode not in {"ramp", "hold"}:
+        raise ValueError(f"unknown heat_mode {mode!r}; expected ramp or hold")
+    return mode
+
+
 def resolve_heat_firstt_finalt(
     args: argparse.Namespace,
     *,
@@ -428,6 +446,9 @@ def resolve_heat_firstt_finalt(
     finalt = getattr(args, "heat_finalt", None)
     firstt = getattr(args, "heat_firstt", None)
     t_end = float(finalt if finalt is not None else default_temp)
+    if resolve_heat_mode(args) == "hold":
+        t_hold = clamp_velocity_assignment_temp_k(t_end)
+        return t_hold, t_end
     if firstt is None or float(firstt) <= 0.0:
         t_start = t_end * 0.2
     else:
@@ -3877,13 +3898,13 @@ def _default_stages_for_setup(setup: str | None) -> list[str]:
     s = (setup or "").strip().lower()
     if s == "pycharmm_minimize":
         return ["mini"]
-    if s == "free_nvt":
+    if s in ("free_nvt", "free_thermalize"):
         return ["mini", "heat"]
     if s == "free_nve":
         return ["mini", "nve"]
     if s in ("pycharmm_full", "pbc_nve", "pbc_npt"):
         return ["mini", "heat", "nve", "equi", "prod"]
-    if s == "pbc_nvt":
+    if s in ("pbc_nvt", "pbc_thermalize"):
         return ["mini", "heat", "equi"]
     return ["mini", "heat", "nve", "equi", "prod"]
 

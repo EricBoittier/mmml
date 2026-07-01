@@ -269,7 +269,7 @@ def test_resolve_heat_firstt_finalt_defaults():
         resolve_heat_firstt_finalt,
     )
 
-    args = argparse.Namespace(heat_firstt=None, heat_finalt=None)
+    args = argparse.Namespace(heat_firstt=None, heat_finalt=None, heat_mode="ramp")
     assert resolve_heat_firstt_finalt(args, default_temp=300.0) == (60.0, 300.0)
     assert resolve_heat_firstt_finalt(args, default_temp=40.0) == (10.0, 40.0)
 
@@ -279,8 +279,26 @@ def test_resolve_heat_firstt_finalt_dcm9_soft():
         resolve_heat_firstt_finalt,
     )
 
-    args = argparse.Namespace(heat_firstt=0.0, heat_finalt=240.0)
+    args = argparse.Namespace(heat_firstt=0.0, heat_finalt=240.0, heat_mode="ramp")
     assert resolve_heat_firstt_finalt(args, default_temp=300.0) == (48.0, 240.0)
+
+
+def test_resolve_heat_firstt_finalt_hold_mode():
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        resolve_heat_firstt_finalt,
+    )
+
+    args = argparse.Namespace(heat_firstt=60.0, heat_finalt=None, heat_mode="hold")
+    assert resolve_heat_firstt_finalt(args, default_temp=300.0) == (300.0, 300.0)
+
+
+def test_default_stages_for_thermalize_setups():
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        _default_stages_for_setup,
+    )
+
+    assert _default_stages_for_setup("pbc_thermalize") == ["mini", "heat", "equi"]
+    assert _default_stages_for_setup("free_thermalize") == ["mini", "heat"]
 
 
 def test_resolve_stage_ps_handles_explicit_none():
@@ -437,7 +455,12 @@ def test_build_stage_dynamics_kw_heat_hoover_vacuum_uses_ihtfrq_fallback():
 
 
 def test_build_stage_dynamics_kw_heat_hoover_pbc_disables_ihtfrq_ramp():
-    args = argparse.Namespace(heat_thermostat="hoover", heat_firstt=0.0, heat_finalt=240.0)
+    args = argparse.Namespace(
+        heat_thermostat="hoover",
+        heat_firstt=0.0,
+        heat_finalt=240.0,
+        heat_mode="ramp",
+    )
     dyn_print = {"nprint": 100, "iprfrq": 500, "isvfrq": 500}
     with patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics.compute_cpt_piston_masses",
@@ -455,7 +478,7 @@ def test_build_stage_dynamics_kw_heat_hoover_pbc_disables_ihtfrq_ramp():
             restart=False,
             use_pbc=True,
         )
-    assert kw["hoover reft"] == 0.0
+    assert kw["hoover reft"] == 48.0
     assert kw["tmass"] == 800
     assert kw["echeck"] == 5000.0
     assert kw["pgamma"] == 0.0

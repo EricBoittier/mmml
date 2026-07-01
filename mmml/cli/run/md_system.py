@@ -42,8 +42,10 @@ def build_parser() -> argparse.ArgumentParser:
         choices=[
             "free_nve",
             "free_nvt",
+            "free_thermalize",
             "pbc_nve",
             "pbc_nvt",
+            "pbc_thermalize",
             "pbc_npt",
             "lambda_ti",
             "pycharmm_minimize",
@@ -57,7 +59,9 @@ def build_parser() -> argparse.ArgumentParser:
             "pycharmm_minimize: CHARMM MLpot SD only (--backend pycharmm). "
             "pycharmm_full: mini → heat → NVE → equi → prod (--backend pycharmm). "
             "pbc_* with --backend pycharmm: same staged pipeline with CHARMM crystal/IMAGE. "
-            "free_nve/free_nvt with --backend pycharmm: mini + NVE or mini + heat."
+            "free_nve/free_nvt with --backend pycharmm: mini + NVE or mini + heat. "
+            "free_thermalize/pbc_thermalize: minimize then heat to --temperature "
+            "(ramp by default) and optional NVT equi (pbc only); use presets/thermalize.yaml."
         ),
     )
     parser.add_argument(
@@ -409,6 +413,15 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "pycharmm: heat end temperature (FINALT). Default --temperature; "
             "DCM:9 stability often uses 240."
+        ),
+    )
+    parser.add_argument(
+        "--heat-mode",
+        choices=("ramp", "hold"),
+        default="ramp",
+        help=(
+            "pycharmm: heat protocol — ramp=gradual FIRSTT→FINALT (default); "
+            "hold=Boltzmann at target T then NVT hold (no ramp)."
         ),
     )
     parser.add_argument(
@@ -2132,12 +2145,27 @@ def _pycharmm_setups() -> set[str]:
     return {
         "free_nve",
         "free_nvt",
+        "free_thermalize",
         "pycharmm_minimize",
         "pycharmm_full",
         "pbc_nve",
         "pbc_nvt",
+        "pbc_thermalize",
         "pbc_npt",
     }
+
+
+def _nvt_setup_names() -> set[str]:
+    return {"free_nvt", "free_thermalize"}
+
+
+def _ase_jaxmd_setup_name(setup: str) -> str:
+    """Map thermalize presets to legacy ASE/JAX-MD setup names."""
+    aliases = {
+        "free_thermalize": "free_nvt",
+        "pbc_thermalize": "pbc_nvt",
+    }
+    return aliases.get(str(setup), str(setup))
 
 
 def _apply_backend_setup_defaults(args: argparse.Namespace) -> None:
@@ -2199,22 +2227,26 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         "pycharmm_minimize": "minimize",
         "free_nve": "staged",
         "free_nvt": "staged",
+        "free_thermalize": "staged",
         "pycharmm_full": "staged",
         "pbc_nve": "staged",
         "pbc_nvt": "staged",
+        "pbc_thermalize": "staged",
         "pbc_npt": "staged",
     }
     _default_stages = {
         "pycharmm_minimize": "mini",
         "free_nve": "mini,nve",
         "free_nvt": "mini,heat",
+        "free_thermalize": "mini,heat",
         "pycharmm_full": "mini,heat,nve,equi,prod",
         "pbc_nve": "mini,heat,nve,equi,prod",
         "pbc_nvt": "mini,heat,equi",
+        "pbc_thermalize": "mini,heat,equi",
         "pbc_npt": "mini,heat,nve,equi,prod",
     }
     phase = _phase_for_setup.get(args.setup, "staged")
-    ensemble = "nvt" if args.setup == "free_nvt" else "nve"
+    ensemble = "nvt" if args.setup in _nvt_setup_names() else "nve"
 
     if args.output_dir is None:
         args.output_dir = Path("artifacts/pycharmm_mlpot")
@@ -2247,6 +2279,7 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     ]
     _append_optional(cmd, "--heat-firstt", getattr(args, "heat_firstt", None))
     _append_optional(cmd, "--heat-finalt", getattr(args, "heat_finalt", None))
+    cmd.extend(["--heat-mode", str(getattr(args, "heat_mode", "ramp"))])
     _append_optional(cmd, "--heat-hoover-tmass", getattr(args, "heat_hoover_tmass", None))
     _append_optional(cmd, "--nve-boltzmann-temp", getattr(args, "nve_boltzmann_temp", None))
     cmd.extend(["--heat-thermostat", str(getattr(args, "heat_thermostat", "scale"))])
@@ -2743,20 +2776,31 @@ def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
 
     skip_box_size_for_cmd = False
     if backend == "jaxmd":
-        jaxmd_setups = {"pbc_nve", "pbc_nvt", "pbc_npt", "free_nve", "free_nvt"}
+        jaxmd_setups = {
+            "pbc_nve",
+            "pbc_nvt",
+            "pbc_thermalize",
+            "pbc_npt",
+            "free_nve",
+            "free_nvt",
+            "free_thermalize",
+        }
+        effective_setup = _ase_jaxmd_setup_name(args.setup)
         if args.setup not in jaxmd_setups:
             raise ValueError(
-                f"--backend jaxmd supports pbc_nve, pbc_nvt, pbc_npt, free_nve, free_nvt; got {args.setup!r}"
+                "--backend jaxmd supports pbc_nve, pbc_nvt, pbc_thermalize, pbc_npt, "
+                "free_nve, free_nvt, free_thermalize; "
+                f"got {args.setup!r}"
             )
-        if args.setup.endswith("_nvt") and args.nvt_integrator == "langevin":
+        if effective_setup.endswith("_nvt") and args.nvt_integrator == "langevin":
             raise ValueError(
                 "--backend jaxmd uses Nose-Hoover chain NVT; use --backend ase for Langevin NVT"
             )
-        if args.setup.startswith("free_"):
-            ensemble = args.setup[len("free_") :]
+        if effective_setup.startswith("free_"):
+            ensemble = effective_setup[len("free_") :]
             jaxmd_free = True
         else:
-            ensemble = args.setup[len("pbc_") :]
+            ensemble = effective_setup[len("pbc_") :]
             jaxmd_free = False
         cmd = [
             "--ensemble",
@@ -2794,26 +2838,28 @@ def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
         ]
         if args.setup == "all":
             cmd.append("--all")
-        elif args.setup == "free_nve":
-            cmd.extend(["--only", "vac_nve"])
-        elif args.setup == "free_nvt":
-            if args.nvt_integrator == "auto":
-                use_langevin = bool(args.composition)
-            else:
-                use_langevin = args.nvt_integrator == "langevin"
-            cmd.extend(["--only", "vac_nvt_langevin" if use_langevin else "vac_nvt_nhc"])
-            cmd.extend(["--nvt-temp-K", str(args.temperature)])
-        elif args.setup == "pbc_nve":
-            cmd.extend(["--only", "pbc_nve"])
-        elif args.setup == "pbc_nvt":
-            if args.nvt_integrator == "auto":
-                use_langevin = bool(args.composition)
-            else:
-                use_langevin = args.nvt_integrator == "langevin"
-            cmd.extend(["--only", "pbc_nvt_langevin" if use_langevin else "pbc_nvt_nhc"])
-            cmd.extend(["--nvt-temp-K", str(args.temperature)])
         else:
-            raise ValueError(f"Unsupported setup: {args.setup}")
+            effective_setup = _ase_jaxmd_setup_name(args.setup)
+            if effective_setup == "free_nve":
+                cmd.extend(["--only", "vac_nve"])
+            elif effective_setup == "free_nvt":
+                if args.nvt_integrator == "auto":
+                    use_langevin = bool(args.composition)
+                else:
+                    use_langevin = args.nvt_integrator == "langevin"
+                cmd.extend(["--only", "vac_nvt_langevin" if use_langevin else "vac_nvt_nhc"])
+                cmd.extend(["--nvt-temp-K", str(args.temperature)])
+            elif effective_setup == "pbc_nve":
+                cmd.extend(["--only", "pbc_nve"])
+            elif effective_setup == "pbc_nvt":
+                if args.nvt_integrator == "auto":
+                    use_langevin = bool(args.composition)
+                else:
+                    use_langevin = args.nvt_integrator == "langevin"
+                cmd.extend(["--only", "pbc_nvt_langevin" if use_langevin else "pbc_nvt_nhc"])
+                cmd.extend(["--nvt-temp-K", str(args.temperature)])
+            else:
+                raise ValueError(f"Unsupported setup: {args.setup}")
 
     if args.composition:
         cmd.extend(["--composition", str(args.composition)])

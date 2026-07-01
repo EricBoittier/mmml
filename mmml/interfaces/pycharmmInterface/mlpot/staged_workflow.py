@@ -519,6 +519,8 @@ def _configure_heat_dynamics_start(
     )
 
     firstt = float(kw.get("firstt", kw.get("finalt", 300.0)))
+    finalt = float(kw.get("finalt", firstt))
+    hold_at_target = abs(firstt - finalt) <= 1.0e-6
     kw["iasvel"] = 1
     hoover_cpt_heat = heat_thermostat == "hoover" and bool(kw.get("cpt"))
     if not hoover_cpt_heat:
@@ -532,9 +534,14 @@ def _configure_heat_dynamics_start(
         kw["new"] = False
         kw["start"] = True
         if not quiet:
+            mode_txt = (
+                f"hold at {finalt:.1f} K"
+                if hold_at_target
+                else f"ramp {firstt:.1f}→{finalt:.1f} K"
+            )
             print(
                 f"HEAT: dyna start FIRSTT={firstt:.1f} K "
-                "(in-memory coords after mini); "
+                f"({mode_txt}; in-memory coords after mini); "
                 + (
                     "Hoover CPT NVT (no ihtfrq); single dyna (no nstep=0 assign)"
                     if hoover_cpt_heat

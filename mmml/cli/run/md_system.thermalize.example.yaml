@@ -1,0 +1,33 @@
+# Thermalize a minimized system to --temperature (PyCHARMM MLpot).
+#
+# pbc_thermalize: mini → ramped heat → NVT equi at target T (no production).
+# free_thermalize: vacuum mini → ramped heat only.
+#
+# Run:
+#   mmml md-system --config mmml/cli/run/md_system.thermalize.example.yaml \
+#     --checkpoint /path/to/params.json --composition DCM:25 --box-size 43.3
+#
+# Instant assign at target T (skip ramp) for handoff/restart with good geometry:
+#   add `heat_mode: hold` and shorten ps_heat (e.g. 2.0).
+
+include:
+  - presets/base-dt0.25.yaml
+  - presets/thermalize.yaml
+  - presets/pre-sd-calculator.yaml
+  - presets/dynamics-overlap-rescue.yaml
+
+defaults:
+  backend: pycharmm
+  setup: pbc_thermalize
+  temperature: 300.0
+  md_stages: "mini,heat,equi"
+  output_dir: runs/thermalize_example
+
+campaign_output: artifacts/md_system/thermalize_example
+
+runs:
+  thermalize_pbc:
+    description: "PBC mini → heat ramp → NVT equi at target temperature"
+    backend: pycharmm
+    setup: pbc_thermalize
+    md_stages: "mini,heat,equi"

@@ -102,6 +102,7 @@ def _pycharmm_args(**overrides) -> argparse.Namespace:
         extra_args=[],
         seed=123,
         heat_thermostat="scale",
+        heat_mode="ramp",
         dynamics_overlap_action="rescue",
         dynamics_overlap_min_distance=1.5,
         dynamics_overlap_check_interval=50,
@@ -236,6 +237,40 @@ def test_build_pycharmm_command_forwards_heat_thermostat():
     cmd = build_pycharmm_command(_pycharmm_args(heat_thermostat="hoover"))
     idx = cmd.index("--heat-thermostat")
     assert cmd[idx + 1] == "hoover"
+
+
+def test_build_pycharmm_command_thermalize_setup_and_heat_mode():
+    cmd = build_pycharmm_command(
+        _pycharmm_args(setup="pbc_thermalize", heat_mode="hold", md_stages=None)
+    )
+    idx = cmd.index("--setup")
+    assert cmd[idx + 1] == "pbc_thermalize"
+    idx = cmd.index("--md-stages")
+    assert cmd[idx + 1] == "mini,heat,equi"
+    idx = cmd.index("--heat-mode")
+    assert cmd[idx + 1] == "hold"
+
+
+def test_parse_md_system_config_accepts_thermalize_setup(tmp_path):
+    cfg = tmp_path / "md_system.yaml"
+    cfg.write_text(
+        "\n".join(
+            [
+                "backend: pycharmm",
+                "setup: pbc_thermalize",
+                "composition: DCM:10",
+                "heat_mode: hold",
+                "temperature: 320.0",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    args = parse_md_system_args(["--config", str(cfg)])
+
+    assert args.setup == "pbc_thermalize"
+    assert args.heat_mode == "hold"
+    assert args.temperature == pytest.approx(320.0)
 
 
 def test_build_pycharmm_command_forwards_npt_cpt_flags():

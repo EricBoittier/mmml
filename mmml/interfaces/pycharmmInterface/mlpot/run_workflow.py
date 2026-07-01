@@ -1558,7 +1558,7 @@ def run_workflow(
         if phase == "full" and not getattr(args, "no_pre_minimize", False):
             if not getattr(args, "md_stages", None) and not getattr(args, "md_stage", None):
                 setup = getattr(args, "setup", "") or ""
-                if setup == "free_nvt":
+                if setup in ("free_nvt", "free_thermalize"):
                     setattr(args, "md_stages", "mini,heat")
                 elif setup == "free_nve":
                     setattr(args, "md_stages", "mini,nve")

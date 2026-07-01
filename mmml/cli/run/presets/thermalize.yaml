@@ -1,0 +1,14 @@
+# Thermalize to --temperature: conservative ramp + NVT hold defaults for md-system.
+# Use with setup: pbc_thermalize or free_thermalize.
+defaults:
+  heat_mode: ramp
+  heat_thermostat: hoover
+  no_echeck_heat: true
+  heat_comp_damp: false
+  ps_heat: 10.0
+  ps_equi: 20.0
+  n_heat_segments: 4
+  heat_ihtfrq: 0
+  npt_thermostat: hoover
+  npt_pgamma: 5.0
+  calculator_pre_minimize: true
