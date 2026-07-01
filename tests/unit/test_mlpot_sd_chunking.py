@@ -690,6 +690,8 @@ def test_materialize_deferred_mlpot_jax_before_sd_skips_update_sync_by_default()
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot._warmup_value_and_grad_for_model",
     ) as warmup, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.prime_charmm_hybrid_energy_before_mlpot_sd",
+    ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ) as recover, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
