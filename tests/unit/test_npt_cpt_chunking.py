@@ -78,6 +78,39 @@ def test_charmm_dynamics_state_is_finite_requires_both():
         assert charmm_dynamics_state_is_finite()
 
 
+def test_charmm_dynamics_energy_is_plausible_rejects_blowup_totke():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        charmm_dynamics_energy_is_plausible,
+        charmm_dynamics_state_is_finite,
+    )
+
+    pos = pd.DataFrame({"x": [0.0, 1.0], "y": [0.0, 0.0], "z": [0.0, 0.0]})
+    row = pd.DataFrame([{"USER": -87539.0, "TOTKe": 9.37e8}])
+    fake_coor = mock.MagicMock()
+    fake_coor.get_positions.return_value = pos
+    fake_energy = mock.MagicMock()
+    fake_energy.get_energy.return_value = row
+    with fake_pycharmm_modules(coor=fake_coor, energy=fake_energy):
+        assert not charmm_dynamics_energy_is_plausible()
+        assert not charmm_dynamics_state_is_finite()
+
+
+def test_validate_charmm_dynamics_state_raises_on_energy_blowup():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        validate_charmm_dynamics_state_after_chunk,
+    )
+
+    pos = pd.DataFrame({"x": [0.0, 1.0], "y": [0.0, 0.0], "z": [0.0, 0.0]})
+    row = pd.DataFrame([{"USER": -87539.0, "TOTKe": 9.37e8}])
+    fake_coor = mock.MagicMock()
+    fake_coor.get_positions.return_value = pos
+    fake_energy = mock.MagicMock()
+    fake_energy.get_energy.return_value = row
+    with fake_pycharmm_modules(coor=fake_coor, energy=fake_energy):
+        with pytest.raises(RuntimeError, match="energies exceed"):
+            validate_charmm_dynamics_state_after_chunk(context="HEAT")
+
+
 def test_validate_charmm_dynamics_state_raises_on_corruption():
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_coordinates_are_finite",

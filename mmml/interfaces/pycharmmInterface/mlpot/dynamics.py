@@ -2933,6 +2933,27 @@ def _strip_non_charmm_dynamics_keywords(kw: dict[str, Any]) -> None:
             kw.pop(key, None)
 
 
+def apply_charmm_dynamics_timestep_kw(kw: dict[str, Any]) -> None:
+    """Push ``timestep`` (ps) to Fortran before ``dyna``.
+
+    CHARMM MM pretreat can leave a large DELTAT in ``contrl``; MLpot heat must
+    call ``set_timest`` explicitly or overlap chunks integrate at the pretreat
+    timestep while diagnostics show the intended ``--dt-fs`` value.
+    """
+    if "timestep" not in kw:
+        return
+    val = float(kw["timestep"])
+    if val <= 0.0:
+        return
+    kw["timestep"] = val
+    try:
+        import pycharmm.dynamics as charm_dyn
+
+        charm_dyn.set_timest(val)
+    except (ImportError, OSError):
+        pass
+
+
 def apply_charmm_dynamics_echeck_kw(kw: dict[str, Any], echeck: float) -> None:
     """Apply ECHECK to dynamics kwargs and CHARMM global state.
 
@@ -3046,6 +3067,7 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
         clear_comparison_coordinates()
     if "echeck" in kw:
         apply_charmm_dynamics_echeck_kw(kw, float(kw["echeck"]))
+    apply_charmm_dynamics_timestep_kw(kw)
     if int(kw.get("ihtfrq", 0) or 0) > 0:
         apply_heat_ramp_frequencies(kw, nstep=nstep, ihtfrq=int(kw["ihtfrq"]))
     _normalize_dynamics_heat_ramp_kw(kw)

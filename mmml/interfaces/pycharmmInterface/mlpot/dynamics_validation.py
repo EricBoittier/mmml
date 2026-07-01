@@ -493,6 +493,35 @@ def charmm_dynamics_energy_is_finite() -> bool:
     return True
 
 
+# Integration blow-up can leave finite but unphysical energies (e.g. TOTKe ~1e11
+# kcal/mol) while coordinates still sit inside the primary cell — must abort
+# before ENER/UPDATE/mlpot_update (Fortran image rebuild segfault risk).
+_DYNAMICS_ENERGY_ABS_MAX_KCALMOL = 1.0e8
+
+
+def charmm_dynamics_energy_is_plausible(
+    *,
+    max_abs_kcalmol: float = _DYNAMICS_ENERGY_ABS_MAX_KCALMOL,
+) -> bool:
+    """False when any CHARMM energy scalar exceeds a sane magnitude."""
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import pycharmm.energy as energy
+
+    limit = float(max_abs_kcalmol)
+    if limit <= 0.0:
+        return True
+    try:
+        row = energy.get_energy().iloc[0]
+    except Exception:
+        return False
+    for value in row.to_dict().values():
+        if isinstance(value, (int, float, np.floating)):
+            v = float(value)
+            if not np.isfinite(v) or abs(v) > limit:
+                return False
+    return True
+
+
 def charmm_coordinates_are_bounded(*, max_abs_A: float = 2000.0) -> bool:
     """False when any atom coordinate magnitude exceeds a sane bound."""
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
@@ -508,12 +537,13 @@ def charmm_coordinates_are_bounded(*, max_abs_A: float = 2000.0) -> bool:
 
 
 def charmm_dynamics_state_is_finite() -> bool:
-    """Coordinates and energy row are finite after a dynamics segment."""
+    """Coordinates and energy row are finite and physically plausible after dynamics."""
     return (
         charmm_coordinates_are_finite()
         and charmm_coordinates_are_nontrivial()
         and charmm_coordinates_are_bounded()
         and charmm_dynamics_energy_is_finite()
+        and charmm_dynamics_energy_is_plausible()
     )
 
 
@@ -551,6 +581,13 @@ def validate_charmm_dynamics_state_after_chunk(
                 "(MLpot integration blow-up). Refuse overlap rescue — ensure scale heat "
                 "passes ihtfrq/teminc on the dynamics line (not after), cap ihtfrq "
                 "< chunk nstep, or use --heat-thermostat hoover."
+            )
+        if not charmm_dynamics_energy_is_plausible():
+            raise RuntimeError(
+                f"{context}: CHARMM energies exceed "
+                f"{_DYNAMICS_ENERGY_ABS_MAX_KCALMOL:.0e} kcal/mol after dynamics "
+                "(MLpot integration blow-up). Shorten the timestep, tighten echeck, "
+                "or verify MLpot timestep is applied (not leftover CHARMM pretreat dt)."
             )
         return
     raise RuntimeError(

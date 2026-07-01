@@ -337,3 +337,24 @@ def test_apply_charmm_dynamics_echeck_kw_sets_global_state(monkeypatch):
     assert kw["echeck"] == -1.0
     assert kw["ichecw"] == 0
     assert calls == [-1.0]
+
+
+def test_apply_charmm_dynamics_timestep_kw_sets_global_state(monkeypatch):
+    import sys
+    import types
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        apply_charmm_dynamics_timestep_kw,
+    )
+
+    calls: list[float] = []
+    fake_dyn = types.ModuleType("pycharmm.dynamics")
+    fake_dyn.set_timest = lambda val: calls.append(float(val))
+    fake_pycharmm = types.ModuleType("pycharmm")
+    fake_pycharmm.dynamics = fake_dyn
+    monkeypatch.setitem(sys.modules, "pycharmm", fake_pycharmm)
+    monkeypatch.setitem(sys.modules, "pycharmm.dynamics", fake_dyn)
+    kw: dict[str, float] = {"timestep": 0.0005}
+    apply_charmm_dynamics_timestep_kw(kw)
+    assert kw["timestep"] == 0.0005
+    assert calls == [0.0005]
