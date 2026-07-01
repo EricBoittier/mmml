@@ -110,6 +110,21 @@ def measure_monomer_grms_stats(
     )
 
 
+# Ignore stale CHARMM force-buffer slots when deriving thresholds (pre-SD may skip
+# ENER FORCE under deferred JAX / MPI).
+_MONOMER_GRMS_CEILING_KCALMOL_A = 1000.0
+
+
+def _robust_monomer_grms(values: np.ndarray, *, default: float) -> np.ndarray:
+    """Finite per-monomer GRMS samples within a physical ceiling."""
+    arr = np.asarray(values, dtype=np.float64)
+    arr = arr[np.isfinite(arr)]
+    arr = arr[(arr >= 0.0) & (arr <= _MONOMER_GRMS_CEILING_KCALMOL_A)]
+    if arr.size == 0:
+        return np.array([float(default)], dtype=np.float64)
+    return arr
+
+
 def _percentile_safe(values: np.ndarray, q: float, default: float) -> float:
     arr = np.asarray(values, dtype=np.float64)
     arr = arr[np.isfinite(arr)]
@@ -131,24 +146,20 @@ def resolve_grms_thresholds_from_stats(
     n_mol = max(1, int(n_monomers))
     n_at = max(1, int(n_atoms))
 
-    charmm_p90 = _percentile_safe(stats.charmm_per_monomer, 90.0, charmm_bonded_ok_max)
-    charmm_finite = stats.charmm_per_monomer[np.isfinite(stats.charmm_per_monomer)]
-    charmm_max = (
-        float(np.max(charmm_finite))
-        if charmm_finite.size
-        else charmm_bonded_ok_max
+    charmm_samples = _robust_monomer_grms(
+        stats.charmm_per_monomer, default=charmm_bonded_ok_max
     )
+    charmm_p90 = _percentile_safe(charmm_samples, 90.0, charmm_bonded_ok_max)
+    charmm_max = float(np.max(charmm_samples))
 
     hybrid_p90: float | None = None
     hybrid_max: float | None = None
     if stats.hybrid_per_monomer is not None and stats.hybrid_per_monomer.size:
-        hybrid_p90 = _percentile_safe(stats.hybrid_per_monomer, 90.0, charmm_p90)
-        hybrid_finite = stats.hybrid_per_monomer[np.isfinite(stats.hybrid_per_monomer)]
-        hybrid_max = (
-            float(np.max(hybrid_finite))
-            if hybrid_finite.size
-            else hybrid_p90
+        hybrid_samples = _robust_monomer_grms(
+            stats.hybrid_per_monomer, default=charmm_p90
         )
+        hybrid_p90 = _percentile_safe(hybrid_samples, 90.0, charmm_p90)
+        hybrid_max = float(np.max(hybrid_samples))
 
     intervention = max(
         5.0,
@@ -160,7 +171,7 @@ def resolve_grms_thresholds_from_stats(
         intervention = max(
             intervention,
             1.5 * hybrid_p90,
-            1.2 * _percentile_safe(stats.hybrid_per_monomer, 75.0, hybrid_p90),
+            1.2 * _percentile_safe(hybrid_samples, 75.0, hybrid_p90),
             3.0 * charmm_p90,
         )
 
