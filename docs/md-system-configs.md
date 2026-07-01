@@ -241,8 +241,9 @@ Before a large PBC run (or after changing composition/box), rebuild the matching
 
 ```bash
 cd /path/to/mmml
-./scripts/ensure_charmm_mlpot_limits.sh --n-ml 1030 --pbc --box-size 35
-export CHARMM_LIB_DIR="${CHARMM_LIB_DIR:-$HOME/.cache/mmml-charmm-build/tier_12000000_nodomdec/lib}"
+eval "$(./scripts/ensure_charmm_mlpot_limits.sh --n-ml 1030 --pbc --box-size 35)"
+echo "CHARMM_LIB_DIR=$CHARMM_LIB_DIR"
+# → ~/.cache/mmml-charmm-build/tier_12000000_nodomdec/lib for DCM:206 @ L=35
 ```
 
 Add `export CHARMM_LIB_DIR=...` to your job script or Slurm prolog. Staged workflows now **preflight** this check right after box sizing (before CHARMM MM pretreat) so you do not waste pretreat time on an undersized lib.

@@ -29,7 +29,12 @@ patches the hosted ``api_func.F90``.
 
 Use --pbc for periodic systems (``mlpot_update`` image ML pairs).
 
-Exports CHARMM_LIB_DIR to the tier lib directory for child processes.
+Stdout is only ``export CHARMM_LIB_DIR=...`` (safe for ``eval "$(...)"``).
+Progress and cmake logs go to stderr.
+
+Example:
+  eval "$(./scripts/ensure_charmm_mlpot_limits.sh --n-ml 1000 --pbc --box-size 50)"
+  echo "CHARMM_LIB_DIR=$CHARMM_LIB_DIR"
 EOF
 }
 
@@ -80,7 +85,7 @@ if [[ -z "${TIER:-}" || -z "${TARGET:-}" ]]; then
   exit 1
 fi
 
-echo "ML atoms=${N_ML} pbc=${PBC} box=${BOX_SIZE:-<unset>} -> tier=${TIER} max_Npr=${TARGET}"
+echo "ML atoms=${N_ML} pbc=${PBC} box=${BOX_SIZE:-<unset>} -> tier=${TIER} max_Npr=${TARGET}" >&2
 
 if [[ ! -f "$TEMPLATE_F90" ]]; then
   TEMPLATE_F90="$ROOT/setup/charmm/source/api/api_func.F90"
@@ -134,7 +139,7 @@ _stamp_matches() {
 # Older ensure_charmm_mlpot_limits.sh left libcharmm.so but no tier metadata.
 _adopt_legacy_prebuild_if_needed() {
   if [[ -f "${LIB_DIR}/libcharmm.so" ]] && [[ ! -f "$STAMP_FILE" ]]; then
-    echo "Adopting legacy tier prebuild (adding .max_npr stamp): ${LIB_DIR}/libcharmm.so"
+    echo "Adopting legacy tier prebuild (adding .max_npr stamp): ${LIB_DIR}/libcharmm.so" >&2
     _write_tier_f90
     _sync_tier_metadata_mtime
   fi
@@ -155,35 +160,35 @@ fi
 _run_tier_build() {
   _write_tier_f90
   CMAKE_BUILD_DIR="${CHARMM_CMAKE_BUILD_DIR:-${SLURM_TMPDIR:-/tmp}/mmml-charmm-cmake-${TARGET}-$$}"
-  echo "Building CHARMM MLpot tier ${TIER} (max_Npr=${TARGET}); cmake in ${CMAKE_BUILD_DIR}"
+  echo "Building CHARMM MLpot tier ${TIER} (max_Npr=${TARGET}); cmake in ${CMAKE_BUILD_DIR}" >&2
   rm -rf "$CMAKE_BUILD_DIR" 2>/dev/null || true
   mkdir -p "$CMAKE_BUILD_DIR"
   MMML_PATCH_SOURCE="$TIER_F90" \
     CHARMM_BUILD_DIR="$CMAKE_BUILD_DIR" \
-    "$ROOT/scripts/rebuild_charmm_mlpot.sh" --clean --no-domdec
+    "$ROOT/scripts/rebuild_charmm_mlpot.sh" --clean --no-domdec >&2
   mkdir -p "$LIB_DIR"
   cp -f "${CHARMM_HOME:-$ROOT/setup/charmm}/libcharmm.so" "${LIB_DIR}/libcharmm.so"
   _sync_tier_metadata_mtime
   rm -rf "$CMAKE_BUILD_DIR" 2>/dev/null || true
-  echo "Installed tier lib: ${LIB_DIR}/libcharmm.so (max_Npr=${TARGET})"
+  echo "Installed tier lib: ${LIB_DIR}/libcharmm.so (max_Npr=${TARGET})" >&2
 }
 
 if [[ "$NEED_BUILD" == 1 ]]; then
   if [[ "$DRY_RUN" == 1 ]]; then
-    echo "(dry-run) would build tier ${TIER} into ${TIER_DIR}"
+    echo "(dry-run) would build tier ${TIER} into ${TIER_DIR}" >&2
   else
     # Snakemake launches many cells at once; flock so only one cmake per tier runs.
     (
       flock -x 200
       if [[ -f "${LIB_DIR}/libcharmm.so" ]] && _stamp_matches; then
-        echo "Reusing tier build (another job finished while waiting): ${LIB_DIR}/libcharmm.so"
+        echo "Reusing tier build (another job finished while waiting): ${LIB_DIR}/libcharmm.so" >&2
       else
         _run_tier_build
       fi
     ) 200>"$LOCK_FILE"
   fi
 else
-  echo "Reusing existing tier build: ${LIB_DIR}/libcharmm.so (max_Npr=${TARGET})"
+  echo "Reusing existing tier build: ${LIB_DIR}/libcharmm.so (max_Npr=${TARGET})" >&2
 fi
 
 export CHARMM_LIB_DIR="$LIB_DIR"
