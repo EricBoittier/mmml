@@ -101,11 +101,63 @@ def test_capture_charmm_velocities_for_bussi_from_restart(tmp_path):
     )
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
-    ) as sync:
+    ) as sync, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
+        return_value=False,
+    ):
         out = capture_charmm_velocities_for_bussi(restart_path=restart)
     assert out is not None
     assert out.shape == (1, 3)
     sync.assert_called_once()
+
+
+def test_run_dynamics_captures_bussi_velocities_before_velos_del():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics
+
+    call_order: list[str] = []
+
+    def _capture(**_kwargs):
+        call_order.append("capture")
+
+    def _release():
+        call_order.append("release")
+
+    kw = {
+        "nstep": 50,
+        "start": True,
+        "iasvel": 1,
+        "firstt": 10.0,
+        "finalt": 50.0,
+        "timestep": 0.0001,
+        "_heat_thermostat": "bussi",
+        "_bussi_ramp": {"firstt": 10.0, "finalt": 50.0, "teminc": 0.8, "ihtfrq": 50},
+        "_bussi_rescale_interval": 50,
+        "_post_dyna_restart_write": "/tmp/fake.res",
+    }
+    fake_dyn = mock.MagicMock()
+    fake_pycharmm = mock.MagicMock()
+    fake_pycharmm.DynamicsScript = mock.MagicMock(return_value=fake_dyn)
+    with mock.patch.dict("sys.modules", {"pycharmm": fake_pycharmm}), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_via_c_api",
+        return_value=fake_dyn,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
+        side_effect=_release,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._apply_dynamics_io_setters",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.capture_charmm_velocities_for_bussi",
+        side_effect=_capture,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.mirror_comparison_velocities_for_dynamics",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.maybe_assign_velocities_via_ase_if_cold",
+    ):
+        run_dynamics(kw)
+    assert call_order == ["capture", "release"]
 
 
 def test_apply_bussi_velocity_rescale_syncs_charmm():

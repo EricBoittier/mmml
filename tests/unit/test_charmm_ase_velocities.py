@@ -172,6 +172,8 @@ def test_run_dynamics_ensures_bussi_iasvel_zero():
         "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.mirror_comparison_velocities_for_dynamics",
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_main",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.capture_charmm_velocities_for_bussi",
     ):
         run_dynamics(kw)
     passed_kw = run_capi.call_args[0][0]

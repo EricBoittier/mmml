@@ -4911,6 +4911,29 @@ def _integrated_step_from_restart(
     return fb
 
 
+def _post_dyna_restart_write_path(
+    write_path: PathLike | None,
+    io_aliases: list[Any],
+) -> Path | None:
+    """Path CHARMM wrote for ``iunwri`` (staging alias before ``finalize``)."""
+    if write_path is None:
+        return None
+    original = Path(write_path).expanduser().resolve()
+    for alias in io_aliases:
+        if not getattr(alias, "for_write", False):
+            continue
+        try:
+            alias_original = Path(alias.original).expanduser().resolve()
+        except OSError:
+            alias_original = Path(alias.original).expanduser()
+        if alias_original != original:
+            continue
+        staging = Path(alias.alias)
+        if staging.is_file() and staging.stat().st_size > 0:
+            return staging
+    return original if original.is_file() and original.stat().st_size > 0 else None
+
+
 def _run_dynamics_chunk(
     dynamics_kwargs: dict[str, Any],
     io: Optional[CharmmTrajectoryFiles],
@@ -4927,9 +4950,12 @@ def _run_dynamics_chunk(
     if io is not None:
         if io.restart_read is not None:
             kw["_restart_read_path"] = io.restart_read
-        if io.restart_write is not None:
-            kw["_post_dyna_restart_write"] = io.restart_write
         open_files, iokw, io_aliases = io.open_for_run()
+        if io.restart_write is not None:
+            kw["_post_dyna_restart_write"] = _post_dyna_restart_write_path(
+                io.restart_write,
+                io_aliases,
+            )
         kw.update(iokw)
     if extra_iokw:
         kw.update(extra_iokw)
@@ -5190,9 +5216,10 @@ def _run_bussi_heat_subchunked(
     """Integrate Verlet heat in short segments with ASE Bussi rescales between them."""
     from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         apply_bussi_velocity_rescale,
-        estimate_kinetic_temperature_k,
         charmm_masses_amu,
-        charmm_velocities_akma,
+        charmm_velocities_akma_for_thermostat,
+        estimate_kinetic_temperature_k,
+        resolve_restart_velocities_read_paths,
     )
 
     spec = bussi_heat_ramp_spec_from_kw(kw)
@@ -5251,9 +5278,13 @@ def _run_bussi_heat_subchunked(
             ihtfrq=interval,
             step=global_after,
         )
-        restart_path = (
-            getattr(sub_io, "restart_write", None) if sub_io is not None else None
-        )
+        restart_path = None
+        if sub_io is not None and getattr(sub_io, "restart_write", None) is not None:
+            candidates = resolve_restart_velocities_read_paths(sub_io.restart_write)
+            restart_path = next(
+                (p for p in candidates if p.is_file() and p.stat().st_size > 0),
+                sub_io.restart_write,
+            )
         apply_bussi_velocity_rescale(
             target_k,
             timestep_ps=timestep_ps,
