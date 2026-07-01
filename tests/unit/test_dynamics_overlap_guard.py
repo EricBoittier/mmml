@@ -4119,10 +4119,10 @@ def test_mlpot_cpt_overlap_uses_readyn_between_chunks(tmp_path, monkeypatch):
     # 2 overlap chunks of 500, each split into 2 CPT sub-chunks of 250.
     assert len(calls) == 4
     assert sum(int(c["nstep"]) for c in calls) == 1000
-    assert calls[0]["restart"] is False
-    assert calls[1]["restart"] is False
-    assert calls[2]["restart"] is True
-    assert calls[3]["restart"] is False
+    assert all(c["restart"] is False for c in calls)
+    assert calls[1].get("_skip_ase_cold_velocity_assign") is True
+    assert calls[2].get("_skip_ase_cold_velocity_assign") is True
+    assert calls[3].get("_skip_ase_cold_velocity_assign") is True
     materialize.assert_not_called()
 
 
@@ -4138,15 +4138,18 @@ def test_valid_overlap_chunk_restart_read_rejects_handoff_seed(tmp_path):
     assert _valid_overlap_chunk_restart_read(handoff) is None
 
     overlap = DynamicsOverlapConfig(memory_handoff=True)
-    assert not _overlap_chunk_uses_memory_handoff(
+    assert _overlap_chunk_uses_memory_handoff(
         object(), chunk_index=0, n_chunks=4, overlap=overlap
     )
-    assert not _overlap_chunk_uses_memory_handoff(
+    assert _overlap_chunk_uses_memory_handoff(
         object(), chunk_index=3, n_chunks=4, overlap=overlap
     )
-    assert not _overlap_chunk_uses_memory_handoff(
+    assert _overlap_chunk_uses_memory_handoff(
         object(), chunk_index=1, n_chunks=4, overlap=overlap, cpt=True
     )
     assert not _overlap_chunk_uses_memory_handoff(
         None, chunk_index=1, n_chunks=4, overlap=overlap
+    )
+    assert not _overlap_chunk_uses_memory_handoff(
+        object(), chunk_index=1, n_chunks=1, overlap=overlap, cpt=True
     )
