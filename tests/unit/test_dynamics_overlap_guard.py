@@ -1970,7 +1970,7 @@ def test_post_rescue_in_memory_handoff_limited_to_next_chunk(tmp_path, monkeypat
 
     assert len(restart_reads) == 3
     assert restart_reads[1] is None
-    assert restart_reads[2] is not None
+    assert restart_reads[2] is None
     post_rescue_prepare.assert_called_once()
 
 
@@ -3338,7 +3338,7 @@ def test_run_dynamics_with_io_cpt_overlap_subchunks(tmp_path):
 
     # 2 overlap chunks of 500, each split into 2 CPT sub-chunks of 250 (in-memory).
     assert calls == [250, 250, 250, 250]
-    assert restart_flags == [False, False, True, False]
+    assert restart_flags == [False, False, False, False]
     assert trajectory_paths == [None, None, None, None]
     assert nsavc_values == [249, 249, 249, 249]
     materialize.assert_not_called()
@@ -4071,7 +4071,7 @@ def test_mlpot_cpt_overlap_uses_scratch_restart_handoff(tmp_path, monkeypatch):
 
 
 def test_mlpot_cpt_overlap_uses_readyn_between_chunks(tmp_path, monkeypatch):
-    """CPT overlap READYNs scratch restarts between chunks; sub-chunks stay in RAM."""
+    """Default CPT overlap stays in RAM between chunks and sub-chunks (no READYN)."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
     monkeypatch.delenv("MMML_CPT_READYN_SUBCHUNK", raising=False)
@@ -4138,10 +4138,10 @@ def test_valid_overlap_chunk_restart_read_rejects_handoff_seed(tmp_path):
     assert _valid_overlap_chunk_restart_read(handoff) is None
 
     overlap = DynamicsOverlapConfig(memory_handoff=True)
-    assert _overlap_chunk_uses_memory_handoff(
+    assert not _overlap_chunk_uses_memory_handoff(
         object(), chunk_index=0, n_chunks=4, overlap=overlap
     )
-    assert _overlap_chunk_uses_memory_handoff(
+    assert not _overlap_chunk_uses_memory_handoff(
         object(), chunk_index=3, n_chunks=4, overlap=overlap
     )
     assert _overlap_chunk_uses_memory_handoff(

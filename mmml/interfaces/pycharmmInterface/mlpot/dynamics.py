@@ -3561,19 +3561,17 @@ def _overlap_chunk_uses_memory_handoff(
     ``write restart`` / ``READYN`` on scratch ``.overlap_*.res`` files does not
     restore barostat piston internals and yields garbage ``PIXX`` / ``PRESSI``.
 
-    Non-CPT overlap uses alternating scratch ``READYN`` with patched ``JHSTRT``
-    so global step/time counters continue.  CPT stability *sub-chunks* within one
-    overlap chunk also stay in-memory (``_run_cpt_stability_subchunked``).
+    Non-CPT MLpot overlap uses alternating scratch ``READYN`` with patched
+    ``JHSTRT`` so global step/time counters continue (``overlap.memory_handoff``
+    on the config affects chunk-0 ``start``/READYN only, not between-chunk I/O).
+    CPT stability *sub-chunks* within one overlap chunk also stay in-memory
+    (``_run_cpt_stability_subchunked``) unless ``MMML_CPT_READYN_SUBCHUNK=1``.
     """
-    del chunk_index
+    del chunk_index, mlpot_ctx, overlap
     if n_chunks <= 1:
         return False
-    if cpt and _cpt_subchunk_use_in_memory_handoff():
-        return True
-    if mlpot_ctx is None:
-        return False
-    if overlap is not None and overlap.memory_handoff:
-        return True
+    if cpt:
+        return _cpt_subchunk_use_in_memory_handoff()
     return False
 
 
@@ -5601,22 +5599,27 @@ def run_dynamics_with_io(
                                     or header_step < steps_done
                                 )
                             ):
-                                try:
-                                    _materialize_overlap_chunk_restart_handoff(
-                                        restart_path,
-                                        global_step=steps_done,
-                                        overlap_context=overlap_context,
-                                        mlpot_ctx=mlpot_ctx,
-                                    )
-                                except RuntimeError as exc:
-                                    print(
-                                        f"WARN: overlap ({overlap_context}): "
-                                        f"{exc}",
-                                        flush=True,
-                                    )
+                                if _valid_restart_file(restart_path) is not None:
                                     patch_restart_global_step(
                                         restart_path, steps_done
                                     )
+                                else:
+                                    try:
+                                        _materialize_overlap_chunk_restart_handoff(
+                                            restart_path,
+                                            global_step=steps_done,
+                                            overlap_context=overlap_context,
+                                            mlpot_ctx=mlpot_ctx,
+                                        )
+                                    except RuntimeError as exc:
+                                        print(
+                                            f"WARN: overlap ({overlap_context}): "
+                                            f"{exc}",
+                                            flush=True,
+                                        )
+                                        patch_restart_global_step(
+                                            restart_path, steps_done
+                                        )
                             elif needs_step_fix:
                                 if (
                                     scratch_handoff

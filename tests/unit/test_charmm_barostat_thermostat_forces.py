@@ -236,6 +236,37 @@ def test_run_dynamics_strips_mmml_dcd_metadata_keywords():
     assert passed["nstep"] == 10
 
 
+def test_run_dynamics_skips_ase_cold_velocity_when_flag_set():
+    fake_dyn = mock.MagicMock()
+    fake_pycharmm = mock.MagicMock()
+    fake_pycharmm.DynamicsScript.return_value = fake_dyn
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.maybe_assign_velocities_via_ase_if_cold",
+    ) as maybe_assign, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._execute_dynamics_script",
+    ), mock.patch.dict(
+        __import__("sys").modules,
+        {"pycharmm": fake_pycharmm},
+        clear=False,
+    ):
+        run_dynamics(
+            {
+                "nstep": 5,
+                "iasvel": 0,
+                "start": False,
+                "_skip_ase_cold_velocity_assign": True,
+            }
+        )
+    maybe_assign.assert_not_called()
+    passed = fake_pycharmm.DynamicsScript.call_args.kwargs
+    assert "_skip_ase_cold_velocity_assign" not in passed
+
+
 def test_run_dynamics_clears_comp_when_iasvel_zero_without_start():
     fake_dyn = mock.MagicMock()
     fake_pycharmm = mock.MagicMock()
