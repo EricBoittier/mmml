@@ -65,6 +65,7 @@ def run_charmm_lattice_abnr(
     nbxmod: int = 5,
     fallback_side_A: float | None = None,
     restart_path: PathLike | None = None,
+    allow_prepare_pbc: bool = True,
 ) -> float | None:
     """Run CHARMM lattice minimization to optimize the unit cell (and optionally coords).
 
@@ -84,17 +85,18 @@ def run_charmm_lattice_abnr(
         apply_pbc_nbonds,
         charmm_crystal_is_active,
         probe_charmm_cubic_box_side_A,
+        reinstall_charmm_crystal_for_lattice_abnr,
         resolve_charmm_cubic_box_side_A,
-        restore_charmm_cubic_crystal_lattice,
     )
     restore_side = fallback_side_A
     if restore_side is None or float(restore_side) <= 0.0:
         probed, _ = probe_charmm_cubic_box_side_A()
         restore_side = probed
     if restore_side is not None and float(restore_side) > 0.0:
-        restore_charmm_cubic_crystal_lattice(
+        reinstall_charmm_crystal_for_lattice_abnr(
             float(restore_side),
             quiet=not verbose,
+            allow_prepare_pbc=bool(allow_prepare_pbc),
         )
     if verbose:
         mode = "box only" if nocoords else "coords + box"

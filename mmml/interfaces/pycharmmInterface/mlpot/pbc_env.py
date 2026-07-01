@@ -353,6 +353,53 @@ def restore_charmm_cubic_crystal_lattice(
     return side
 
 
+def reinstall_charmm_crystal_for_lattice_abnr(
+    cubic_box_side_A: float,
+    *,
+    nbxmod: int = 5,
+    quiet: bool = False,
+    allow_prepare_pbc: bool = True,
+) -> float:
+    """Reinstall CRYSTAL/IMAGE before LATT ABNR (avoids singular ``XTLABC`` in ``MBUILD``).
+
+    After coords+box lattice minimization or MC-density handoffs, ``XUCELL`` can
+    remain populated while ``pbound_get_size`` reads zero and the crystal metric
+    matrix is not usable for box-only (``NOCO``) lattice work.  A light
+    :func:`restore_charmm_cubic_crystal_lattice` is not always enough; ``crystal
+    free`` + redefine, or full :func:`prepare_charmm_pbc` when safe, may be required.
+    """
+    side = float(cubic_box_side_A)
+    if side <= 0.0:
+        raise ValueError(f"cubic box side must be > 0, got {side}")
+
+    import pycharmm.crystal as crystal
+
+    def _restore(*, free_first: bool) -> None:
+        if free_first and crystal.crystal_free_available():
+            crystal.free_crystal()
+        restore_charmm_cubic_crystal_lattice(
+            side,
+            nbxmod=nbxmod,
+            quiet=quiet,
+        )
+
+    for free_first in (False, True):
+        _restore(free_first=free_first)
+        if charmm_crystal_lattice_ready():
+            return side
+
+    if allow_prepare_pbc:
+        prepare_charmm_pbc(side)
+        apply_pbc_nbonds(nbxmod=nbxmod, cubic_box_side_A=side)
+        if charmm_crystal_lattice_ready():
+            return side
+
+    raise RuntimeError(
+        "CHARMM crystal metric not lattice-ready after reinstall; "
+        f"cannot run lattice ABNR safely (L={side:.3f} Å)"
+    )
+
+
 def ensure_charmm_crystal_for_cpt(
     cubic_box_side_A: float,
     *,
@@ -644,6 +691,7 @@ __all__ = [
     "push_charmm_cubic_box_side_A",
     "pbc_nbond_cutoffs",
     "prepare_charmm_pbc",
+    "reinstall_charmm_crystal_for_lattice_abnr",
     "restore_charmm_cubic_crystal_lattice",
     "setup_charmm_environment",
     "sync_charmm_box_from_workflow_side",

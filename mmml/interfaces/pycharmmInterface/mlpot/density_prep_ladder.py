@@ -688,7 +688,7 @@ def run_density_prep_ladder(
             break
 
         if charmm_pbc and lattice_steps > 0:
-            for nocoords, tag in ((True, "lattice_box"), (False, "lattice_full")):
+            for nocoords, tag in ((False, "lattice_full"), (True, "lattice_box")):
                 step_label = f"round{round_idx + 1}:{tag}"
                 try:
                     pos_before = np.asarray(
@@ -706,6 +706,7 @@ def run_density_prep_ladder(
                         nocoords=nocoords,
                         verbose=not quiet,
                         fallback_side_A=box_side,
+                        allow_prepare_pbc=mlpot_ctx is None,
                     )
                     if new_side is not None:
                         box_side = float(new_side)
@@ -1132,7 +1133,7 @@ def run_pre_mlpot_geometry_gate(
                     print(f"Pre-MLpot gate: skip {step_label} ({exc})", flush=True)
 
     if charmm_pbc and lattice_steps > 0:
-        for nocoords, tag in ((True, "lattice_box"), (False, "lattice_full")):
+        for nocoords, tag in ((False, "lattice_full"), (True, "lattice_box")):
             step_label = f"pre_mlpot:{tag}"
             try:
                 from mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
@@ -1146,6 +1147,7 @@ def run_pre_mlpot_geometry_gate(
                     nocoords=nocoords,
                     verbose=not quiet,
                     fallback_side_A=side,
+                    allow_prepare_pbc=True,
                 )
                 if new_side is not None:
                     side = float(new_side)

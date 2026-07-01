@@ -280,6 +280,61 @@ def test_charmm_crystal_lattice_ready_requires_pbound_not_xucell_only() -> None:
         assert charmm_crystal_lattice_ready() is False
 
 
+def test_reinstall_charmm_crystal_for_lattice_abnr_uses_prepare_when_restore_fails() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        reinstall_charmm_crystal_for_lattice_abnr,
+    )
+
+    mock_crystal = mock.MagicMock()
+    mock_crystal.crystal_free_available.return_value = True
+    mock_crystal.free_crystal.return_value = True
+    ready = mock.Mock(side_effect=[False, False, True])
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_lattice_ready",
+        ready,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.restore_charmm_cubic_crystal_lattice",
+    ) as mock_restore, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.prepare_charmm_pbc",
+    ) as mock_prepare, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.apply_pbc_nbonds",
+    ), mock.patch(
+        "pycharmm.crystal",
+        mock_crystal,
+        create=True,
+    ):
+        side = reinstall_charmm_crystal_for_lattice_abnr(43.616, quiet=True)
+    assert side == pytest.approx(43.616)
+    assert mock_restore.call_count == 2
+    mock_crystal.free_crystal.assert_called_once()
+    mock_prepare.assert_called_once_with(43.616)
+
+
+def test_reinstall_charmm_crystal_for_lattice_abnr_raises_without_prepare() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        reinstall_charmm_crystal_for_lattice_abnr,
+    )
+
+    mock_crystal = mock.MagicMock()
+    mock_crystal.crystal_free_available.return_value = False
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_lattice_ready",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.restore_charmm_cubic_crystal_lattice",
+    ), mock.patch(
+        "pycharmm.crystal",
+        mock_crystal,
+        create=True,
+    ):
+        with pytest.raises(RuntimeError, match="lattice-ready"):
+            reinstall_charmm_crystal_for_lattice_abnr(
+                43.616,
+                quiet=True,
+                allow_prepare_pbc=False,
+            )
+
+
 def test_sync_charmm_crystal_after_mm_pretreat_refreshes_image_without_redef() -> None:
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         sync_charmm_crystal_after_mm_pretreat,
