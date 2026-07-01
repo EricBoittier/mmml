@@ -160,6 +160,7 @@ def test_run_dynamics_ensures_bussi_iasvel_one():
         "_heat_thermostat": "bussi",
         "_bussi_ramp": {"firstt": 10.0, "finalt": 50.0, "teminc": 1.0, "ihtfrq": 50},
         "_bussi_rescale_interval": 50,
+        "_skip_ase_cold_velocity_assign": True,
     }
     with patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_via_c_api",

@@ -3353,6 +3353,7 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     skip_ase_cold = bool(kw.pop("_skip_ase_cold_velocity_assign", False))
     quiet_ase = bool(kw.pop("_quiet_ase_velocity_assign", False))
     restart_read_path = kw.pop("_restart_read_path", None)
+    _ensure_bussi_heat_continuation_iasvel(kw)
     _strip_non_charmm_dynamics_keywords(kw)
     nstep = int(kw.get("nstep", 0) or 0)
     if nstep < 1:
@@ -3370,7 +3371,6 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     )
 
     import pycharmm
-    _ensure_bussi_heat_continuation_iasvel(kw)
     clamp_velocity_assignment_dynamics_kw(kw)
     # Populate COMP before the cold check: ``iasvel=0`` dyna reads COMP, not main.
     mirror_comparison_velocities_for_dynamics(
