@@ -220,9 +220,26 @@ def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
     if config.reference_positions is not None:
         sync_charmm_positions(config.reference_positions)
 
+    pbc_side_before_block: float | None = None
+    if bool(config.use_pbc):
+        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+            probe_charmm_cubic_box_side_A,
+        )
+
+        pbc_side_before_block, _ = probe_charmm_cubic_box_side_A()
+
     apply_charmm_mm_block()
-    # Vacuum nbonds call crystal free; skip when loose/full PBC is already active.
-    if not bool(config.use_pbc):
+    if bool(config.use_pbc):
+        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+            restore_charmm_cubic_crystal_lattice,
+        )
+
+        if pbc_side_before_block is not None and float(pbc_side_before_block) > 0.0:
+            restore_charmm_cubic_crystal_lattice(
+                float(pbc_side_before_block),
+                quiet=not config.verbose,
+            )
+    elif not bool(config.use_pbc):
         setup_default_nbonds()
     if config.nstep_sd <= 0 and config.nstep_abnr <= 0:
         return

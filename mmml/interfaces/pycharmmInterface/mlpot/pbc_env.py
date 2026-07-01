@@ -295,6 +295,47 @@ def charmm_crystal_is_active(*, rel_tol: float = 1e-3) -> bool:
         return False
 
 
+def charmm_crystal_lattice_ready(*, rel_tol: float = 1e-3) -> bool:
+    """True when CRYSTAL ``xtltyp``/IMAGE state can run lattice minimization or CPT.
+
+    ``crystal free`` before CGENFF ``READ PARAM APPEND`` clears ``xtltyp`` but
+    ``pbound_get_size`` can still return the old box edge — do not use
+    :func:`charmm_crystal_is_active` alone before lattice ABNR.
+    """
+    try:
+        import pycharmm.image as image
+
+        if int(image.get_ntrans()) <= 1:
+            return False
+        ux, uy, uz = _read_charmm_ucell_lengths_A()
+        return _is_cubic_box_sides(ux, uy, uz, rel_tol=rel_tol) and min(ux, uy, uz) > 1.0
+    except Exception:
+        return False
+
+
+def restore_charmm_cubic_crystal_lattice(
+    cubic_box_side_A: float,
+    *,
+    nbxmod: int = 5,
+    quiet: bool = False,
+) -> float:
+    """Reinstall CUBI crystal after ``crystal free`` without BYRES re-centering."""
+    import pycharmm.crystal as crystal
+
+    side = float(cubic_box_side_A)
+    if side <= 0.0:
+        raise ValueError(f"cubic box side must be > 0, got {side}")
+    if not crystal.set_cubic_side(side):
+        raise RuntimeError(f"crystal.set_cubic_side failed for L={side} Å")
+    apply_pbc_nbonds(nbxmod=nbxmod, cubic_box_side_A=side)
+    if not quiet:
+        print(
+            f"CHARMM crystal lattice restored: L={side:.3f} Å",
+            flush=True,
+        )
+    return side
+
+
 def ensure_charmm_crystal_for_cpt(
     cubic_box_side_A: float,
     *,
@@ -302,20 +343,21 @@ def ensure_charmm_crystal_for_cpt(
 ) -> None:
     """Install or refresh CHARMM crystal before CPT / Hoover dynamics.
 
-    CGENFF pre-minimize via :func:`minimize_charmm_mm_only` used to call vacuum
-    nbonds (``crystal free``). Loose-PBC Hoover heat needs the box restored.
+    CGENFF pre-minimize via :func:`minimize_charmm_mm_only` suspends PBC with
+    ``crystal free`` during ``READ PARAM APPEND``. Restore the lattice when
+    ``xtltyp``/IMAGE are gone but pbound still looks active.
     """
     side = float(cubic_box_side_A)
     if side <= 0.0:
         raise ValueError(f"cubic box side must be > 0, got {side}")
-    if charmm_crystal_is_active():
+    if charmm_crystal_lattice_ready():
         try:
             live, _ = resolve_charmm_cubic_box_side_A(fallback_side_A=side)
             if abs(live - side) <= max(1e-3, 1e-4 * side):
                 return
         except Exception:
             pass
-    push_charmm_cubic_box_side_A(side, quiet=quiet)
+    restore_charmm_cubic_crystal_lattice(side, quiet=quiet)
 
 
 def _ensure_crystal_image_str() -> None:
@@ -576,6 +618,8 @@ from mmml.interfaces.pycharmmInterface.nbonds_config import (  # noqa: E402
 __all__ = [
     "PbcNbondCutoffs",
     "apply_pbc_nbonds",
+    "charmm_crystal_is_active",
+    "charmm_crystal_lattice_ready",
     "cubic_box_length_from_geometry",
     "cubic_box_matrix_from_side",
     "ensure_charmm_crystal_for_cpt",
@@ -583,6 +627,7 @@ __all__ = [
     "push_charmm_cubic_box_side_A",
     "pbc_nbond_cutoffs",
     "prepare_charmm_pbc",
+    "restore_charmm_cubic_crystal_lattice",
     "setup_charmm_environment",
     "sync_charmm_box_from_workflow_side",
     "sync_workflow_pbc_box_side_after_mm_pretreat",
