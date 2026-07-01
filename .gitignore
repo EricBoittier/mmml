@@ -199,6 +199,7 @@ lfs_audit.txt
 build.setup.out
 CHARMMSETUP
 *.xyz
+!mmml/data/molecules/dcm.xyz
 *.png
 !docs/images/**/*.png
 CHARMMSETUP

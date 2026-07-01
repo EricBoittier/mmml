@@ -256,7 +256,7 @@ def test_promote_mlpot_jax_for_calculator_mini_skips_gpu_when_mpi_defers_sd():
         2,
         z,
         defer_jax_until_after_sd=True,
-        lr_solver="jax_mic",
+        lr_solver="mic",
     )
     ctx = MagicMock(pyCModel=model)
     with patch(

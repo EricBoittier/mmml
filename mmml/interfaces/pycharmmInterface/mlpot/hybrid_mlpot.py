@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import time
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Optional, Sequence, Union
 
@@ -33,6 +34,7 @@ __all__ = [
     "DecomposedMlpotModel",
     "build_decomposed_mlpot_model",
     "materialize_deferred_mlpot_jax_before_sd",
+    "charmm_mlpot_sd_jax_cpu_guard",
     "warmup_decomposed_mlpot",
 ]
 
@@ -464,15 +466,20 @@ class DecomposedMlpotCalculator:
                 try:
                     from mmml.interfaces.pycharmmInterface.charmm_mpi import (
                         charmm_lib_links_mpi,
+                        recover_mpi_for_charmm_after_jax,
                     )
                     from mmml.interfaces.pycharmmInterface.jax_device_policy import (
                         mlpot_jax_device_name,
                     )
 
-                    if charmm_lib_links_mpi() and mlpot_jax_device_name() == "gpu":
-                        from mmml.utils.jax_gpu_warmup import sync_jax_gpu_before_charmm
-
-                        sync_jax_gpu_before_charmm(phase="after MLpot gete")
+                    if charmm_lib_links_mpi():
+                        parent = getattr(self, "_parent_model", None)
+                        sd_active = (
+                            parent is not None
+                            and int(getattr(parent, "_charmm_mlpot_sd_active", 0)) > 0
+                        )
+                        if sd_active or mlpot_jax_device_name() == "gpu":
+                            recover_mpi_for_charmm_after_jax(phase="after MLpot gete")
                 except Exception:
                     pass
             parent = getattr(self, "_parent_model", None)
@@ -1246,6 +1253,21 @@ def materialize_deferred_mlpot_jax_before_sd(
             )
 
     return did_work
+
+
+@contextmanager
+def charmm_mlpot_sd_jax_cpu_guard(model: DecomposedMlpotModel | Any | None):
+    """Keep deferred JAX on CPU while CHARMM ``minimize_run_sd`` is active."""
+    if not isinstance(model, DecomposedMlpotModel):
+        yield
+        return
+    model._charmm_mlpot_sd_active = int(getattr(model, "_charmm_mlpot_sd_active", 0)) + 1
+    try:
+        yield
+    finally:
+        model._charmm_mlpot_sd_active = max(
+            0, int(getattr(model, "_charmm_mlpot_sd_active", 1)) - 1
+        )
 
 
 def maybe_warmup_deferred_decomposed_mlpot(

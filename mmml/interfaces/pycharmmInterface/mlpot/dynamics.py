@@ -5773,6 +5773,20 @@ def minimize_with_mlpot(
 
     sd_kw = _sd_kwargs_from_config(config)
 
+    pyC_model = (
+        getattr(config.mlpot_ctx, "pyCModel", None) if config.mlpot_ctx is not None else None
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+        charmm_mlpot_sd_jax_cpu_guard,
+        materialize_deferred_mlpot_jax_before_sd,
+    )
+
+    if config.mlpot_ctx is not None:
+        materialize_deferred_mlpot_jax_before_sd(
+            config.mlpot_ctx,
+            verbose=config.verbose,
+        )
+
     try:
         if config.verbose and config.show_energy:
             print("CHARMM energy before minimization:")
