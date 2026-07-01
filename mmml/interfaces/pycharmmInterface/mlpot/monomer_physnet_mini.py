@@ -162,7 +162,7 @@ def resolve_monomer_template_reference_positions(
     restart_path: Path | str | None = None,
     n_atoms: int | None = None,
 ) -> tuple[np.ndarray, Path] | None:
-    """Restart/CRD ladder, then in-memory mini/baseline snapshots on ``mlpot_ctx``."""
+    """Restart/CRD ladder, in-memory snapshots, then same-residue cluster template."""
     from mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery import (
         resolve_extent_reference_positions,
     )
@@ -173,9 +173,16 @@ def resolve_monomer_template_reference_positions(
     )
     try:
         ref, source = resolve_extent_reference_positions(candidates, mlpot_ctx)
+        ref_arr = np.asarray(ref, dtype=np.float64)
     except RuntimeError:
-        return None
-    ref_arr = np.asarray(ref, dtype=np.float64)
+        from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+            same_residue_cluster_reference_from_ctx,
+        )
+
+        ref_arr = same_residue_cluster_reference_from_ctx(mlpot_ctx, n_atoms=n_atoms)
+        if ref_arr is None:
+            return None
+        source = Path("<same-residue-cluster>")
     if n_atoms is not None and int(ref_arr.shape[0]) != int(n_atoms):
         return None
     if ref_arr.size == 0 or not np.all(np.isfinite(ref_arr)):
@@ -316,14 +323,22 @@ def run_selective_monomer_physnet_mini(
         ref, source = ref_info
         pos = rebuild_monomers_from_reference(pos, ref, offsets, list(selected))
         if config.verbose:
-            print(
-                f"{context_prefix}: restored monomer(s) {list(selected)} from "
-                f"{source} at current COM",
-                flush=True,
-            )
+            if source.name == "<same-residue-cluster>":
+                print(
+                    f"{context_prefix}: no external template residue; "
+                    f"copying and adjusting positions from same residue type "
+                    f"for monomer(s) {list(selected)}",
+                    flush=True,
+                )
+            else:
+                print(
+                    f"{context_prefix}: restored monomer(s) {list(selected)} from "
+                    f"{source} at current COM",
+                    flush=True,
+                )
     elif config.verbose:
         print(
-            f"{context_prefix}: no restart/template reference available; "
+            f"{context_prefix}: no restart/template reference; "
             f"PhysNet BFGS from current coordinates",
             flush=True,
         )

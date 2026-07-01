@@ -99,3 +99,83 @@ def test_ensure_charmm_session_ready_sets_bomlev(monkeypatch: pytest.MonkeyPatch
     assert calls == [-2]
     cg.ensure_charmm_session_ready()
     assert calls == [-2]
+
+
+def test_build_same_residue_reference_cluster_copies_first_monomer():
+    from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+        build_same_residue_reference_cluster,
+    )
+
+    # Monomer 0: sensible triangle; monomer 1: collinear garbage.
+    pos = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [10.0, 0.0, 0.0],
+            [20.0, 0.0, 0.0],
+            [30.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    offsets = np.array([0, 3, 6], dtype=int)
+    labels = ["DCM", "DCM"]
+    out = build_same_residue_reference_cluster(pos, offsets, labels)
+    internal0 = pos[:3] - pos[:3].mean(axis=0)
+    internal1 = out[3:6] - out[3:6].mean(axis=0)
+    np.testing.assert_allclose(internal0, internal1, atol=1e-12)
+    np.testing.assert_allclose(out[3:6].mean(axis=0), pos[3:6].mean(axis=0), atol=1e-12)
+
+
+def test_apply_same_residue_template_to_positions():
+    from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+        apply_same_residue_template_to_positions,
+    )
+
+    pos = np.arange(18, dtype=float).reshape(6, 3)
+    out = apply_same_residue_template_to_positions(
+        pos,
+        n_molecules=2,
+        atoms_per_monomer=3,
+        residue_label="MEOH",
+    )
+    np.testing.assert_allclose(
+        out[3:6] - out[3:6].mean(axis=0),
+        out[:3] - out[:3].mean(axis=0),
+        atol=1e-12,
+    )
+
+
+def test_same_residue_cluster_reference_from_ctx(monkeypatch: pytest.MonkeyPatch):
+    from types import SimpleNamespace
+
+    from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+        same_residue_cluster_reference_from_ctx,
+    )
+
+    pos = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [5.0, 0.0, 0.0],
+            [15.0, 0.0, 0.0],
+            [25.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    ctx = SimpleNamespace(
+        workflow_args=SimpleNamespace(residue="DCM"),
+        pyCModel=SimpleNamespace(_atoms_per_monomer=[3, 3]),
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        lambda: pos,
+    )
+    ref = same_residue_cluster_reference_from_ctx(ctx, n_atoms=6)
+    assert ref is not None
+    np.testing.assert_allclose(
+        ref[3:6] - ref[3:6].mean(axis=0),
+        ref[:3] - ref[:3].mean(axis=0),
+        atol=1e-12,
+    )

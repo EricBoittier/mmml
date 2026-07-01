@@ -76,6 +76,110 @@ def ensure_monomer_3d_coords(
     return out
 
 
+def build_same_residue_reference_cluster(
+    positions: np.ndarray,
+    monomer_offsets: np.ndarray,
+    residue_labels: list[str],
+) -> np.ndarray:
+    """Copy internal geometry from the first monomer of each residue name.
+
+    Mirrors CHARMM IC when no external template residue is available: copy the
+    first instance of a residue type and adjust each copy to its current COM.
+    """
+    pos = np.asarray(positions, dtype=np.float64).copy()
+    offsets = np.asarray(monomer_offsets, dtype=int).reshape(-1)
+    if len(residue_labels) != int(len(offsets) - 1):
+        raise ValueError(
+            f"residue_labels length ({len(residue_labels)}) != "
+            f"n_monomers ({len(offsets) - 1})"
+        )
+    internal_templates: dict[str, np.ndarray] = {}
+    for i, res in enumerate(residue_labels):
+        key = str(res).upper()
+        s, e = int(offsets[i]), int(offsets[i + 1])
+        block = pos[s:e]
+        if block.size == 0 or not np.all(np.isfinite(block)):
+            continue
+        if key not in internal_templates:
+            internal_templates[key] = block - block.mean(axis=0, keepdims=True)
+    out = pos.copy()
+    for i, res in enumerate(residue_labels):
+        key = str(res).upper()
+        tmpl = internal_templates.get(key)
+        if tmpl is None:
+            continue
+        s, e = int(offsets[i]), int(offsets[i + 1])
+        if tmpl.shape[0] != e - s:
+            continue
+        com = out[s:e].mean(axis=0, keepdims=True)
+        out[s:e] = tmpl + com
+    return out
+
+
+def apply_same_residue_template_to_positions(
+    positions: np.ndarray,
+    *,
+    n_molecules: int,
+    atoms_per_monomer: int,
+    residue_label: str,
+) -> np.ndarray:
+    """After ``ic.build()`` on a homogeneous sequence, duplicate monomer 0 coords."""
+    pos = np.asarray(positions, dtype=np.float64).copy()
+    n_mol = max(1, int(n_molecules))
+    apm = max(1, int(atoms_per_monomer))
+    if n_mol <= 1 or pos.shape[0] < n_mol * apm:
+        return pos
+    labels = [str(residue_label).upper()] * n_mol
+    offsets = np.arange(n_mol + 1, dtype=int) * apm
+    return build_same_residue_reference_cluster(pos, offsets, labels)
+
+
+def resolve_cluster_residue_labels(mlpot_ctx: Any, n_monomers: int) -> list[str]:
+    args = getattr(mlpot_ctx, "workflow_args", None)
+    if args is not None:
+        labels = getattr(args, "_cluster_residue_labels", None)
+        if labels is not None and len(labels) == n_monomers:
+            return [str(x).upper() for x in labels]
+        residue = getattr(args, "residue", None)
+        if residue is not None:
+            return [str(residue).upper()] * n_monomers
+    return ["UNK"] * n_monomers
+
+
+def same_residue_cluster_reference_from_ctx(
+    mlpot_ctx: Any,
+    *,
+    n_atoms: int | None = None,
+) -> np.ndarray | None:
+    """Build cluster reference by copying each residue type from its first monomer."""
+    from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+        monomer_offsets_from_atoms_per,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+
+    pos = get_charmm_positions_array()
+    if pos is None:
+        return None
+    arr = np.asarray(pos, dtype=np.float64)
+    if n_atoms is not None and int(arr.shape[0]) != int(n_atoms):
+        return None
+    if arr.size == 0 or not np.all(np.isfinite(arr)):
+        return None
+    atoms_per = getattr(mlpot_ctx, "atoms_per_monomer", None)
+    if atoms_per is None:
+        pyCModel = getattr(mlpot_ctx, "pyCModel", None)
+        atoms_per = getattr(pyCModel, "_atoms_per_monomer", None) if pyCModel else None
+    if not atoms_per:
+        return None
+    per = [int(x) for x in atoms_per]
+    n_monomers = len(per)
+    if n_monomers <= 0 or int(sum(per)) != int(arr.shape[0]):
+        return None
+    offsets = monomer_offsets_from_atoms_per(per)
+    labels = resolve_cluster_residue_labels(mlpot_ctx, n_monomers)
+    return build_same_residue_reference_cluster(arr, offsets, labels)
+
+
 def prepare_jax_gpu_notebook(*, required: bool = True) -> bool:
     """Prep JAX GPU JIT toolchain (``ptxas``, cuDNN/cuSPARSE libs) for notebook kernels."""
     from mmml.utils.jax_gpu_warmup import prepare_jax_gpu_notebook as _prepare

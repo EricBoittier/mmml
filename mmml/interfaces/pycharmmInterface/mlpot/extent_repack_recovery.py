@@ -78,6 +78,14 @@ def resolve_extent_reference_positions(
     for arr, virtual in _memory_extent_reference_sources(mlpot_ctx):
         return arr, virtual
 
+    from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+        same_residue_cluster_reference_from_ctx,
+    )
+
+    same_res = same_residue_cluster_reference_from_ctx(mlpot_ctx)
+    if same_res is not None:
+        return same_res, Path("<same-residue-cluster>")
+
     names = ", ".join(p.name for p in candidates) or "(none)"
     mem = "no" if mlpot_ctx is None else (
         "mini+baseline"

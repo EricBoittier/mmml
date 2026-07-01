@@ -94,6 +94,16 @@ def _build_psf_ordered_cluster(
             "cannot form equal same-residue chunks."
         )
     atoms_per_res = n_atoms // n_molecules
+    from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+        apply_same_residue_template_to_positions,
+    )
+
+    positions = apply_same_residue_template_to_positions(
+        positions,
+        n_molecules=n_molecules,
+        atoms_per_monomer=atoms_per_res,
+        residue_label=residue,
+    )
 
     n_side = int(np.ceil(np.sqrt(n_molecules)))
     shifted = positions.copy()
