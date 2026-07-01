@@ -55,7 +55,9 @@ jobs:
       - name: Build PDF docs
         env:
           MMML_MERMAID_PUPPETEER_CONFIG: mermaid-puppeteer-config.json
-        run: python scripts/build_docs_pdf.py
+        run: |
+          python scripts/generate_cli_docs.py --check
+          python scripts/build_docs_pdf.py
       - name: Upload PDF artifact
         uses: actions/upload-artifact@v4
         with:
