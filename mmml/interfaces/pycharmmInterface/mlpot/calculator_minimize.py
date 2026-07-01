@@ -653,7 +653,11 @@ def _hybrid_mlpot_ase_calculator_class():
 
 def _promote_mlpot_jax_for_calculator_mini(mlpot_ctx: Any, *, verbose: bool) -> None:
     pyCModel = getattr(mlpot_ctx, "pyCModel", None)
-    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotModel
+    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+        DecomposedMlpotModel,
+        warmup_decomposed_mlpot,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
     defer_mesh = (
         isinstance(pyCModel, DecomposedMlpotModel)
@@ -669,7 +673,24 @@ def _promote_mlpot_jax_for_calculator_mini(mlpot_ctx: Any, *, verbose: bool) -> 
         return
     promote = getattr(pyCModel, "promote_jax_factory_to_gpu", None)
     if callable(promote):
+        was_gpu = bool(getattr(pyCModel, "_jax_on_gpu", False))
         promote()
+        if isinstance(pyCModel, DecomposedMlpotModel) and (
+            not was_gpu or not pyCModel._jax_warmup_done
+        ):
+            n_mono = int(getattr(pyCModel, "_n_monomers", 0) or 0)
+            if n_mono > 1:
+                cell = getattr(mlpot_ctx, "cubic_box_side_A", None)
+                if cell is None:
+                    cell = getattr(mlpot_ctx, "charmm_cubic_box_side_A", None)
+                if cell is None and getattr(pyCModel, "_cell", False):
+                    cell = pyCModel._cell
+                warmup_decomposed_mlpot(
+                    pyCModel,
+                    get_charmm_positions_array(),
+                    cell=cell,
+                    verbose=False,
+                )
         if verbose:
             print(
                 "Pre-SD hybrid calculator minimize: promoted JAX factory to GPU",

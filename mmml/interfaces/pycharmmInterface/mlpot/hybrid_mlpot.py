@@ -600,6 +600,7 @@ class DecomposedMlpotModel:
         self._last_ml_forces: np.ndarray | None = None
         self._spherical_forward_fn: Any | None = None
         self._forward_cache_key: tuple[Any, ...] | None = None
+        self._jax_warmup_done = False
         self._pending_factory = pending_factory
         self._pending_factory_z = (
             None if pending_factory_z is None else np.asarray(pending_factory_z, dtype=int)
@@ -776,11 +777,17 @@ class DecomposedMlpotModel:
         if self._spherical_fn is None and self._pending_factory is not None:
             if self._defer_jax_until_mlpot_registered:
                 if self._defer_jax_until_after_sd:
-                    self._finalize_jax_factory(gpu=False)
-                else:
-                    return self._build_registered_calculator(
-                        ml_atomic_numbers=ml_atomic_numbers
+                    # Stay fully deferred until GPU promote (calculator mini) or first ENER.
+                    # Eager CPU _finalize here duplicated work: promote/warmup recompiled on GPU.
+                    deferred = _DeferredDecomposedMlpotCalculator(
+                        self,
+                        ml_atomic_numbers=ml_atomic_numbers,
                     )
+                    self._registered_calculator = deferred
+                    return deferred
+                return self._build_registered_calculator(
+                    ml_atomic_numbers=ml_atomic_numbers
+                )
             deferred = _DeferredDecomposedMlpotCalculator(
                 self,
                 ml_atomic_numbers=ml_atomic_numbers,
@@ -1144,6 +1151,8 @@ def warmup_decomposed_mlpot(
     from mmml.utils.jax_gpu_warmup import maybe_sanitize_process_env_for_ptxas
 
     maybe_sanitize_process_env_for_ptxas()
+    if getattr(model, "_jax_warmup_done", False) and model._spherical_fn is not None:
+        return
     if model._defer_jax_until_after_sd and not model._jax_on_gpu:
         model.promote_jax_factory_to_gpu()
     else:
@@ -1217,3 +1226,4 @@ def warmup_decomposed_mlpot(
 
         pycharmm_verbose()
         print("Decomposed MLpot JAX warmup complete", flush=True)
+    model._jax_warmup_done = True

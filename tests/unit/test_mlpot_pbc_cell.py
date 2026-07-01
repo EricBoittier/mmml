@@ -189,17 +189,19 @@ def test_decomposed_mlpot_sd_defer_uses_cpu_until_promote():
         )
         model.get_pycharmm_calculator()
         mock_xla_warm.assert_not_called()
-        cpu_ctx.__enter__.assert_called()
+        cpu_ctx.__enter__.assert_not_called()
         gpu_ctx.__enter__.assert_not_called()
         assert model._jax_on_gpu is False
+        assert model._spherical_fn is None
         assert model._pending_factory is factory
 
         model.promote_jax_factory_to_gpu()
         mock_xla_warm.assert_called_once()
+        cpu_ctx.__enter__.assert_not_called()
         gpu_ctx.__enter__.assert_called()
         assert model._jax_on_gpu is True
         assert model._pending_factory is None
-        assert mock_unpack.call_count == 2
+        assert mock_unpack.call_count == 1
 
 
 def test_maybe_promote_deferred_jax_on_hybrid_eval_without_jax_pme():

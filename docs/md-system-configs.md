@@ -882,6 +882,37 @@ Legacy loop cost scales with monomer count (~38 host jax-pme evals per hybrid st
 
 For full-box vs intra micro-benchmarks on a PyCHARMM-built cluster, see `tests/functionality/long_range/08_jax_pme_hybrid_timing.py`. Broader LR backend ladder: `tests/functionality/long_range/README.md`.
 
+### JAX / `setup_calculator` compile churn (mini → SD → dynamics)
+
+`setup_calculator` itself runs **once** per MLpot session (model load + closure). What feels like “recompiling the calculator” between **calculator mini**, **MLpot SD pass 1/2**, and **heat** is usually **XLA JIT**, not a second `setup_calculator` call.
+
+Typical compile stages (hybrid MLpot, multi-monomer):
+
+| Stage | What compiles | Notes |
+|-------|----------------|-------|
+| MLpot registration | Deferred (no JIT) when MPI defers JAX until after SD | Avoids GPU work before `upinb` |
+| Pre-SD calculator mini (BFGS/FIRE) | GPU `spherical_fn` + forward `jit` wrapper | One-time per device |
+| First hybrid `ENER` (jax-pme mesh) | Extra CPU→GPU promote on first callback | `lr_solver: jax_pme` + `pme`/`p3m` only |
+| MLpot SD chunks | Steady-state (same shapes) | `invalidate_mlpot_calculator_caches` clears MM pair cache only |
+| Post-mini `maybe_warmup_deferred` | Skipped if calculator mini already warmed GPU | MPI defer path |
+
+**Why you see many `Compiling jit(...)` lines:** JAX logs each sub-primitive on first trace (MIC/PBC, jax-pme host callbacks, PhysNet batches). Shapes are cached; cost is dominated by **first** compile per device, not per SD step.
+
+**Reduce compile / cache misses:**
+
+```bash
+# Persistent on-disk XLA cache (default under ~/.cache/mmml/jax_compile when unset)
+export JAX_COMPILATION_CACHE_DIR=$HOME/.cache/mmml/jax_compile
+
+# Pre-warm PhysNet + hybrid shapes before mpirun (no CHARMM)
+mmml warmup-mlpot-jax --checkpoint /path/to/ckpt --composition DCM:60 --box-side 32
+
+# Skip duplicate post-SD warmup when pre-SD calculator mini already ran (automatic)
+# calculator_pre_minimize: true in YAML / --calculator-pre-minimize
+```
+
+Avoid toggling `MMML_JAX_PME_INTRA_MODE`, `ml_compute_dtype`, or cutoffs between mini legs — those change static JIT keys. For jax-pme mesh on MPI builds, expect one extra promote on the **first** hybrid energy after SD starts.
+
 ```mermaid
 flowchart LR
   subgraph legacy ["full_minus_intra (legacy)"]
