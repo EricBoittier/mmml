@@ -358,6 +358,84 @@ def test_resolve_restart_velocities_read_paths_includes_overlap_slots(tmp_path):
     assert (tmp_path / "heat.b.res").resolve() in paths
 
 
+def _write_restart_with_velocities(path: Path, vx: float) -> None:
+    path.write_text(
+        "REST     0     1\n"
+        "       1 !NTITLE followed by title\n"
+        "* t\n"
+        "\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        "         1           0           0           0           0           0           0\n"
+        " !X, Y, Z\n"
+        " 0.000000000000000D+00 0.000000000000000D+00 0.000000000000000D+00\n"
+        " !VELOCITIES\n"
+        f" {vx:.15E} 0.000000000000000D+00 0.000000000000000D+00\n",
+        encoding="ascii",
+    )
+
+
+def test_resolve_restart_velocities_read_paths_from_scratch_slot(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        resolve_restart_velocities_read_paths,
+    )
+
+    scratch = tmp_path / "heat.a.res"
+    paths = resolve_restart_velocities_read_paths(scratch)
+    assert scratch.resolve() in paths
+    assert (tmp_path / "heat.b.res").resolve() in paths
+    assert (tmp_path / "heat.res").resolve() in paths
+
+
+def test_read_restart_velocities_akma_falls_back_to_alternate_slot(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        _read_restart_velocities_akma,
+    )
+
+    cold = tmp_path / "heat.a.res"
+    warm = tmp_path / "heat.b.res"
+    _write_restart_with_velocities(cold, 1.0e-8)
+    _write_restart_with_velocities(warm, 100.0)
+
+    def _cold(vel, **_kwargs):
+        arr = np.asarray(vel, dtype=float).reshape(-1, 3)
+        return float(np.max(np.abs(arr))) < 50.0
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
+        side_effect=_cold,
+    ):
+        vel = _read_restart_velocities_akma(cold, quiet=True)
+    assert vel is not None
+    assert vel[0, 0] == pytest.approx(100.0)
+
+
+def test_read_restart_velocities_akma_falls_back_to_prior_restart(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        _read_restart_velocities_akma,
+    )
+
+    current = tmp_path / "heat.a.res"
+    prior = tmp_path / "pretreat.res"
+    _write_restart_with_velocities(current, 1.0e-8)
+    _write_restart_with_velocities(prior, 80.0)
+
+    def _cold(vel, **_kwargs):
+        arr = np.asarray(vel, dtype=float).reshape(-1, 3)
+        return float(np.max(np.abs(arr))) < 50.0
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
+        side_effect=_cold,
+    ):
+        vel = _read_restart_velocities_akma(
+            current,
+            fallback_paths=[prior],
+            quiet=True,
+        )
+    assert vel is not None
+    assert vel[0, 0] == pytest.approx(80.0)
+
+
 def test_apply_bussi_velocity_rescale_syncs_charmm():
     masses = np.array([12.0, 1.0, 1.0], dtype=float)
     v_akma = np.ones((3, 3), dtype=float) * 100.0
