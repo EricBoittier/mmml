@@ -375,6 +375,300 @@ def plot_system_monomer_regions() -> Path:
     return out
 
 
+# --- ASE dimer panels with illustrative hybrid forces at cutoff distances ---
+
+_ILLUSTRATION_STYLE = {
+    "figure_facecolor": "#f8fafc",
+    "axes_facecolor": "#f8fafc",
+    "bond_color": "#64748b",
+    "bond_width": 1.2,
+    "atom_edge": "#1e293b",
+    "monomer_colors": ("#2563eb", "#ea580c"),
+}
+
+_K_COULOMB_KCAL = 332.063711
+_LJ_EPS_KCAL = {"C": 0.11, "H": 0.03, "O": 0.21, "Cl": 0.25}
+_LJ_SIG_A = {"C": 3.5, "H": 2.5, "O": 3.0, "Cl": 3.5}
+_PARTIAL_Q = {"C": 0.0, "H": 0.09, "O": -0.45, "Cl": -0.12}
+
+
+def _element_key(z: int) -> str:
+    from ase.data import chemical_symbols
+
+    sym = chemical_symbols[int(z)]
+    return "Cl" if sym == "Cl" else sym
+
+
+def _load_monomer_template(residue: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    from ase.io import read
+
+    from mmml.interfaces.crystal_charmm import default_make_res_monomer_pdb
+    from mmml.paths import default_aco_template_pdb
+
+    res = residue.strip().upper()
+    path = (
+        default_aco_template_pdb()
+        if res == "ACO"
+        else default_make_res_monomer_pdb("DCM" if res == "DCM" else res)
+    )
+    atoms = read(str(path))
+    pos = np.asarray(atoms.get_positions(), dtype=float)
+    rel = pos - pos.mean(axis=0)
+    z = np.asarray(atoms.get_atomic_numbers(), dtype=int)
+    charges = np.array([_PARTIAL_Q.get(_element_key(zi), 0.0) for zi in z], dtype=float)
+    return rel, z, charges
+
+
+def _dimer_positions(
+    mono_rel: np.ndarray, z: np.ndarray, charges: np.ndarray, com_dist: float
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, int]:
+    n = int(mono_rel.shape[0])
+    pos1 = mono_rel.copy()
+    pos2 = mono_rel + np.array([float(com_dist), 0.0, 0.0], dtype=float)
+    pos = np.vstack([pos1, pos2])
+    z_full = np.concatenate([z, z])
+    q_full = np.concatenate([charges, charges])
+    return pos, z_full, q_full, n
+
+
+def _com_distance(pos: np.ndarray, n_per: int) -> float:
+    return float(np.linalg.norm(pos[n_per:].mean(axis=0) - pos[:n_per].mean(axis=0)))
+
+
+def _lj_sigma_eps(za: int, zb: int) -> tuple[float, float]:
+    ea, eb = _element_key(za), _element_key(zb)
+    sig = 0.5 * (_LJ_SIG_A.get(ea, 3.4) + _LJ_SIG_A.get(eb, 3.4))
+    eps = float(np.sqrt(_LJ_EPS_KCAL.get(ea, 0.1) * _LJ_EPS_KCAL.get(eb, 0.1)))
+    return float(sig), eps
+
+
+def _mm_cross_energy(pos: np.ndarray, z: np.ndarray, q: np.ndarray, n_per: int) -> float:
+    energy = 0.0
+    for i in range(n_per):
+        for j in range(n_per, 2 * n_per):
+            r = float(np.linalg.norm(pos[j] - pos[i]))
+            r = max(r, 1.0)
+            sig, eps = _lj_sigma_eps(int(z[i]), int(z[j]))
+            sr = sig / r
+            energy += 4.0 * eps * (sr**12 - sr**6)
+            energy += _K_COULOMB_KCAL * float(q[i] * q[j]) / r
+    return float(energy)
+
+
+def _ml_com_energy(r_com: float) -> float:
+    r0, amplitude = 5.2, 9.0
+    return -amplitude * (r0 / max(r_com, 2.5)) ** 6
+
+
+def _hybrid_energy(
+    pos: np.ndarray, z: np.ndarray, q: np.ndarray, n_per: int, cp: CutoffParameters
+) -> float:
+    r = _com_distance(pos, n_per)
+    s_ml = float(cp.ml_scale(r, gamma_ml=GAMMA_ON))
+    s_mm = float(cp.mm_scale_complementary(r, gamma_ml=GAMMA_ON, gamma_mm_off=GAMMA_OFF))
+    return s_ml * _ml_com_energy(r) + s_mm * _mm_cross_energy(pos, z, q, n_per)
+
+
+def _hybrid_forces_fd(
+    pos: np.ndarray,
+    z: np.ndarray,
+    q: np.ndarray,
+    n_per: int,
+    cp: CutoffParameters,
+    *,
+    delta: float = 1e-4,
+) -> np.ndarray:
+    forces = np.zeros_like(pos)
+    for i in range(pos.shape[0]):
+        for axis in range(3):
+            pos[i, axis] += delta
+            e_plus = _hybrid_energy(pos, z, q, n_per, cp)
+            pos[i, axis] -= 2.0 * delta
+            e_minus = _hybrid_energy(pos, z, q, n_per, cp)
+            pos[i, axis] += delta
+            forces[i, axis] = -(e_plus - e_minus) / (2.0 * delta)
+    return forces
+
+
+def _bond_segments_2d_panel(atoms, writer) -> np.ndarray:
+    from ase.neighborlist import natural_cutoffs, neighbor_list
+
+    cutoffs = natural_cutoffs(atoms, mult=1.08)
+    i, j = neighbor_list("ij", atoms, cutoffs, self_interaction=False)
+    if len(i) == 0:
+        return np.empty((0, 2, 2))
+    pos = atoms.get_positions()
+    im_i = writer.to_image_plane_positions(pos[i])[:, :2]
+    im_j = writer.to_image_plane_positions(pos[j])[:, :2]
+    return np.stack([im_i, im_j], axis=1)
+
+
+def _forces_in_image_plane(pos: np.ndarray, forces: np.ndarray, writer) -> np.ndarray:
+    tail = writer.to_image_plane_positions(pos + forces)[:, :2]
+    head = writer.to_image_plane_positions(pos)[:, :2]
+    return tail - head
+
+
+def _panel_distance_specs(cp: CutoffParameters) -> list[tuple[str, float, str]]:
+    handoff_start = float(cp.mm_switch_on - cp.ml_switch_width)
+    mm_outer = float(cp.mm_switch_on + cp.mm_switch_width)
+    return [
+        (
+            "Pure ML",
+            handoff_start - 0.7,
+            f"r = {handoff_start - 0.7:.1f} Å (below handoff start {handoff_start:.1f} Å)",
+        ),
+        (
+            "Handoff",
+            0.5 * (handoff_start + float(cp.mm_switch_on)),
+            f"r ≈ {0.5 * (handoff_start + float(cp.mm_switch_on)):.1f} Å — complementary switch",
+        ),
+        (
+            "MM tail",
+            0.5 * (float(cp.mm_switch_on) + mm_outer),
+            f"r ≈ {0.5 * (float(cp.mm_switch_on) + mm_outer):.1f} Å — ML off, MM tapering",
+        ),
+        (
+            "Beyond switched MM",
+            mm_outer + 1.3,
+            f"r = {mm_outer + 1.3:.1f} Å (past outer {mm_outer:.0f} Å)",
+        ),
+    ]
+
+
+def _draw_dimer_forces_panel(
+    ax,
+    pos: np.ndarray,
+    z: np.ndarray,
+    forces: np.ndarray,
+    n_per: int,
+    *,
+    zone: str,
+    subtitle: str,
+    rotation: str = "25x,18y,0z",
+) -> None:
+    from ase import Atoms
+    from ase.data import chemical_symbols
+    from ase.visualize.plot import Matplotlib
+    from matplotlib.collections import LineCollection
+    from matplotlib.patches import Circle
+
+    symbols = [chemical_symbols[int(zi)] for zi in z]
+    atoms = Atoms(symbols=symbols, positions=pos)
+    writer = Matplotlib(
+        atoms,
+        ax,
+        rotation=rotation,
+        radii=0.85,
+        scale=40.0,
+        show_unit_cell=0,
+        auto_bbox_size=1.05,
+    )
+    segments = _bond_segments_2d_panel(atoms, writer)
+    if len(segments):
+        ax.add_collection(
+            LineCollection(
+                segments,
+                colors=_ILLUSTRATION_STYLE["bond_color"],
+                linewidths=_ILLUSTRATION_STYLE["bond_width"],
+                capstyle="round",
+                zorder=1,
+            )
+        )
+    im_pos = writer.to_image_plane_positions(pos)
+    for i in range(len(pos)):
+        color = _ILLUSTRATION_STYLE["monomer_colors"][0 if i < n_per else 1]
+        ax.add_patch(
+            Circle(
+                im_pos[i, :2],
+                radius=2.6,
+                facecolor=color,
+                edgecolor=_ILLUSTRATION_STYLE["atom_edge"],
+                linewidth=0.55,
+                zorder=3,
+                alpha=0.96,
+            )
+        )
+    f2d = _forces_in_image_plane(pos, forces, writer)
+    fmag = np.linalg.norm(forces, axis=1)
+    fmax = float(fmag.max()) if fmag.size else 1.0
+    quiver_scale = max(0.25 * fmax, 0.05)
+    q = ax.quiver(
+        im_pos[:, 0],
+        im_pos[:, 1],
+        f2d[:, 0],
+        f2d[:, 1],
+        fmag,
+        cmap="magma",
+        angles="xy",
+        scale_units="xy",
+        scale=quiver_scale,
+        width=0.0045,
+        zorder=4,
+        alpha=0.9,
+        clim=(0.0, fmax),
+    )
+    ax.set_xlim(0, writer.w)
+    ax.set_ylim(0, writer.h)
+    ax.set_aspect("equal", adjustable="box")
+    ax.set_axis_off()
+    ax.set_title(f"{zone}\n{subtitle}", fontsize=8.5, fontweight="500", pad=4)
+    return q
+
+
+def plot_dimer_forces_cutoff_panels(residue: str) -> Path:
+    """ASE orthographic dimer views with force quivers at key COM distances."""
+    cp = CutoffParameters()
+    mono_rel, z, charges = _load_monomer_template(residue)
+    specs = _panel_distance_specs(cp)
+    res_label = residue.strip().upper()
+
+    fig, axes = plt.subplots(2, 2, figsize=(11.5, 9.0), facecolor=_ILLUSTRATION_STYLE["figure_facecolor"])
+    q_last = None
+    for ax, (zone, dist, subtitle) in zip(axes.ravel(), specs, strict=True):
+        ax.set_facecolor(_ILLUSTRATION_STYLE["axes_facecolor"])
+        pos, z_full, q_full, n_per = _dimer_positions(mono_rel, z, charges, dist)
+        forces = _hybrid_forces_fd(pos, z_full, q_full, n_per, cp)
+        r_com = _com_distance(pos, n_per)
+        s_ml = float(cp.ml_scale(r_com, gamma_ml=GAMMA_ON))
+        s_mm = float(cp.mm_scale_complementary(r_com, gamma_ml=GAMMA_ON, gamma_mm_off=GAMMA_OFF))
+        ann = f"s_ML={s_ml:.2f}  s_MM={s_mm:.2f}  |F|_max={np.linalg.norm(forces, axis=1).max():.2f} kcal/mol/Å"
+        q_last = _draw_dimer_forces_panel(
+            ax,
+            pos,
+            z_full,
+            forces,
+            n_per,
+            zone=zone,
+            subtitle=f"{subtitle}\n{ann}",
+        )
+    if q_last is not None:
+        cbar = fig.colorbar(q_last, ax=axes.ravel().tolist(), shrink=0.72, pad=0.02)
+        cbar.set_label("|F| (kcal/mol/Å)", fontsize=9)
+    fig.suptitle(
+        f"{res_label} dimer — illustrative switched hybrid forces at cutoff distances "
+        f"(default {DEFAULT_MM_SWITCH_ON:g} / {DEFAULT_MM_SWITCH_WIDTH:g} / {DEFAULT_ML_SWITCH_WIDTH:g} Å)",
+        fontsize=10,
+        fontweight="600",
+        y=0.98,
+    )
+    fig.text(
+        0.5,
+        0.01,
+        "Illustrative E = s_ML·E_ML(r_COM) + s_MM·E_MM(cross); arrows from −∇E (finite difference). "
+        "Not a PhysNet/CHARMM evaluation — shows how force balance shifts across switch regions.",
+        ha="center",
+        fontsize=7.5,
+        color="#475569",
+    )
+    fig.tight_layout(rect=(0, 0.03, 1, 0.95))
+    slug = res_label.lower()
+    out = OUT_DIR / f"{slug}_dimer_forces_cutoffs.png"
+    fig.savefig(out, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
+    plt.close(fig)
+    return out
+
+
 def plot_dual_stack_responsibilities() -> Path:
     """Which layer owns which physics on ML-tagged atoms."""
     fig, ax = plt.subplots(figsize=(9.5, 5.2))
@@ -483,6 +777,8 @@ def main() -> None:
     paths.append(plot_heat_segments())
     paths.append(plot_cutoff_radius_ladder())
     paths.append(plot_system_monomer_regions())
+    paths.append(plot_dimer_forces_cutoff_panels("DCM"))
+    paths.append(plot_dimer_forces_cutoff_panels("ACO"))
     paths.append(plot_dual_stack_responsibilities())
     paths.append(plot_lr_solvers_overview())
     paths.append(plot_lr_energy_split())

@@ -11,6 +11,8 @@ REPO = Path(__file__).resolve().parents[2]
 NEW_FIGURES = (
     "docs/images/mlpot-settings/cutoff_radius_ladder.png",
     "docs/images/mlpot-settings/system_monomer_regions.png",
+    "docs/images/mlpot-settings/dcm_dimer_forces_cutoffs.png",
+    "docs/images/mlpot-settings/aco_dimer_forces_cutoffs.png",
     "docs/images/mlpot-settings/dual_stack_responsibilities.png",
     "docs/images/mlpot-settings/lr_solvers_overview.png",
     "docs/images/mlpot-settings/lr_energy_split_schematic.png",

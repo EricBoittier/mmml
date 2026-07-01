@@ -26,6 +26,27 @@ Every ML residue (e.g. `DCM`, `BENZ`) is one **monomer**. The hybrid calculator:
 
 For the highlighted dimer (monomers 1 and 2), `r ≈ 10.5 Å` falls in the **MM tail**: ML two-body is off (`s_ML = 0`), switched JAX MM is partially on and tapering toward zero at 13 Å.
 
+### Dimer force vectors at cutoff distances
+
+Illustrative **switched hybrid** forces (finite difference on  
+`E = s_ML(r)·E_ML + s_MM(r)·E_MM`) for **DCM** and **ACO** dimers at COM separations
+inside, on, and beyond the default switch regions. Arrow color = |**F**| (kcal/mol/Å);
+blue / orange = monomer 1 / 2.
+
+![DCM dimer ASE view with force quivers at four COM distances](images/mlpot-settings/dcm_dimer_forces_cutoffs.png)
+
+![ACO dimer ASE view with force quivers at four COM distances](images/mlpot-settings/aco_dimer_forces_cutoffs.png)
+
+| Panel | Typical COM `r` | Switch region |
+|-------|-----------------|---------------|
+| Pure ML | ~5.8 Å | `s_ML ≈ 1`, MM off |
+| Handoff | ~7.25 Å | `s_ML + s_MM = 1` |
+| MM tail | ~10.5 Å | ML off, MM tapering |
+| Beyond switched MM | ~14.3 Å | both two-body switches ≈ 0 |
+
+These are **schematic** (LJ+Coulomb cross + r⁻⁶ ML well), not checkpoint energies.
+For quantitative curves from PyCHARMM, run the [dimer LR scans](../tests/functionality/dimer_scans/README.md).
+
 ---
 
 ## 2. COM-distance cutoffs (default 8 / 5 / 1.5 Å)

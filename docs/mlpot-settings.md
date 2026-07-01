@@ -1,6 +1,8 @@
 # MLpot switching reference
 
-Visual reference for ML/MM handoff switches and staged heating. **Start here for the full picture (monomer colors, radius ladder, LR solvers):** [Hybrid potential: cutoffs, regions, and long-range solvers](hybrid-potential-regions.md).
+Visual reference for ML/MM handoff switches and staged heating. **Start here for the full picture (monomer colors, radius ladder, LR solvers, force quivers):** [Hybrid potential: cutoffs, regions, and long-range solvers](hybrid-potential-regions.md).
+
+Dimer **force vector** panels (DCM / ACO at COM distances across switch zones): `dcm_dimer_forces_cutoffs.png`, `aco_dimer_forces_cutoffs.png` in `docs/images/mlpot-settings/`.
 
 Figures are generated locally by:
 
