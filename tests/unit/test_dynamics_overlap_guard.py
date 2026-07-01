@@ -3057,6 +3057,9 @@ def test_overlap_refresh_scratch_restart_fixes_invalid_handoff(tmp_path):
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_overlap_scratch_restart",
         side_effect=fake_refresh,
     ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._materialize_overlap_chunk_restart_handoff",
+        side_effect=RuntimeError("mock: non-restartable scratch"),
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
