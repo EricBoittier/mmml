@@ -3397,7 +3397,7 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     else:
         dyn = pycharmm.DynamicsScript(**kw)
         _execute_dynamics_script(dyn, append=heat_append)
-    _release_charmm_dynamics_api_buffers()
+    # Capture in-memory velocities before ``velos_del`` frees the dynamics buffers.
     if bussi_active:
         from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
             capture_charmm_velocities_for_bussi,
@@ -3412,6 +3412,7 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
         )
 
         sync_comparison_velocities_from_main()
+    _release_charmm_dynamics_api_buffers()
     return dyn
 
 
@@ -4105,8 +4106,11 @@ def _harmonize_overlap_chunk_frequencies(
                     pass
                 else:
                     chunk_kw["_suppress_trajectory"] = True
-                    for k in ("nprint", "iprfrq", "isvfrq", "nsavv"):
+                    for k in ("nprint", "iprfrq", "isvfrq"):
                         chunk_kw.pop(k, None)
+                    # Keep ``nsavv=n`` so restart I/O still records ``!VELOCITIES``
+                    # for ASE Bussi rescales between micro-chunks.
+                    chunk_kw["nsavv"] = n
                     _emit_overlap_log(
                         f"chunk: skip DCD (target nsavc={old} >= nstep={n}; "
                         f"CHARMM nsavc={chunk_kw['nsavc']}; "
