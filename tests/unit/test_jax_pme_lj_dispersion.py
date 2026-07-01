@@ -239,3 +239,37 @@ def test_hybrid_warmup_counts_unique_intra_shapes(monkeypatch):
     }
     assert calls == [(1, 5), (1, 2), (1, 3), (6, 5), (6, 2), (6, 3)]
 
+
+def test_hybrid_warmup_com_switch_jit_when_pbc_cell(monkeypatch):
+    monkeypatch.setenv("MMML_JAX_PME_INTRA_MODE", "cross")
+    com_calls: list[tuple[int, int]] = []
+
+    def _fake_com_switch(pos, offsets, cell, **kwargs):
+        com_calls.append((int(np.asarray(pos).shape[0]), int(np.asarray(offsets).shape[0])))
+        return 0.5, np.zeros_like(np.asarray(pos, dtype=np.float64))
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.compute_jax_pme_cross_monomer_power_law",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb._com_switch_value_and_grad",
+        _fake_com_switch,
+    )
+    pos = np.zeros((6, 3), dtype=np.float64)
+    charges = np.ones(6, dtype=np.float64)
+    offsets = np.array([0, 3, 6], dtype=np.int64)
+    cell = np.diag([30.0, 30.0, 30.0])
+    counts = warmup_jax_pme_hybrid_host(
+        pos,
+        charges,
+        offsets,
+        box_length_A=30.0,
+        method="ewald",
+        sr_cutoff_A=6.0,
+        pbc_cell=cell,
+    )
+    assert counts["com_switch_jit"] == 1
+    assert counts["coulomb_cross"] == 1
+    assert com_calls == [(6, 4)]
+

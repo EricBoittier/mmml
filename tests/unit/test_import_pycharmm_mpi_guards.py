@@ -35,3 +35,12 @@ def test_reset_block_skips_under_mpi_linked_mpirun():
     assert skip_pos < reset_pos
     reset = source.split("def reset_block")[1].split("\ndef ")[0]
     assert "should_skip_charmm_reset_block()" in reset
+
+
+def test_reset_block_skips_on_empty_psf_at_import():
+    source = Path("mmml/interfaces/pycharmmInterface/import_pycharmm.py").read_text(
+        encoding="utf-8"
+    )
+    maybe = source.split("def _maybe_reset_block_at_import")[1].split("\ndef ")[0]
+    assert "get_natom()" in maybe
+    assert "reset_block()" in maybe
