@@ -1,0 +1,14 @@
+REMARK   bundled make-res-style monomer for BENZ
+ATOM      1   CG BEN A   1       1.715   5.342   6.373  1.00  0.00           C
+ATOM      2   HG BEN A   1       1.114   0.098   0.812  1.00  0.00           C
+ATOM      3  CD1 BEN A   1       0.968   5.281   5.822  1.00  0.00           H
+ATOM      4  HD1 BEN A   1       1.861   0.158   1.362  1.00  0.00           H
+ATOM      5  CD2 BEN A   1       2.713   4.352   6.319  1.00  0.00           C
+ATOM      6  HD2 BEN A   1       0.116   1.088   0.866  1.00  0.00           C
+ATOM      7  CE1 BEN A   1       2.632   3.623   5.747  1.00  0.00           H
+ATOM      8  HE1 BEN A   1       0.197   1.817   1.438  1.00  0.00           H
+ATOM      9  CE2 BEN A   1       4.543   0.952   0.052  1.00  0.00           C
+ATOM     10  HE2 BEN A   1      -1.714   4.488   7.132  1.00  0.00           C
+ATOM     11   CZ BEN A   1       3.870   1.593   0.090  1.00  0.00           H
+ATOM     12   HZ BEN A   1      -1.042   3.846   7.095  1.00  0.00           H
+END
