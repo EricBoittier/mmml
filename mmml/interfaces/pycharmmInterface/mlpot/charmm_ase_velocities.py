@@ -147,10 +147,23 @@ def capture_charmm_velocities_for_bussi(
     *,
     restart_path: Path | str | None = None,
 ) -> np.ndarray | None:
-    """Load AKMA velocities into main/COMP/cache for Bussi (memory, then restart)."""
+    """Load AKMA velocities into main/COMP/cache for Bussi (cache, restart, then memory)."""
     synced = charmm_synced_velocities_akma()
     if synced is not None:
         return synced
+
+    if restart_path is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+            read_restart_velocities,
+        )
+
+        for candidate in resolve_restart_velocities_read_paths(restart_path):
+            if not candidate.is_file() or candidate.stat().st_size <= 0:
+                continue
+            vel = read_restart_velocities(candidate)
+            if vel is not None and not velocities_are_cold(vel):
+                sync_charmm_velocities_akma(vel)
+                return vel
 
     vel = charmm_velocities_akma_for_thermostat()
     if vel is not None and not velocities_are_cold(vel):
@@ -172,19 +185,6 @@ def capture_charmm_velocities_for_bussi(
             return comp
     except Exception:
         pass
-
-    if restart_path is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
-            read_restart_velocities,
-        )
-
-        for candidate in resolve_restart_velocities_read_paths(restart_path):
-            if not candidate.is_file() or candidate.stat().st_size <= 0:
-                continue
-            vel = read_restart_velocities(candidate)
-            if vel is not None and not velocities_are_cold(vel):
-                sync_charmm_velocities_akma(vel)
-                return vel
     return None
 
 
@@ -484,13 +484,29 @@ def apply_bussi_velocity_rescale(
                 flush=True,
             )
         assign_maxwell_boltzmann_velocities_via_ase(temp, quiet=quiet)
-        v_akma = (
-            charmm_synced_velocities_akma()
-            or capture_charmm_velocities_for_bussi(restart_path=restart_path)
-        )
+        v_akma = charmm_synced_velocities_akma()
+        if v_akma is None and restart_path is not None:
+            from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+                read_restart_velocities,
+            )
+
+            for candidate in resolve_restart_velocities_read_paths(restart_path):
+                if not candidate.is_file() or candidate.stat().st_size <= 0:
+                    continue
+                vel = read_restart_velocities(candidate)
+                if vel is not None and not velocities_are_cold(vel):
+                    sync_charmm_velocities_akma(vel)
+                    v_akma = vel
+                    break
+        if v_akma is None:
+            v_akma = capture_charmm_velocities_for_bussi(restart_path=restart_path)
     if v_akma is None:
         assign_maxwell_boltzmann_velocities_via_ase(temp, quiet=quiet)
         v_akma = charmm_synced_velocities_akma() or charmm_velocities_akma_for_thermostat()
+    if v_akma is None:
+        global _last_synced_velocities_akma
+        if _last_synced_velocities_akma is not None:
+            v_akma = np.asarray(_last_synced_velocities_akma, dtype=np.float64)
     if v_akma is None:
         raise RuntimeError("apply_bussi_velocity_rescale: CHARMM velocities unavailable")
     dof = resolve_bussi_degrees_of_freedom(ndegf)

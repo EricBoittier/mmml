@@ -80,6 +80,39 @@ def test_prepare_bussi_heat_dynamics_kw_disables_charmm_ihtfrq():
     assert ramp["thermostat"] == "bussi"
 
 
+def test_capture_charmm_velocities_for_bussi_prefers_restart_before_memory(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        capture_charmm_velocities_for_bussi,
+    )
+
+    restart = tmp_path / "dyn.res"
+    restart.write_text(
+        "REST     0     1\n"
+        "       1 !NTITLE followed by title\n"
+        "* t\n"
+        "\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        "         1           0           0           0           0           0           0\n"
+        " !X, Y, Z\n"
+        " 0.000000000000000D+00 0.000000000000000D+00 0.000000000000000D+00\n"
+        " !VELOCITIES\n"
+        " 1.000000000000000D+02 0.000000000000000D+00 0.000000000000000D+00\n",
+        encoding="ascii",
+    )
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_velocities_akma_for_thermostat",
+    ) as mem, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
+    ) as sync, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
+        return_value=False,
+    ):
+        out = capture_charmm_velocities_for_bussi(restart_path=restart)
+    mem.assert_not_called()
+    assert out is not None
+    sync.assert_called_once()
+
+
 def test_capture_charmm_velocities_for_bussi_from_restart(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         capture_charmm_velocities_for_bussi,
@@ -169,6 +202,19 @@ def test_post_dyna_restart_write_path_prefers_staging_alias(tmp_path):
     original = tmp_path / "Heat.res"
     staging = tmp_path / "heat.res"
     staging.write_text("REST\n", encoding="ascii")
+    alias = CharmmIoAlias(original=original, alias=staging, for_write=True)
+    out = _post_dyna_restart_write_path(original, [alias])
+    assert out == staging
+
+
+def test_post_dyna_restart_write_path_returns_staging_before_file_exists(tmp_path):
+    from mmml.interfaces.pycharmmInterface.charmm_paths import CharmmIoAlias
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _post_dyna_restart_write_path,
+    )
+
+    original = tmp_path / "Heat.res"
+    staging = tmp_path / "heat.res"
     alias = CharmmIoAlias(original=original, alias=staging, for_write=True)
     out = _post_dyna_restart_write_path(original, [alias])
     assert out == staging
@@ -313,3 +359,12 @@ def test_harmonize_overlap_chunk_preserves_nsavv_when_suppressing_dcd():
     assert kw["nsavc"] == 49
     assert kw["nsavv"] == 50
     assert "nprint" not in kw
+
+    kw_cadence = {
+        "nsavc": 499,
+        "nsavv": 499,
+        "_dyn_freq_cadence": 50,
+    }
+    _harmonize_overlap_chunk_frequencies(kw_cadence, 50, global_step_start=0)
+    assert kw_cadence["_suppress_trajectory"] is True
+    assert kw_cadence["nsavv"] == 50

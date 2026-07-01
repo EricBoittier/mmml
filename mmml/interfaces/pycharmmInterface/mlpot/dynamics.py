@@ -3355,6 +3355,8 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     quiet_ase = bool(kw.pop("_quiet_ase_velocity_assign", False))
     restart_read_path = kw.pop("_restart_read_path", None)
     post_dyna_restart_write = kw.pop("_post_dyna_restart_write", None)
+    post_dyna_restart_target = kw.pop("_post_dyna_restart_write_target", None)
+    post_dyna_io_aliases = kw.pop("_post_dyna_io_aliases", None) or []
     bussi_active = _bussi_heat_ramp_active(kw)
     _ensure_bussi_heat_continuation_iasvel(kw)
     _strip_non_charmm_dynamics_keywords(kw)
@@ -3397,6 +3399,11 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     else:
         dyn = pycharmm.DynamicsScript(**kw)
         _execute_dynamics_script(dyn, append=heat_append)
+    if post_dyna_restart_target is not None:
+        post_dyna_restart_write = (
+            _post_dyna_restart_write_path(post_dyna_restart_target, post_dyna_io_aliases)
+            or post_dyna_restart_write
+        )
     # Capture in-memory velocities before ``velos_del`` frees the dynamics buffers.
     if bussi_active:
         from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
@@ -4145,6 +4152,9 @@ def _harmonize_overlap_chunk_frequencies(
         _ensure_ntrfrq_above_nstep(chunk_kw, n)
         _maybe_disable_ixtfrq_for_fixed_volume_chunk(chunk_kw, n)
         _maybe_disable_interior_list_updates_for_fixed_volume_chunk(chunk_kw, n)
+    if chunk_kw.get("_suppress_trajectory"):
+        # ``cadence_active`` may overwrite ``nsavv``; Bussi needs ``!VELOCITIES`` each micro-chunk.
+        chunk_kw["nsavv"] = n
 
 
 def _mlpot_ctx_cubic_box_side_A(mlpot_ctx: Optional["MlpotContext"]) -> float | None:
@@ -4915,10 +4925,14 @@ def _post_dyna_restart_write_path(
     write_path: PathLike | None,
     io_aliases: list[Any],
 ) -> Path | None:
-    """Path CHARMM wrote for ``iunwri`` (staging alias before ``finalize``)."""
+    """Path CHARMM wrote for ``iunwri`` (prefer staging alias over user path)."""
     if write_path is None:
         return None
-    original = Path(write_path).expanduser().resolve()
+    try:
+        original = Path(write_path).expanduser().resolve()
+    except OSError:
+        original = Path(write_path).expanduser()
+    staging_candidate: Path | None = None
     for alias in io_aliases:
         if not getattr(alias, "for_write", False):
             continue
@@ -4928,10 +4942,16 @@ def _post_dyna_restart_write_path(
             alias_original = Path(alias.original).expanduser()
         if alias_original != original:
             continue
-        staging = Path(alias.alias)
-        if staging.is_file() and staging.stat().st_size > 0:
-            return staging
-    return original if original.is_file() and original.stat().st_size > 0 else None
+        staging_candidate = Path(alias.alias)
+        break
+    if staging_candidate is not None:
+        if staging_candidate.is_file() and staging_candidate.stat().st_size > 0:
+            return staging_candidate
+        # CHARMM writes to the alias even before ``CharmmIoAlias.finalize()``.
+        return staging_candidate
+    if original.is_file() and original.stat().st_size > 0:
+        return original
+    return None
 
 
 def _run_dynamics_chunk(
@@ -4952,10 +4972,8 @@ def _run_dynamics_chunk(
             kw["_restart_read_path"] = io.restart_read
         open_files, iokw, io_aliases = io.open_for_run()
         if io.restart_write is not None:
-            kw["_post_dyna_restart_write"] = _post_dyna_restart_write_path(
-                io.restart_write,
-                io_aliases,
-            )
+            kw["_post_dyna_restart_write_target"] = io.restart_write
+            kw["_post_dyna_io_aliases"] = list(io_aliases)
         kw.update(iokw)
     if extra_iokw:
         kw.update(extra_iokw)
