@@ -301,6 +301,7 @@ mmml = [
     "data/charmm/crystal_image.str",
     "data/molecules/dcm.xyz",
     "data/structures/dcm_pbcn_cod2100015.cif",
+    "data/structures/benzene_p21c_cod4501704.cif",
     "generate/sample/pdb/*.pdb",
     "generate/sample/psf/*.psf",
     "models/physnetjax/defaults/*.json",

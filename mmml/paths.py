@@ -37,3 +37,8 @@ def default_dcm_molecule_xyz() -> Path:
 def default_dcm_crystal_cif() -> Path:
     """Experimental DCM crystal (Pbcn, COD 2100015 / CCDC doi:10.5517/cc9lyjb)."""
     return bundled_file("data", "structures", "dcm_pbcn_cod2100015.cif")
+
+
+def default_benzene_crystal_cif() -> Path:
+    """Experimental benzene crystal (P2₁/c, COD 4501704)."""
+    return bundled_file("data", "structures", "benzene_p21c_cod4501704.cif")
