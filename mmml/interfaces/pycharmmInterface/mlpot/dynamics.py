@@ -4234,6 +4234,52 @@ def _harmonize_overlap_chunk_frequencies(
         chunk_kw["nsavv"] = n
 
 
+def _overlap_readyn_restart_frequencies(
+    chunk_kw: dict[str, Any],
+    chunk_nstep: int,
+) -> tuple[int, int]:
+    """``(nsavc, nsavv)`` harmonized for this overlap chunk (matches ``dyna`` keywords)."""
+    n = max(1, int(chunk_nstep))
+    nsavc = int(chunk_kw.get("nsavc", max(1, n - 1)))
+    nsavv = int(chunk_kw.get("nsavv", n))
+    return nsavc, nsavv
+
+
+def _rewrite_overlap_readyn_restart_from_memory(
+    restart_path: PathLike | None,
+    chunk_kw: dict[str, Any],
+    *,
+    chunk_nstep: int,
+    global_step: int,
+    overlap_context: str,
+) -> None:
+    """Rewrite scratch restart before ``READYN`` with harmonized ``NSAVV`` / ``NSAVC``.
+
+    WRIDYN snapshots from in-memory overlap legs can retain stale ``NSAVV`` (e.g. 500
+    from stage ``isvfrq``) while the upcoming chunk uses ``nstep=50``.  ``READYN`` then
+    restores mismatched averaging buffers and blows up kinetic energy.
+    """
+    if restart_path is None:
+        return
+    path = Path(restart_path)
+    nsavc, nsavv = _overlap_readyn_restart_frequencies(chunk_kw, chunk_nstep)
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        rewrite_dynamics_restart_validated,
+    )
+
+    if not rewrite_dynamics_restart_validated(
+        path,
+        global_step=max(0, int(global_step)),
+        nsavc=nsavc,
+        nsavv=nsavv,
+    ):
+        raise RuntimeError(
+            f"overlap ({overlap_context}): failed to rewrite scratch restart "
+            f"{path.name} before READYN (nsavc={nsavc}, nsavv={nsavv}, "
+            f"global step={int(global_step)})"
+        )
+
+
 def _mlpot_ctx_cubic_box_side_A(mlpot_ctx: Optional["MlpotContext"]) -> float | None:
     if mlpot_ctx is None:
         return None
@@ -6039,6 +6085,14 @@ def run_dynamics_with_io(
                     global_step_start=steps_before_chunk,
                     split_trajectory=split_trajectory,
                 )
+                if has_restart_read and chunk_io is not None:
+                    _rewrite_overlap_readyn_restart_from_memory(
+                        chunk_io.restart_read,
+                        chunk_kw,
+                        chunk_nstep=chunk_nstep,
+                        global_step=steps_before_chunk,
+                        overlap_context=overlap_context,
+                    )
                 suppress_chunk_traj = bool(chunk_kw.get("_suppress_trajectory", False))
                 if suppress_chunk_traj or "nsavc" not in chunk_kw:
                     chunk_io = _drop_trajectory_io(chunk_io)

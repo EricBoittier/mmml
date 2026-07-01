@@ -45,6 +45,9 @@ def rewrite_dynamics_restart_from_current_state(
     restart_path: PathLike | None,
     *,
     write_unit: int = 92,
+    global_step: int | None = None,
+    nsavc: int | None = None,
+    nsavv: int | None = None,
 ) -> None:
     """Write a restart snapshot from the current in-memory CHARMM state.
 
@@ -63,13 +66,23 @@ def rewrite_dynamics_restart_from_current_state(
         write_charmm_restart_from_memory,
     )
 
-    write_charmm_restart_from_memory(path)
+    kwargs: dict[str, int] = {}
+    if global_step is not None:
+        kwargs["global_step"] = max(0, int(global_step))
+    if nsavc is not None:
+        kwargs["nsavc"] = max(1, int(nsavc))
+    if nsavv is not None:
+        kwargs["nsavv"] = max(0, int(nsavv))
+    write_charmm_restart_from_memory(path, **kwargs)
 
 
 def rewrite_dynamics_restart_validated(
     restart_path: PathLike | None,
     *,
     write_unit: int = 92,
+    global_step: int | None = None,
+    nsavc: int | None = None,
+    nsavv: int | None = None,
 ) -> bool:
     """Write restart from memory; return False when Cartesian coords are non-finite or missing."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
@@ -82,13 +95,21 @@ def rewrite_dynamics_restart_validated(
     if restart_path is None:
         return True
     path = Path(restart_path)
-    rewrite_dynamics_restart_from_current_state(path, write_unit=write_unit)
+    rewrite_dynamics_restart_from_current_state(
+        path,
+        write_unit=write_unit,
+        global_step=global_step,
+        nsavc=nsavc,
+        nsavv=nsavv,
+    )
     if read_restart_coordinates(path) is None or restart_has_nonfinite_coordinates(path):
         return False
 
     step = read_restart_last_step(path)
     if step is not None and step < 0:
         patch_restart_global_step(path, 0)
+    elif global_step is not None:
+        patch_restart_global_step(path, max(0, int(global_step)))
 
     return True
 

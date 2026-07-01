@@ -625,6 +625,31 @@ def assert_charmm_dynamics_chunk_safe(
     )
 
 
+def read_restart_nsavv(path: Path) -> int | None:
+    """Return ``NSAVV`` (5th integer) from the ``!NATOM`` counter line."""
+    p = Path(path)
+    if not p.is_file():
+        return None
+    try:
+        lines = p.read_text(errors="ignore").splitlines()
+    except OSError:
+        return None
+    for i, raw in enumerate(lines):
+        tag = raw.strip().split()[0] if raw.strip() else ""
+        if not (tag.startswith("!NATOM") or tag.startswith("NATOM")):
+            continue
+        if i + 1 >= len(lines):
+            break
+        fields = lines[i + 1].split()
+        if len(fields) >= 5:
+            try:
+                return int(fields[4])
+            except ValueError:
+                return None
+        break
+    return None
+
+
 def read_restart_last_step(path: Path) -> int | None:
     """Return the accumulated dynamics step from a CHARMM restart file.
 

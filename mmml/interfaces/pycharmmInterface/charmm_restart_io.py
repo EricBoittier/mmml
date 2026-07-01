@@ -31,6 +31,7 @@ def _restart_natom_counter_line(
     natom: int,
     nstep: int = 0,
     nsavc: int = 1,
+    nsavv: int = 0,
     jhstrt: int = 0,
 ) -> str:
     """``!NATOM`` data line using Fortran ``I10`` columns (READYN-safe)."""
@@ -39,7 +40,7 @@ def _restart_natom_counter_line(
         0,
         int(nstep),
         int(nsavc),
-        0,
+        int(nsavv),
         int(jhstrt),
         0,
         0,
@@ -55,6 +56,7 @@ def write_charmm_restart_from_memory(
     title: str = "MMML snapshot",
     global_step: int | None = None,
     nsavc: int = 1,
+    nsavv: int = 0,
     include_velocities: bool = True,
     include_crystal: bool = True,
 ) -> Path:
@@ -98,6 +100,7 @@ def write_charmm_restart_from_memory(
             natom=natom,
             nstep=step,
             nsavc=int(nsavc),
+            nsavv=int(nsavv),
             jhstrt=step,
         ),
     ]
