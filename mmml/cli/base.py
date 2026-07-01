@@ -24,6 +24,8 @@ _PKG_ROOT = Path(__file__).resolve().parent.parent
 _BUNDLED_LEGACY_MEOH_PATH = (
     _PKG_ROOT / "models" / "physnetjax" / "defaults" / "meoh_dimer_portable.json"
 )
+# Stable path for argparse help / generated CLI docs (not machine-specific).
+BUNDLED_LEGACY_MEOH_REL_PATH = "mmml/models/physnetjax/defaults/meoh_dimer_portable.json"
 try:
     from mmml.models.physnetjax.defaults import resolve_hf_physnet_checkpoint
 

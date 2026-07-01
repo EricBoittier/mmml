@@ -123,7 +123,7 @@ def test_heat_ramp_bath_target_at_step():
 
 
 def test_apply_heat_ramp_overlap_chunk_continues_ramp():
-    chunk_kw: dict = {}
+    chunk_kw: dict = {"TEMINC": 0.12, "ihtfrq": 100}
     spec = {"firstt": 0.0, "finalt": 240.0, "teminc": 0.12, "ihtfrq": 100}
     apply_heat_ramp_overlap_chunk(
         chunk_kw,

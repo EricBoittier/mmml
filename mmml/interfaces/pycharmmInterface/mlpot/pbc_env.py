@@ -318,6 +318,53 @@ def charmm_crystal_lattice_ready(*, rel_tol: float = 1e-3) -> bool:
         return False
 
 
+def charmm_crystal_abnr_ready(
+    expected_side_A: float | None = None,
+    *,
+    rel_tol: float = 1e-3,
+) -> bool:
+    """True when lattice ABNR can run after a fresh crystal reinstall.
+
+    Same strict ``pbound`` gate as :func:`charmm_crystal_lattice_ready` when the
+    C API reports a cubic cell.  After ``prepare_charmm_pbc`` on KEY_LIBRARY /
+    MPI builds, ``pbound_get_size`` can stay zero in Python while ``XUCELL`` and
+    IMAGE transforms are valid — accept that post-reinstall state when
+    ``expected_side_A`` matches ``image_get_ucell``.
+    """
+    try:
+        import pycharmm.image as image
+
+        if int(image.get_ntrans()) <= 1:
+            return False
+    except Exception:
+        return False
+
+    if charmm_crystal_lattice_ready(rel_tol=rel_tol):
+        if expected_side_A is None:
+            return True
+        try:
+            live, _ = resolve_charmm_cubic_box_side_A(
+                fallback_side_A=float(expected_side_A),
+            )
+            tol = max(1e-3, rel_tol * float(expected_side_A))
+            return abs(float(live) - float(expected_side_A)) <= tol
+        except Exception:
+            return True
+
+    try:
+        ux, uy, uz = _read_charmm_ucell_lengths_A()
+        if not _is_cubic_box_sides(ux, uy, uz, rel_tol=rel_tol) or min(ux, uy, uz) <= 1.0:
+            return False
+        mean = (ux + uy + uz) / 3.0
+        if expected_side_A is not None:
+            tol = max(1e-3, rel_tol * float(expected_side_A))
+            if abs(mean - float(expected_side_A)) > tol:
+                return False
+        return True
+    except Exception:
+        return False
+
+
 def restore_charmm_cubic_crystal_lattice(
     cubic_box_side_A: float,
     *,
@@ -337,9 +384,13 @@ def restore_charmm_cubic_crystal_lattice(
     """
     import pycharmm.crystal as crystal
 
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import mpi_charmm_script
+    from mmml.interfaces.pycharmmInterface.pycharmmCommands import pbcset
+
     side = float(cubic_box_side_A)
     if side <= 0.0:
         raise ValueError(f"cubic box side must be > 0, got {side}")
+    mpi_charmm_script(pbcset.format(SIDELENGTH=side), quiet=True)
     if not crystal.set_cubic_side(side):
         raise RuntimeError(f"crystal.set_cubic_side failed for L={side} Å")
     _image_setup_byres_all(0.0, 0.0, 0.0)
@@ -382,6 +433,9 @@ def reinstall_charmm_crystal_for_lattice_abnr(
     if side <= 0.0:
         raise ValueError(f"cubic box side must be > 0, got {side}")
 
+    if charmm_crystal_abnr_ready(side):
+        return side
+
     if allow_prepare_pbc:
         _free_charmm_crystal_if_available()
         prepare_charmm_pbc(side)
@@ -398,10 +452,10 @@ def reinstall_charmm_crystal_for_lattice_abnr(
 
         for free_first in (False, True):
             _restore(free_first=free_first)
-            if charmm_crystal_lattice_ready():
+            if charmm_crystal_abnr_ready(side):
                 return side
 
-    if not charmm_crystal_lattice_ready():
+    if not charmm_crystal_abnr_ready(side):
         raise RuntimeError(
             "CHARMM crystal metric not lattice-ready after reinstall; "
             f"cannot run lattice ABNR safely (L={side:.3f} Å)"
@@ -413,6 +467,30 @@ def reinstall_charmm_crystal_for_lattice_abnr(
             flush=True,
         )
     return side
+
+
+def assert_charmm_pbc_lattice_ready_for_mlpot(
+    *,
+    context: str = "MLpot",
+    cubic_box_side_A: float | None = None,
+) -> None:
+    """Fail fast before ``mlpot_update`` when PBC crystal/IMAGE lists are unusable.
+
+    ``mlpot_update`` (first MLpot ``ENER`` during SD) dereferences CHARMM neighbor
+    and IMAGE arrays. After lattice prep or ``READ PARAM``, ``XUCELL`` alone is not
+    enough: ``pbound_get_size`` must be active or ``mlpot_update`` can segfault.
+    """
+    if charmm_crystal_lattice_ready():
+        return
+    side_hint = ""
+    if cubic_box_side_A is not None and float(cubic_box_side_A) > 0.0:
+        side_hint = f" (workflow L={float(cubic_box_side_A):.3f} Å)"
+    raise RuntimeError(
+        f"{context}: CHARMM PBC crystal is not lattice-ready{side_hint}. "
+        "IMAGE/neighbor tables are unsafe for MLpot SD (mlpot_update may segfault). "
+        "Re-run liquid-box / pre-MLpot prep or rebuild libcharmm with matching PBC "
+        "limits."
+    )
 
 
 def ensure_charmm_crystal_for_cpt(
@@ -697,6 +775,8 @@ from mmml.interfaces.pycharmmInterface.nbonds_config import (  # noqa: E402
 __all__ = [
     "PbcNbondCutoffs",
     "apply_pbc_nbonds",
+    "assert_charmm_pbc_lattice_ready_for_mlpot",
+    "charmm_crystal_abnr_ready",
     "charmm_crystal_is_active",
     "charmm_crystal_lattice_ready",
     "cubic_box_length_from_geometry",

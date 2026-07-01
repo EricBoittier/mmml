@@ -1235,8 +1235,19 @@ def _run_minimize_in_chunks(
     chunk_index = 0
     stagnant_chunks = 0
     converged_grms = _resolved_sd_converged_grms(config)
+    pbc_sd = bool(getattr(config.mlpot_ctx, "use_pbc", False)) if config.mlpot_ctx else False
     while remaining > 0:
         chunk_index += 1
+        if chunk_index == 1 and pbc_sd:
+            from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+                assert_charmm_pbc_lattice_ready_for_mlpot,
+            )
+
+            box_side = getattr(config.mlpot_ctx, "cubic_box_side_A", None)
+            assert_charmm_pbc_lattice_ready_for_mlpot(
+                context=f"MLpot {method} {pass_label}",
+                cubic_box_side_A=float(box_side) if box_side is not None else None,
+            )
         step = min(_effective_mlpot_sd_chunk_nstep(config, previous_grms=previous_grms), remaining)
         kw = {**base_kw, "nstep": step}
         _prepare_mlpot_sd_list_frequencies(pycharmm, sd_kw=kw)

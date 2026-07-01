@@ -121,7 +121,7 @@ except ImportError:
 from mmml.models.physnetjax.physnetjax.models.model import EF
 from mmml.utils.model_checkpoint import build_physnet_from_config
 from mmml.models.physnetjax.physnetjax.directories import BASE_CKPT_DIR
-from mmml.cli.base import BUNDLED_PORTABLE_MEOH_PATH
+from mmml.cli.base import BUNDLED_LEGACY_MEOH_REL_PATH, BUNDLED_PORTABLE_MEOH_PATH
 from mmml.models.physnetjax.defaults import (
     JOINT_TRAINING_CATEGORY,
     list_hf_physnet_models,
@@ -3796,7 +3796,7 @@ def build_parser() -> argparse.ArgumentParser:
                        help='Filter --list-physnet-transfer-models by manifest category.')
     parser.add_argument('--use-repo-physnet-params', action='store_true', default=False,
                        help='Initialize the PhysNet part of joint DCMNet training from the bundled '
-                            f'repo PhysNet parameters ({BUNDLED_PORTABLE_MEOH_PATH}).')
+                            f'repo PhysNet parameters ({BUNDLED_LEGACY_MEOH_REL_PATH}).')
     parser.add_argument('--print-freq', type=int, default=1,
                        help='Print frequency (epochs)')
     parser.add_argument('--plot-results', action='store_true', default=False,

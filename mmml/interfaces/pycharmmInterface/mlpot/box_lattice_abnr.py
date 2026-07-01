@@ -93,11 +93,16 @@ def run_charmm_lattice_abnr(
         probed, _ = probe_charmm_cubic_box_side_A()
         restore_side = probed
     if restore_side is not None and float(restore_side) > 0.0:
-        reinstall_charmm_crystal_for_lattice_abnr(
-            float(restore_side),
-            quiet=not verbose,
-            allow_prepare_pbc=bool(allow_prepare_pbc),
+        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+            charmm_crystal_abnr_ready,
         )
+
+        if not charmm_crystal_abnr_ready(float(restore_side)):
+            reinstall_charmm_crystal_for_lattice_abnr(
+                float(restore_side),
+                quiet=not verbose,
+                allow_prepare_pbc=bool(allow_prepare_pbc),
+            )
     if verbose:
         mode = "box only" if nocoords else "coords + box"
         print(

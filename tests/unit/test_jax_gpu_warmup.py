@@ -184,6 +184,12 @@ def test_maybe_sanitize_process_env_for_ptxas_strips_openmpi(monkeypatch):
     assert "/usr/lib/nvidia" in parts
 
 
+def test_jax_compile_timers_work_without_prior_reset(monkeypatch):
+    monkeypatch.setenv("MMML_JAX_COMPILE_TIMERS", "1")
+    jax_gpu_warmup.run_jax_warmup_passes("init_check", 1, lambda: 0, block=lambda _: None)
+    assert jax_gpu_warmup.get_jax_compile_timer_session().entries
+
+
 def test_jax_compile_timers_log_passes(capsys, monkeypatch):
     monkeypatch.setenv("MMML_JAX_COMPILE_TIMERS", "1")
     jax_gpu_warmup.reset_jax_compile_timers()

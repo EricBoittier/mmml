@@ -247,8 +247,29 @@ def _parser_help(command: str, get_subcommand_parser) -> str | None:
         return None
     parser.prog = f"mmml {command}"
     buf = io.StringIO()
-    parser.print_help(buf)
+    # Fixed width keeps generated docs stable across local vs CI terminals.
+    with _temporary_columns("80"):
+        parser.print_help(buf)
     return buf.getvalue().rstrip()
+
+
+def _temporary_columns(width: str):
+    import os
+    from contextlib import contextmanager
+
+    @contextmanager
+    def _ctx():
+        old = os.environ.get("COLUMNS")
+        os.environ["COLUMNS"] = width
+        try:
+            yield
+        finally:
+            if old is None:
+                os.environ.pop("COLUMNS", None)
+            else:
+                os.environ["COLUMNS"] = old
+
+    return _ctx()
 
 
 def _status_banner(spec) -> str:

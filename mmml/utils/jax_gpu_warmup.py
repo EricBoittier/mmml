@@ -191,6 +191,9 @@ class JAXCompileTimerSession:
         return records
 
 
+_COMPILE_TIMER_SESSION = JAXCompileTimerSession()
+
+
 def summarize_jax_compile_timers() -> list[dict[str, float | str | None]]:
     """Return per-label compile/run records from the active timer session."""
     return get_jax_compile_timer_session().summary_records()

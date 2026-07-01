@@ -80,20 +80,20 @@ def test_minimize_bonded_mm_recovery_backend_charmm_skips_jax():
     ctx = MagicMock()
     cfg = BondedMmMiniConfig(nstep_sd=10, backend="charmm", verbose=False)
     with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        return_value=np.zeros((2, 3)),
+    ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.bonded_jax_recovery.minimize_bonded_jax_recovery",
-    ) as jax_mini:
-        with patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._mlpot_covers_all_atoms",
-            return_value=False,
-        ):
-            with patch(
-                "mmml.interfaces.pycharmmInterface.mlpot.dynamics._minimize_bonded_charmm_recovery",
-                return_value=1.0,
-            ) as charmm_mini:
-                with patch(
-                    "mmml.interfaces.pycharmmInterface.mlpot.dynamics._print_bonded_recovery_geometry_diff",
-                ):
-                    minimize_bonded_mm_recovery(ctx, cfg)
+    ) as jax_mini, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._mlpot_covers_all_atoms",
+        return_value=False,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._minimize_bonded_charmm_recovery",
+        return_value=1.0,
+    ) as charmm_mini, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._print_bonded_recovery_geometry_diff",
+    ):
+        minimize_bonded_mm_recovery(ctx, cfg)
     jax_mini.assert_not_called()
     charmm_mini.assert_called_once()
 
@@ -108,6 +108,9 @@ def test_minimize_bonded_jax_recovery_all_ml_returns_none_for_charmm_fallback():
     system = MagicMock()
     system.topology.bonds = np.zeros((0, 2), dtype=np.int32)
     with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        return_value=np.zeros((4, 3)),
+    ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.bonded_jax_recovery.load_bonded_system_for_recovery",
         return_value=(system, MagicMock(cleanup=lambda: None)),
     ):

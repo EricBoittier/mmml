@@ -1307,15 +1307,11 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
     """
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         apply_pbc_nbonds,
-        restore_charmm_cubic_crystal_lattice,
+        prepare_charmm_pbc,
     )
 
     side = float(cubic_box_side_A)
-    restore_charmm_cubic_crystal_lattice(
-        side,
-        quiet=not verbose,
-        apply_nbonds=False,
-    )
+    prepare_charmm_pbc(side)
     _install_ml_exclusions(ml_selection, update=False)
     apply_pbc_nbonds(nbxmod=5, cubic_box_side_A=side)
     pycharmm = _import_pycharmm()
@@ -1441,14 +1437,11 @@ def register_mlpot(
             )
         if use_pbc:
             box_side = _registration_pbc_box_side_A(cubic_box_side_A, budget_box)
-            if uses_block:
-                _install_ml_exclusions(ml_selection)
-            else:
-                _finalize_pbc_mlpot_exclusions_after_param_read(
-                    ml_selection,
-                    cubic_box_side_A=box_side,
-                    verbose=verbose,
-                )
+            _finalize_pbc_mlpot_exclusions_after_param_read(
+                ml_selection,
+                cubic_box_side_A=box_side,
+                verbose=verbose,
+            )
             skip_iblo_inb_update = True
         mlpot = pycharmm.MLpot(
             ml_model=pyCModel,
@@ -1477,6 +1470,15 @@ def register_mlpot(
         if use_pbc and cubic_box_side_A is not None
         else (float(budget_box) if use_pbc and budget_box is not None else None)
     )
+    if use_pbc:
+        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+            assert_charmm_pbc_lattice_ready_for_mlpot,
+        )
+
+        assert_charmm_pbc_lattice_ready_for_mlpot(
+            context="MLpot registration",
+            cubic_box_side_A=reg_box,
+        )
     return MlpotContext(
         mlpot=mlpot,
         pyCModel=pyCModel,

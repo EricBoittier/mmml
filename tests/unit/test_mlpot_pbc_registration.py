@@ -48,6 +48,8 @@ def test_register_mlpot_pbc_rebuilds_after_param_swap():
     ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
         return_value=MagicMock(__enter__=MagicMock(return_value=None), __exit__=MagicMock(return_value=False)),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
     ):
         fake_pycharmm.MLpot = _FakeMLpot
         mlpot_setup.register_mlpot(
@@ -82,6 +84,9 @@ def test_register_mlpot_pbc_block_skips_crystal_free_before_prm():
         call_order.append("block")
         return "all"
 
+    def _finalize(_sel, *, cubic_box_side_A, verbose=False):
+        call_order.append("finalize_pbc_exclusions")
+
     def _install(_sel, *, update=True):
         call_order.append("install_exclusions")
 
@@ -93,7 +98,11 @@ def test_register_mlpot_pbc_block_skips_crystal_free_before_prm():
         mlpot_setup,
         "_suspend_pbc_for_cgenff_param_read",
         side_effect=_suspend,
-    ), patch.object(mlpot_setup, "_install_ml_exclusions", side_effect=_install), patch(
+    ), patch.object(
+        mlpot_setup,
+        "_finalize_pbc_mlpot_exclusions_after_param_read",
+        side_effect=_finalize,
+    ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_mlpot_registration_mm_off",
         side_effect=_block,
     ), patch(
@@ -104,6 +113,8 @@ def test_register_mlpot_pbc_block_skips_crystal_free_before_prm():
     ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
         return_value=MagicMock(__enter__=MagicMock(return_value=None), __exit__=MagicMock(return_value=False)),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
     ):
         fake_pycharmm.MLpot = _FakeMLpot
         mlpot_setup.register_mlpot(
@@ -116,7 +127,7 @@ def test_register_mlpot_pbc_block_skips_crystal_free_before_prm():
         )
 
     assert "crystal_free" not in call_order
-    assert call_order == ["block", "install_exclusions", "mlpot"]
+    assert call_order == ["block", "finalize_pbc_exclusions", "mlpot"]
 
 
 def test_register_mlpot_vacuum_skips_pre_block_exclusions():
@@ -192,13 +203,13 @@ def test_register_mlpot_pbc_requires_skip_iblo_parameter():
         )
 
 
-def test_finalize_pbc_exclusions_restores_lattice_with_image_byres():
+def test_finalize_pbc_exclusions_uses_prepare_charmm_pbc():
     from mmml.interfaces.pycharmmInterface.mlpot import setup as mlpot_setup
 
     fake_sel = MagicMock()
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.restore_charmm_cubic_crystal_lattice",
-    ) as restore, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.prepare_charmm_pbc",
+    ) as prepare, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.apply_pbc_nbonds",
     ) as apply_nb, patch.object(
         mlpot_setup,
@@ -214,7 +225,7 @@ def test_finalize_pbc_exclusions_restores_lattice_with_image_byres():
             cubic_box_side_A=32.0,
             verbose=False,
         )
-    restore.assert_called_once_with(32.0, quiet=True, apply_nbonds=False)
+    prepare.assert_called_once_with(32.0)
     install.assert_called_once_with(fake_sel, update=False)
     apply_nb.assert_called_once_with(nbxmod=5, cubic_box_side_A=32.0)
     fake_pycharmm.nbonds.update_bnbnd.assert_not_called()

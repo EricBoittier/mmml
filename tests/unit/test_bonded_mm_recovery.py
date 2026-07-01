@@ -87,6 +87,8 @@ def test_apply_bonded_mm_only_block_script():
 
     scripts: list[str] = []
     with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.apply_full_cgenff_params",
+    ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
         side_effect=scripts.append,
     ):
@@ -111,6 +113,8 @@ def test_apply_bonded_vdw_recovery_block_script():
 
     scripts: list[str] = []
     with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.apply_full_cgenff_params",
+    ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
         side_effect=scripts.append,
     ):
@@ -419,7 +423,7 @@ def test_minimize_bonded_recovery_runs_sd_and_reports_angl():
         side_effect=fake_eterm,
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
-        return_value=MagicMock(),
+        return_value=np.zeros((4, 3)),
     ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
     ):
@@ -454,7 +458,7 @@ def test_minimize_bonded_recovery_unset_and_reregister():
         return_value=1.0,
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
-        return_value=MagicMock(),
+        return_value=np.zeros((4, 3)),
     ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
     ):
@@ -623,7 +627,7 @@ def test_reregister_after_topology_reload_skips_upinb_rebuild():
     ) as refresh_pbc:
         bonded_mm_recovery._reregister_mlpot_after_topology_reload(ctx)
 
-    ctx.reregister_mlpot.assert_called_once_with()
+    ctx.reregister_mlpot.assert_called_once_with(reregister_params=True)
     sync_pos.assert_called_once_with(positions)
     register.assert_not_called()
     refresh_pbc.assert_not_called()
