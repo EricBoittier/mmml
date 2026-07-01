@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
+jax.config.update("jax_enable_x64", True)
 
 from mmml.interfaces.pycharmmInterface.mm_system_energy import (
     COULOMB_KCAL,
