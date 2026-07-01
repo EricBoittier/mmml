@@ -744,7 +744,7 @@ def test_normalize_dynamics_heat_ramp_kw_strips_bussi_continuation_bath():
     }
     prepare_bussi_heat_dynamics_kw(kw, nstep=50, ihtfrq=50, timestep_ps=0.0001)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._clear_stale_charmm_heat_bath_fortran_state",
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_bussi_plain_verlet_fortran_state",
     ) as clear_fortran:
         _normalize_dynamics_heat_ramp_kw(kw)
     clear_fortran.assert_called_once()
@@ -765,10 +765,170 @@ def test_apply_bussi_in_memory_continuation_clears_fortran_heat_bath():
     kw = {"firstt": 10.0, "finalt": 50.0, "timestep": 0.0001, "nstep": 50}
     prepare_bussi_heat_dynamics_kw(kw, nstep=50, ihtfrq=50, timestep_ps=0.0001)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._clear_stale_charmm_heat_bath_fortran_state",
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_bussi_plain_verlet_fortran_state",
     ) as clear_fortran:
         _apply_bussi_in_memory_continuation_kw(kw)
     clear_fortran.assert_called_once()
+
+
+def test_prepare_bussi_strips_scale_heat_pollution_on_cold_start():
+    kw = {
+        "firstt": 20.0,
+        "finalt": 100.0,
+        "tbath": 100.0,
+        "tstruct": 20.0,
+        "twindh": 10.0,
+        "twindl": -10.0,
+        "timestep": 0.0001,
+        "nstep": 100,
+    }
+    prepare_bussi_heat_dynamics_kw(kw, nstep=100, ihtfrq=50, timestep_ps=0.0001)
+    assert kw["firstt"] == 20.0
+    assert kw["tstruct"] == 20.0
+    assert "finalt" not in kw
+    assert "tbath" not in kw
+    assert "TEMINC" not in kw
+    assert "twindh" not in kw
+    assert "twindl" not in kw
+    assert kw["_bussi_ramp"]["finalt"] == 100.0
+
+
+def test_normalize_dynamics_heat_ramp_kw_bussi_cold_start_keeps_firstt_only():
+    from unittest.mock import patch
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _normalize_dynamics_heat_ramp_kw,
+        prepare_bussi_heat_dynamics_kw,
+    )
+
+    kw = {
+        "firstt": 20.0,
+        "finalt": 100.0,
+        "tbath": 100.0,
+        "tstruct": 20.0,
+        "twindh": 10.0,
+        "twindl": -10.0,
+        "timestep": 0.0001,
+        "nstep": 50,
+        "start": True,
+        "iasvel": 1,
+    }
+    prepare_bussi_heat_dynamics_kw(kw, nstep=50, ihtfrq=50, timestep_ps=0.0001)
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._zero_bussi_scale_heat_fortran_keep_firstt",
+    ) as zero_fortran:
+        _normalize_dynamics_heat_ramp_kw(kw)
+    zero_fortran.assert_called_once()
+    assert kw["firstt"] == 20.0
+    assert kw["tstruct"] == 20.0
+    assert "finalt" not in kw
+    assert "tbath" not in kw
+    assert "twindh" not in kw
+
+
+def test_clear_stale_charmm_heat_bath_fortran_state_zeros_twind():
+    from unittest.mock import MagicMock, patch
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _clear_stale_charmm_heat_bath_fortran_state,
+    )
+
+    charm_dyn = MagicMock()
+    with patch(
+        "pycharmm.dynamics",
+        charm_dyn,
+        create=True,
+    ):
+        _clear_stale_charmm_heat_bath_fortran_state()
+    charm_dyn.set_twindh.assert_called_once_with(0.0)
+    charm_dyn.set_twindl.assert_called_once_with(0.0)
+
+
+def test_run_bussi_heat_subchunked_clears_fortran_after_each_leg():
+    from unittest.mock import patch
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _run_bussi_heat_subchunked,
+        prepare_bussi_heat_dynamics_kw,
+    )
+
+    kw = {
+        "firstt": 10.0,
+        "finalt": 50.0,
+        "timestep": 0.0001,
+        "nstep": 4,
+    }
+    prepare_bussi_heat_dynamics_kw(kw, nstep=4, ihtfrq=2, timestep_ps=0.0001)
+    clear_calls: list[int] = []
+
+    def fake_chunk(*_a, **_k):
+        return mock.Mock()
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        side_effect=fake_chunk,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.apply_bussi_velocity_rescale",
+        return_value=(300.0, 1.0),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_bussi_plain_verlet_fortran_state",
+        side_effect=lambda: clear_calls.append(1),
+    ):
+        _run_bussi_heat_subchunked(
+            kw,
+            None,
+            overlap_context="HEAT",
+            rng_base=None,
+            chunk_nstep=2,
+            total_nstep=4,
+            log_banner=False,
+            quiet_bussi=True,
+        )
+    assert len(clear_calls) == 3  # post-rescale x2 + continuation prep x1
+
+
+def test_overlap_chunk_bussi_ramp_prep_strips_bath():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _apply_overlap_chunk_dynamics_kw,
+        _apply_overlap_chunk_heat_ramp,
+        heat_ramp_spec_from_kw,
+        prepare_bussi_heat_dynamics_kw,
+    )
+
+    kw = {
+        "firstt": 10.0,
+        "finalt": 50.0,
+        "tstruct": 10.0,
+        "tbath": 50.0,
+        "timestep": 0.0001,
+        "nstep": 50,
+        "start": True,
+        "iasvel": 1,
+    }
+    prepare_bussi_heat_dynamics_kw(kw, nstep=50, ihtfrq=50, timestep_ps=0.0001)
+    ramp_spec = heat_ramp_spec_from_kw(kw)
+    assert ramp_spec is not None
+    chunk_kw = dict(kw)
+    chunk_kw["nstep"] = 50
+    _apply_overlap_chunk_heat_ramp(
+        chunk_kw,
+        chunk_index=1,
+        chunk_nstep=50,
+        steps_done=50,
+        ramp_spec=ramp_spec,
+    )
+    _apply_overlap_chunk_dynamics_kw(
+        chunk_kw,
+        chunk_index=1,
+        has_restart_read=False,
+    )
+    assert chunk_kw["iasvel"] == 0
+    assert chunk_kw["start"] is False
+    assert chunk_kw["iunrea"] == -1
+    assert "firstt" not in chunk_kw
+    assert "finalt" not in chunk_kw
+    assert "tbath" not in chunk_kw
+    assert "twindh" not in chunk_kw
 
 
 def test_resolve_dynamics_init_velocities_bussi_continuation_uses_rescale_ladder():

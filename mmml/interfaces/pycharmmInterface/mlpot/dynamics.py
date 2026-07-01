@@ -1942,6 +1942,7 @@ def prepare_bussi_heat_dynamics_kw(
     kw.pop("TEMINC", None)
     kw.pop("teminc", None)
     kw["iasors"] = 0
+    _strip_bussi_scale_heat_pollution_keywords(kw, cold_start=True)
 
 
 def _bussi_heat_chunk_nstep(kw: dict[str, Any], total_nstep: int) -> int | None:
@@ -1971,7 +1972,7 @@ def _apply_bussi_in_memory_continuation_kw(kw: dict[str, Any]) -> None:
     kw.pop("iunrea", None)
     kw["iunrea"] = -1
     _strip_bussi_in_memory_heat_bath_keywords(kw)
-    _clear_stale_charmm_heat_bath_fortran_state()
+    _ensure_bussi_plain_verlet_fortran_state()
 
 
 def apply_bussi_heat_ramp_overlap_chunk(
@@ -1995,7 +1996,7 @@ def apply_bussi_heat_ramp_overlap_chunk(
     chunk_kw.pop("teminc", None)
     chunk_kw["_skip_ase_cold_velocity_assign"] = True
     _strip_bussi_in_memory_heat_bath_keywords(chunk_kw)
-    _clear_stale_charmm_heat_bath_fortran_state()
+    _ensure_bussi_plain_verlet_fortran_state()
 
 
 def _apply_overlap_chunk_bussi_heat_ramp(
@@ -3282,6 +3283,34 @@ def _clear_stale_charmm_heat_bath_fortran_state() -> None:
         charm_dyn.set_finalt(0.0)
         charm_dyn.set_teminc(0.0)
         charm_dyn.set_tstruc(0.0)
+        charm_dyn.set_twindh(0.0)
+        charm_dyn.set_twindl(0.0)
+    except (ImportError, OSError):
+        pass
+
+
+def _ensure_bussi_plain_verlet_fortran_state() -> None:
+    """Plain Verlet Bussi legs must not inherit scale-heat ``reawri`` globals."""
+    _clear_stale_charmm_heat_bath_fortran_state()
+
+
+def _zero_bussi_scale_heat_fortran_keep_firstt(kw: dict[str, Any]) -> None:
+    """Clear scale-heat Fortran state but keep ``FIRSTT``/``TSTRUC`` for cold Boltzmann."""
+    try:
+        import pycharmm.dynamics as charm_dyn
+
+        charm_dyn.set_finalt(0.0)
+        charm_dyn.set_teminc(0.0)
+        charm_dyn.set_twindh(0.0)
+        charm_dyn.set_twindl(0.0)
+        if "firstt" in kw:
+            firstt = float(kw["firstt"])
+            tstruct = float(kw.get("tstruct", firstt))
+            charm_dyn.set_firstt(firstt)
+            charm_dyn.set_tstruc(tstruct)
+        else:
+            charm_dyn.set_firstt(0.0)
+            charm_dyn.set_tstruc(0.0)
     except (ImportError, OSError):
         pass
 
@@ -3292,14 +3321,17 @@ def _normalize_dynamics_heat_ramp_kw(kw: dict[str, Any]) -> None:
     if bussi:
         kw.pop("TEMINC", None)
         kw.pop("teminc", None)
+        cold_start = bool(kw.get("start")) and int(kw.get("iasvel", 0) or 0) == 1
+        if cold_start:
+            _strip_bussi_scale_heat_pollution_keywords(kw, cold_start=True)
+            _zero_bussi_scale_heat_fortran_keep_firstt(kw)
+            return
         if int(kw.get("iasvel", 0) or 0) == 0 or not bool(kw.get("start")):
             _strip_bussi_in_memory_heat_bath_keywords(kw)
-            _clear_stale_charmm_heat_bath_fortran_state()
+            _ensure_bussi_plain_verlet_fortran_state()
             return
-        kw.pop("finalt", None)
-        kw.pop("FINALT", None)
-        for key in ("twindh", "twindl"):
-            kw.pop(key, None)
+        _strip_bussi_scale_heat_pollution_keywords(kw, cold_start=True)
+        return
     _sync_tstruct_with_bath_kw(kw)
     teminc = kw.pop("TEMINC", None)
     if teminc is not None and "teminc" not in kw and not bussi:
@@ -3540,6 +3572,8 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     if int(kw.get("ihtfrq", 0) or 0) > 0:
         apply_heat_ramp_frequencies(kw, nstep=nstep, ihtfrq=int(kw["ihtfrq"]))
     _normalize_dynamics_heat_ramp_kw(kw)
+    if bussi_active and not bool(kw.get("start")):
+        _ensure_bussi_plain_verlet_fortran_state()
     _apply_dynamics_io_setters(kw)
     _prepare_dynamics_list_frequencies(kw, nstep=nstep)
     heat_append = _dynamics_script_append_for_heat_ramp(kw)
@@ -5034,11 +5068,26 @@ def _strip_stale_heat_ramp_keywords(kw: dict[str, Any]) -> None:
         kw.pop(key, None)
 
 
+def _strip_bussi_scale_heat_pollution_keywords(
+    kw: dict[str, Any],
+    *,
+    cold_start: bool = False,
+) -> None:
+    """Remove CHARMM scale-heat keys that pollute Fortran during Bussi Verlet legs."""
+    for key in ("finalt", "FINALT", "tbath", "TEMINC", "teminc", "twindh", "twindl"):
+        kw.pop(key, None)
+    if cold_start:
+        if "firstt" in kw and "tstruct" not in kw:
+            kw["tstruct"] = float(kw["firstt"])
+        return
+    for key in ("firstt", "tstruct"):
+        kw.pop(key, None)
+
+
 def _strip_bussi_in_memory_heat_bath_keywords(kw: dict[str, Any]) -> None:
     """Drop CHARMM heat-bath keys before plain Verlet Bussi continuation legs."""
     _strip_stale_heat_ramp_keywords(kw)
-    for key in ("firstt", "tstruct", "tbath", "twindh", "twindl"):
-        kw.pop(key, None)
+    _strip_bussi_scale_heat_pollution_keywords(kw, cold_start=False)
 
 
 def _apply_overlap_chunk_dynamics_kw(
@@ -5726,6 +5775,7 @@ def _run_bussi_heat_subchunked(
                     f"T_target={target_k:.2f} K, T_live≈{live:.2f} K",
                     flush=True,
                 )
+        _ensure_bussi_plain_verlet_fortran_state()
         steps_done += n
     return last_dyn
 
