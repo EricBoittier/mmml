@@ -3477,6 +3477,7 @@ def test_harmonize_dynamics_frequency_for_remainder_chunk():
     _harmonize_overlap_chunk_frequencies(kw5, 250, global_step_start=0)
     assert kw5["nsavc"] == 249
     assert kw5["_suppress_trajectory"] is True
+    assert kw5["nsavv"] == 250
 
     kw6 = {"nsavc": 1600}
     _harmonize_overlap_chunk_frequencies(
