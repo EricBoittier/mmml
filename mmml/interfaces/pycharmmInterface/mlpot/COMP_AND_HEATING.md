@@ -151,6 +151,92 @@ rescue `sync_charmm_positions`, or CRD reload, use **`start=False`** and
 
 Avoid **`iasors=1`** with short `ihtfrq` on all-ML clusters unless you accept Gaussian spikes (219 K before rescale to 66 K in earlier logs).
 
+## ASE Bussi heat (`--heat-thermostat bussi`)
+
+Default staged heat uses **ASE Bussi stochastic rescaling** with CHARMM `ihtfrq=0`
+(no CHARMM velocity-scaling ramp). CHARMM still does Verlet integration; Python
+rescales velocities between micro-chunks.
+
+### Correct handoff pattern
+
+| Segment | `start` | `iasvel` | Velocity source |
+|---------|---------|----------|-----------------|
+| Chunk 0 / cold start | `True` | `1` | One Boltzmann draw at `FIRSTT` |
+| Sub-chunks 1+ / overlap continuation | `False` | `0` | COMP mirrored from main (or restart) |
+
+**Do not** set `iasvel=1` on Bussi continuation chunks: PyCHARMM may omit `start=False`,
+CHARMM keeps lingering START, and each sub-chunk re-draws Boltzmann (COM drift, box stress).
+
+Before every `iasvel=0` `dyna`, mmml calls
+`mirror_comparison_velocities_for_dynamics()` (main → warm COMP → restart `!VELOCITIES`).
+After every Bussi `dyna`, `capture_charmm_velocities_for_bussi()` stores AKMA velocities
+in the synced cache and COMP for the next rescale / sub-chunk.
+
+### Restart I/O and CHARMM staging paths
+
+Overlap heat alternates scratch restarts (`heat.a.res` / `heat.b.res`) and may stage
+writes under `/tmp/mmml-charmm-io/<hash>/` when the real path has capitals (Fortran
+`OPEN` limits). CHARMM writes `!VELOCITIES` to the **staging** file first; the alias is
+copied back to the user path only when the I/O handle closes (`CharmmIoAlias.finalize()`).
+
+**Failure mode (fixed):** reading `heat.res` immediately after `dyna`, before finalize,
+sees a missing or stale file → `ASE Bussi rescale: no readable velocities` → MB fallback
+→ `apply_bussi_velocity_rescale: CHARMM velocities unavailable`.
+
+mmml now resolves restart reads via `resolve_restart_velocities_read_paths()`:
+
+1. User path (e.g. `.../heat.res`)
+2. Overlap slots (`heat.a.res`, `heat.b.res`)
+3. Staging alias (`/tmp/mmml-charmm-io/<hash>/heat.res`)
+
+Post-`dyna` capture uses `_post_dyna_restart_write_path()` so Bussi reads the staging
+file while it still holds fresh velocities. A synced in-memory cache
+(`charmm_synced_velocities_akma`) is the fallback when PyCHARMM lacks `coor.get_velocity`.
+
+### Log grep (Bussi)
+
+```bash
+grep -E 'Bussi rescale|readable velocities|IASVEL|IASORS|heat\.a\.res|heat\.b\.res|mmml-charmm-io' your.log
+```
+
+Healthy Bussi heat after chunk 0:
+
+```
+ASE Bussi rescale toward 14.00 K (T_after≈14.xx K, α=...)
+overlap (...): Bussi schedule step 50: T_target=14.00 K, T_live≈...
+```
+
+Red flags:
+
+```
+ASE Bussi rescale: no readable velocities
+ASE Maxwell-Boltzmann velocities at ... (measured T≈0.00 K)
+apply_bussi_velocity_rescale: CHARMM velocities unavailable
+```
+
+Ensure overlap micro-chunks keep `nsavv=nstep` so scratch restarts include
+`!VELOCITIES` (see `_harmonize_overlap_chunk_frequencies` in `dynamics.py`).
+
+### Bussi sequence (overlap micro-chunks)
+
+```mermaid
+sequenceDiagram
+    participant Dyna as dyna (50 steps)
+    participant Staging as heat.a.res (staging)
+    participant Bussi as apply_bussi_velocity_rescale
+    participant COMP as COMP mirror
+
+    Note over Dyna: chunk 0: start=True, iasvel=1
+    Dyna->>Staging: WRIDYN + !VELOCITIES
+    Dyna->>COMP: capture_charmm_velocities_for_bussi
+    Bussi->>Staging: read velocities (staging path)
+    Bussi->>COMP: sync rescale α·v
+    Note over Dyna: sub-chunk 1+: iasvel=0
+    COMP->>Dyna: mirror before dyna
+    Dyna->>Staging: WRIDYN
+    Dyna->>Bussi: capture + rescale
+```
+
 ## Likely mitigations for X–H (not yet default)
 
 - Longer / cooler ramp (already biased in `run_dcm9_stability.sh`).
@@ -162,7 +248,8 @@ Avoid **`iasors=1`** with short `ihtfrq` on all-ML clusters unless you accept Ga
 
 | File | Role |
 |------|------|
-| `comp_velocities.py` | COMP scalar force copy; optional pre-heat metadata |
+| `comp_velocities.py` | COMP scalar force copy; COMP velocity mirror for `iasvel=0` |
+| `charmm_ase_velocities.py` | ASE Maxwell–Boltzmann / Bussi; velocity cache; restart path resolution |
 | `staged_workflow.py` | `_configure_heat_dynamics_start`, `iasors=0`, Boltzmann pre-step |
-| `dynamics.py` | `build_heat_dynamics`, `assign_velocities_at_temperature`, `apply_heat_ramp_frequencies` |
-| `cli_common.py` | `--heat-firstt`, `--heat-finalt`, `--heat-comp-damp` (default off) |
+| `dynamics.py` | `build_heat_dynamics`, Bussi sub-chunking, overlap restart staging, `nsavv` |
+| `cli_common.py` | `--heat-firstt`, `--heat-finalt`, `--heat-thermostat`, `--heat-comp-damp` (default off) |
