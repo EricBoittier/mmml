@@ -287,9 +287,12 @@ def charmm_crystal_is_active(*, rel_tol: float = 1e-3) -> bool:
     """True when CHARMM reports a positive cubic periodic box (crystal + IMAGE)."""
     try:
         lx, ly, lz = _read_charmm_box_sides_A()
+        if _is_cubic_box_sides(lx, ly, lz, rel_tol=rel_tol) and min(lx, ly, lz) > 1.0:
+            return True
+        ux, uy, uz = _read_charmm_ucell_lengths_A()
+        return _is_cubic_box_sides(ux, uy, uz, rel_tol=rel_tol) and min(ux, uy, uz) > 1.0
     except Exception:
         return False
-    return _is_cubic_box_sides(lx, ly, lz, rel_tol=rel_tol) and min(lx, ly, lz) > 1.0
 
 
 def ensure_charmm_crystal_for_cpt(

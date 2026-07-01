@@ -125,11 +125,17 @@ def test_push_charmm_cubic_box_side_A_calls_prepare_when_mismatch() -> None:
     mock_prepare.assert_called_once_with(32.0)
     assert side == pytest.approx(32.0)
     assert source == "pbound"
+
+
+def test_probe_charmm_cubic_box_side_A_returns_none_when_unavailable() -> None:
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import probe_charmm_cubic_box_side_A
 
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_box_sides_A",
         return_value=(0.0, 0.0, 0.0),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_ucell_lengths_A",
+        side_effect=RuntimeError("no ucell"),
     ):
         side, source = probe_charmm_cubic_box_side_A()
     assert side is None
