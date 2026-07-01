@@ -3396,7 +3396,12 @@ def _resolve_dynamics_init_velocities(
         fallback_paths=fallback_paths,
     )
     v = np.asarray(v, dtype=np.float64).reshape(-1, 3)
-    if v.size == 0 or float(np.max(np.abs(v))) < 1.0e-8 or velocities_are_cold(v):
+    if (
+        v.size == 0
+        or float(np.max(np.abs(v))) < 1.0e-8
+        or velocities_are_cold(v)
+        or velocities_are_pathological(v)
+    ):
         if _bussi_heat_ramp_active(kw) or bool(kw.get("_skip_ase_cold_velocity_assign")):
             from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
                 assign_bussi_fallback_velocities,
