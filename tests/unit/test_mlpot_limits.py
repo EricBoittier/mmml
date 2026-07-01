@@ -217,6 +217,8 @@ def test_register_mlpot_validates_pbc_pair_budget(monkeypatch):
         return_value="all",
     ), mock.patch("mmml.interfaces.pycharmmInterface.mlpot.setup._require_mlpot_skip_iblo_support"), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup._install_ml_exclusions"
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
     ):
         register_mlpot(mock.MagicMock(), list(range(1650)), sel, use_pbc=True)
     assert calls == [(1650, True, None)]

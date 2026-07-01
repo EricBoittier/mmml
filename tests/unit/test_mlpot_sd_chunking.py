@@ -149,6 +149,8 @@ def test_run_minimize_in_chunks_splits_long_pbc_sd():
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
         return_value=5.0,
     ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
+    ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
     ):
         result = _run_minimize_in_chunks(
@@ -194,6 +196,8 @@ def test_run_minimize_in_chunks_watchdog_stops_early():
         return_value=12.0,
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._rollback_mlpot_sd_chunk_geometry",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
     ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
     ):
@@ -242,6 +246,8 @@ def test_run_minimize_in_chunks_watchdog_uses_sd_watchdog_initial_grms():
         return_value=np.zeros((1, 3)),
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._rollback_mlpot_sd_chunk_geometry",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
     ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
     ):
@@ -292,6 +298,8 @@ def test_run_minimize_in_chunks_watchdog_rolls_back_after_chunk_blowup():
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._rollback_mlpot_sd_chunk_geometry",
     ) as rollback, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
+    ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
     ):
         result = _run_minimize_in_chunks(
@@ -492,6 +500,8 @@ def test_run_minimize_in_chunks_stops_on_grms_plateau():
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
         return_value=272.8245,
     ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
+    ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
     ):
         result = _run_minimize_in_chunks(
@@ -537,6 +547,8 @@ def test_run_minimize_in_chunks_exits_early_when_converged():
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
         return_value=120.0,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
     ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
     ):

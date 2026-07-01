@@ -68,7 +68,7 @@ def test_charmm_dynamics_energy_is_finite_detects_nan():
 
 
 def test_charmm_dynamics_state_is_finite_requires_both():
-    pos = pd.DataFrame({"x": [0.0], "y": [0.0], "z": [0.0]})
+    pos = pd.DataFrame({"x": [0.0, 1.0], "y": [0.0, 0.0], "z": [0.0, 0.0]})
     row = pd.DataFrame([{"USER": -1.0}])
     fake_coor = mock.MagicMock()
     fake_coor.get_positions.return_value = pos
@@ -80,7 +80,7 @@ def test_charmm_dynamics_state_is_finite_requires_both():
 
 def test_validate_charmm_dynamics_state_raises_on_corruption():
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_dynamics_state_is_finite",
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_coordinates_are_finite",
         return_value=False,
     ):
         with pytest.raises(RuntimeError, match="non-finite"):
