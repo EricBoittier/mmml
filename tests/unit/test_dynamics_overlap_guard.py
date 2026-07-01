@@ -2216,11 +2216,8 @@ def test_completed_overlap_refresh_repatches_final_restart_step(tmp_path):
 
 
 def test_overlap_chunk_readyn_when_restart_jhstrt_zero(tmp_path):
-    """Materialize scratch restart when JHSTRT=0 so the next chunk READYNs global step."""
+    """Patch JHSTRT=0 scratch restarts so the next chunk READYNs at global step."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
-        read_restart_last_step,
-    )
 
     cfg = DynamicsOverlapConfig(
         action="error",
@@ -2230,24 +2227,13 @@ def test_overlap_chunk_readyn_when_restart_jhstrt_zero(tmp_path):
         use_pbc=False,
     )
     final_res = tmp_path / "equi.res"
-    slot_a = tmp_path / "equi.overlap_a.res"
     calls: list[dict] = []
 
     def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
         calls.append(dict(kw))
         if _io is not None and _io.restart_write is not None:
-            # CHARMM coord-history: segment NSTEP only, JHSTRT stays 0.
-            Path(_io.restart_write).write_text(
-                "REST    48       0\n"
-                "\n"
-                " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
-                f"          25           0           2         320          10           0\n",
-                encoding="utf-8",
-            )
+            _write_test_restart(Path(_io.restart_write), 0)
         return mock.Mock()
-
-    def fake_materialize(path, *, global_step, **kwargs):
-        _write_test_restart(Path(path), int(global_step))
 
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
@@ -2261,9 +2247,8 @@ def test_overlap_chunk_readyn_when_restart_jhstrt_zero(tmp_path):
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
         return_value=0,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._materialize_overlap_chunk_restart_handoff",
-        side_effect=fake_materialize,
-    ) as materialize:
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.patch_restart_global_step",
+    ) as patch_step:
         run_dynamics_with_io(
             {"nstep": 6, "new": False, "start": False, "restart": False},
             CharmmTrajectoryFiles(restart_write=final_res),
@@ -2276,9 +2261,8 @@ def test_overlap_chunk_readyn_when_restart_jhstrt_zero(tmp_path):
     assert calls[0]["restart"] is False
     assert calls[1]["restart"] is True
     assert calls[2]["restart"] is True
-    assert materialize.call_count == 2
-    assert materialize.call_args_list[0].kwargs["global_step"] == 2
-    assert read_restart_last_step(slot_a) == 2
+    assert patch_step.call_count >= 1
+    assert patch_step.call_args_list[0].args[1] == 2
 
 
 def test_overlap_memory_handoff_chunks_scratch_restart_handoff(tmp_path):

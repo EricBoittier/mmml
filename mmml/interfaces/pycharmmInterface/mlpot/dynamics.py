@@ -5539,25 +5539,29 @@ def run_dynamics_with_io(
                     restart_path = Path(chunk_io.restart_write)
                     if restart_path.is_file():
                         header_step = read_restart_last_step(restart_path)
-                        if header_step is None or header_step < expected_after - 1:
-                            patch_restart_global_step(restart_path, steps_done)
-                        if (
-                            n_chunks > 1
-                            and final_restart is not None
-                            and _is_overlap_scratch_restart(restart_path, final_restart)
-                            and chunk_index < n_chunks - 1
-                        ):
-                            header_step = read_restart_last_step(restart_path)
+                        needs_step_fix = (
+                            header_step is None
+                            or header_step < expected_after - 1
+                        )
+                        if needs_step_fix:
                             if (
-                                _valid_restart_file(restart_path) is None
-                                or header_step is None
-                                or header_step < expected_after - 1
+                                n_chunks > 1
+                                and final_restart is not None
+                                and _is_overlap_scratch_restart(
+                                    restart_path, final_restart
+                                )
+                                and chunk_index < n_chunks - 1
+                                and _valid_restart_file(restart_path) is None
                             ):
                                 _materialize_overlap_chunk_restart_handoff(
                                     restart_path,
                                     global_step=steps_done,
                                     overlap_context=overlap_context,
                                     mlpot_ctx=mlpot_ctx,
+                                )
+                            else:
+                                patch_restart_global_step(
+                                    restart_path, steps_done
                                 )
                 if final_restart is not None and chunk_io is not None:
                     _overlap_refresh_or_validate_scratch_restart(
