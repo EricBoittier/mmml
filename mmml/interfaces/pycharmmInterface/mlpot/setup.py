@@ -1312,7 +1312,12 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
 
     side = float(cubic_box_side_A)
     prepare_charmm_pbc(side)
+    print(
+        f"MLpot PBC: crystal/IMAGE ready (L={side:.3f} Å); installing ML exclusions…",
+        flush=True,
+    )
     _install_ml_exclusions(ml_selection, update=False)
+    print("MLpot PBC: rebuilding nonbond lists (upinb)…", flush=True)
     apply_pbc_nbonds(nbxmod=5, cubic_box_side_A=side)
     pycharmm = _import_pycharmm()
     pycharmm.image.update_bimag()
