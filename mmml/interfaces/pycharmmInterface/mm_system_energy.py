@@ -34,13 +34,23 @@ COULOMB_KCAL = 332.063711
 
 @dataclass(frozen=True, slots=True)
 class CharmmNbondSettings:
-    """CHARMM ``nbonds`` switched cutoffs (Å) for cdie + fswitch/vswitch."""
+    """CHARMM ``nbonds`` switched cutoffs (Å) for cdie + VDW switching.
+
+    ``elec_switch`` / ``vdw_switch`` select CHARMM ``enbfast`` / ``enbaexp`` modes:
+
+    - ``fshift`` — cdie force shift (``CSHIFT``; CGENFF PRM ``fshift`` keyword)
+    - ``fswitch`` — cdie force switch (``CFSWIT``; PyCHARMM ``fswitch=True``)
+    - ``pswitch`` — potential switch (``CSWIT`` / ``LVSW``; legacy JAX default)
+    - ``vfswitch`` — VDW force switch (``LVFSW``; PyCHARMM ``vfswitch=True``)
+    """
 
     cutnb: float
     ctonnb: float
     ctofnb: float
     eps: float = 1.0
     e14fac: float = 1.0
+    elec_switch: str = "fswitch"
+    vdw_switch: str = "vfswitch"
 
     @property
     def c2onnb(self) -> float:
@@ -49,6 +59,14 @@ class CharmmNbondSettings:
     @property
     def c2ofnb(self) -> float:
         return float(self.ctofnb) ** 2
+
+    @property
+    def ctrof2(self) -> float:
+        return -1.0 / self.c2ofnb
+
+    @property
+    def min2of(self) -> float:
+        return 2.0 / float(self.ctofnb)
 
     @property
     def rul3(self) -> float:
@@ -62,7 +80,95 @@ class CharmmNbondSettings:
         denom = self.c2ofnb - self.c2onnb
         if abs(denom) < 1e-12:
             return 0.0
-        return 1.0 / (denom**2)
+        return 12.0 * self.rul3
+
+
+@dataclass(frozen=True, slots=True)
+class CharmmVfswitchCoeffs:
+    """Precomputed VDW force-switch coefficients (``LVFSW`` init in ``enbfast``)."""
+
+    recof6: float
+    recof3: float
+    onoff6: float
+    onoff3: float
+    ofdif6: float
+    ofdif3: float
+
+
+@dataclass(frozen=True, slots=True)
+class CharmmFswitchCoeffs:
+    """Precomputed cdie force-switch coefficients (``CFSWIT`` init in ``enbfast``)."""
+
+    acoef: float
+    bcoef: float
+    cover3: float
+    dover5: float
+    const: float
+    eadd: float
+
+
+def charmm_vfswitch_coeffs(settings: CharmmNbondSettings) -> CharmmVfswitchCoeffs:
+    """Coefficients for CHARMM VDW force switch (``LVFSW``)."""
+    c2of = settings.c2ofnb
+    b = float(settings.ctofnb)
+    off3 = c2of * b
+    off6 = off3 * off3
+    recof6 = 1.0 / off6
+    if float(settings.ctonnb) < b:
+        c2on = settings.c2onnb
+        on3 = c2on * float(settings.ctonnb)
+        on6 = on3 * on3
+        recof3 = 1.0 / off3
+        ofdif6 = off6 / (off6 - on6)
+        ofdif3 = off3 / (off3 - on3)
+        onoff6 = recof6 / on6
+        onoff3 = recof3 / on3
+    else:
+        onoff6 = recof6 * recof6
+        onoff3 = recof6
+        recof3 = 1.0 / off3
+        ofdif6 = 1.0
+        ofdif3 = 1.0
+    return CharmmVfswitchCoeffs(
+        recof6=recof6,
+        recof3=recof3,
+        onoff6=onoff6,
+        onoff3=onoff3,
+        ofdif6=ofdif6,
+        ofdif3=ofdif3,
+    )
+
+
+def charmm_fswitch_coeffs(settings: CharmmNbondSettings) -> CharmmFswitchCoeffs:
+    """Coefficients for CHARMM cdie force switch (``CFSWIT``)."""
+    c2on = settings.c2onnb
+    c2of = settings.c2ofnb
+    b = float(settings.ctofnb)
+    cton = float(settings.ctonnb)
+    if cton < b:
+        onoff2 = c2on * c2of
+        on3 = c2on * cton
+        off3 = c2of * b
+        off4 = c2of * c2of
+        off5 = off3 * c2of
+        denom = 1.0 / (c2of - c2on) ** 3
+        eadd = (onoff2 * (b - cton) - (off5 - on3 * c2on) / 5.0) * 8.0 * denom
+        acoef = off4 * (c2of - 3.0 * c2on) * denom
+        bcoef = 6.0 * onoff2 * denom
+        cover3 = -(c2on + c2of) * denom
+        dover5 = 2.0 * denom / 5.0
+        const = bcoef * b - acoef / b + cover3 * off3 + dover5 * off5
+    else:
+        eadd = -1.0 / b
+        acoef = bcoef = cover3 = dover5 = const = 0.0
+    return CharmmFswitchCoeffs(
+        acoef=acoef,
+        bcoef=bcoef,
+        cover3=cover3,
+        dover5=dover5,
+        const=const,
+        eadd=eadd,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,6 +201,111 @@ def charmm_switch_factor(r_sq: Array, settings: CharmmNbondSettings) -> Array:
     inside = (r_sq <= c2of) & (r_sq > c2on)
     below = r_sq <= c2on
     return jnp.where(below, 1.0, jnp.where(inside, funct, 0.0))
+
+
+def charmm_fshift_elec(r: Array, qq: Array, settings: CharmmNbondSettings) -> Array:
+    """CHARMM cdie force shift (``CSHIFT`` / PRM ``fshift``).
+
+    ``qq`` is ``q_i * q_j / eps`` (no Coulomb constant); multiply by ``COULOMB_KCAL``.
+    """
+    r_safe = jnp.maximum(r, 1e-10)
+    r_sq = r_safe * r_safe
+    r1 = 1.0 / r_safe
+    ch = qq * r1
+    return ch * (1.0 + r_sq * (settings.min2of * r1 - settings.ctrof2))
+
+
+def charmm_fswitch_elec(
+    r: Array,
+    qq: Array,
+    settings: CharmmNbondSettings,
+    coeffs: CharmmFswitchCoeffs,
+) -> Array:
+    """CHARMM cdie force switch (``CFSWIT`` / PyCHARMM ``fswitch``)."""
+    r_safe = jnp.maximum(r, 1e-10)
+    r_sq = r_safe * r_safe
+    r1 = 1.0 / r_safe
+    outer = r_sq > settings.c2onnb
+    inner = (1.0 / r_safe) + coeffs.eadd
+    switched = r1 * (
+        coeffs.acoef
+        - r_sq * (coeffs.bcoef + r_sq * (coeffs.cover3 + coeffs.dover5 * r_sq))
+    ) + coeffs.const
+    return qq * jnp.where(outer, switched, inner)
+
+
+def charmm_vfswitch_vdw(
+    r: Array,
+    a_coef: Array,
+    b_coef: Array,
+    settings: CharmmNbondSettings,
+    coeffs: CharmmVfswitchCoeffs,
+) -> Array:
+    """CHARMM VDW force switch (``LVFSW`` / PyCHARMM ``vfswitch``).
+
+    ``a_coef`` = ``epsilon * sigma^12``, ``b_coef`` = ``2 * epsilon * sigma^6``.
+    """
+    r_safe = jnp.maximum(r, 1e-10)
+    r_sq = r_safe * r_safe
+    r1 = 1.0 / r_safe
+    tr2 = r1 * r1
+    tr6 = tr2 * tr2 * tr2
+    outer = r_sq > settings.c2onnb
+    r3 = r1 * tr2
+    rjunk6 = tr6 - coeffs.recof6
+    rjunk3 = r3 - coeffs.recof3
+    cr12 = a_coef * coeffs.ofdif6 * rjunk6
+    cr6 = b_coef * coeffs.ofdif3 * rjunk3
+    switched = cr12 * rjunk6 - cr6 * rjunk3
+    ca = a_coef * tr6 * tr6
+    enevdw = ca - b_coef * tr6
+    inner = enevdw + b_coef * coeffs.onoff3 - a_coef * coeffs.onoff6
+    return jnp.where(outer, switched, inner)
+
+
+def _pair_elec_energy(
+    r: Array,
+    qq: Array,
+    settings: CharmmNbondSettings,
+    fswitch_coeffs: CharmmFswitchCoeffs,
+) -> Array:
+    mode = settings.elec_switch
+    if mode == "fshift":
+        raw = charmm_fshift_elec(r, qq, settings)
+    elif mode == "fswitch":
+        raw = charmm_fswitch_elec(r, qq, settings, fswitch_coeffs)
+    elif mode == "pswitch":
+        r_sq = r * r
+        coul = qq / jnp.maximum(r, 1e-10)
+        return coul * charmm_switch_factor(r_sq, settings) * COULOMB_KCAL
+    else:
+        raise ValueError(f"unknown elec_switch {mode!r}")
+    return COULOMB_KCAL * raw
+
+
+def _pair_vdw_energy(
+    r: Array,
+    ep: Array,
+    sig: Array,
+    settings: CharmmNbondSettings,
+    vfswitch_coeffs: CharmmVfswitchCoeffs,
+    *,
+    use_jax_pme_dispersion: bool,
+) -> Array:
+    a_coef = ep * sig**12
+    b_coef = 2.0 * ep * sig**6
+    mode = settings.vdw_switch
+    if mode == "vfswitch":
+        return charmm_vfswitch_vdw(r, a_coef, b_coef, settings, vfswitch_coeffs)
+    if mode == "pswitch":
+        r_sq = r * r
+        r_safe = jnp.maximum(r, 1e-10)
+        sig_r6 = (sig / r_safe) ** 6
+        vdw_r12 = ep * (sig_r6 * sig_r6)
+        vdw_full = ep * (sig_r6 * sig_r6 - 2.0 * sig_r6)
+        vdw = vdw_r12 if use_jax_pme_dispersion else vdw_full
+        return vdw * charmm_switch_factor(r_sq, settings)
+    raise ValueError(f"unknown vdw_switch {mode!r}")
 
 
 def fully_excluded_pairs(iblo: Iterable[int], inb: Iterable[int], natom: int) -> frozenset[tuple[int, int]]:
