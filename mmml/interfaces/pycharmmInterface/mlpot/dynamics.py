@@ -1968,11 +1968,10 @@ def _apply_bussi_in_memory_continuation_kw(kw: dict[str, Any]) -> None:
     kw.pop("TEMINC", None)
     kw.pop("teminc", None)
     kw["_skip_ase_cold_velocity_assign"] = True
-    # Prefer synced-cache velocities for ``init_velocities`` (C API), not COMP-only.
-    kw["_bussi_comp_only_handoff"] = True
     kw.pop("iunrea", None)
     kw["iunrea"] = -1
     _strip_bussi_in_memory_heat_bath_keywords(kw)
+    _clear_stale_charmm_heat_bath_fortran_state()
 
 
 def apply_bussi_heat_ramp_overlap_chunk(
@@ -1996,6 +1995,7 @@ def apply_bussi_heat_ramp_overlap_chunk(
     chunk_kw.pop("teminc", None)
     chunk_kw["_skip_ase_cold_velocity_assign"] = True
     _strip_bussi_in_memory_heat_bath_keywords(chunk_kw)
+    _clear_stale_charmm_heat_bath_fortran_state()
 
 
 def _apply_overlap_chunk_bussi_heat_ramp(

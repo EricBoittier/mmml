@@ -717,7 +717,6 @@ def test_apply_bussi_in_memory_continuation_keeps_iasvel_zero():
     assert kw["start"] is False
     assert kw["iunrea"] == -1
     assert kw["_skip_ase_cold_velocity_assign"] is True
-    assert kw["_bussi_comp_only_handoff"] is True
     assert "firstt" not in kw
     assert "finalt" not in kw
     assert "tstruct" not in kw
@@ -755,7 +754,24 @@ def test_normalize_dynamics_heat_ramp_kw_strips_bussi_continuation_bath():
     assert "twindh" not in kw
 
 
-def test_resolve_dynamics_init_velocities_bussi_comp_only_uses_rescale_ladder():
+def test_apply_bussi_in_memory_continuation_clears_fortran_heat_bath():
+    from unittest.mock import patch
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _apply_bussi_in_memory_continuation_kw,
+        prepare_bussi_heat_dynamics_kw,
+    )
+
+    kw = {"firstt": 10.0, "finalt": 50.0, "timestep": 0.0001, "nstep": 50}
+    prepare_bussi_heat_dynamics_kw(kw, nstep=50, ihtfrq=50, timestep_ps=0.0001)
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._clear_stale_charmm_heat_bath_fortran_state",
+    ) as clear_fortran:
+        _apply_bussi_in_memory_continuation_kw(kw)
+    clear_fortran.assert_called_once()
+
+
+def test_resolve_dynamics_init_velocities_bussi_continuation_uses_rescale_ladder():
     from unittest.mock import patch
 
     import numpy as np
@@ -769,7 +785,6 @@ def test_resolve_dynamics_init_velocities_bussi_comp_only_uses_rescale_ladder():
     kw = {
         "start": False,
         "iasvel": 0,
-        "_bussi_comp_only_handoff": True,
         "_heat_thermostat": "bussi",
     }
     with patch(
@@ -802,7 +817,6 @@ def test_ensure_bussi_heat_continuation_iasvel_for_overlap_chunk():
     _apply_overlap_chunk_dynamics_kw(kw, chunk_index=1, has_restart_read=False)
     assert kw["iasvel"] == 0
     assert kw["start"] is False
-    assert kw["_bussi_comp_only_handoff"] is True
     assert "firstt" not in kw
     assert "tstruct" not in kw
 

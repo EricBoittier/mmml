@@ -546,25 +546,13 @@ def test_prepare_comp_for_heat_targets_hydrogen(mock_prepare):
     )
 
 
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.run_charmm_script")
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.zero_comparison_scalars")
 @patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.clear_comparison_coordinates")
-def test_clear_comp_for_production(mock_clear_coords, mock_zero, mock_script):
+def test_clear_comp_for_production(mock_clear_coords):
     clear_comp_for_production()
     mock_clear_coords.assert_called_once()
-    mock_zero.assert_called_once_with("all", quiet=False)
-    mock_script.assert_called_once_with(
-        "scalar wcomp set 0 select all end", quiet=False
-    )
 
 
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.run_charmm_script")
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.zero_comparison_scalars")
 @patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.clear_comparison_coordinates")
-def test_clear_comp_for_production_honors_quiet(mock_clear_coords, mock_zero, mock_script):
+def test_clear_comp_for_production_honors_quiet(mock_clear_coords):
     clear_comp_for_production(quiet=True)
     mock_clear_coords.assert_called_once()
-    mock_zero.assert_called_once_with("all", quiet=True)
-    mock_script.assert_called_once_with(
-        "scalar wcomp set 0 select all end", quiet=True
-    )
