@@ -249,27 +249,32 @@ def _fallback_crystal_atoms() -> Atoms:
 
 
 def figure_build_crystal(out: Path) -> bool:
-    """PyXtal benzene cell when available; else ASE illustrative periodic cell."""
+    """PyXtal DCM cell scaled to solid density when available; else ASE fallback."""
     try:
         from mmml.interfaces.pyxtal_placement import (
             MolecularCrystalBuildRequest,
             build_molecular_crystal_random,
             have_pyxtal,
+            scale_atoms_cell_to_density,
         )
+        from mmml.paths import default_dcm_molecule_xyz
 
         if have_pyxtal():
-            atoms, _meta = build_molecular_crystal_random(
+            dcm_xyz = str(default_dcm_molecule_xyz())
+            result = build_molecular_crystal_random(
                 MolecularCrystalBuildRequest(
-                    molecules=["c1ccccc1"],
-                    stoichiometry=[2],
+                    molecules=[dcm_xyz],
+                    stoichiometry=[4],
                     space_group=14,
                     dimension=3,
-                    volume_factor=1.1,
-                    seed=7,
+                    factor=1.0,
+                    seed=42,
                     max_attempts=40,
                 )
             )
-            title = "build-crystal: benzene (Z=2, space group 14)"
+            atoms = result.atoms
+            scale_atoms_cell_to_density(atoms, 1.36)
+            title = "build-crystal: DCM (Z=4, SG 14) at ρ=1.36 g/cm³"
             rotation = "15x,70y,0z"
         else:
             raise ImportError("pyxtal not installed")

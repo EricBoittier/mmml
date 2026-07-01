@@ -11,6 +11,11 @@ uv sync --extra chem
 Generate a symmetry-aware molecular crystal and export ASE-compatible geometry:
 
 ```bash
+# DCM solid crystal at ρ = 1.36 g/cm³ (bundled monomer XYZ)
+mmml build-crystal \
+  -m "$(python -c 'from mmml.paths import default_dcm_molecule_xyz; print(default_dcm_molecule_xyz())')" \
+  --spg 14 --z 4 --target-density-g-cm3 1.36 -o dcm_solid.extxyz
+
 # Random molecular crystal (space group 14, Z=2 for one species)
 mmml build-crystal -m benzene.xyz --spg 14 --z 2 -o crystal.extxyz
 
@@ -24,6 +29,10 @@ mmml build-crystal -m h2o.xyz --spg 36 --z 4 --supercell 2,2,2 \
 # NPZ for md-system / handoff workflows
 mmml build-crystal -m monomer.xyz --spg 4 --z 2 -o seed.npz
 ```
+
+**DCM note:** SMILES `C(Cl)Cl` is not in PyXtal's molecule DB — use
+`default_dcm_molecule_xyz()` or an XYZ from `mmml make-res --res DCM`.
+Liquid DCM density is **1.326 g/cm³**; solid crystal seeds often use **1.36**.
 
 ## Python API
 

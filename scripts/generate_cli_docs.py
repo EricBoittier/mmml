@@ -147,7 +147,7 @@ COMMAND_FIGURES: dict[str, list[tuple[str, str]]] = {
         ("Packed acetone box (illustrative)", "../../images/structures/make-box-acetone.png"),
     ],
     "build-crystal": [
-        ("Benzene crystal / periodic cell", "../../images/structures/build-crystal.png"),
+        ("DCM crystal / periodic cell (ρ=1.36 g/cm³)", "../../images/structures/build-crystal.png"),
     ],
     "liquid-box": [
         ("Density prep ladder (schematic)", "../../images/plots/liquid-box-density-ladder.png"),
@@ -201,6 +201,30 @@ PyCHARMM.
 mmml env
 mmml env --json
 ```
+""",
+    "build-crystal": """
+Build molecular crystals with PyXtal (`uv sync --extra chem`). DCM (CH₂Cl₂) is
+not in PyXtal's SMILES database — use the bundled monomer XYZ or your own
+`mmml make-res --res DCM` export.
+
+```bash
+# DCM crystal at solid density (~1.36 g/cm³ at 298 K)
+mmml build-crystal \\
+  -m "$(python -c 'from mmml.paths import default_dcm_molecule_xyz; print(default_dcm_molecule_xyz())')" \\
+  --spg 14 --z 4 \\
+  --target-density-g-cm3 1.36 \\
+  -o dcm_solid.extxyz
+
+# Benzene (SMILES works for aromatics in PyXtal's DB)
+mmml build-crystal -m c1ccccc1 --spg 14 --z 2 -o benzene.extxyz
+
+# Supercell + NPZ handoff
+mmml build-crystal -m monomer.xyz --spg 4 --supercell 2,2,2 -o super.cif
+mmml build-crystal -m monomer.xyz --spg 14 --z 2 -o seed.npz
+```
+
+Liquid DCM boxes use **1.326 g/cm³** (`liquid-box`, `md-system`); solid
+crystal seeds often target **1.36 g/cm³**.
 """,
 }
 

@@ -826,9 +826,76 @@ Hybrid ML/MM potentials use three COM-distance knobs (Å) plus optional long-ran
 | `jax_pme_method` | jax-pme variant when `lr_solver: jax_pme`: `ewald`, `pme`, `p3m` | `ewald` |
 | `jax_pme_sr_cutoff` | jax-pme real-space cutoff (Å) | `6.0` |
 | `jax_pme_dispersion` | Include reciprocal r⁻⁶ LJ-PME tail when `lr_solver: jax_pme`; set false for Coulomb-only long range | env / true |
+| `jax_pme_intra_mode` | Cross-monomer LR evaluation: `cross` (fused, default) or `full_minus_intra` (legacy per-monomer loop) | env / `cross` |
+| `jax_pme_cross_kernel` | Fused kernel when `cross`: `auto` (ewald → structure-factor; PME/P3M → masked), `structure_factor`, or `masked` | env / `auto` |
+| `jax_pme_profile` | Log per-call jax-pme timings to stderr (`1`, `per_call`) | off |
 | `periodic_charmm_vdw` | With `periodic_external`: keep CHARMM IMAGE LJ (default true) | true |
 
 Legacy YAML aliases still work: `ml_cutoff` → `ml_switch_width`, `mm_cutoff` → `mm_switch_width`.
+
+Environment equivalents (override YAML `lr_solver` / jax-pme knobs):
+
+```bash
+export MMML_LR_SOLVER=jax_pme
+export JAX_PME_METHOD=ewald          # ewald | pme | p3m
+export MMML_JAX_PME_INTRA_MODE=cross # cross | full_minus_intra
+export MMML_JAX_PME_CROSS_KERNEL=auto  # auto | structure_factor | masked
+export MMML_JAX_PME_PROFILE=1        # optional timing to stderr
+```
+
+### jax-pme cross-monomer (hybrid MM long range)
+
+When `lr_solver: jax_pme`, the hybrid calculator evaluates periodic Coulomb (and optional r⁻⁶ dispersion) on **cross-monomer** pairs only: ML owns intra-monomer electrostatics. The default **`cross`** path uses one jax-pme `prepare` plus a fused kernel instead of `E_full − Σ_m E_intra` with one host solve per monomer.
+
+| Piece | Role |
+|-------|------|
+| `mmml/.../jax_pme_cross_monomer.py` | Fused cross-monomer energy/forces (`structure_factor` or `masked` kernel) |
+| `mmml/.../jax_pme_hybrid_coulomb.py` | COM switching, Coulomb + dispersion corrections |
+| `tests/functionality/long_range/09_jax_pme_cross_validate.py` | **Validate vs legacy + CPU benchmark** |
+| `tests/unit/test_jax_pme_cross_monomer.py` | Unit tests (ion dimer, cluster, kernel A/B, chain rule) |
+
+**Run validation and timings locally** (no PyCHARMM; CPU recommended for reproducibility):
+
+```bash
+cd /path/to/mmml
+JAX_PLATFORMS=cpu uv run python tests/functionality/long_range/09_jax_pme_cross_validate.py
+
+# Steadier means + per-kernel profile labels
+MMML_JAX_PME_PROFILE=1 JAX_PLATFORMS=cpu \
+  uv run python tests/functionality/long_range/09_jax_pme_cross_validate.py --reps 10 --warmup 3
+
+# Fast unit regression (mocked shapes; ~1 min)
+JAX_PLATFORMS=cpu uv run pytest tests/unit/test_jax_pme_cross_monomer.py -q
+```
+
+**Recorded on this repo (2026-07-01, `JAX_PLATFORMS=cpu`, Python 3.13):**
+
+| Check | Result |
+|-------|--------|
+| Cross energy vs legacy `full − intra` (18×3-atom cluster, ewald, box 28 Å) | `energy_ok=True`, `max_force_err ≈ 6×10⁻¹⁵` kcal/mol/Å |
+| `structure_factor` vs `masked` kernel (ewald) | match to ~1e-6 (unit test) |
+| Hybrid `hybrid_jax_pme_mm_lr_correction` steady mean (`--reps 10`) | legacy **4773 ms** → cross **2699 ms** (**1.77×**) |
+| Fused cross kernel only (`cross_monomer_sf`, profile during benchmark) | ~**52 ms** / eval (Coulomb cross; dispersion separate) |
+| Unit suite `test_jax_pme_cross_monomer.py` | **7 passed** |
+
+Legacy loop cost scales with monomer count (~38 host jax-pme evals per hybrid step for 18 monomers with dispersion). **`cross`** replaces that with two fused evals (Coulomb + r⁻⁶) per step. COM switching uses **`F = s·F_lr − E_lr·∇s`** (not `s·F_lr` alone).
+
+For full-box vs intra micro-benchmarks on a PyCHARMM-built cluster, see `tests/functionality/long_range/08_jax_pme_hybrid_timing.py`. Broader LR backend ladder: `tests/functionality/long_range/README.md`.
+
+```mermaid
+flowchart LR
+  subgraph legacy ["full_minus_intra (legacy)"]
+    F1["E_pme(full box)"]
+    I1["Σ_m E_pme(monomer m)"]
+    F1 --> D1["scale × (F1 − I1)"]
+    I1 --> D1
+  end
+
+  subgraph cross ["cross (default)"]
+    P["one prepare + fused cross kernel"]
+    P --> D2["COM switch × E_cross, chain-rule forces"]
+  end
+```
 
 ```mermaid
 flowchart LR

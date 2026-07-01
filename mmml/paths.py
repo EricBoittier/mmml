@@ -27,3 +27,8 @@ def default_aco_template_pdb() -> Path:
 def crystal_image_str_source() -> Path:
     """CHARMM periodic-image helper copied into the working directory when needed."""
     return bundled_file("data", "charmm", "crystal_image.str")
+
+
+def default_dcm_molecule_xyz() -> Path:
+    """Bundled DCM (CH2Cl2) monomer XYZ for ``build-crystal`` / PyXtal."""
+    return bundled_file("data", "molecules", "dcm.xyz")

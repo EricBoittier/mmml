@@ -3,6 +3,29 @@
 Symmetry-aware crystals (PyXtal).
 
 
+Build molecular crystals with PyXtal (`uv sync --extra chem`). DCM (CH₂Cl₂) is
+not in PyXtal's SMILES database — use the bundled monomer XYZ or your own
+`mmml make-res --res DCM` export.
+
+```bash
+# DCM crystal at solid density (~1.36 g/cm³ at 298 K)
+mmml build-crystal \
+  -m "$(python -c 'from mmml.paths import default_dcm_molecule_xyz; print(default_dcm_molecule_xyz())')" \
+  --spg 14 --z 4 \
+  --target-density-g-cm3 1.36 \
+  -o dcm_solid.extxyz
+
+# Benzene (SMILES works for aromatics in PyXtal's DB)
+mmml build-crystal -m c1ccccc1 --spg 14 --z 2 -o benzene.extxyz
+
+# Supercell + NPZ handoff
+mmml build-crystal -m monomer.xyz --spg 4 --supercell 2,2,2 -o super.cif
+mmml build-crystal -m monomer.xyz --spg 14 --z 2 -o seed.npz
+```
+
+Liquid DCM boxes use **1.326 g/cm³** (`liquid-box`, `md-system`); solid
+crystal seeds often target **1.36 g/cm³**.
+
 ## Usage
 
 ```bash
@@ -14,7 +37,8 @@ mmml build-crystal --help
 ```text
 usage: mmml build-crystal [-h] -m SPEC [--stoichiometry Z [Z ...]]
                           [--z Z_VALUES [Z_VALUES ...]] [--dim {0,1,2,3}]
-                          [--spg SPACE_GROUP] [--factor FACTOR] [--seed SEED]
+                          [--spg SPACE_GROUP] [--factor FACTOR]
+                          [--target-density-g-cm3 RHO] [--seed SEED]
                           [--attempts ATTEMPTS] [--no-resort]
                           [--supercell NX,NY,NZ] -o OUTPUT
                           [--format OUT_FORMAT] [--optimize]
@@ -42,6 +66,10 @@ options:
                         International space-group number (default: 14)
   --factor FACTOR       PyXtal volume factor passed to from_random (default:
                         1.0)
+  --target-density-g-cm3 RHO
+                        Scale unit cell after build to this mass density
+                        (g/cm³). Solid DCM ≈ 1.36; liquid DCM ≈ 1.326
+                        (default: None)
   --seed SEED           RNG seed for reproducible PyXtal trials (default:
                         None)
   --attempts ATTEMPTS   Maximum PyXtal from_random retries (default: 20)
@@ -71,7 +99,7 @@ ASE optimization (optional):
 
 ## Example structures
 
-![Benzene crystal / periodic cell](../../images/structures/build-crystal.png)
+![DCM crystal / periodic cell (ρ=1.36 g/cm³)](../../images/structures/build-crystal.png)
 
 More detail: [Structure building guide](../structure-building.md).
 

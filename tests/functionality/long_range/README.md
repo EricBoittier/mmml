@@ -59,20 +59,22 @@ python tests/functionality/long_range/07_hybrid_grms_lr_solver_compare.py \
   --summary-tsv ~/tests/runs/dcm60_l32_lr_solvers/solver_comparison.tsv  # after workflow sweep
 ```
 
-### Hybrid MM with jax-pme (LJ + electrostatics)
+### Cross-monomer jax-pme (fused hybrid LR)
 
-Set ``MMML_LR_SOLVER=jax_pme`` (or ``lr_solver: jax_pme`` in YAML) to keep **switched
-Lennard-Jones** on the JAX pair path and evaluate **Coulomb** with jax-pme
-(Ewald / PME / P3M via ``JAX_PME_METHOD``):
+Default when `lr_solver: jax_pme`: one fused cross-monomer eval per Coulomb/dispersion channel instead of a per-monomer `full − intra` loop.
 
 ```bash
-export MMML_LR_SOLVER=jax_pme
-export JAX_PME_METHOD=ewald   # or pme, p3m
-pytest tests/functionality/long_range/test_hybrid_jax_pme_mm.py -v
-python tests/functionality/long_range/06_hybrid_jax_pme_mm.py  # PyCHARMM ACO:2 cluster
-python tests/functionality/long_range/07_hybrid_grms_lr_solver_compare.py \
-  --summary-tsv ~/tests/runs/dcm60_l32_lr_solvers/solver_comparison.tsv  # after workflow sweep
+# Validate energy/forces vs legacy + CPU benchmark (no PyCHARMM)
+JAX_PLATFORMS=cpu uv run python tests/functionality/long_range/09_jax_pme_cross_validate.py
+
+MMML_JAX_PME_PROFILE=1 JAX_PLATFORMS=cpu \
+  uv run python tests/functionality/long_range/09_jax_pme_cross_validate.py --reps 10
+
+# Unit tests
+JAX_PLATFORMS=cpu uv run pytest tests/unit/test_jax_pme_cross_monomer.py -q
 ```
+
+Optional env: `MMML_JAX_PME_INTRA_MODE=cross|full_minus_intra`, `MMML_JAX_PME_CROSS_KERNEL=auto|structure_factor|masked`. Documented with benchmark numbers in [md-system-configs.md](../../docs/md-system-configs.md#jax-pme-cross-monomer-hybrid-mm-long-range).
 
 ## Test systems
 

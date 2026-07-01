@@ -12,9 +12,11 @@ from mmml.interfaces.pyxtal_placement import (
     ase_supercell,
     atoms_to_reference_npz,
     build_molecular_crystal_random,
+    crystal_mass_density_g_cm3,
     have_pyxtal,
     parse_stoichiometry,
     parse_supercell_reps,
+    scale_atoms_cell_to_density,
     write_ase_structure,
 )
 
@@ -74,6 +76,16 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=1.0,
         help="PyXtal volume factor passed to from_random",
+    )
+    parser.add_argument(
+        "--target-density-g-cm3",
+        type=float,
+        default=None,
+        metavar="RHO",
+        help=(
+            "Scale unit cell after build to this mass density (g/cm³). "
+            "Solid DCM ≈ 1.36; liquid DCM ≈ 1.326"
+        ),
     )
     parser.add_argument(
         "--seed",
@@ -206,6 +218,16 @@ def main(argv: list[str] | None = None) -> int:
         reps = parse_supercell_reps(args.supercell)
         atoms = ase_supercell(atoms, reps)
         print(f"Supercell {reps[0]}×{reps[1]}×{reps[2]} → natoms={len(atoms)}", flush=True)
+
+    if args.target_density_g_cm3 is not None:
+        rho_before = crystal_mass_density_g_cm3(atoms)
+        scale = scale_atoms_cell_to_density(atoms, float(args.target_density_g_cm3))
+        rho_after = crystal_mass_density_g_cm3(atoms)
+        print(
+            f"Density scale: {rho_before:.4f} → {rho_after:.4f} g/cm³ "
+            f"(target {float(args.target_density_g_cm3):.4f}, cell×{scale:.4f})",
+            flush=True,
+        )
 
     if args.optimize:
         if not args.emt and atoms.calc is None:

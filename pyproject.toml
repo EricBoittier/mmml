@@ -299,6 +299,7 @@ mmml = [
     "py.typed",
     "data/qcml/atomic_reference_energies.json",
     "data/charmm/crystal_image.str",
+    "data/molecules/dcm.xyz",
     "generate/sample/pdb/*.pdb",
     "generate/sample/psf/*.psf",
     "models/physnetjax/defaults/*.json",

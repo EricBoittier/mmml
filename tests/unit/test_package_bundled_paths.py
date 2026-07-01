@@ -11,6 +11,7 @@ from mmml.paths import (
     bundled_file,
     crystal_image_str_source,
     default_aco_template_pdb,
+    default_dcm_molecule_xyz,
     default_meoh_template_pdb,
 )
 
@@ -40,6 +41,13 @@ def test_default_aco_template_pdb_is_bundled() -> None:
 def test_crystal_image_str_is_bundled() -> None:
     path = crystal_image_str_source()
     assert path.is_file(), f"missing bundled CHARMM helper: {path}"
+
+
+def test_default_dcm_molecule_xyz_is_bundled() -> None:
+    path = default_dcm_molecule_xyz()
+    assert path.is_file(), f"missing bundled DCM monomer XYZ: {path}"
+    text = path.read_text(encoding="utf-8")
+    assert "Cl" in text and "DCM" in text.splitlines()[1]
 
 
 def test_pycharmm_interface_compat_alias() -> None:

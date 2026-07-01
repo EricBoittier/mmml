@@ -209,6 +209,35 @@ def atoms_to_reference_npz(
     return out
 
 
+_AVOGADRO = 6.02214076e23
+_CM3_PER_A3 = 1.0e-24
+
+
+def crystal_mass_density_g_cm3(atoms: Any) -> float:
+    """Mass density (g/cm³) from ASE atomic masses and unit-cell volume."""
+    volume_a3 = float(atoms.get_volume())
+    if volume_a3 <= 0.0:
+        raise ValueError(f"atoms volume must be positive, got {volume_a3}")
+    mass_g = float(np.sum(atoms.get_masses())) / _AVOGADRO
+    return mass_g / (volume_a3 * _CM3_PER_A3)
+
+
+def scale_atoms_cell_to_density(atoms: Any, target_density_g_cm3: float) -> float:
+    """Uniformly scale the cell (and positions) to match *target_density_g_cm3*.
+
+    Returns the linear cell scale factor applied (``scale_atoms=True``).
+    """
+    target = float(target_density_g_cm3)
+    if target <= 0.0:
+        raise ValueError(f"target_density_g_cm3 must be positive, got {target}")
+    rho = crystal_mass_density_g_cm3(atoms)
+    if rho <= 0.0:
+        raise ValueError(f"current density must be positive, got {rho}")
+    scale = (rho / target) ** (1.0 / 3.0)
+    atoms.set_cell(atoms.cell * scale, scale_atoms=True)
+    return float(scale)
+
+
 def parse_supercell_reps(text: str) -> tuple[int, int, int]:
     """Parse ``2,2,2`` or ``2x2x2`` into a supercell repetition tuple."""
     raw = str(text).strip().lower().replace("x", ",")

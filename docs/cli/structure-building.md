@@ -109,15 +109,56 @@ offsets = [(4, 4, 4), (12, 4, 6), (6, 11, 5), (14, 12, 8)]
 Builds molecular crystals with space-group symmetry via PyXtal; exports ASE-readable
 structures for optimization or `md-system` handoff.
 
+### DCM (CH₂Cl₂) at solid density
+
+PyXtal does not resolve `C(Cl)Cl` from its molecule database. Use the bundled
+monomer XYZ (or `mmml make-res --res DCM` → export XYZ). After PyXtal placement,
+`--target-density-g-cm3` uniformly scales the unit cell to the requested mass
+density.
+
+| Phase | Typical ρ (g/cm³) | MMML knob |
+|-------|-------------------|-----------|
+| Liquid DCM | 1.326 | `liquid-box`, `md-system` solvent props |
+| Solid DCM | 1.36 | `build-crystal --target-density-g-cm3 1.36` |
+
+```bash
+# Install PyXtal
+uv sync --extra chem
+
+# DCM crystal, space group 14, Z=4, scaled to solid density
+mmml build-crystal \\
+  -m "$(python -c 'from mmml.paths import default_dcm_molecule_xyz; print(default_dcm_molecule_xyz())')" \\
+  --spg 14 --z 4 \\
+  --target-density-g-cm3 1.36 \\
+  --seed 42 \\
+  -o dcm_solid.extxyz
+
+# Larger periodic box for MD handoff
+mmml build-crystal \\
+  -m "$(python -c 'from mmml.paths import default_dcm_molecule_xyz; print(default_dcm_molecule_xyz())')" \\
+  --spg 14 --z 4 --supercell 2,2,2 \\
+  --target-density-g-cm3 1.36 \\
+  -o dcm_super.extxyz
+
+# NPZ reference for md-system / cluster builders
+mmml build-crystal \\
+  -m "$(python -c 'from mmml.paths import default_dcm_molecule_xyz; print(default_dcm_molecule_xyz())')" \\
+  --spg 14 --z 4 --target-density-g-cm3 1.36 \\
+  -o dcm_seed.npz
+```
+
+### Other examples
+
 ```bash
 mmml build-crystal -m c1ccccc1 --spg 14 --z 2 -o benzene.extxyz
 mmml build-crystal -m monomer.xyz --spg 4 --supercell 2,2,2 -o super.cif
 ```
 
-![Benzene crystal / periodic cell](../images/structures/build-crystal.png)
+![DCM crystal / periodic cell (ρ=1.36 g/cm³)](../images/structures/build-crystal.png)
 
-With `uv sync --extra chem`, the doc figure uses a real PyXtal draw (benzene, SG 14).
-Without PyXtal, the script falls back to an illustrative ASE periodic cell.
+With `uv sync --extra chem`, the doc figure uses a real PyXtal DCM draw (SG 14,
+Z=4) scaled to 1.36 g/cm³. Without PyXtal, the script falls back to an
+illustrative ASE periodic cell.
 
 See also: [PyXtal tests on GitHub](https://github.com/EricBoittier/mmml/blob/main/tests/functionality/pyxtal/README.md).
 

@@ -39,6 +39,33 @@ def test_parse_stoichiometry_defaults_and_repeat():
     assert parse_stoichiometry(["a.xyz"], None, None) == [2]
 
 
+def test_crystal_mass_density_and_scale():
+    from ase import Atoms
+
+    from mmml.interfaces.pyxtal_placement import (
+        crystal_mass_density_g_cm3,
+        scale_atoms_cell_to_density,
+    )
+
+    atoms = Atoms("C4", positions=[[0, 0, 0]] * 4, cell=[5, 5, 5], pbc=True)
+    rho0 = crystal_mass_density_g_cm3(atoms)
+    target = rho0 / 2.0
+    scale_atoms_cell_to_density(atoms, target)
+    rho1 = crystal_mass_density_g_cm3(atoms)
+    assert rho1 == pytest.approx(target, rel=1e-9)
+    assert atoms.get_volume() == pytest.approx((5.0 * (rho0 / target) ** (1 / 3)) ** 3, rel=1e-6)
+
+
+def test_scale_atoms_cell_rejects_bad_density():
+    from ase import Atoms
+
+    from mmml.interfaces.pyxtal_placement import scale_atoms_cell_to_density
+
+    atoms = Atoms("C", positions=[[0, 0, 0]], cell=[5, 5, 5], pbc=True)
+    with pytest.raises(ValueError, match="positive"):
+        scale_atoms_cell_to_density(atoms, 0.0)
+
+
 def test_build_molecular_crystal_random_mock(tmp_path, monkeypatch):
     from ase import Atoms
 
