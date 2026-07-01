@@ -118,6 +118,92 @@ def test_mirror_comparison_velocities_for_dynamics_clears_when_no_main_vel(
     mock_clear.assert_called_once()
 
 
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_main",
+)
+def test_mirror_comparison_velocities_for_dynamics_skips_when_iasvel_one(mock_sync):
+    mirror_comparison_velocities_for_dynamics({"iasvel": 1, "start": False})
+    mock_sync.assert_not_called()
+
+
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_main",
+)
+def test_mirror_comparison_velocities_for_dynamics_skips_when_start_true(mock_sync):
+    mirror_comparison_velocities_for_dynamics({"iasvel": 0, "start": True})
+    mock_sync.assert_not_called()
+
+
+def test_coor_get_comparison_capi():
+    fake_charmm = MagicMock()
+
+    def _fill(x, y, z, w):
+        for i in range(2):
+            x[i] = float(i + 1)
+            y[i] = float(i + 2)
+            z[i] = float(i + 3)
+            w[i] = 0.0
+
+    fake_charmm.coor_get_comparison.side_effect = _fill
+    fake_lib = types.SimpleNamespace(charmm=fake_charmm)
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities._charmm_lib",
+        return_value=fake_lib,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities._import_pycharmm",
+    ) as mock_import:
+        mock_import.return_value.psf.get_natom.return_value = 2
+        out = coor_get_comparison_capi()
+    assert out.shape == (2, 4)
+    assert out[0, 0] == pytest.approx(1.0)
+    assert out[1, 2] == pytest.approx(4.0)
+
+
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_akma",
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_velocities_akma",
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
+    return_value=False,
+)
+def test_sync_comparison_velocities_from_main_warm(mock_cold, mock_vel, mock_sync):
+    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+        sync_comparison_velocities_from_main,
+    )
+
+    vel = np.array([[1.0, 0.0, 0.0], [0.0, 2.0, 0.0]], dtype=float)
+    mock_vel.return_value = vel
+    assert sync_comparison_velocities_from_main() is True
+    mock_sync.assert_called_once()
+    np.testing.assert_allclose(mock_sync.call_args[0][0], vel)
+
+
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_velocities_akma",
+    return_value=None,
+)
+def test_sync_comparison_velocities_from_main_missing(mock_vel):
+    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+        sync_comparison_velocities_from_main,
+    )
+
+    assert sync_comparison_velocities_from_main() is False
+
+
+@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.coor_set_comparison_capi")
+@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities._import_pycharmm")
+def test_clear_comparison_coordinates_zeros_comp(mock_import, mock_set_capi):
+    mock_import.return_value.psf.get_natom.return_value = 3
+    clear_comparison_coordinates()
+    mock_set_capi.assert_called_once()
+    zeros = mock_set_capi.call_args[0][0]
+    assert zeros.shape == (3, 4)
+    assert np.all(zeros == 0.0)
+
+
 @patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.run_charmm_script")
 def test_zero_comparison_scalars(mock_script):
     zero_comparison_scalars()
@@ -266,19 +352,6 @@ def test_prepare_comp_for_heat_targets_hydrogen(mock_prepare):
         hydrogen_only=True,
         exclude_hydrogen=False,
     )
-
-
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.set_comparison_array")
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities._import_pycharmm")
-def test_clear_comparison_coordinates(mock_import, mock_set_comp):
-    mod = MagicMock()
-    mod.psf.get_natom.return_value = 3
-    mock_import.return_value = mod
-    clear_comparison_coordinates()
-    mock_set_comp.assert_called_once()
-    out = mock_set_comp.call_args.args[0]
-    assert out.shape == (3, 4)
-    assert np.allclose(out, 0.0)
 
 
 @patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.run_charmm_script")

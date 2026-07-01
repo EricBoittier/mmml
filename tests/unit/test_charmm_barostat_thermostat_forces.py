@@ -181,7 +181,9 @@ def test_run_dynamics_passes_cpt_keywords_to_dynamics_script():
     )
     kw["nstep"] = 10
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.clear_comparison_coordinates",
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.maybe_assign_velocities_via_ase_if_cold",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.mirror_comparison_velocities_for_dynamics",
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
     ), mock.patch(
@@ -243,6 +245,8 @@ def test_run_dynamics_skips_ase_cold_velocity_when_flag_set():
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.maybe_assign_velocities_via_ase_if_cold",
     ) as maybe_assign, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.mirror_comparison_velocities_for_dynamics",
+    ) as mirror_comp, mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
@@ -263,8 +267,43 @@ def test_run_dynamics_skips_ase_cold_velocity_when_flag_set():
             }
         )
     maybe_assign.assert_not_called()
+    mirror_comp.assert_called_once()
     passed = fake_pycharmm.DynamicsScript.call_args.kwargs
     assert "_skip_ase_cold_velocity_assign" not in passed
+
+
+def test_run_dynamics_mirror_noops_after_ase_cold_assign():
+    fake_dyn = mock.MagicMock()
+    fake_pycharmm = mock.MagicMock()
+    fake_pycharmm.DynamicsScript.return_value = fake_dyn
+
+    def _assign_side_effect(kw, **kwargs):
+        kw["iasvel"] = 1
+        kw["start"] = False
+        return True
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.maybe_assign_velocities_via_ase_if_cold",
+        side_effect=_assign_side_effect,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_main",
+    ) as sync_from_main, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._execute_dynamics_script",
+    ), mock.patch.dict(
+        __import__("sys").modules,
+        {"pycharmm": fake_pycharmm},
+        clear=False,
+    ):
+        run_dynamics({"nstep": 5, "iasvel": 0, "start": True})
+    sync_from_main.assert_not_called()
+    passed = fake_pycharmm.DynamicsScript.call_args.kwargs
+    assert passed["iasvel"] == 1
+    assert passed["start"] is False
 
 
 def test_run_dynamics_mirrors_comp_when_iasvel_zero_without_start():

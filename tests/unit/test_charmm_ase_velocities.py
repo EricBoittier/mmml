@@ -68,6 +68,18 @@ def test_clamp_velocity_assignment_dynamics_kw_clamps_firstt_on_start():
     assert kw["tbath"] == pytest.approx(40.0)
 
 
+def test_maybe_assign_velocities_via_ase_if_cold_sets_iasvel_after_assign():
+    kw = {"iasvel": 0, "start": True, "finalt": 240.0}
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.assign_maxwell_boltzmann_velocities_via_ase",
+        return_value=58.0,
+    ) as assign:
+        assert maybe_assign_velocities_via_ase_if_cold(kw) is True
+    assign.assert_called_once()
+    assert kw["iasvel"] == 1
+    assert kw["start"] is False
+
+
 def test_maybe_assign_velocities_via_ase_if_cold_skips_when_warm():
     kw = {"iasvel": 0, "start": False}
     with patch(
