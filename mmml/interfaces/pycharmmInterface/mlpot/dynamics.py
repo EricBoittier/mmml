@@ -2825,6 +2825,28 @@ def _execute_dynamics_script(dyn: Any, *, append: str = "") -> None:
     lingo.charmm_script(script)
 
 
+def _dynamics_c_api_available() -> bool:
+    """True when dynamics can run without the ``dynamics`` script command."""
+    try:
+        import pycharmm.dynamics as charm_dyn
+
+        return bool(charm_dyn.dynamics_run_kw_available())
+    except (ImportError, OSError):
+        return False
+
+
+def _run_dynamics_via_c_api(kw: dict[str, Any], *, heat_append: str = "") -> Any:
+    """Run ``dynopt`` with a keyword line (KEY_LIBRARY; leap/hoover/cpt flags)."""
+    import pycharmm
+    import pycharmm.dynamics as charm_dyn
+
+    dyn = pycharmm.DynamicsScript(**kw)
+    script = _merge_dynamics_script_append(dyn.create_script_string(), heat_append)
+    command_line = charm_dyn.flatten_dynamics_script(script)
+    charm_dyn.run_with_command_line(command_line, **kw)
+    return dyn
+
+
 def _dynamics_script_append_for_heat_ramp(kw: dict[str, Any]) -> str:
     """Extra ``dyna`` keywords when scale-heat ramp must reach Fortran ``reawri``."""
     parts: list[str] = []
@@ -2867,8 +2889,11 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     _apply_dynamics_io_setters(kw)
     heat_append = _dynamics_script_append_for_heat_ramp(kw)
     _release_charmm_dynamics_api_buffers()
-    dyn = pycharmm.DynamicsScript(**kw)
-    _execute_dynamics_script(dyn, append=heat_append)
+    if _dynamics_c_api_available():
+        dyn = _run_dynamics_via_c_api(kw, heat_append=heat_append)
+    else:
+        dyn = pycharmm.DynamicsScript(**kw)
+        _execute_dynamics_script(dyn, append=heat_append)
     _release_charmm_dynamics_api_buffers()
     return dyn
 

@@ -36,6 +36,13 @@ def c_api_path_buffer(file_name: str) -> tuple[ctypes.Array, ctypes.c_int]:
     return buf, ctypes.c_int(len(file_name))
 
 
+def c_api_string_buffer(text: str) -> tuple[ctypes.Array, ctypes.c_int]:
+    """Stable buffer + length for arbitrary CHARMM ``bind(c)`` string APIs."""
+    encoded = text.encode()
+    buf = ctypes.create_string_buffer(encoded)
+    return buf, ctypes.c_int(len(encoded))
+
+
 def _resolve_charmm_fortran_path(file_name, *, read_only, append):
     try:
         from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path

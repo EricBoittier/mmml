@@ -33,6 +33,28 @@ def should_run_mini_lattice_abnr(
     return True
 
 
+def _run_lattice_minimize_c_api(
+    *,
+    nstep: int,
+    tolenr: float,
+    tolgrd: float,
+    nocoords: bool,
+) -> None:
+    """Lattice box optimization via KEY_LIBRARY minimize C API (no ``mini`` script)."""
+    import pycharmm.minimize as charm_min
+
+    kwargs: dict[str, object] = {
+        "lattice": True,
+        "nstep": int(nstep),
+        "tolenr": float(tolenr),
+        "tolgrd": float(tolgrd),
+    }
+    if nocoords:
+        kwargs["nocoords"] = True
+    if not charm_min.run_abnr(**kwargs):
+        raise RuntimeError("CHARMM lattice minimize (ABNR/SD) failed")
+
+
 def run_charmm_lattice_abnr(
     *,
     nstep: int,
@@ -44,19 +66,18 @@ def run_charmm_lattice_abnr(
     fallback_side_A: float | None = None,
     restart_path: PathLike | None = None,
 ) -> float | None:
-    """Run CHARMM ``MINI ABNR LATTice`` to optimize the unit cell (and optionally coords).
+    """Run CHARMM lattice minimization to optimize the unit cell (and optionally coords).
 
-    PyCHARMM's :func:`pycharmm.minimize.run_abnr` C binding does not pass the SD
-    ``lattice`` flag, so this uses a CHARMM script command instead.
+    Uses :func:`pycharmm.minimize.run_abnr` with ``lattice=True`` (C API). When
+    ``minimize_run_abnr_lattice`` is absent from ``libcharmm``, falls back to SD
+    with the same lattice flags.
 
     After MM pretreat, ``pbound_get_size`` often reads zero in Python while IMAGE
     lists remain valid in Fortran. Pass ``fallback_side_A`` / ``restart_path`` so
-    post-ABNR box resolution does not fail when live pbound is inactive.
+    post-minimize box resolution does not fail when live pbound is inactive.
     """
     if int(nstep) <= 0:
         return None
-
-    import pycharmm.script
 
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_quiet_output
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
@@ -77,14 +98,6 @@ def run_charmm_lattice_abnr(
             float(fallback_side_A),
             quiet=not verbose,
         )
-    kwargs: dict[str, object] = {
-        "lattice": True,
-        "nstep": int(nstep),
-        "tolenr": float(tolenr),
-        "tolgrd": float(tolgrd),
-    }
-    if nocoords:
-        kwargs["nocoords"] = True
     if verbose:
         mode = "box only" if nocoords else "coords + box"
         print(
@@ -92,7 +105,12 @@ def run_charmm_lattice_abnr(
             flush=True,
         )
     with charmm_quiet_output():
-        pycharmm.script.CommandScript("mini abnr", **kwargs).run()
+        _run_lattice_minimize_c_api(
+            nstep=int(nstep),
+            tolenr=float(tolenr),
+            tolgrd=float(tolgrd),
+            nocoords=nocoords,
+        )
     restart_for_resolve = restart_path
     if restart_for_resolve is not None and charmm_crystal_is_active():
         restart_for_resolve = None

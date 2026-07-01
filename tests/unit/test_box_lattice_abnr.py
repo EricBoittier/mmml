@@ -12,15 +12,15 @@ import pytest
 
 
 @contextmanager
-def _fake_pycharmm_script_module(script_cls: MagicMock):
-    """Inject a stub ``pycharmm.script`` without loading libcharmm."""
+def _fake_pycharmm_minimize_module(run_abnr: MagicMock):
+    """Inject a stub ``pycharmm.minimize`` without loading libcharmm."""
     fake_pycharmm = types.ModuleType("pycharmm")
-    fake_script_mod = types.ModuleType("pycharmm.script")
-    fake_script_mod.CommandScript = script_cls
-    fake_pycharmm.script = fake_script_mod
+    fake_min_mod = types.ModuleType("pycharmm.minimize")
+    fake_min_mod.run_abnr = run_abnr
+    fake_pycharmm.minimize = fake_min_mod
     with patch.dict(
         sys.modules,
-        {"pycharmm": fake_pycharmm, "pycharmm.script": fake_script_mod},
+        {"pycharmm": fake_pycharmm, "pycharmm.minimize": fake_min_mod},
     ):
         yield
 
@@ -59,16 +59,14 @@ def test_should_run_mini_lattice_abnr_true_for_pbc_mini():
     )
 
 
-def test_run_charmm_lattice_abnr_uses_script_command():
+def test_run_charmm_lattice_abnr_uses_minimize_c_api():
     from mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
         run_charmm_lattice_abnr,
     )
 
-    script_cls = MagicMock()
-    script_inst = MagicMock()
-    script_cls.return_value = script_inst
+    run_abnr = MagicMock(return_value=True)
     with (
-        _fake_pycharmm_script_module(script_cls),
+        _fake_pycharmm_minimize_module(run_abnr),
         patch(
             "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
             return_value=(42.5, "pbound"),
@@ -88,15 +86,13 @@ def test_run_charmm_lattice_abnr_uses_script_command():
             verbose=False,
         )
     assert side == pytest.approx(42.5)
-    script_cls.assert_called_once_with(
-        "mini abnr",
+    run_abnr.assert_called_once_with(
         lattice=True,
         nstep=30,
         tolenr=1e-3,
         tolgrd=1e-3,
         nocoords=True,
     )
-    script_inst.run.assert_called_once()
     apply_nb.assert_called_once_with(nbxmod=5, cubic_box_side_A=42.5)
 
 
@@ -113,11 +109,9 @@ def test_run_charmm_lattice_abnr_uses_fallback_when_pbound_inactive():
         run_charmm_lattice_abnr,
     )
 
-    script_cls = MagicMock()
-    script_inst = MagicMock()
-    script_cls.return_value = script_inst
+    run_abnr = MagicMock(return_value=True)
     with (
-        _fake_pycharmm_script_module(script_cls),
+        _fake_pycharmm_minimize_module(run_abnr),
         patch(
             "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
             return_value=False,
@@ -158,11 +152,9 @@ def test_run_charmm_lattice_abnr_skips_restart_when_crystal_active():
         run_charmm_lattice_abnr,
     )
 
-    script_cls = MagicMock()
-    script_inst = MagicMock()
-    script_cls.return_value = script_inst
+    run_abnr = MagicMock(return_value=True)
     with (
-        _fake_pycharmm_script_module(script_cls),
+        _fake_pycharmm_minimize_module(run_abnr),
         patch(
             "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
             return_value=True,

@@ -47,6 +47,34 @@ contains
     call minmiz(command_line, command_line_len, min_opts, abnr_opts=abnr_opts)
     minimize_run_abner = 1    
   end function minimize_run_abner
+
+  !> @brief ABNR with optional CRYSTAL LATTice / NOCOords (KEY_LIBRARY dynopt path).
+  integer(c_int) function minimize_run_abnr_lattice(min_opts, abnr_opts, &
+       lattice_flag, nocoords_flag) bind(c)
+    use, intrinsic :: iso_c_binding, only: c_int
+    use api_types, only: min_settings, min_abnr_settings
+    use minmiz_module, only: minmiz
+    implicit none
+
+    type(min_settings) :: min_opts
+    type(min_abnr_settings) :: abnr_opts
+    integer(c_int), value :: lattice_flag, nocoords_flag
+
+    character(len=128) :: command_line = ' '
+    integer :: command_line_len = 0
+
+    minimize_run_abnr_lattice = 0
+    if (lattice_flag /= 0) then
+       command_line = 'LATT'
+       command_line_len = 4
+       if (nocoords_flag /= 0) then
+          command_line(5:9) = ' NOCO'
+          command_line_len = 9
+       end if
+    end if
+    call minmiz(command_line, command_line_len, min_opts, abnr_opts=abnr_opts)
+    minimize_run_abnr_lattice = 1
+  end function minimize_run_abnr_lattice
 #endif /* KEY_LIBRARY */
 
 end module api_minimize

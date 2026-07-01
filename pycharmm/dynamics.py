@@ -730,6 +730,153 @@ def _configure(**kwargs):
     return options
 
 
+def flatten_dynamics_script(script: str) -> str:
+    """Collapse a ``DynamicsScript`` string to a single ``dynopt`` keyword line."""
+    body = script.replace("-\n", " ").replace("\n", " ").strip()
+    if body.lower().startswith("dynamics "):
+        body = body[len("dynamics ") :]
+    return " ".join(body.split())
+
+
+def dynamics_run_kw_available() -> bool:
+    """True when ``libcharmm`` exports ``dynamics_run_kw`` (KEY_LIBRARY rebuild)."""
+    return callable(getattr(lib.charmm, "dynamics_run_kw", None))
+
+
+def _configure_known_only(**kwargs):
+    """Apply dynamics setters/options; ignore unknown ``DynamicsScript`` keys."""
+    valid_opts = dict(
+        [
+            ("ieqfrq", 0),
+            ("ntrfrq", 100),
+            ("ichecw", 0),
+            ("tbath", 298.0),
+            ("iasors", 0),
+            ("iasvel", 1),
+            ("iscale", 0),
+            ("iscvel", 0),
+            ("isvfrq", 100),
+            ("iprfrq", 100),
+            ("ihtfrq", 0),
+        ]
+    )
+
+    options = OPTIONS()
+    for opt, default in valid_opts.items():
+        setattr(options, opt, default)
+
+    valid_toggles = dict(
+        [("lang", use_lang), ("start", use_start), ("restart", use_restart)]
+    )
+
+    valid_setters = dict(
+        [
+            ("nprint", set_nprint),
+            ("nstep", set_nstep),
+            ("inbfrq", set_inbfrq),
+            ("ihbfrq", set_ihbfrq),
+            ("ilbfrq", set_ilbfrq),
+            ("finalt", set_finalt),
+            ("teminc", set_teminc),
+            ("tstruc", set_tstruc),
+            ("timest", set_timest),
+            ("akmast", set_akmast),
+            ("firstt", set_firstt),
+            ("twindh", set_twindh),
+            ("twindl", set_twindl),
+            ("echeck", set_echeck),
+            ("nsavc", set_nsavc),
+            ("nsavv", set_nsavv),
+            ("iseed", set_rngseeds),
+            ("fbeta", set_fbetas),
+            ("iunwri", set_iunwri),
+            ("iuncrd", set_iuncrd),
+            ("iunrea", set_iunrea),
+        ]
+    )
+
+    for k, v in kwargs.items():
+        if k in valid_opts:
+            setattr(options, k, v)
+        elif k in valid_toggles and v:
+            valid_toggles[k]()
+        elif k in valid_setters:
+            valid_setters[k](v)
+
+    return options
+
+
+def run_with_command_line(command_line: str, init_velocities=None, **kwargs):
+    """Run dynamics via ``dynopt`` keyword line (KEY_LIBRARY; no ``dynamics`` script)."""
+    if not dynamics_run_kw_available():
+        raise RuntimeError(
+            "dynamics_run_kw is not exported by libcharmm; rebuild with api_dynamics.F90"
+        )
+
+    from pycharmm.charmm_file import c_api_string_buffer
+
+    natom = coor.get_natom()
+    if init_velocities:
+        init_vx = (ctypes.c_double * natom)(*(init_velocities["vx"][0:natom]))
+        init_vy = (ctypes.c_double * natom)(*(init_velocities["vy"][0:natom]))
+        init_vz = (ctypes.c_double * natom)(*(init_velocities["vz"][0:natom]))
+        out_vx = (ctypes.c_double * natom)()
+        out_vy = (ctypes.c_double * natom)()
+        out_vz = (ctypes.c_double * natom)()
+    else:
+        init_vx = init_vy = init_vz = None
+        out_vx = out_vy = out_vz = None
+
+    options = _configure_known_only(**kwargs)
+    buf, buflen = c_api_string_buffer(command_line)
+    fn = lib.charmm.dynamics_run_kw
+    if init_velocities:
+        success = fn(
+            ctypes.byref(options),
+            buf,
+            ctypes.byref(buflen),
+            init_vx,
+            init_vy,
+            init_vz,
+            out_vx,
+            out_vy,
+            out_vz,
+        )
+    else:
+        success = fn(
+            ctypes.byref(options),
+            buf,
+            ctypes.byref(buflen),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+
+    if not success:
+        raise RuntimeError("dynamics_run_kw failed")
+
+    if not init_velocities:
+        out_vx = (ctypes.c_double * natom)()
+        out_vy = (ctypes.c_double * natom)()
+        out_vz = (ctypes.c_double * natom)()
+        out_vw = (ctypes.c_double * natom)()
+        lib.charmm.coor_get_comparison(out_vx, out_vy, out_vz, out_vw)
+    else:
+        out_vw = (ctypes.c_double * natom)()
+
+    return pandas.DataFrame(
+        {
+            "vx": [out_vx[i] for i in range(natom)],
+            "vy": [out_vy[i] for i in range(natom)],
+            "vz": [out_vz[i] for i in range(natom)],
+            "vw": [out_vw[i] for i in range(natom)],
+        }
+    )
+
+
 def run(init_velocities=None, **kwargs):
     """Execute a dynamics run for the current system
 

@@ -47,6 +47,52 @@ contains
     call dynamics_reset()
   end function dynamics_run
 
+  !> @brief run dynamics with DYNAMICS keyword tail (leap, hoover, cpt, …).
+  !
+  ! ``dynamics_run`` passes an empty command line; integrator / thermostat flags
+  ! are only parsed from ``c_kw`` (same tokens as after ``DYNAmics`` in a script).
+  integer(c_int) function dynamics_run_kw(options, c_kw, c_kw_len, &
+       in_vx, in_vy, in_vz, &
+       out_vx, out_vy, out_vz) bind(c)
+    use, intrinsic :: iso_c_binding, only: c_int, c_double, c_char
+    use dcntrl_mod, only: dynopt
+    use api_types, only: dynamics_settings
+    use api_util, only: c2f_string
+    use dimens_fcm, only: mxcmsz
+
+    implicit none
+
+    type(dynamics_settings), intent(in) :: options
+    character(kind=c_char), intent(in) :: c_kw(*)
+    integer(c_int), value :: c_kw_len
+
+    real(c_double), dimension(:), optional :: &
+         in_vx, in_vy, in_vz, &
+         out_vx, out_vy, out_vz
+
+    character(len=:), allocatable :: kw_str
+    character(len=mxcmsz) :: comlyn
+    integer :: ntrim
+
+    dynamics_run_kw = 0
+    kw_str = c2f_string(c_kw, c_kw_len)
+    ntrim = len_trim(kw_str)
+    if (ntrim > mxcmsz) ntrim = mxcmsz
+    comlyn = ' '
+    if (ntrim > 0) comlyn(1:ntrim) = kw_str(1:ntrim)
+
+    if (present(in_vx)) then
+       call dynopt(comlyn, ntrim, options, &
+            in_vx, in_vy, in_vz, &
+            out_vx, out_vy, out_vz)
+    else
+       call dynopt(comlyn, ntrim, options)
+    end if
+
+    dynamics_run_kw = 1
+    call dynamics_reset()
+  end function dynamics_run_kw
+
   !> @brief use Langevin dynamics
   !
   !> @return integer(c_int) 1 if Langevin dynamics was being used

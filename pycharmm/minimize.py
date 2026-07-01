@@ -292,12 +292,33 @@ def run_abnr(**kwargs):
     bool
         true for success, false if there was an error
     """
+    lattice = bool(kwargs.pop("lattice", False))
+    nocoords = bool(kwargs.pop("nocoords", False))
     min_obj = MinOpts()
     min_settings, other_settings = _filter_attributes(min_obj, kwargs)
     min_opts = _configure_minimization(min_settings)
     abnr_opts = _configure_abnr(other_settings)
-    status = lib.charmm.minimize_run_abner(ctypes.byref(min_opts),
-                                           ctypes.byref(abnr_opts))
+    lat_fn = getattr(lib.charmm, "minimize_run_abnr_lattice", None)
+    if (lattice or nocoords) and callable(lat_fn):
+        lat = ctypes.c_int(1 if lattice else 0)
+        noco = ctypes.c_int(1 if nocoords else 0)
+        status = lat_fn(
+            ctypes.byref(min_opts),
+            ctypes.byref(abnr_opts),
+            lat,
+            noco,
+        )
+    else:
+        if lattice or nocoords:
+            return run_sd(
+                lattice=lattice,
+                nocoords=nocoords,
+                **min_settings,
+            )
+        status = lib.charmm.minimize_run_abner(
+            ctypes.byref(min_opts),
+            ctypes.byref(abnr_opts),
+        )
     status = bool(status)
     return status
 

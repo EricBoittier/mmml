@@ -116,7 +116,7 @@ def test_run_dynamics_merges_heat_ramp_onto_dynamics_line():
     block = _read("mmml/interfaces/pycharmmInterface/mlpot/dynamics.py").split(
         "def run_dynamics("
     )[1].split("\ndef ")[0]
-    assert "_execute_dynamics_script" in block
+    assert "_execute_dynamics_script" in block or "_run_dynamics_via_c_api" in block
     assert "_normalize_dynamics_heat_ramp_kw" in block
     assert "apply_heat_ramp_frequencies" in block
     assert "_apply_dynamics_io_setters" in block
