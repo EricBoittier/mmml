@@ -3233,6 +3233,16 @@ def test_harmonize_dynamics_frequency_for_remainder_chunk():
     assert kw_mismatch["inbfrq"] == 100
     assert kw_mismatch["imgfrq"] % kw_mismatch["inbfrq"] == 0
 
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _align_inbfrq_with_imgfrq,
+        _prepare_dynamics_list_frequencies,
+    )
+
+    kw_stale_img = {"inbfrq": 50, "imgfrq": -1, "ihbfrq": -1, "ilbfrq": -1}
+    _align_inbfrq_with_imgfrq(kw_stale_img)
+    assert kw_stale_img["imgfrq"] == 50
+    assert kw_stale_img["ihbfrq"] == 50
+
     kw4 = {
         "nsavc": 250,
         "_target_dcd_nsavc": 250,
@@ -3276,6 +3286,27 @@ def test_apply_overlap_chunk_heat_ramp_chunk_zero():
     )
     assert chunk_kw["ihtfrq"] < 500
     assert chunk_kw["TEMINC"] > 0.0
+
+
+def test_prepare_dynamics_list_frequencies_aligns_stale_imgfrq():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _align_inbfrq_with_imgfrq,
+    )
+
+    kw = {"inbfrq": 200, "imgfrq": -1, "ihbfrq": -1, "ilbfrq": -1}
+    _align_inbfrq_with_imgfrq(kw)
+    assert kw["imgfrq"] == 200
+    assert kw["ihbfrq"] == 200
+    assert kw["ilbfrq"] == 200
+
+    block = (
+        Path("mmml/interfaces/pycharmmInterface/mlpot/dynamics.py")
+        .read_text(encoding="utf-8")
+        .split("def _prepare_dynamics_list_frequencies(")[1]
+        .split("\ndef ")[0]
+    )
+    assert "set_imgfrq" in block
+    assert "set_inbfrq" in block
 
 
 def test_apply_dyn_imgfrq_from_args_sets_pbc_list_freqs():

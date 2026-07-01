@@ -2887,6 +2887,7 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
         apply_heat_ramp_frequencies(kw, nstep=nstep, ihtfrq=int(kw["ihtfrq"]))
     _normalize_dynamics_heat_ramp_kw(kw)
     _apply_dynamics_io_setters(kw)
+    _prepare_dynamics_list_frequencies(kw, nstep=nstep)
     heat_append = _dynamics_script_append_for_heat_ramp(kw)
     _release_charmm_dynamics_api_buffers()
     if _dynamics_c_api_available():
@@ -3488,12 +3489,56 @@ def _align_inbfrq_with_imgfrq(chunk_kw: dict[str, Any]) -> None:
         return
     inb = int(chunk_kw["inbfrq"])
     img = int(chunk_kw["imgfrq"])
-    if inb <= 0 or img <= 0 or img % inb == 0:
+    if inb <= 0:
+        return
+    if img <= 0:
+        chunk_kw["imgfrq"] = inb
+        if "ihbfrq" in chunk_kw:
+            chunk_kw["ihbfrq"] = inb
+        if "ilbfrq" in chunk_kw:
+            chunk_kw["ilbfrq"] = inb
+        return
+    if img % inb == 0:
         return
     for d in range(min(inb, img), 0, -1):
         if img % d == 0:
             chunk_kw["inbfrq"] = d
             return
+
+
+def _prepare_dynamics_list_frequencies(kw: dict[str, Any], *, nstep: int) -> None:
+    """Push aligned ``inbfrq`` / ``imgfrq`` to Fortran before ``dynopt`` (C API path).
+
+    ``dynamics.set_inbfrq`` updates ``contrl`` but not image-list cadence; a leftover
+    ``imgfrq=-1`` with ``inbfrq>0`` triggers BOMLev -2 (IMGFRQ not a multiple of INBFRQ).
+    """
+    _align_inbfrq_with_imgfrq(kw)
+    inb = int(kw.get("inbfrq", -1))
+    if inb == 0:
+        kw["imgfrq"] = 0
+        kw["ihbfrq"] = 0
+        kw["ilbfrq"] = 0
+    try:
+        import pycharmm.nbonds as nbonds
+    except (ImportError, OSError):
+        return
+    if inb == 0:
+        nbonds.set_inbfrq(0)
+        nbonds.set_imgfrq(0)
+        return
+    if inb > 0:
+        inb_eff = _harmonize_dynamics_frequency(inb, max(1, int(nstep)))
+        if inb_eff != inb:
+            kw["inbfrq"] = inb_eff
+            inb = inb_eff
+        nbonds.set_inbfrq(inb)
+        img = int(kw.get("imgfrq", inb))
+        if img <= 0 or img % inb != 0:
+            img = inb
+        kw["imgfrq"] = img
+        kw["ihbfrq"] = img
+        kw["ilbfrq"] = img
+        nbonds.set_imgfrq(img)
 
 
 _OVERLAP_CHUNK_FREQ_KEYS = (
