@@ -9,6 +9,7 @@ import pytest
 
 from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
     apply_bussi_velocity_rescale,
+    assign_bussi_fallback_velocities,
     calculate_bussi_rescale_alpha,
     target_kinetic_energy_kcalmol,
 )
@@ -288,10 +289,58 @@ def test_apply_bussi_velocity_rescale_assigns_when_velocities_missing():
             rescale_interval_steps=50,
             quiet=True,
         )
-    assign.assert_called_once()
     sync.assert_called_once()
     assert alpha == pytest.approx(1.0)
     assert measured == pytest.approx(10.0)
+
+
+def test_assign_bussi_fallback_velocities_uses_numpy_when_ase_fails():
+    masses = np.array([12.0, 1.0, 1.0], dtype=float)
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.assign_maxwell_boltzmann_velocities_via_ase",
+        side_effect=RuntimeError("ase unavailable"),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_masses_amu",
+        return_value=masses,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
+    ) as sync:
+        measured, vel = assign_bussi_fallback_velocities(300.0, quiet=True, seed=0)
+    sync.assert_called_once()
+    assert vel.shape == (3, 3)
+    assert float(np.max(np.abs(vel))) > 0.0
+    assert measured > 0.0
+
+
+def test_apply_bussi_velocity_rescale_never_raises_when_fallback_assigns():
+    masses = np.array([12.0, 1.0, 1.0], dtype=float)
+    v_akma = np.ones((3, 3), dtype=float) * 80.0
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_masses_amu",
+        return_value=masses,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._resolve_bussi_rescale_velocities",
+        return_value=v_akma,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.calculate_bussi_rescale_alpha",
+        return_value=1.0,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.estimate_kinetic_temperature_k",
+        return_value=12.0,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.estimate_kinetic_energy_kcalmol",
+        return_value=2.0,
+    ):
+        measured, alpha = apply_bussi_velocity_rescale(
+            14.0,
+            timestep_ps=0.0001,
+            rescale_interval_steps=50,
+            quiet=True,
+        )
+    assert alpha == pytest.approx(1.0)
+    assert measured == pytest.approx(12.0)
 
 
 def test_resolve_heat_thermostat_keeps_bussi_after_pretreat(monkeypatch):

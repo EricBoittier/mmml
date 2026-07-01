@@ -209,10 +209,14 @@ overlap (...): Bussi schedule step 50: T_target=14.00 K, T_live≈...
 Red flags:
 
 ```
-ASE Bussi rescale: no readable velocities
-ASE Maxwell-Boltzmann velocities at ... (measured T≈0.00 K)
-apply_bussi_velocity_rescale: CHARMM velocities unavailable
+ASE Bussi rescale: no readable velocities          # OK if followed by MB / in-memory draw
+ASE Maxwell-Boltzmann assign failed (...); drawing in-memory Maxwell-Boltzmann
+apply_bussi_velocity_rescale: CHARMM velocities unavailable   # should not appear
 ```
+
+After overlap rescue or CGENFF ``reregister_mlpot``, mmml calls
+``ensure_bussi_velocities_after_overlap_recovery`` (restart ladder → in-memory MB)
+before retrying Bussi sub-chunks.
 
 Ensure overlap micro-chunks keep `nsavv=nstep` so scratch restarts include
 `!VELOCITIES` (see `_harmonize_overlap_chunk_frequencies` in `dynamics.py`).
