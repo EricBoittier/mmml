@@ -867,8 +867,8 @@ def test_materialize_deferred_mlpot_jax_before_sd_warms_callback_when_spherical_
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot._warmup_value_and_grad_for_model",
     ) as warmup, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
-    ) as probe, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.prime_charmm_hybrid_energy_before_mlpot_sd",
+    ) as prime, patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ) as recover, patch.object(
         model,
@@ -880,7 +880,7 @@ def test_materialize_deferred_mlpot_jax_before_sd_warms_callback_when_spherical_
     ):
         assert materialize_deferred_mlpot_jax_before_sd(ctx) is True
 
-    probe.assert_not_called()
+    prime.assert_called_once()
     warmup.assert_called_once()
     assert recover.call_count == 2
 
@@ -1047,3 +1047,35 @@ def test_prime_charmm_hybrid_energy_before_mlpot_sd_skips_serial():
         assert prime_charmm_hybrid_energy_before_mlpot_sd(ctx) is None
 
     probe.assert_not_called()
+
+
+def test_prime_charmm_hybrid_energy_re_primes_when_stale_probed_flag_without_user():
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        prime_charmm_hybrid_energy_before_mlpot_sd,
+    )
+
+    ctx = MagicMock(_mlpot_pre_sd_ener_probed=True)
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
+        return_value=True,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
+        return_value=True,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
+        return_value=3.1,
+    ) as probe, patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup._read_mlpot_user_energy_kcal",
+        side_effect=[None, -8.0],
+    ):
+        grms = prime_charmm_hybrid_energy_before_mlpot_sd(ctx, verbose=False)
+
+    assert grms == pytest.approx(3.1)
+    probe.assert_called_once()
+    assert ctx._mlpot_pre_sd_ener_probed is True
