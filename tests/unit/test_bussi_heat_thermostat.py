@@ -848,3 +848,78 @@ def test_harmonize_overlap_chunk_preserves_nsavv_when_suppressing_dcd():
     _harmonize_overlap_chunk_frequencies(kw_cadence, 50, global_step_start=0)
     assert kw_cadence["_suppress_trajectory"] is True
     assert kw_cadence["nsavv"] == 50
+
+
+def test_estimate_akma_velocities_from_position_delta():
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        estimate_akma_velocities_from_position_delta,
+        estimate_kinetic_temperature_k,
+    )
+
+    masses = np.array([12.0, 1.0, 1.0], dtype=float)
+    p0 = np.zeros((3, 3), dtype=float)
+    p1 = p0.copy()
+    p1[0, 0] = 0.025  # 0.025 Å in 0.025 ps => 1 Å/ps on atom 0
+    vel = estimate_akma_velocities_from_position_delta(
+        p0, p1, dt_ps=0.025, masses_amu=masses
+    )
+    assert vel is not None
+    assert vel.shape == (3, 3)
+    temp = estimate_kinetic_temperature_k(vel, masses)
+    assert temp is not None
+    assert float(temp) > 0.5
+
+
+def test_read_restart_coordinate_frames_two_snapshots(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_restart_coordinate_frames,
+    )
+
+    restart = tmp_path / "hist.res"
+    restart.write_text(
+        "REST     0     1\n"
+        "       1 !NTITLE followed by title\n"
+        "* t\n"
+        "\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        "         1           0          50          49          50           0           0\n"
+        " !X, Y, Z\n"
+        " 0.000000000000000D+00 0.000000000000000D+00 0.000000000000000D+00\n"
+        " !X, Y, Z\n"
+        " 2.500000000000000D-02 0.000000000000000D+00 0.000000000000000D+00\n",
+        encoding="ascii",
+    )
+    frames = read_restart_coordinate_frames(restart)
+    assert len(frames) == 2
+    assert frames[1][0, 0] == pytest.approx(0.025)
+
+
+def test_try_bussi_finite_difference_from_memory(monkeypatch):
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        _try_bussi_finite_difference_velocities,
+    )
+
+    masses = np.array([12.0], dtype=float)
+    p0 = np.zeros((1, 3), dtype=float)
+    p1 = np.array([[0.025, 0.0, 0.0]], dtype=float)
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        lambda: p1,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_masses_amu",
+        lambda: masses,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._charmm_cubic_cell_matrix",
+        lambda: None,
+    )
+
+    vel = _try_bussi_finite_difference_velocities(
+        pos_before=p0,
+        dt_ps=0.025,
+        quiet=True,
+    )
+    assert vel is not None
+    assert vel.shape == (1, 3)

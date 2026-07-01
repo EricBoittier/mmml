@@ -324,6 +324,42 @@ def read_restart_velocities(path: Path) -> np.ndarray | None:
     return None
 
 
+def read_restart_coordinate_frames(path: Path) -> list[np.ndarray]:
+    """Return all Cartesian frames from a CHARMM restart (oldest first, newest last)."""
+    p = Path(path)
+    natom = read_restart_natom(p)
+    if natom is None or natom <= 0:
+        return []
+    try:
+        lines = p.read_text(errors="ignore").splitlines()
+    except OSError:
+        return []
+    frames: list[np.ndarray] = []
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        if _is_restart_xyz_header(line, velocities=False):
+            values: list[float] = []
+            i += 1
+            while i < len(lines):
+                row = lines[i].strip()
+                if not row:
+                    i += 1
+                    continue
+                if row.startswith("!"):
+                    break
+                for match in _FORTRAN_FLOAT_RE.finditer(row):
+                    values.append(_parse_fortran_d_float(match.group()))
+                i += 1
+            if len(values) >= 3 * natom:
+                arr = np.asarray(values[: 3 * natom], dtype=float).reshape(natom, 3)
+                if np.all(np.isfinite(arr)):
+                    frames.append(arr)
+            continue
+        i += 1
+    return frames
+
+
 def restart_velocities_match_coordinates(
     path: Path,
     velocities: np.ndarray,

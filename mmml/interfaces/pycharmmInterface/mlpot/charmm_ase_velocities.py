@@ -22,6 +22,120 @@ MAX_REASONABLE_VELOCITY_TEMP_K = 5000.0
 _last_synced_velocities_akma: np.ndarray | None = None
 
 
+def _charmm_cubic_cell_matrix() -> np.ndarray | None:
+    """Orthorhombic box matrix from live CHARMM crystal, if any."""
+    try:
+        import pycharmm.crystal as crystal
+
+        abc = np.asarray(crystal.get_crystal_param(), dtype=np.float64).reshape(-1)
+        if abc.size >= 3 and float(abc[0]) > 0.0:
+            return np.diag([float(abc[0]), float(abc[1]), float(abc[2])])
+    except Exception:
+        pass
+    return None
+
+
+def estimate_akma_velocities_from_position_delta(
+    pos0: np.ndarray,
+    pos1: np.ndarray,
+    *,
+    dt_ps: float,
+    masses_amu: np.ndarray | None = None,
+    cell: np.ndarray | None = None,
+) -> np.ndarray | None:
+    """Finite-difference velocities (AKMA) from two Cartesian snapshots."""
+    dt = float(dt_ps)
+    if dt <= 0.0 or not np.isfinite(dt):
+        return None
+    p0 = np.asarray(pos0, dtype=np.float64).reshape(-1, 3)
+    p1 = np.asarray(pos1, dtype=np.float64).reshape(-1, 3)
+    if p0.shape != p1.shape or p0.size == 0:
+        return None
+    if not np.all(np.isfinite(p0)) or not np.all(np.isfinite(p1)):
+        return None
+    delta = p1 - p0
+    if cell is not None:
+        from mmml.utils.geometry_checks import _mic
+
+        delta = _mic(delta, np.asarray(cell, dtype=np.float64).reshape(3, 3))
+    v_ang_ps = delta / dt
+    try:
+        if masses_amu is None:
+            masses_amu = charmm_masses_amu()
+    except Exception:
+        return None
+    m = np.asarray(masses_amu, dtype=np.float64).reshape(-1)
+    if v_ang_ps.shape[0] != m.shape[0]:
+        return None
+    return ase_to_charmm_akma_velocities(v_ang_ps, m)
+
+
+def _try_bussi_finite_difference_velocities(
+    *,
+    pos_before: np.ndarray | None = None,
+    dt_ps: float | None = None,
+    restart_path: Path | str | None = None,
+    frame_dt_ps: float | None = None,
+    quiet: bool = True,
+) -> np.ndarray | None:
+    """Estimate AKMA velocities from in-memory or restart coordinate deltas."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_restart_coordinate_frames,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+
+    cell = _charmm_cubic_cell_matrix()
+    masses = None
+    try:
+        masses = charmm_masses_amu()
+    except Exception:
+        masses = None
+
+    vel: np.ndarray | None = None
+    source = ""
+    if pos_before is not None and dt_ps is not None and float(dt_ps) > 0.0:
+        try:
+            pos_after = get_charmm_positions_array()
+        except Exception:
+            pos_after = None
+        if pos_after is not None:
+            vel = estimate_akma_velocities_from_position_delta(
+                pos_before,
+                pos_after,
+                dt_ps=float(dt_ps),
+                masses_amu=masses,
+                cell=cell,
+            )
+            source = "in-memory Δx/Δt"
+    if vel is None and restart_path is not None and frame_dt_ps is not None:
+        p = Path(restart_path).expanduser()
+        if p.is_file():
+            frames = read_restart_coordinate_frames(p)
+            if len(frames) >= 2 and float(frame_dt_ps) > 0.0:
+                vel = estimate_akma_velocities_from_position_delta(
+                    frames[-2],
+                    frames[-1],
+                    dt_ps=float(frame_dt_ps),
+                    masses_amu=masses,
+                    cell=cell,
+                )
+                source = f"{p.name} coordinate history"
+    if vel is None:
+        return None
+    if velocities_are_cold(vel, masses_amu=masses) or velocities_are_pathological(
+        vel, masses_amu=masses
+    ):
+        return None
+    if not quiet:
+        temp = estimate_kinetic_temperature_k(vel, masses)
+        txt = f"{temp:.2f}" if temp is not None else "?"
+        print(
+            f"ASE Bussi: velocities from {source} (T≈{txt} K)",
+            flush=True,
+        )
+    return np.asarray(vel, dtype=np.float64).reshape(-1, 3)
+
+
 def clamp_velocity_assignment_temp_k(temperature_K: float) -> float:
     """Return ``temperature_K`` clamped to :data:`MIN_VELOCITY_ASSIGNMENT_TEMP_K`."""
     temp = float(temperature_K)
@@ -298,12 +412,16 @@ def capture_charmm_velocities_for_bussi(
     *,
     restart_path: Path | str | None = None,
     fallback_paths: Path | str | Sequence[Path | str] | None = None,
+    pos_before: np.ndarray | None = None,
+    dt_ps: float | None = None,
+    frame_dt_ps: float | None = None,
     quiet: bool = True,
 ) -> np.ndarray | None:
     """Load AKMA velocities into main/COMP/cache for Bussi.
 
     Order: warm synced cache, live main-set (post-``dyna``), warm restart ladder
-    (current scratch + paired slot + staging + *fallback_paths*), then warm COMP.
+    (current scratch + paired slot + staging + *fallback_paths*), finite-difference
+    from coordinate deltas, then warm COMP.
     """
     raw = last_synced_velocities_akma_raw()
     if raw is not None and not velocities_are_cold(raw) and not velocities_are_pathological(raw):
@@ -347,6 +465,7 @@ def capture_charmm_velocities_for_bussi(
             and _velocity_array_matches_psf(comp)
             and not comparison_matches_main_positions()
             and not velocities_are_cold(comp)
+            and not velocities_are_pathological(comp)
         ):
             sync_charmm_velocities_akma(comp)
             return comp
@@ -354,6 +473,21 @@ def capture_charmm_velocities_for_bussi(
         pass
     except Exception:
         pass
+
+    vel = _try_bussi_finite_difference_velocities(
+        pos_before=pos_before,
+        dt_ps=dt_ps,
+        restart_path=restart_path,
+        frame_dt_ps=frame_dt_ps,
+        quiet=quiet,
+    )
+    if vel is not None:
+        try:
+            sync_charmm_velocities_akma(vel)
+        except ValueError:
+            vel = None
+        else:
+            return vel
     return None
 
 
@@ -740,12 +874,18 @@ def _resolve_bussi_rescale_velocities(
     temperature_K: float,
     quiet: bool,
     fallback_paths: Path | str | Sequence[Path | str] | None = None,
+    pos_before: np.ndarray | None = None,
+    dt_ps: float | None = None,
+    frame_dt_ps: float | None = None,
 ) -> np.ndarray:
     """Best-effort AKMA velocities for one Bussi rescale (never returns ``None``)."""
     temp = clamp_velocity_assignment_temp_k(temperature_K)
     vel = capture_charmm_velocities_for_bussi(
         restart_path=restart_path,
         fallback_paths=fallback_paths,
+        pos_before=pos_before,
+        dt_ps=dt_ps,
+        frame_dt_ps=frame_dt_ps,
         quiet=quiet,
     )
     if vel is not None:
@@ -753,6 +893,16 @@ def _resolve_bussi_rescale_velocities(
     vel = _read_restart_velocities_akma(
         restart_path,
         fallback_paths=fallback_paths,
+        quiet=quiet,
+    )
+    if vel is not None:
+        sync_charmm_velocities_akma(vel)
+        return vel
+    vel = _try_bussi_finite_difference_velocities(
+        pos_before=pos_before,
+        dt_ps=dt_ps,
+        restart_path=restart_path,
+        frame_dt_ps=frame_dt_ps,
         quiet=quiet,
     )
     if vel is not None:
@@ -862,6 +1012,9 @@ def apply_bussi_velocity_rescale(
     rng: np.random.Generator | None = None,
     restart_path: Path | str | None = None,
     fallback_paths: Path | str | Sequence[Path | str] | None = None,
+    pos_before: np.ndarray | None = None,
+    dt_ps: float | None = None,
+    frame_dt_ps: float | None = None,
 ) -> tuple[float, float]:
     """Rescale CHARMM velocities toward ``temperature_K`` using Bussi dynamics.
 
@@ -878,6 +1031,9 @@ def apply_bussi_velocity_rescale(
         temperature_K=temp,
         quiet=quiet,
         fallback_paths=fallback_paths,
+        pos_before=pos_before,
+        dt_ps=dt_ps,
+        frame_dt_ps=frame_dt_ps,
     )
     dof = resolve_bussi_degrees_of_freedom(ndegf)
     if velocities_are_pathological(v_akma, masses_amu=masses, ndegf=dof):

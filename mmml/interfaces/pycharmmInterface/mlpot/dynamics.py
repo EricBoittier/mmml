@@ -5305,6 +5305,15 @@ def _run_dynamics_chunk(
         kw.pop("iunrea", None)
         kw["iunrea"] = -1
     _sync_dynamics_io_units(kw, iokw)
+    if _bussi_heat_ramp_active(kw):
+        try:
+            from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+
+            kw["_bussi_pos_before_dyna"] = np.asarray(
+                get_charmm_positions_array(), dtype=np.float64
+            ).copy()
+        except Exception:
+            pass
     try:
         from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
 
@@ -5331,9 +5340,28 @@ def _run_dynamics_chunk(
             )
             if restart_path is None and io is not None and io.restart_write is not None:
                 restart_path = Path(io.restart_write)
+            pos_before = kw.pop("_bussi_pos_before_dyna", None)
+            nstep = int(kw.get("nstep", 0) or 0)
+            timestep_ps = float(kw.get("timestep", 0.00025) or 0.00025)
+            dt_ps = float(nstep) * timestep_ps if nstep > 0 else None
+            nsavc_raw = kw.get("nsavc", kw.get("nsavv"))
+            frame_dt_ps = (
+                float(max(1, int(nsavc_raw))) * timestep_ps
+                if nsavc_raw is not None
+                else None
+            )
+            if pos_before is not None:
+                kw["_bussi_last_pos_before"] = pos_before
+            if dt_ps is not None:
+                kw["_bussi_last_dt_ps"] = dt_ps
+            if frame_dt_ps is not None:
+                kw["_bussi_last_frame_dt_ps"] = frame_dt_ps
             capture_charmm_velocities_for_bussi(
                 restart_path=restart_path,
                 fallback_paths=bussi_restart_fallbacks,
+                pos_before=pos_before,
+                dt_ps=dt_ps,
+                frame_dt_ps=frame_dt_ps,
                 quiet=bool(kw.get("_quiet_bussi_rescale", False)),
             )
             if restart_path is not None:
@@ -5653,6 +5681,9 @@ def _run_bussi_heat_subchunked(
             quiet=quiet_bussi,
             restart_path=restart_path,
             fallback_paths=kw.get("_bussi_restart_fallback_paths"),
+            pos_before=sub_kw.pop("_bussi_last_pos_before", None),
+            dt_ps=sub_kw.get("_bussi_last_dt_ps"),
+            frame_dt_ps=sub_kw.get("_bussi_last_frame_dt_ps"),
         )
         if not quiet_bussi:
             live = estimate_kinetic_temperature_k(
