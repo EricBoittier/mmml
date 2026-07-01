@@ -382,17 +382,24 @@ def build_parser() -> argparse.ArgumentParser:
         default=0,
         metavar="N",
         help=(
-            "pycharmm: heating velocity rescale every N steps when --heat-thermostat "
-            "scale (0 = match --dyn-freq-cadence, else --dyn-nprint). Ignored for hoover."
+            "pycharmm: heat rescale cadence for bussi (ASE) or scale (CHARMM ihtfrq); "
+            "0 = match --dyn-freq-cadence, else --dyn-nprint. Ignored for hoover."
         ),
     )
     parser.add_argument(
+        "--heat-bussi-taut",
+        type=float,
+        default=None,
+        metavar="PS",
+        help="pycharmm: Bussi coupling time taut (ps) when --heat-thermostat bussi.",
+    )
+    parser.add_argument(
         "--heat-thermostat",
-        choices=("scale", "hoover"),
-        default="scale",
+        choices=("bussi", "scale", "hoover"),
+        default="bussi",
         help=(
-            "pycharmm heat stage: scale=IHTFRQ velocity rescaling; hoover=CHARMM Hoover "
-            "NVT (vacuum hoover reft/tmass, no CPT / no ML PBC required)."
+            "pycharmm heat stage: bussi=ASE Bussi rescaling (default); "
+            "scale=CHARMM IHTFRQ; hoover=CHARMM Hoover NVT."
         ),
     )
     parser.add_argument(
@@ -2282,7 +2289,7 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     cmd.extend(["--heat-mode", str(getattr(args, "heat_mode", "ramp"))])
     _append_optional(cmd, "--heat-hoover-tmass", getattr(args, "heat_hoover_tmass", None))
     _append_optional(cmd, "--nve-boltzmann-temp", getattr(args, "nve_boltzmann_temp", None))
-    cmd.extend(["--heat-thermostat", str(getattr(args, "heat_thermostat", "scale"))])
+    cmd.extend(["--heat-thermostat", str(getattr(args, "heat_thermostat", "bussi"))])
     _append_boolean_optional_flag(
         cmd, "--heat-comp-damp", bool(getattr(args, "heat_comp_damp", False))
     )

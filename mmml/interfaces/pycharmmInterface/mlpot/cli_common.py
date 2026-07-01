@@ -92,17 +92,28 @@ def add_charmm_output_args(parser: argparse.ArgumentParser) -> None:
         default=0,
         metavar="N",
         help=(
-            "Heating with --heat-thermostat scale: CHARMM ihtfrq (velocity rescaling "
-            "every N steps). 0 = use --dyn-freq-cadence (else --dyn-nprint; full stage "
-            "when --quiet). Ignored for --heat-thermostat hoover."
+            "Heat rescale cadence every N steps for --heat-thermostat bussi (ASE) or "
+            "scale (CHARMM ihtfrq). 0 = match --dyn-freq-cadence, else --dyn-nprint. "
+            "Ignored for hoover."
+        ),
+    )
+    group.add_argument(
+        "--heat-bussi-taut",
+        type=float,
+        default=None,
+        metavar="PS",
+        help=(
+            "Bussi coupling time taut (ps) for --heat-thermostat bussi. "
+            "Default: rescale_interval × timestep."
         ),
     )
     group.add_argument(
         "--heat-thermostat",
-        choices=("scale", "hoover"),
-        default="scale",
+        choices=("bussi", "scale", "hoover"),
+        default="bussi",
         help=(
-            "Heat-stage temperature control: scale=IHTFRQ velocity rescaling (default); "
+            "Heat-stage temperature control: bussi=ASE Bussi stochastic rescaling "
+            "(default; CHARMM ihtfrq=0); scale=CHARMM IHTFRQ velocity rescaling; "
             "hoover=CHARMM Hoover NVT (no ihtfrq; vacuum uses hoover reft/tmass, no CPT)."
         ),
     )
@@ -498,8 +509,8 @@ def resolve_heat_comp_damp(args: argparse.Namespace) -> bool:
 
 
 def _requested_heat_thermostat(args: argparse.Namespace) -> str:
-    raw = str(getattr(args, "heat_thermostat", "scale") or "scale").strip().lower()
-    if raw not in ("scale", "hoover"):
+    raw = str(getattr(args, "heat_thermostat", "bussi") or "bussi").strip().lower()
+    if raw not in ("bussi", "scale", "hoover"):
         raise ValueError(f"unknown heat_thermostat: {raw!r}")
     return raw
 
@@ -771,10 +782,11 @@ def heat_thermostat_requires_hoover_after_pretreat(args: argparse.Namespace) -> 
 
 
 def resolve_heat_thermostat(args: argparse.Namespace) -> str:
-    """Heat-stage thermostat: ``scale`` (IHTFRQ) or ``hoover`` (CHARMM Hoover NVT).
+    """Heat-stage thermostat: ``bussi`` (default), ``scale`` (IHTFRQ), or ``hoover``.
 
     After CHARMM MM pretreat (Hoover NVT equi/prod in-session), ``scale`` heat
     triggers CHARMM ``Calling two different nose methods`` on overlap chunks.
+    ``bussi`` and ``hoover`` are safe after pretreat.
     """
     requested = _requested_heat_thermostat(args)
     if requested == "scale" and heat_thermostat_requires_hoover_after_pretreat(args):
@@ -786,6 +798,22 @@ def resolve_heat_thermostat(args: argparse.Namespace) -> str:
             )
         return "hoover"
     return requested
+
+
+def resolve_heat_bussi_taut_ps(
+    args: argparse.Namespace,
+    *,
+    rescale_interval_steps: int,
+    timestep_ps: float,
+) -> float | None:
+    """Optional Bussi ``taut`` (ps); ``None`` lets dynamics derive from cadence × dt."""
+    raw = getattr(args, "heat_bussi_taut", None)
+    if raw is None:
+        return None
+    val = float(raw)
+    if not np.isfinite(val) or val <= 0.0:
+        raise ValueError(f"heat_bussi_taut must be positive, got {raw!r}")
+    return val
 
 
 def resolve_heat_hoover_tmass(

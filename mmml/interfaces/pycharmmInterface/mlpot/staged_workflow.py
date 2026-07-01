@@ -350,6 +350,8 @@ def _build_stage_dynamics_kw(
             if n_atoms is not None and n_monomers is not None:
                 heat_floor = recommend_heat_echeck_kcal(n_monomers, n_atoms)
             heat_echeck = max(echeck, heat_floor) if echeck > 0 else echeck
+        from mmml.interfaces.pycharmmInterface.mlpot.dynamics import build_heat_dynamics
+
         if resolve_heat_thermostat(args) == "hoover":
             from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
                 build_hoover_heat_dynamics,
@@ -372,6 +374,37 @@ def _build_stage_dynamics_kw(
                 ihtfrq=resolve_heat_ihtfrq(args, nstep=nstep),
                 tmass=tmass,
             )
+        elif resolve_heat_thermostat(args) == "bussi":
+            from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+                prepare_bussi_heat_dynamics_kw,
+            )
+            from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+                resolve_heat_bussi_taut_ps,
+            )
+
+            kw = build_heat_dynamics(
+                timestep_ps=timestep_ps,
+                duration_ps=duration_ps,
+                save_interval_ps=save_interval_ps,
+                temp=temp,
+                firstt=heat_firstt,
+                finalt=heat_finalt,
+                echeck=heat_echeck,
+                use_pbc=use_pbc,
+            )
+            ihtfrq = resolve_heat_ihtfrq(args, nstep=nstep)
+            prepare_bussi_heat_dynamics_kw(
+                kw,
+                nstep=nstep,
+                ihtfrq=ihtfrq,
+                timestep_ps=timestep_ps,
+                bussi_taut_ps=resolve_heat_bussi_taut_ps(
+                    args,
+                    rescale_interval_steps=ihtfrq,
+                    timestep_ps=timestep_ps,
+                ),
+            )
+            kw["iasors"] = 0
         else:
             kw = build_heat_dynamics(
                 timestep_ps=timestep_ps,
@@ -452,13 +485,14 @@ def _build_stage_dynamics_kw(
         )
 
         ihtfrq = resolve_heat_ihtfrq(args, nstep=nstep)
-        if resolve_heat_thermostat(args) == "scale" or not kw.get("cpt"):
-            # Scale heat and vacuum Hoover fallback (no CPT): ihtfrq velocity ramp.
-            apply_heat_ramp_frequencies(kw, nstep=nstep, ihtfrq=ihtfrq)
-        else:
+        heat_thermostat = resolve_heat_thermostat(args)
+        if heat_thermostat == "hoover" and kw.get("cpt"):
             # PBC Hoover CPT: thermostat via hoover reft; disable IHTFRQ ramp.
             kw["ihtfrq"] = 0
             kw.pop("TEMINC", None)
+        elif heat_thermostat == "scale" or not kw.get("cpt"):
+            apply_heat_ramp_frequencies(kw, nstep=nstep, ihtfrq=ihtfrq)
+            kw["iasors"] = 0
     elif (
         stage == "equi"
         and not use_pbc
@@ -523,10 +557,29 @@ def _configure_heat_dynamics_start(
     hold_at_target = abs(firstt - finalt) <= 1.0e-6
     kw["iasvel"] = 1
     hoover_cpt_heat = heat_thermostat == "hoover" and bool(kw.get("cpt"))
+    bussi_heat = heat_thermostat == "bussi" or bool(kw.get("_heat_thermostat") == "bussi")
     if not hoover_cpt_heat:
-        # Scale at IHTFRQ (CHARMM iasors=0); avoid Gaussian reassignment every ihtfrq
-        # which spikes T and trips echeck on all-ML clusters (no SHAKE).
         kw["iasors"] = 0
+
+    def _heat_dyn_mode_label(*, single_dyna: bool = True) -> str:
+        if hoover_cpt_heat:
+            return (
+                "Hoover CPT NVT (no ihtfrq); single dyna (no nstep=0 assign)"
+                if single_dyna
+                else "Hoover CPT NVT (no ihtfrq)"
+            )
+        if bussi_heat:
+            return (
+                "ASE Bussi rescale ramp (CHARMM ihtfrq=0); single dyna "
+                "(no nstep=0 assign)"
+                if single_dyna
+                else "ASE Bussi rescale ramp (CHARMM ihtfrq=0)"
+            )
+        return (
+            "ihtfrq scales (iasors=0); single dyna (no nstep=0 assign)"
+            if single_dyna
+            else "ihtfrq scales (iasors=0)"
+        )
 
     if coords_in_memory:
         io.restart_read = None
@@ -542,11 +595,7 @@ def _configure_heat_dynamics_start(
             print(
                 f"HEAT: dyna start FIRSTT={firstt:.1f} K "
                 f"({mode_txt}; in-memory coords after mini); "
-                + (
-                    "Hoover CPT NVT (no ihtfrq); single dyna (no nstep=0 assign)"
-                    if hoover_cpt_heat
-                    else "ihtfrq scales (iasors=0); single dyna (no nstep=0 assign)"
-                ),
+                + _heat_dyn_mode_label(),
                 flush=True,
             )
         return
@@ -583,11 +632,7 @@ def _configure_heat_dynamics_start(
             print(
                 f"HEAT: dyna restart+start FIRSTT={firstt:.1f} K "
                 f"(coords from {restart_path}); "
-                + (
-                    "Hoover CPT NVT (no ihtfrq); single dyna (no nstep=0 assign)"
-                    if hoover_cpt_heat
-                    else "ihtfrq scales (iasors=0); single dyna (no nstep=0 assign)"
-                ),
+                + _heat_dyn_mode_label(),
                 flush=True,
             )
         return
@@ -598,11 +643,7 @@ def _configure_heat_dynamics_start(
     if not quiet:
         print(
             f"HEAT: dyna start FIRSTT={firstt:.1f} K (cold start); "
-            + (
-                "Hoover CPT NVT (no ihtfrq)"
-                if hoover_cpt_heat
-                else "ihtfrq scales (iasors=0)"
-            ),
+            + _heat_dyn_mode_label(single_dyna=False),
             flush=True,
         )
 
