@@ -1257,7 +1257,6 @@ def _run_minimize_in_chunks(
             materialize_deferred_mlpot_jax_before_sd(
                 config.mlpot_ctx,
                 verbose=config.verbose,
-                force_ener_probe=True,
             )
             from mmml.interfaces.pycharmmInterface.charmm_mpi import (
                 recover_mpi_for_charmm_after_jax,
@@ -5846,7 +5845,6 @@ def minimize_with_mlpot(
             materialize_deferred_mlpot_jax_before_sd(
                 config.mlpot_ctx,
                 verbose=config.verbose,
-                force_ener_probe=True,
             )
         with charmm_mlpot_sd_jax_cpu_guard(pyC_model):
             sd_result = _run_mlpot_sd_then_abnr(

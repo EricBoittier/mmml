@@ -684,6 +684,7 @@ def test_materialize_deferred_mlpot_jax_before_sd_probes_after_fresh_jax_materia
     from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
     from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
         DecomposedMlpotModel,
+        _DeferredDecomposedMlpotCalculator,
         materialize_deferred_mlpot_jax_before_sd,
     )
 
@@ -719,6 +720,10 @@ def test_materialize_deferred_mlpot_jax_before_sd_probes_after_fresh_jax_materia
     ) as sync_lists, patch.object(
         model,
         "get_pycharmm_calculator",
+        return_value=_DeferredDecomposedMlpotCalculator(model),
+    ), patch.object(
+        _DeferredDecomposedMlpotCalculator,
+        "_ensure_real",
         return_value=MagicMock(),
     ):
         assert materialize_deferred_mlpot_jax_before_sd(ctx) is True

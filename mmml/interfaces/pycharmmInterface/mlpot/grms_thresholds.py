@@ -101,6 +101,18 @@ def measure_monomer_grms_stats(
                     hybrid_f = np.asarray(forces_ev, dtype=np.float64) * float(ev2kcalmol)
                     hybrid_per = per_monomer_grms_from_forces(hybrid_f, atoms_per_list)
                     hybrid_total = forces_grms_kcalmol_A(hybrid_f)
+                    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+                        mlpot_skip_charmm_ener_force_before_first_sd,
+                    )
+
+                    if mlpot_skip_charmm_ener_force_before_first_sd(mlpot_ctx):
+                        from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+                            recover_mpi_for_charmm_after_jax,
+                        )
+
+                        recover_mpi_for_charmm_after_jax(
+                            phase="after pre-SD hybrid GRMS JAX eval",
+                        )
 
     return MonomerGrmsStats(
         charmm_per_monomer=charmm_per,

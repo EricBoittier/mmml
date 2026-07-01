@@ -710,6 +710,14 @@ class DecomposedMlpotModel:
         if not cpu_only:
             self._pending_factory = None
             self._pending_factory_z = None
+        if cpu_only and self._defer_jax_until_after_sd:
+            from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+                recover_mpi_for_charmm_after_jax,
+            )
+
+            recover_mpi_for_charmm_after_jax(
+                phase="after deferred MLpot JAX CPU finalize",
+            )
         if self._verbose:
             backend = "CPU" if cpu_only else "GPU"
             print(
@@ -1177,33 +1185,31 @@ def materialize_deferred_mlpot_jax_before_sd(
     mlpot_ctx: Any,
     *,
     verbose: bool = False,
-    probe_charmm_ener: bool = True,
+    probe_charmm_ener: bool = False,
     force_ener_probe: bool = False,
     sync_lists: bool = False,
 ) -> bool:
-    """Build deferred JAX on CPU and optionally probe CHARMM before MLpot SD.
+    """Build deferred JAX on CPU before MLpot SD (no CHARMM ``ENER`` on MPI+PBC).
 
     MPI-linked CHARMM defers JAX until SD. Lazy materialization inside the first
     ``steepd`` ``gete`` can corrupt OpenMPI pools so the next ``enbond`` step
     segfaults. Materialize the callback via hybrid forces (with
-    ``recover_mpi_for_charmm_after_jax`` between JAX and Fortran).
+    ``recover_mpi_for_charmm_after_jax`` after JAX compile).
 
-    A standalone ``ENER FORCE`` probe runs only when JAX was materialized in this
-    call and calculator prep has not already primed CHARMM. Redundant probes after
-    calculator pre-minimize can segfault in Fortran ``upinb`` on PBC all-ML builds.
+    Do **not** run a standalone ``ENER FORCE`` / ``UPDATE`` here on the MPI+PBC
+    defer path: registration already ran ``upinb`` once; a second ``upinb`` after
+    JAX activity segfaults in ``__nbexcl_MOD_upinb`` on all-ML PBC boxes. The
+    first safe hybrid CHARMM energy eval is MLpot SD step 1.
 
-    When ``sync_lists`` is set, run CHARMM ``ENER`` + ``UPDATE`` after the probe.
-    Do **not** enable before the first MLpot SD step with MLpot registered: ``UPDATE``
-    still drives ``upinb`` / ``UPIMNB`` and can segfault on large PBC all-ML systems
-    (especially right after deferred JAX materialize). Post-chunk SD sync uses
-    :func:`sync_charmm_lists_after_mini` separately after coordinates move.
+    ``probe_charmm_ener``, ``force_ener_probe``, and ``sync_lists`` are deprecated
+    no-ops kept for API compatibility.
     """
+    del probe_charmm_ener, force_ener_probe, sync_lists
     from mmml.interfaces.pycharmmInterface.charmm_mpi import (
         recover_mpi_for_charmm_after_jax,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
-        mlpot_sd_charmm_ener_already_primed,
         mlpot_skip_charmm_ener_force_before_first_sd,
     )
 
@@ -1218,9 +1224,8 @@ def materialize_deferred_mlpot_jax_before_sd(
     if not getattr(pyCModel, "_defer_jax_until_after_sd", False):
         return False
 
-    jax_was_ready = getattr(pyCModel, "_spherical_fn", None) is not None
     did_work = False
-    if not jax_was_ready:
+    if getattr(pyCModel, "_spherical_fn", None) is None:
         calc = pyCModel.get_pycharmm_calculator()
         if isinstance(calc, _DeferredDecomposedMlpotCalculator):
             calc._ensure_real()
@@ -1257,36 +1262,8 @@ def materialize_deferred_mlpot_jax_before_sd(
         did_work = True
         if verbose:
             print(
-                "Pre-MLpot SD: materialized deferred JAX factory on CPU",
-                flush=True,
-            )
-
-    already_primed = mlpot_sd_charmm_ener_already_primed(mlpot_ctx)
-    should_probe = probe_charmm_ener and did_work and not already_primed
-    if should_probe:
-        from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
-            _ensure_domdec_off_for_mlpot_energy,
-            sync_charmm_lists_after_mini,
-        )
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
-            charmm_grms_after_ener_force,
-        )
-        from mmml.interfaces.pycharmmInterface.charmm_mpi import (
-            recover_mpi_for_charmm_after_jax,
-        )
-
-        _ensure_domdec_off_for_mlpot_energy(context="pre-MLpot SD ENER probe")
-        grms = charmm_grms_after_ener_force(silent=True)
-        recover_mpi_for_charmm_after_jax(phase="after pre-MLpot SD ENER probe")
-        setattr(mlpot_ctx, "_mlpot_pre_sd_ener_probed", True)
-        did_work = True
-        if sync_lists:
-            sync_charmm_lists_after_mini(quiet=True)
-            recover_mpi_for_charmm_after_jax(phase="after pre-MLpot SD list sync")
-        if verbose:
-            print(
-                f"Pre-MLpot SD: CHARMM ENER probe OK "
-                f"(GRMS={float(grms):.4f} kcal/mol/Å)",
+                "Pre-MLpot SD: materialized deferred JAX factory on CPU "
+                "(deferring CHARMM ENER until MLpot SD step 1)",
                 flush=True,
             )
 
