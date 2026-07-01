@@ -272,6 +272,22 @@ def warmup_jax_pme_hybrid_host(
                         prefactor=DEFAULT_JAX_PME_LJ_PREFACTOR,
                     )
                     counts["dispersion_intra"] += 1
+    from mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
+        _com_switch_value_and_grad,
+    )
+
+    if pbc_cell is not None:
+        _com_switch_value_and_grad(
+            pos,
+            offsets,
+            np.asarray(pbc_cell, dtype=np.float64),
+            ml_switch_width=6.0,
+            mm_switch_on=12.0,
+            mm_switch_width=1.0,
+            complementary_handoff=True,
+            mm_r_min=None,
+        )
+        counts["com_switch_jit"] = 1
     return counts
 
 

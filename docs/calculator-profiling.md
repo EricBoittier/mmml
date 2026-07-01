@@ -100,17 +100,41 @@ Output columns: `compile_s`, `run_s` (from two-pass warmup), `steady_ms` (mean o
 
 ### Example snapshot (CPU, 18×3 cluster, Ewald, cross mode)
 
-Run locally; numbers vary by CPU/GPU and jax-pme version. Representative order of magnitude from validation runs:
+Run locally; numbers vary by CPU/GPU and jax-pme version.
+
+**After COM-switch JIT fix (2026-07):** steady `hybrid_mm_lr_total_cross` ~**200 ms** on CPU (18×3), down from ~2.5 s. `switch_scale` ~**1 ms** after warmup (was ~1.2 s × 2 per call).
 
 | Primitive | compile (s) | run (s) | steady (ms) |
 |-----------|-------------|---------|-------------|
-| `jax_pme_coulomb_full` | ~2–5 | ~0.05 | ~50 |
-| `cross_monomer_coulomb` | ~2–4 | ~0.05 | ~52 |
-| `hybrid_mm_lr_total_cross` | ~5–10 | ~0.1 | ~270 |
-| `hybrid_coulomb_total` | — | — | ~120 |
-| `coulomb_cross_total` | — | — | ~55 |
+| `cross_monomer_coulomb` | ~0.8 | ~0.10 | ~110 |
+| `switch_scale` | ~4.5 (first only) | — | **~1** |
+| `hybrid_mm_lr_total_cross` | ~4.5 (first) | ~0.22 | **~216** |
+| `coulomb_cross_total` | — | — | ~103 |
+| `dispersion_cross_total` | — | — | ~102 |
 
 Legacy `full_minus_intra` hybrid totals are typically **~1.5–2×** slower steady-state than fused `cross` at 18 monomers.
+
+### COM switch compile footgun (fixed)
+
+`_scale_lr_with_com_switch` used uncached `jax.grad(mean_switch)` on every hybrid LR eval. Fix:
+
+1. **`jax.jit(jax.value_and_grad(mean_switch))`** cached by monomer offsets + switch parameters (`_cached_com_switch_value_and_grad_fn`).
+2. **One** COM `value_and_grad` per `hybrid_jax_pme_mm_lr_correction` (shared by Coulomb + dispersion).
+3. Cache key uses `mm_r_min=None`, **not** `float('nan')` — `NaN != NaN` broke `@lru_cache` and recompiled every call.
+
+Warmup: `warmup_jax_pme_hybrid_host` JIT-warms COM switch (`counts["com_switch_jit"]`).
+
+### Spherical cutoff compile footguns
+
+| Issue | Mitigation |
+|-------|------------|
+| Duplicate `warmup_decomposed_mlpot` | `_jax_warmup_done` on `DecomposedMlpotModel` |
+| CPU `_finalize_jax_factory` then GPU promote | `defer_jax_until_after_sd` + skip CPU finalize when deferring |
+| New `_get_spherical_forward_fn` every eval | `_forward_cache_key` caches `jit` wrapper on model |
+| `CutoffParameters` / dtype / box changes | Keep static args stable across mini legs; see [md-system-configs](md-system-configs.md#jax--setup_calculator-compile-churn) |
+| First `spherical_cutoff` compile | `mmml warmup-mlpot-jax` or `warmup_decomposed_mlpot` once before timed MD |
+
+`spherical_cutoff_calculator` itself is `@jax.jit(static_argnames=[...])` — cost is **one** large XLA compile per distinct shape/cutoff key, not per MD step.
 
 ## Profiling scripts
 

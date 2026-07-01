@@ -338,8 +338,19 @@ def _maybe_reset_block_at_import() -> None:
     late ranks are still in Python.  Skip import-time ``reset_block`` under
     ``mpirun``; callers run it after topology load or rank-synchronized setup
     (``MMML_SKIP_CHARMM_RESET_BLOCK`` to force-skip on serial diagnostics).
+
+    Also skip when no PSF is loaded yet: ``BLOCK`` on an empty topology can
+    stall indefinitely on MPI-linked builds (e.g. calculator primitive benchmark
+    importing ``hybrid_mlpot`` before cluster PSF read).
     """
     if not PYCHARMM_AVAILABLE:
+        return
+    if should_skip_charmm_reset_block():
+        return
+    try:
+        if int(psf.get_natom()) <= 0:
+            return
+    except Exception:
         return
     reset_block()
 

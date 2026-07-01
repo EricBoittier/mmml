@@ -288,3 +288,69 @@ def test_hybrid_coulomb_only_skips_dispersion(monkeypatch):
     )
     assert out.energy_kcalmol == pytest.approx(1.0)
     assert out.dispersion is None
+
+
+def test_com_switch_jit_cache_reuses_same_fn() -> None:
+    from mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
+        _cached_com_switch_value_and_grad_fn,
+        _com_switch_jit_key,
+        reset_com_switch_jit_cache,
+    )
+
+    reset_com_switch_jit_cache()
+    offsets = np.array([0, 3, 6], dtype=np.int64)
+    key = _com_switch_jit_key(
+        offsets,
+        ml_switch_width=1.0,
+        mm_switch_on=8.0,
+        mm_switch_width=2.0,
+        complementary_handoff=True,
+        mm_r_min=None,
+    )
+    fn1 = _cached_com_switch_value_and_grad_fn(key)
+    fn2 = _cached_com_switch_value_and_grad_fn(key)
+    assert fn1 is fn2
+    info = _cached_com_switch_value_and_grad_fn.cache_info()
+    assert info.hits >= 1
+    assert info.misses == 1
+
+
+def test_hybrid_lr_shared_com_switch_matches_independent() -> None:
+    from mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
+        _com_switch_value_and_grad,
+        hybrid_jax_pme_mm_lr_correction,
+        reset_com_switch_jit_cache,
+    )
+
+    reset_com_switch_jit_cache()
+    rng = np.random.default_rng(3)
+    n = 12
+    pos = rng.random((n, 3)) * 18.0
+    chg = rng.normal(0.0, 0.1, n)
+    offsets = np.arange(0, n + 1, 3, dtype=np.int64)
+    cell = np.diag([28.0, 28.0, 28.0])
+    c6 = np.full(n, 0.05, dtype=np.float64)
+
+    shared = hybrid_jax_pme_mm_lr_correction(
+        pos,
+        chg,
+        offsets,
+        box_length_A=28.0,
+        method="ewald",
+        sr_cutoff_A=6.0,
+        c6_sqrt=c6,
+        pbc_cell=cell,
+        mm_switch_on=6.0,
+        mm_switch_width=4.0,
+    )
+    com_switch = _com_switch_value_and_grad(
+        pos,
+        offsets,
+        cell,
+        ml_switch_width=1.0,
+        mm_switch_on=6.0,
+        mm_switch_width=4.0,
+        complementary_handoff=True,
+        mm_r_min=None,
+    )
+    assert shared.coulomb.switch_scale == pytest.approx(com_switch[0], rel=0, abs=1e-12)

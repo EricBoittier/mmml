@@ -19,7 +19,6 @@ the jax-pme screened real-space kernel within ``sr_cutoff_A``.
 from __future__ import annotations
 
 import atexit
-import math
 import os
 import sys
 import time
@@ -329,7 +328,7 @@ class _ComSwitchJitKey:
     mm_switch_on: float
     mm_switch_width: float
     complementary_handoff: bool
-    mm_r_min: float  # ``nan`` when unset
+    mm_r_min: float | None
 
 
 def _com_switch_jit_key(
@@ -348,7 +347,7 @@ def _com_switch_jit_key(
         mm_switch_on=float(mm_switch_on),
         mm_switch_width=float(mm_switch_width),
         complementary_handoff=bool(complementary_handoff),
-        mm_r_min=float("nan") if mm_r_min is None else float(mm_r_min),
+        mm_r_min=None if mm_r_min is None else float(mm_r_min),
     )
 
 
@@ -358,7 +357,7 @@ def _cached_com_switch_value_and_grad_fn(key: _ComSwitchJitKey):
     import jax
 
     offsets = np.asarray(key.monomer_offsets, dtype=np.int64)
-    mm_r_min = None if math.isnan(key.mm_r_min) else float(key.mm_r_min)
+    mm_r_min = key.mm_r_min
 
     def mean_switch(positions, cell):
         return _mean_switch_scale_jax(
@@ -930,6 +929,23 @@ def hybrid_jax_pme_mm_lr_correction(
         resolve_jax_pme_dispersion,
     )
 
+    pos = np.asarray(positions_A, dtype=np.float64)
+    offsets = np.asarray(monomer_offsets, dtype=np.int64)
+    com_switch: tuple[float, np.ndarray] | None = None
+    if pbc_cell is not None:
+        t_sw = _profile_start()
+        com_switch = _com_switch_value_and_grad(
+            pos,
+            offsets,
+            np.asarray(pbc_cell, dtype=np.float64),
+            ml_switch_width=ml_switch_width,
+            mm_switch_on=mm_switch_on,
+            mm_switch_width=mm_switch_width,
+            complementary_handoff=complementary_handoff,
+            mm_r_min=mm_r_min,
+        )
+        _record_profile("switch_scale", t_sw)
+
     t0 = _profile_start()
     coulomb = hybrid_jax_pme_coulomb_correction(
         positions_A,
@@ -950,6 +966,7 @@ def hybrid_jax_pme_mm_lr_correction(
         complementary_handoff=complementary_handoff,
         mm_r_min=mm_r_min,
         subtract_pair_mic_sr=subtract_pair_mic_sr,
+        com_switch=com_switch,
     )
     _record_profile("hybrid_coulomb_total", t0)
     dispersion: HybridJaxPmeCorrectionResult | None = None
@@ -968,6 +985,7 @@ def hybrid_jax_pme_mm_lr_correction(
             mm_switch_width=mm_switch_width,
             complementary_handoff=complementary_handoff,
             mm_r_min=mm_r_min,
+            com_switch=com_switch,
         )
         _record_profile("hybrid_dispersion_total", t0)
     e = coulomb.energy_kcalmol

@@ -310,6 +310,15 @@ def _bench_mlpot_primitives(args: argparse.Namespace, *, steady_reps: int) -> li
         print(f"  skip MLpot: checkpoint not found: {ckpt}", file=sys.stderr)
         return []
 
+    # JAX compile timing only — avoid import-time CHARMM BLOCK/crystal on empty PSF
+    # (MPI-linked libcharmm can stall for minutes with no progress output).
+    os.environ.setdefault("MMML_WARMUP_MLPOT_JAX_ONLY", "1")
+    print(
+        "\n--- MLpot JAX warmup primitives "
+        "(MMML_WARMUP_MLPOT_JAX_ONLY=1; compile may take ~30–120s on CPU) ---",
+        flush=True,
+    )
+
     from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
         build_decomposed_mlpot_model,
         warmup_decomposed_mlpot,
@@ -374,12 +383,26 @@ def _bench_mlpot_primitives(args: argparse.Namespace, *, steady_reps: int) -> li
     if steady_reps > 0 and model._spherical_fn is not None:
         import jax.numpy as jnp
 
-        from mmml.utils.jax_gpu_warmup import block_jax_values, run_jax_warmup_passes
-
         z_j = jnp.asarray(z)
         r_j = jnp.asarray(pos)
         side = float(box)
         box_j = jnp.asarray([[side, 0.0, 0.0], [0.0, side, 0.0], [0.0, 0.0, side]])
+        mm_pair_idx = None
+        mm_pair_mask = None
+        if model._do_mm and model._get_update_fn is not None:
+            from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+                _box_numpy_for_update,
+            )
+
+            update_fn = model._get_update_fn(pos, model._cutoff_params, box=box_j)
+            if update_fn is not None:
+                box_np = _box_numpy_for_update(box_j)
+                if box_np is not None:
+                    mm_pair_idx, mm_pair_mask = update_fn(pos, box=box_np)
+                else:
+                    mm_pair_idx, mm_pair_mask = update_fn(pos)
+                mm_pair_idx = jnp.asarray(mm_pair_idx)
+                mm_pair_mask = jnp.asarray(mm_pair_mask)
 
         def _spherical():
             return model._spherical_fn(
@@ -390,8 +413,8 @@ def _bench_mlpot_primitives(args: argparse.Namespace, *, steady_reps: int) -> li
                 doML=True,
                 doMM=model._do_mm,
                 doML_dimer=True,
-                mm_pair_idx=None,
-                mm_pair_mask=None,
+                mm_pair_idx=mm_pair_idx,
+                mm_pair_mask=mm_pair_mask,
                 box=box_j,
             )
 
@@ -447,7 +470,6 @@ def main() -> int:
 
     mlpot_rows = _bench_mlpot_primitives(args, steady_reps=int(args.steady_reps))
     if mlpot_rows:
-        print("\n--- MLpot JAX warmup primitives ---")
         rows.extend(mlpot_rows)
 
     print("\n=== summary ===")
