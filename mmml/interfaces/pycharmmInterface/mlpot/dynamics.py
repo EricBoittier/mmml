@@ -3557,17 +3557,20 @@ def _overlap_chunk_uses_memory_handoff(
 ) -> bool:
     """Whether overlap chunk boundaries skip ``READYN`` (in-process continuation).
 
-    Overlap segments always ``READYN`` alternating scratch ``.overlap_*.res``
-    files with patched ``JHSTRT`` so CHARMM time/step counters continue across
-    chunks.  In-memory handoff is reserved for CPT stability *sub-chunks* within
-    one overlap chunk (``_run_cpt_stability_subchunked``) and for one-shot
-    early-abort / post-rescue retries (explicit flags in the overlap loop).
+    Hoover CPT overlap **must** continue in RAM between overlap chunks: plain
+    ``write restart`` / ``READYN`` on scratch ``.overlap_*.res`` files does not
+    restore barostat piston internals and yields garbage ``PIXX`` / ``PRESSI``.
 
-    ``DynamicsOverlapConfig.memory_handoff`` still controls stage-level handoff
-    (e.g. post-mini seed restart) via ``overlap_first_chunk_skips_readyn``; it
-    does not disable scratch ``READYN`` between overlap chunks.
+    Non-CPT overlap uses alternating scratch ``READYN`` with patched ``JHSTRT``
+    so global step/time counters continue.  CPT stability *sub-chunks* within one
+    overlap chunk also stay in-memory (``_run_cpt_stability_subchunked``).
     """
-    del mlpot_ctx, chunk_index, n_chunks, overlap, cpt
+    if mlpot_ctx is None or n_chunks <= 1:
+        return False
+    if cpt and _cpt_subchunk_use_in_memory_handoff():
+        return True
+    if overlap is not None and overlap.memory_handoff:
+        return True
     return False
 
 
@@ -4335,6 +4338,7 @@ def _apply_cpt_in_memory_continuation_kw(kw: dict[str, Any]) -> None:
     kw.pop("firstt", None)
     kw.pop("iunrea", None)
     kw["iunrea"] = -1
+    kw["_skip_ase_cold_velocity_assign"] = True
     _strip_stale_heat_ramp_keywords(kw)
     if int(kw.get("ihtfrq", 0) or 0) != 0:
         kw["ihtfrq"] = 0
@@ -5375,7 +5379,6 @@ def run_dynamics_with_io(
                     mem_handoff
                     and bool(chunk_kw.get("cpt"))
                     and chunk_index > 0
-                    and not has_restart_read
                 ):
                     _apply_cpt_in_memory_continuation_kw(chunk_kw)
                 if early_abort_memory_handoff:
