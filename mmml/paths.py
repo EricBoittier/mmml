@@ -47,3 +47,8 @@ def default_benzene_crystal_cif() -> Path:
 def default_trialanine_water_smoke_extxyz() -> Path:
     """Bundled illustrative tri-alanine + TIP3 grid (docs / figure CI)."""
     return bundled_file("data", "charmm", "trialanine-water-smoke.extxyz")
+
+
+def default_trialanine_cgenff_rtf() -> Path:
+    """Bundled ``RESI TRIA`` (TRIALANINE) supplemental CGENFF topology."""
+    return bundled_file("data", "charmm", "top_trialanine_cgenff.rtf")

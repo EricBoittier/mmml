@@ -70,6 +70,19 @@ def _map_atype(protein_type: str) -> str:
     raise KeyError(f"No CGENFF mapping for protein atom type {protein_type!r}")
 
 
+def _protein_toppar_paths() -> tuple[Path, Path]:
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import CHARMM_HOME
+
+    base = Path(CHARMM_HOME) / "toppar"
+    rtf = base / "top_all36_prot.rtf"
+    prm = base / "par_all36m_prot.prm"
+    if not prm.is_file():
+        prm = base / "par_all36_prot.prm"
+    if not rtf.is_file() or not prm.is_file():
+        raise FileNotFoundError(f"Protein toppar not found under {base}")
+    return rtf, prm
+
+
 def _build_minimized_trialanine() -> None:
     from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
 
@@ -80,9 +93,8 @@ def _build_minimized_trialanine() -> None:
     import pycharmm.lingo as lingo
     from mmml.interfaces.pycharmmInterface.import_pycharmm import reset_block
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-    from mmml.interfaces.pycharmmInterface.trialanine_water_box import protein_toppar_paths
 
-    rtf, prm = protein_toppar_paths()
+    rtf, prm = _protein_toppar_paths()
     lingo.charmm_script("DELETE ATOM SELE ALL END")
     reset_block()
     with charmm_relaxed_bomlev():

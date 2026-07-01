@@ -27,7 +27,7 @@ from mmml.interfaces.pycharmmInterface.mm_system_energy import (
 from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
 from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
     build_trialanine_water_box_in_charmm,
-    have_protein_toppar,
+    have_trialanine_cgenff,
 )
 from tests.conftest import bonded_block_hangs_under_mpi_mpirun, can_import_pycharmm
 
@@ -37,8 +37,8 @@ pytestmark = [
         reason="pycharmm / libcharmm not available",
     ),
     pytest.mark.skipif(
-        not have_protein_toppar(),
-        reason="CHARMM_HOME/toppar protein files not available",
+        not have_trialanine_cgenff(),
+        reason="bundled CGENFF TRIA (TRIALANINE) RTF not available",
     ),
 ]
 
@@ -81,8 +81,7 @@ def test_trialanine_water_bonded_matches_pycharmm(trialanine_water_box) -> None:
     bonded = load_bonded_system_from_psf(
         box.psf_path,
         positions,
-        prm_file=box.protein_prm,
-        extra_prm_files=[CGENFF_PRM],
+        prm_file=box.cgenff_prm,
     )
     components, forces = bonded_energy_and_forces(
         jnp.asarray(positions),
@@ -110,8 +109,7 @@ def test_trialanine_water_nonbonded_matches_pycharmm(trialanine_water_box) -> No
 
     nbond_data = load_nonbonded_system_from_charmm(
         box.psf_path,
-        box.protein_prm,
-        CGENFF_PRM,
+        box.cgenff_prm,
     )
     settings = _nbond_settings_from_box(box)
     components, forces = nonbonded_energy_and_forces(
@@ -142,13 +140,11 @@ def test_trialanine_water_total_mm_matches_pycharmm(
     bonded = load_bonded_system_from_psf(
         box.psf_path,
         positions,
-        prm_file=box.protein_prm,
-        extra_prm_files=[CGENFF_PRM],
+        prm_file=box.cgenff_prm,
     )
     nbond_data = load_nonbonded_system_from_charmm(
         box.psf_path,
-        box.protein_prm,
-        CGENFF_PRM,
+        box.cgenff_prm,
     )
     result = mm_system_energy_and_forces(
         positions,

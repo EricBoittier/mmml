@@ -13,33 +13,24 @@ minimal solvated peptide without Packmol or MLpot.
 
 Tests live in `tests/functionality/charmm/test_trialanine_water_box_mm.py`.
 
-## Requirements
-
-- Importable **PyCHARMM** / `libcharmm` (`pytest -m pycharmm`)
-- Full CHARMM install with protein toppar:
-  - `CHARMM_HOME/toppar/top_all36_prot.rtf`
-  - `CHARMM_HOME/toppar/par_all36m_prot.prm` (or `par_all36_prot.prm`)
-- Bundled CGENFF for TIP3 (`mmml/data/charmm/`)
-
-## Run
-
-```bash
-pytest tests/functionality/charmm/test_trialanine_water_box_mm.py -m pycharmm -v
-```
-
-Fast unit coverage (no CHARMM):
-
-```bash
-uv run pytest tests/unit/test_mm_system_energy.py -q
-```
-
 ## System build (`trialanine_water_box.py`)
 
-1. **Tri-alanine** — `ALA ALA ALA` with ACE/CT3 patches (protein FF).
+1. **Tri-alanine** — CGENFF residue ``TRIA`` (TRIALANINE: ACE–ALA×3–CT3) from
+   ``mmml/data/charmm/top_trialanine_cgenff.rtf``; coordinates via ``ic.build`` /
+   ``setupRes.generate_coordinates`` when needed.
 2. **Waters** — TIP3 on a simple cubic grid (~2.85 Å spacing); no Packmol.
 3. **PBC** — cubic cell via `prepare_charmm_pbc`; `apply_pbc_nbonds` caps cutoffs to `L/2`.
 
-Default smoke: 10 waters in a 28 Å box (~70 atoms).
+Regenerate the peptide RTF after topology changes::
+
+    ./scripts/mmml-charmm-mpirun.sh python scripts/export_trialanine_cgenff_rtf.py
+
+Default smoke: 10 waters in a 28 Å box (~72 atoms).
+
+## Requirements
+
+- Importable **PyCHARMM** / `libcharmm` (`pytest -m pycharmm`)
+- Bundled CGENFF + ``top_trialanine_cgenff.rtf`` (no protein ``toppar``)
 
 ## Electrostatic / nonbond setups
 

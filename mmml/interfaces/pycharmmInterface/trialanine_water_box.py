@@ -1,10 +1,9 @@
 """Build a minimal tri-alanine (ACE–ALA×3–CT3) periodic water box in PyCHARMM.
 
-Grid-placed TIP3 waters avoid Packmol so the fixture runs on CHARMM CI nodes.
-Protein parameters come from ``CHARMM_HOME/toppar``; TIP3 uses bundled CGENFF.
+Uses bundled CGENFF residue ``TRIA`` (documented as TRIALANINE) plus grid-placed
+TIP3 waters — no Packmol and no protein ``toppar``.
 
-User guide (figures, tests, electrostatic presets):
-``docs/trialanine-water-box.md``.
+User guide: ``docs/trialanine-water-box.md``.
 """
 
 from __future__ import annotations
@@ -22,6 +21,8 @@ from mmml.interfaces.pycharmmInterface.nbonds_config import PbcNbondCutoffs
 if TYPE_CHECKING:
     from ase import Atoms
 
+TRIA_RESI_NAME = "TRIA"  # CGENFF RESI (≤4 chars); full name TRIALANINE in docs/CGENFF.RES
+
 
 @dataclass(frozen=True, slots=True)
 class TrialanineWaterBox:
@@ -30,8 +31,8 @@ class TrialanineWaterBox:
     positions: np.ndarray
     psf_path: Path
     box_side_A: float
-    protein_rtf: Path
-    protein_prm: Path
+    peptide_rtf: Path
+    cgenff_prm: Path
     n_waters: int
     nbond_cutoffs: PbcNbondCutoffs
 
@@ -41,29 +42,31 @@ class TrialanineWaterBox:
         return np.diag([side, side, side])
 
 
-def protein_toppar_paths() -> tuple[Path, Path]:
-    """Return protein RTF/PRM under ``CHARMM_HOME/toppar``."""
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import CHARMM_HOME
+def trialanine_cgenff_rtf_path() -> Path:
+    """Supplemental RTF defining ``RESI TRIA`` (ACE–ALA×3–CT3)."""
+    from mmml.paths import bundled_file
 
-    base = Path(CHARMM_HOME) / "toppar"
-    rtf = base / "top_all36_prot.rtf"
-    prm = base / "par_all36m_prot.prm"
-    if not prm.is_file():
-        prm = base / "par_all36_prot.prm"
-    if not rtf.is_file() or not prm.is_file():
-        raise FileNotFoundError(
-            f"Protein toppar not found under {base}. "
-            "Set CHARMM_HOME to a full CHARMM installation."
-        )
-    return rtf, prm
+    return bundled_file("data", "charmm", "top_trialanine_cgenff.rtf")
 
 
-def have_protein_toppar() -> bool:
-    try:
-        protein_toppar_paths()
-        return True
-    except FileNotFoundError:
-        return False
+def have_trialanine_cgenff() -> bool:
+    return trialanine_cgenff_rtf_path().is_file()
+
+
+def _load_cgenff_with_trialanine() -> None:
+    import pycharmm.read as read
+
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+        CGENFF_PRM_BOMLEV,
+        _rtf_path_without_drude_autogen,
+        read_cgenff_prm,
+    )
+
+    with charmm_relaxed_bomlev(CGENFF_PRM_BOMLEV):
+        read.rtf(_rtf_path_without_drude_autogen(CGENFF_RTF))
+        read_cgenff_prm(bomlev=False)
+        read.rtf(str(trialanine_cgenff_rtf_path()), append=True)
 
 
 def _tip3_template() -> np.ndarray:
@@ -146,15 +149,11 @@ def synthetic_trialanine_water_atoms_for_docs(
 ) -> Atoms:
     """Illustrative ASE periodic system for MkDocs (no PyCHARMM).
 
-    Backbone geometry is a schematic extended tri-alanine at the cell centre;
-  water oxygens use the same grid placement as
-  :func:`build_trialanine_water_box_in_charmm`.  Regenerate figures with
-  ``uv run python scripts/generate_docs_figures.py``.
+    Regenerate figures with ``uv run python scripts/generate_docs_figures.py``.
     """
     from ase import Atoms
 
     centre = np.array([box_side_A / 2, box_side_A / 2, box_side_A / 2], dtype=np.float64)
-    # Extended N→CA→C trace (Å) along +x with light +y CB offsets (schematic only).
     backbone_offsets = np.array(
         [
             [-4.2, -0.3, -0.8],
@@ -220,13 +219,15 @@ def build_trialanine_water_box_in_charmm(
     seed: int = 11,
     workdir: Path | None = None,
 ) -> TrialanineWaterBox:
-    """Construct tri-alanine + waters in CHARMM and return PSF-ordered coordinates."""
+    """Construct CGENFF ``TRIA`` + TIP3 waters in CHARMM and return PSF-ordered coordinates."""
     import pycharmm.coor as coor
     import pycharmm.generate as generate
     import pycharmm.ic as ic
     import pycharmm.read as read
     import pycharmm.settings as settings
     import pycharmm.write as write
+
+    from mmml.interfaces.pycharmmInterface import setupRes
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
     from mmml.interfaces.pycharmmInterface.import_pycharmm import (
         crystal_free_charmm_for_param_append,
@@ -237,31 +238,31 @@ def build_trialanine_water_box_in_charmm(
         apply_pbc_nbonds,
         prepare_charmm_pbc,
     )
+    from mmml.interfaces.pycharmmInterface.nbonds_config import ic_prm_fill
 
-    protein_rtf, protein_prm = protein_toppar_paths()
+    if not have_trialanine_cgenff():
+        raise FileNotFoundError(
+            f"Missing {trialanine_cgenff_rtf_path()}. "
+            "Run: ./scripts/mmml-charmm-mpirun.sh python scripts/export_trialanine_cgenff_rtf.py"
+        )
+
     rng = np.random.default_rng(seed)
+    peptide_rtf = trialanine_cgenff_rtf_path()
 
-    # Prior CPT/barostat tests may leave IMAGE/crystal state; MPI-safe free before rebuild.
     crystal_free_charmm_for_param_append()
     pycharmm.lingo.charmm_script("DELETE ATOM SELE ALL END")
     reset_block()
 
-    with charmm_relaxed_bomlev():
-        read.rtf(str(protein_rtf))
-        read.prm(str(protein_prm))
-
+    _load_cgenff_with_trialanine()
     settings.set_verbosity(0)
-    read.sequence_string("ALA ALA ALA")
-    generate.new_segment(
-        seg_name="TRIA",
-        first_patch="ACE",
-        last_patch="CT3",
-        setup_ic=True,
-    )
-    from mmml.interfaces.pycharmmInterface.nbonds_config import ic_prm_fill
-
+    read.sequence_string(TRIA_RESI_NAME)
+    generate.new_segment(seg_name="PEPT", setup_ic=True)
     ic_prm_fill(replace_all=True)
     ic.build()
+
+    pos = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
+    if np.any(np.abs(pos) > 9000.0) or float(np.std(pos)) < 0.05:
+        setupRes.generate_coordinates(skip_energy_show=True, validate=True)
 
     peptide = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float).copy()
     peptide -= peptide.mean(axis=0)
@@ -283,18 +284,6 @@ def build_trialanine_water_box_in_charmm(
     water_coords = np.vstack(
         [site + (tip3 - tip3_com) for site in oxygen_sites],
     )
-
-    # Load CGENFF after the protein segment is built — loading both PRMs before
-    # ic.build() triggers DRUDE particle generation and aborts on some builds.
-    from mmml.interfaces.pycharmmInterface.nbonds_config import (
-        CGENFF_PRM_BOMLEV,
-        _rtf_path_without_drude_autogen,
-        read_cgenff_prm,
-    )
-
-    with charmm_relaxed_bomlev(CGENFF_PRM_BOMLEV):
-        read.rtf(_rtf_path_without_drude_autogen(CGENFF_RTF))
-        read_cgenff_prm(bomlev=False)
 
     read.sequence_string(" ".join(["TIP3"] * n_waters))
     generate.new_segment(seg_name="SOLV", setup_ic=False)
@@ -323,8 +312,8 @@ def build_trialanine_water_box_in_charmm(
         positions=positions,
         psf_path=psf_path,
         box_side_A=float(box_side_A),
-        protein_rtf=protein_rtf,
-        protein_prm=protein_prm,
+        peptide_rtf=peptide_rtf,
+        cgenff_prm=Path(CGENFF_PRM),
         n_waters=n_waters,
         nbond_cutoffs=nbond_cutoffs,
     )
