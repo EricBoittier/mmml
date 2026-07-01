@@ -819,11 +819,18 @@ def _register_mlpot_context(
     )
 
     rebind_mlpot_calculator_from_pycmodel(ctx, verbose=verbose)
-    assert_mlpot_user_active(
-        ctx,
-        context="MLpot registration",
-        quiet=not verbose,
-    )
+    if not defer_jax_warmup:
+        assert_mlpot_user_active(
+            ctx,
+            context="MLpot registration",
+            quiet=not verbose,
+        )
+    elif verbose:
+        print(
+            "MLpot registration: deferring USER/ENER check until after MLpot SD "
+            "(MPI-linked CHARMM deferred JAX)",
+            flush=True,
+        )
     return ctx, pyCModel
 
 

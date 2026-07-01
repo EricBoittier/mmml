@@ -1270,9 +1270,13 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
     atoms (``api_read.F90``). Installing ML exclusions via ``set_iblo_inb`` before
     rebuilding PBC leaves ``upinb`` operating on a cleared image table → segfault.
     """
-    refresh_nbonds_after_mlpot_pbc(
-        cubic_box_side_A=float(cubic_box_side_A),
-        force=True,
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        restore_charmm_cubic_crystal_lattice,
+    )
+
+    restore_charmm_cubic_crystal_lattice(
+        float(cubic_box_side_A),
+        quiet=not verbose,
     )
     _install_ml_exclusions(ml_selection, update=False)
     pycharmm = _import_pycharmm()

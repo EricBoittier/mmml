@@ -190,3 +190,71 @@ def test_register_mlpot_pbc_requires_skip_iblo_parameter():
             fake_sel,
             use_pbc=True,
         )
+
+
+def test_finalize_pbc_exclusions_restores_lattice_without_byres():
+    from mmml.interfaces.pycharmmInterface.mlpot import setup as mlpot_setup
+
+    fake_sel = MagicMock()
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.restore_charmm_cubic_crystal_lattice",
+    ) as restore, patch.object(
+        mlpot_setup,
+        "_install_ml_exclusions",
+    ) as install, patch.object(
+        mlpot_setup,
+        "_import_pycharmm",
+    ) as import_py:
+        fake_pycharmm = MagicMock()
+        import_py.return_value = fake_pycharmm
+        mlpot_setup._finalize_pbc_mlpot_exclusions_after_param_read(
+            fake_sel,
+            cubic_box_side_A=32.0,
+            verbose=False,
+        )
+    restore.assert_called_once_with(32.0, quiet=True)
+    install.assert_called_once_with(fake_sel, update=False)
+    fake_pycharmm.nbonds.update_bnbnd.assert_called_once()
+    fake_pycharmm.image.update_bimag.assert_called_once()
+
+
+def test_register_mlpot_context_skips_user_check_when_jax_deferred():
+    from mmml.interfaces.pycharmmInterface.mlpot import run_workflow
+
+    z = __import__("numpy").zeros(4, dtype=int)
+    r = __import__("numpy").zeros((4, 3))
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.run_workflow.load_physnet_mlpot_bundle",
+        return_value=(None, None, MagicMock()),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.run_workflow.register_mlpot",
+        return_value=MagicMock(),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.run_workflow.select_all_atoms",
+        return_value=MagicMock(),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.defer_jax_warmup_until_after_mlpot_sd",
+        return_value=True,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.run_workflow.refresh_nbonds_after_mlpot_pbc",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.run_workflow.sync_charmm_positions",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.run_workflow.get_charmm_positions_array",
+        return_value=r,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
+        return_value=True,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.assert_mlpot_user_active",
+    ) as assert_user:
+        run_workflow._register_mlpot_context(
+            z,
+            r,
+            __import__("pathlib").Path("ckpt"),
+            len(z),
+            1,
+            defer_jax_warmup=True,
+            verbose=True,
+        )
+    assert_user.assert_not_called()
