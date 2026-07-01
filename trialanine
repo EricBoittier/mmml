@@ -1,0 +1,2518 @@
+
+          RESIDUE TOPOLOGY FILE MODULE
+          CONTROL ARRAY :   47   47   13   15   54   48    0    0    0    0
+ TITLE>  *  DATE:     7/ 1/26     17:32:59      CREATED BY USER: ericb
+ TITLE>  *
+
+          Number of atom type codes is  54
+
+          ATOM TYPE CODES : MASSES
+        1    H               1.0080
+        2    HC              1.0080
+        3    HA              1.0080
+        4    HP              1.0080
+        5    HB1             1.0080
+        6    HB2             1.0080
+        7    HR1             1.0080
+        8    HR2             1.0080
+        9    HR3             1.0080
+       10    HS              1.0080
+       11    HE1             1.0080
+       12    HE2             1.0080
+       13    HA1             1.0080
+       14    HA2             1.0080
+       15    HA3             1.0080
+       16    C              12.0110
+       17    CA             12.0110
+       18    CT             12.0110
+       19    CT1            12.0110
+       20    CT2            12.0110
+       21    CT2A           12.0110
+       22    CT3            12.0110
+       23    CPH1           12.0110
+       24    CPH2           12.0110
+       25    CPT            12.0110
+       26    CY             12.0110
+       27    CP1            12.0110
+       28    CP2            12.0110
+       29    CP3            12.0110
+       30    CC             12.0110
+       31    CD             12.0110
+       32    CS             12.0110
+       33    CE1            12.0110
+       34    CE2            12.0110
+       35    CAI            12.0110
+       36    C3             12.0110
+       37    N              14.0070
+       38    NR1            14.0070
+       39    NR2            14.0070
+       40    NR3            14.0070
+       41    NH1            14.0070
+       42    NH2            14.0070
+       43    NH3            14.0070
+       44    NC2            14.0070
+       45    NY             14.0070
+       46    NP             14.0070
+       47    O              15.9994
+       48    OB             15.9994
+       49    OC             15.9994
+       50    OH1            15.9994
+       51    OS             15.9994
+       52    S              32.0600
+       53    SM             32.0600
+       54    SS             32.0600
+
+          Number of residues and patch residues is  48
+
+--------------------------------------------------------------------------------
+          -    1 -    ALA 
+
+ This is not a patch.  Default first and last patches: NTER  CTER    Autogenerate code:   7
+
+ 10 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6        7        8        9       10
+ ATOM NAME       N        HN       CA       HA       CB       HB1      HB2      HB3      C        O     
+ ATOM TYPE       NH1      H        CT1      HB1      CT3      HA3      HA3      HA3      C        O     
+ TYPE CODE       41        1       19        5       22       15       15       15       16       47
+ GROUP NO         1        1        1        1        2        2        2        2        3        3
+ CHARGE       -0.4700   0.3100   0.0700   0.0900  -0.2700   0.0900   0.0900   0.0900   0.5100  -0.5100
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0        0        0        0        0        0
+
+          TOTAL CHARGE =   0.0000          TOTAL ALPHA  =   0.0000
+
+  10 BONDS: | CB    CA      0 | N     HN      0 | N     CA      0 | C     CA      0 | C     +N      0 | CA    HA      0 | CB    HB1     0 | CB    HB2     0 | CB    HB3     0 | O     C       0 |
+            |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   2 IMPROPERS: | N     -C    CA    HN     | C     CA    +N    O      |
+
+   1 CROSS-TERM: | -C    N     CA    C     : N     CA    C     +N     |  
+
+   0 ANISOTROPY:
+
+   1 HB DONORS:    | HN    N      |
+
+   1 HB ACCEPTORS: | O     C      |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ -C    CA    N     HN        1.35510    126.490    180.000    115.420    0.99960  T
+ -C    N     CA    C         1.35510    126.490    180.000    114.440    1.53900  F
+ N     CA    C     +N        1.45920    114.440    180.000    116.840    1.35580  F
+ +N    CA    C     O         1.35580    116.840    180.000    122.520    1.22970  T
+ CA    C     +N    +CA       1.53900    116.840    180.000    126.770    1.46130  F
+ N     C     CA    CB        1.45920    114.440    123.230    111.090    1.54610  T
+ N     C     CA    HA        1.45920    114.440   -120.450    106.390    1.08400  T
+ C     CA    CB    HB1       1.53900    111.090    177.250    109.600    1.11090  F
+ HB1   CA    CB    HB2       1.11090    109.600    119.130    111.050    1.11190  T
+ HB1   CA    CB    HB3       1.11090    109.600   -119.580    111.610    1.11140  T
+
+--------------------------------------------------------------------------------
+          -    2 -    ARG 
+
+ This is not a patch.  Default first and last patches: NTER  CTER    Autogenerate code:   7
+
+ 24 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6        7        8        9       10       11       12       13       14       15       16       17       18       19       20
+                 21       22       23       24
+ ATOM NAME       N        HN       CA       HA       CB       HB1      HB2      CG       HG1      HG2      CD       HD1      HD2      NE       HE       CZ       NH1      HH11     HH12     NH2   
+                 HH21     HH22     C        O     
+ ATOM TYPE       NH1      H        CT1      HB1      CT2      HA2      HA2      CT2      HA2      HA2      CT2      HA2      HA2      NC2      HC       C        NC2      HC       HC       NC2   
+                 HC       HC       C        O     
+ TYPE CODE       41        1       19        5       20       14       14       20       14       14       20       14       14       44        2       16       44        2        2       44
+                  2        2       16       47
+ GROUP NO         1        1        1        1        2        2        2        3        3        3        4        4        4        4        4        4        4        4        4        4
+                  4        4        5        5
+ CHARGE       -0.4700   0.3100   0.0700   0.0900  -0.1800   0.0900   0.0900  -0.1800   0.0900   0.0900   0.2000   0.0900   0.0900  -0.7000   0.4400   0.6400  -0.8000   0.4600   0.4600  -0.8000
+               0.4600   0.4600   0.5100  -0.5100
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+               0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+               0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0
+                  0        0        0        0
+
+          TOTAL CHARGE =   1.0000          TOTAL ALPHA  =   0.0000
+
+  24 BONDS: | CB    CA      0 | CG    CB      0 | CD    CG      0 | NE    CD      0 | CZ    NE      0 | NH2   CZ      0 | N     HN      0 | N     CA      0 | C     CA      0 | C     +N      0 |
+            | CA    HA      0 | CB    HB1     0 | CB    HB2     0 | CG    HG1     0 | CG    HG2     0 | CD    HD1     0 | CD    HD2     0 | NE    HE      0 | NH1   HH11    0 | NH1   HH12    0 |
+            | NH2   HH21    0 | NH2   HH22    0 | O     C       0 | CZ    NH1     0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   5 IMPROPERS: | N     -C    CA    HN     | C     CA    +N    O      | CZ    NH1   NH2   NE     | NH1   HH11  HH12  CZ     | NH2   HH21  HH22  CZ     |
+
+   1 CROSS-TERM: | -C    N     CA    C     : N     CA    C     +N     |  
+
+   0 ANISOTROPY:
+
+   6 HB DONORS:    | HN    N      | HE    NE     | HH11  NH1    | HH12  NH1    | HH21  NH2    |
+                   | HH22  NH2    |
+
+   1 HB ACCEPTORS: | O     C      |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ -C    CA    N     HN        1.34960    122.450    180.000    116.670    0.99730  T
+ -C    N     CA    C         1.34960    122.450    180.000    109.860    1.52270  F
+ N     CA    C     +N        1.45440    109.860    180.000    117.120    1.35110  F
+ +N    CA    C     O         1.35110    117.120    180.000    121.400    1.22710  T
+ CA    C     +N    +CA       1.52270    117.120    180.000    124.670    1.45650  F
+ N     C     CA    CB        1.45440    109.860    123.640    112.260    1.55520  T
+ N     C     CA    HA        1.45440    109.860   -117.930    106.610    1.08360  T
+ N     CA    CB    CG        1.45440    110.700    180.000    115.950    1.54750  F
+ CG    CA    CB    HB1       1.54750    115.950    120.050    106.400    1.11630  T
+ CG    CA    CB    HB2       1.54750    115.950   -125.810    109.550    1.11240  T
+ CA    CB    CG    CD        1.55520    115.950    180.000    114.010    1.53840  F
+ CD    CB    CG    HG1       1.53840    114.010    125.200    108.550    1.11210  T
+ CD    CB    CG    HG2       1.53840    114.010   -120.300    108.960    1.11430  T
+ CB    CG    CD    NE        1.54750    114.010    180.000    107.090    1.50340  F
+ NE    CG    CD    HD1       1.50340    107.090    120.690    109.410    1.11430  T
+ NE    CG    CD    HD2       1.50340    107.090   -119.040    111.520    1.11500  T
+ CG    CD    NE    CZ        1.53840    107.090    180.000    123.050    1.34010  F
+ CZ    CD    NE    HE        1.34010    123.050    180.000    113.140    1.00650  T
+ CD    NE    CZ    NH1       1.50340    123.050    180.000    118.060    1.33110  F
+ NE    CZ    NH1   HH11      1.34010    118.060   -178.280    120.610    0.99030  F
+ HH11  CZ    NH1   HH12      0.99030    120.610    171.190    116.290    1.00230  T
+ NH1   NE    CZ    NH2       1.33110    118.060    178.640    122.140    1.32920  T
+ NE    CZ    NH2   HH21      1.34010    122.140   -174.140    119.910    0.98990  F
+ HH21  CZ    NH2   HH22      0.98990    119.910    166.160    116.880    0.99140  T
+
+--------------------------------------------------------------------------------
+          -    3 -    ASN 
+
+ This is not a patch.  Default first and last patches: NTER  CTER    Autogenerate code:   7
+
+ 14 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6        7        8        9       10       11       12       13       14
+ ATOM NAME       N        HN       CA       HA       CB       HB1      HB2      CG       OD1      ND2      HD21     HD22     C        O     
+ ATOM TYPE       NH1      H        CT1      HB1      CT2      HA2      HA2      CC       O        NH2      H        H        C        O     
+ TYPE CODE       41        1       19        5       20       14       14       30       47       42        1        1       16       47
+ GROUP NO         1        1        1        1        2        2        2        3        3        4        4        4        5        5
+ CHARGE       -0.4700   0.3100   0.0700   0.0900  -0.1800   0.0900   0.0900   0.5500  -0.5500  -0.6200   0.3200   0.3000   0.5100  -0.5100
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0        0        0        0        0        0        0        0        0        0
+
+          TOTAL CHARGE =   0.0000          TOTAL ALPHA  =   0.0000
+
+  14 BONDS: | CB    CA      0 | CG    CB      0 | ND2   CG      0 | N     HN      0 | N     CA      0 | C     CA      0 | C     +N      0 | CA    HA      0 | CB    HB1     0 | CB    HB2     0 |
+            | ND2   HD21    0 | ND2   HD22    0 | C     O       0 | CG    OD1     0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   6 IMPROPERS: | N     -C    CA    HN     | C     CA    +N    O      | CG    ND2   CB    OD1    | CG    CB    ND2   OD1    | ND2   CG    HD21  HD22   | ND2   CG    HD22  HD21   |
+                |
+
+   1 CROSS-TERM: | -C    N     CA    C     : N     CA    C     +N     |  
+
+   0 ANISOTROPY:
+
+   3 HB DONORS:    | HN    N      | HD21  ND2    | HD22  ND2    |
+
+   2 HB ACCEPTORS: | OD1   CG     | O     C      |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ -C    CA    N     HN        1.34800    124.050    180.000    114.490    0.99920  T
+ -C    N     CA    C         1.34800    124.050    180.000    105.230    1.52450  F
+ N     CA    C     +N        1.45100    105.230    180.000    117.380    1.34670  F
+ +N    CA    C     O         1.34670    117.380    180.000    120.320    1.22820  T
+ CA    C     +N    +CA       1.52450    117.380    180.000    124.880    1.45280  F
+ N     C     CA    CB        1.45100    105.230    121.180    113.040    1.56270  T
+ N     C     CA    HA        1.45100    105.230   -115.520    107.630    1.08480  T
+ N     CA    CB    CG        1.45100    110.910    180.000    114.300    1.53190  F
+ CG    CA    CB    HB1       1.53190    114.300    119.170    107.820    1.11200  T
+ CG    CA    CB    HB2       1.53190    114.300   -123.740    110.340    1.10910  T
+ CA    CB    CG    OD1       1.56270    114.300    180.000    122.560    1.23230  F
+ OD1   CB    CG    ND2       1.23230    122.560   -179.190    116.150    1.35210  T
+ CB    CG    ND2   HD21      1.53190    116.150   -179.260    117.350    0.99630  F
+ HD21  CG    ND2   HD22      0.99630    117.350    178.020    120.050    0.99510  T
+
+--------------------------------------------------------------------------------
+          -    4 -    ASP 
+
+ This is not a patch.  Default first and last patches: NTER  CTER    Autogenerate code:   7
+
+ 12 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6        7        8        9       10       11       12
+ ATOM NAME       N        HN       CA       HA       CB       HB1      HB2      CG       OD1      OD2      C        O     
+ ATOM TYPE       NH1      H        CT1      HB1      CT2A     HA2      HA2      CC       OC       OC       C        O     
+ TYPE CODE       41        1       19        5       21       14       14       30       49       49       16       47
+ GROUP NO         1        1        1        1        2        2        2        2        2        2        3        3
+ CHARGE       -0.4700   0.3100   0.0700   0.0900  -0.2800   0.0900   0.0900   0.6200  -0.7600  -0.7600   0.5100  -0.5100
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0        0        0        0        0        0        0        0
+
+          TOTAL CHARGE =  -1.0000          TOTAL ALPHA  =   0.0000
+
+  12 BONDS: | CB    CA      0 | CG    CB      0 | OD2   CG      0 | N     HN      0 | N     CA      0 | C     CA      0 | C     +N      0 | CA    HA      0 | CB    HB1     0 | CB    HB2     0 |
+            | O     C       0 | CG    OD1     0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   3 IMPROPERS: | N     -C    CA    HN     | C     CA    +N    O      | CG    CB    OD2   OD1    |
+
+   1 CROSS-TERM: | -C    N     CA    C     : N     CA    C     +N     |  
+
+   0 ANISOTROPY:
+
+   1 HB DONORS:    | HN    N      |
+
+   3 HB ACCEPTORS: | OD1   CG     | OD2   CG     | O     C      |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ -C    CA    N     HN        1.34650    125.310    180.000    112.940    0.99660  T
+ -C    N     CA    C         1.34650    125.310    180.000    105.630    1.53150  F
+ N     CA    C     +N        1.44900    105.630    180.000    117.060    1.34780  F
+ +N    CA    C     O         1.34780    117.060    180.000    120.710    1.23300  T
+ CA    C     +N    +CA       1.53150    117.060    180.000    125.390    1.44840  F
+ N     C     CA    CB        1.44900    105.630    122.330    114.100    1.56190  T
+ N     C     CA    HA        1.44900    105.630   -116.400    106.770    1.08410  T
+ N     CA    CB    CG        1.44900    111.100    180.000    112.600    1.52180  F
+ CG    CA    CB    HB1       1.52180    112.600    119.220    109.230    1.10860  T
+ CG    CA    CB    HB2       1.52180    112.600   -121.610    110.640    1.10800  T
+ CA    CB    CG    OD1       1.56190    112.600    180.000    117.990    1.25650  F
+ OD1   CB    CG    OD2       1.25650    117.990   -170.230    117.700    1.25410  T
+
+--------------------------------------------------------------------------------
+          -    5 -    CYS 
+
+ This is not a patch.  Default first and last patches: NTER  CTER    Autogenerate code:   7
+
+ 11 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6        7        8        9       10       11
+ ATOM NAME       N        HN       CA       HA       CB       HB1      HB2      SG       HG1      C        O     
+ ATOM TYPE       NH1      H        CT1      HB1      CT2      HA2      HA2      S        HS       C        O     
+ TYPE CODE       41        1       19        5       20       14       14       52       10       16       47
+ GROUP NO         1        1        1        1        2        2        2        2        2        3        3
+ CHARGE       -0.4700   0.3100   0.0700   0.0900  -0.1100   0.0900   0.0900  -0.2300   0.1600   0.5100  -0.5100
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0        0        0        0        0        0        0
+
+          TOTAL CHARGE =   0.0000          TOTAL ALPHA  =   0.0000
+
+  11 BONDS: | CB    CA      0 | SG    CB      0 | N     HN      0 | N     CA      0 | C     CA      0 | C     +N      0 | CA    HA      0 | CB    HB1     0 | CB    HB2     0 | SG    HG1     0 |
+            | O     C       0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   2 IMPROPERS: | N     -C    CA    HN     | C     CA    +N    O      |
+
+   1 CROSS-TERM: | -C    N     CA    C     : N     CA    C     +N     |  
+
+   0 ANISOTROPY:
+
+   2 HB DONORS:    | HN    N      | HG1   SG     |
+
+   1 HB ACCEPTORS: | O     C      |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ -C    CA    N     HN        1.34790    123.930    180.000    114.770    0.99820  T
+ -C    N     CA    C         1.34790    123.930    180.000    105.890    1.52020  F
+ N     CA    C     +N        1.45330    105.890    180.000    118.300    1.34980  F
+ +N    CA    C     O         1.34980    118.300    180.000    120.590    1.23060  T
+ CA    C     +N    +CA       1.52020    118.300    180.000    124.500    1.45480  F
+ N     C     CA    CB        1.45330    105.890    121.790    111.980    1.55840  T
+ N     C     CA    HA        1.45330    105.890   -116.340    107.710    1.08370  T
+ N     CA    CB    SG        1.45330    111.560    180.000    113.870    1.83590  F
+ SG    CA    CB    HB1       1.83590    113.870    119.910    107.240    1.11340  T
+ SG    CA    CB    HB2       1.83590    113.870   -125.320    109.820    1.11240  T
+ CA    CB    SG    HG1       1.55840    113.870    176.960     97.150    1.33410  F
+
+--------------------------------------------------------------------------------
+          -    6 -    GLN 
+
+ This is not a patch.  Default first and last patches: NTER  CTER    Autogenerate code:   7
+
+ 17 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6        7        8        9       10       11       12       13       14       15       16       17
+ ATOM NAME       N        HN       CA       HA       CB       HB1      HB2      CG       HG1      HG2      CD       OE1      NE2      HE21     HE22     C        O     
+ ATOM TYPE       NH1      H        CT1      HB1      CT2      HA2      HA2      CT2      HA2      HA2      CC       O        NH2      H        H        C        O     
+ TYPE CODE       41        1       19        5       20       14       14       20       14       14       30       47       42        1        1       16       47
+ GROUP NO         1        1        1        1        2        2        2        3        3        3        4        4        5        5        5        6        6
+ CHARGE       -0.4700   0.3100   0.0700   0.0900  -0.1800   0.0900   0.0900  -0.1800   0.0900   0.0900   0.5500  -0.5500  -0.6200   0.3200   0.3000   0.5100  -0.5100
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0
+
+          TOTAL CHARGE =   0.0000          TOTAL ALPHA  =   0.0000
+
+  17 BONDS: | CB    CA      0 | CG    CB      0 | CD    CG      0 | NE2   CD      0 | N     HN      0 | N     CA      0 | C     CA      0 | C     +N      0 | CA    HA      0 | CB    HB1     0 |
+            | CB    HB2     0 | CG    HG1     0 | CG    HG2     0 | NE2   HE21    0 | NE2   HE22    0 | O     C       0 | CD    OE1     0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   6 IMPROPERS: | N     -C    CA    HN     | C     CA    +N    O      | CD    NE2   CG    OE1    | CD    CG    NE2   OE1    | NE2   CD    HE21  HE22   | NE2   CD    HE22  HE21   |
+                |
+
+   1 CROSS-TERM: | -C    N     CA    C     : N     CA    C     +N     |  
+
+   0 ANISOTROPY:
+
+   3 HB DONORS:    | HN    N      | HE21  NE2    | HE22  NE2    |
+
+   2 HB ACCEPTORS: | OE1   CD     | O     C      |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ -C    CA    N     HN        1.34770    123.930    180.000    114.450    0.99840  T
+ -C    N     CA    C         1.34770    123.930    180.000    106.570    1.51800  F
+ N     CA    C     +N        1.45060    106.570    180.000    117.720    1.34630  F
+ +N    CA    C     O         1.34630    117.720    180.000    120.590    1.22910  T
+ CA    C     +N    +CA       1.51800    117.720    180.000    124.350    1.44610  F
+ N     C     CA    CB        1.45060    106.570    121.910    111.680    1.55380  T
+ N     C     CA    HA        1.45060    106.570   -116.820    107.530    1.08320  T
+ N     CA    CB    CG        1.45060    111.440    180.000    115.520    1.55340  F
+ CG    CA    CB    HB1       1.55340    115.520    120.930    106.800    1.11470  T
+ CG    CA    CB    HB2       1.55340    115.520   -124.580    109.340    1.11400  T
+ CA    CB    CG    CD        1.55380    115.520    180.000    112.500    1.53200  F
+ CD    CB    CG    HG1       1.53200    112.500    118.690    110.410    1.11120  T
+ CD    CB    CG    HG2       1.53200    112.500   -121.910    110.740    1.10940  T
+ CB    CG    CD    OE1       1.55340    112.500    180.000    121.520    1.22940  F
+ OE1   CG    CD    NE2       1.22940    121.520    179.570    116.840    1.35300  T
+ CG    CD    NE2   HE21      1.53200    116.840   -179.720    116.860    0.99590  F
+ HE21  CD    NE2   HE22      0.99590    116.860   -178.910    119.830    0.99430  T
+
+--------------------------------------------------------------------------------
+          -    7 -    GLU 
+
+ This is not a patch.  Default first and last patches: NTER  CTER    Autogenerate code:   7
+
+ 15 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6        7        8        9       10       11       12       13       14       15
+ ATOM NAME       N        HN       CA       HA       CB       HB1      HB2      CG       HG1      HG2      CD       OE1      OE2      C        O     
+ ATOM TYPE       NH1      H        CT1      HB1      CT2A     HA2      HA2      CT2      HA2      HA2      CC       OC       OC       C        O     
+ TYPE CODE       41        1       19        5       21       14       14       20       14       14       30       49       49       16       47
+ GROUP NO         1        1        1        1        2        2        2        3        3        3        3        3        3        4        4
+ CHARGE       -0.4700   0.3100   0.0700   0.0900  -0.1800   0.0900   0.0900  -0.2800   0.0900   0.0900   0.6200  -0.7600  -0.7600   0.5100  -0.5100
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0        0        0        0        0        0        0        0        0        0        0
+
+          TOTAL CHARGE =  -1.0000          TOTAL ALPHA  =   0.0000
+
+  15 BONDS: | CB    CA      0 | CG    CB      0 | CD    CG      0 | OE2   CD      0 | N     HN      0 | N     CA      0 | C     CA      0 | C     +N      0 | CA    HA      0 | CB    HB1     0 |
+            | CB    HB2     0 | CG    HG1     0 | CG    HG2     0 | O     C       0 | CD    OE1     0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   3 IMPROPERS: | N     -C    CA    HN     | C     CA    +N    O      | CD    CG    OE2   OE1    |
+
+   1 CROSS-TERM: | -C    N     CA    C     : N     CA    C     +N     |  
+
+   0 ANISOTROPY:
+
+   1 HB DONORS:    | HN    N      |
+
+   3 HB ACCEPTORS: | OE1   CD     | OE2   CD     | O     C      |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ -C    CA    N     HN        1.34710    124.450    180.000    113.990    0.99610  T
+ -C    N     CA    C         1.34710    124.450    180.000    107.270    1.52160  F
+ N     CA    C     +N        1.45120    107.270    180.000    117.250    1.35010  F
+ +N    CA    C     O         1.35010    117.250    180.000    121.070    1.23060  T
+ CA    C     +N    +CA       1.52160    117.250    180.000    124.300    1.45300  F
+ N     C     CA    CB        1.45120    107.270    121.900    111.710    1.55160  T
+ N     C     CA    HA        1.45120    107.270   -118.060    107.260    1.08280  T
+ N     CA    CB    CG        1.45120    111.040    180.000    115.690    1.55570  F
+ CG    CA    CB    HB1       1.55570    115.690    121.220    108.160    1.11450  T
+ CG    CA    CB    HB2       1.55570    115.690   -123.650    109.810    1.11310  T
+ CA    CB    CG    CD        1.55160    115.690    180.000    115.730    1.53070  F
+ CD    CB    CG    HG1       1.53070    115.730    117.380    109.500    1.10530  T
+ CD    CB    CG    HG2       1.53070    115.730   -121.960    111.000    1.10810  T
+ CB    CG    CD    OE1       1.55570    115.730    180.000    114.990    1.25900  F
+ OE1   CG    CD    OE2       1.25900    114.990   -179.100    120.080    1.25320  T
+
+--------------------------------------------------------------------------------
+          -    8 -    GLY 
+
+ This is not a patch.  Default first and last patches: GLYP  CTER    Autogenerate code:   7
+
+  7 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6        7
+ ATOM NAME       N        HN       CA       HA1      HA2      C        O     
+ ATOM TYPE       NH1      H        CT2      HB2      HB2      C        O     
+ TYPE CODE       41        1       20        6        6       16       47
+ GROUP NO         1        1        1        1        1        2        2
+ CHARGE       -0.4700   0.3100  -0.0200   0.0900   0.0900   0.5100  -0.5100
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0        0        0
+
+          TOTAL CHARGE =   0.0000          TOTAL ALPHA  =   0.0000
+
+   7 BONDS: | N     HN      0 | N     CA      0 | C     CA      0 | C     +N      0 | CA    HA1     0 | CA    HA2     0 | O     C       0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   2 IMPROPERS: | N     -C    CA    HN     | C     CA    +N    O      |
+
+   1 CROSS-TERM: | -C    N     CA    C     : N     CA    C     +N     |  
+
+   0 ANISOTROPY:
+
+   1 HB DONORS:    | HN    N      |
+
+   1 HB ACCEPTORS: | O     C      |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ -C    CA    N     HN        1.34750    122.820    180.000    115.620    0.99920  T
+ -C    N     CA    C         1.34750    122.820    180.000    108.940    1.49710  F
+ N     CA    C     +N        1.45530    108.940    180.000    117.600    1.34790  F
+ +N    CA    C     O         1.34790    117.600    180.000    120.850    1.22890  T
+ CA    C     +N    +CA       1.49710    117.600    180.000    124.080    1.45600  F
+ N     C     CA    HA1       1.45530    108.940    117.860    108.030    1.08140  T
+ N     C     CA    HA2       1.45530    108.940   -118.120    107.950    1.08170  T
+
+--------------------------------------------------------------------------------
+          -    9 -    HSD 
+
+ This is not a patch.  Default first and last patches: NTER  CTER    Autogenerate code:   7
+
+ 17 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6        7        8        9       10       11       12       13       14       15       16       17
+ ATOM NAME       N        HN       CA       HA       CB       HB1      HB2      ND1      HD1      CG       CE1      HE1      NE2      CD2      HD2      C        O     
+ ATOM TYPE       NH1      H        CT1      HB1      CT2      HA2      HA2      NR1      H        CPH1     CPH2     HR1      NR2      CPH1     HR3      C        O     
+ TYPE CODE       41        1       19        5       20       14       14       38        1       23       24        7       39       23        9       16       47
+ GROUP NO         1        1        1        1        2        2        2        2        2        2        3        3        3        3        3        4        4
+ CHARGE       -0.4700   0.3100   0.0700   0.0900  -0.0900   0.0900   0.0900  -0.3600   0.3200  -0.0500   0.2500   0.1300  -0.7000   0.2200   0.1000   0.5100  -0.5100
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0
+
+          TOTAL CHARGE =   0.0000          TOTAL ALPHA  =   0.0000
+
+  18 BONDS: | CB    CA      0 | CG    CB      0 | ND1   CG      0 | CE1   ND1     0 | NE2   CD2     0 | N     HN      0 | N     CA      0 | C     CA      0 | C     +N      0 | CA    HA      0 |
+            | CB    HB1     0 | CB    HB2     0 | ND1   HD1     0 | CD2   HD2     0 | CE1   HE1     0 | O     C       0 | CG    CD2     0 | CE1   NE2     0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   8 IMPROPERS: | ND1   CG    CE1   HD1    | CD2   CG    NE2   HD2    | CE1   ND1   NE2   HE1    | ND1   CE1   CG    HD1    | CD2   NE2   CG    HD2    | CE1   NE2   ND1   HE1    |
+                | N     -C    CA    HN     | C     CA    +N    O      |
+
+   1 CROSS-TERM: | -C    N     CA    C     : N     CA    C     +N     |  
+
+   0 ANISOTROPY:
+
+   2 HB DONORS:    | HN    N      | HD1   ND1    |
+
+   2 HB ACCEPTORS: | NE2          | O     C      |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ -C    CA    N     HN        1.34750    123.270    180.000    115.210    0.99880  T
+ -C    N     CA    C         1.34750    123.270    180.000    107.700    1.51660  F
+ N     CA    C     +N        1.45210    107.700    180.000    117.570    1.35090  F
+ +N    CA    C     O         1.35090    117.570    180.000    120.240    1.22730  T
+ CA    C     +N    +CA       1.51660    117.570    180.000    123.720    1.45450  F
+ N     C     CA    CB        1.45210    107.700    122.460    109.990    1.55190  T
+ N     C     CA    HA        1.45210    107.700   -117.490    107.370    1.08300  T
+ N     CA    CB    CG        1.45210    112.120    180.000    114.050    1.50410  F
+ CG    CA    CB    HB1       1.50410    114.050    121.170    109.010    1.11180  T
+ CG    CA    CB    HB2       1.50410    114.050   -122.360    109.530    1.11210  T
+ CA    CB    CG    ND1       1.55190    114.050     90.000    124.100    1.37830  F
+ ND1   CB    CG    CD2       1.37830    124.100   -171.290    129.600    1.35970  T
+ CB    CG    ND1   CE1       1.50410    124.100   -173.210    107.030    1.35490  F
+ CB    CG    CD2   NE2       1.50410    129.600    171.990    110.030    1.38170  F
+ NE2   ND1   CE1   HE1       1.31660    111.630   -179.630    123.890    1.09320  T
+ CE1   CG    ND1   HD1       1.35490    107.030   -174.650    126.260    1.00050  T
+ NE2   CG    CD2   HD2       1.38170    110.030   -177.850    129.630    1.08340  T
+
+--------------------------------------------------------------------------------
+          -   10 -    HSE 
+
+ This is not a patch.  Default first and last patches: NTER  CTER    Autogenerate code:   7
+
+ 17 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6        7        8        9       10       11       12       13       14       15       16       17
+ ATOM NAME       N        HN       CA       HA       CB       HB1      HB2      ND1      CG       CE1      HE1      NE2      HE2      CD2      HD2      C        O     
+ ATOM TYPE       NH1      H        CT1      HB1      CT2      HA2      HA2      NR2      CPH1     CPH2     HR1      NR1      H        CPH1     HR3      C        O     
+ TYPE CODE       41        1       19        5       20       14       14       39       23       24        7       38        1       23        9       16       47
+ GROUP NO         1        1        1        1        2        2        2        2        2        2        2        3        3        3        3        4        4
+ CHARGE       -0.4700   0.3100   0.0700   0.0900  -0.0800   0.0900   0.0900  -0.7000   0.2200   0.2500   0.1300  -0.3600   0.3200  -0.0500   0.0900   0.5100  -0.5100
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0
+
+          TOTAL CHARGE =   0.0000          TOTAL ALPHA  =   0.0000
+
+  18 BONDS: | CB    CA      0 | CG    CB      0 | ND1   CG      0 | NE2   CD2     0 | N     HN      0 | N     CA      0 | C     CA      0 | C     +N      0 | NE2   CE1     0 | CA    HA      0 |
+            | CB    HB1     0 | CB    HB2     0 | NE2   HE2     0 | CD2   HD2     0 | CE1   HE1     0 | O     C       0 | CD2   CG      0 | CE1   ND1     0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   8 IMPROPERS: | NE2   CD2   CE1   HE2    | CD2   CG    NE2   HD2    | CE1   ND1   NE2   HE1    | NE2   CE1   CD2   HE2    | CD2   NE2   CG    HD2    | CE1   NE2   ND1   HE1    |
+                | N     -C    CA    HN     | C     CA    +N    O      |
+
+   1 CROSS-TERM: | -C    N     CA    C     : N     CA    C     +N     |  
+
+   0 ANISOTROPY:
+
+   2 HB DONORS:    | HN    N      | HE2   NE2    |
+
+   2 HB ACCEPTORS: | ND1          | O     C      |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ -C    CA    N     HN        1.34720    124.160    180.000    114.360    0.99910  T
+ -C    N     CA    C         1.34720    124.160    180.000    106.430    1.51660  F
+ N     CA    C     +N        1.45320    106.430    180.000    116.970    1.34460  F
+ +N    CA    C     O         1.34460    116.970    180.000    120.680    1.22900  T
+ CA    C     +N    +CA       1.51660    116.970    180.000    124.950    1.45050  F
+ N     C     CA    CB        1.45320    106.430    123.520    111.670    1.55780  T
+ N     C     CA    HA        1.45320    106.430   -116.490    107.080    1.08330  T
+ N     CA    CB    CG        1.45320    112.820    180.000    116.940    1.51090  F
+ CG    CA    CB    HB1       1.51090    116.940    119.800    107.910    1.11140  T
+ CG    CA    CB    HB2       1.51090    116.940   -124.040    109.500    1.11010  T
+ CA    CB    CG    ND1       1.55780    116.940     90.000    120.170    1.38590  F
+ ND1   CB    CG    CD2       1.38590    120.170   -178.260    129.710    1.35960  T
+ CB    CG    ND1   CE1       1.51090    120.170   -179.200    105.200    1.31700  F
+ CB    CG    CD2   NE2       1.51090    129.710    178.660    105.800    1.37820  F
+ NE2   ND1   CE1   HE1       1.35390    111.760    179.690    124.580    1.09290  T
+ CE1   CD2   NE2   HE2       1.35390    107.150   -178.690    125.860    0.99960  T
+ NE2   CG    CD2   HD2       1.37820    105.800   -179.350    129.890    1.08090  T
+
+--------------------------------------------------------------------------------
+          -   11 -    HSP 
+
+ This is not a patch.  Default first and last patches: NTER  CTER    Autogenerate code:   7
+
+ 18 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6        7        8        9       10       11       12       13       14       15       16       17       18
+ ATOM NAME       N        HN       CA       HA       CB       HB1      HB2      CD2      HD2      CG       NE2      HE2      ND1      HD1      CE1      HE1      C        O     
+ ATOM TYPE       NH1      H        CT1      HB1      CT2A     HA2      HA2      CPH1     HR1      CPH1     NR3      H        NR3      H        CPH2     HR2      C        O     
+ TYPE CODE       41        1       19        5       21       14       14       23        7       23       40        1       40        1       24        8       16       47
+ GROUP NO         1        1        1        1        2        2        2        2        2        2        3        3        3        3        3        3        4        4
+ CHARGE       -0.4700   0.3100   0.0700   0.0900  -0.0500   0.0900   0.0900   0.1900   0.1300   0.1900  -0.5100   0.4400  -0.5100   0.4400   0.3200   0.1800   0.5100  -0.5100
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0
+
+          TOTAL CHARGE =   1.0000          TOTAL ALPHA  =   0.0000
+
+  19 BONDS: | CB    CA      0 | CG    CB      0 | ND1   CG      0 | CE1   ND1     0 | NE2   CD2     0 | N     HN      0 | N     CA      0 | C     CA      0 | C     +N      0 | CA    HA      0 |
+            | CB    HB1     0 | CB    HB2     0 | ND1   HD1     0 | NE2   HE2     0 | CD2   HD2     0 | CE1   HE1     0 | O     C       0 | CD2   CG      0 | NE2   CE1     0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   6 IMPROPERS: | ND1   CG    CE1   HD1    | ND1   CE1   CG    HD1    | NE2   CD2   CE1   HE2    | NE2   CE1   CD2   HE2    | N     -C    CA    HN     | C     CA    +N    O      |
+                |
+
+   1 CROSS-TERM: | -C    N     CA    C     : N     CA    C     +N     |  
+
+   0 ANISOTROPY:
+
+   3 HB DONORS:    | HN    N      | HD1   ND1    | HE2   NE2    |
+
+   1 HB ACCEPTORS: | O     C      |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ -C    CA    N     HN        1.34890    123.930    180.000    118.800    1.00410  T
+ -C    N     CA    C         1.34890    123.930    180.000    112.030    1.52250  F
+ N     CA    C     +N        1.45480    112.030    180.000    116.490    1.34640  F
+ +N    CA    C     O         1.34640    116.490    180.000    121.200    1.22840  T
+ CA    C     +N    +CA       1.52250    116.490    180.000    124.240    1.45210  F
+ N     C     CA    CB        1.45480    112.030    125.130    109.380    1.55330  T
+ N     C     CA    HA        1.45480    112.030   -119.200    106.720    1.08320  T
+ N     CA    CB    CG        1.45480    112.250    180.000    114.180    1.51680  F
+ CG    CA    CB    HB1       1.51680    114.180    122.500    108.990    1.11160  T
+ CG    CA    CB    HB2       1.51680    114.180   -121.510    108.970    1.11320  T
+ CA    CB    CG    ND1       1.55330    114.180     90.000    122.940    1.37180  F
+ ND1   CB    CG    CD2       1.37180    122.940   -165.260    128.930    1.35490  T
+ CB    CG    ND1   CE1       1.51680    122.940   -167.620    108.900    1.32620  F
+ CB    CG    CD2   NE2       1.51680    128.930    167.130    106.930    1.37270  F
+ NE2   ND1   CE1   HE1       1.32560    108.500    178.390    125.760    1.07990  T
+ CE1   CD2   NE2   HE2       1.32560    108.820   -172.940    125.520    1.00200  T
+ CE1   CG    ND1   HD1       1.32620    108.900    171.490    126.090    1.00180  T
+ NE2   CG    CD2   HD2       1.37270    106.930   -174.490    128.410    1.08670  T
+
+--------------------------------------------------------------------------------
+          -   12 -    ILE 
+
+ This is not a patch.  Default first and last patches: NTER  CTER    Autogenerate code:   7
+
+ 19 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6        7        8        9       10       11       12       13       14       15       16       17       18       19
+ ATOM NAME       N        HN       CA       HA       CB       HB       CG2      HG21     HG22     HG23     CG1      HG11     HG12     CD       HD1      HD2      HD3      C        O     
+ ATOM TYPE       NH1      H        CT1      HB1      CT1      HA1      CT3      HA3      HA3      HA3      CT2      HA2      HA2      CT3      HA3      HA3      HA3      C        O     
+ TYPE CODE       41        1       19        5       19       13       22       15       15       15       20       14       14       22       15       15       15       16       47
+ GROUP NO         1        1        1        1        2        2        3        3        3        3        4        4        4        5        5        5        5        6        6
+ CHARGE       -0.4700   0.3100   0.0700   0.0900  -0.0900   0.0900  -0.2700   0.0900   0.0900   0.0900  -0.1800   0.0900   0.0900  -0.2700   0.0900   0.0900   0.0900   0.5100  -0.5100
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0
+
+          TOTAL CHARGE =   0.0000          TOTAL ALPHA  =   0.0000
+
+  19 BONDS: | CB    CA      0 | CG1   CB      0 | CG2   CB      0 | CD    CG1     0 | N     HN      0 | N     CA      0 | C     CA      0 | C     +N      0 | CA    HA      0 | CB    HB      0 |
+            | CG1   HG11    0 | CG1   HG12    0 | CG2   HG21    0 | CG2   HG22    0 | CG2   HG23    0 | CD    HD1     0 | CD    HD2     0 | CD    HD3     0 | O     C       0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   2 IMPROPERS: | N     -C    CA    HN     | C     CA    +N    O      |
+
+   1 CROSS-TERM: | -C    N     CA    C     : N     CA    C     +N     |  
+
+   0 ANISOTROPY:
+
+   1 HB DONORS:    | HN    N      |
+
+   1 HB ACCEPTORS: | O     C      |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ -C    CA    N     HN        1.34700    124.160    180.000    114.190    0.99780  T
+ -C    N     CA    C         1.34700    124.160    180.000    106.350    1.51900  F
+ N     CA    C     +N        1.45420    106.350    180.000    117.970    1.34650  F
+ +N    CA    C     O         1.34650    117.970    180.000    120.590    1.23000  T
+ CA    C     +N    +CA       1.51900    117.970    180.000    124.210    1.44670  F
+ N     C     CA    CB        1.45420    106.350    124.220    112.930    1.56810  T
+ N     C     CA    HA        1.45420    106.350   -115.630    106.810    1.08260  T
+ N     CA    CB    CG1       1.45420    112.790    180.000    113.630    1.54980  F
+ CG1   CA    CB    HB        1.54980    113.630    114.550    104.480    1.11950  T
+ CG1   CA    CB    CG2       1.54980    113.630   -130.040    113.930    1.54520  T
+ CA    CB    CG2   HG21      1.56810    113.930   -171.300    110.610    1.11000  F
+ HG21  CB    CG2   HG22      1.11000    110.610    119.350    110.900    1.11020  T
+ HG21  CB    CG2   HG23      1.11000    110.610   -120.090    110.970    1.11050  T
+ CA    CB    CG1   CD        1.56810    113.630    180.000    114.090    1.53810  F
+ CD    CB    CG1   HG11      1.53810    114.090    122.360    109.780    1.11300  T
+ CD    CB    CG1   HG12      1.53810    114.090   -120.590    108.890    1.11410  T
+ CB    CG1   CD    HD1       1.54980    114.090   -176.780    110.310    1.11150  F
+ HD1   CG1   CD    HD2       1.11150    110.310    119.750    110.650    1.11130  T
+ HD1   CG1   CD    HD3       1.11150    110.310   -119.700    111.020    1.11030  T
+
+--------------------------------------------------------------------------------
+          -   13 -    LEU 
+
+ This is not a patch.  Default first and last patches: NTER  CTER    Autogenerate code:   7
+
+ 19 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6        7        8        9       10       11       12       13       14       15       16       17       18       19
+ ATOM NAME       N        HN       CA       HA       CB       HB1      HB2      CG       HG       CD1      HD11     HD12     HD13     CD2      HD21     HD22     HD23     C        O     
+ ATOM TYPE       NH1      H        CT1      HB1      CT2      HA2      HA2      CT1      HA1      CT3      HA3      HA3      HA3      CT3      HA3      HA3      HA3      C        O     
+ TYPE CODE       41        1       19        5       20       14       14       19       13       22       15       15       15       22       15       15       15       16       47
+ GROUP NO         1        1        1        1        2        2        2        3        3        4        4        4        4        5        5        5        5        6        6
+ CHARGE       -0.4700   0.3100   0.0700   0.0900  -0.1800   0.0900   0.0900  -0.0900   0.0900  -0.2700   0.0900   0.0900   0.0900  -0.2700   0.0900   0.0900   0.0900   0.5100  -0.5100
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0
+
+          TOTAL CHARGE =   0.0000          TOTAL ALPHA  =   0.0000
+
+  19 BONDS: | CB    CA      0 | CG    CB      0 | CD1   CG      0 | CD2   CG      0 | N     HN      0 | N     CA      0 | C     CA      0 | C     +N      0 | CA    HA      0 | CB    HB1     0 |
+            | CB    HB2     0 | CG    HG      0 | CD1   HD11    0 | CD1   HD12    0 | CD1   HD13    0 | CD2   HD21    0 | CD2   HD22    0 | CD2   HD23    0 | O     C       0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   2 IMPROPERS: | N     -C    CA    HN     | C     CA    +N    O      |
+
+   1 CROSS-TERM: | -C    N     CA    C     : N     CA    C     +N     |  
+
+   0 ANISOTROPY:
+
+   1 HB DONORS:    | HN    N      |
+
+   1 HB ACCEPTORS: | O     C      |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ -C    CA    N     HN        1.34740    124.310    180.000    114.260    0.99790  T
+ -C    N     CA    C         1.34740    124.310    180.000    106.050    1.51840  F
+ N     CA    C     +N        1.45080    106.050    180.000    117.930    1.34630  F
+ +N    CA    C     O         1.34630    117.930    180.000    120.560    1.22990  T
+ CA    C     +N    +CA       1.51840    117.930    180.000    124.260    1.44670  F
+ N     C     CA    CB        1.45080    106.050    121.520    112.120    1.55430  T
+ N     C     CA    HA        1.45080    106.050   -116.500    107.570    1.08240  T
+ N     CA    CB    CG        1.45080    111.190    180.000    117.460    1.54720  F
+ CG    CA    CB    HB1       1.54720    117.460    120.980    107.170    1.11450  T
+ CG    CA    CB    HB2       1.54720    117.460   -124.670    108.980    1.11260  T
+ CA    CB    CG    CD1       1.55430    117.460    180.000    110.480    1.53610  F
+ CD1   CB    CG    CD2       1.53610    110.480    120.000    112.570    1.53600  T
+ CD1   CD2   CG    HG        1.53610    110.260    120.000    108.020    1.11680  T
+ CB    CG    CD1   HD11      1.54720    110.480    177.330    110.540    1.11110  F
+ HD11  CG    CD1   HD12      1.11110    110.540    119.960    110.620    1.11120  T
+ HD11  CG    CD1   HD13      1.11110    110.540   -119.850    110.690    1.11080  T
+ CB    CG    CD2   HD21      1.54720    112.570    178.960    110.320    1.11160  F
+ HD21  CG    CD2   HD22      1.11160    110.320    119.710    111.690    1.10860  T
+ HD21  CG    CD2   HD23      1.11160    110.320   -119.610    110.490    1.11150  T
+
+--------------------------------------------------------------------------------
+          -   14 -    LYS 
+
+ This is not a patch.  Default first and last patches: NTER  CTER    Autogenerate code:   7
+
+ 22 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6        7        8        9       10       11       12       13       14       15       16       17       18       19       20
+                 21       22
+ ATOM NAME       N        HN       CA       HA       CB       HB1      HB2      CG       HG1      HG2      CD       HD1      HD2      CE       HE1      HE2      NZ       HZ1      HZ2      HZ3   
+                 C        O     
+ ATOM TYPE       NH1      H        CT1      HB1      CT2      HA2      HA2      CT2      HA2      HA2      CT2      HA2      HA2      CT2      HA2      HA2      NH3      HC       HC       HC    
+                 C        O     
+ TYPE CODE       41        1       19        5       20       14       14       20       14       14       20       14       14       20       14       14       43        2        2        2
+                 16       47
+ GROUP NO         1        1        1        1        2        2        2        3        3        3        4        4        4        5        5        5        5        5        5        5
+                  6        6
+ CHARGE       -0.4700   0.3100   0.0700   0.0900  -0.1800   0.0900   0.0900  -0.1800   0.0900   0.0900  -0.1800   0.0900   0.0900   0.2100   0.0500   0.0500  -0.3000   0.3300   0.3300   0.3300
+               0.5100  -0.5100
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+               0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+               0.0000   0.0000
+ MAUTO            0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0
+                  0        0
+
+          TOTAL CHARGE =   1.0000          TOTAL ALPHA  =   0.0000
+
+  22 BONDS: | CB    CA      0 | CG    CB      0 | CD    CG      0 | CE    CD      0 | NZ    CE      0 | N     HN      0 | N     CA      0 | C     CA      0 | C     +N      0 | CA    HA      0 |
+            | CB    HB1     0 | CB    HB2     0 | CG    HG1     0 | CG    HG2     0 | CD    HD1     0 | CD    HD2     0 | CE    HE1     0 | CE    HE2     0 | O     C       0 | NZ    HZ1     0 |
+            | NZ    HZ2     0 | NZ    HZ3     0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   2 IMPROPERS: | N     -C    CA    HN     | C     CA    +N    O      |
+
+   1 CROSS-TERM: | -C    N     CA    C     : N     CA    C     +N     |  
+
+   0 ANISOTROPY:
+
+   4 HB DONORS:    | HN    N      | HZ1   NZ     | HZ2   NZ     | HZ3   NZ     |
+
+   1 HB ACCEPTORS: | O     C      |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ -C    CA    N     HN        1.34820    123.570    180.000    115.110    0.99880  T
+ -C    N     CA    C         1.34820    123.570    180.000    107.290    1.51870  F
+ N     CA    C     +N        1.45040    107.290    180.000    117.270    1.34780  F
+ +N    CA    C     O         1.34780    117.270    180.000    120.790    1.22770  T
+ CA    C     +N    +CA       1.51870    117.270    180.000    124.910    1.44870  F
+ N     C     CA    CB        1.45040    107.290    122.230    111.360    1.55680  T
+ N     C     CA    HA        1.45040    107.290   -116.880    107.360    1.08330  T
+ N     CA    CB    CG        1.45040    111.470    180.000    115.760    1.54350  F
+ CG    CA    CB    HB1       1.54350    115.760    120.900    107.110    1.11460  T
+ CG    CA    CB    HB2       1.54350    115.760   -124.480    108.990    1.11310  T
+ CA    CB    CG    CD        1.55680    115.760    180.000    113.280    1.53970  F
+ CD    CB    CG    HG1       1.53970    113.280    120.740    109.100    1.11380  T
+ CD    CB    CG    HG2       1.53970    113.280   -122.340    108.990    1.11430  T
+ CB    CG    CD    CE        1.54350    113.280    180.000    112.330    1.53500  F
+ CE    CG    CD    HD1       1.53500    112.330    122.250    108.410    1.11410  T
+ CE    CG    CD    HD2       1.53500    112.330   -121.590    108.130    1.11460  T
+ CG    CD    CE    NZ        1.53970    112.330    180.000    110.460    1.46040  F
+ NZ    CD    CE    HE1       1.46040    110.460    119.910    110.510    1.11280  T
+ NZ    CD    CE    HE2       1.46040    110.460   -120.020    110.570    1.11230  T
+ CD    CE    NZ    HZ1       1.53500    110.460    179.920    110.020    1.04040  F
+ HZ1   CE    NZ    HZ2       1.04040    110.020    120.270    109.500    1.04020  T
+ HZ1   CE    NZ    HZ3       1.04040    110.020   -120.130    109.400    1.04010  T
+
+--------------------------------------------------------------------------------
+          -   15 -    MET 
+
+ This is not a patch.  Default first and last patches: NTER  CTER    Autogenerate code:   7
+
+ 17 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6        7        8        9       10       11       12       13       14       15       16       17
+ ATOM NAME       N        HN       CA       HA       CB       HB1      HB2      CG       HG1      HG2      SD       CE       HE1      HE2      HE3      C        O     
+ ATOM TYPE       NH1      H        CT1      HB1      CT2      HA2      HA2      CT2      HA2      HA2      S        CT3      HA3      HA3      HA3      C        O     
+ TYPE CODE       41        1       19        5       20       14       14       20       14       14       52       22       15       15       15       16       47
+ GROUP NO         1        1        1        1        2        2        2        3        3        3        3        3        3        3        3        4        4
+ CHARGE       -0.4700   0.3100   0.0700   0.0900  -0.1800   0.0900   0.0900  -0.1400   0.0900   0.0900  -0.0900  -0.2200   0.0900   0.0900   0.0900   0.5100  -0.5100
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0
+
+          TOTAL CHARGE =   0.0000          TOTAL ALPHA  =   0.0000
+
+  17 BONDS: | CB    CA      0 | CG    CB      0 | SD    CG      0 | CE    SD      0 | N     HN      0 | N     CA      0 | C     CA      0 | C     +N      0 | CA    HA      0 | CB    HB1     0 |
+            | CB    HB2     0 | CG    HG1     0 | CG    HG2     0 | CE    HE1     0 | CE    HE2     0 | CE    HE3     0 | O     C       0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   2 IMPROPERS: | N     -C    CA    HN     | C     CA    +N    O      |
+
+   1 CROSS-TERM: | -C    N     CA    C     : N     CA    C     +N     |  
+
+   0 ANISOTROPY:
+
+   1 HB DONORS:    | HN    N      |
+
+   1 HB ACCEPTORS: | O     C      |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ -C    CA    N     HN        1.34780    124.210    180.000    114.390    0.99780  T
+ -C    N     CA    C         1.34780    124.210    180.000    106.310    1.51950  F
+ N     CA    C     +N        1.45100    106.310    180.000    117.740    1.34710  F
+ +N    CA    C     O         1.34710    117.740    180.000    120.640    1.22880  T
+ CA    C     +N    +CA       1.51950    117.740    180.000    124.520    1.44710  F
+ N     C     CA    CB        1.45100    106.310    121.620    111.880    1.55460  T
+ N     C     CA    HA        1.45100    106.310   -116.980    107.570    1.08320  T
+ N     CA    CB    CG        1.45100    111.250    180.000    115.920    1.54600  F
+ CG    CA    CB    HB1       1.54600    115.920    120.560    106.900    1.11530  T
+ CG    CA    CB    HB2       1.54600    115.920   -124.800    109.380    1.11290  T
+ CA    CB    CG    SD        1.55460    115.920    180.000    110.280    1.82190  F
+ SD    CB    CG    HG1       1.82190    110.280    120.500    110.340    1.11060  T
+ SD    CB    CG    HG2       1.82190    110.280   -121.160    109.640    1.11190  T
+ CB    CG    SD    CE        1.54600    110.280    180.000     98.940    1.82060  F
+ CG    SD    CE    HE1       1.82190     98.940   -179.420    110.910    1.11110  F
+ HE1   SD    CE    HE2       1.11110    110.910    119.950    111.030    1.11150  T
+ HE1   SD    CE    HE3       1.11110    110.910   -119.950    111.090    1.11120  T
+
+--------------------------------------------------------------------------------
+          -   16 -    PHE 
+
+ This is not a patch.  Default first and last patches: NTER  CTER    Autogenerate code:   7
+
+ 20 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6        7        8        9       10       11       12       13       14       15       16       17       18       19       20
+
+ ATOM NAME       N        HN       CA       HA       CB       HB1      HB2      CG       CD1      HD1      CE1      HE1      CZ       HZ       CD2      HD2      CE2      HE2      C        O     
+
+ ATOM TYPE       NH1      H        CT1      HB1      CT2      HA2      HA2      CA       CA       HP       CA       HP       CA       HP       CA       HP       CA       HP       C        O     
+
+ TYPE CODE       41        1       19        5       20       14       14       17       17        4       17        4       17        4       17        4       17        4       16       47
+
+ GROUP NO         1        1        1        1        2        2        2        3        4        4        5        5        6        6        7        7        8        8        9        9
+
+ CHARGE       -0.4700   0.3100   0.0700   0.0900  -0.1800   0.0900   0.0900   0.0000  -0.1150   0.1150  -0.1150   0.1150  -0.1150   0.1150  -0.1150   0.1150  -0.1150   0.1150   0.5100  -0.5100
+
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+
+ MAUTO            0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0
+
+
+          TOTAL CHARGE =   0.0000          TOTAL ALPHA  =   0.0000
+
+  21 BONDS: | CB    CA      0 | CG    CB      0 | CD2   CG      0 | CE1   CD1     0 | CZ    CE2     0 | N     HN      0 | N     CA      0 | C     CA      0 | C     +N      0 | CA    HA      0 |
+            | CB    HB1     0 | CB    HB2     0 | CD1   HD1     0 | CD2   HD2     0 | CE1   HE1     0 | O     C       0 | CD1   CG      0 | CZ    CE1     0 | CE2   CD2     0 | CE2   HE2     0 |
+            | CZ    HZ      0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   2 IMPROPERS: | N     -C    CA    HN     | C     CA    +N    O      |
+
+   1 CROSS-TERM: | -C    N     CA    C     : N     CA    C     +N     |  
+
+   0 ANISOTROPY:
+
+   1 HB DONORS:    | HN    N      |
+
+   1 HB ACCEPTORS: | O     C      |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ -C    CA    N     HN        1.34760    123.890    180.000    114.470    0.99870  T
+ -C    N     CA    C         1.34760    123.890    180.000    106.380    1.52290  F
+ N     CA    C     +N        1.45040    106.380    180.000    117.650    1.34830  F
+ +N    CA    C     O         1.34830    117.650    180.000    120.490    1.22870  T
+ CA    C     +N    +CA       1.52290    117.650    180.000    124.100    1.45230  F
+ N     C     CA    CB        1.45040    106.380    122.490    112.450    1.55940  T
+ N     C     CA    HA        1.45040    106.380   -115.630    107.050    1.08320  T
+ N     CA    CB    CG        1.45040    111.630    180.000    112.760    1.51090  F
+ CG    CA    CB    HB1       1.51090    112.760    118.270    109.100    1.11190  T
+ CG    CA    CB    HB2       1.51090    112.760   -123.830    111.110    1.11130  T
+ CA    CB    CG    CD1       1.55940    112.760     90.000    120.320    1.40590  F
+ CD1   CB    CG    CD2       1.40590    120.320   -177.960    120.760    1.40620  T
+ CB    CG    CD1   CE1       1.51090    120.320   -177.370    120.630    1.40060  F
+ CE1   CG    CD1   HD1       1.40060    120.630    179.700    119.650    1.08140  T
+ CB    CG    CD2   CE2       1.51090    120.760    177.200    120.620    1.40020  F
+ CE2   CG    CD2   HD2       1.40020    120.620   -178.690    119.990    1.08110  T
+ CG    CD1   CE1   CZ        1.40590    120.630     -0.120    119.930    1.40040  F
+ CZ    CD1   CE1   HE1       1.40040    119.930   -179.690    120.010    1.08080  T
+ CZ    CD2   CE2   HE2       1.40000    119.960   -179.930    119.870    1.08110  T
+ CE1   CE2   CZ    HZ        1.40040    119.980    179.510    119.970    1.08070  T
+
+--------------------------------------------------------------------------------
+          -   17 -    PRO 
+
+ This is not a patch.  Default first and last patches: PROP  CTER    Autogenerate code:   7
+
+ 14 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6        7        8        9       10       11       12       13       14
+ ATOM NAME       N        CD       HD1      HD2      CA       HA       CB       HB1      HB2      CG       HG1      HG2      C        O     
+ ATOM TYPE       N        CP3      HA2      HA2      CP1      HB1      CP2      HA2      HA2      CP2      HA2      HA2      C        O     
+ TYPE CODE       37       29       14       14       27        5       28       14       14       28       14       14       16       47
+ GROUP NO         1        1        1        1        1        1        2        2        2        3        3        3        4        4
+ CHARGE       -0.2900   0.0000   0.0900   0.0900   0.0200   0.0900  -0.1800   0.0900   0.0900  -0.1800   0.0900   0.0900   0.5100  -0.5100
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0        0        0        0        0        0        0        0        0        0
+
+          TOTAL CHARGE =   0.0000          TOTAL ALPHA  =   0.0000
+
+  15 BONDS: | C     CA      0 | C     +N      0 | N     CA      0 | CA    CB      0 | CB    CG      0 | CG    CD      0 | N     CD      0 | HA    CA      0 | HG1   CG      0 | HG2   CG      0 |
+            | HD1   CD      0 | HD2   CD      0 | HB1   CB      0 | HB2   CB      0 | O     C       0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   2 IMPROPERS: | N     -C    CA    CD     | C     CA    +N    O      |
+
+   1 CROSS-TERM: | -C    N     CA    C     : N     CA    C     +N     |  
+
+   0 ANISOTROPY:
+
+   0 HB DONORS:    |
+
+   1 HB ACCEPTORS: | O     C      |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ -C    CA    N     CD        1.33660    122.940    178.510    112.750    1.46240  T
+ -C    N     CA    C         1.33660    122.940    -76.120    110.860    1.53990  F
+ N     CA    C     +N        1.45850    110.860    180.000    114.750    1.35690  F
+ +N    CA    C     O         1.35690    114.750    177.150    120.460    1.23160  T
+ CA    C     +N    +CA       1.53990    116.120    180.000    124.890    1.45170  F
+ N     C     CA    CB        1.45850    110.860    113.740    111.740    1.53990  T
+ N     C     CA    HA        1.45850    110.860   -122.400    109.090    1.08370  T
+ N     CA    CB    CG        1.45850    102.560     31.610    104.390    1.53220  F
+ CA    CB    CG    CD        1.53990    104.390    -34.590    103.210    1.53170  F
+ CA    CG    CB    HB1       1.45850    102.560    120.000    109.020    1.11310  T
+ CA    CG    CB    HB2       1.45850    102.560   -120.000    109.020    1.11310  T
+ CB    CD    CG    HG1       1.53990    104.390    120.000    112.950    1.10770  T
+ CB    CD    CG    HG2       1.53990    104.390   -120.000    109.220    1.11430  T
+ N     CG    CD    HD1       1.53220    103.210    120.000    110.030    1.11370  T
+ N     CG    CD    HD2       1.53220    103.210   -120.000    110.000    1.11440  T
+
+--------------------------------------------------------------------------------
+          -   18 -    SER 
+
+ This is not a patch.  Default first and last patches: NTER  CTER    Autogenerate code:   7
+
+ 11 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6        7        8        9       10       11
+ ATOM NAME       N        HN       CA       HA       CB       HB1      HB2      OG       HG1      C        O     
+ ATOM TYPE       NH1      H        CT1      HB1      CT2      HA2      HA2      OH1      H        C        O     
+ TYPE CODE       41        1       19        5       20       14       14       50        1       16       47
+ GROUP NO         1        1        1        1        2        2        2        2        2        3        3
+ CHARGE       -0.4700   0.3100   0.0700   0.0900   0.0500   0.0900   0.0900  -0.6600   0.4300   0.5100  -0.5100
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0        0        0        0        0        0        0
+
+          TOTAL CHARGE =   0.0000          TOTAL ALPHA  =   0.0000
+
+  11 BONDS: | CB    CA      0 | OG    CB      0 | N     HN      0 | N     CA      0 | C     CA      0 | C     +N      0 | CA    HA      0 | CB    HB1     0 | CB    HB2     0 | OG    HG1     0 |
+            | O     C       0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   2 IMPROPERS: | N     -C    CA    HN     | C     CA    +N    O      |
+
+   1 CROSS-TERM: | -C    N     CA    C     : N     CA    C     +N     |  
+
+   0 ANISOTROPY:
+
+   2 HB DONORS:    | HN    N      | HG1   OG     |
+
+   2 HB ACCEPTORS: | OG           | O     C      |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ -C    CA    N     HN        1.34740    124.370    180.000    114.180    0.99990  T
+ -C    N     CA    C         1.34740    124.370    180.000    105.810    1.51660  F
+ N     CA    C     +N        1.45790    105.810    180.000    117.720    1.34480  F
+ +N    CA    C     O         1.34480    117.720    180.000    120.250    1.22900  T
+ CA    C     +N    +CA       1.51660    117.720    180.000    124.630    1.45290  F
+ N     C     CA    CB        1.45790    105.810    124.750    111.400    1.55850  T
+ N     C     CA    HA        1.45790    105.810   -115.560    107.300    1.08210  T
+ N     CA    CB    OG        1.45790    114.280    180.000    112.450    1.43410  F
+ OG    CA    CB    HB1       1.43410    112.450    119.320    108.100    1.11400  T
+ OG    CA    CB    HB2       1.43410    112.450   -123.860    110.380    1.11360  T
+ CA    CB    OG    HG1       1.55850    112.450    165.960    107.080    0.96550  F
+
+--------------------------------------------------------------------------------
+          -   19 -    THR 
+
+ This is not a patch.  Default first and last patches: NTER  CTER    Autogenerate code:   7
+
+ 14 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6        7        8        9       10       11       12       13       14
+ ATOM NAME       N        HN       CA       HA       CB       HB       OG1      HG1      CG2      HG21     HG22     HG23     C        O     
+ ATOM TYPE       NH1      H        CT1      HB1      CT1      HA1      OH1      H        CT3      HA3      HA3      HA3      C        O     
+ TYPE CODE       41        1       19        5       19       13       50        1       22       15       15       15       16       47
+ GROUP NO         1        1        1        1        2        2        2        2        3        3        3        3        4        4
+ CHARGE       -0.4700   0.3100   0.0700   0.0900   0.1400   0.0900  -0.6600   0.4300  -0.2700   0.0900   0.0900   0.0900   0.5100  -0.5100
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0        0        0        0        0        0        0        0        0        0
+
+          TOTAL CHARGE =   0.0000          TOTAL ALPHA  =   0.0000
+
+  14 BONDS: | CB    CA      0 | OG1   CB      0 | CG2   CB      0 | N     HN      0 | N     CA      0 | C     CA      0 | C     +N      0 | CA    HA      0 | CB    HB      0 | OG1   HG1     0 |
+            | CG2   HG21    0 | CG2   HG22    0 | CG2   HG23    0 | O     C       0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   2 IMPROPERS: | N     -C    CA    HN     | C     CA    +N    O      |
+
+   1 CROSS-TERM: | -C    N     CA    C     : N     CA    C     +N     |  
+
+   0 ANISOTROPY:
+
+   2 HB DONORS:    | HN    N      | HG1   OG1    |
+
+   2 HB ACCEPTORS: | OG1          | O     C      |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ -C    CA    N     HN        1.34710    124.120    180.000    114.260    0.99950  T
+ -C    N     CA    C         1.34710    124.120    180.000    106.090    1.51620  F
+ N     CA    C     +N        1.46070    106.090    180.000    117.690    1.34490  F
+ +N    CA    C     O         1.34490    117.690    180.000    120.300    1.22940  T
+ CA    C     +N    +CA       1.51620    117.690    180.000    124.660    1.45250  F
+ N     C     CA    CB        1.46070    106.090    126.460    112.740    1.56930  T
+ N     C     CA    HA        1.46070    106.090   -114.920    106.530    1.08170  T
+ N     CA    CB    OG1       1.46070    114.810    180.000    112.160    1.42520  F
+ OG1   CA    CB    HB        1.42520    112.160    116.390    106.110    1.11740  T
+ OG1   CA    CB    CG2       1.42520    112.160   -124.130    115.910    1.53240  T
+ CA    CB    OG1   HG1       1.56930    112.160   -179.280    105.450    0.96330  F
+ CA    CB    CG2   HG21      1.56930    115.910   -173.650    110.850    1.11040  F
+ HG21  CB    CG2   HG22      1.11040    110.850    119.510    110.410    1.11090  T
+ HG21  CB    CG2   HG23      1.11040    110.850   -120.390    111.110    1.11130  T
+
+--------------------------------------------------------------------------------
+          -   20 -    TRP 
+
+ This is not a patch.  Default first and last patches: NTER  CTER    Autogenerate code:   7
+
+ 24 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6        7        8        9       10       11       12       13       14       15       16       17       18       19       20
+                 21       22       23       24
+ ATOM NAME       N        HN       CA       HA       CB       HB1      HB2      CG       CD1      HD1      NE1      HE1      CE2      CD2      CE3      HE3      CZ3      HZ3      CZ2      HZ2   
+                 CH2      HH2      C        O     
+ ATOM TYPE       NH1      H        CT1      HB1      CT2      HA2      HA2      CY       CA       HP       NY       H        CPT      CPT      CAI      HP       CA       HP       CAI      HP    
+                 CA       HP       C        O     
+ TYPE CODE       41        1       19        5       20       14       14       26       17        4       45        1       25       25       35        4       17        4       35        4
+                 17        4       16       47
+ GROUP NO         1        1        1        1        2        2        2        3        3        3        3        3        3        3        3        3        3        3        3        3
+                  3        3        4        4
+ CHARGE       -0.4700   0.3100   0.0700   0.0900  -0.1800   0.0900   0.0900  -0.0300  -0.1500   0.2200  -0.5100   0.3700   0.2400   0.1100  -0.2500   0.1700  -0.2000   0.1400  -0.2700   0.1600
+              -0.1400   0.1400   0.5100  -0.5100
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+               0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+               0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0
+                  0        0        0        0
+
+          TOTAL CHARGE =   0.0000          TOTAL ALPHA  =   0.0000
+
+  26 BONDS: | CB    CA      0 | CG    CB      0 | CD2   CG      0 | NE1   CD1     0 | CZ2   CE2     0 | N     HN      0 | N     CA      0 | C     CA      0 | C     +N      0 | CZ3   CH2     0 |
+            | CD2   CE3     0 | NE1   CE2     0 | CA    HA      0 | CB    HB1     0 | CB    HB2     0 | CD1   HD1     0 | NE1   HE1     0 | CE3   HE3     0 | CZ2   HZ2     0 | CZ3   HZ3     0 |
+            | CH2   HH2     0 | O     C       0 | CD1   CG      0 | CE2   CD2     0 | CZ3   CE3     0 | CH2   CZ2     0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   2 IMPROPERS: | N     -C    CA    HN     | C     CA    +N    O      |
+
+   1 CROSS-TERM: | -C    N     CA    C     : N     CA    C     +N     |  
+
+   0 ANISOTROPY:
+
+   2 HB DONORS:    | HN    N      | HE1   NE1    |
+
+   1 HB ACCEPTORS: | O     C      |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ -C    CA    N     HN        1.34820    123.510    180.000    115.020    0.99720  T
+ -C    N     CA    C         1.34820    123.510    180.000    107.690    1.52020  F
+ N     CA    C     +N        1.45070    107.690    180.000    117.570    1.35050  F
+ +N    CA    C     O         1.35050    117.570    180.000    121.080    1.23040  T
+ CA    C     +N    +CA       1.52020    117.570    180.000    124.880    1.45260  F
+ N     C     CA    CB        1.45070    107.690    122.680    111.230    1.55600  T
+ N     C     CA    HA        1.45070    107.690   -117.020    106.920    1.08350  T
+ N     CA    CB    CG        1.45070    111.680    180.000    115.140    1.52330  F
+ CG    CA    CB    HB1       1.52330    115.140    119.170    107.840    1.11270  T
+ CG    CA    CB    HB2       1.52330    115.140   -124.730    109.870    1.11180  T
+ CA    CB    CG    CD2       1.55600    115.140     90.000    123.950    1.44070  F
+ CD2   CB    CG    CD1       1.44070    123.950   -172.810    129.180    1.36790  T
+ CD1   CG    CD2   CE2       1.36790    106.570     -0.080    106.650    1.41260  F
+ CG    CD2   CE2   NE1       1.44070    106.650      0.140    107.870    1.37460  F
+ CE2   CG    CD2   CE3       1.41260    106.650    179.210    132.540    1.40110  T
+ CE2   CD2   CE3   CZ3       1.41260    120.800     -0.200    118.160    1.40170  F
+ CD2   CE3   CZ3   CH2       1.40110    118.160      0.100    120.970    1.40190  F
+ CE3   CZ3   CH2   CZ2       1.40170    120.970      0.010    120.870    1.40300  F
+ CZ3   CD2   CE3   HE3       1.40170    118.160   -179.620    121.840    1.08150  T
+ CH2   CE3   CZ3   HZ3       1.40190    120.970   -179.820    119.450    1.08110  T
+ CZ2   CZ3   CH2   HH2       1.40300    120.870   -179.920    119.570    1.08110  T
+ CE2   CH2   CZ2   HZ2       1.39390    118.420    179.870    120.080    1.07900  T
+ CD1   CE2   NE1   HE1       1.37520    108.810    177.780    124.680    0.97670  T
+ CG    NE1   CD1   HD1       1.36790    110.100    178.100    125.430    1.08200  T
+
+--------------------------------------------------------------------------------
+          -   21 -    TYR 
+
+ This is not a patch.  Default first and last patches: NTER  CTER    Autogenerate code:   7
+
+ 21 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6        7        8        9       10       11       12       13       14       15       16       17       18       19       20
+                 21
+ ATOM NAME       N        HN       CA       HA       CB       HB1      HB2      CG       CD1      HD1      CE1      HE1      CZ       OH       HH       CD2      HD2      CE2      HE2      C     
+                 O     
+ ATOM TYPE       NH1      H        CT1      HB1      CT2      HA2      HA2      CA       CA       HP       CA       HP       CA       OH1      H        CA       HP       CA       HP       C     
+                 O     
+ TYPE CODE       41        1       19        5       20       14       14       17       17        4       17        4       17       50        1       17        4       17        4       16
+                 47
+ GROUP NO         1        1        1        1        2        2        2        3        4        4        5        5        6        6        6        7        7        8        8        9
+                  9
+ CHARGE       -0.4700   0.3100   0.0700   0.0900  -0.1800   0.0900   0.0900   0.0000  -0.1150   0.1150  -0.1150   0.1150   0.1100  -0.5400   0.4300  -0.1150   0.1150  -0.1150   0.1150   0.5100
+              -0.5100
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+               0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+               0.0000
+ MAUTO            0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0
+                  0
+
+          TOTAL CHARGE =   0.0000          TOTAL ALPHA  =   0.0000
+
+  22 BONDS: | CB    CA      0 | CG    CB      0 | CD2   CG      0 | CE1   CD1     0 | CZ    CE2     0 | OH    CZ      0 | N     HN      0 | N     CA      0 | C     CA      0 | C     +N      0 |
+            | CA    HA      0 | CB    HB1     0 | CB    HB2     0 | CD1   HD1     0 | CD2   HD2     0 | CE1   HE1     0 | CE2   HE2     0 | OH    HH      0 | O     C       0 | CD1   CG      0 |
+            | CE1   CZ      0 | CE2   CD2     0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   2 IMPROPERS: | N     -C    CA    HN     | C     CA    +N    O      |
+
+   1 CROSS-TERM: | -C    N     CA    C     : N     CA    C     +N     |  
+
+   0 ANISOTROPY:
+
+   2 HB DONORS:    | HN    N      | HH    OH     |
+
+   2 HB ACCEPTORS: | OH           | O     C      |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ -C    CA    N     HN        1.34760    123.810    180.000    114.540    0.99860  T
+ -C    N     CA    C         1.34760    123.810    180.000    106.520    1.52320  F
+ N     CA    C     +N        1.45010    106.520    180.000    117.330    1.34840  F
+ +N    CA    C     O         1.34840    117.330    180.000    120.670    1.22870  T
+ CA    C     +N    +CA       1.52320    117.330    180.000    124.310    1.45130  F
+ N     C     CA    CB        1.45010    106.520    122.270    112.340    1.56060  T
+ N     C     CA    HA        1.45010    106.520   -116.040    107.150    1.08330  T
+ N     CA    CB    CG        1.45010    111.430    180.000    112.940    1.51130  F
+ CG    CA    CB    HB1       1.51130    112.940    118.890    109.120    1.11190  T
+ CG    CA    CB    HB2       1.51130    112.940   -123.360    110.700    1.11150  T
+ CA    CB    CG    CD1       1.56060    112.940     90.000    120.490    1.40640  F
+ CD1   CB    CG    CD2       1.40640    120.490   -176.460    120.460    1.40680  T
+ CB    CG    CD1   CE1       1.51130    120.490   -175.490    120.400    1.40260  F
+ CE1   CG    CD1   HD1       1.40260    120.400    178.940    119.800    1.08140  T
+ CB    CG    CD2   CE2       1.51130    120.460    175.320    120.560    1.40220  F
+ CE2   CG    CD2   HD2       1.40220    120.560   -177.570    119.980    1.08130  T
+ CG    CD1   CE1   CZ        1.40640    120.400     -0.190    120.090    1.39780  F
+ CZ    CD1   CE1   HE1       1.39780    120.090    179.640    120.580    1.07990  T
+ CZ    CD2   CE2   HE2       1.39790    119.920   -178.690    119.760    1.07980  T
+ CE1   CE2   CZ    OH        1.39780    120.050   -178.980    120.250    1.40630  T
+ CE1   CZ    OH    HH        1.39780    119.680    175.450    107.470    0.95940  F
+
+--------------------------------------------------------------------------------
+          -   22 -    VAL 
+
+ This is not a patch.  Default first and last patches: NTER  CTER    Autogenerate code:   7
+
+ 16 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6        7        8        9       10       11       12       13       14       15       16
+ ATOM NAME       N        HN       CA       HA       CB       HB       CG1      HG11     HG12     HG13     CG2      HG21     HG22     HG23     C        O     
+ ATOM TYPE       NH1      H        CT1      HB1      CT1      HA1      CT3      HA3      HA3      HA3      CT3      HA3      HA3      HA3      C        O     
+ TYPE CODE       41        1       19        5       19       13       22       15       15       15       22       15       15       15       16       47
+ GROUP NO         1        1        1        1        2        2        3        3        3        3        4        4        4        4        5        5
+ CHARGE       -0.4700   0.3100   0.0700   0.0900  -0.0900   0.0900  -0.2700   0.0900   0.0900   0.0900  -0.2700   0.0900   0.0900   0.0900   0.5100  -0.5100
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0
+
+          TOTAL CHARGE =   0.0000          TOTAL ALPHA  =   0.0000
+
+  16 BONDS: | CB    CA      0 | CG1   CB      0 | CG2   CB      0 | N     HN      0 | N     CA      0 | C     CA      0 | C     +N      0 | CA    HA      0 | CB    HB      0 | CG1   HG11    0 |
+            | CG1   HG12    0 | CG1   HG13    0 | CG2   HG21    0 | CG2   HG22    0 | CG2   HG23    0 | O     C       0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   2 IMPROPERS: | N     -C    CA    HN     | C     CA    +N    O      |
+
+   1 CROSS-TERM: | -C    N     CA    C     : N     CA    C     +N     |  
+
+   0 ANISOTROPY:
+
+   1 HB DONORS:    | HN    N      |
+
+   1 HB ACCEPTORS: | O     C      |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ -C    CA    N     HN        1.34820    124.570    180.000    114.410    0.99660  T
+ -C    N     CA    C         1.34820    124.570    180.000    105.540    1.51800  F
+ N     CA    C     +N        1.45700    105.540    180.000    117.830    1.34710  F
+ +N    CA    C     O         1.34710    117.830    180.000    120.700    1.22970  T
+ CA    C     +N    +CA       1.51800    117.830    180.000    124.080    1.44710  F
+ N     C     CA    CB        1.45700    105.540    122.950    111.230    1.56600  T
+ N     C     CA    HA        1.45700    105.540   -117.240    107.460    1.08280  T
+ N     CA    CB    CG1       1.45700    113.050    180.000    113.970    1.54410  F
+ CG1   CA    CB    CG2       1.54410    113.970    123.990    112.170    1.54140  T
+ CG1   CA    CB    HB        1.54410    113.970   -119.170    107.570    1.11780  T
+ CA    CB    CG1   HG11      1.56600    113.970    177.830    110.300    1.11140  F
+ HG11  CB    CG1   HG12      1.11140    110.300    119.250    111.670    1.10970  T
+ HG11  CB    CG1   HG13      1.11140    110.300   -119.490    110.700    1.11100  T
+ CA    CB    CG2   HG21      1.56600    112.170   -177.780    110.710    1.11080  F
+ HG21  CB    CG2   HG22      1.11080    110.710    120.080    110.560    1.11150  T
+ HG21  CB    CG2   HG23      1.11080    110.710   -119.550    111.230    1.10980  T
+
+--------------------------------------------------------------------------------
+          -   23 -    ALAD
+
+ This is not a patch.  Default first and last patches: NONE  NONE    Autogenerate code:   7
+
+ 22 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6        7        8        9       10       11       12       13       14       15       16       17       18       19       20
+                 21       22
+ ATOM NAME       CL       HL1      HL2      HL3      CLP      OL       NL       HL       CA       HA       CB       HB1      HB2      HB3      CRP      OR       NR       HR       CR       HR1   
+                 HR2      HR3   
+ ATOM TYPE       CT3      HA3      HA3      HA3      C        O        NH1      H        CT1      HB1      CT3      HA3      HA3      HA3      C        O        NH1      H        CT3      HA3   
+                 HA3      HA3   
+ TYPE CODE       22       15       15       15       16       47       41        1       19        5       22       15       15       15       16       47       41        1       22       15
+                 15       15
+ GROUP NO         1        1        1        1        2        2        3        3        3        3        4        4        4        4        5        5        6        6        6        6
+                  6        6
+ CHARGE       -0.2700   0.0900   0.0900   0.0900   0.5100  -0.5100  -0.4700   0.3100   0.0700   0.0900  -0.2700   0.0900   0.0900   0.0900   0.5100  -0.5100  -0.4700   0.3100  -0.1100   0.0900
+               0.0900   0.0900
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+               0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+               0.0000   0.0000
+ MAUTO            0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0
+                  0        0
+
+          TOTAL CHARGE =   0.0000          TOTAL ALPHA  =   0.0000
+
+  21 BONDS: | CL    CLP     0 | CLP   NL      0 | NL    CA      0 | CA    CRP     0 | CRP   NR      0 | NR    CR      0 | CLP   OL      0 | CRP   OR      0 | NL    HL      0 | NR    HR      0 |
+            | CA    HA      0 | CA    CB      0 | CL    HL1     0 | CL    HL2     0 | CL    HL3     0 | CB    HB1     0 | CB    HB2     0 | CB    HB3     0 | CR    HR1     0 | CR    HR2     0 |
+            | CR    HR3     0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   4 IMPROPERS: | CLP   CL    NL    OL     | NL    CLP   CA    HL     | CRP   CA    NR    OR     | NR    CRP   CR    HR     |
+
+   1 CROSS-TERM: | CLP   NL    CA    CRP   : NL    CA    CRP   NR     |  
+
+   0 ANISOTROPY:
+
+   0 HB DONORS:    |
+
+   0 HB ACCEPTORS: |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ CLP   NL    CA    CRP       0.00000      0.000    180.000      0.000    0.00000  F
+ CA    CLP   NL    HL        0.00000      0.000    180.000      0.000    0.00000  T
+ HL    NL    CA    CRP       0.00000      0.000      0.000      0.000    0.00000  F
+ NL    CA    CRP   NR        0.00000      0.000    180.000      0.000    0.00000  F
+ CA    NR    CRP   OR        0.00000      0.000    180.000      0.000    0.00000  T
+ NL    CA    CRP   OR        0.00000      0.000      0.000      0.000    0.00000  F
+ CL    CLP   NL    CA        0.00000      0.000    180.000      0.000    0.00000  F
+ NL    CL    CLP   OL        0.00000      0.000    180.000      0.000    0.00000  T
+ OL    CLP   NL    CA        0.00000      0.000      0.000      0.000    0.00000  F
+ CA    CRP   NR    CR        0.00000      0.000    180.000      0.000    0.00000  F
+ CRP   CR    NR    HR        0.00000      0.000    180.000      0.000    0.00000  T
+ CA    CRP   NR    HR        0.00000      0.000    180.000      0.000    0.00000  F
+ NL    CRP   CA    HA        0.00000      0.000    240.000      0.000    0.00000  T
+ NL    CRP   CA    CB        0.00000      0.000    120.000      0.000    0.00000  T
+ HL1   CL    CLP   NL        0.00000      0.000    180.000      0.000    0.00000  F
+ HL2   CL    CLP   NL        0.00000      0.000     60.000      0.000    0.00000  F
+ HL3   CL    CLP   OL        0.00000      0.000    120.000      0.000    0.00000  F
+ HA    CA    CB    HB1       0.00000      0.000    180.000      0.000    0.00000  F
+ NL    CA    CB    HB2       0.00000      0.000    180.000      0.000    0.00000  F
+ CRP   CA    CB    HB3       0.00000      0.000    180.000      0.000    0.00000  F
+ CRP   NR    CR    HR1       0.00000      0.000    180.000      0.000    0.00000  F
+ CRP   NR    CR    HR2       0.00000      0.000     60.000      0.000    0.00000  F
+ HR    NR    CR    HR3       0.00000      0.000    120.000      0.000    0.00000  F
+ CA    CLP   NL    HL        0.00000      0.000    180.000      0.000    0.00000  T
+ CA    NR    CRP   OR        0.00000      0.000    180.000      0.000    0.00000  T
+ HB1   HB2   CB    HB3       0.00000      0.000    120.000      0.000    0.00000  T
+ HL1   HL2   CL    HL3       0.00000      0.000    240.000      0.000    0.00000  T
+ HR1   HR2   CR    HR3       0.00000      0.000    240.000      0.000    0.00000  T
+ HA    CA    NL    HL        0.00000      0.000    240.000      0.000    0.00000  F
+
+--------------------------------------------------------------------------------
+          -   24 -    NTER
+
+ This is a patch.  Autogenerate code:   7
+
+  7 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6        7
+ ATOM NAME       N        HT1      HT2      HT3      CA       HA       HN    
+ ATOM TYPE       NH3      HC       HC       HC       CT1      HB1      dele  
+ TYPE CODE       43        2        2        2       19        5        0
+ GROUP NO         1        1        1        1        1        1        0
+ CHARGE       -0.3000   0.3300   0.3300   0.3300   0.2100   0.1000   0.0000
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0        0        0
+
+          TOTAL CHARGE =   1.0000          TOTAL ALPHA  =   0.0000
+
+   3 BONDS: | HT1   N       0 | HT2   N       0 | HT3   N       0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   0 IMPROPERS: |
+
+   0 CROSS-TERM: | 
+
+   0 ANISOTROPY:
+
+   3 HB DONORS:    | HT1   N      | HT2   N      | HT3   N      |
+
+   0 HB ACCEPTORS: |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ HT1   N     CA    C         0.00000      0.000    180.000      0.000    0.00000  F
+ HT2   CA    N     HT1       0.00000      0.000    120.000      0.000    0.00000  T
+ HT3   CA    N     HT2       0.00000      0.000    120.000      0.000    0.00000  T
+
+--------------------------------------------------------------------------------
+          -   25 -    GLYP
+
+ This is a patch.  Autogenerate code:   7
+
+  8 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6        7        8
+ ATOM NAME       N        HT1      HT2      HT3      CA       HA1      HA2      HN    
+ ATOM TYPE       NH3      HC       HC       HC       CT2      HB2      HB2      dele  
+ TYPE CODE       43        2        2        2       20        6        6        0
+ GROUP NO         1        1        1        1        1        1        1        0
+ CHARGE       -0.3000   0.3300   0.3300   0.3300   0.1300   0.0900   0.0900   0.0000
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0        0        0        0
+
+          TOTAL CHARGE =   1.0000          TOTAL ALPHA  =   0.0000
+
+   3 BONDS: | HT1   N       0 | HT2   N       0 | HT3   N       0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   0 IMPROPERS: |
+
+   0 CROSS-TERM: | 
+
+   0 ANISOTROPY:
+
+   3 HB DONORS:    | HT1   N      | HT2   N      | HT3   N      |
+
+   0 HB ACCEPTORS: |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ HT1   N     CA    C         0.00000      0.000    180.000      0.000    0.00000  F
+ HT2   CA    N     HT1       0.00000      0.000    120.000      0.000    0.00000  T
+ HT3   CA    N     HT2       0.00000      0.000    120.000      0.000    0.00000  T
+
+--------------------------------------------------------------------------------
+          -   26 -    PROP
+
+ This is a patch.  Autogenerate code:   7
+
+  8 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6        7        8
+ ATOM NAME       N        HN1      HN2      CD       HD1      HD2      CA       HA    
+ ATOM TYPE       NP       HC       HC       CP3      HA2      HA2      CP1      HB1   
+ TYPE CODE       46        2        2       29       14       14       27        5
+ GROUP NO         1        1        1        1        1        1        1        1
+ CHARGE       -0.0700   0.2400   0.2400   0.1600   0.0900   0.0900   0.1600   0.0900
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0        0        0        0
+
+          TOTAL CHARGE =   1.0000          TOTAL ALPHA  =   0.0000
+
+   2 BONDS: | HN1   N       0 | HN2   N       0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   0 IMPROPERS: |
+
+   0 CROSS-TERM: | 
+
+   0 ANISOTROPY:
+
+   2 HB DONORS:    | HN1   N      | HN2   N      |
+
+   0 HB ACCEPTORS: |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ HN1   CA    N     CD        0.00000      0.000    120.000      0.000    0.00000  T
+ HN2   CA    N     HN1       0.00000      0.000    120.000      0.000    0.00000  T
+
+--------------------------------------------------------------------------------
+          -   27 -    ACE 
+
+ This is a patch.  Autogenerate code:   7
+
+  6 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6
+ ATOM NAME       CAY      HY1      HY2      HY3      CY       OY    
+ ATOM TYPE       CT3      HA3      HA3      HA3      C        O     
+ TYPE CODE       22       15       15       15       16       47
+ GROUP NO         1        1        1        1        2        2
+ CHARGE       -0.2700   0.0900   0.0900   0.0900   0.5100  -0.5100
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0        0
+
+          TOTAL CHARGE =   0.0000          TOTAL ALPHA  =   0.0000
+
+   6 BONDS: | CY    CAY     0 | CY    N       0 | CAY   HY1     0 | CAY   HY2     0 | CAY   HY3     0 | OY    CY      0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   2 IMPROPERS: | CY    CAY   N     OY     | N     CY    CA    HN     |
+
+   1 CROSS-TERM: | CY    N     CA    C     : N     CA    C     +N     |  
+
+   0 ANISOTROPY:
+
+   0 HB DONORS:    |
+
+   1 HB ACCEPTORS: | OY    CY     |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ CY    N     CA    C         0.00000      0.000    -60.000      0.000    0.00000  F
+ CY    CA    N     HN        0.00000      0.000    180.000      0.000    0.00000  T
+ CAY   CY    N     CA        0.00000      0.000    180.000      0.000    0.00000  F
+ N     CAY   CY    OY        0.00000      0.000    180.000      0.000    0.00000  T
+ OY    CY    CAY   HY1       0.00000      0.000    180.000      0.000    0.00000  F
+ OY    CY    CAY   HY2       0.00000      0.000     60.000      0.000    0.00000  F
+ OY    CY    CAY   HY3       0.00000      0.000    -60.000      0.000    0.00000  F
+
+--------------------------------------------------------------------------------
+          -   28 -    ACED
+
+ This is a patch.  Autogenerate code:   7
+
+  6 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6
+ ATOM NAME       CAY      HY1      HY2      HY3      CY       OY    
+ ATOM TYPE       CT3      HA3      HA3      HA3      C        O     
+ TYPE CODE       22       15       15       15       16       47
+ GROUP NO         1        1        1        1        2        2
+ CHARGE       -0.2700   0.0900   0.0900   0.0900   0.5100  -0.5100
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0        0
+
+          TOTAL CHARGE =   0.0000          TOTAL ALPHA  =   0.0000
+
+   6 BONDS: | CY    CAY     0 | CY    N       0 | CAY   HY1     0 | CAY   HY2     0 | CAY   HY3     0 | OY    CY      0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   2 IMPROPERS: | CY    CAY   N     OY     | N     CY    CA    HN     |
+
+   1 CROSS-TERM: | CY    N     CA    C     : N     CA    C     NT     |  
+
+   0 ANISOTROPY:
+
+   0 HB DONORS:    |
+
+   1 HB ACCEPTORS: | OY    CY     |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ CY    N     CA    C         0.00000      0.000    -60.000      0.000    0.00000  F
+ CY    CA    N     HN        0.00000      0.000    180.000      0.000    0.00000  T
+ CAY   CY    N     CA        0.00000      0.000    180.000      0.000    0.00000  F
+ N     CAY   CY    OY        0.00000      0.000    180.000      0.000    0.00000  T
+ OY    CY    CAY   HY1       0.00000      0.000    180.000      0.000    0.00000  F
+ OY    CY    CAY   HY2       0.00000      0.000     60.000      0.000    0.00000  F
+ OY    CY    CAY   HY3       0.00000      0.000    -60.000      0.000    0.00000  F
+
+--------------------------------------------------------------------------------
+          -   29 -    ACP 
+
+ This is a patch.  Autogenerate code:   7
+
+  6 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6
+ ATOM NAME       CAY      HY1      HY2      HY3      CY       OY    
+ ATOM TYPE       CT3      HA3      HA3      HA3      C        O     
+ TYPE CODE       22       15       15       15       16       47
+ GROUP NO         1        1        1        1        2        2
+ CHARGE       -0.2700   0.0900   0.0900   0.0900   0.5100  -0.5100
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0        0
+
+          TOTAL CHARGE =   0.0000          TOTAL ALPHA  =   0.0000
+
+   6 BONDS: | CY    CAY     0 | CY    N       0 | CAY   HY1     0 | CAY   HY2     0 | CAY   HY3     0 | OY    CY      0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   2 IMPROPERS: | CY    CAY   N     OY     | N     CY    CA    CD     |
+
+   1 CROSS-TERM: | CY    N     CA    C     : N     CA    C     +N     |  
+
+   0 ANISOTROPY:
+
+   0 HB DONORS:    |
+
+   1 HB ACCEPTORS: | OY    CY     |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ CY    N     CA    C         0.00000      0.000    -60.000      0.000    0.00000  F
+ CY    CA    N     CD        0.00000      0.000    180.000      0.000    0.00000  T
+ CAY   CY    N     CA        0.00000      0.000    180.000      0.000    0.00000  F
+ N     CAY   CY    OY        0.00000      0.000    180.000      0.000    0.00000  T
+ OY    CY    CAY   HY1       0.00000      0.000    180.000      0.000    0.00000  F
+ OY    CY    CAY   HY2       0.00000      0.000     60.000      0.000    0.00000  F
+ OY    CY    CAY   HY3       0.00000      0.000    -60.000      0.000    0.00000  F
+
+--------------------------------------------------------------------------------
+          -   30 -    ACPD
+
+ This is a patch.  Autogenerate code:   7
+
+  6 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6
+ ATOM NAME       CAY      HY1      HY2      HY3      CY       OY    
+ ATOM TYPE       CT3      HA3      HA3      HA3      C        O     
+ TYPE CODE       22       15       15       15       16       47
+ GROUP NO         1        1        1        1        2        2
+ CHARGE       -0.2700   0.0900   0.0900   0.0900   0.5100  -0.5100
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0        0
+
+          TOTAL CHARGE =   0.0000          TOTAL ALPHA  =   0.0000
+
+   6 BONDS: | CY    CAY     0 | CY    N       0 | CAY   HY1     0 | CAY   HY2     0 | CAY   HY3     0 | OY    CY      0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   2 IMPROPERS: | CY    CAY   N     OY     | N     CY    CA    CD     |
+
+   1 CROSS-TERM: | CY    N     CA    C     : N     CA    C     NT     |  
+
+   0 ANISOTROPY:
+
+   0 HB DONORS:    |
+
+   1 HB ACCEPTORS: | OY    CY     |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ CY    N     CA    C         0.00000      0.000    -60.000      0.000    0.00000  F
+ CY    CA    N     CD        0.00000      0.000    180.000      0.000    0.00000  T
+ CAY   CY    N     CA        0.00000      0.000    180.000      0.000    0.00000  F
+ N     CAY   CY    OY        0.00000      0.000    180.000      0.000    0.00000  T
+ OY    CY    CAY   HY1       0.00000      0.000    180.000      0.000    0.00000  F
+ OY    CY    CAY   HY2       0.00000      0.000     60.000      0.000    0.00000  F
+ OY    CY    CAY   HY3       0.00000      0.000    -60.000      0.000    0.00000  F
+
+--------------------------------------------------------------------------------
+          -   31 -    NNEU
+
+ This is a patch.  Autogenerate code:   7
+
+  6 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6
+ ATOM NAME       N        HT1      HT2      CA       HA       HN    
+ ATOM TYPE       NH2      H        H        CT1      HB1      dele  
+ TYPE CODE       42        1        1       19        5        0
+ GROUP NO         1        1        1        1        1        0
+ CHARGE       -0.9600   0.3400   0.3400   0.1900   0.0900   0.0000
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0        0
+
+          TOTAL CHARGE =   0.0000          TOTAL ALPHA  =   0.0000
+
+   2 BONDS: | HT1   N       0 | HT2   N       0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   0 IMPROPERS: |
+
+   0 CROSS-TERM: | 
+
+   0 ANISOTROPY:
+
+   2 HB DONORS:    | HT1   N      | HT2   N      |
+
+   0 HB ACCEPTORS: |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ HT1   N     CA    C         0.00000      0.000    180.000      0.000    0.00000  F
+ HT2   CA    N     HT1       0.00000      0.000    120.000      0.000    0.00000  T
+
+--------------------------------------------------------------------------------
+          -   32 -    NGNE
+
+ This is a patch.  Autogenerate code:   7
+
+  7 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6        7
+ ATOM NAME       N        HT1      HT2      CA       HA1      HA2      HN    
+ ATOM TYPE       NH2      H        H        CT2      HB2      HB2      dele  
+ TYPE CODE       42        1        1       20        6        6        0
+ GROUP NO         1        1        1        1        1        1        0
+ CHARGE       -0.9600   0.3400   0.3400   0.1000   0.0900   0.0900   0.0000
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0        0        0
+
+          TOTAL CHARGE =   0.0000          TOTAL ALPHA  =   0.0000
+
+   2 BONDS: | HT1   N       0 | HT2   N       0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   0 IMPROPERS: |
+
+   0 CROSS-TERM: | 
+
+   0 ANISOTROPY:
+
+   2 HB DONORS:    | HT1   N      | HT2   N      |
+
+   0 HB ACCEPTORS: |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ HT1   N     CA    C         0.00000      0.000    180.000      0.000    0.00000  F
+ HT2   CA    N     HT1       0.00000      0.000    120.000      0.000    0.00000  T
+
+--------------------------------------------------------------------------------
+          -   33 -    CTER
+
+ This is a patch.  Autogenerate code:   7
+
+  4 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4
+ ATOM NAME       C        OT1      OT2      O     
+ ATOM TYPE       CC       OC       OC       dele  
+ TYPE CODE       30       49       49        0
+ GROUP NO         1        1        1        0
+ CHARGE        0.3400  -0.6700  -0.6700   0.0000
+ ALPHA         0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0
+
+          TOTAL CHARGE =  -1.0000          TOTAL ALPHA  =   0.0000
+
+   2 BONDS: | C     OT2     0 | C     OT1     0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   1 IMPROPERS: | C     CA    OT2   OT1    |
+
+   0 CROSS-TERM: | 
+
+   0 ANISOTROPY:
+
+   0 HB DONORS:    |
+
+   2 HB ACCEPTORS: | OT1   C      | OT2   C      |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ N     CA    C     OT2       0.00000      0.000    180.000      0.000    0.00000  F
+ OT2   CA    C     OT1       0.00000      0.000    180.000      0.000    0.00000  T
+
+--------------------------------------------------------------------------------
+          -   34 -    CNEU
+
+ This is a patch.  Autogenerate code:   7
+
+  5 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5
+ ATOM NAME       C        OT1      OT2      HT2B     O     
+ ATOM TYPE       CD       OB       OH1      H        dele  
+ TYPE CODE       31       48       50        1        0
+ GROUP NO         1        1        1        1        0
+ CHARGE        0.7200  -0.5500  -0.6100   0.4400   0.0000
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0
+
+          TOTAL CHARGE =  -0.0000          TOTAL ALPHA  =   0.0000
+
+   3 BONDS: | C     OT2     0 | OT2   HT2B    0 | C     OT1     0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   1 IMPROPERS: | C     CA    OT2   OT1    |
+
+   0 CROSS-TERM: | 
+
+   0 ANISOTROPY:
+
+   0 HB DONORS:    |
+
+   2 HB ACCEPTORS: | OT1   C      | OT2   C      |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ N     CA    C     OT2       0.00000      0.000    180.000      0.000    0.00000  F
+ OT2   CA    C     OT1       0.00000      0.000    180.000      0.000    0.00000  T
+ CA    C     OT2   HT2B      0.00000      0.000    180.000      0.000    0.00000  F
+
+--------------------------------------------------------------------------------
+          -   35 -    PCTE
+
+ This is a patch.  Autogenerate code:   7
+
+  5 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5
+ ATOM NAME       C        OT1      OT2      HT2      O     
+ ATOM TYPE       CD       OB       OH1      H        dele  
+ TYPE CODE       31       48       50        1        0
+ GROUP NO         1        1        1        1        0
+ CHARGE        0.7200  -0.5500  -0.6100   0.4400   0.0000
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0
+
+          TOTAL CHARGE =  -0.0000          TOTAL ALPHA  =   0.0000
+
+   3 BONDS: | C     OT2     0 | OT2   HT2     0 | C     OT1     0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   1 IMPROPERS: | C     CA    OT2   OT1    |
+
+   0 CROSS-TERM: | 
+
+   0 ANISOTROPY:
+
+   0 HB DONORS:    |
+
+   1 HB ACCEPTORS: | OT1   C      |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ N     CA    C     OT2       0.00000      0.000    180.000      0.000    0.00000  F
+ OT2   CA    C     OT1       0.00000      0.000    180.000      0.000    0.00000  T
+ CA    C     OT2   HT2       0.00000      0.000    180.000      0.000    0.00000  F
+
+--------------------------------------------------------------------------------
+          -   36 -    CT1 
+
+ This is a patch.  Autogenerate code:   7
+
+ 12 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6        7        8        9       10       11       12
+ ATOM NAME       N        HN       CA       HA       C        OT1      OT2      CT       HT1      HT2      HT3      O     
+ ATOM TYPE       NH1      H        CT1      HB1      CD       OB       OS       CT3      HA3      HA3      HA3      dele  
+ TYPE CODE       41        1       19        5       31       48       51       22       15       15       15        0
+ GROUP NO         1        1        1        1        1        1        1        1        1        1        1        0
+ CHARGE       -0.4700   0.3100   0.1700   0.0900   0.6300  -0.5200  -0.3400  -0.1400   0.0900   0.0900   0.0900   0.0000
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0        0        0        0        0        0        0        0
+
+          TOTAL CHARGE =  -0.0000          TOTAL ALPHA  =   0.0000
+
+   6 BONDS: | C     OT2     0 | OT2   CT      0 | CT    HT1     0 | CT    HT2     0 | CT    HT3     0 | C     OT1     0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   1 IMPROPERS: | C     CA    OT2   OT1    |
+
+   0 CROSS-TERM: | 
+
+   0 ANISOTROPY:
+
+   0 HB DONORS:    |
+
+   2 HB ACCEPTORS: | OT1   C      | OT2   C      |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ N     CA    C     OT2       0.00000      0.000    180.000      0.000    0.00000  F
+ OT2   CA    C     OT1       0.00000      0.000    180.000      0.000    0.00000  T
+ CA    C     OT2   CT        0.00000      0.000    180.000      0.000    0.00000  F
+ C     OT2   CT    HT1       0.00000      0.000      0.000      0.000    0.00000  F
+ C     OT2   CT    HT2       0.00000      0.000    120.000      0.000    0.00000  F
+ C     OT2   CT    HT3       0.00000      0.000    240.000      0.000    0.00000  F
+
+--------------------------------------------------------------------------------
+          -   37 -    CT2 
+
+ This is a patch.  Autogenerate code:   7
+
+  5 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5
+ ATOM NAME       C        O        NT       HT1      HT2   
+ ATOM TYPE       CC       O        NH2      H        H     
+ TYPE CODE       30       47       42        1        1
+ GROUP NO         1        1        2        2        2
+ CHARGE        0.5500  -0.5500  -0.6200   0.3200   0.3000
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0
+
+          TOTAL CHARGE =   0.0000          TOTAL ALPHA  =   0.0000
+
+   3 BONDS: | C     NT      0 | NT    HT1     0 | NT    HT2     0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   4 IMPROPERS: | C     NT    CA    O      | C     CA    NT    O      | NT    C     HT1   HT2    | NT    C     HT2   HT1    |
+
+   0 CROSS-TERM: | 
+
+   0 ANISOTROPY:
+
+   2 HB DONORS:    | HT1   NT     | HT2   NT     |
+
+   0 HB ACCEPTORS: |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ N     CA    C     O         0.00000      0.000    180.000      0.000    0.00000  F
+ NT    CA    C     O         0.00000      0.000    180.000      0.000    0.00000  T
+ CA    C     NT    HT1       0.00000      0.000    180.000      0.000    0.00000  F
+ HT1   C     NT    HT2       0.00000      0.000    180.000      0.000    0.00000  T
+
+--------------------------------------------------------------------------------
+          -   38 -    CT3 
+
+ This is a patch.  Autogenerate code:   7
+
+  8 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6        7        8
+ ATOM NAME       C        O        NT       HNT      CAT      HT1      HT2      HT3   
+ ATOM TYPE       C        O        NH1      H        CT3      HA3      HA3      HA3   
+ TYPE CODE       16       47       41        1       22       15       15       15
+ GROUP NO         1        1        2        2        2        2        2        2
+ CHARGE        0.5100  -0.5100  -0.4700   0.3100  -0.1100   0.0900   0.0900   0.0900
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0        0        0        0
+
+          TOTAL CHARGE =   0.0000          TOTAL ALPHA  =   0.0000
+
+   6 BONDS: | C     NT      0 | NT    HNT     0 | NT    CAT     0 | CAT   HT1     0 | CAT   HT2     0 | CAT   HT3     0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   2 IMPROPERS: | NT    C     CAT   HNT    | C     CA    NT    O      |
+
+   1 CROSS-TERM: | -C    N     CA    C     : N     CA    C     NT     |  
+
+   0 ANISOTROPY:
+
+   1 HB DONORS:    | HNT   NT     |
+
+   0 HB ACCEPTORS: |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ N     CA    C     NT        0.00000      0.000    180.000      0.000    0.00000  F
+ NT    CA    C     O         0.00000      0.000    180.000      0.000    0.00000  T
+ C     CAT   NT    HNT       0.00000      0.000    180.000      0.000    0.00000  T
+ CA    C     NT    CAT       0.00000      0.000    180.000      0.000    0.00000  F
+ C     NT    CAT   HT1       0.00000      0.000     60.000      0.000    0.00000  F
+ C     NT    CAT   HT2       0.00000      0.000    180.000      0.000    0.00000  F
+ C     NT    CAT   HT3       0.00000      0.000    -60.000      0.000    0.00000  F
+
+--------------------------------------------------------------------------------
+          -   39 -    ASPP
+
+ This is a patch.  Autogenerate code:   7
+
+  7 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6        7
+ ATOM NAME       CB       HB1      HB2      CG       OD1      OD2      HD2   
+ ATOM TYPE       CT2      HA2      HA2      CD       OB       OH1      H     
+ TYPE CODE       20       14       14       31       48       50        1
+ GROUP NO         1        1        1        1        1        1        1
+ CHARGE       -0.2100   0.0900   0.0900   0.7500  -0.5500  -0.6100   0.4400
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0        0        0
+
+          TOTAL CHARGE =  -0.0000          TOTAL ALPHA  =   0.0000
+
+   1 BONDS: | OD2   HD2     0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   0 IMPROPERS: |
+
+   0 CROSS-TERM: | 
+
+   0 ANISOTROPY:
+
+   1 HB DONORS:    | HD2   OD2    |
+
+   0 HB ACCEPTORS: |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ HD2   OD2   CG    OD1       0.00000      0.000      0.000      0.000    0.00000  F
+
+--------------------------------------------------------------------------------
+          -   40 -    GLUP
+
+ This is a patch.  Autogenerate code:   7
+
+  7 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6        7
+ ATOM NAME       CG       HG1      HG2      CD       OE1      OE2      HE2   
+ ATOM TYPE       CT2      HA2      HA2      CD       OB       OH1      H     
+ TYPE CODE       20       14       14       31       48       50        1
+ GROUP NO         1        1        1        1        1        1        1
+ CHARGE       -0.2100   0.0900   0.0900   0.7500  -0.5500  -0.6100   0.4400
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0        0        0
+
+          TOTAL CHARGE =  -0.0000          TOTAL ALPHA  =   0.0000
+
+   1 BONDS: | OE2   HE2     0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   0 IMPROPERS: |
+
+   0 CROSS-TERM: | 
+
+   0 ANISOTROPY:
+
+   1 HB DONORS:    | HE2   OE2    |
+
+   0 HB ACCEPTORS: |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ HE2   OE2   CD    OE1       0.00000      0.000      0.000      0.000    0.00000  F
+
+--------------------------------------------------------------------------------
+          -   41 -    LSN 
+
+ This is a patch.  Autogenerate code:   7
+
+  7 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6        7
+ ATOM NAME       HZ3      CE       HE1      HE2      NZ       HZ1      HZ2   
+ ATOM TYPE       dele     CT2      HA2      HA2      NH2      HC       HC    
+ TYPE CODE        0       20       14       14       42        2        2
+ GROUP NO         0        1        1        1        1        1        1
+ CHARGE        0.0000   0.1300   0.0750   0.0750  -0.9600   0.3400   0.3400
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0        0        0
+
+          TOTAL CHARGE =   0.0000          TOTAL ALPHA  =   0.0000
+
+   0 BONDS: |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   0 IMPROPERS: |
+
+   0 CROSS-TERM: | 
+
+   0 ANISOTROPY:
+
+   0 HB DONORS:    |
+
+   0 HB ACCEPTORS: |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+--------------------------------------------------------------------------------
+          -   42 -    CYM 
+
+ This is not a patch.  Default first and last patches: NTER  CTER    Autogenerate code:   7
+
+ 10 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6        7        8        9       10
+ ATOM NAME       N        HN       CA       HA       CB       HB1      HB2      SG       C        O     
+ ATOM TYPE       NH1      H        CT1      HB1      CS       HA2      HA2      SS       C        O     
+ TYPE CODE       41        1       19        5       32       14       14       54       16       47
+ GROUP NO         1        1        1        1        2        2        2        2        3        3
+ CHARGE       -0.4700   0.3100   0.0700   0.0900  -0.3800   0.0900   0.0900  -0.8000   0.5100  -0.5100
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0        0        0        0        0        0
+
+          TOTAL CHARGE =  -1.0000          TOTAL ALPHA  =   0.0000
+
+  10 BONDS: | CB    CA      0 | SG    CB      0 | N     HN      0 | N     CA      0 | O     C       0 | C     CA      0 | C     +N      0 | CA    HA      0 | CB    HB1     0 | CB    HB2     0 |
+            |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   2 IMPROPERS: | N     -C    CA    HN     | C     CA    +N    O      |
+
+   1 CROSS-TERM: | -C    N     CA    C     : N     CA    C     +N     |  
+
+   0 ANISOTROPY:
+
+   1 HB DONORS:    | HN    N      |
+
+   1 HB ACCEPTORS: | O     C      |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ -C    CA    N     HN        1.34790    123.930    180.000    114.770    0.99820  T
+ -C    N     CA    C         1.34790    123.930    180.000    105.890    1.52020  F
+ N     CA    C     +N        1.45330    105.890    180.000    118.300    1.34980  F
+ +N    CA    C     O         1.34980    118.300    180.000    120.590    1.23060  T
+ CA    C     +N    +CA       1.52020    118.300    180.000    124.500    1.45480  F
+ N     C     CA    CB        1.45330    105.890    121.790    111.980    1.55840  T
+ N     C     CA    HA        1.45330    105.890   -116.340    107.710    1.08370  T
+ N     CA    CB    SG        1.45330    111.560    180.000    113.870    1.83590  F
+ SG    CA    CB    HB1       1.83590    113.870    119.910    107.240    1.11340  T
+ SG    CA    CB    HB2       1.83590    113.870   -125.320    109.820    1.11240  T
+
+--------------------------------------------------------------------------------
+          -   43 -    CYSD
+
+ This is a patch.  Autogenerate code:   7
+
+  5 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5
+ ATOM NAME       HG1      CB       HB1      HB2      SG    
+ ATOM TYPE       dele     CS       HA2      HA2      SS    
+ TYPE CODE        0       32       14       14       54
+ GROUP NO         0        0        0        0        0
+ CHARGE        0.0000  -0.3800   0.0900   0.0900  -0.8000
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0
+
+          TOTAL CHARGE =  -1.0000          TOTAL ALPHA  =   0.0000
+
+   0 BONDS: |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   0 IMPROPERS: |
+
+   0 CROSS-TERM: | 
+
+   0 ANISOTROPY:
+
+   0 HB DONORS:    |
+
+   0 HB ACCEPTORS: |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+--------------------------------------------------------------------------------
+          -   44 -    SERD
+
+ This is a patch.  Autogenerate code:   7
+
+  5 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5
+ ATOM NAME       HG1      CB       HB1      HB2      OG    
+ ATOM TYPE       dele     CT2      HA2      HA2      OC    
+ TYPE CODE        0       20       14       14       49
+ GROUP NO         0        0        0        0        0
+ CHARGE        0.0000  -0.3000   0.1100   0.1100  -0.9200
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0
+
+          TOTAL CHARGE =  -1.0000          TOTAL ALPHA  =   0.0000
+
+   0 BONDS: |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   0 IMPROPERS: |
+
+   0 CROSS-TERM: | 
+
+   0 ANISOTROPY:
+
+   0 HB DONORS:    |
+
+   0 HB ACCEPTORS: |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+--------------------------------------------------------------------------------
+          -   45 -    DISU
+
+ This is a patch.  Autogenerate code:   7
+
+  6 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6
+ ATOM NAME       1CB      1SG      2SG      2CB      1HG1     2HG1  
+ ATOM TYPE       CT2      SM       SM       CT2      dele     dele  
+ TYPE CODE       20       53       53       20        0        0
+ GROUP NO         1        1        2        2        0        0
+ CHARGE       -0.1000  -0.0800  -0.0800  -0.1000   0.0000   0.0000
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0        0
+
+          TOTAL CHARGE =  -0.3600          TOTAL ALPHA  =   0.0000
+
+   1 BONDS: | 1SG   2SG     0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   0 IMPROPERS: |
+
+   0 CROSS-TERM: | 
+
+   0 ANISOTROPY:
+
+   0 HB DONORS:    |
+
+   0 HB ACCEPTORS: |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ 1CA   1CB   1SG   2SG       0.00000      0.000    180.000      0.000    0.00000  F
+ 1CB   1SG   2SG   2CB       0.00000      0.000     90.000      0.000    0.00000  F
+ 1SG   2SG   2CB   2CA       0.00000      0.000    180.000      0.000    0.00000  F
+
+--------------------------------------------------------------------------------
+          -   46 -    HS2 
+
+ This is a patch.  Autogenerate code:   7
+
+ 12 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER      1        2        3        4        5        6        7        8        9       10       11       12
+ ATOM NAME       CE1      HE1      ND1      CG       CB       HB1      HB2      NE2      HE2      CD2      HD2      HD1   
+ ATOM TYPE       CPH2     HR1      NR2      CPH1     CT2      HA2      HA2      NR1      H        CPH1     HR3      dele  
+ TYPE CODE       24        7       39       23       20       14       14       38        1       23        9        0
+ GROUP NO         1        1        1        1        1        1        1        2        2        2        2        0
+ CHARGE        0.2500   0.1300  -0.7000   0.2200  -0.0800   0.0900   0.0900  -0.3600   0.3200  -0.0500   0.0900   0.0000
+ ALPHA         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ THOLE         0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000   0.0000
+ MAUTO            0        0        0        0        0        0        0        0        0        0        0        0
+
+          TOTAL CHARGE =   0.0000          TOTAL ALPHA  =   0.0000
+
+   1 BONDS: | NE2   HE2     0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   2 IMPROPERS: | NE2   CD2   CE1   HE2    | NE2   CE1   CD2   HE2    |
+
+   0 CROSS-TERM: | 
+
+   0 ANISOTROPY:
+
+   1 HB DONORS:    | HE2   NE2    |
+
+   2 HB ACCEPTORS: | NE2          | ND1          |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ CE1   CD2   NE2   HE2       0.00000      0.000    180.000      0.000    0.00000  T
+
+--------------------------------------------------------------------------------
+          -   47 -    LIG1
+
+ This is a patch.  Autogenerate code:   7
+
+  0 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER
+ ATOM NAME    
+ ATOM TYPE    
+ TYPE CODE  
+ GROUP NO   
+ CHARGE     
+ ALPHA      
+ THOLE      
+ MAUTO      
+
+          TOTAL CHARGE =   0.0000          TOTAL ALPHA  =   0.0000
+
+   1 BONDS: | 2C    3N      0 |
+
+   0 ANGLES: |
+
+   0 DIHEDRALS: |
+
+   2 IMPROPERS: | 3N    2C    3CA   3HN    | 2C    2CA   3N    2O     |
+
+   2 CROSS-TERM: | 1C    2N    2CA   2C    : 2N    2CA   2C    3N     |  2C    3N    3CA   3C    : 3N    3CA   3C    4N     |
+                 | 
+
+   0 ANISOTROPY:
+
+   0 HB DONORS:    |
+
+   0 HB ACCEPTORS: |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ 2N    2CA   2C    3N        0.00000      0.000    180.000      0.000    0.00000  F
+ 3N    2CA   2C    2O        0.00000      0.000    180.000      0.000    0.00000  T
+ 2CA   2C    3N    3CA       0.00000      0.000    180.000      0.000    0.00000  F
+ 2C    3N    3CA   3C        0.00000      0.000    180.000      0.000    0.00000  F
+ 2C    3CA   3N    3HN       0.00000      0.000    180.000      0.000    0.00000  T
+
+--------------------------------------------------------------------------------
+          -   48 -    LINK
+
+ This is a patch.  Autogenerate code:   7
+
+  0 ATOMS, WITH FOLLOWING ATTRIBUTES:
+ ATOM NUMBER
+ ATOM NAME    
+ ATOM TYPE    
+ TYPE CODE  
+ GROUP NO   
+ CHARGE     
+ ALPHA      
+ THOLE      
+ MAUTO      
+
+          TOTAL CHARGE =   0.0000          TOTAL ALPHA  =   0.0000
+
+   1 BONDS: | 2C    3N      0 |
+
+   4 ANGLES: | 2C    3N    3CA     1 | 2CA   2C    3N      1 | 2O    2C    3N      1 | 2C    3N    3HN     1 |
+
+  10 DIHEDRALS: | 2C    3N    3CA   3C      1 | 2C    3N    3CA   3HA     1 | 2C    3N    3CA   3CB     1 | 2HA   2CA   2C    3N      1 | 2N    2CA   2C    3N      1 |
+                | 2CB   2CA   2C    3N      1 | 2CA   2C    3N    3HN     1 | 2CA   2C    3N    3CA     1 | 2O    2C    3N    3HN     1 | 2O    2C    3N    3CA     1 |
+
+   2 IMPROPERS: | 3N    2C    3CA   3HN    | 2C    2CA   3N    2O     |
+
+   2 CROSS-TERM: | 1C    2N    2CA   2C    : 2N    2CA   2C    3N     |  2C    3N    3CA   3C    : 3N    3CA   3C    4N     |
+                 | 
+
+   0 ANISOTROPY:
+
+   0 HB DONORS:    |
+
+   0 HB ACCEPTORS: |
+
+ ATOMS WITH NONBOND EXCLUSIONS:
+
+ RESIDUE IC INFORMATION
+ I     J     K     L         BOND IJ    ANGLE IJK  DIHEDRAL   ANGLE JKL  BOND KL IMP
+ 2N    2CA   2C    3N        0.00000      0.000    180.000      0.000    0.00000  F
+ 3N    2CA   2C    2O        0.00000      0.000    180.000      0.000    0.00000  T
+ 2CA   2C    3N    3CA       0.00000      0.000    180.000      0.000    0.00000  F
+ 2C    3N    3CA   3C        0.00000      0.000    180.000      0.000    0.00000  F
+ 2C    3CA   3N    3HN       0.00000      0.000    180.000      0.000    0.00000  T
+
+--------------------------------------------------------------------------------
+          TOTALS IN USE
+ ATOMS        539
+ BONDS        463
+ ANGLES         4
+ DIHEDRALS     10
+ IMPROPERS    103
+ CROSSTERMS    33
+ LONE PAIRS     0
+ ANISOTROP      0
+ EXCLUSIONS     0
+ ACCEPTORS     47
+ DONORS        61
+ BUILD/IC     480
+ GROUPS         0
+
+--------------------------------------------------------------------------------
