@@ -1237,6 +1237,60 @@ def _handle_extent_cleanup_rescue(
     return _extent_check(config, context=f"{label} after cleanup extent rescue")
 
 
+def _escalate_extent_rescue(
+    config: DynamicsOverlapConfig,
+    *,
+    label: str,
+    still_bad: RuntimeError,
+    mlpot_ctx: "MlpotContext",
+    recovery_path: Path | None = None,
+    sd_steps: int | None = None,
+) -> float:
+    """Try density prep ladder, then monomer repack, before aborting extent rescue."""
+    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+        build_extent_recovery_candidates,
+    )
+
+    exc: RuntimeError = still_bad
+    if config.density_prep_ladder_fallback:
+        try:
+            return _try_density_prep_ladder_after_extent_failure(
+                config,
+                label=label,
+                exc=exc,
+                mlpot_ctx=mlpot_ctx,
+            )
+        except Exception as ladder_exc:
+            if not isinstance(ladder_exc, RuntimeError):
+                raise
+            exc = ladder_exc
+
+    candidates = build_extent_recovery_candidates(config)
+    if candidates:
+        try:
+            return _handle_extent_cleanup_rescue(
+                config,
+                label=label,
+                exc=exc,
+                mlpot_ctx=mlpot_ctx,
+            )
+        except RuntimeError as repack_exc:
+            exc = repack_exc
+
+    if recovery_path is not None:
+        sd_txt = f" (SD={sd_steps})" if sd_steps is not None else ""
+        raise RuntimeError(
+            f"{exc}; fly-off recovery from {recovery_path.name}{sd_txt}, density "
+            f"prep ladder, and monomer repack did not restore monomer extent "
+            f"<= {config.max_monomer_extent_A:.2f} A — inspect the prior restart "
+            f"or reduce the timestep / heating rate"
+        ) from exc
+    raise RuntimeError(
+        f"{exc}; extent rescue (density prep ladder and monomer repack) did not "
+        f"restore monomer extent <= {config.max_monomer_extent_A:.2f} A"
+    ) from exc
+
+
 def _handle_extent_rescue(
     config: DynamicsOverlapConfig,
     *,
@@ -1282,42 +1336,25 @@ def _handle_extent_rescue(
             candidates=candidates,
         )
     except Exception as rescue_exc:
-        if config.density_prep_ladder_fallback:
-            try:
-                return _try_density_prep_ladder_after_extent_failure(
-                    config,
-                    label=label,
-                    exc=RuntimeError(f"{exc}; fly-off recovery failed: {rescue_exc}"),
-                    mlpot_ctx=mlpot_ctx,
-                )
-            except Exception as ladder_exc:
-                if not isinstance(ladder_exc, RuntimeError):
-                    raise
-                rescue_exc = ladder_exc
-        raise RuntimeError(
-            f"{exc}; fly-off recovery from {recovery_path.name} failed: {rescue_exc}"
-        ) from rescue_exc
+        return _escalate_extent_rescue(
+            config,
+            label=label,
+            still_bad=RuntimeError(f"{exc}; fly-off recovery failed: {rescue_exc}"),
+            mlpot_ctx=mlpot_ctx,
+            recovery_path=recovery_path,
+            sd_steps=sd_steps,
+        )
     try:
         return _extent_check(config, context=f"{label} after fly-off recovery")
     except RuntimeError as still_bad:
-        if config.density_prep_ladder_fallback:
-            try:
-                return _try_density_prep_ladder_after_extent_failure(
-                    config,
-                    label=label,
-                    exc=still_bad,
-                    mlpot_ctx=mlpot_ctx,
-                )
-            except Exception as ladder_exc:
-                if not isinstance(ladder_exc, RuntimeError):
-                    raise
-                still_bad = ladder_exc
-        raise RuntimeError(
-            f"{still_bad}; fly-off recovery from {recovery_path.name} "
-            f"(SD={sd_steps}) did not restore monomer extent "
-            f"<= {config.max_monomer_extent_A:.2f} A — inspect the prior restart "
-            f"or reduce the timestep / heating rate"
-        ) from still_bad
+        return _escalate_extent_rescue(
+            config,
+            label=label,
+            still_bad=still_bad,
+            mlpot_ctx=mlpot_ctx,
+            recovery_path=recovery_path,
+            sd_steps=sd_steps,
+        )
 
 
 def _try_density_prep_ladder_after_extent_failure(

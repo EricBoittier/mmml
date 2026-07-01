@@ -1206,6 +1206,76 @@ def test_check_extent_cleanup_rescue_rebuilds_monomer_from_reference(tmp_path):
     ctx.reregister_mlpot.assert_called_once_with(verbose=False, reregister_params=False)
 
 
+def test_check_extent_rescue_falls_back_to_repack_when_bonded_sd_leaves_extent(tmp_path):
+    """Bonded SD cannot collapse a dissociated monomer; repack from reference should."""
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        check_dynamics_overlap,
+    )
+
+    mini_crd = tmp_path / "02_mini.crd"
+    mini_crd.write_text(
+        "6 EXT\n"
+        "1 1 0 0.0 0.0 0.0\n"
+        "2 1 0 1.0 0.0 0.0\n"
+        "3 1 0 0.0 1.0 0.0\n"
+        "4 1 0 5.0 0.0 0.0\n"
+        "5 1 0 5.0 1.0 0.0\n"
+        "6 1 0 5.5 0.5 0.0\n",
+        encoding="utf-8",
+    )
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        min_distance_A=0.0,
+        intra_min_distance_A=0.0,
+        max_monomer_extent_A=12.0,
+        n_monomers=2,
+        use_pbc=False,
+        cleanup_mode=False,
+        geometry_fallback_restarts=(mini_crd,),
+        rescue=OverlapRescueConfig(nstep_sd=10, nstep_abnr=0, verbose=False),
+    )
+    bad_pos = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [30.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+        ],
+        dtype=float,
+    )
+    ctx = mock.MagicMock()
+    positions = {"current": bad_pos.copy()}
+
+    def _get_pos():
+        return positions["current"]
+
+    def _sync_pos(new_pos):
+        positions["current"] = np.asarray(new_pos, dtype=float)
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        side_effect=_get_pos,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        side_effect=_sync_pos,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.run_extent_recovery_from_prior_restart",
+    ) as flyoff:
+        extent, rescued = check_dynamics_overlap(
+            cfg, context="HEAT", step=3000, mlpot_ctx=ctx
+        )
+    flyoff.assert_called_once()
+    assert rescued is True
+    assert extent < 12.0
+    assert ctx._overlap_post_rescue_cold_start is True
+
+
 def test_check_intra_monomer_raises_on_close_contact():
     cfg = DynamicsOverlapConfig(
         action="error",
