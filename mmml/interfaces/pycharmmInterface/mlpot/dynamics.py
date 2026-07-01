@@ -1875,7 +1875,17 @@ def finalize_heat_dynamics_frequencies(kw: dict[str, Any]) -> dict[str, tuple[in
         if new != old:
             changes[key] = (old, new)
         kw[key] = new
-    if "nsavc" in kw:
+    cadence = kw.get("_dyn_freq_cadence")
+    if cadence is not None and int(cadence) > 0:
+        c = _harmonize_dynamics_frequency(int(cadence), nstep)
+        for key in ("nprint", "iprfrq", "isvfrq"):
+            if key not in kw:
+                continue
+            old = int(kw[key])
+            if old != c:
+                changes[key] = (old, c)
+            kw[key] = c
+    elif "nsavc" in kw:
         ns = int(kw["nsavc"])
         for key in ("nprint", "iprfrq", "isvfrq"):
             if key in kw and int(kw[key]) != ns:
@@ -3692,6 +3702,9 @@ _OVERLAP_CHUNK_FREQ_KEYS = (
 )
 
 
+_OVERLAP_CHUNK_PRINT_CADENCE_KEYS = ("iprfrq", "nprint", "isvfrq")
+
+
 def _harmonize_overlap_chunk_frequencies(
     chunk_kw: dict[str, Any],
     chunk_nstep: int,
@@ -3703,6 +3716,8 @@ def _harmonize_overlap_chunk_frequencies(
     """Align list/image/HB update freqs with this chunk's ``nstep`` (avoids FINCYC retune)."""
 
     n = max(1, int(chunk_nstep))
+    cadence = chunk_kw.get("_dyn_freq_cadence")
+    cadence_active = cadence is not None and int(cadence) > 0
     for key in _OVERLAP_CHUNK_FREQ_KEYS:
         if key not in chunk_kw:
             continue
@@ -3732,10 +3747,21 @@ def _harmonize_overlap_chunk_frequencies(
                         f"chunk: per-chunk DCD nsavc={chunk_kw['nsavc']} "
                         f"(global step {int(global_step_start)}–{int(global_step_start) + n})",
                     )
+                if cadence_active:
+                    c = _harmonize_dynamics_frequency(int(cadence), n)
+                    for k in ("nprint", "iprfrq", "isvfrq"):
+                        chunk_kw[k] = c
+            elif cadence_active:
+                c = _harmonize_dynamics_frequency(int(cadence), n)
+                for k in ("nprint", "iprfrq", "isvfrq"):
+                    if k in chunk_kw:
+                        chunk_kw[k] = c
             else:
                 for k in ("nprint", "iprfrq", "isvfrq"):
                     if k in chunk_kw:
                         chunk_kw[k] = old
+        elif cadence_active and key in _OVERLAP_CHUNK_PRINT_CADENCE_KEYS:
+            chunk_kw[key] = _harmonize_dynamics_frequency(int(cadence), n)
         else:
             chunk_kw[key] = _harmonize_dynamics_frequency(int(chunk_kw[key]), n)
     _align_inbfrq_with_imgfrq(chunk_kw)

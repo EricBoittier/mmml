@@ -932,6 +932,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="pycharmm PBC: image/HB list rebuild every N steps (default 50; larger=faster)",
     )
     parser.add_argument(
+        "--dyn-freq-cadence",
+        type=int,
+        default=50,
+        metavar="N",
+        help=(
+            "pycharmm: align heat/print cadence (ihtfrq, nprint, …) to N steps; "
+            "decoupled from DCD nsavc (default: 50). Overlap CPT chunks still "
+            "disable interior inbfrq/imgfrq. Use 0 for legacy behavior."
+        ),
+    )
+    parser.add_argument(
         "--pre-nve-charmm-update",
         action=argparse.BooleanOptionalAction,
         default=None,
@@ -2328,6 +2339,7 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd.append("--mlpot-pbc")
     _append_optional(cmd, "--dyn-inbfrq", getattr(args, "dyn_inbfrq", None))
     _append_optional(cmd, "--dyn-imgfrq", getattr(args, "dyn_imgfrq", None))
+    _append_optional(cmd, "--dyn-freq-cadence", getattr(args, "dyn_freq_cadence", None))
     if getattr(args, "pre_nve_charmm_update", None) is False:
         cmd.append("--no-pre-nve-charmm-update")
     elif getattr(args, "pre_nve_charmm_update", None) is True:

@@ -3415,6 +3415,35 @@ def test_harmonize_overlap_chunk_fixed_volume_lifts_interior_list_freqs():
     assert kw["ilbfrq"] == 251
 
 
+def test_harmonize_overlap_chunk_cadence_sets_print_not_interior_lists():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _harmonize_overlap_chunk_frequencies,
+    )
+
+    kw = {
+        "cpt": True,
+        "pmass": 0,
+        "inbfrq": 50,
+        "imgfrq": 50,
+        "ihbfrq": 50,
+        "ilbfrq": 50,
+        "nprint": 500,
+        "iprfrq": 500,
+        "isvfrq": 500,
+        "nsavc": 500,
+        "_dyn_freq_cadence": 50,
+        "nstep": 500,
+    }
+    _harmonize_overlap_chunk_frequencies(
+        kw, 500, loose_pbc=False, split_trajectory=True
+    )
+    assert kw["inbfrq"] == 501
+    assert kw["imgfrq"] == 501
+    assert kw["nprint"] == 50
+    assert kw["iprfrq"] == 50
+    assert kw["nsavc"] == 499
+
+
 def test_harmonize_overlap_chunk_npt_keeps_interior_list_freqs():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _harmonize_overlap_chunk_frequencies,
