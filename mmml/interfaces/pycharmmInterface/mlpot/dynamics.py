@@ -3362,8 +3362,14 @@ def _resolve_dynamics_init_velocities(
 
     if bool(kw.get("_bussi_comp_only_handoff")):
         raw = last_synced_velocities_akma_raw()
-        if raw is not None and not velocities_are_cold(raw):
-            return None
+        if raw is not None:
+            v = np.asarray(raw, dtype=np.float64).reshape(-1, 3)
+            if (
+                v.size > 0
+                and np.all(np.isfinite(v))
+                and float(np.max(np.abs(v))) >= 1.0e-8
+            ):
+                return None
 
     temp = resolve_assignment_temperature_k(kw, default_K=300.0)
     ramp = kw.get("_bussi_ramp")
