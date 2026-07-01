@@ -3055,11 +3055,18 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
             "use start=True, iasvel=1 on the main dyna call for velocity assignment"
         )
 
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        maybe_assign_velocities_via_ase_if_cold,
+    )
     from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
         clear_comparison_coordinates,
     )
 
     import pycharmm
+    maybe_assign_velocities_via_ase_if_cold(
+        kw,
+        quiet=bool(kw.pop("_quiet_ase_velocity_assign", False)),
+    )
     # PyCHARMM omits ``start`` from the script when start=False, so CHARMM may keep
     # START active after a prior Boltzmann assign. With iasvel=0 that reads COMP
     # coordinates as velocities — zero COMP defensively.
@@ -3859,8 +3866,18 @@ def _assign_post_rescue_velocities_and_crystal(
     *,
     mlpot_ctx: Optional["MlpotContext"],
 ) -> None:
-    """Alias kept for overlap tests; bath/crystal only — velocities via ``start=True``."""
+    """Assign ASE Maxwell-Boltzmann velocities and refresh bath/crystal keywords."""
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        assign_maxwell_boltzmann_velocities_via_ase,
+        resolve_assignment_temperature_k,
+    )
+
     _prepare_post_rescue_bath_and_crystal(chunk_kw, mlpot_ctx=mlpot_ctx)
+    target = resolve_assignment_temperature_k(chunk_kw)
+    assign_maxwell_boltzmann_velocities_via_ase(target, quiet=True)
+    chunk_kw["iasvel"] = 0
+    chunk_kw["start"] = False
+    chunk_kw["iasors"] = 0
 
 
 def _prepare_post_rescue_overlap_handoff(
@@ -3893,13 +3910,19 @@ def _prepare_post_rescue_cold_start_overlap_handoff(
     *,
     mlpot_ctx: Optional["MlpotContext"],
 ) -> None:
-    """Zero velocities and resume with ``iasvel=0`` (IHTFRQ heat ramp when configured)."""
+    """Assign ASE Maxwell-Boltzmann velocities before IHTFRQ heat ramp continuation."""
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        assign_maxwell_boltzmann_velocities_via_ase,
+        resolve_assignment_temperature_k,
+    )
     from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
-        prepare_comp_for_iasvel0,
+        clear_comparison_coordinates,
     )
 
     _prepare_post_rescue_bath_and_crystal(chunk_kw, mlpot_ctx=mlpot_ctx)
-    prepare_comp_for_iasvel0(zero_only=True)
+    clear_comparison_coordinates()
+    target = resolve_assignment_temperature_k(chunk_kw)
+    assign_maxwell_boltzmann_velocities_via_ase(target, quiet=False)
     chunk_kw["restart"] = False
     chunk_kw["new"] = False
     chunk_kw["start"] = False
@@ -3910,7 +3933,8 @@ def _prepare_post_rescue_cold_start_overlap_handoff(
     if mlpot_ctx is not None:
         setattr(mlpot_ctx, "_overlap_post_rescue_cold_start", False)
     print(
-        "overlap: post-rescue cold restart (iasvel=0; IHTFRQ ramp when configured)",
+        "overlap: post-rescue ASE velocity assign "
+        f"(target {target:.1f} K; iasvel=0 continuation)",
         flush=True,
     )
 

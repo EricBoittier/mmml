@@ -423,6 +423,16 @@ def resolve_handoff_restart_template(
     return None
 
 
+def _sync_charmm_velocities(velocities: np.ndarray) -> None:
+    """Write handoff/restart velocities into CHARMM main or comparison sets."""
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        sync_charmm_velocities_akma,
+    )
+
+    v = np.asarray(velocities, dtype=np.float64).reshape(-1, 3)
+    sync_charmm_velocities_akma(v)
+
+
 def _handoff_positions_for_charmm_restart(handoff: MdHandoffState) -> np.ndarray:
     """Prefer live CHARMM coords when the caller already synced aligned positions."""
     try:

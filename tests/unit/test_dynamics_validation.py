@@ -304,6 +304,8 @@ def test_run_dynamics_clears_comparison_coords_when_iasvel_zero_no_start():
     with patch(
         "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.clear_comparison_coordinates",
     ) as clear_comp, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.maybe_assign_velocities_via_ase_if_cold",
+    ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
     ) as release_bufs, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
