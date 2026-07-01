@@ -907,9 +907,18 @@ export JAX_COMPILATION_CACHE_DIR=$HOME/.cache/mmml/jax_compile
 # Pre-warm PhysNet + hybrid shapes before mpirun (no CHARMM)
 mmml warmup-mlpot-jax --checkpoint /path/to/ckpt --composition DCM:60 --box-side 32
 
-# Skip duplicate post-SD warmup when pre-SD calculator mini already ran (automatic)
-# calculator_pre_minimize: true in YAML / --calculator-pre-minimize
+# Profile hybrid jax-pme LR only (no PyCHARMM): see tests/functionality/long_range/10_hybrid_jax_profile.py
 ```
+
+**Profile mini / SD / dynamics on your machine:**
+
+| Layer | Tool | Command |
+|-------|------|---------|
+| Python hot path | `cProfile` | `python -m cProfile -o md.prof -m mmml.cli md-system --config ...` |
+| MLpot callback split | `MMML_MLPOT_PROFILE=1` | also `--mlpot-profile` on md-system |
+| JAX compile vs run | `MMML_JAX_COMPILE_TIMERS=1` | logged after warmup / atexit |
+| jax-pme components | `MMML_JAX_PME_PROFILE=1` | `10_hybrid_jax_profile.py` or hybrid ENER |
+| GPU kernels / H2D | `jax.profiler` | `--jax-trace DIR` in `10_hybrid_jax_profile.py`; TensorBoard |
 
 Avoid toggling `MMML_JAX_PME_INTRA_MODE`, `ml_compute_dtype`, or cutoffs between mini legs — those change static JIT keys. For jax-pme mesh on MPI builds, expect one extra promote on the **first** hybrid energy after SD starts.
 

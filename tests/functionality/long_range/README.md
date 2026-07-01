@@ -76,6 +76,28 @@ JAX_PLATFORMS=cpu uv run pytest tests/unit/test_jax_pme_cross_monomer.py -q
 
 Optional env: `MMML_JAX_PME_INTRA_MODE=cross|full_minus_intra`, `MMML_JAX_PME_CROSS_KERNEL=auto|structure_factor|masked`. Documented with benchmark numbers in [md-system-configs.md](../../docs/md-system-configs.md#jax-pme-cross-monomer-hybrid-mm-long-range).
 
+### Profiling (cProfile + JAX trace)
+
+Hybrid jax-pme LR without PyCHARMM:
+
+```bash
+# Component timers + compile pass log
+MMML_JAX_PME_PROFILE=1 MMML_JAX_COMPILE_TIMERS=1 JAX_PLATFORMS=cpu \\
+  uv run python tests/functionality/long_range/10_hybrid_jax_profile.py
+
+# cProfile top summary + .prof files
+JAX_PLATFORMS=cpu uv run python tests/functionality/long_range/10_hybrid_jax_profile.py \\
+  --cprofile --enable-jax-pme-profile --enable-compile-timers \\
+  --out-dir artifacts/hybrid_jax_profile
+
+# JAX device trace (TensorBoard)
+JAX_PLATFORMS=cpu uv run python tests/functionality/long_range/10_hybrid_jax_profile.py \\
+  --jax-trace /tmp/jax_trace_hybrid --intra-mode cross --reps 8
+tensorboard --logdir /tmp/jax_trace_hybrid
+```
+
+Full `md-system` mini/SD (PyCHARMM): see [mlpot/README.md](../../mmml/interfaces/pycharmmInterface/mlpot/README.md) (`MMML_MLPOT_PROFILE`, `cProfile -m mmml.cli md-system`, `jax.profiler`). MPI CPU sweep: `tests/functionality/mlpot/10_spatial_mpi_cpu_profile.py`.
+
 ## Test systems
 
 Defined in `_common.py` (mirroring jax-pme `tests/test_ewald.py`):
