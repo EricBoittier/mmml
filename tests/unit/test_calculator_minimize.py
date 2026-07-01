@@ -603,3 +603,54 @@ def test_commit_hybrid_calculator_mini_defer_path_restores_historical_best():
     sync_lists.assert_not_called()
     assert prime.call_count == 2
     ener_force.assert_not_called()
+
+
+def test_commit_hybrid_calculator_mini_non_defer_restores_historical_best():
+    from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+        _commit_hybrid_calculator_mini_result,
+    )
+
+    atoms = MagicMock()
+    atoms.get_positions.return_value = np.zeros((6, 3))
+    atoms.get_forces.return_value = np.zeros((6, 3))
+    atoms.get_potential_energy.return_value = -1.0
+
+    mlpot_ctx = MagicMock()
+    best = _BestMinimizationFrame(atoms)
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+    ) as sync_lists, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
+        return_value=False,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
+    ) as ener_force, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.mlpot_hybrid_grms_from_calculator",
+        return_value=0.5,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize._update_calculator_mini_historical_best",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize._maybe_restore_calculator_mini_historical_best",
+        return_value=(0.1, -2.0, 0.4, True),
+    ):
+        grms = _commit_hybrid_calculator_mini_result(
+            mlpot_ctx,
+            atoms,
+            best,
+            context_prefix="Test",
+            grms0=1.0,
+            stopped_on_spike=False,
+            optimizer_name="FIRE",
+            step_count=0,
+            verbose=False,
+            stopped_on_safe_grms=True,
+        )
+
+    assert grms == pytest.approx(0.5)
+    assert sync_lists.call_count == 2
+    assert ener_force.call_count == 2

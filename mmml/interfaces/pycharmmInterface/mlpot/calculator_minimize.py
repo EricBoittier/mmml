@@ -532,12 +532,18 @@ def _commit_hybrid_calculator_mini_result(
     stopped_on_safe_grms: bool = False,
 ) -> float:
     """Sync CHARMM, update historical best, and return hybrid GRMS (kcal/mol/Å)."""
+    from mmml.interfaces.pycharmmInterface.mlpot import cli_common
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         invalidate_mlpot_calculator_caches,
         sync_charmm_lists_after_mini,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms_after_ener_force
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        mlpot_skip_charmm_ener_force_before_first_sd,
+        prime_charmm_hybrid_energy_before_mlpot_sd,
+        sync_charmm_positions,
+    )
+
+    defer_pre_sd_ener = mlpot_skip_charmm_ener_force_before_first_sd(mlpot_ctx)
 
     def _prime_or_ener_force(*, context_suffix: str) -> None:
         if defer_pre_sd_ener:
@@ -548,15 +554,9 @@ def _commit_hybrid_calculator_mini_result(
                 context=f"{context_prefix} {context_suffix}",
             )
         else:
-            charmm_grms_after_ener_force()
+            cli_common.charmm_grms_after_ener_force()
 
     sync_charmm_positions(np.asarray(atoms.get_positions(), dtype=np.float64))
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
-        mlpot_skip_charmm_ener_force_before_first_sd,
-        prime_charmm_hybrid_energy_before_mlpot_sd,
-    )
-
-    defer_pre_sd_ener = mlpot_skip_charmm_ener_force_before_first_sd(mlpot_ctx)
     if not defer_pre_sd_ener:
         sync_charmm_lists_after_mini(quiet=True)
     invalidate_mlpot_calculator_caches(mlpot_ctx)
