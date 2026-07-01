@@ -831,6 +831,8 @@ def test_materialize_deferred_mlpot_jax_before_sd_warms_callback_when_spherical_
         "mmml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
         return_value=True,
     ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.assert_mpi_launcher_for_mlpot_sd",
+    ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
         return_value=True,
     ), patch(
@@ -858,4 +860,4 @@ def test_materialize_deferred_mlpot_jax_before_sd_warms_callback_when_spherical_
 
 
 def test_materialize_deferred_mlpot_jax_before_sd_skips_probe_after_calculator_prep():
-    test_materialize_deferred_mlpot_jax_before_sd_skips_callback_warmup_after_calculator_prep()
+    test_materialize_deferred_mlpot_jax_before_sd_warms_callback_after_calculator_baseline()
