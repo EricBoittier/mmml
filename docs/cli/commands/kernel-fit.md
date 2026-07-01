@@ -15,9 +15,8 @@ mmml kernel-fit --help
 usage: mmml kernel-fit [-h] [--out-dir OUT_DIR] [--natmk NATMK]
                        [--out-h5 OUT_H5] [--out-mdcm OUT_MDCM]
                        [--out-kmdcm OUT_KMDCM] [--residue-name RESIDUE_NAME]
-                       [--nkfr NKFR] [--optimize]
-                       [--train-frames TRAIN_FRAMES] [--lam LAM]
-                       [--sigma SIGMA] [--base-name BASE_NAME]
+                       [--nkfr NKFR] [--optimize] [--train-frames TRAIN_FRAMES]
+                       [--lam LAM] [--sigma SIGMA] [--base-name BASE_NAME]
                        h5
 
 Fit kernel ridge: distance matrix -> (AQ,BQ,CQ). Write CHARMM kernel files and

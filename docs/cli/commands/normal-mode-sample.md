@@ -12,8 +12,7 @@ mmml normal-mode-sample --help
 ## Options
 
 ```text
-usage: mmml normal-mode-sample [-h] -i INPUT [-o OUTPUT]
-                               [--amplitude AMPLITUDE]
+usage: mmml normal-mode-sample [-h] -i INPUT [-o OUTPUT] [--amplitude AMPLITUDE]
                                [--amplitudes AMPLITUDES [AMPLITUDES ...]]
                                [--freq-min FREQ_MIN] [--include-equilibrium]
                                [--samples-per-mode {1,2}] [--max-samples N]
@@ -37,15 +36,12 @@ options:
   --max-samples N       Maximum number of structures to generate (default: no
                         limit)
 
-CLI for normal mode sampling from pyscf-dft harmonic output.
-
-Samples geometries along vibrational modes for downstream QM/ML.
-Input: .h5 from mmml pyscf-dft --harmonic
-Output: NPZ with R (n_samples, n_atoms, 3), Z, N
-
-Usage:
-    mmml normal-mode-sample -i out/04_results.h5 -o out/06_sampled.npz --amplitude 0.1
-    mmml normal-mode-sample -i out/04_results.h5 -o out/06_sampled.npz --amplitude 0.1 --include-equilibrium
+CLI for normal mode sampling from pyscf-dft harmonic output. Samples geometries
+along vibrational modes for downstream QM/ML. Input: .h5 from mmml pyscf-dft
+--harmonic Output: NPZ with R (n_samples, n_atoms, 3), Z, N Usage: mmml normal-
+mode-sample -i out/04_results.h5 -o out/06_sampled.npz --amplitude 0.1 mmml
+normal-mode-sample -i out/04_results.h5 -o out/06_sampled.npz --amplitude 0.1
+--include-equilibrium
 ```
 
 

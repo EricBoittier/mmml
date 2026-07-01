@@ -14,7 +14,8 @@ mmml interpolate-xyz --help
 ```text
 usage: mmml interpolate-xyz [-h] [-o OUTPUT] [--steps N] xyz1 xyz2
 
-Interpolate between two XYZ files via Z-matrix coordinates and save frames to NPZ (R, Z, N).
+Interpolate between two XYZ files via Z-matrix coordinates and save frames to
+NPZ (R, Z, N).
 
 positional arguments:
   xyz1                 First XYZ file (defines Z-matrix connectivity)
@@ -27,13 +28,10 @@ options:
                        default: 1000)
 
 CLI: interpolate between two XYZ geometries in internal (Z-matrix) coordinates.
-
 Uses the first structure's Z-matrix topology; the second XYZ must match atom
 order and count. Writes a compressed NPZ with R, Z, N per frame (same layout as
-interpolate_xyzs_to_npz).
-
-Usage:
-    mmml interpolate-xyz start.xyz end.xyz -o path.npz --steps 500
+interpolate_xyzs_to_npz). Usage: mmml interpolate-xyz start.xyz end.xyz -o
+path.npz --steps 500
 ```
 
 

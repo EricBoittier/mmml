@@ -28,8 +28,7 @@ options:
   -h, --help            show this help message and exit
   -n, --n-structures N  Number of diverse structures to keep.
   -o, --output OUTPUT   Output NPZ path (default: sampled.npz).
-  --seed SEED           RNG seed for the first farthest-point seed (default:
-                        0).
+  --seed SEED           RNG seed for the first farthest-point seed (default: 0).
   --species SPECIES     Comma-separated chemical symbols for SOAP (default:
                         H,C,O).
   --r-cut R_CUT

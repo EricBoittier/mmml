@@ -14,9 +14,8 @@ mmml efield-evaluate --help
 ```text
 usage: mmml efield-evaluate [-h] [--params PARAMS] [--config CONFIG]
                             [--data DATA] [--test-npz TEST_NPZ]
-                            [--output-dir OUTPUT_DIR]
-                            [--batch-size BATCH_SIZE] [--num-test NUM_TEST]
-                            [--model-config MODEL_CONFIG]
+                            [--output-dir OUTPUT_DIR] [--batch-size BATCH_SIZE]
+                            [--num-test NUM_TEST] [--model-config MODEL_CONFIG]
                             [--features FEATURES] [--max-degree MAX_DEGREE]
                             [--num-iterations NUM_ITERATIONS]
                             [--num-basis-functions NUM_BASIS_FUNCTIONS]
@@ -30,8 +29,8 @@ Evaluate trained model
 
 options:
   -h, --help            show this help message and exit
-  --params PARAMS       Path to parameters JSON file (can be params-UUID.json
-                        or params.json)
+  --params PARAMS       Path to parameters JSON file (can be params-UUID.json or
+                        params.json)
   --config CONFIG       Path to config JSON file (will be auto-detected from
                         params UUID if not provided)
   --data DATA           Path to dataset NPZ file

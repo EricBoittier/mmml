@@ -12,9 +12,8 @@ mmml compare-npz --help
 ## Options
 
 ```text
-usage: mmml compare-npz [-h] [--reference REFERENCE]
-                        [--predictions PREDICTIONS] [--checkpoint CHECKPOINT]
-                        [--data DATA] [-o OUTPUT_DIR]
+usage: mmml compare-npz [-h] [--reference REFERENCE] [--predictions PREDICTIONS]
+                        [--checkpoint CHECKPOINT] [--data DATA] [-o OUTPUT_DIR]
                         [--max-frames MAX_FRAMES] [--stride STRIDE]
                         [--cutoff CUTOFF] [--use-dcmnet-dipole]
                         [--energy-unit ENERGY_UNIT] [--force-unit FORCE_UNIT]
@@ -47,16 +46,11 @@ options:
   --save-predictions    With --checkpoint, save inference NPZ to output dir
 
 Compare reference (PySCF/QM) and model NPZ trajectories with metrics and plots.
-
-Modes
------
-1. Two NPZ files (reference labels vs model predictions):
-       mmml compare-npz --reference ref.npz --predictions pred.npz -o out/
-
-2. Checkpoint inference against labeled NPZ (same file holds R,Z,E,F,...):
-       mmml compare-npz --checkpoint params.json --data test.npz -o out/ --max-frames 200
-
-Issue #12: per-atom / per-element force analysis and richer validation plots.
+Modes ----- 1. Two NPZ files (reference labels vs model predictions): mmml
+compare-npz --reference ref.npz --predictions pred.npz -o out/ 2. Checkpoint
+inference against labeled NPZ (same file holds R,Z,E,F,...): mmml compare-npz
+--checkpoint params.json --data test.npz -o out/ --max-frames 200 Issue #12:
+per-atom / per-element force analysis and richer validation plots.
 ```
 
 

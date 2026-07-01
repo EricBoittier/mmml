@@ -31,8 +31,8 @@ Evaluate trained model
 
 options:
   -h, --help            show this help message and exit
-  --params PARAMS       Path to parameters JSON file (can be params-UUID.json
-                        or params.json)
+  --params PARAMS       Path to parameters JSON file (can be params-UUID.json or
+                        params.json)
   --config CONFIG       Path to config JSON file (will be auto-detected from
                         params UUID if not provided)
   --data DATA           Path to dataset NPZ file

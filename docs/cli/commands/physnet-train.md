@@ -38,8 +38,7 @@ usage: mmml physnet-train [-h] [--config CONFIG] [--data DATA]
                           [--batch-method BATCH_METHOD]
                           [--batch-args-dict BATCH_ARGS_DICT]
                           [--data-keys DATA_KEYS [DATA_KEYS ...]]
-                          [--conversion CONVERSION]
-                          [--init-params INIT_PARAMS]
+                          [--conversion CONVERSION] [--init-params INIT_PARAMS]
                           [--physnet-checkpoint PHYSNET_CHECKPOINT]
                           [--physnet-transfer-model PHYSNET_TRANSFER_MODEL]
                           [--list-physnet-transfer-models]
@@ -50,18 +49,18 @@ usage: mmml physnet-train [-h] [--config CONFIG] [--data DATA]
                           [--distill-targets DISTILL_TARGETS [DISTILL_TARGETS ...]]
                           [--teacher-checkpoint TEACHER_CHECKPOINT]
                           [--metrics-plot METRICS_PLOT] [--log-loss]
-                          [--rot-augment]
-                          [--rot-perturbation ROT_PERTURBATION] [--charges]
-                          [--no-charges] [--total-charge TOTAL_CHARGE]
-                          [--no-electrostatics] [--efa] [--no-efa] [--debug]
-                          [--no-debug] [--save-config SAVE_CONFIG] [--quiet]
+                          [--rot-augment] [--rot-perturbation ROT_PERTURBATION]
+                          [--charges] [--no-charges]
+                          [--total-charge TOTAL_CHARGE] [--no-electrostatics]
+                          [--efa] [--no-efa] [--debug] [--no-debug]
+                          [--save-config SAVE_CONFIG] [--quiet]
 
 Train a PhysNetJAX EF model from NPZ data.
 
 options:
   -h, --help            show this help message and exit
-  --config CONFIG       YAML file with training options (CLI flags override
-                        file values)
+  --config CONFIG       YAML file with training options (CLI flags override file
+                        values)
   --data DATA           Training NPZ file
   --valid-data, --valid_data VALID_DATA
                         Optional validation NPZ (use full files; no random re-
@@ -69,8 +68,8 @@ options:
   --ckpt-dir, --ckpt_dir CKPT_DIR
                         Checkpoint directory (absolute path used for Orbax)
   --tag TAG             Run name for checkpoints
-  --model MODEL         Optional model JSON to load instead of creating a new
-                        EF model
+  --model MODEL         Optional model JSON to load instead of creating a new EF
+                        model
   --n-train, --n_train N_TRAIN
   --n-valid, --n_valid N_VALID
   --seed SEED
@@ -84,8 +83,7 @@ options:
   --objective OBJECTIVE
   --restart RESTART     Checkpoint path to restart from
   --num-atoms, --num_atoms NUM_ATOMS
-                        Atoms per structure (auto-detected from N/R if
-                        omitted)
+                        Atoms per structure (auto-detected from N/R if omitted)
   --features FEATURES
   --max-degree, --max_degree MAX_DEGREE
   --num-basis-functions, --num_basis_functions NUM_BASIS_FUNCTIONS
@@ -105,11 +103,10 @@ options:
   --transform TRANSFORM
                         Transform string (e.g. 'reduce_on_plateau')
   --schedule-fn, --schedule_fn SCHEDULE_FN
-                        Learning rate schedule string (e.g. 'warmup',
-                        'cosine')
+                        Learning rate schedule string (e.g. 'warmup', 'cosine')
   --early-stop-patience, --early_stop_patience EARLY_STOP_PATIENCE
-                        Number of epochs to wait for improvement before
-                        stopping training
+                        Number of epochs to wait for improvement before stopping
+                        training
   --best                Only save checkpoint when objective improves
   --no-save-every-epoch
                         Disable saving a checkpoint at every epoch
@@ -125,18 +122,17 @@ options:
   --data-keys, --data_keys DATA_KEYS [DATA_KEYS ...]
                         Keys to load from NPZ file
   --conversion CONVERSION
-                        Display-only MAE scaling for energy/forces (JSON
-                        string or .json/.yaml path). Multiplies reported
-                        train/valid energy and force MAE after each epoch;
-                        does NOT transform NPZ arrays or affect the loss.
-                        Default when omitted: {"energy": 1, "forces": 1} (MAE
-                        in same units as the NPZ). Example for kcal/mol
-                        display when data are eV: '{"energy": 23.060549,
-                        "forces": 23.060549}'. Dipole units are not handled
-                        here — convert D/Dxyz before training (e.g. mmml fix-
-                        and-split --dipole-in debye --dipole-out e-angstrom).
-                        See docs/UNITS_SUMMARY.md § physnet-train
-                        --conversion.
+                        Display-only MAE scaling for energy/forces (JSON string
+                        or .json/.yaml path). Multiplies reported train/valid
+                        energy and force MAE after each epoch; does NOT
+                        transform NPZ arrays or affect the loss. Default when
+                        omitted: {"energy": 1, "forces": 1} (MAE in same units
+                        as the NPZ). Example for kcal/mol display when data are
+                        eV: '{"energy": 23.060549, "forces": 23.060549}'. Dipole
+                        units are not handled here — convert D/Dxyz before
+                        training (e.g. mmml fix-and-split --dipole-in debye
+                        --dipole-out e-angstrom). See docs/UNITS_SUMMARY.md §
+                        physnet-train --conversion.
   --init-params, --init_params INIT_PARAMS
                         JSON string or file path to initialize flax parameters
   --physnet-checkpoint, --physnet_checkpoint PHYSNET_CHECKPOINT
@@ -159,11 +155,10 @@ options:
                         checkpoint config
   --distill             Enable teacher distillation loss during training
   --distill-alpha, --distill_alpha DISTILL_ALPHA
-                        Ground-truth loss weight (1.0=GT only, 0.0=teacher
-                        only)
+                        Ground-truth loss weight (1.0=GT only, 0.0=teacher only)
   --distill-targets, --distill_targets DISTILL_TARGETS [DISTILL_TARGETS ...]
-                        Distillation targets: energy forces dipole (default:
-                        all three)
+                        Distillation targets: energy forces dipole (default: all
+                        three)
   --teacher-checkpoint, --teacher_checkpoint TEACHER_CHECKPOINT
                         Teacher checkpoint for distillation (defaults to warm-
                         start checkpoint)
@@ -190,20 +185,13 @@ options:
                         Write resolved training options to YAML and exit
   --quiet, -q           Suppress JAX device summary
 
-Examples:
-  mmml physnet-train \
-      --data output/energies_forces_dipoles_train.npz \
-      --ckpt-dir ./ckpts/ama_mp2 \
-      --tag ama_mp2 \
-      --n-train 24000 --n-valid 3000 \
-      --batch-size 32 --num-epochs 2000 \
-      --max-atomic-number 35
-
-  mmml physnet-train --config train.yaml
-
-YAML keys match CLI flags (with optional aliases: train, output, max_epochs).
-See mmml/cli/misc/physnet_train.example.yaml for a template.
-See mmml/cli/misc/physnet_train_transfer.example.yaml for transfer learning / distillation.
+Examples: mmml physnet-train \ --data output/energies_forces_dipoles_train.npz \
+--ckpt-dir ./ckpts/ama_mp2 \ --tag ama_mp2 \ --n-train 24000 --n-valid 3000 \
+--batch-size 32 --num-epochs 2000 \ --max-atomic-number 35 mmml physnet-train
+--config train.yaml YAML keys match CLI flags (with optional aliases: train,
+output, max_epochs). See mmml/cli/misc/physnet_train.example.yaml for a
+template. See mmml/cli/misc/physnet_train_transfer.example.yaml for transfer
+learning / distillation.
 ```
 
 

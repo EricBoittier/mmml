@@ -37,21 +37,12 @@ options:
   --verbose, -v         Verbose output
   --quiet, -q           Quiet mode
 
-Examples:
-  # Basic evaluation
-  mmml evaluate --model checkpoint.pkl --data test.npz
-  
-  # Evaluate specific properties
-  mmml evaluate --model checkpoint.pkl --data test.npz \
-           --properties energy forces
-  
-  # Save results and report
-  mmml evaluate --model checkpoint.pkl --data test.npz \
-           --output results/ --report
-  
-  # Compare multiple models
-  mmml evaluate --model model1.pkl model2.pkl --data test.npz \
-           --output comparison/
+Examples: # Basic evaluation mmml evaluate --model checkpoint.pkl --data
+test.npz # Evaluate specific properties mmml evaluate --model checkpoint.pkl
+--data test.npz \ --properties energy forces # Save results and report mmml
+evaluate --model checkpoint.pkl --data test.npz \ --output results/ --report #
+Compare multiple models mmml evaluate --model model1.pkl model2.pkl --data
+test.npz \ --output comparison/
 ```
 
 

@@ -23,8 +23,8 @@ usage: mmml unwrap-traj [-h] -o OUTPUT [--format {auto,traj,xyz,extxyz,dcd}]
 Unwrap periodic ASE trajectories or HDF5 coordinate files.
 
 positional arguments:
-  input                 Input trajectory (.traj/.xyz/.extxyz/etc.) or
-                        .h5/.hdf5 file
+  input                 Input trajectory (.traj/.xyz/.extxyz/etc.) or .h5/.hdf5
+                        file
 
 options:
   -h, --help            show this help message and exit
@@ -38,13 +38,13 @@ options:
   --group-size GROUP_SIZE
                         Atoms per contiguous molecule/group for molecule-wise
                         unwrapping
-  --n-groups N_GROUPS   Number of equal contiguous molecule/groups for
-                        molecule-wise unwrapping
-  --no-molecules        Disable automatic bonded-fragment grouping; unwrap
-                        atoms independently
+  --n-groups N_GROUPS   Number of equal contiguous molecule/groups for molecule-
+                        wise unwrapping
+  --no-molecules        Disable automatic bonded-fragment grouping; unwrap atoms
+                        independently
   --reference REFERENCE
-                        ASE-readable file supplying atomic numbers and
-                        fallback cell for HDF5 inputs
+                        ASE-readable file supplying atomic numbers and fallback
+                        cell for HDF5 inputs
   --coord-key COORD_KEY
                         HDF5 coordinate dataset key (default:
                         R/positions/coordinates/coords/xyz)
@@ -55,12 +55,10 @@ options:
                         cell/cells/lattice/lattices/box/boxes)
   --quiet               Suppress summary output
 
-Unwrap periodic trajectories and write ASE/XYZ outputs.
-
-Examples:
-  mmml unwrap-traj in.traj -o unwrapped.traj
-  mmml unwrap-traj in.traj -o unwrapped.xyz --format xyz --fast
-  mmml unwrap-traj coords.h5 -o unwrapped.extxyz --reference wrapped.traj --fast
+Unwrap periodic trajectories and write ASE/XYZ outputs. Examples: mmml unwrap-
+traj in.traj -o unwrapped.traj mmml unwrap-traj in.traj -o unwrapped.xyz
+--format xyz --fast mmml unwrap-traj coords.h5 -o unwrapped.extxyz --reference
+wrapped.traj --fast
 ```
 
 

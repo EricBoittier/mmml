@@ -12,15 +12,13 @@ mmml diagnose-lc-outliers --help
 ## Options
 
 ```text
-usage: mmml diagnose-lc-outliers [-h] --eval-root EVAL_ROOT
-                                 [--dataset DATASET] [--train-npz TRAIN_NPZ]
-                                 [--json-out JSON_OUT]
+usage: mmml diagnose-lc-outliers [-h] --eval-root EVAL_ROOT [--dataset DATASET]
+                                 [--train-npz TRAIN_NPZ] [--json-out JSON_OUT]
                                  [--structure-plot-out STRUCTURE_PLOT_OUT]
                                  [--structure-indices STRUCTURE_INDICES]
                                  [--structure-reference-index STRUCTURE_REFERENCE_INDEX]
                                  [--max-structures MAX_STRUCTURES]
-                                 [--plot-out PLOT_OUT]
-                                 [--plot-style PLOT_STYLE]
+                                 [--plot-out PLOT_OUT] [--plot-style PLOT_STYLE]
                                  [--spike-relative-factor SPIKE_RELATIVE_FACTOR]
                                  [--spike-jump-factor SPIKE_JUMP_FACTOR]
                                  [--test-z-threshold TEST_Z_THRESHOLD]
@@ -60,11 +58,8 @@ options:
   --top-spikes TOP_SPIKES
   -q, --quiet           Suppress tables; still writes --json-out
 
-Example:
-  mmml diagnose-lc-outliers \
-    --eval-root out/eval/learning_curve/e1000 \
-    --dataset aco \
-    --train-npz out/splits/aco/energies_forces_dipoles_train.npz
+Example: mmml diagnose-lc-outliers \ --eval-root out/eval/learning_curve/e1000 \
+--dataset aco \ --train-npz out/splits/aco/energies_forces_dipoles_train.npz
 ```
 
 

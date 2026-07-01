@@ -27,10 +27,8 @@ options:
                         Key to extract from restored checkpoint dict (default:
                         "params")
 
-CLI: export an Orbax checkpoint to a portable JSON file.
-
-Usage:
-    mmml orbax-to-json path/to/epoch-1985 -o DESdimers_params.json
+CLI: export an Orbax checkpoint to a portable JSON file. Usage: mmml orbax-to-
+json path/to/epoch-1985 -o DESdimers_params.json
 ```
 
 

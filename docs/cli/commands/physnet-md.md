@@ -13,10 +13,10 @@ mmml physnet-md --help
 
 ```text
 usage: mmml physnet-md [-h] --checkpoint CHECKPOINT (--structure STRUCTURE |
-                       --data DATA) [-o OUTPUT_DIR]
-                       [--temperature TEMPERATURE] [--timestep TIMESTEP]
-                       [--nsteps-ase NSTEPS_ASE] [--nsteps-jaxmd NSTEPS_JAXMD]
-                       [--printfreq PRINTFREQ] [--skip-jaxmd] [--n-replicas B]
+                       --data DATA) [-o OUTPUT_DIR] [--temperature TEMPERATURE]
+                       [--timestep TIMESTEP] [--nsteps-ase NSTEPS_ASE]
+                       [--nsteps-jaxmd NSTEPS_JAXMD] [--printfreq PRINTFREQ]
+                       [--skip-jaxmd] [--n-replicas B]
 
 PhysNet MD sampling with ASE and JAX-MD.
 
@@ -41,20 +41,18 @@ options:
   --printfreq PRINTFREQ
                         Print/save interval (default: 25)
   --skip-jaxmd          Skip JAX-MD (ASE only)
-  --n-replicas B        Number of independent replicas to run in parallel.
-                        ASE: ProcessPoolExecutor; JAX-MD: batched GPU. With
-                        --data, uses first B structures as initial geometries
-                        if available. (default: 1)
+  --n-replicas B        Number of independent replicas to run in parallel. ASE:
+                        ProcessPoolExecutor; JAX-MD: batched GPU. With --data,
+                        uses first B structures as initial geometries if
+                        available. (default: 1)
 
-CLI for PhysNet molecular dynamics sampling with ASE and JAX-MD.
-
-Runs NVT Langevin (ASE) and NVT Nose-Hoover (JAX-MD) using a trained PhysNet
-checkpoint as the energy/force calculator.
-
-Usage:
-    mmml physnet-md --checkpoint out/ckpts/cybz_physnet --structure molecule.xyz -o out/
-    mmml physnet-md --checkpoint out/ckpts/cybz_physnet --data splits/energies_forces_dipoles_train.npz -o out/
-    mmml physnet-md --checkpoint out/ckpts/cybz_physnet --data splits/train.npz -o out/ --n-replicas 4
+CLI for PhysNet molecular dynamics sampling with ASE and JAX-MD. Runs NVT
+Langevin (ASE) and NVT Nose-Hoover (JAX-MD) using a trained PhysNet checkpoint
+as the energy/force calculator. Usage: mmml physnet-md --checkpoint
+out/ckpts/cybz_physnet --structure molecule.xyz -o out/ mmml physnet-md
+--checkpoint out/ckpts/cybz_physnet --data
+splits/energies_forces_dipoles_train.npz -o out/ mmml physnet-md --checkpoint
+out/ckpts/cybz_physnet --data splits/train.npz -o out/ --n-replicas 4
 ```
 
 

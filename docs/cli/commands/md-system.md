@@ -17,12 +17,10 @@ usage: mmml md-system [-h]
                       [--backend {auto,ase,jaxmd,pycharmm}]
                       [--checkpoint CHECKPOINT] [--output-dir OUTPUT_DIR]
                       [--job-name JOB_NAME] [--jobs-dir JOBS_DIR]
-                      [--template-pdb TEMPLATE_PDB]
-                      [--n-molecules N_MOLECULES] [--composition COMPOSITION]
-                      [--spacing SPACING] [--ps PS] [--dt-fs DT_FS]
-                      [--traj-chunk-frames TRAJ_CHUNK_FRAMES]
-                      [--traj-export-molecular-wrap]
-                      [--temperature TEMPERATURE]
+                      [--template-pdb TEMPLATE_PDB] [--n-molecules N_MOLECULES]
+                      [--composition COMPOSITION] [--spacing SPACING] [--ps PS]
+                      [--dt-fs DT_FS] [--traj-chunk-frames TRAJ_CHUNK_FRAMES]
+                      [--traj-export-molecular-wrap] [--temperature TEMPERATURE]
                       [--nvt-integrator {auto,nhc,langevin}]
                       [--pressure PRESSURE] [--seed SEED]
                       [--builder {gas,liquid,crystal}]
@@ -96,8 +94,8 @@ usage: mmml md-system [-h]
                       [--forces-npz-interval FORCES_NPZ_INTERVAL]
                       [--no-scale-mini-nstep] [--no-scale-echeck]
                       [--allow-high-grms] [--no-scale-max-grms]
-                      [--max-grms-before-dyn MAX_GRMS_BEFORE_DYN]
-                      [--test-first] [--test-first-tol TEST_FIRST_TOL]
+                      [--max-grms-before-dyn MAX_GRMS_BEFORE_DYN] [--test-first]
+                      [--test-first-tol TEST_FIRST_TOL]
                       [--test-first-step TEST_FIRST_STEP]
                       [--test-first-resids TEST_FIRST_RESIDS]
                       [--test-first-charmm] [--test-first-update-nbonds]
@@ -193,16 +191,15 @@ usage: mmml md-system [-h]
                       [--mlpot-mm-internal-scale W]
                       [--mm-nonbond-mode {jax_mic,periodic_external}]
                       [--lr-solver {auto,mic,scafacos,jax_pme,nvalchemiops_pme}]
-                      [--jax-pme-method {ewald,pme,p3m}]
-                      [--jax-pme-sr-cutoff A]
+                      [--jax-pme-method {ewald,pme,p3m}] [--jax-pme-sr-cutoff A]
                       [--jax-pme-dispersion | --no-jax-pme-dispersion]
                       [--scafacos-method SCAFACOS_METHOD]
                       [--periodic-charmm-vdw | --no-periodic-charmm-vdw]
                       [--include-mm | --no-include-mm] [--residue RESIDUE]
                       [--skip-jit-warmup]
                       [--auto-warmup-mlpot-jax | --no-auto-warmup-mlpot-jax]
-                      [--resume] [--config CONFIG] [--job-id JOB_ID]
-                      [--run-all] [--resume-campaign]
+                      [--resume] [--config CONFIG] [--job-id JOB_ID] [--run-all]
+                      [--resume-campaign]
                       [--campaign-output-dir CAMPAIGN_OUTPUT_DIR]
                       [--continue-from CONTINUE_FROM]
                       [--continue-from-frame CONTINUE_FROM_FRAME]
@@ -219,8 +216,7 @@ usage: mmml md-system [-h]
                       [--jaxmd-pbc-minimize-steps JAXMD_PBC_MINIMIZE_STEPS]
                       [--jax-md-update-interval JAX_MD_UPDATE_INTERVAL]
                       [--jax-md-skin-distance JAX_MD_SKIN_DISTANCE]
-                      [--evaluate-npz PATH]
-                      [--evaluate-output EVALUATE_OUTPUT]
+                      [--evaluate-npz PATH] [--evaluate-output EVALUATE_OUTPUT]
                       [--evaluate-frame EVALUATE_FRAME]
                       [--evaluate-forces-npz PATH] [--evaluate-traj PATH]
                       [--no-evaluate-save-artifacts]
@@ -251,21 +247,21 @@ options:
   -h, --help            show this help message and exit
   --setup {free_nve,free_nvt,pbc_nve,pbc_nvt,pbc_npt,lambda_ti,pycharmm_minimize,pycharmm_full,all}
                         Simulation setup preset. lambda_ti: alchemical TI with
-                        CHARMM+MMML minimization per λ window (--lambda-md-
-                        mode, --backend ase|jaxmd); mmml lambda-mbar
-                        afterward. pycharmm_minimize: CHARMM MLpot SD only
-                        (--backend pycharmm). pycharmm_full: mini → heat → NVE
-                        → equi → prod (--backend pycharmm). pbc_* with
-                        --backend pycharmm: same staged pipeline with CHARMM
+                        CHARMM+MMML minimization per λ window (--lambda-md-mode,
+                        --backend ase|jaxmd); mmml lambda-mbar afterward.
+                        pycharmm_minimize: CHARMM MLpot SD only (--backend
+                        pycharmm). pycharmm_full: mini → heat → NVE → equi →
+                        prod (--backend pycharmm). pbc_* with --backend
+                        pycharmm: same staged pipeline with CHARMM
                         crystal/IMAGE. free_nve/free_nvt with --backend
                         pycharmm: mini + NVE or mini + heat.
   --backend {auto,ase,jaxmd,pycharmm}
                         MD engine: ase runs md_pbc_suite.ase; jaxmd runs
-                        md_pbc_suite.jaxmd; pycharmm runs CHARMM MLpot
-                        (vacuum, non-PBC: SD + NVE/NVT). auto uses ASE for
-                        vacuum (free_*) and fixed-volume PBC, JAX-MD for NPT.
-                        Use jaxmd with --setup free_nve or free_nvt for open-
-                        boundary JAX-MD.
+                        md_pbc_suite.jaxmd; pycharmm runs CHARMM MLpot (vacuum,
+                        non-PBC: SD + NVE/NVT). auto uses ASE for vacuum
+                        (free_*) and fixed-volume PBC, JAX-MD for NPT. Use jaxmd
+                        with --setup free_nve or free_nvt for open-boundary JAX-
+                        MD.
   --checkpoint CHECKPOINT
                         Model checkpoint path.
   --output-dir OUTPUT_DIR
@@ -281,11 +277,10 @@ options:
   --n-molecules N_MOLECULES
                         Number of molecules for single-residue runs.
   --composition COMPOSITION
-                        Residue composition: comma-separated RES:N entries,
-                        e.g. MEOH:5,TIP3:5. A bare RES (no ':N') implies a
-                        single copy (N=1); when this option is set,
-                        --n-molecules is not passed to the backend (use DCM:10
-                        for ten DCM).
+                        Residue composition: comma-separated RES:N entries, e.g.
+                        MEOH:5,TIP3:5. A bare RES (no ':N') implies a single
+                        copy (N=1); when this option is set, --n-molecules is
+                        not passed to the backend (use DCM:10 for ten DCM).
   --spacing SPACING     Target minimum random COM spacing in Angstrom.
   --ps PS               Simulation length in ps.
   --dt-fs DT_FS         Timestep in fs.
@@ -293,8 +288,8 @@ options:
                         Split trajectory output into multi-file chunks with at
                         most this many frames (0 = single file).
   --traj-export-molecular-wrap
-                        JAX-MD only: molecular COM wrap when writing
-                        HDF5/.traj (slower).
+                        JAX-MD only: molecular COM wrap when writing HDF5/.traj
+                        (slower).
   --temperature TEMPERATURE
                         Target temperature in K (NVT/NPT).
   --nvt-integrator {auto,nhc,langevin}
@@ -311,8 +306,8 @@ options:
                         Abort if atoms from different monomers get closer than
                         this distance in Angstrom (<=0 disables).
   --packmol, --no-packmol
-                        Explicitly pack --composition with Packmol. Default
-                        uses grid placement plus CHARMM refinement.
+                        Explicitly pack --composition with Packmol. Default uses
+                        grid placement plus CHARMM refinement.
   --packmol-placement {cube,sphere}
                         Initial placement constraint: cube (default) or sphere
                         (--packmol-radius).
@@ -333,8 +328,8 @@ options:
                         pycharmm: Packmol cache root (default: output-
                         dir/.packmol_cache or MMML_PACKMOL_CACHE).
   --save-run-state      pycharmm: after staged MD, save positions/velocities +
-                        metadata (Orbax if installed, else NPZ; PhysNet stays
-                        in --checkpoint).
+                        metadata (Orbax if installed, else NPZ; PhysNet stays in
+                        --checkpoint).
   --run-state-dir RUN_STATE_DIR
                         pycharmm: run-state output directory (default: output-
                         dir/run_state).
@@ -345,29 +340,28 @@ options:
                         pycharmm: save overlap run-state sidecar every N
                         successful chunks (0=off).
   --flat-bottom-radius Å
-                        Harmonic flat-bottom on system COM: V=0 inside radius
-                        R, V=k(|d|-R)^2 outside. Independent of --packmol-
-                        radius. Vacuum: center at origin; PBC: MIC to box
-                        center.
+                        Harmonic flat-bottom on system COM: V=0 inside radius R,
+                        V=k(|d|-R)^2 outside. Independent of --packmol-radius.
+                        Vacuum: center at origin; PBC: MIC to box center.
   --flat-bottom-k eV/Å²
                         Flat-bottom force constant when COM is outside --flat-
                         bottom-radius (default: 1.0).
   --flat-bottom-selection FLAT_BOTTOM_SELECTION
-                        pycharmm: CHARMM atom selection for MMFP wall
-                        (default: all).
+                        pycharmm: CHARMM atom selection for MMFP wall (default:
+                        all).
   --flat-bottom-mode {system,monomer}
                         Flat-bottom anchor: system = one restraint on mass-
                         weighted cluster COM; monomer = sum of harmonic
                         restraints on each monomer COM (same R and k).
   --min-com-restraint-distance Å
                         Pairwise inter-monomer COM lower wall. Adds
-                        0.5*k*(r_min-r)^2 when COM distance r < r_min
-                        (default: disabled).
+                        0.5*k*(r_min-r)^2 when COM distance r < r_min (default:
+                        disabled).
   --min-com-restraint-k eV/Å²
                         Force constant for --min-com-restraint-distance
                         (default: 1.0).
-  --extra-args ...      Additional raw args forwarded to the underlying
-                        script; put this option last.
+  --extra-args ...      Additional raw args forwarded to the underlying script;
+                        put this option last.
   --fix-resids FIX_RESIDS
                         pycharmm: monomers held in SD pass 2 (comma-separated
                         1-based resids; default: none — use e.g. 1 or 1,3 to
@@ -377,11 +371,10 @@ options:
                         separated)
   --no-fix              pycharmm: skip constrained SD pass 2
   --mini-nstep MINI_NSTEP
-                        pycharmm: SD steps per minimization pass before
-                        dynamics
+                        pycharmm: SD steps per minimization pass before dynamics
   --no-pre-minimize     pycharmm: skip SD minimization before dynamics
-  --echeck ECHECK       pycharmm: CHARMM ECHECK tolerance (kcal/mol); use
-                        --no-echeck to disable
+  --echeck ECHECK       pycharmm: CHARMM ECHECK tolerance (kcal/mol); use --no-
+                        echeck to disable
   --no-echeck           pycharmm: disable CHARMM ECHECK early stop
   --no-echeck-heat      pycharmm: disable CHARMM ECHECK during the heat stage
                         only (equi/prod still use --echeck)
@@ -391,8 +384,8 @@ options:
   --nprint NPRINT       pycharmm: print SD minimization energy every N steps
                         (default: 50)
   --dyn-nprint DYN_NPRINT
-                        pycharmm: print dynamics energy every N steps
-                        (default: 500)
+                        pycharmm: print dynamics energy every N steps (default:
+                        500)
   --dyn-iprfrq DYN_IPRFRQ
                         pycharmm: detailed dynamics status every N steps
                         (default: 2000)
@@ -410,55 +403,52 @@ options:
                         --temperature; DCM:9 stability often uses 240.
   --heat-hoover-tmass M
                         pycharmm Hoover heat only: thermostat mass tmass
-                        (kcal·mol⁻¹·ps²). Default clamps PSF tmass to
-                        400–1200. Lower = stronger T coupling.
+                        (kcal·mol⁻¹·ps²). Default clamps PSF tmass to 400–1200.
+                        Lower = stronger T coupling.
   --nve-boltzmann-temp K
                         pycharmm: Boltzmann velocity temperature before NVE
-                        after mini. Default 0.2×--temperature; use 50–100 K
-                        for a gentler start than 300 K.
+                        after mini. Default 0.2×--temperature; use 50–100 K for
+                        a gentler start than 300 K.
   --heat-comp-damp, --no-heat-comp-damp
                         pycharmm: experimental COMP force copy before heat
                         (default: off).
   --heat-comp-hydrogen-only, --no-heat-comp-hydrogen-only
                         pycharmm: with --heat-comp-damp, select high-|F|
-                        hydrogens only (default). --no-heat-comp-hydrogen-only
-                        = all atom types.
+                        hydrogens only (default). --no-heat-comp-hydrogen-only =
+                        all atom types.
   --heat-comp-force-min KCAL
                         pycharmm: |F| threshold for heat COMP selection
                         (kcal/mol/Å).
   --heat-comp-force-scale HEAT_COMP_FORCE_SCALE
-                        pycharmm: scale for forces copied into COMP during
-                        heat.
+                        pycharmm: scale for forces copied into COMP during heat.
   --skip-energy-show    pycharmm: skip CHARMM energy.show() (MPI/cluster
                         segfault guard)
   --show-energy, --no-show-energy
                         pycharmm: print CHARMM energy tables (off by default)
   --quiet               pycharmm: reduce CHARMM console output
-  --verbose             Print CHARMM BLOCK Rich summaries and extra MLpot
-                        setup detail
+  --verbose             Print CHARMM BLOCK Rich summaries and extra MLpot setup
+                        detail
   --dcd-nsavc DCD_NSAVC
                         pycharmm: DCD frame every N integration/SD steps
-  --dcd-interval-ps PS  pycharmm: DCD save interval in ps (overrides --dcd-
-                        nsavc when set)
+  --dcd-interval-ps PS  pycharmm: DCD save interval in ps (overrides --dcd-nsavc
+                        when set)
   --dcd-max-frames N    pycharmm: cap DCD output to ~N frames per stage when
                         --dcd-interval-ps is unset (0 = no cap)
-  --save-forces-npz     pycharmm: write <output-dir>/forces.npz during
-                        dynamics
+  --save-forces-npz     pycharmm: write <output-dir>/forces.npz during dynamics
   --forces-npz-interval FORCES_NPZ_INTERVAL
                         pycharmm: force NPZ save every N steps (default: 1)
   --no-scale-mini-nstep
                         pycharmm: do not auto-increase --mini-nstep for large
                         clusters
-  --no-scale-echeck     pycharmm: do not auto-loosen --echeck for large
-                        clusters (default scales with N monomers/atoms)
+  --no-scale-echeck     pycharmm: do not auto-loosen --echeck for large clusters
+                        (default scales with N monomers/atoms)
   --allow-high-grms     pycharmm: start dynamics even if post-min GRMS is high
-  --no-scale-max-grms   pycharmm: use --max-grms-before-dyn exactly (skip
-                        size-aware scaling from per-monomer hybrid GRMS tails)
+  --no-scale-max-grms   pycharmm: use --max-grms-before-dyn exactly (skip size-
+                        aware scaling from per-monomer hybrid GRMS tails)
   --max-grms-before-dyn MAX_GRMS_BEFORE_DYN
                         pycharmm: abort if post-min GRMS exceeds this
                         (kcal/mol/Å)
-  --test-first          pycharmm: CHARMM TEST FIRSt after MLpot SD
-                        minimization
+  --test-first          pycharmm: CHARMM TEST FIRSt after MLpot SD minimization
   --test-first-tol TEST_FIRST_TOL
                         pycharmm: TEST FIRSt tolerance (default: 0.005)
   --test-first-step TEST_FIRST_STEP
@@ -470,47 +460,45 @@ options:
   --test-first-charmm   pycharmm: also run CHARMM TEST FIRSt (ANALYTIC omits
                         MLpot USER energy)
   --test-first-update-nbonds
-                        pycharmm: UPDATE nonbond lists before CHARMM TEST
-                        FIRSt
+                        pycharmm: UPDATE nonbond lists before CHARMM TEST FIRSt
   --ml-batch-size N     pycharmm: chunk PhysNet batches (auto: 256 on GPU / 64
                         on CPU for n>=40; or MMML_MLPOT_ML_BATCH_SIZE). DCM:90
                         try 256-512 on one GPU.
   --ml-gpu-count N      pycharmm: parallel PhysNet chunks on N local GPUs
                         (default 1; or MMML_MLPOT_N_GPUS). Set
                         CUDA_VISIBLE_DEVICES to the GPU ids to use.
-  --max-pairs N         PBC: cell-list MM pair buffer size (auto from N and
-                        box when unset). Increase if you see 'MM Pair List
+  --max-pairs N         PBC: cell-list MM pair buffer size (auto from N and box
+                        when unset). Increase if you see 'MM Pair List
                         Truncated' during MLpot mini/MD.
   --ml-spatial-mpi      pycharmm: per-rank spatial ML decomposition when MPI
-                        size>1 (PBC only; or MMML_MLPOT_SPATIAL_MPI=1). Use
-                        with MMML_MPI_NP>1 and --ml-gpu-count 1.
+                        size>1 (PBC only; or MMML_MLPOT_SPATIAL_MPI=1). Use with
+                        MMML_MPI_NP>1 and --ml-gpu-count 1.
   --charmm-omp-threads N
-                        pycharmm: set MMML_CHARMM_OMP_THREADS before MPI-
-                        linked CHARMM bootstrap (default 1; CPU performance
-                        experiment knob).
+                        pycharmm: set MMML_CHARMM_OMP_THREADS before MPI-linked
+                        CHARMM bootstrap (default 1; CPU performance experiment
+                        knob).
   --ml-compute-dtype {float32,float64}
                         JAX dtype for ML/MM hybrid interior (default: float32,
                         or MMML_ML_DTYPE / JAX_ENABLE_X64=1 → float64). CHARMM
                         I/O stays float64.
   --ml-max-active-dimers N
-                        pycharmm: sparse ML dimer slot cap per step (PBC
-                        default max(1000, 6*n_monomers); free-space default
-                        all unique dimers). Run
-                        scripts/validate_mlpot_sparse_dimers.py to check.
+                        pycharmm: sparse ML dimer slot cap per step (PBC default
+                        max(1000, 6*n_monomers); free-space default all unique
+                        dimers). Run scripts/validate_mlpot_sparse_dimers.py to
+                        check.
   --md-stages MD_STAGES
                         pycharmm: comma-separated mini,heat,nve,equi,prod
                         (default from --setup)
   --md-stage {mini,heat,nve,equi,prod}
                         pycharmm: run one stage only (implies prior artifacts
                         under --output-dir)
-  --tag TAG             pycharmm: artifact tag for staged outputs (default:
-                        from composition)
+  --tag TAG             pycharmm: artifact tag for staged outputs (default: from
+                        composition)
   --ps-heat PS_HEAT     pycharmm: heating length in ps (default: 10)
-  --charmm-mm-pretreat  pycharmm: CGENFF minimize + CHARMM heat/equi/prod
-                        before MLpot (no PhysNet); see --charmm-mm-pretreat-
-                        ps-* and --charmm-mm-pretreat-heat-nstep. Skipped when
-                        continuing from handoff unless --charmm-mm-pretreat-
-                        on-handoff
+  --charmm-mm-pretreat  pycharmm: CGENFF minimize + CHARMM heat/equi/prod before
+                        MLpot (no PhysNet); see --charmm-mm-pretreat-ps-* and
+                        --charmm-mm-pretreat-heat-nstep. Skipped when continuing
+                        from handoff unless --charmm-mm-pretreat-on-handoff
   --charmm-mm-pretreat-on-handoff
                         pycharmm: run CHARMM MM pretreat even when
                         jaxmd/PyCHARMM handoff coords are already in memory
@@ -525,35 +513,34 @@ options:
                         pycharmm: pretreat CHARMM NPT equilibration in ps (0
                         skips; default: 0)
   --charmm-mm-pretreat-ps-prod PS
-                        pycharmm: pretreat CHARMM NPT production in ps (0
-                        skips; default: 0)
+                        pycharmm: pretreat CHARMM NPT production in ps (0 skips;
+                        default: 0)
   --charmm-mm-pretreat-mini-sd N
                         pycharmm: pretreat CHARMM SD steps (default: --charmm-
                         sd-steps)
   --charmm-mm-pretreat-mini-abnr N
-                        pycharmm: pretreat CHARMM ABNR steps (default:
-                        --charmm-abnr-steps)
+                        pycharmm: pretreat CHARMM ABNR steps (default: --charmm-
+                        abnr-steps)
   --charmm-mm-pretreat-dt-fs FS
-                        Pretreat CHARMM dynamics timestep in fs (default:
-                        1.0). Independent of MLpot --dt-fs.
+                        Pretreat CHARMM dynamics timestep in fs (default: 1.0).
+                        Independent of MLpot --dt-fs.
   --charmm-mm-pretreat-temperature K
                         Pretreat CHARMM heat/equi/prod temperature (default:
                         --temperature).
   --charmm-mm-pretreat-pressure ATM
-                        Pretreat CHARMM NPT reference pressure (default:
-                        --npt-pressure or --pressure).
+                        Pretreat CHARMM NPT reference pressure (default: --npt-
+                        pressure or --pressure).
   --charmm-mm-pretreat-echeck KCAL
                         ECHECK for pretreat CPT equi/prod and mini box equil
-                        (kcal/mol). Default: disabled. Use 0 or a negative
-                        value to keep ECHECK off.
+                        (kcal/mol). Default: disabled. Use 0 or a negative value
+                        to keep ECHECK off.
   --charmm-mm-pretreat-inbfrq N
                         Pretreat CHARMM nonbond list rebuild cadence (inbfrq).
-                        Default scales with --charmm-mm-pretreat-dt-fs (400 at
-                        2 fs vs 50 for MLpot).
+                        Default scales with --charmm-mm-pretreat-dt-fs (400 at 2
+                        fs vs 50 for MLpot).
   --charmm-mm-pretreat-imgfrq N
                         Pretreat PBC image/HB list cadence
-                        (imgfrq/ihbfrq/ilbfrq). Default matches pretreat
-                        inbfrq.
+                        (imgfrq/ihbfrq/ilbfrq). Default matches pretreat inbfrq.
   --charmm-mm-pretreat-ixtfrq N
                         Pretreat crystal transform cadence (ixtfrq; default
                         scales with pretreat dt).
@@ -576,8 +563,7 @@ options:
                         pycharmm: split NPT equilibration into chained restart
                         segments
   --n-prod-segments N_PROD_SEGMENTS
-                        pycharmm: split production into chained restart
-                        segments
+                        pycharmm: split production into chained restart segments
   --bonded-mm-mini, --no-bonded-mm-mini
                         pycharmm: bonded-only SD if MM bonded strain exceeds
                         post-MM-pre-min baseline (default: on; heat always
@@ -589,8 +575,8 @@ options:
                         pycharmm: bonded recovery mini steps (default: 50)
   --bonded-recovery-backend {auto,jax,charmm}
                         pycharmm: bonded recovery minimizer — JAX FIRE without
-                        MLpot detach (auto tries JAX first), CHARMM SD, or
-                        auto (default: auto)
+                        MLpot detach (auto tries JAX first), CHARMM SD, or auto
+                        (default: auto)
   --bonded-mm-mini-always
                         pycharmm: bonded SD after every --bonded-mm-mini-after
                         stage (ignore strain margins)
@@ -598,11 +584,10 @@ options:
                         pycharmm: deprecated alias for --bonded-mm-grms-margin
                         (default: 0)
   --bonded-mm-grms-margin BONDED_MM_GRMS_MARGIN
-                        pycharmm: kcal/mol/Å above baseline GRMS before
-                        recovery
+                        pycharmm: kcal/mol/Å above baseline GRMS before recovery
   --bonded-mm-internal-energy-margin BONDED_MM_INTERNAL_ENERGY_MARGIN
-                        pycharmm: kcal/mol above baseline bonded internal
-                        before recovery (0=off)
+                        pycharmm: kcal/mol above baseline bonded internal before
+                        recovery (0=off)
   --bonded-mm-angl-margin BONDED_MM_ANGL_MARGIN
                         pycharmm: kcal/mol above baseline ANGL before recovery
                         (0=off)
@@ -619,19 +604,19 @@ options:
                         pycharmm: CHARMM .res restart for first dynamics stage
   --from-psf FROM_PSF   pycharmm: load PSF instead of rebuilding cluster
   --from-crd FROM_CRD   pycharmm: load CRD with --from-psf
-  --skip-cluster-build  pycharmm: skip Packmol/IC; use --from-psf/--from-crd
-                        or prior mini artifacts
-  --skip-if-crd-exists  pycharmm: skip MLpot SD when mini CRD already exists
-                        in --output-dir
+  --skip-cluster-build  pycharmm: skip Packmol/IC; use --from-psf/--from-crd or
+                        prior mini artifacts
+  --skip-if-crd-exists  pycharmm: skip MLpot SD when mini CRD already exists in
+                        --output-dir
   --no-save-vmd-topology
                         pycharmm: skip cluster_for_vmd PSF/PDB before MLpot
                         registration
   --free-space          pycharmm: force vacuum (no PBC). free_nve/free_nvt
                         setups are vacuum by default; use to override when
                         --box-size is also set.
-  --mlpot-pbc           pycharmm: enable ML MIC / periodic dimer lists
-                        (default for pbc_* setups). With free_* + --box-size,
-                        CHARMM uses loose PBC unless this flag is set.
+  --mlpot-pbc           pycharmm: enable ML MIC / periodic dimer lists (default
+                        for pbc_* setups). With free_* + --box-size, CHARMM uses
+                        loose PBC unless this flag is set.
   --dyn-inbfrq DYN_INBFRQ
                         pycharmm: CHARMM inbfrq for dynamics (-1=heuristic,
                         50=vacuum default)
@@ -660,17 +645,16 @@ options:
                         ASE FIRE steps during calculator pre-minimize / rescue
                         (default 200).
   --fire-min-maxstep FIRE_MIN_MAXSTEP
-                        ASE FIRE max atomic displacement per step in Å
-                        (default 0.2).
+                        ASE FIRE max atomic displacement per step in Å (default
+                        0.2).
   --rescue-fire-fmax RESCUE_FIRE_FMAX
-                        FIRE force convergence threshold in eV/Å for
-                        calculator rescue (default 0.05).
+                        FIRE force convergence threshold in eV/Å for calculator
+                        rescue (default 0.05).
   --quiet-bfgs, --no-quiet-bfgs
-                        Suppress ASE BFGS/FIRE log output during calculator
-                        pre-minimize.
+                        Suppress ASE BFGS/FIRE log output during calculator pre-
+                        minimize.
   --charmm-pre-minimize, --no-charmm-pre-minimize
-                        lambda_ti: CHARMM SD/ABNR before MMML BFGS (default
-                        on).
+                        lambda_ti: CHARMM SD/ABNR before MMML BFGS (default on).
   --calculator-pre-minimize, --no-calculator-pre-minimize
                         lambda_ti: MMML-calculator BFGS after CHARMM (default
                         on).
@@ -708,30 +692,29 @@ options:
                         placement (Å).
   --no-fix-com          lambda_ti: disable ASE FixCom (COM position can drift
                         during MD).
-  --no-stationary       lambda_ti: skip Stationary/ZeroRotation on velocity
-                        init (with --no-fix-com, COM can translate).
+  --no-stationary       lambda_ti: skip Stationary/ZeroRotation on velocity init
+                        (with --no-fix-com, COM can translate).
   --ml-cutoff ML_CUTOFF
                         lambda_ti: ML cutoff (Å).
   --ml-switch-width, --ml-cutoff-distance ML_SWITCH_WIDTH
                         COM-distance width (Å) of the ML→MM handoff for
-                        pycharmm/MMML; ML is fully on below mm_switch_on -
-                        width and reaches zero at mm_switch_on (default: 1.5).
-                        Does not affect lambda_ti (see --ml-cutoff).
+                        pycharmm/MMML; ML is fully on below mm_switch_on - width
+                        and reaches zero at mm_switch_on (default: 1.5). Does
+                        not affect lambda_ti (see --ml-cutoff).
   --mm-switch-on MM_SWITCH_ON
-                        COM handoff distance (Å); ML→0 / MM→1 at this
-                        separation (default: 8).
+                        COM handoff distance (Å); ML→0 / MM→1 at this separation
+                        (default: 8).
   --mm-cutoff, --mm-switch-width MM_SWITCH_WIDTH
                         COM-distance width (Å) of the MM outer tail past
                         mm_switch_on (default: 5).
   --mlpot-mm-internal-scale W
-                        pycharmm: scale CGENFF BOND/ANGL/DIHE on ML atoms
-                        during MLpot BLOCK (0=off, 0.1=10% internal). ELEC/VDW
-                        stay off in jax_mic mode; periodic_external keeps
-                        CHARMM VDW on.
+                        pycharmm: scale CGENFF BOND/ANGL/DIHE on ML atoms during
+                        MLpot BLOCK (0=off, 0.1=10% internal). ELEC/VDW stay off
+                        in jax_mic mode; periodic_external keeps CHARMM VDW on.
   --mm-nonbond-mode {jax_mic,periodic_external}
                         pycharmm MLpot MM nonbonds: jax_mic (default) or
-                        periodic_external (external Coulomb + CHARMM IMAGE
-                        VDW; requires pbc_*).
+                        periodic_external (external Coulomb + CHARMM IMAGE VDW;
+                        requires pbc_*).
   --lr-solver {auto,mic,scafacos,jax_pme,nvalchemiops_pme}
                         Long-range Coulomb backend. jax_mic (default):
                         mic=truncated MIC in the pair loop; jax_pme=jax-pme
@@ -745,9 +728,8 @@ options:
                         jax-pme real-space cutoff in Å (default 6.0).
   --jax-pme-dispersion, --no-jax-pme-dispersion
                         pycharmm jax_mic + jax_pme: include reciprocal r^-6 LJ
-                        dispersion (default: env MMML_JAX_PME_DISPERSION or
-                        on). Use --no-jax-pme-dispersion for Coulomb-only long
-                        range.
+                        dispersion (default: env MMML_JAX_PME_DISPERSION or on).
+                        Use --no-jax-pme-dispersion for Coulomb-only long range.
   --scafacos-method SCAFACOS_METHOD
                         ScaFaCoS fcs_init method when --lr-solver=scafacos
                         (default: ewald).
@@ -756,46 +738,45 @@ options:
                         --no-periodic-charmm-vdw disables CHARMM LJ (ScaFaCoS
                         Coulomb only).
   --include-mm, --no-include-mm
-                        Include switched JAX MM pairs (LJ + MIC Coulomb) in
-                        the hybrid calculator. --no-include-mm evaluates
-                        PhysNet ML only (doMM=False); cutoff keys are ignored
-                        for MM pair lists.
+                        Include switched JAX MM pairs (LJ + MIC Coulomb) in the
+                        hybrid calculator. --no-include-mm evaluates PhysNet ML
+                        only (doMM=False); cutoff keys are ignored for MM pair
+                        lists.
   --residue RESIDUE     Single-residue name when --composition is not set
                         (ignored when --composition is set; lambda_ti default
                         MEOH).
-  --skip-jit-warmup     Skip JIT/XLA warmup. jaxmd/ase: generic XLA GPU
-                        compile and pre-MD hybrid MMML eval; lambda_ti: skip
-                        first MMML energy eval per window; pycharmm: skip
-                        serial auto warmup-mlpot-jax before CHARMM MLpot.
+  --skip-jit-warmup     Skip JIT/XLA warmup. jaxmd/ase: generic XLA GPU compile
+                        and pre-MD hybrid MMML eval; lambda_ti: skip first MMML
+                        energy eval per window; pycharmm: skip serial auto
+                        warmup-mlpot-jax before CHARMM MLpot.
   --auto-warmup-mlpot-jax, --no-auto-warmup-mlpot-jax
-                        pycharmm: run serial warmup-mlpot-jax before
-                        MPI/CHARMM to populate JAX_COMPILATION_CACHE_DIR
-                        (default on). Also disabled by --skip-jit-warmup or
+                        pycharmm: run serial warmup-mlpot-jax before MPI/CHARMM
+                        to populate JAX_COMPILATION_CACHE_DIR (default on). Also
+                        disabled by --skip-jit-warmup or
                         MMML_NO_AUTO_WARMUP_MLPOT_JAX=1.
   --resume              Resume existing work instead of starting in new output
-                        directories. Campaign (--run-all): reuse output dirs
-                        and skip jobs with valid handoffs. PyCHARMM retry:
-                        when re-running a failed leg in the same output_dir,
-                        continues from the latest .res checkpoint. lambda_ti:
-                        skip complete production trajectories; redo partial
-                        prod.traj files.
-  --config CONFIG       YAML file with md-system options or a campaign
-                        (defaults + runs/jobs).
+                        directories. Campaign (--run-all): reuse output dirs and
+                        skip jobs with valid handoffs. PyCHARMM retry: when re-
+                        running a failed leg in the same output_dir, continues
+                        from the latest .res checkpoint. lambda_ti: skip
+                        complete production trajectories; redo partial prod.traj
+                        files.
+  --config CONFIG       YAML file with md-system options or a campaign (defaults
+                        + runs/jobs).
   --job-id JOB_ID       Run one job from a campaign config (--config); honors
                         depends_on chain.
-  --run-all             Run all jobs from a campaign config in dependency
-                        order (in-process). If the campaign output dir already
-                        exists, a new suffixed directory is used unless
-                        --resume is set.
-  --resume-campaign     Alias for --resume when using --run-all or campaign
-                        YAML configs.
+  --run-all             Run all jobs from a campaign config in dependency order
+                        (in-process). If the campaign output dir already exists,
+                        a new suffixed directory is used unless --resume is set.
+  --resume-campaign     Alias for --resume when using --run-all or campaign YAML
+                        configs.
   --campaign-output-dir CAMPAIGN_OUTPUT_DIR
                         Directory for campaign_plan.json and
-                        campaign_summary.json. With --run-all, an existing
-                        path gets a UUID suffix unless --resume is set.
+                        campaign_summary.json. With --run-all, an existing path
+                        gets a UUID suffix unless --resume is set.
   --continue-from CONTINUE_FROM
-                        Resume from handoff path (.res, .h5, .traj,
-                        run_state/, state.npz).
+                        Resume from handoff path (.res, .h5, .traj, run_state/,
+                        state.npz).
   --continue-from-frame CONTINUE_FROM_FRAME
                         Frame index for .h5/.traj continue-from (default: -1
                         last).
@@ -811,27 +792,27 @@ options:
                         Run pre-minimization even when continuing from a
                         handoff.
   --handoff-quality-gate, --no-handoff-quality-gate
-                        When continuing from handoff, evaluate initial MMML
-                        |F| and optionally run pre-minimization if above
-                        --handoff-quality-fmax-eVA (default: off).
+                        When continuing from handoff, evaluate initial MMML |F|
+                        and optionally run pre-minimization if above --handoff-
+                        quality-fmax-eVA (default: off).
   --handoff-quality-fmax-eVA HANDOFF_QUALITY_FMAX_EVA
                         |F| threshold (eV/Å) for --handoff-quality-gate
                         (default: 1.0).
   --handoff-quality-action {minimize,warn,error}
-                        Action when quality gate threshold is exceeded
-                        (default: minimize).
+                        Action when quality gate threshold is exceeded (default:
+                        minimize).
   --handoff-velocity-remove-drift, --no-handoff-velocity-remove-drift
-                        Remove net momentum and rotation from handoff
-                        velocities before MD (default: on).
+                        Remove net momentum and rotation from handoff velocities
+                        before MD (default: on).
   --handoff-require-cell, --no-handoff-require-cell
                         Require periodic cell in handoff for PBC continuation
                         (default: off).
   --jaxmd-minimize-steps JAXMD_MINIMIZE_STEPS
-                        FIRE minimization steps in JAX-MD runner before
-                        dynamics (default: 200).
-  --jaxmd-pbc-minimize-steps JAXMD_PBC_MINIMIZE_STEPS
-                        PBC-aware FIRE steps after first minimization
+                        FIRE minimization steps in JAX-MD runner before dynamics
                         (default: 200).
+  --jaxmd-pbc-minimize-steps JAXMD_PBC_MINIMIZE_STEPS
+                        PBC-aware FIRE steps after first minimization (default:
+                        200).
   --jax-md-update-interval JAX_MD_UPDATE_INTERVAL
                         JAX-MD/ASE PBC MM neighbor-list refresh interval in MD
                         steps or calculator calls (default: 1, conservative).
@@ -845,25 +826,24 @@ options:
                         backend calculator, and write energy/forces to
                         evaluate.json (no dynamics).
   --evaluate-output EVALUATE_OUTPUT
-                        JSON path for --evaluate-npz results (default:
-                        <output-dir>/evaluate.json).
+                        JSON path for --evaluate-npz results (default: <output-
+                        dir>/evaluate.json).
   --evaluate-frame EVALUATE_FRAME
-                        Frame index when --evaluate-npz uses trajectory keys
-                        R/Z (default: 0).
+                        Frame index when --evaluate-npz uses trajectory keys R/Z
+                        (default: 0).
   --evaluate-forces-npz PATH
-                        Trajectory-style NPZ output with R, F, E, Z, N
-                        (default: <output-dir>/evaluate.npz).
+                        Trajectory-style NPZ output with R, F, E, Z, N (default:
+                        <output-dir>/evaluate.npz).
   --evaluate-traj PATH  Extended XYZ with attached energy/forces for ASE/Ovito
                         (default: <output-dir>/evaluate.extxyz).
   --no-evaluate-save-artifacts
                         Do not write evaluate.npz / evaluate.extxyz alongside
                         evaluate.json.
   --evaluate-reference-npz PATH
-                        MP2/QM reference trajectory NPZ (keys R, E, optional
-                        F) for on-the-fly comparison; writes
-                        evaluate_compare.json. With --max-frames > 1,
-                        geometries are taken from this file and a multi-frame
-                        evaluate.extxyz is written.
+                        MP2/QM reference trajectory NPZ (keys R, E, optional F)
+                        for on-the-fly comparison; writes evaluate_compare.json.
+                        With --max-frames > 1, geometries are taken from this
+                        file and a multi-frame evaluate.extxyz is written.
   --evaluate-reference-frame EVALUATE_REFERENCE_FRAME
                         Reference NPZ frame for comparison (default: same as
                         --evaluate-frame).
@@ -893,9 +873,9 @@ options:
   --optimize-cutoffs    Grid-search ML/MM handoff cutoffs against a reference
                         trajectory NPZ (requires --reference-npz and
                         --composition). ASE backend only.
-  --reference-npz PATH  Trajectory NPZ with keys R (n_frames, N, 3) and
-                        optional E, F, Z, N for --optimize-cutoffs (not the
-                        single-frame handoff format used by --evaluate-npz).
+  --reference-npz PATH  Trajectory NPZ with keys R (n_frames, N, 3) and optional
+                        E, F, Z, N for --optimize-cutoffs (not the single-frame
+                        handoff format used by --evaluate-npz).
   --optimize-output OPTIMIZE_OUTPUT
                         JSON path for --optimize-cutoffs results (default:
                         <output-dir>/optimize_cutoffs.json).
@@ -913,8 +893,8 @@ options:
                         Max trajectory frames to evaluate (-1 = all). Default:
                         200 for --optimize-cutoffs; 1 for --evaluate-npz with
                         --evaluate-reference-npz unless this flag is set.
-  --no-run-advice       Do not print or write next-run guidance (next_run.yaml
-                        / next_run.sh) when a job finishes or fails.
+  --no-run-advice       Do not print or write next-run guidance (next_run.yaml /
+                        next_run.sh) when a job finishes or fails.
   --no-stage-summary    Do not write stage_summary.json (campaigns).
   --mlpot-profile       Enable profiling of MLpot callbacks and JAX/XLA
                         compilation timers
@@ -922,19 +902,18 @@ options:
 PyXtal crystal placement (requires mmml[chem]):
   --pyxtal, --no-pyxtal
                         Build --composition with PyXtal (space-group crystal)
-                        instead of Packmol/grid. Requires uv sync --extra
-                        chem.
+                        instead of Packmol/grid. Requires uv sync --extra chem.
   --pyxtal-spg PYXTAL_SPG
-                        International space-group number for PyXtal
-                        from_random (default: 14).
+                        International space-group number for PyXtal from_random
+                        (default: 14).
   --pyxtal-dim {0,1,2,3}
                         PyXtal crystal dimensionality (default: 3).
   --pyxtal-factor PYXTAL_FACTOR
                         PyXtal volume factor passed to from_random (default:
                         1.0).
   --pyxtal-stoichiometry Z [Z ...]
-                        Formula units per unique species in the PyXtal unit
-                        cell (default: 2 for each; one value repeats for all
+                        Formula units per unique species in the PyXtal unit cell
+                        (default: 2 for each; one value repeats for all
                         species).
   --pyxtal-supercell NX,NY,NZ
                         Supercell expansion after PyXtal build (e.g. 2,2,2).
@@ -943,23 +922,22 @@ PyXtal crystal placement (requires mmml[chem]):
                         Maximum PyXtal from_random retries (default: 20).
   --pyxtal-trim, --no-pyxtal-trim
                         When the PyXtal supercell has more molecules than
-                        --composition, keep the first N and warn (default:
-                        on).
+                        --composition, keep the first N and warn (default: on).
   --optimize-pyxtal     Optional ASE pre-relax of the PyXtal structure before
                         CHARMM MM cluster minimize.
   --optimize-pyxtal-emt
                         Use ASE EMT for --optimize-pyxtal (smoke tests only).
 
 PBC box sizing:
-  --box-size ANG        Fixed cubic box side (Å) for Packmol cube and PBC
-                        cell. With --box-auto count, scales --composition to
-                        target ρ at this side.
+  --box-size ANG        Fixed cubic box side (Å) for Packmol cube and PBC cell.
+                        With --box-auto count, scales --composition to target ρ
+                        at this side.
   --box-auto {geometry,density,count}
                         How to choose the cubic box / molecule count:
                         geometry=span+padding (default); density=box side from
                         --composition counts and target ρ; count=scale
-                        --composition stoichiometry to target ρ in fixed
-                        --box-size.
+                        --composition stoichiometry to target ρ in fixed --box-
+                        size.
   --box-auto-count-min-molecules N
                         Minimum total molecules for --box-auto count (default:
                         1).
@@ -970,15 +948,14 @@ PBC box sizing:
                         (requires --composition).
   --bulk-density-fraction FRAC
                         Fraction of experimental bulk ρ for a single-species
-                        --composition (e.g. 0.85 for 85% of liquid DCM
-                        density).
+                        --composition (e.g. 0.85 for 85% of liquid DCM density).
   --mc-density-equalize, --no-mc-density-equalize
-                        Run default post-build MC cubic-volume equalization
-                        for PBC composition builds when a density target can
-                        be resolved (default: on).
+                        Run default post-build MC cubic-volume equalization for
+                        PBC composition builds when a density target can be
+                        resolved (default: on).
   --mc-density-target-g-cm3 RHO
-                        Target density for MC density equalization. Defaults
-                        to --target-density-g-cm3, --bulk-density-fraction, or
+                        Target density for MC density equalization. Defaults to
+                        --target-density-g-cm3, --bulk-density-fraction, or
                         known single-solvent bulk density.
   --mc-density-steps N  MC density equalization proposal count (default: 64).
   --mc-density-step-scale LOGSCALE
@@ -1018,17 +995,17 @@ PBC box sizing:
                         CRYSTAL/PBC.
   --mini-lattice-abnr-nocoords
                         With --mini-lattice-abnr-steps: optimize only the unit
-                        cell (NOCOordinates); default optimizes coordinates
-                        and box together.
+                        cell (NOCOordinates); default optimizes coordinates and
+                        box together.
   --mini-lattice-abnr-allow-fixed-box
-                        Allow --mini-lattice-abnr-steps even when --box-size
-                        is set (default: fixed --box-size skips lattice
+                        Allow --mini-lattice-abnr-steps even when --box-size is
+                        set (default: fixed --box-size skips lattice
                         minimization).
   --liquid-prep, --no-liquid-prep
                         Easy dense-liquid setup: same as --density-prep-mode
                         resilient (looser Packmol, MC density equalization,
-                        stronger CHARMM/lattice mini, mini box equil, post-
-                        mini rescue ladder when GRMS is high). For full prep +
+                        stronger CHARMM/lattice mini, mini box equil, post-mini
+                        rescue ladder when GRMS is high). For full prep +
                         dynamics recovery in one flag, prefer --cleanup.
   --density-prep-mode {off,resilient}
                         Condensed-phase box prep strategy. resilient: start
@@ -1037,21 +1014,21 @@ PBC box sizing:
                         post-mini density prep ladder when GRMS is high.
   --density-prep-ladder, --no-density-prep-ladder
                         After MLpot mini, run a multi-step density/box rescue
-                        ladder (repack, MC density, lattice ABNR, bonded MM,
-                        ASE BFGS/FIRE, MLpot SD) when GRMS exceeds --max-grms-
+                        ladder (repack, MC density, lattice ABNR, bonded MM, ASE
+                        BFGS/FIRE, MLpot SD) when GRMS exceeds --max-grms-
                         before-dyn. Default on for --density-prep-mode
                         resilient.
   --density-prep-ladder-max-rounds N
                         Maximum density prep ladder rounds (default: 3).
   --density-prep-lattice-abnr-steps N
-                        Lattice ABNR steps inside the density prep ladder
-                        (0=use --mini-lattice-abnr-steps or 100).
+                        Lattice ABNR steps inside the density prep ladder (0=use
+                        --mini-lattice-abnr-steps or 100).
   --pre-mlpot-overlap-min-distance ANG
                         Pre-MLpot geometry gate: minimum inter-monomer atom
-                        distance in Å (default: 1.0; independent of
-                        --dynamics-overlap-min-distance). Catches true cross-
-                        monomer clashes while allowing tight liquid contacts
-                        that hybrid mini relaxes.
+                        distance in Å (default: 1.0; independent of --dynamics-
+                        overlap-min-distance). Catches true cross-monomer
+                        clashes while allowing tight liquid contacts that hybrid
+                        mini relaxes.
 
 Recovery artifact folders:
   --prep-ladder-dir PREP_LADDER_DIR
@@ -1067,36 +1044,35 @@ Recovery artifact folders:
 Geometry cleanup (one-shot recovery):
   --cleanup, --no-cleanup
                         Enable the full geometry cleanup ladder: resilient
-                        liquid prep, pre-MLpot repack gate, density prep
-                        ladder, hybrid calculator pre-minimize, bonded-MM
-                        recovery, and dynamics overlap rescue (selective
-                        monomer repack when forces indicate 1–2 hot spots).
-                        Use once when a run breaks (ECHECK, overlap, high
-                        GRMS) to reach a stable restart, then re-run without
-                        --cleanup for production trajectories where time-
-                        series correlations matter. Superset of --liquid-prep;
-                        individual recovery flags remain overridable.
+                        liquid prep, pre-MLpot repack gate, density prep ladder,
+                        hybrid calculator pre-minimize, bonded-MM recovery, and
+                        dynamics overlap rescue (selective monomer repack when
+                        forces indicate 1–2 hot spots). Use once when a run
+                        breaks (ECHECK, overlap, high GRMS) to reach a stable
+                        restart, then re-run without --cleanup for production
+                        trajectories where time-series correlations matter.
+                        Superset of --liquid-prep; individual recovery flags
+                        remain overridable.
 
 Dynamics overlap guard (PyCHARMM MLpot):
   --dynamics-overlap-action {error,warn,rescue,off}
                         On inter-monomer overlap during MD: rescue=CHARMM
-                        bonded+VDW mini, then monomer repack (re-place COMs)
-                        if still overlapped (default); error=abort, warn=log
-                        only, off=disable. Also controls intra-monomer close-
-                        contact checks and max monomer extent (fly-off)
-                        recovery.
+                        bonded+VDW mini, then monomer repack (re-place COMs) if
+                        still overlapped (default); error=abort, warn=log only,
+                        off=disable. Also controls intra-monomer close-contact
+                        checks and max monomer extent (fly-off) recovery.
   --dynamics-overlap-charmm-sd-steps DYNAMICS_OVERLAP_CHARMM_SD_STEPS
                         CHARMM SD steps for overlap rescue (default: 200).
   --dynamics-overlap-charmm-abnr-steps DYNAMICS_OVERLAP_CHARMM_ABNR_STEPS
                         CHARMM ABNR steps for overlap rescue (default: 400).
   --dynamics-overlap-min-distance ANG
-                        Minimum allowed inter-monomer atom distance in Å
-                        during dynamics (default: 1.5; CHARMM close-contact
-                        warnings often appear near this).
+                        Minimum allowed inter-monomer atom distance in Å during
+                        dynamics (default: 1.5; CHARMM close-contact warnings
+                        often appear near this).
   --dynamics-intra-min-distance ANG
                         Minimum allowed nonbonded atom distance within each
-                        monomer (1–2 and 1–3 pairs excluded from PSF bonds).
-                        Set 0 to disable (default: 0.5 Å).
+                        monomer (1–2 and 1–3 pairs excluded from PSF bonds). Set
+                        0 to disable (default: 0.5 Å).
   --no-dynamics-intra-exclude-1-3
                         Intra-monomer checks: only exclude PSF 1–2 bonds, not
                         1–3 pairs.
@@ -1131,10 +1107,10 @@ Dynamics overlap guard (PyCHARMM MLpot):
                         when last-resort monomer repack spacing is derived
                         automatically (default: 0.2).
   --dynamics-max-monomer-extent ANG
-                        Maximum allowed axis-aligned monomer extent in Å
-                        during dynamics (default: 12.0, aligned with CHARMM
-                        NBONDA group limit). On violation, restore the prior
-                        segment restart and run bonded-MM SD.
+                        Maximum allowed axis-aligned monomer extent in Å during
+                        dynamics (default: 12.0, aligned with CHARMM NBONDA
+                        group limit). On violation, restore the prior segment
+                        restart and run bonded-MM SD.
   --no-dynamics-max-monomer-extent
                         Disable max monomer extent / fly-off guard.
 ```

@@ -27,7 +27,9 @@ usage: mmml warmup-mlpot-jax [-h] [--checkpoint CHECKPOINT]
                              [--allow-under-mpirun] [--dry-run] [--quiet]
                              [--verbose]
 
-Warm up MLpot PhysNet JAX compilation in serial Python (multithreaded XLA). Populates JAX_COMPILATION_CACHE_DIR for faster later runs under mpirun. Does not import PyCHARMM or call MPI.
+Warm up MLpot PhysNet JAX compilation in serial Python (multithreaded XLA).
+Populates JAX_COMPILATION_CACHE_DIR for faster later runs under mpirun. Does not
+import PyCHARMM or call MPI.
 
 options:
   -h, --help            show this help message and exit
@@ -49,17 +51,16 @@ options:
                         unique dimers when n≤4005; same as md-system --ml-max-
                         active-dimers).
   --ml-switch-width, --ml-cutoff ML_SWITCH_WIDTH
-                        COM-distance width (Å) of the ML→MM handoff. ML is
-                        fully on below mm_switch_on - width and tapers to zero
-                        at mm_switch_on (default: 1.5).
+                        COM-distance width (Å) of the ML→MM handoff. ML is fully
+                        on below mm_switch_on - width and tapers to zero at
+                        mm_switch_on (default: 1.5).
   --mm-switch-on MM_SWITCH_ON
                         COM distance (Å) where the complementary handoff ends:
-                        ML scale reaches 0 and MM scale reaches 1 (default:
-                        8).
+                        ML scale reaches 0 and MM scale reaches 1 (default: 8).
   --mm-switch-width, --mm-cutoff MM_SWITCH_WIDTH
                         COM-distance width (Å) of the MM outer tail after
-                        mm_switch_on. Switched MM reaches zero at mm_switch_on
-                        + width (default: 5).
+                        mm_switch_on. Switched MM reaches zero at mm_switch_on +
+                        width (default: 5).
   --no-complementary-handoff
                         Legacy MM window: MM starts at mm_switch_on instead of
                         filling the ML taper handoff.
@@ -74,21 +75,15 @@ options:
   --quiet
   --verbose
 
-Examples:
-  export MMML_CKPT=/path/to/DESdimers_params.json
-  mmml warmup-mlpot-jax --n-monomers 20 --ml-batch-size 128
-
-  # Match DCM:60 liquid workflow (resilient preset cutoffs + sparse dimer cap):
-  mmml warmup-mlpot-jax --checkpoint "$MMML_CKPT" --n-monomers 60 \
-    --atoms-per-monomer 5 --box-side 32 --ml-batch-size 64 --ml-gpu-count 1 \
-    --ml-max-active-dimers 1770 --mm-switch-on 6.0 --mm-switch-width 4.0 \
-    --ml-switch-width 1.0 --do-mm
-
-  # Then under MPI:
-  MMML_MPI_NP=2 MMML_MLPOT_SPATIAL_MPI=1 ./scripts/mmml-charmm-mpirun.sh md-system ...
-
-Do **not** run under mpirun (compile threads are disabled there by design).
-Clear stale launcher env if needed: unset OMPI_COMM_WORLD_SIZE PMI_SIZE PMIX_SIZE
+Examples: export MMML_CKPT=/path/to/DESdimers_params.json mmml warmup-mlpot-jax
+--n-monomers 20 --ml-batch-size 128 # Match DCM:60 liquid workflow (resilient
+preset cutoffs + sparse dimer cap): mmml warmup-mlpot-jax --checkpoint
+"$MMML_CKPT" --n-monomers 60 \ --atoms-per-monomer 5 --box-side 32 --ml-batch-
+size 64 --ml-gpu-count 1 \ --ml-max-active-dimers 1770 --mm-switch-on 6.0 --mm-
+switch-width 4.0 \ --ml-switch-width 1.0 --do-mm # Then under MPI: MMML_MPI_NP=2
+MMML_MLPOT_SPATIAL_MPI=1 ./scripts/mmml-charmm-mpirun.sh md-system ... Do
+**not** run under mpirun (compile threads are disabled there by design). Clear
+stale launcher env if needed: unset OMPI_COMM_WORLD_SIZE PMI_SIZE PMIX_SIZE
 ```
 
 

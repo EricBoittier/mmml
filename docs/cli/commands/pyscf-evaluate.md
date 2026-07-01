@@ -34,8 +34,7 @@ options:
   --no-gradient         Skip forces/gradients
   --no-dipole           Skip dipole moments
   --esp                 Compute ESP on density-selected grid (slower)
-  --esp-cpu-fallback    Use CPU path for ESP (slower; default: GPU
-                        int1e_grids)
+  --esp-cpu-fallback    Use CPU path for ESP (slower; default: GPU int1e_grids)
   --polarizability      Compute molecular polarizability tensor for each
                         geometry
   --EF                  Include uniform electric field in the Hamiltonian
@@ -49,8 +48,8 @@ options:
                         (argparse otherwise treats -0.01,... as a separate
                         flag).
   --efield-sigma EFIELD_SIGMA
-                        Std dev (a.u.) per component for random fields when
-                        --EF is set without --efield (default: 0.01)
+                        Std dev (a.u.) per component for random fields when --EF
+                        is set without --efield (default: 0.01)
   --add-random-noise SIGMA
                         Gaussian noise std dev in Angstrom added to all R
                         components before evaluation
@@ -59,20 +58,16 @@ options:
                         With --EF/--efield: use mf.kernel energy only (omit
                         nuclear-field term after SCF).
 
-CLI to evaluate sampled geometries with pyscf-dft (energy, forces, dipoles, ESP).
-
-Runs all geometries in one process (same GPU context) for speed.
-Input: NPZ with R (n_samples, n_atoms, 3), Z, N (e.g. from normal-mode-sample)
-Output: NPZ with R, Z, N, E, F, Dxyz, esp, esp_grid (if --esp), Ef (if --EF)
-
-Usage:
-    mmml pyscf-evaluate -i out/06_sampled.npz -o out/07_evaluated.npz
-    mmml pyscf-evaluate -i out/06_sampled.npz -o out/07_evaluated.npz --esp
-    mmml pyscf-evaluate -i traj.npz -o out.npz --EF
-    mmml pyscf-evaluate -i traj.npz -o out.npz --EF --efield 0,0,0.01
-    mmml pyscf-evaluate -i traj.npz -o out.npz --efield=-0.01,0,0
-    mmml pyscf-evaluate -i traj.npz -o out.npz --EF --no-efield-include-nuclear-energy
-    mmml pyscf-evaluate -i traj.npz -o out.npz --add-random-noise 0.1
+CLI to evaluate sampled geometries with pyscf-dft (energy, forces, dipoles,
+ESP). Runs all geometries in one process (same GPU context) for speed. Input:
+NPZ with R (n_samples, n_atoms, 3), Z, N (e.g. from normal-mode-sample) Output:
+NPZ with R, Z, N, E, F, Dxyz, esp, esp_grid (if --esp), Ef (if --EF) Usage: mmml
+pyscf-evaluate -i out/06_sampled.npz -o out/07_evaluated.npz mmml pyscf-evaluate
+-i out/06_sampled.npz -o out/07_evaluated.npz --esp mmml pyscf-evaluate -i
+traj.npz -o out.npz --EF mmml pyscf-evaluate -i traj.npz -o out.npz --EF
+--efield 0,0,0.01 mmml pyscf-evaluate -i traj.npz -o out.npz --efield=-0.01,0,0
+mmml pyscf-evaluate -i traj.npz -o out.npz --EF --no-efield-include-nuclear-
+energy mmml pyscf-evaluate -i traj.npz -o out.npz --add-random-noise 0.1
 ```
 
 

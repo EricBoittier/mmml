@@ -23,15 +23,13 @@ options:
                       ACO, CYBZ, TIP3.
   --list-residues     List valid CGENFF residue names and descriptions (opens
                       less on a TTY).
-  --no-pager          With --list-residues, print the table to stdout instead
-                      of piping to less.
+  --no-pager          With --list-residues, print the table to stdout instead of
+                      piping to less.
   --skip-energy-show  Skip the final CHARMM energy.show() (avoids segfault on
                       some clusters/SLURM).
 
-Examples:
-  mmml make-res --list-residues
-  mmml make-res --list-residues --no-pager | grep -i acetone
-  mmml make-res --res ACO
+Examples: mmml make-res --list-residues mmml make-res --list-residues --no-pager
+| grep -i acetone mmml make-res --res ACO
 ```
 
 ## Example structures

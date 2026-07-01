@@ -46,9 +46,8 @@ usage: mmml train-joint [-h] --train-efd TRAIN_EFD --train-esp TRAIN_ESP
                         [--dipole-loss-sources [{physnet,dcmnet,mixed} ...]]
                         [--esp-loss-sources [{physnet,dcmnet,mixed} ...]]
                         [--dipole-metric {l2,mae,rmse}]
-                        [--esp-metric {l2,mae,rmse}]
-                        [--loss-config LOSS_CONFIG] [--mix-coulomb-energy]
-                        [--disable-physnet-point-coulomb]
+                        [--esp-metric {l2,mae,rmse}] [--loss-config LOSS_CONFIG]
+                        [--mix-coulomb-energy] [--disable-physnet-point-coulomb]
                         [--mix-warmup-start MIX_WARMUP_START]
                         [--mix-warmup-end MIX_WARMUP_END]
                         [--mix-weight-max MIX_WEIGHT_MAX]
@@ -72,180 +71,159 @@ Joint PhysNet-DCMNet training
 options:
   -h, --help            show this help message and exit
   --train-efd TRAIN_EFD
-                        Training energies/forces/dipoles NPZ file (default:
-                        None)
+                        Training energies/forces/dipoles NPZ file
   --train-esp TRAIN_ESP
-                        Training ESP grids NPZ file (default: None)
+                        Training ESP grids NPZ file
   --valid-efd VALID_EFD
-                        Validation energies/forces/dipoles NPZ file (default:
-                        None)
+                        Validation energies/forces/dipoles NPZ file
   --valid-esp VALID_ESP
-                        Validation ESP grids NPZ file (default: None)
+                        Validation ESP grids NPZ file
   --subtract-atom-energies
                         Subtract reference atomic energies from total energies
-                        (default: do not subtract) (default: False)
+                        (default: do not subtract)
   --physnet-features PHYSNET_FEATURES
-                        PhysNet: number of features (default: 64)
+                        PhysNet: number of features
   --physnet-iterations PHYSNET_ITERATIONS
-                        PhysNet: message passing iterations (default: 3)
+                        PhysNet: message passing iterations
   --physnet-basis PHYSNET_BASIS
-                        PhysNet: number of basis functions (default: 64)
+                        PhysNet: number of basis functions
   --physnet-cutoff PHYSNET_CUTOFF
-                        PhysNet: cutoff distance (Angstroms) (default: 6.0)
+                        PhysNet: cutoff distance (Angstroms)
   --physnet-n-res PHYSNET_N_RES
-                        PhysNet: number of residual blocks (default: 3)
-  --zbl                 Enable PhysNet ZBL short-range repulsion (default:
-                        True)
-  --no-zbl              Disable PhysNet ZBL short-range repulsion (default:
-                        True)
+                        PhysNet: number of residual blocks
+  --zbl                 Enable PhysNet ZBL short-range repulsion
+  --no-zbl              Disable PhysNet ZBL short-range repulsion
   --physnet-max-degree PHYSNET_MAX_DEGREE
-                        PhysNet: maximum spherical harmonic degree (default:
-                        0)
+                        PhysNet: maximum spherical harmonic degree
   --dcmnet-features DCMNET_FEATURES
-                        DCMNet: number of features (default: 128)
+                        DCMNet: number of features
   --dcmnet-iterations DCMNET_ITERATIONS
-                        DCMNet: message passing iterations (default: 2)
+                        DCMNet: message passing iterations
   --dcmnet-basis DCMNET_BASIS
-                        DCMNet: number of basis functions (default: 64)
+                        DCMNet: number of basis functions
   --dcmnet-cutoff DCMNET_CUTOFF
-                        DCMNet: cutoff distance (Angstroms) (default: 10.0)
-  --n-dcm N_DCM         DCMNet: distributed multipoles per atom (default: 3)
+                        DCMNet: cutoff distance (Angstroms)
+  --n-dcm N_DCM         DCMNet: distributed multipoles per atom
   --max-degree MAX_DEGREE
-                        DCMNet: maximum spherical harmonic degree (default: 2)
+                        DCMNet: maximum spherical harmonic degree
   --use-noneq-model     Use non-equivariant charge model instead of DCMNet
-                        (predicts Cartesian displacements) (default: False)
+                        (predicts Cartesian displacements)
   --noneq-features NONEQ_FEATURES
-                        Non-equivariant model: hidden layer size (default:
-                        128)
+                        Non-equivariant model: hidden layer size
   --noneq-layers NONEQ_LAYERS
-                        Non-equivariant model: number of MLP layers (default:
-                        3)
+                        Non-equivariant model: number of MLP layers
   --noneq-max-displacement NONEQ_MAX_DISPLACEMENT
                         Non-equivariant model: maximum displacement distance
-                        (Angstroms) (default: 0.5)
+                        (Angstroms)
   --batch-size BATCH_SIZE
-                        Batch size (start with 1 for debugging) (default: 1)
-  --epochs EPOCHS       Number of epochs (default: 100)
+                        Batch size (start with 1 for debugging)
+  --epochs EPOCHS       Number of epochs
   --optimizer {adam,adamw,rmsprop,muon}
-                        Optimizer choice (default: adam) (default: adam)
+                        Optimizer choice (default: adam)
   --learning-rate, --lr LEARNING_RATE
-                        Learning rate (default: auto-select based on dataset
-                        and optimizer) (default: None)
+                        Learning rate (default: auto-select based on dataset and
+                        optimizer)
   --weight-decay WEIGHT_DECAY
                         Weight decay/L2 regularization (default: auto-select
-                        based on optimizer) (default: None)
+                        based on optimizer)
   --use-recommended-hparams
                         Use recommended hyperparameters based on dataset
-                        properties (overrides manual settings) (default:
-                        False)
-  --seed SEED           Random seed (default: 42)
+                        properties (overrides manual settings)
+  --seed SEED           Random seed
   --energy-weight ENERGY_WEIGHT
-                        Energy loss weight (default: 10.0)
+                        Energy loss weight
   --forces-weight FORCES_WEIGHT
-                        Forces loss weight (default: 50.0)
+                        Forces loss weight
   --dipole-weight DIPOLE_WEIGHT
-                        Dipole loss weight (default: 25.0)
+                        Dipole loss weight
   --esp-weight ESP_WEIGHT
-                        ESP loss weight (default: 10000.0)
+                        ESP loss weight
   --esp-min-distance ESP_MIN_DISTANCE
-                        Additional minimum distance (Å) from atoms for ESP
-                        grid points (default: 0, uses 2×atomic_radius). Set >
-                        0 to add extra distance constraint. (default: 0.0)
+                        Additional minimum distance (Å) from atoms for ESP grid
+                        points (default: 0, uses 2×atomic_radius). Set > 0 to
+                        add extra distance constraint.
   --esp-max-value ESP_MAX_VALUE
                         Maximum |ESP| value (Hartree/e) to include in loss -
                         filters out high ESP points (default: no limit)
-                        (default: None)
   --mono-weight MONO_WEIGHT
                         Monopole constraint loss weight (enforce distributed
-                        charges sum to atomic charges) (default: 100.0)
+                        charges sum to atomic charges)
   --charge-reg-weight CHARGE_REG_WEIGHT
-                        L2 regularization on DCMNet charge magnitudes to
-                        prevent blow-up (default: 1.0) (default: 1.0)
+                        L2 regularization on DCMNet charge magnitudes to prevent
+                        blow-up (default: 1.0)
   --dipole-source {physnet,dcmnet,mixed}
                         Source for dipole in loss: physnet (from charges) or
-                        dcmnet (from distributed multipoles) (default:
-                        physnet)
+                        dcmnet (from distributed multipoles)
   --dipole-loss-sources [{physnet,dcmnet,mixed} ...]
-                        Override dipole supervision sources (e.g. physnet
-                        dcmnet mixed). Defaults to --dipole-source when
-                        omitted. (default: None)
+                        Override dipole supervision sources (e.g. physnet dcmnet
+                        mixed). Defaults to --dipole-source when omitted.
   --esp-loss-sources [{physnet,dcmnet,mixed} ...]
                         ESP supervision sources (e.g. dcmnet physnet mixed).
-                        Defaults to dcmnet when omitted. (default: None)
+                        Defaults to dcmnet when omitted.
   --dipole-metric {l2,mae,rmse}
-                        Error metric for default dipole loss terms (ignored
-                        when --loss-config specified) (default: l2)
+                        Error metric for default dipole loss terms (ignored when
+                        --loss-config specified)
   --esp-metric {l2,mae,rmse}
                         Error metric for default ESP loss terms (ignored when
-                        --loss-config specified) (default: l2)
+                        --loss-config specified)
   --loss-config LOSS_CONFIG
                         Optional JSON or YAML file defining dipole/ESP loss
                         terms (overrides individual loss source flags)
-                        (default: None)
   --mix-coulomb-energy  Mix PhysNet energy with DCMNet Coulomb energy (fixed
-                        λ=1; optional warmup schedule) (default: False)
+                        λ=1; optional warmup schedule)
   --disable-physnet-point-coulomb
                         Disable PhysNet point-charge electrostatics term while
-                        still predicting charges (default: False)
+                        still predicting charges
   --mix-warmup-start MIX_WARMUP_START
-                        Epoch to start ramping Coulomb mix weight (default: 1)
+                        Epoch to start ramping Coulomb mix weight
   --mix-warmup-end MIX_WARMUP_END
-                        Epoch to finish ramping Coulomb mix weight (default:
-                        1)
+                        Epoch to finish ramping Coulomb mix weight
   --mix-weight-max MIX_WEIGHT_MAX
-                        Maximum effective Coulomb mix weight (0-1) (default:
-                        1.0)
+                        Maximum effective Coulomb mix weight (0-1)
   --mix-schedule {linear,cosine}
-                        Ramp shape for Coulomb mix warmup (default: linear)
-  --natoms NATOMS       Maximum number of atoms (default: auto-detect from
-                        data) (default: None)
+                        Ramp shape for Coulomb mix warmup
+  --natoms NATOMS       Maximum number of atoms (default: auto-detect from data)
   --max-atomic-number MAX_ATOMIC_NUMBER
-                        Maximum atomic number (default: 28)
+                        Maximum atomic number
   --grad-clip-norm GRAD_CLIP_NORM
-                        Gradient clipping norm (None to disable) (default:
-                        1.0)
-  --name NAME           Experiment name (default: joint_physnet_dcmnet)
-  --ckpt-dir CKPT_DIR   Checkpoint directory (default: None)
+                        Gradient clipping norm (None to disable)
+  --name NAME           Experiment name
+  --ckpt-dir CKPT_DIR   Checkpoint directory
   --write-checkpoint-path WRITE_CHECKPOINT_PATH
-                        After training, write the resolved run directory
-                        (ckpt-dir/name) to this file as a single line (for
-                        shell scripts and asset tools). (default: None)
+                        After training, write the resolved run directory (ckpt-
+                        dir/name) to this file as a single line (for shell
+                        scripts and asset tools).
   --restart RESTART     Restart from checkpoint (path to best_params.pkl or
-                        checkpoint directory) (default: None)
+                        checkpoint directory)
   --physnet-checkpoint PHYSNET_CHECKPOINT
-                        Load PhysNet params from a pre-trained checkpoint
-                        (e.g. from step 09). Path to orbax experiment dir
-                        (e.g. <name>-<uuid>) or epoch dir, or JSON. (default:
-                        None)
+                        Load PhysNet params from a pre-trained checkpoint (e.g.
+                        from step 09). Path to orbax experiment dir (e.g.
+                        <name>-<uuid>) or epoch dir, or JSON.
   --physnet-transfer-model PHYSNET_TRANSFER_MODEL
                         Bundled PhysNet transfer model ID, file stem, or
                         category. Defaults to the 'joint-training-defaults'
                         charged model for fresh joint training. Use --list-
-                        physnet-transfer-models to inspect choices. (default:
-                        None)
+                        physnet-transfer-models to inspect choices.
   --list-physnet-transfer-models
-                        List bundled PhysNet transfer-learning models and
-                        exit. (default: False)
+                        List bundled PhysNet transfer-learning models and exit.
   --physnet-transfer-category PHYSNET_TRANSFER_CATEGORY
                         Filter --list-physnet-transfer-models by manifest
-                        category. (default: None)
+                        category.
   --use-repo-physnet-params
                         Initialize the PhysNet part of joint DCMNet training
-                        from the bundled repo PhysNet parameters (mmml/models/
-                        physnetjax/defaults/meoh_dimer_portable.json).
-                        (default: False)
+                        from the bundled repo PhysNet parameters (mmml/models/ph
+                        ysnetjax/defaults/meoh_dimer_portable.json).
   --print-freq PRINT_FREQ
-                        Print frequency (epochs) (default: 1)
-  --plot-results        Create validation plots after training (default:
-                        False)
+                        Print frequency (epochs)
+  --plot-results        Create validation plots after training
   --plot-freq PLOT_FREQ
                         Create validation plots every N epochs during training
-                        (default: 10, set to 0 to disable) (default: 10)
+                        (default: 10, set to 0 to disable)
   --plot-samples PLOT_SAMPLES
-                        Number of validation samples to plot (default: 100)
+                        Number of validation samples to plot
   --plot-esp-examples PLOT_ESP_EXAMPLES
-                        Number of ESP examples to visualize (default: 2)
-  --verbose             Verbose output (default: True)
+                        Number of ESP examples to visualize
+  --verbose             Verbose output
 ```
 
 

@@ -54,8 +54,7 @@ options:
   --test-npz TEST_NPZ   Optional test NPZ: only print shapes (not used for
                         training)
   --output-dir OUTPUT_DIR
-                        Directory for params-*.json, config-*.json, and
-                        symlinks
+                        Directory for params-*.json, config-*.json, and symlinks
   --features FEATURES
   --max_degree MAX_DEGREE
   --num_iterations NUM_ITERATIONS
@@ -96,10 +95,10 @@ options:
                         Equivariant parity dimension in e3x MessagePass /
                         tensors (default: on)
   --gradient-checkpoint
-                        Use gradient checkpointing to reduce GPU memory
-                        (slower training)
-  --rot-augment         Apply random SO(3) rotation augmentation to batches
-                        (all splits)
+                        Use gradient checkpointing to reduce GPU memory (slower
+                        training)
+  --rot-augment         Apply random SO(3) rotation augmentation to batches (all
+                        splits)
   --rot-perturbation ROT_PERTURBATION
                         Rotation perturbation strength in [0, 1] (used with
                         --rot-augment)

@@ -52,8 +52,7 @@ options:
                         Filter --list-physnet-transfer-models by manifest
                         category
   --train TRAIN         Training NPZ file
-  --valid VALID         Validation NPZ file (optional if using --train-
-                        fraction)
+  --valid VALID         Validation NPZ file (optional if using --train-fraction)
   --train-fraction TRAIN_FRACTION
                         Fraction for train split if --valid not provided
                         (default: 0.8)
@@ -67,8 +66,7 @@ options:
                         Early stopping patience (default: 50)
   --targets TARGETS [TARGETS ...]
                         Training targets (default: energy)
-  --output OUTPUT       Output directory for checkpoints (default:
-                        checkpoints)
+  --output OUTPUT       Output directory for checkpoints (default: checkpoints)
   --log-interval LOG_INTERVAL
                         Log interval in epochs (default: 10)
   --center-coords       Center coordinates at origin
@@ -80,24 +78,13 @@ options:
   --quiet, -q           Quiet mode
   --dry-run             Prepare data but do not train
 
-Examples:
-  # Train with config file
-  mmml train --config config.yaml
-  
-  # Train DCMNet from command line
-  mmml train --model dcmnet \
-           --train train.npz \
-           --valid valid.npz \
-           --output checkpoints/dcmnet/
-  
-  # Train with auto train/valid split
-  mmml train --model dcmnet \
-           --train dataset.npz \
-           --train-fraction 0.8
-  
-  # Train PhysNetJAX (prefer physnet-train for full options / YAML)
-  mmml physnet-train --config train.yaml
-  mmml train --model physnetjax --train train.npz --valid valid.npz
+Examples: # Train with config file mmml train --config config.yaml # Train
+DCMNet from command line mmml train --model dcmnet \ --train train.npz \ --valid
+valid.npz \ --output checkpoints/dcmnet/ # Train with auto train/valid split
+mmml train --model dcmnet \ --train dataset.npz \ --train-fraction 0.8 # Train
+PhysNetJAX (prefer physnet-train for full options / YAML) mmml physnet-train
+--config train.yaml mmml train --model physnetjax --train train.npz --valid
+valid.npz
 ```
 
 

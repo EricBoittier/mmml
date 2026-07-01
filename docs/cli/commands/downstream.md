@@ -14,12 +14,11 @@ mmml downstream --help
 ```text
 usage: mmml downstream [-h] --dataset DATASET --checkpoint-dcm CHECKPOINT_DCM
                        --checkpoint-noneq CHECKPOINT_NONEQ
-                       [--sample-index SAMPLE_INDEX]
-                       [--mode {check,quick,full}] [--output-dir OUTPUT_DIR]
-                       [--temperature TEMPERATURE] [--md-steps MD_STEPS]
-                       [--timestep TIMESTEP] [--ir-delta IR_DELTA]
-                       [--freq-delta FREQ_DELTA] [--opt-fmax OPT_FMAX]
-                       [--opt-steps OPT_STEPS] [--raman]
+                       [--sample-index SAMPLE_INDEX] [--mode {check,quick,full}]
+                       [--output-dir OUTPUT_DIR] [--temperature TEMPERATURE]
+                       [--md-steps MD_STEPS] [--timestep TIMESTEP]
+                       [--ir-delta IR_DELTA] [--freq-delta FREQ_DELTA]
+                       [--opt-fmax OPT_FMAX] [--opt-steps OPT_STEPS] [--raman]
                        [--raman-delta RAMAN_DELTA] [--raman-field RAMAN_FIELD]
 
 Run harmonic / MD downstream analyses on an MMML dataset
@@ -47,8 +46,7 @@ options:
   --opt-fmax OPT_FMAX   Geometry optimisation force threshold (eV/Å)
   --opt-steps OPT_STEPS
                         Maximum optimisation steps
-  --raman               Compute Raman spectrum using finite-field
-                        polarizability
+  --raman               Compute Raman spectrum using finite-field polarizability
   --raman-delta RAMAN_DELTA
                         Displacement for Raman derivatives (Å)
   --raman-field RAMAN_FIELD

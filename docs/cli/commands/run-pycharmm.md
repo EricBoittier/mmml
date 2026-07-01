@@ -46,14 +46,14 @@ options:
                         Run restrained two-residue PyCHARMM sampling after
                         nbonds/block setup (default: True).
   --two-residue-restraint-force K
-                        CHARMM harmonic restraint force constant for two-
-                        residue sampling (default: 1.0).
+                        CHARMM harmonic restraint force constant for two-residue
+                        sampling (default: 1.0).
   --two-residue-restraint-r0 ANGSTROM
                         CHARMM harmonic restraint target distance r0 for two-
                         residue sampling (default: 2.5 Angstrom).
   --two-residue-sampling-steps N
-                        ABNR steps for restrained two-residue sampling
-                        (default: --pycharmm-minimize-steps).
+                        ABNR steps for restrained two-residue sampling (default:
+                        --pycharmm-minimize-steps).
   --two-residue-restraint-resid1 TWO_RESIDUE_RESTRAINT_RESID1
                         First CHARMM residue id for two-residue sampling
                         (default: 1).
@@ -62,15 +62,12 @@ options:
                         (default: 2).
   --view-braille        Display braille molecular viewer at each phase.
 
-Pure PyCHARMM runner: heating and equilibration only (no MM/ML).
-
-Runs CHARMM setup, minimization, heating, and equilibration. Does not run
-ASE MD, JAX-MD, or any ML calculator. Use this for classical CHARMM-only
-simulations or to prepare structures before running mmml run (MM/ML).
-
-Usage:
-    python -m mmml.cli.run.run_pycharmm --pdbfile pdb/init-packmol.pdb --cell 40
-    mmml run-pycharmm --pdbfile pdb/init-packmol.pdb --cell 40
+Pure PyCHARMM runner: heating and equilibration only (no MM/ML). Runs CHARMM
+setup, minimization, heating, and equilibration. Does not run ASE MD, JAX-MD, or
+any ML calculator. Use this for classical CHARMM-only simulations or to prepare
+structures before running mmml run (MM/ML). Usage: python -m
+mmml.cli.run.run_pycharmm --pdbfile pdb/init-packmol.pdb --cell 40 mmml run-
+pycharmm --pdbfile pdb/init-packmol.pdb --cell 40
 ```
 
 

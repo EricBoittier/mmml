@@ -41,24 +41,13 @@ options:
   --max-files MAX_FILES
                         Maximum number of files to process (for testing)
 
-Examples:
-  # Convert single file
-  mmml xml2npz output.xml -o data.npz
-  
-  # Convert multiple files
-  mmml xml2npz file1.xml file2.xml file3.xml -o dataset.npz
-  
-  # Convert all XML files in directory
-  mmml xml2npz molpro_outputs/ -o dataset.npz
-  
-  # Recursive search
-  mmml xml2npz data/ -o dataset.npz --recursive
-  
-  # With validation and summary
-  mmml xml2npz inputs/*.xml -o data.npz --validate --summary summary.json
-  
-  # Adjust padding for larger molecules
-  mmml xml2npz inputs/*.xml -o data.npz --padding 100
+Examples: # Convert single file mmml xml2npz output.xml -o data.npz # Convert
+multiple files mmml xml2npz file1.xml file2.xml file3.xml -o dataset.npz #
+Convert all XML files in directory mmml xml2npz molpro_outputs/ -o dataset.npz #
+Recursive search mmml xml2npz data/ -o dataset.npz --recursive # With validation
+and summary mmml xml2npz inputs/*.xml -o data.npz --validate --summary
+summary.json # Adjust padding for larger molecules mmml xml2npz inputs/*.xml -o
+data.npz --padding 100
 ```
 
 

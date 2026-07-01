@@ -47,11 +47,10 @@ usage: mmml build-crystal [-h] [--literature PRESET] [--from-cif PATH]
                           [--spg SPACE_GROUP] [--factor FACTOR]
                           [--target-density-g-cm3 RHO] [--seed SEED]
                           [--attempts ATTEMPTS] [--no-resort]
-                          [--supercell NX,NY,NZ] -o OUTPUT
-                          [--format OUT_FORMAT] [--optimize]
-                          [--optimizer {bfgs,fire,lbfgs}] [--fmax FMAX]
-                          [--max-opt-steps MAX_OPT_STEPS] [--fix-cell] [--emt]
-                          [--quiet-opt]
+                          [--supercell NX,NY,NZ] -o OUTPUT [--format OUT_FORMAT]
+                          [--optimize] [--optimizer {bfgs,fire,lbfgs}]
+                          [--fmax FMAX] [--max-opt-steps MAX_OPT_STEPS]
+                          [--fix-cell] [--emt] [--quiet-opt]
 
 Build molecular crystals: literature CIF + make-res (CHARMM names) or PyXtal
 random placement with space-group symmetry.
@@ -61,61 +60,55 @@ options:
   --target-density-g-cm3 RHO
                         Scale cell to this mass density (g/cm³). Literature
                         presets use CIF ρ unless this is set. Liquid DCM ≈
-                        1.326; crystal DCM ≈ 1.972 (default: None)
-  --supercell NX,NY,NZ  Supercell repeats (literature: auto from --min-box-
-                        side if omitted) (default: None)
+                        1.326; crystal DCM ≈ 1.972
+  --supercell NX,NY,NZ  Supercell repeats (literature: auto from --min-box-side
+                        if omitted)
   -o, --output OUTPUT   Output path (.pdb, .xyz, .extxyz, .cif, or .npz)
-                        (default: None)
   --format OUT_FORMAT   ASE output format override (default: inferred from
-                        --output suffix) (default: None)
+                        --output suffix)
 
 Literature CIF + make-res (recommended for DCM / benzene):
   --literature PRESET   Bundled experimental CIF preset: dcm (Pbcn) or benz
-                        (P2₁/c) (default: None)
+                        (P2₁/c)
   --from-cif PATH       Override CIF path (requires --residue or --literature
-                        for residue name) (default: None)
-  --residue NAME        CHARMM residue (DCM, BENZ) when using --from-cif
-                        without --literature (default: None)
+                        for residue name)
+  --residue NAME        CHARMM residue (DCM, BENZ) when using --from-cif without
+                        --literature
   --monomer-pdb PATH    make-res monomer PDB for atom-name mapping (default:
-                        pdb/<res>.pdb or bundled) (default: None)
+                        pdb/<res>.pdb or bundled)
   --min-box-side ANG    Minimum supercell edge length (Å); default ≈2× CHARMM
-                        cutnb (default: 28.0)
+                        cutnb
 
 PyXtal random placement:
   -m, --molecule SPEC   Molecule specification (repeat for multi-component
                         crystals): XYZ/CIF path, SMILES, or chemical formula
-                        understood by PyXtal (default: None)
+                        understood by PyXtal
   --stoichiometry Z [Z ...]
                         Formula units per molecule species (same order as
-                        --molecule) (default: None)
+                        --molecule)
   --z Z_VALUES [Z_VALUES ...]
                         Alias for stoichiometry; one value repeats for all
-                        molecules (default: None)
+                        molecules
   --dim {0,1,2,3}       Crystal dimensionality (0=cluster, 3=3D periodic)
-                        (default: 3)
   --spg, --space-group SPACE_GROUP
-                        International space-group number (default: 14)
-  --factor FACTOR       PyXtal volume factor passed to from_random (default:
-                        1.0)
-  --seed SEED           RNG seed for reproducible PyXtal trials (default:
-                        None)
-  --attempts ATTEMPTS   Maximum PyXtal from_random retries (default: 20)
+                        International space-group number
+  --factor FACTOR       PyXtal volume factor passed to from_random
+  --seed SEED           RNG seed for reproducible PyXtal trials
+  --attempts ATTEMPTS   Maximum PyXtal from_random retries
   --no-resort           Keep PyXtal atom order in ASE export (to_ase
-                        resort=False) (default: False)
+                        resort=False)
 
 ASE optimization (optional, PyXtal path):
   --optimize            Relax structure with ASE after PyXtal generation
-                        (default: False)
   --optimizer {bfgs,fire,lbfgs}
-                        ASE optimizer when --optimize is set (default: bfgs)
-  --fmax FMAX           ASE force convergence (eV/Å) (default: 0.05)
+                        ASE optimizer when --optimize is set
+  --fmax FMAX           ASE force convergence (eV/Å)
   --max-opt-steps MAX_OPT_STEPS
-                        Maximum ASE optimizer steps (default: 200)
-  --fix-cell            Document intent to keep the unit cell fixed
-                        (positions-only relaxation) (default: False)
-  --emt                 Use ASE EMT calculator for --optimize (smoke tests
-                        only) (default: False)
-  --quiet-opt           Suppress ASE optimizer log output (default: False)
+                        Maximum ASE optimizer steps
+  --fix-cell            Document intent to keep the unit cell fixed (positions-
+                        only relaxation)
+  --emt                 Use ASE EMT calculator for --optimize (smoke tests only)
+  --quiet-opt           Suppress ASE optimizer log output
 ```
 
 ## Example structures
