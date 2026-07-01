@@ -103,14 +103,16 @@ def check_jax(*, require_gpu: bool = False) -> InterfaceCheck:
         return check
 
     try:
-        from mmml.utils.jax_gpu_warmup import ensure_jax_cuda_runtime_libs
+        from mmml.utils.jax_gpu_warmup import (
+            ensure_jax_cuda_runtime_libs,
+            jax_cuda_runtime_libs_warning,
+        )
 
         bundled = ensure_jax_cuda_runtime_libs(quiet=True)
         check.details["pip_cuda_runtime_libs"] = bool(bundled)
-        if not bundled and check.details.get("cuda_visible"):
-            check.warnings.append(
-                "No pip nvidia/cudnn libs on LD_LIBRARY_PATH; cluster cuDNN may be < 9.10"
-            )
+        warning = jax_cuda_runtime_libs_warning(prefix="health-check")
+        if warning:
+            check.warnings.append(warning)
     except Exception as exc:
         check.warnings.append(f"CUDA runtime lib probe failed: {exc}")
 

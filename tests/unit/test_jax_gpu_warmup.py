@@ -62,6 +62,41 @@ def test_find_bundled_nvidia_lib_dirs_from_site_packages(tmp_path, monkeypatch):
     jax_gpu_warmup.find_bundled_nvidia_lib_dirs.cache_clear()
 
 
+def test_jax_cuda_runtime_libs_warning_silent_without_cuda_plugin(monkeypatch):
+    monkeypatch.setattr(jax_gpu_warmup, "find_bundled_nvidia_lib_dirs", lambda: [])
+    monkeypatch.setattr(jax_gpu_warmup, "_installed_jax_cuda_plugins", lambda: [])
+    assert jax_gpu_warmup.jax_cuda_runtime_libs_warning() is None
+
+
+def test_jax_cuda_runtime_libs_warning_silent_when_bundled(monkeypatch, tmp_path):
+    cudnn_dir = tmp_path / "nvidia" / "cudnn" / "lib"
+    cudnn_dir.mkdir(parents=True)
+    monkeypatch.setattr(
+        jax_gpu_warmup,
+        "find_bundled_nvidia_lib_dirs",
+        lambda: [cudnn_dir.resolve()],
+    )
+    monkeypatch.setattr(
+        jax_gpu_warmup,
+        "_installed_jax_cuda_plugins",
+        lambda: ["jax-cuda13-plugin"],
+    )
+    assert jax_gpu_warmup.jax_cuda_runtime_libs_warning() is None
+
+
+def test_jax_cuda_runtime_libs_warning_when_plugin_without_bundled(monkeypatch):
+    monkeypatch.setattr(jax_gpu_warmup, "find_bundled_nvidia_lib_dirs", lambda: [])
+    monkeypatch.setattr(
+        jax_gpu_warmup,
+        "_installed_jax_cuda_plugins",
+        lambda: ["jax-cuda13-plugin"],
+    )
+    warning = jax_gpu_warmup.jax_cuda_runtime_libs_warning(prefix="test")
+    assert warning is not None
+    assert "JAX CUDA plugin is installed" in warning
+    assert "uv sync --extra gpu" in warning
+
+
 def test_ensure_jax_cuda_runtime_libs_prefers_bundled_cudnn(tmp_path, monkeypatch):
     cudnn_dir = tmp_path / "nvidia" / "cudnn" / "lib"
     cudnn_dir.mkdir(parents=True)

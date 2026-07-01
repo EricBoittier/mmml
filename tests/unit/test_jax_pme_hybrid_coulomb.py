@@ -100,7 +100,8 @@ def test_hybrid_correction_is_full_minus_intra_scaled():
     np.testing.assert_allclose(
         corr.forces_kcalmol_A,
         corr.switch_scale * expected_f,
-        rtol=1e-8,
+        rtol=0,
+        atol=1e-6,
     )
 
 

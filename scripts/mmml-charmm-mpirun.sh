@@ -38,29 +38,25 @@ import shlex
 
 from mmml.interfaces.pycharmmInterface.charmm_mpi import charmm_mpirun_path, mpi_shell_setup_lines
 from mmml.interfaces.pycharmmInterface.jax_compile_threads import sanitize_xla_flags_env
-from mmml.utils.jax_gpu_warmup import ensure_jax_cuda_runtime_libs
+from mmml.utils.jax_gpu_warmup import ensure_jax_cuda_runtime_libs, jax_cuda_runtime_libs_warning
 
 sanitize_xla_flags_env(quiet=True)
 
 for line in mpi_shell_setup_lines():
     print(line)
 
-bundled = ensure_jax_cuda_runtime_libs(quiet=True)
+ensure_jax_cuda_runtime_libs(quiet=True)
 ld = os.environ.get("LD_LIBRARY_PATH", "")
 if ld:
     print(f"export LD_LIBRARY_PATH={shlex.quote(ld)}")
 preload = os.environ.get("LD_PRELOAD", "")
 if preload:
     print(f"export LD_PRELOAD={shlex.quote(preload)}")
-if not bundled:
+warning = jax_cuda_runtime_libs_warning(prefix="mmml-charmm-mpirun")
+if warning:
     import sys
 
-    print(
-        "mmml-charmm-mpirun: warning: no pip nvidia/cudnn libs; "
-        "JAX CUDA may fail if module cuDNN is below 9.10.1. "
-        "Run: uv sync --extra gpu",
-        file=sys.stderr,
-    )
+    print(warning, file=sys.stderr)
 
 mpirun = charmm_mpirun_path()
 if mpirun is None:

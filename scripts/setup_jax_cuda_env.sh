@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Prepend pip-shipped cuDNN/cuBLAS to LD_LIBRARY_PATH before mmml imports JAX.
 #
-# JAX CUDA 13 aborts when module-loaded cuDNN < 9.10.1 is found (common: cudnn/9.4).
-# After sourcing, prefer: module unload cudnn  (or load cudnn >= 9.10).
+# JAX CUDA prefers pip-shipped cuDNN; module-loaded cuDNN can win on LD_LIBRARY_PATH.
+# After sourcing, prefer: module unload cudnn  (or load a cuDNN version compatible with JAX).
 #
 # Usage:
 #   source scripts/setup_jax_cuda_env.sh
@@ -27,18 +27,15 @@ _setup_jax_cuda_env() {
   eval "$("$py" - <<'PY'
 import os
 import shlex
-from mmml.utils.jax_gpu_warmup import ensure_jax_cuda_runtime_libs
+from mmml.utils.jax_gpu_warmup import ensure_jax_cuda_runtime_libs, jax_cuda_runtime_libs_warning
 
-bundled = ensure_jax_cuda_runtime_libs(quiet=True)
+ensure_jax_cuda_runtime_libs(quiet=True)
 ld = os.environ.get("LD_LIBRARY_PATH", "")
 if ld:
     print(f"export LD_LIBRARY_PATH={shlex.quote(ld)}")
-if not bundled:
-    print(
-        "echo setup_jax_cuda_env: no pip nvidia/cudnn libs under site-packages; "
-        "run: uv sync --extra gpu  (or pip install nvidia-cudnn-cu13) >&2",
-        file=__import__('sys').stderr,
-    )
+warning = jax_cuda_runtime_libs_warning(prefix="setup_jax_cuda_env")
+if warning:
+    print(warning, file=__import__('sys').stderr)
 PY
 )"
 }

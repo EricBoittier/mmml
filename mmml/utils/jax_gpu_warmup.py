@@ -510,12 +510,30 @@ def prepare_jax_gpu_notebook(*, required: bool = True) -> bool:
     return False
 
 
+def jax_cuda_runtime_libs_warning(*, prefix: str = "mmml") -> str | None:
+    """Return a launch hint when JAX CUDA is installed but pip runtime libs are absent.
+
+    CPU-only installs (no ``jax-cuda*-plugin``) are intentionally silent — the old
+    unconditional warning fired on every ``mmml-charmm-mpirun`` invocation after a
+    dev-only ``uv sync``.
+    """
+    if find_bundled_nvidia_lib_dirs():
+        return None
+    if not _installed_jax_cuda_plugins():
+        return None
+    return (
+        f"{prefix}: warning: JAX CUDA plugin is installed but no pip NVIDIA runtime "
+        "libs were found; an older cuDNN on LD_LIBRARY_PATH (e.g. module load cudnn) "
+        "can block GPU init. Fix: uv sync --extra gpu, or unload cudnn / use "
+        "jax[cuda13-local] with a system CUDA stack."
+    )
+
+
 def ensure_jax_cuda_runtime_libs(*, quiet: bool = False) -> list[str]:
     """Prefer pip-shipped cuDNN/cuBLAS over older system modules on ``LD_LIBRARY_PATH``.
 
-    JAX CUDA 13 rejects cuDNN < 9.10.1 on multi-GPU nodes when cuBLAS >= 12.9 is
-    visible. ``uv sync --extra gpu`` installs ``nvidia-cudnn-cu13`` under
-    ``site-packages``, but cluster ``module load cudnn/9.4`` often wins unless these
+    ``jax[cuda13]`` (``uv sync --extra gpu``) installs NVIDIA wheels under
+    ``site-packages``, but cluster ``module load cudnn`` often wins unless these
     directories are prepended *after* MPI/CHARMM library setup as well.
     """
     global _jax_cuda_runtime_libs_configured
