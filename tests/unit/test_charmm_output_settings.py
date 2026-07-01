@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from unittest.mock import patch
 
 import pytest
 
