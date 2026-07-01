@@ -5195,6 +5195,27 @@ def run_dynamics_with_io(
                 if pending_readyn_chunk_io is not None:
                     chunk_io = pending_readyn_chunk_io
                     pending_readyn_chunk_io = None
+                    if io is not None and n_chunks > 1:
+                        _planned_read, planned_write = _overlap_chunk_restart_paths(
+                            io, chunk_index=chunk_index, n_chunks=n_chunks
+                        )
+                        traj = chunk_io.trajectory
+                        if (
+                            io.trajectory is not None
+                            and split_trajectory
+                            and traj is None
+                        ):
+                            traj = _overlap_chunk_trajectory_path(
+                                Path(io.trajectory), chunk_index
+                            )
+                        chunk_io = CharmmTrajectoryFiles(
+                            restart_read=chunk_io.restart_read or _planned_read,
+                            restart_write=planned_write,
+                            trajectory=traj,
+                            restart_read_unit=chunk_io.restart_read_unit,
+                            restart_write_unit=chunk_io.restart_write_unit,
+                            trajectory_unit=chunk_io.trajectory_unit,
+                        )
                 elif io is None:
                     chunk_io = None
                 elif n_chunks == 1:
@@ -5553,12 +5574,19 @@ def run_dynamics_with_io(
                                 and chunk_index < n_chunks - 1
                                 and _valid_restart_file(restart_path) is None
                             ):
-                                _materialize_overlap_chunk_restart_handoff(
-                                    restart_path,
-                                    global_step=steps_done,
-                                    overlap_context=overlap_context,
-                                    mlpot_ctx=mlpot_ctx,
-                                )
+                                try:
+                                    _materialize_overlap_chunk_restart_handoff(
+                                        restart_path,
+                                        global_step=steps_done,
+                                        overlap_context=overlap_context,
+                                        mlpot_ctx=mlpot_ctx,
+                                    )
+                                except RuntimeError as exc:
+                                    print(
+                                        f"WARN: overlap ({overlap_context}): "
+                                        f"{exc}",
+                                        flush=True,
+                                    )
                             else:
                                 patch_restart_global_step(
                                     restart_path, steps_done

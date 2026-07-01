@@ -2562,6 +2562,9 @@ def test_overlap_aborts_before_charmm_when_scratch_restart_is_invalid(tmp_path):
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_overlap_scratch_restart",
     ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._materialize_overlap_chunk_restart_handoff",
+        side_effect=RuntimeError("mock: non-restartable scratch"),
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=pos_ok,
     ):
