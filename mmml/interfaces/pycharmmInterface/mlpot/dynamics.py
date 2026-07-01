@@ -3398,7 +3398,15 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
         dyn = pycharmm.DynamicsScript(**kw)
         _execute_dynamics_script(dyn, append=heat_append)
     _release_charmm_dynamics_api_buffers()
-    if bussi_active and int(kw.get("iasvel", 0) or 0) == 0:
+    if bussi_active:
+        from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+            capture_charmm_velocities_for_bussi,
+        )
+
+        capture_charmm_velocities_for_bussi(
+            restart_path=post_dyna_restart_write or restart_read_path,
+        )
+    elif int(kw.get("iasvel", 0) or 0) == 0:
         from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
             sync_comparison_velocities_from_main,
         )
@@ -4915,6 +4923,8 @@ def _run_dynamics_chunk(
     if io is not None:
         if io.restart_read is not None:
             kw["_restart_read_path"] = io.restart_read
+        if io.restart_write is not None:
+            kw["_post_dyna_restart_write"] = io.restart_write
         open_files, iokw, io_aliases = io.open_for_run()
         kw.update(iokw)
     if extra_iokw:
@@ -5237,16 +5247,20 @@ def _run_bussi_heat_subchunked(
             ihtfrq=interval,
             step=global_after,
         )
+        restart_path = (
+            getattr(sub_io, "restart_write", None) if sub_io is not None else None
+        )
         apply_bussi_velocity_rescale(
             target_k,
             timestep_ps=timestep_ps,
             rescale_interval_steps=n,
             taut_ps=taut_ps,
             quiet=quiet_bussi,
+            restart_path=restart_path,
         )
         if not quiet_bussi:
             live = estimate_kinetic_temperature_k(
-                charmm_velocities_akma(),
+                charmm_velocities_akma_for_thermostat(),
                 charmm_masses_amu(),
             )
             if live is not None:
