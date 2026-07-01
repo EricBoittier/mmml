@@ -612,6 +612,7 @@ class DecomposedMlpotModel:
         self._spherical_forward_fn: Any | None = None
         self._forward_cache_key: tuple[Any, ...] | None = None
         self._jax_warmup_done = False
+        self._pre_sd_callback_forward_warmup_done = False
         self._pending_factory = pending_factory
         self._pending_factory_z = (
             None if pending_factory_z is None else np.asarray(pending_factory_z, dtype=int)
@@ -1132,11 +1133,16 @@ def _resolve_mlpot_warmup_box_pairs(
     mm_pair_mask = None
     use_mm_pairs = False
     if use_pbc and box_A is not None:
-        side = float(box_A)
-        box = jnp.asarray(
-            [[side, 0.0, 0.0], [0.0, side, 0.0], [0.0, 0.0, side]],
-            dtype=jnp.float64,
+        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import cubic_box_matrix_from_side
+        from mmml.interfaces.pycharmmInterface.ml_dtypes import (
+            as_ml_array,
+            resolve_ml_compute_dtype,
         )
+
+        side = float(box_A)
+        box_np = cubic_box_matrix_from_side(side)
+        dtype = resolve_ml_compute_dtype(getattr(model, "_ml_compute_dtype", None))
+        box = as_ml_array(box_np, dtype=dtype)
         if model._do_mm and model._get_update_fn is not None:
             update_fn = model._get_update_fn(
                 np.asarray(positions, dtype=np.float64),
@@ -1236,25 +1242,14 @@ def materialize_deferred_mlpot_jax_before_sd(
     force_ener_probe: bool = False,
     sync_lists: bool = False,
 ) -> bool:
-    """Build deferred JAX on CPU before MLpot SD (no CHARMM ``ENER`` on MPI+PBC).
+    """Build deferred JAX on CPU before MLpot SD.
 
-    MPI-linked CHARMM defers JAX until SD. Lazy materialization inside the first
-    ``steepd`` ``gete`` can corrupt OpenMPI pools so the next ``enbond`` step
-    segfaults. Materialize ``spherical_fn`` and pre-compile the CHARMM callback
-    ``_get_spherical_forward_fn`` JIT path (with ``recover_mpi_for_charmm_after_jax``
-    after each compile block).
+    Materialize ``spherical_fn``, pre-compile the CHARMM callback
+    ``_get_spherical_forward_fn`` JIT path, then under ``mpirun`` run one
+    ``ENER FORCE`` to prime USER + Fortran ``enbond`` before ``steepd``.
 
-    ``calculate_charmm`` does **not** call ``spherical_fn`` directly; it uses a
-    separate ``jax.jit`` wrapper. Warming only ``spherical_fn`` (e.g. via hybrid
-    GRMS stats) is insufficient and leaves first SD step to compile inside Fortran.
-
-    Do **not** run a standalone ``ENER FORCE`` / ``UPDATE`` here on the MPI+PBC
-    defer path: registration already ran ``upinb`` once; a second ``upinb`` after
-    JAX activity segfaults in ``__nbexcl_MOD_upinb`` on all-ML PBC boxes. The
-    first safe hybrid CHARMM energy eval is MLpot SD step 1.
-
-    ``probe_charmm_ener``, ``force_ener_probe``, and ``sync_lists`` are deprecated
-    no-ops kept for API compatibility.
+    Serial ``python`` on MPI-linked CHARMM is rejected by
+    :func:`assert_mpi_launcher_for_mlpot_sd` (``upinb`` / MPI pool risk).
     """
     del probe_charmm_ener, force_ener_probe, sync_lists
     from mmml.interfaces.pycharmmInterface.charmm_mpi import (
@@ -1266,6 +1261,7 @@ def materialize_deferred_mlpot_jax_before_sd(
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
         mlpot_skip_charmm_ener_force_before_first_sd,
+        prime_charmm_hybrid_energy_before_mlpot_sd,
         rebind_mlpot_calculator_from_pycmodel,
     )
 
@@ -1285,6 +1281,15 @@ def materialize_deferred_mlpot_jax_before_sd(
     if not isinstance(pyCModel, DecomposedMlpotModel):
         return False
     if not getattr(pyCModel, "_defer_jax_until_after_sd", False):
+        return False
+
+    if getattr(mlpot_ctx, "_mlpot_sd_jax_materialized", False):
+        rebind_mlpot_calculator_from_pycmodel(mlpot_ctx, verbose=False)
+        prime_charmm_hybrid_energy_before_mlpot_sd(
+            mlpot_ctx,
+            verbose=verbose,
+            context="Pre-MLpot SD",
+        )
         return False
 
     rebind_mlpot_calculator_from_pycmodel(mlpot_ctx, verbose=False)
@@ -1359,6 +1364,13 @@ def materialize_deferred_mlpot_jax_before_sd(
             "Pre-MLpot SD: callback forward JIT ready",
             flush=True,
         )
+
+    setattr(mlpot_ctx, "_mlpot_sd_jax_materialized", True)
+    prime_charmm_hybrid_energy_before_mlpot_sd(
+        mlpot_ctx,
+        verbose=verbose,
+        context="Pre-MLpot SD",
+    )
 
     return did_work
 

@@ -318,6 +318,61 @@ def mlpot_sd_charmm_ener_already_primed(mlpot_ctx: Any) -> bool:
     return bool(getattr(mlpot_ctx, "_mlpot_pre_sd_ener_probed", False))
 
 
+def prime_charmm_hybrid_energy_before_mlpot_sd(
+    mlpot_ctx: Any,
+    *,
+    verbose: bool = False,
+    context: str = "Pre-MLpot SD",
+) -> float | None:
+    """Run one hybrid ``ENER FORCE`` under ``mpirun`` after JAX warmup (defer path).
+
+  JAX callback warmup alone does not exercise Fortran ``enbond`` in the same
+  process layout as ``steepd``. On the MPI+PBC defer path, serial ``python``
+  must not call ``ENER`` here (``upinb`` risk); under ``mpirun`` one probe
+  after callback JIT validates USER + ``enbond`` before the first SD step.
+    """
+    if not mlpot_skip_charmm_ener_force_before_first_sd(mlpot_ctx):
+        return None
+    if mlpot_sd_charmm_ener_already_primed(mlpot_ctx):
+        return None
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+        _under_mpirun,
+        recover_mpi_for_charmm_after_jax,
+    )
+
+    if not _under_mpirun():
+        return None
+
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        charmm_grms_after_ener_force,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _ensure_domdec_off_for_mlpot_energy,
+    )
+
+    rebind_mlpot_calculator_from_pycmodel(mlpot_ctx, verbose=False)
+    _ensure_domdec_off_for_mlpot_energy(context=f"{context} CHARMM ENER prime")
+    grms = float(charmm_grms_after_ener_force(silent=not verbose))
+    recover_mpi_for_charmm_after_jax(phase=f"after {context} CHARMM ENER prime")
+    setattr(mlpot_ctx, "_mlpot_pre_sd_ener_probed", True)
+
+    user = _read_mlpot_user_energy_kcal(force=False)
+    if _mlpot_user_missing(user, zero_tol_kcalmol=1.0e-12):
+        raise RuntimeError(
+            f"{context}: MLpot USER term missing after CHARMM ENER FORCE prime "
+            f"(GRMS={grms:.4f} kcal/mol/Å); refusing MLpot SD"
+        )
+    if verbose:
+        from mmml.data.units import format_energy_kcal_ev
+
+        print(
+            f"{context}: CHARMM ENER prime OK "
+            f"(GRMS={grms:.4f} kcal/mol/Å, USER={format_energy_kcal_ev(float(user))})",
+            flush=True,
+        )
+    return grms
+
+
 def assert_mlpot_user_active(
     ctx: MlpotContext,
     *,

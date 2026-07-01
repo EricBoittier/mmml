@@ -2286,11 +2286,19 @@ def probe_and_light_resync_if_desync(
     if mlpot_skip_charmm_ener_force_before_first_sd(mlpot_ctx):
         if verbose and context:
             print(
-                f"{context}: skipping CHARMM ENER FORCE until MLpot SD "
+                f"{context}: deferring CHARMM ENER FORCE until JAX callback warmup "
                 "(PBC + MPI-linked CHARMM deferred JAX)",
                 flush=True,
             )
-        diag = measure_hybrid_charmm_grms(mlpot_ctx, prefer_calculator=False)
+        pyCModel = getattr(mlpot_ctx, "pyCModel", None)
+        prefer_calc = (
+            pyCModel is not None
+            and getattr(pyCModel, "_spherical_fn", None) is not None
+        )
+        diag = measure_hybrid_charmm_grms(
+            mlpot_ctx,
+            prefer_calculator=prefer_calc,
+        )
         _print_hybrid_charmm_grms_diag(
             context,
             diag,
