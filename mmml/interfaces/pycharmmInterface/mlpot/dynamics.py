@@ -3165,7 +3165,7 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
         maybe_assign_velocities_via_ase_if_cold,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
-        clear_comparison_coordinates,
+        mirror_comparison_velocities_for_dynamics,
     )
 
     import pycharmm

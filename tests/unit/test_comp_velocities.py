@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sys
+import types
 from unittest.mock import MagicMock, call, patch
 
 import numpy as np
@@ -14,10 +16,14 @@ from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
     build_high_force_selection,
     clear_comp_for_production,
     clear_comparison_coordinates,
+    coor_get_comparison_capi,
+    coor_set_comparison_capi,
     get_comparison_array,
+    mirror_comparison_velocities_for_dynamics,
     prepare_comp_for_heat,
     prepare_comp_for_iasvel0,
     set_comparison_array,
+    sync_comparison_velocities_akma,
     zero_comparison_scalars,
 )
 
@@ -49,22 +55,65 @@ def _mock_pycharmm_module(n_atoms: int = 4):
     return mod
 
 
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities._import_pycharmm")
-def test_set_comparison_array_roundtrip(mock_import):
-    pycharmm = _mock_pycharmm_module()
-    mock_import.return_value = pycharmm
+@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.coor_set_comparison_capi")
+def test_set_comparison_array_roundtrip(mock_set_capi):
+    mock_set_capi.return_value = 2
     values = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
     set_comparison_array(values)
-    df = pycharmm.coor.set_comparison.call_args[0][0]
-    assert list(df.columns) == ["x", "y", "z", "w"]
-    assert df["x"].tolist() == [1.0, 4.0]
-    assert df["w"].tolist() == [0.0, 0.0]
+    mock_set_capi.assert_called_once_with(values)
 
-    pycharmm.coor.get_comparison.return_value = df
+
+@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.coor_get_comparison_capi")
+def test_get_comparison_array_uses_capi(mock_get_capi):
+    mock_get_capi.return_value = np.array([[1.0, 2.0, 3.0, 0.0]])
     out = get_comparison_array()
-    assert out.shape == (2, 4)
+    mock_get_capi.assert_called_once()
+    assert out.shape == (1, 4)
     assert out[0, 0] == pytest.approx(1.0)
-    assert out[0, 3] == pytest.approx(0.0)
+
+
+def test_coor_set_comparison_capi():
+    fake_charmm = MagicMock()
+    fake_charmm.coor_set_comparison.return_value = 2
+    fake_lib = types.SimpleNamespace(charmm=fake_charmm)
+    with patch.dict(sys.modules, {"pycharmm.lib": fake_lib}):
+        out = coor_set_comparison_capi(np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]))
+    assert out == 2
+    fake_charmm.coor_set_comparison.assert_called_once()
+
+
+@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.coor_set_comparison_capi")
+def test_sync_comparison_velocities_akma(mock_set_capi):
+    sync_comparison_velocities_akma(np.array([[100.0, 0.0, 0.0], [0.0, 200.0, 0.0]]))
+    mock_set_capi.assert_called_once()
+    passed = mock_set_capi.call_args[0][0]
+    assert passed.shape == (2, 4)
+    assert passed[0, 0] == pytest.approx(100.0)
+    assert passed[1, 1] == pytest.approx(200.0)
+
+
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_main",
+    return_value=True,
+)
+def test_mirror_comparison_velocities_for_dynamics_syncs_when_iasvel_zero(mock_sync):
+    kw = {"iasvel": 0, "start": False}
+    mirror_comparison_velocities_for_dynamics(kw)
+    mock_sync.assert_called_once()
+
+
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_main",
+    return_value=False,
+)
+@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.clear_comparison_coordinates")
+def test_mirror_comparison_velocities_for_dynamics_clears_when_no_main_vel(
+    mock_clear, mock_sync
+):
+    kw = {"iasvel": 0, "start": False}
+    mirror_comparison_velocities_for_dynamics(kw)
+    mock_sync.assert_called_once()
+    mock_clear.assert_called_once()
 
 
 @patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.run_charmm_script")

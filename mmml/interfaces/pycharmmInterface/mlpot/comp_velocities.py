@@ -29,29 +29,6 @@ def _import_pycharmm():
     return pycharmm
 
 
-def _comparison_dataframe(arr: np.ndarray) -> pd.DataFrame:
-    arr = np.asarray(arr, dtype=float)
-    if arr.ndim != 2 or arr.shape[1] not in (3, 4):
-        raise ValueError(f"comparison array must be (N, 3) or (N, 4), got {arr.shape}")
-    if arr.shape[1] == 3:
-        return pd.DataFrame(
-            {
-                "x": arr[:, 0],
-                "y": arr[:, 1],
-                "z": arr[:, 2],
-                "w": np.zeros(arr.shape[0], dtype=float),
-            }
-        )
-    return pd.DataFrame(
-        {
-            "x": arr[:, 0],
-            "y": arr[:, 1],
-            "z": arr[:, 2],
-            "w": arr[:, 3],
-        }
-    )
-
-
 def coor_set_comparison_capi(arr: np.ndarray) -> int:
     """Write COMP via ``coor_set_comparison`` (ctypes C API; no pandas)."""
     import pycharmm.lib as lib

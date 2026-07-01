@@ -302,8 +302,8 @@ def test_run_dynamics_clears_comparison_coords_when_iasvel_zero_no_start():
     dyn = MagicMock()
     fake_pycharmm.DynamicsScript.return_value = dyn
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.clear_comparison_coordinates",
-    ) as clear_comp, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.mirror_comparison_velocities_for_dynamics",
+    ) as mirror_comp, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.maybe_assign_velocities_via_ase_if_cold",
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
@@ -314,7 +314,7 @@ def test_run_dynamics_clears_comparison_coords_when_iasvel_zero_no_start():
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._execute_dynamics_script",
     ) as exec_dyn, patch.dict(sys.modules, {"pycharmm": fake_pycharmm}):
         run_dynamics({"iasvel": 0, "start": False, "nstep": 10})
-    clear_comp.assert_called_once()
+    mirror_comp.assert_called_once()
     exec_dyn.assert_called_once()
     assert release_bufs.call_count == 2
 

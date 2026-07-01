@@ -267,13 +267,15 @@ def test_run_dynamics_skips_ase_cold_velocity_when_flag_set():
     assert "_skip_ase_cold_velocity_assign" not in passed
 
 
-def test_run_dynamics_clears_comp_when_iasvel_zero_without_start():
+def test_run_dynamics_mirrors_comp_when_iasvel_zero_without_start():
     fake_dyn = mock.MagicMock()
     fake_pycharmm = mock.MagicMock()
     fake_pycharmm.DynamicsScript.return_value = fake_dyn
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.clear_comparison_coordinates",
-    ) as clear_comp, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.maybe_assign_velocities_via_ase_if_cold",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.mirror_comparison_velocities_for_dynamics",
+    ) as mirror_comp, mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
@@ -286,5 +288,5 @@ def test_run_dynamics_clears_comp_when_iasvel_zero_without_start():
         clear=False,
     ):
         run_dynamics({"nstep": 5, "iasvel": 0, "start": False})
-    clear_comp.assert_called_once()
+    mirror_comp.assert_called_once()
     fake_pycharmm.DynamicsScript.assert_called_once()
