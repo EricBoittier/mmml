@@ -128,6 +128,28 @@ def test_apply_heat_ramp_frequencies_recomputes_teminc():
     assert kw["TEMINC"] == (300.0 - 60.0) / (4000 // 40)
 
 
+def test_normalize_dynamics_heat_ramp_kw_sets_tstruct_from_firstt():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _normalize_dynamics_heat_ramp_kw,
+    )
+
+    kw = {"firstt": 48.0, "finalt": 240.0}
+    with patch("pycharmm.dynamics.set_firstt"), patch(
+        "pycharmm.dynamics.set_finalt"
+    ), patch("pycharmm.dynamics.set_tstruc") as set_tstruc:
+        _normalize_dynamics_heat_ramp_kw(kw)
+    assert kw["tstruct"] == pytest.approx(48.0)
+    set_tstruc.assert_called_once_with(48.0)
+
+
+def test_build_heat_dynamics_sets_tstruct_to_firstt():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import build_heat_dynamics
+
+    kw = build_heat_dynamics(temp=240.0, firstt=48.0, finalt=240.0, use_pbc=True)
+    assert kw["firstt"] == pytest.approx(48.0)
+    assert kw["tstruct"] == pytest.approx(48.0)
+
+
 def test_apply_heat_ramp_frequencies_caps_ihtfrq_below_nstep():
     """Overlap chunks (nstep=500, stage ihtfrq=500) need interior IHTFRQ events."""
     kw = {"firstt": 1.0, "finalt": 5.0}

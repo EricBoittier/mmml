@@ -2820,6 +2820,7 @@ def build_nvt_equilibration_dynamics(
     )
     if include_firstt and not restart:
         kw["firstt"] = firstt
+        kw["tstruct"] = float(firstt)
         apply_heat_ramp_frequencies(kw, nstep=nstep, ihtfrq=50)
     else:
         kw["ihtfrq"] = 0
