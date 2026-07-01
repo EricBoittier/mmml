@@ -247,7 +247,6 @@ def test_sync_comparison_velocities_from_main_missing(mock_vel):
     "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.coor_get_comparison_capi",
 )
 def test_sync_comparison_velocities_from_comparison_warm(mock_get, mock_cold):
-    masses = np.ones(2)
     mock_get.return_value = np.array([[10.0, 0.0, 0.0, 0.0], [0.0, 20.0, 0.0, 0.0]])
     assert sync_comparison_velocities_from_comparison() is True
     mock_get.assert_called_once()
