@@ -439,17 +439,11 @@ def _build_stage_dynamics_kw(
             )
     else:
         raise ValueError(stage)
-    kw["nprint"] = dyn_print["nprint"]
-    kw["iprfrq"] = dyn_print["iprfrq"]
-    kw["isvfrq"] = dyn_print["isvfrq"]
+    ns = kw["nsavc"]
+    kw["nprint"] = ns
+    kw["iprfrq"] = ns
+    kw["isvfrq"] = ns
     kw["nstep"] = nstep
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
-        resolve_dynamics_freq_cadence,
-    )
-
-    cadence = resolve_dynamics_freq_cadence(args)
-    if cadence is not None:
-        kw["_dyn_freq_cadence"] = cadence
     if stage == "heat":
         from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
             apply_heat_ramp_frequencies,

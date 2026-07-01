@@ -1218,13 +1218,6 @@ def run_dynamics_workflow(
                 nstep=nstep,
                 ihtfrq=resolve_heat_ihtfrq(args, nstep=nstep),
             )
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
-            resolve_dynamics_freq_cadence,
-        )
-
-        cadence = resolve_dynamics_freq_cadence(args)
-        if cadence is not None:
-            kw["_dyn_freq_cadence"] = cadence
         kw["new"] = True
         kw["start"] = True
         kw["nstep"] = nstep

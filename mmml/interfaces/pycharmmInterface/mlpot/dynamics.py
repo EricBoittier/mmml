@@ -943,6 +943,13 @@ def sync_charmm_lists_after_mini(*, quiet: bool = False) -> None:
     invokes ``upinb`` / ``UPIMNB`` on PBC builds — avoid calling this before the
     first MLpot SD step right after deferred JAX materialize).
     """
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        assert_charmm_dynamics_chunk_safe,
+    )
+
+    assert_charmm_dynamics_chunk_safe(
+        context="CHARMM UPDATE after mini (sync NB/MLpot lists)",
+    )
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
 
     pycharmm = _import_pycharmm_modules()[0]
@@ -1868,17 +1875,7 @@ def finalize_heat_dynamics_frequencies(kw: dict[str, Any]) -> dict[str, tuple[in
         if new != old:
             changes[key] = (old, new)
         kw[key] = new
-    cadence = kw.get("_dyn_freq_cadence")
-    if cadence is not None and int(cadence) > 0:
-        c = _harmonize_dynamics_frequency(int(cadence), nstep)
-        for key in ("nprint", "iprfrq", "isvfrq"):
-            if key not in kw:
-                continue
-            old = int(kw[key])
-            if old != c:
-                changes[key] = (old, c)
-            kw[key] = c
-    elif "nsavc" in kw:
+    if "nsavc" in kw:
         ns = int(kw["nsavc"])
         for key in ("nprint", "iprfrq", "isvfrq"):
             if key in kw and int(kw[key]) != ns:
@@ -3695,17 +3692,6 @@ _OVERLAP_CHUNK_FREQ_KEYS = (
 )
 
 
-_OVERLAP_CHUNK_CADENCE_FREQ_KEYS = (
-    "inbfrq",
-    "ihbfrq",
-    "ilbfrq",
-    "imgfrq",
-    "iprfrq",
-    "nprint",
-    "isvfrq",
-)
-
-
 def _harmonize_overlap_chunk_frequencies(
     chunk_kw: dict[str, Any],
     chunk_nstep: int,
@@ -3717,8 +3703,6 @@ def _harmonize_overlap_chunk_frequencies(
     """Align list/image/HB update freqs with this chunk's ``nstep`` (avoids FINCYC retune)."""
 
     n = max(1, int(chunk_nstep))
-    cadence = chunk_kw.get("_dyn_freq_cadence")
-    cadence_active = cadence is not None and int(cadence) > 0
     for key in _OVERLAP_CHUNK_FREQ_KEYS:
         if key not in chunk_kw:
             continue
@@ -3748,17 +3732,10 @@ def _harmonize_overlap_chunk_frequencies(
                         f"chunk: per-chunk DCD nsavc={chunk_kw['nsavc']} "
                         f"(global step {int(global_step_start)}–{int(global_step_start) + n})",
                     )
-            elif cadence_active:
-                c = _harmonize_dynamics_frequency(int(cadence), n)
-                for k in ("nprint", "iprfrq", "isvfrq"):
-                    if k in chunk_kw:
-                        chunk_kw[k] = c
             else:
                 for k in ("nprint", "iprfrq", "isvfrq"):
                     if k in chunk_kw:
                         chunk_kw[k] = old
-        elif cadence_active and key in _OVERLAP_CHUNK_CADENCE_FREQ_KEYS:
-            chunk_kw[key] = _harmonize_dynamics_frequency(int(cadence), n)
         else:
             chunk_kw[key] = _harmonize_dynamics_frequency(int(chunk_kw[key]), n)
     _align_inbfrq_with_imgfrq(chunk_kw)
@@ -3767,8 +3744,7 @@ def _harmonize_overlap_chunk_frequencies(
     else:
         _ensure_ntrfrq_above_nstep(chunk_kw, n)
         _maybe_disable_ixtfrq_for_fixed_volume_chunk(chunk_kw, n)
-        if not cadence_active:
-            _maybe_disable_interior_list_updates_for_fixed_volume_chunk(chunk_kw, n)
+        _maybe_disable_interior_list_updates_for_fixed_volume_chunk(chunk_kw, n)
 
 
 def _mlpot_ctx_cubic_box_side_A(mlpot_ctx: Optional["MlpotContext"]) -> float | None:
@@ -4508,6 +4484,7 @@ def _dynamics_chunk_state_corrupt(
 ) -> bool:
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         charmm_dynamics_state_is_finite,
+        restart_coordinates_are_unsafe,
         restart_has_nonfinite_coordinates,
     )
 
@@ -4518,10 +4495,13 @@ def _dynamics_chunk_state_corrupt(
             flush=True,
         )
         return True
-    if restart_path is not None and restart_has_nonfinite_coordinates(restart_path):
+    if restart_path is not None and (
+        restart_has_nonfinite_coordinates(Path(restart_path))
+        or restart_coordinates_are_unsafe(Path(restart_path))
+    ):
         print(
-            f"WARN: {overlap_context}: restart {Path(restart_path).name} has "
-            "non-finite coordinates after dynamics chunk",
+            f"WARN: {overlap_context}: restart {Path(restart_path).name} has unsafe "
+            "coordinates after dynamics chunk",
             flush=True,
         )
         return True
@@ -4661,13 +4641,18 @@ def _run_cpt_stability_subchunked(
                 else None
             )
         )
-        if _dynamics_chunk_state_corrupt(
+        _dynamics_chunk_state_corrupt(
             overlap_context=f"{overlap_context} CPT sub-chunk ending step {steps_done + n}",
             restart_path=restart_path,
-        ):
-            validate_charmm_dynamics_state_after_chunk(
-                context=f"{overlap_context} at step {steps_done + n}",
-            )
+        )
+        from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+            assert_charmm_dynamics_chunk_safe,
+        )
+
+        assert_charmm_dynamics_chunk_safe(
+            context=f"{overlap_context} CPT sub-chunk ending step {steps_done + n}",
+            restart_path=restart_path,
+        )
         chunk_end = steps_done + n
         if restart_path is not None:
             from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
@@ -4853,7 +4838,7 @@ def run_dynamics_with_io(
             ),
         )
         from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
-            validate_charmm_dynamics_state_after_chunk,
+            assert_charmm_dynamics_chunk_safe,
         )
         from mmml.interfaces.pycharmmInterface.mlpot.force_checkpoint import (
             maybe_record_forces,
@@ -4864,11 +4849,14 @@ def run_dynamics_with_io(
             if io is not None and io.restart_write is not None
             else None
         )
-        if _dynamics_chunk_state_corrupt(
+        _dynamics_chunk_state_corrupt(
             overlap_context=overlap_context,
             restart_path=restart_path,
-        ):
-            validate_charmm_dynamics_state_after_chunk(context=overlap_context)
+        )
+        assert_charmm_dynamics_chunk_safe(
+            context=overlap_context,
+            restart_path=restart_path,
+        )
         maybe_record_forces(int(kw.get("nstep", 0)), ml_forces=None)
         return _overlap_dynamics_result(
             last_dyn,
@@ -5296,20 +5284,21 @@ def run_dynamics_with_io(
                         ),
                     )
                 from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
-                    validate_charmm_dynamics_state_after_chunk,
+                    assert_charmm_dynamics_chunk_safe,
                 )
 
-                validate_charmm_dynamics_state_after_chunk(
-                    context=(
-                        f"overlap ({overlap_context}) chunk "
-                        f"{chunk_index + 1}/{n_chunks}"
-                    ),
-                )
                 chunk_restart_path = (
                     Path(chunk_io.restart_write)
                     if chunk_io is not None
                     and getattr(chunk_io, "restart_write", None) is not None
                     else None
+                )
+                assert_charmm_dynamics_chunk_safe(
+                    context=(
+                        f"overlap ({overlap_context}) chunk "
+                        f"{chunk_index + 1}/{n_chunks}"
+                    ),
+                    restart_path=chunk_restart_path,
                 )
                 chunk_state_corrupt = _dynamics_chunk_state_corrupt(
                     overlap_context=(
@@ -5377,6 +5366,13 @@ def run_dynamics_with_io(
                         if header_step is None or header_step < expected_after - 1:
                             patch_restart_global_step(restart_path, steps_done)
                 if chunk_outcome.charmm_aborted:
+                    assert_charmm_dynamics_chunk_safe(
+                        context=(
+                            f"overlap ({overlap_context}) chunk "
+                            f"{chunk_index + 1}/{n_chunks} CHARMM abort"
+                        ),
+                        restart_path=chunk_restart_path,
+                    )
                     print(
                         f"overlap ({overlap_context}): CHARMM abort at step "
                         f"{steps_done}/{total_nstep}",

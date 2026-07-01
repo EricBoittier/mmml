@@ -431,6 +431,25 @@ def restart_has_nonfinite_coordinates(path: Path | None) -> bool:
     return False
 
 
+def restart_coordinates_are_unsafe(
+    path: Path | None,
+    *,
+    max_abs_A: float = 2000.0,
+) -> bool:
+    """True when restart coordinates are non-finite or unphysically large."""
+    if path is None:
+        return False
+    p = Path(path)
+    if not p.is_file():
+        return False
+    pos = read_restart_coordinates(p)
+    if pos is None:
+        return restart_has_nonfinite_coordinates(p)
+    if not np.all(np.isfinite(pos)):
+        return True
+    return float(np.max(np.abs(pos))) > float(max_abs_A)
+
+
 def charmm_coordinates_are_finite() -> bool:
     """True when all CHARMM Cartesian coordinates are finite."""
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
@@ -498,8 +517,25 @@ def charmm_dynamics_state_is_finite() -> bool:
     )
 
 
-def validate_charmm_dynamics_state_after_chunk(*, context: str) -> None:
+def validate_charmm_dynamics_state_after_chunk(
+    *,
+    context: str,
+    restart_path: Path | None = None,
+) -> None:
     """Raise when coordinates or energies are non-finite (barostat / MLpot blow-up)."""
+    if restart_path is not None and restart_has_nonfinite_coordinates(Path(restart_path)):
+        raise RuntimeError(
+            f"{context}: restart {Path(restart_path).name} has non-finite coordinates "
+            "after dynamics (MLpot integration blow-up). Do not continue integration — "
+            "Fortran image updates can segfault on bad coordinates."
+        )
+    if restart_path is not None and restart_coordinates_are_unsafe(Path(restart_path)):
+        raise RuntimeError(
+            f"{context}: restart {Path(restart_path).name} has unphysical coordinates "
+            f"(>|{2000.0:.0f}| Å) after dynamics (MLpot integration blow-up). "
+            "Do not continue integration — Fortran image updates can segfault on "
+            "fly-off coordinates."
+        )
     if charmm_coordinates_are_finite() and charmm_dynamics_energy_is_finite():
         if not charmm_coordinates_are_nontrivial():
             raise RuntimeError(
@@ -522,6 +558,28 @@ def validate_charmm_dynamics_state_after_chunk(*, context: str) -> None:
         "(NPT barostat instability or MLpot blow-up). Use a shorter timestep, "
         "tighter echeck, or rely on CPT stability chunking; do not continue "
         "integration — Fortran image updates can segfault on NaN coordinates."
+    )
+
+
+def assert_charmm_dynamics_chunk_safe(
+    *,
+    context: str,
+    restart_path: Path | None = None,
+) -> None:
+    """Log a warning when state looks corrupt, then raise before list rebuild / mlpot_update."""
+    memory_bad = not charmm_dynamics_state_is_finite()
+    restart_bad = restart_path is not None and (
+        restart_has_nonfinite_coordinates(Path(restart_path))
+        or restart_coordinates_are_unsafe(Path(restart_path))
+    )
+    if memory_bad or restart_bad:
+        print(
+            f"WARN: {context}: unsafe CHARMM coordinates/energy after dynamics chunk",
+            flush=True,
+        )
+    validate_charmm_dynamics_state_after_chunk(
+        context=context,
+        restart_path=restart_path,
     )
 
 
