@@ -1125,6 +1125,16 @@ def _warmup_value_and_grad_for_model(
     z = np.asarray(physnet_ml_atomic_numbers(model._atomic_numbers), dtype=int)
     pos = np.asarray(positions, dtype=np.float64)
     calc = model.get_pycharmm_calculator()
+    if (
+        use_mm_pairs
+        and model._do_mm
+        and model._get_update_fn is not None
+        and (box is not None or model._cell)
+        and (mm_pair_idx is None or mm_pair_mask is None)
+    ):
+        raise RuntimeError(
+            "_warmup_value_and_grad_for_model: PBC MM warmup requires mm_pair_idx/mm_pair_mask"
+        )
     if use_mm_pairs and mm_pair_idx is not None and mm_pair_mask is not None:
         pair_idx = jnp.asarray(mm_pair_idx)
         pair_mask = jnp.asarray(mm_pair_mask)
