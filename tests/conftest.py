@@ -148,3 +148,22 @@ def _jax_enable_x64_for_pycharmm_tests(request: pytest.FixtureRequest) -> None:
         import jax
 
         jax.config.update("jax_enable_x64", True)
+
+
+@pytest.fixture(autouse=True)
+def _charmm_default_levels_for_pycharmm_tests(request: pytest.FixtureRequest) -> None:
+    """Live PyCHARMM tests load CHARMM outside ``import_pycharmm`` when ``MMML_WARMUP_MLPOT_JAX_ONLY=1``.
+
+    Unit-test collection skips ``apply_charmm_verbosity(bomlev=-2)``; ensure relaxed
+    BOMLEV before the first ``read`` / ``nbonds`` in each live test body.
+    """
+    if request.node.get_closest_marker("pycharmm") is None:
+        return
+    try:
+        import pycharmm  # noqa: F401 — initialize libcharmm if not already loaded
+
+        from mmml.interfaces.pycharmmInterface.mlpot.setup import apply_charmm_verbosity
+
+        apply_charmm_verbosity(prnlev=5, warnlev=5, bomlev=-2)
+    except Exception:
+        pass
