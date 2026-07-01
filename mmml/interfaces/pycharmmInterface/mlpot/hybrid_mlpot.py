@@ -473,18 +473,9 @@ class DecomposedMlpotCalculator:
                         charmm_lib_links_mpi,
                         recover_mpi_for_charmm_after_jax,
                     )
-                    from mmml.interfaces.pycharmmInterface.jax_device_policy import (
-                        mlpot_jax_device_name,
-                    )
 
                     if charmm_lib_links_mpi():
-                        parent = getattr(self, "_parent_model", None)
-                        sd_active = (
-                            parent is not None
-                            and int(getattr(parent, "_charmm_mlpot_sd_active", 0)) > 0
-                        )
-                        if sd_active or mlpot_jax_device_name() == "gpu":
-                            recover_mpi_for_charmm_after_jax(phase="after MLpot gete")
+                        recover_mpi_for_charmm_after_jax(phase="after MLpot gete")
                 except Exception:
                     pass
             parent = getattr(self, "_parent_model", None)
@@ -718,6 +709,16 @@ class DecomposedMlpotModel:
             recover_mpi_for_charmm_after_jax(
                 phase="after deferred MLpot JAX CPU finalize",
             )
+        elif (not cpu_only) and self._defer_jax_until_after_sd:
+            from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+                charmm_lib_links_mpi,
+                recover_mpi_for_charmm_after_jax,
+            )
+
+            if charmm_lib_links_mpi():
+                recover_mpi_for_charmm_after_jax(
+                    phase="after deferred MLpot JAX GPU finalize",
+                )
         if self._verbose:
             backend = "CPU" if cpu_only else "GPU"
             print(
@@ -797,6 +798,7 @@ class DecomposedMlpotModel:
                 from mmml.utils.jax_gpu_warmup import sync_jax_gpu_before_charmm
 
                 sync_jax_gpu_before_charmm(phase="after MLpot JAX GPU promote")
+            if charmm_lib_links_mpi():
                 recover_mpi_for_charmm_after_jax(phase="after MLpot JAX GPU promote")
         except Exception:
             pass
@@ -1117,6 +1119,42 @@ def build_decomposed_mlpot_model(
     return model
 
 
+def _resolve_mlpot_warmup_box_pairs(
+    model: DecomposedMlpotModel,
+    positions: np.ndarray,
+    *,
+    use_pbc: bool,
+    box_A: float | None,
+) -> tuple[jnp.ndarray | None, Any, Any, bool]:
+    """Box matrix and MM pair buffers for callback-forward warmup."""
+    box: jnp.ndarray | None = None
+    mm_pair_idx = None
+    mm_pair_mask = None
+    use_mm_pairs = False
+    if use_pbc and box_A is not None:
+        side = float(box_A)
+        box = jnp.asarray(
+            [[side, 0.0, 0.0], [0.0, side, 0.0], [0.0, 0.0, side]],
+            dtype=jnp.float64,
+        )
+        if model._do_mm and model._get_update_fn is not None:
+            update_fn = model._get_update_fn(
+                np.asarray(positions, dtype=np.float64),
+                model._cutoff_params,
+                box=box,
+            )
+            if update_fn is not None:
+                box_np = _box_numpy_for_update(box)
+                pos_np = np.asarray(positions, dtype=np.float64)
+                if box_np is not None:
+                    mm_pair_idx, mm_pair_mask = update_fn(pos_np, box=box_np)
+                else:
+                    mm_pair_idx, mm_pair_mask = update_fn(pos_np)
+                if mm_pair_idx is not None and mm_pair_mask is not None:
+                    use_mm_pairs = True
+    return box, mm_pair_idx, mm_pair_mask, use_mm_pairs
+
+
 def _warmup_value_and_grad_for_model(
     model: DecomposedMlpotModel,
     positions: np.ndarray,
@@ -1133,6 +1171,10 @@ def _warmup_value_and_grad_for_model(
     z = np.asarray(physnet_ml_atomic_numbers(model._atomic_numbers), dtype=int)
     pos = np.asarray(positions, dtype=np.float64)
     calc = model.get_pycharmm_calculator()
+    if isinstance(calc, _DeferredDecomposedMlpotCalculator):
+        calc = calc._ensure_real()
+    if not isinstance(calc, DecomposedMlpotCalculator):
+        return
     if (
         use_mm_pairs
         and model._do_mm
@@ -1150,7 +1192,12 @@ def _warmup_value_and_grad_for_model(
         pair_idx, pair_mask = _DUMMY_MM_PAIR_IDX, _DUMMY_MM_PAIR_MASK
         use_mm_pairs = False
 
-    with mlpot_jax_device_context():
+    device_ctx = (
+        calc._mlpot_eval_device_context
+        if isinstance(calc, DecomposedMlpotCalculator)
+        else mlpot_jax_device_context
+    )
+    with device_ctx():
         positions_jax = as_ml_array(
             pos,
             dtype=resolve_ml_compute_dtype(model._ml_compute_dtype),
@@ -1193,8 +1240,13 @@ def materialize_deferred_mlpot_jax_before_sd(
 
     MPI-linked CHARMM defers JAX until SD. Lazy materialization inside the first
     ``steepd`` ``gete`` can corrupt OpenMPI pools so the next ``enbond`` step
-    segfaults. Materialize the callback via hybrid forces (with
-    ``recover_mpi_for_charmm_after_jax`` after JAX compile).
+    segfaults. Materialize ``spherical_fn`` and pre-compile the CHARMM callback
+    ``_get_spherical_forward_fn`` JIT path (with ``recover_mpi_for_charmm_after_jax``
+    after each compile block).
+
+    ``calculate_charmm`` does **not** call ``spherical_fn`` directly; it uses a
+    separate ``jax.jit`` wrapper. Warming only ``spherical_fn`` (e.g. via hybrid
+    GRMS stats) is insufficient and leaves first SD step to compile inside Fortran.
 
     Do **not** run a standalone ``ENER FORCE`` / ``UPDATE`` here on the MPI+PBC
     defer path: registration already ran ``upinb`` once; a second ``upinb`` after
@@ -1224,6 +1276,12 @@ def materialize_deferred_mlpot_jax_before_sd(
     if not getattr(pyCModel, "_defer_jax_until_after_sd", False):
         return False
 
+    pos = get_charmm_positions_array()
+    use_pbc = bool(getattr(mlpot_ctx, "use_pbc", False))
+    box_A = getattr(mlpot_ctx, "cubic_box_side_A", None)
+    if box_A is None:
+        box_A = getattr(mlpot_ctx, "charmm_cubic_box_side_A", None)
+
     did_work = False
     if getattr(pyCModel, "_spherical_fn", None) is None:
         calc = pyCModel.get_pycharmm_calculator()
@@ -1232,11 +1290,6 @@ def materialize_deferred_mlpot_jax_before_sd(
         elif not isinstance(calc, DecomposedMlpotCalculator):
             return False
 
-        pos = get_charmm_positions_array()
-        use_pbc = bool(getattr(mlpot_ctx, "use_pbc", False))
-        box_A = getattr(mlpot_ctx, "cubic_box_side_A", None)
-        if box_A is None:
-            box_A = getattr(mlpot_ctx, "charmm_cubic_box_side_A", None)
         from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
             mlpot_spherical_forces_ev_angstrom,
         )
@@ -1252,17 +1305,47 @@ def materialize_deferred_mlpot_jax_before_sd(
                 "Pre-MLpot SD: failed to materialize deferred JAX hybrid calculator"
             )
 
-        from mmml.interfaces.pycharmmInterface.charmm_mpi import (
-            recover_mpi_for_charmm_after_jax,
-        )
-
         recover_mpi_for_charmm_after_jax(
             phase="after deferred MLpot JAX CPU materialize",
         )
         did_work = True
         if verbose:
             print(
-                "Pre-MLpot SD: materialized deferred JAX factory on CPU "
+                "Pre-MLpot SD: materialized deferred JAX factory on CPU",
+                flush=True,
+            )
+
+    calc = pyCModel.get_pycharmm_calculator()
+    if isinstance(calc, _DeferredDecomposedMlpotCalculator):
+        calc = calc._ensure_real()
+    if isinstance(calc, DecomposedMlpotCalculator) and calc.spherical_fn is not None:
+        box, mm_pair_idx, mm_pair_mask, use_mm_pairs = _resolve_mlpot_warmup_box_pairs(
+            pyCModel,
+            pos,
+            use_pbc=use_pbc,
+            box_A=float(box_A) if box_A is not None else None,
+        )
+        if verbose:
+            print(
+                "Pre-MLpot SD: warming CHARMM callback spherical_forward JIT "
+                "(same path as steepd gete)",
+                flush=True,
+            )
+        _warmup_value_and_grad_for_model(
+            pyCModel,
+            pos,
+            box=box,
+            mm_pair_idx=mm_pair_idx,
+            mm_pair_mask=mm_pair_mask,
+            use_mm_pairs=use_mm_pairs,
+        )
+        recover_mpi_for_charmm_after_jax(
+            phase="after pre-MLpot SD callback forward warmup",
+        )
+        did_work = True
+        if verbose:
+            print(
+                "Pre-MLpot SD: callback forward JIT ready "
                 "(deferring CHARMM ENER until MLpot SD step 1)",
                 flush=True,
             )
