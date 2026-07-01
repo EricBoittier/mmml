@@ -44,3 +44,12 @@ def test_reset_block_skips_on_empty_psf_at_import():
     maybe = source.split("def _maybe_reset_block_at_import")[1].split("\ndef ")[0]
     assert "get_natom()" in maybe
     assert "reset_block()" in maybe
+
+
+def test_get_mm_energy_forces_uses_force_static_mm_eval_for_cell_fallback():
+    source = Path("mmml/interfaces/pycharmmInterface/mmml_calculator.py").read_text(
+        encoding="utf-8"
+    )
+    block = source.split("def get_MM_energy_forces_fns")[1].split("\n    _cached_mm_fn")[0]
+    assert "force_static_mm_eval=True" in block
+    assert "if isinstance(mm_fn_cell, tuple):" in block
