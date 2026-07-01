@@ -7,6 +7,11 @@ import sys
 from pathlib import Path
 
 from mmml.interfaces.aseInterface.pyxtal_optimize import optimize_ase_atoms
+from mmml.interfaces.crystal_charmm import (
+    LITERATURE_CRYSTAL_PRESETS,
+    build_charmm_literature_supercell,
+    build_literature_charmm_supercell,
+)
 from mmml.interfaces.pyxtal_placement import (
     MolecularCrystalBuildRequest,
     ase_supercell,
@@ -24,23 +29,61 @@ from mmml.interfaces.pyxtal_placement import (
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Build molecular crystals with PyXtal (space-group symmetry) and export "
-            "ASE-compatible structures for optimization or MMML handoff."
+            "Build molecular crystals: literature CIF + make-res (CHARMM names) or "
+            "PyXtal random placement with space-group symmetry."
         ),
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument(
+    lit = parser.add_argument_group(
+        "Literature CIF + make-res (recommended for DCM / benzene)"
+    )
+    lit.add_argument(
+        "--literature",
+        choices=sorted(LITERATURE_CRYSTAL_PRESETS),
+        default=None,
+        metavar="PRESET",
+        help="Bundled experimental CIF preset: dcm (Pbcn) or benz (P2₁/c)",
+    )
+    lit.add_argument(
+        "--from-cif",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="Override CIF path (requires --residue or --literature for residue name)",
+    )
+    lit.add_argument(
+        "--residue",
+        default=None,
+        metavar="NAME",
+        help="CHARMM residue (DCM, BENZ) when using --from-cif without --literature",
+    )
+    lit.add_argument(
+        "--monomer-pdb",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="make-res monomer PDB for atom-name mapping (default: pdb/<res>.pdb or bundled)",
+    )
+    lit.add_argument(
+        "--min-box-side",
+        type=float,
+        default=28.0,
+        metavar="ANG",
+        help="Minimum supercell edge length (Å); default ≈2× CHARMM cutnb",
+    )
+    pyx = parser.add_argument_group("PyXtal random placement")
+    pyx.add_argument(
         "-m",
         "--molecule",
         action="append",
-        required=True,
+        default=None,
         metavar="SPEC",
         help=(
             "Molecule specification (repeat for multi-component crystals): "
             "XYZ/CIF path, SMILES, or chemical formula understood by PyXtal"
         ),
     )
-    parser.add_argument(
+    pyx.add_argument(
         "--stoichiometry",
         type=int,
         nargs="+",
@@ -48,7 +91,7 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="Z",
         help="Formula units per molecule species (same order as --molecule)",
     )
-    parser.add_argument(
+    pyx.add_argument(
         "--z",
         dest="z_values",
         type=int,
@@ -56,14 +99,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Alias for stoichiometry; one value repeats for all molecules",
     )
-    parser.add_argument(
+    pyx.add_argument(
         "--dim",
         type=int,
         default=3,
         choices=(0, 1, 2, 3),
         help="Crystal dimensionality (0=cluster, 3=3D periodic)",
     )
-    parser.add_argument(
+    pyx.add_argument(
         "--spg",
         "--space-group",
         dest="space_group",
@@ -71,7 +114,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=14,
         help="International space-group number",
     )
-    parser.add_argument(
+    pyx.add_argument(
         "--factor",
         type=float,
         default=1.0,
@@ -83,23 +126,23 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="RHO",
         help=(
-            "Scale unit cell after build to this mass density (g/cm³). "
-            "Liquid DCM ≈ 1.326; experimental Pbcn crystal (COD 2100015) ≈ 1.97"
+            "Scale cell to this mass density (g/cm³). Literature presets use CIF ρ "
+            "unless this is set. Liquid DCM ≈ 1.326; crystal DCM ≈ 1.972"
         ),
     )
-    parser.add_argument(
+    pyx.add_argument(
         "--seed",
         type=int,
         default=None,
         help="RNG seed for reproducible PyXtal trials",
     )
-    parser.add_argument(
+    pyx.add_argument(
         "--attempts",
         type=int,
         default=20,
         help="Maximum PyXtal from_random retries",
     )
-    parser.add_argument(
+    pyx.add_argument(
         "--no-resort",
         action="store_true",
         help="Keep PyXtal atom order in ASE export (to_ase resort=False)",
@@ -109,14 +152,14 @@ def build_parser() -> argparse.ArgumentParser:
         type=str,
         default=None,
         metavar="NX,NY,NZ",
-        help="Build supercell after generation (e.g. 2,2,2)",
+        help="Supercell repeats (literature: auto from --min-box-side if omitted)",
     )
     parser.add_argument(
         "-o",
         "--output",
         type=Path,
         required=True,
-        help="Output path (.xyz, .extxyz, .cif, or .npz)",
+        help="Output path (.pdb, .xyz, .extxyz, .cif, or .npz)",
     )
     parser.add_argument(
         "--format",
@@ -124,7 +167,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="ASE output format override (default: inferred from --output suffix)",
     )
-    opt = parser.add_argument_group("ASE optimization (optional)")
+    opt = parser.add_argument_group("ASE optimization (optional, PyXtal path)")
     opt.add_argument(
         "--optimize",
         action="store_true",
@@ -174,15 +217,113 @@ def _infer_format(path: Path, override: str | None) -> str | None:
     if override:
         return override
     suffix = path.suffix.lower().lstrip(".")
-    if suffix in ("xyz", "extxyz", "cif", "json"):
+    if suffix in ("xyz", "extxyz", "cif", "json", "pdb"):
         return suffix
     if suffix == "npz":
         return None
     return "extxyz"
 
 
+def _resolve_literature_args(args: argparse.Namespace) -> tuple[str, Path]:
+    if args.literature is not None:
+        spec = LITERATURE_CRYSTAL_PRESETS[args.literature]
+        residue = str(spec["residue"])
+        cif = Path(spec["cif"]())
+    elif args.from_cif is not None:
+        if not args.residue:
+            print(
+                "Error: --from-cif requires --residue (e.g. DCM, BENZ).",
+                file=sys.stderr,
+            )
+            raise SystemExit(2)
+        residue = args.residue.strip().upper()
+        cif = Path(args.from_cif).expanduser().resolve()
+        if not cif.is_file():
+            print(f"Error: CIF not found: {cif}", file=sys.stderr)
+            raise SystemExit(1)
+    else:
+        raise ValueError("literature args not set")
+
+    if args.from_cif is not None and args.literature is not None:
+        cif = Path(args.from_cif).expanduser().resolve()
+    return residue, cif
+
+
+def _run_literature_build(args: argparse.Namespace) -> int:
+    residue, cif_path = _resolve_literature_args(args)
+    reps = (
+        parse_supercell_reps(args.supercell)
+        if args.supercell is not None
+        else None
+    )
+    out = Path(args.output).expanduser().resolve()
+
+    if args.literature is not None and args.from_cif is None:
+        result = build_literature_charmm_supercell(
+            args.literature,
+            supercell_reps=reps,
+            min_box_side_a=float(args.min_box_side) if reps is None else None,
+            monomer_pdb=args.monomer_pdb,
+            pdb_out=out if out.suffix.lower() == ".pdb" else None,
+            target_density_g_cm3=args.target_density_g_cm3,
+        )
+    else:
+        result = build_charmm_literature_supercell(
+            residue=residue,
+            cif_path=cif_path,
+            supercell_reps=reps,
+            min_box_side_a=float(args.min_box_side) if reps is None else None,
+            monomer_pdb=args.monomer_pdb,
+            pdb_out=out if out.suffix.lower() == ".pdb" else None,
+            target_density_g_cm3=args.target_density_g_cm3,
+        )
+
+    atoms = result.atoms
+    a, b, c = result.cell_lengths_a
+    alpha, beta, gamma = result.cell_angles_deg
+    rx, ry, rz = result.supercell_reps
+    print(
+        f"Literature crystal: {result.residue} from {cif_path.name}; "
+        f"supercell {rx}×{ry}×{rz}; {result.n_molecules} molecules; "
+        f"ρ={result.density_g_cm3:.4f} g/cm³",
+        flush=True,
+    )
+    print(
+        f"Box: a={a:.3f} b={b:.3f} c={c:.3f} Å; "
+        f"α={alpha:.1f} β={beta:.1f} γ={gamma:.1f}°",
+        flush=True,
+    )
+    print(f"Monomer template: {result.monomer_pdb}", flush=True)
+
+    if out.suffix.lower() == ".pdb":
+        if result.pdb_path != out:
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(result.pdb_path.read_text(encoding="utf-8"), encoding="utf-8")
+        print(f"Wrote {out}", flush=True)
+    elif out.suffix.lower() == ".npz":
+        atoms_to_reference_npz(atoms, out, label="literature_charmm_crystal")
+        print(f"Wrote {out}", flush=True)
+    else:
+        write_ase_structure(atoms, out, format=_infer_format(out, args.out_format))
+        print(f"Wrote {out}", flush=True)
+        if out.suffix.lower() != ".pdb":
+            print(f"CHARMM PDB: {result.pdb_path}", flush=True)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+
+    if args.literature is not None or args.from_cif is not None:
+        return _run_literature_build(args)
+
+    if not args.molecule:
+        print(
+            "Error: provide --literature / --from-cif or at least one -m/--molecule.",
+            file=sys.stderr,
+        )
+        return 2
+
     if not have_pyxtal():
         print(
             "Error: PyXtal is not installed. Install with: uv sync --extra chem",
