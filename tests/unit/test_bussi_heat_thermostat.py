@@ -157,7 +157,33 @@ def test_run_dynamics_captures_bussi_velocities_before_velos_del():
         "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.maybe_assign_velocities_via_ase_if_cold",
     ):
         run_dynamics(kw)
-    assert call_order == ["capture", "release"]
+    assert call_order == ["release", "capture", "release"]
+
+
+def test_post_dyna_restart_write_path_prefers_staging_alias(tmp_path):
+    from mmml.interfaces.pycharmmInterface.charmm_paths import CharmmIoAlias
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _post_dyna_restart_write_path,
+    )
+
+    original = tmp_path / "Heat.res"
+    staging = tmp_path / "heat.res"
+    staging.write_text("REST\n", encoding="ascii")
+    alias = CharmmIoAlias(original=original, alias=staging, for_write=True)
+    out = _post_dyna_restart_write_path(original, [alias])
+    assert out == staging
+
+
+def test_resolve_restart_velocities_read_paths_includes_overlap_slots(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        resolve_restart_velocities_read_paths,
+    )
+
+    final = tmp_path / "heat.res"
+    paths = resolve_restart_velocities_read_paths(final)
+    assert final.resolve() in paths
+    assert (tmp_path / "heat.a.res").resolve() in paths
+    assert (tmp_path / "heat.b.res").resolve() in paths
 
 
 def test_apply_bussi_velocity_rescale_syncs_charmm():
