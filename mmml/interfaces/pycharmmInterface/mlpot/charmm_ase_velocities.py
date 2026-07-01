@@ -156,22 +156,14 @@ def capture_charmm_velocities_for_bussi(
     restart_path: Path | str | None = None,
 ) -> np.ndarray | None:
     """Load AKMA velocities into main/COMP/cache for Bussi (cache, restart, then memory)."""
-    synced = charmm_synced_velocities_akma()
-    if synced is not None:
-        return synced
+    raw = last_synced_velocities_akma_raw()
+    if raw is not None and not velocities_are_cold(raw):
+        return raw
 
-    if restart_path is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
-            read_restart_velocities,
-        )
-
-        for candidate in resolve_restart_velocities_read_paths(restart_path):
-            if not candidate.is_file() or candidate.stat().st_size <= 0:
-                continue
-            vel = read_restart_velocities(candidate)
-            if vel is not None and not velocities_are_cold(vel):
-                sync_charmm_velocities_akma(vel)
-                return vel
+    vel = _read_restart_velocities_akma(restart_path)
+    if vel is not None:
+        sync_charmm_velocities_akma(vel)
+        return vel
 
     vel = charmm_velocities_akma_for_thermostat()
     if vel is not None and not velocities_are_cold(vel):
