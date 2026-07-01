@@ -615,6 +615,8 @@ def test_apply_bussi_in_memory_continuation_keeps_iasvel_zero():
     kw = {
         "firstt": 10.0,
         "finalt": 50.0,
+        "tstruct": 10.0,
+        "tbath": 10.0,
         "timestep": 0.0001,
         "nstep": 50,
     }
@@ -624,6 +626,37 @@ def test_apply_bussi_in_memory_continuation_keeps_iasvel_zero():
     assert kw["start"] is False
     assert kw["iunrea"] == -1
     assert kw["_skip_ase_cold_velocity_assign"] is True
+    assert kw["_bussi_comp_only_handoff"] is True
+    assert "firstt" not in kw
+    assert "finalt" not in kw
+    assert "tstruct" not in kw
+
+
+def test_resolve_dynamics_init_velocities_bussi_comp_only_skips_c_api():
+    from unittest.mock import patch
+
+    import numpy as np
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _resolve_dynamics_init_velocities,
+    )
+
+    warm = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], dtype=float)
+    kw = {
+        "start": False,
+        "iasvel": 0,
+        "_bussi_comp_only_handoff": True,
+        "_heat_thermostat": "bussi",
+    }
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.last_synced_velocities_akma_raw",
+        return_value=warm,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._resolve_bussi_rescale_velocities",
+    ) as resolve:
+        out = _resolve_dynamics_init_velocities(kw, restart_read_path=None)
+    assert out is None
+    resolve.assert_not_called()
 
 
 def test_ensure_bussi_heat_continuation_iasvel_for_overlap_chunk():
@@ -634,6 +667,7 @@ def test_ensure_bussi_heat_continuation_iasvel_for_overlap_chunk():
     kw = {
         "firstt": 10.0,
         "finalt": 50.0,
+        "tstruct": 10.0,
         "timestep": 0.0001,
         "nstep": 50,
         "start": False,
@@ -643,8 +677,9 @@ def test_ensure_bussi_heat_continuation_iasvel_for_overlap_chunk():
     _apply_overlap_chunk_dynamics_kw(kw, chunk_index=1, has_restart_read=False)
     assert kw["iasvel"] == 0
     assert kw["start"] is False
-    _ensure_bussi_heat_continuation_iasvel(kw)
-    assert kw["iasvel"] == 0
+    assert kw["_bussi_comp_only_handoff"] is True
+    assert "firstt" not in kw
+    assert "tstruct" not in kw
 
 
 def test_overlap_chunk_uses_memory_handoff_for_bussi(monkeypatch):

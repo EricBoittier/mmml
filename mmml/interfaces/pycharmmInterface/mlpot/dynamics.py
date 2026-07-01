@@ -1968,9 +1968,10 @@ def _apply_bussi_in_memory_continuation_kw(kw: dict[str, Any]) -> None:
     kw.pop("TEMINC", None)
     kw.pop("teminc", None)
     kw["_skip_ase_cold_velocity_assign"] = True
+    kw["_bussi_comp_only_handoff"] = True
     kw.pop("iunrea", None)
     kw["iunrea"] = -1
-    _strip_stale_heat_ramp_keywords(kw)
+    _strip_bussi_in_memory_heat_bath_keywords(kw)
 
 
 def apply_bussi_heat_ramp_overlap_chunk(
@@ -1983,21 +1984,17 @@ def apply_bussi_heat_ramp_overlap_chunk(
     """Continue a Bussi heat ramp on overlap chunk ``chunk_index`` > 0."""
     if chunk_index <= 0:
         return
-    chunk_kw["firstt"] = heat_ramp_bath_target_K(
-        firstt=float(ramp_spec["firstt"]),
-        finalt=float(ramp_spec["finalt"]),
-        teminc=float(ramp_spec["teminc"]),
-        ihtfrq=int(ramp_spec["ihtfrq"]),
-        step=int(steps_done),
-    )
-    chunk_kw["finalt"] = float(ramp_spec["finalt"])
-    chunk_kw["tstruct"] = float(chunk_kw["firstt"])
+    # Bath target is applied by ASE Bussi rescale via ``_bussi_ramp``; do not pass
+    # scale-heat ``FIRSTT`` / ``FINALT`` keywords to plain Verlet ``dyna`` legs
+    # (lingering heat-ramp state can segfault ``dynopt`` on in-memory handoffs).
     chunk_kw["iasvel"] = 0
     chunk_kw["iasors"] = 0
     chunk_kw["start"] = False
     chunk_kw["ihtfrq"] = 0
     chunk_kw.pop("TEMINC", None)
+    chunk_kw.pop("teminc", None)
     chunk_kw["_skip_ase_cold_velocity_assign"] = True
+    _strip_bussi_in_memory_heat_bath_keywords(chunk_kw)
 
 
 def _apply_overlap_chunk_bussi_heat_ramp(
@@ -2032,6 +2029,7 @@ def _apply_overlap_chunk_bussi_heat_ramp(
             steps_done=int(steps_done),
             ramp_spec=ramp_spec,
         )
+        chunk_kw["_bussi_global_step"] = int(steps_done)
 
 
 def apply_heat_ramp_overlap_chunk(
@@ -3357,11 +3355,27 @@ def _resolve_dynamics_init_velocities(
         return None
     from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         _resolve_bussi_rescale_velocities,
+        last_synced_velocities_akma_raw,
         resolve_assignment_temperature_k,
         velocities_are_cold,
     )
 
+    if bool(kw.get("_bussi_comp_only_handoff")):
+        raw = last_synced_velocities_akma_raw()
+        if raw is not None and not velocities_are_cold(raw):
+            return None
+
     temp = resolve_assignment_temperature_k(kw, default_K=300.0)
+    ramp = kw.get("_bussi_ramp")
+    if isinstance(ramp, dict):
+        global_step = int(kw.get("_bussi_global_step", 0) or 0)
+        temp = heat_ramp_bath_target_K(
+            firstt=float(ramp.get("firstt", temp)),
+            finalt=float(ramp.get("finalt", temp)),
+            teminc=float(ramp.get("teminc", 0.0)),
+            ihtfrq=int(ramp.get("ihtfrq", 0) or 0),
+            step=global_step,
+        )
     v = _resolve_bussi_rescale_velocities(
         restart_path=restart_read_path,
         temperature_K=temp,
@@ -3444,7 +3458,6 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     bussi_restart_fallbacks = kw.pop("_bussi_restart_fallback_paths", None)
     bussi_active = _bussi_heat_ramp_active(kw)
     _ensure_bussi_heat_continuation_iasvel(kw)
-    _strip_non_charmm_dynamics_keywords(kw)
     nstep = int(kw.get("nstep", 0) or 0)
     if nstep < 1:
         raise ValueError(
@@ -3469,6 +3482,7 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
         restart_read_path=restart_read_path,
         fallback_paths=bussi_restart_fallbacks,
     )
+    _strip_non_charmm_dynamics_keywords(kw)
     # Populate COMP before the cold check: ``iasvel=0`` dyna reads COMP, not main.
     mirror_comparison_velocities_for_dynamics(
         kw,
@@ -4972,6 +4986,13 @@ def _strip_stale_heat_ramp_keywords(kw: dict[str, Any]) -> None:
         kw.pop(key, None)
 
 
+def _strip_bussi_in_memory_heat_bath_keywords(kw: dict[str, Any]) -> None:
+    """Drop CHARMM heat-bath keys before plain Verlet Bussi continuation legs."""
+    _strip_stale_heat_ramp_keywords(kw)
+    for key in ("firstt", "tstruct", "tbath", "twindh", "twindl"):
+        kw.pop(key, None)
+
+
 def _apply_overlap_chunk_dynamics_kw(
     chunk_kw: dict[str, Any],
     *,
@@ -5090,6 +5111,8 @@ def _apply_overlap_chunk_dynamics_kw(
         _apply_bussi_in_memory_continuation_kw(chunk_kw)
     elif int(chunk_index) > 0:
         _ensure_bussi_heat_continuation_iasvel(chunk_kw)
+        if _bussi_heat_ramp_active(chunk_kw) and not has_restart_read:
+            _strip_bussi_in_memory_heat_bath_keywords(chunk_kw)
 
 
 def _cleanup_overlap_restart_slots(io: Optional[CharmmTrajectoryFiles]) -> None:
@@ -5559,6 +5582,7 @@ def _run_bussi_heat_subchunked(
         sub_kw["nstep"] = n
         if steps_done > 0:
             _apply_bussi_in_memory_continuation_kw(sub_kw)
+        sub_kw["_bussi_global_step"] = int(global_step_offset) + steps_done
         _harmonize_overlap_chunk_frequencies(
             sub_kw,
             n,
