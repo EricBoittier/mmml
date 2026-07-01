@@ -131,7 +131,10 @@ def test_assign_maxwell_boltzmann_velocities_via_ase_syncs_charmm():
         return_value=masses,
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
-    ) as sync:
+    ) as sync, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.estimate_kinetic_temperature_k",
+        return_value=300.0,
+    ):
         assign_maxwell_boltzmann_velocities_via_ase(300.0, quiet=True)
 
     atoms.set_masses.assert_called_once()

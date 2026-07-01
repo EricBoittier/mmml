@@ -67,7 +67,10 @@ def test_resolve_dynamics_init_velocities_uses_bussi_rescale_ladder():
     with patch(
         "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._resolve_bussi_rescale_velocities",
         return_value=v,
-    ) as rescale:
+    ) as rescale, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
+        return_value=False,
+    ):
         out = _resolve_dynamics_init_velocities(
             {"start": False, "iasvel": 0, "firstt": 12.0},
             restart_read_path="/tmp/heat.a.res",
