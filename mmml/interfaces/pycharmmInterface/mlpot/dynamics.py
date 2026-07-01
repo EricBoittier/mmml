@@ -3152,6 +3152,7 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     kw = dict(dynamics_kwargs)
     skip_ase_cold = bool(kw.pop("_skip_ase_cold_velocity_assign", False))
     quiet_ase = bool(kw.pop("_quiet_ase_velocity_assign", False))
+    restart_read_path = kw.pop("_restart_read_path", None)
     _strip_non_charmm_dynamics_keywords(kw)
     nstep = int(kw.get("nstep", 0) or 0)
     if nstep < 1:
@@ -3170,12 +3171,13 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
 
     import pycharmm
     clamp_velocity_assignment_dynamics_kw(kw)
+    # Populate COMP before the cold check: ``iasvel=0`` dyna reads COMP, not main.
+    mirror_comparison_velocities_for_dynamics(
+        kw,
+        restart_read_path=restart_read_path,
+    )
     if not skip_ase_cold:
         maybe_assign_velocities_via_ase_if_cold(kw, quiet=quiet_ase)
-    # PyCHARMM omits ``start`` from the script when start=False, so CHARMM may keep
-    # START active after a prior Boltzmann assign. With iasvel=0 that reads COMP
-    # as velocities — mirror main velocities into COMP via C API (not zero COMP).
-    mirror_comparison_velocities_for_dynamics(kw)
     if "echeck" in kw:
         apply_charmm_dynamics_echeck_kw(kw, float(kw["echeck"]))
     apply_charmm_dynamics_timestep_kw(kw)
@@ -4670,6 +4672,8 @@ def _run_dynamics_chunk(
     kw = dict(dynamics_kwargs)
     iokw: dict[str, Any] = {}
     if io is not None:
+        if io.restart_read is not None:
+            kw["_restart_read_path"] = io.restart_read
         open_files, iokw, io_aliases = io.open_for_run()
         kw.update(iokw)
     if extra_iokw:

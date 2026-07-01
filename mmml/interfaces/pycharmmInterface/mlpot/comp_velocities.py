@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -144,6 +145,17 @@ def sync_comparison_velocities_akma(velocities_akma: np.ndarray) -> None:
     coor_set_comparison_capi(np.column_stack([v, w]))
 
 
+def comparison_velocities_akma() -> np.ndarray | None:
+    """COMP x/y/z as AKMA velocity components when CHARMM uses the COMP path."""
+    try:
+        comp = coor_get_comparison_capi()
+    except Exception:
+        return None
+    if comp.shape[0] == 0:
+        return None
+    return np.asarray(comp[:, :3], dtype=np.float64)
+
+
 def sync_comparison_velocities_from_main() -> bool:
     """Copy readable main-set velocities into COMP; return False when unavailable."""
     from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
@@ -158,18 +170,60 @@ def sync_comparison_velocities_from_main() -> bool:
     return True
 
 
-def mirror_comparison_velocities_for_dynamics(kw: dict[str, Any]) -> None:
-    """When ``iasvel=0``, mirror main velocities into COMP instead of zeroing COMP.
+def sync_comparison_velocities_from_comparison() -> bool:
+    """True when COMP already holds warm AKMA velocities (post-dyna / handoff)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        velocities_are_cold,
+    )
+
+    vel = comparison_velocities_akma()
+    if vel is None or velocities_are_cold(vel):
+        return False
+    return True
+
+
+def sync_comparison_velocities_from_restart(path: Path | str | None) -> bool:
+    """Load ``!VELOCITIES`` from a restart file into COMP when present."""
+    if path is None:
+        return False
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        velocities_are_cold,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_restart_velocities,
+    )
+
+    p = Path(path)
+    if not p.is_file():
+        return False
+    vel = read_restart_velocities(p)
+    if vel is None or velocities_are_cold(vel):
+        return False
+    sync_comparison_velocities_akma(vel)
+    return True
+
+
+def mirror_comparison_velocities_for_dynamics(
+    kw: dict[str, Any],
+    *,
+    restart_read_path: Path | str | None = None,
+) -> None:
+    """When ``iasvel=0``, ensure COMP holds warm velocities for CHARMM ``dyna``.
 
     PyCHARMM may omit ``start=False`` so CHARMM keeps START and reads COMP as
-    velocities. Zero COMP yields T≈0 and spurious ASE reassignment at chunk
-    boundaries; mirroring assigned/main velocities keeps ``dyna`` consistent.
+    velocities. Zeroing COMP at overlap chunk boundaries yields T≈0; prefer
+    main-set, in-memory COMP, or restart-file velocities instead.
     """
     if bool(kw.get("start")) or int(kw.get("iasvel", 1) or 0) != 0:
         return
+    if restart_read_path is None:
+        restart_read_path = kw.pop("_restart_read_path", None)
     if sync_comparison_velocities_from_main():
         return
-    clear_comparison_coordinates()
+    if sync_comparison_velocities_from_comparison():
+        return
+    if sync_comparison_velocities_from_restart(restart_read_path):
+        return
 
 
 def force_magnitudes_kcalmol_A() -> np.ndarray:

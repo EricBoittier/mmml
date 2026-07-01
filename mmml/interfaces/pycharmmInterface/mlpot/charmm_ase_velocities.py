@@ -36,18 +36,29 @@ def charmm_masses_amu() -> np.ndarray:
 
 
 def charmm_velocities_akma() -> np.ndarray | None:
-    """Main-set velocities as ``(N, 3)`` in CHARMM AKMA units, or ``None``."""
+    """Main-set velocities as ``(N, 3)`` in CHARMM AKMA units, or ``None``.
+
+    Falls back to the COMP coordinate set when ``coor.get_velocity`` is missing
+    (common on cluster PyCHARMM builds). With ``iasvel=0``, CHARMM stores and
+    reads AKMA velocity components in COMP.
+    """
     from mmml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (
         _charmm_velocities_array,
     )
 
     vel = _charmm_velocities_array()
-    if vel is None:
+    if vel is not None:
+        arr = np.asarray(vel, dtype=np.float64)
+        if arr.ndim == 2 and arr.shape[1] == 3:
+            return arr
+    try:
+        from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+            comparison_velocities_akma,
+        )
+
+        return comparison_velocities_akma()
+    except Exception:
         return None
-    arr = np.asarray(vel, dtype=np.float64)
-    if arr.ndim != 2 or arr.shape[1] != 3:
-        return None
-    return arr
 
 
 def ase_to_charmm_akma_velocities(
