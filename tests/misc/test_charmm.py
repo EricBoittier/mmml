@@ -11,26 +11,11 @@ import os
 import pytest
 
 
-def _can_import_pycharmm() -> bool:
-    """Return True if pycharmm can be imported."""
-    try:
-        __import__("pycharmm")
-        return True
-    except Exception:
-        return False
-
-
-def _charmm_env_configured() -> bool:
-    """Return True if CHARMM env vars are set and paths exist."""
-    home = os.environ.get("CHARMM_HOME")
-    lib = os.environ.get("CHARMM_LIB_DIR")
-    if not home or not lib:
-        return False
-    return os.path.exists(home) and os.path.exists(lib)
+from tests.conftest import can_import_pycharmm, charmm_env_configured
 
 
 @pytest.mark.skipif(
-    not _charmm_env_configured(),
+    not charmm_env_configured(),
     reason="CHARMM_HOME or CHARMM_LIB_DIR not set or paths do not exist",
 )
 def test_charmm_import():
@@ -40,12 +25,12 @@ def test_charmm_import():
 
 
 @pytest.mark.skipif(
-    not _can_import_pycharmm(),
+    not can_import_pycharmm(),
     reason="pycharmm not available in this environment",
 )
 def test_mmml_calculator_charmm_flag():
     """MMML calculator module exposes _HAVE_PYCHARMM correctly."""
-    from mmml.pycharmmInterface import mmml_calculator
+    from mmml.interfaces.pycharmmInterface import mmml_calculator
 
     assert hasattr(mmml_calculator, "_HAVE_PYCHARMM")
     assert mmml_calculator._HAVE_PYCHARMM is True

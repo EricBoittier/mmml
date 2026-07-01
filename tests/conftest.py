@@ -37,6 +37,9 @@ _PYCHARMM_SEED_PDBS = (
     "init-tip3.pdb",
     "tip3.pdb",
 )
+_PYCHARMM_SEED_PSFS = (
+    "aco-1.psf",
+)
 
 # Paths (relative to tests/) that require a live PyCHARMM build.
 _PYCHARMM_PATH_PREFIXES = (
@@ -124,6 +127,10 @@ def pycharmm_workdir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         src = PYCHARMMETC_DIR / "pdb" / name
         if src.is_file():
             shutil.copy2(src, tmp_path / "pdb" / name)
+    for name in _PYCHARMM_SEED_PSFS:
+        src = PYCHARMMETC_DIR / "psf" / name
+        if src.is_file():
+            shutil.copy2(src, tmp_path / "psf" / name)
     monkeypatch.chdir(tmp_path)
     return tmp_path
 

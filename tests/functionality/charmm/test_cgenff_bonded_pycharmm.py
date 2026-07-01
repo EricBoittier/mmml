@@ -21,7 +21,7 @@ from mmml.interfaces.pycharmmInterface.cgenff_topology import (
     parse_psf_ext,
 )
 from tests.conftest import can_import_pycharmm
-from tests.functionality.pycharmmETC._paths import PYCHARMMETC_DIR
+from tests.functionality.pycharmmETC._paths import PYCHARMMETC_DIR, workdir_pdb, workdir_psf
 
 pytestmark = pytest.mark.skipif(
     not can_import_pycharmm(),
@@ -86,16 +86,21 @@ def test_committed_aco_psf_matches_pycharmm_after_charmm_load(pycharmm_workdir) 
     assert ACO_PSF.is_file(), f"missing fixture PSF: {ACO_PSF}"
     assert ACO_PDB.is_file(), f"missing fixture PDB: {ACO_PDB}"
 
+    aco_psf = Path(workdir_psf("aco-1.psf"))
+    aco_pdb = Path(workdir_pdb("aco.pdb"))
+    assert aco_psf.is_file(), f"missing workdir PSF seed: {aco_psf}"
+    assert aco_pdb.is_file(), f"missing workdir PDB seed: {aco_pdb}"
+
     with charmm_relaxed_bomlev():
         read.rtf(CGENFF_RTF)
         read.prm(CGENFF_PRM)
-    read.psf_card(str(ACO_PSF))
-    read.pdb(str(ACO_PDB), resid=True)
+        read.psf_card(str(aco_psf))
+        read.pdb(str(aco_pdb), resid=True)
 
     positions = charmm_positions_xyz_array()
     positions = _perturb_positions(positions, seed=23)
     _compare_psf_bonded_to_charmm(
-        ACO_PSF,
+        aco_psf,
         positions,
         # Committed PDB/PSF pair is not re-minimized like setupRes fixtures.
         energy_rtol=5e-3,

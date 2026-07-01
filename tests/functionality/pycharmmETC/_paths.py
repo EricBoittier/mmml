@@ -15,3 +15,8 @@ def fixture_pdb(name: str) -> Path:
 def workdir_pdb(name: str) -> str:
     """Relative PDB path for CHARMM OPEN inside ``pycharmm_workdir`` (copied seed)."""
     return f"pdb/{name}"
+
+
+def workdir_psf(name: str) -> str:
+    """Relative PSF path for CHARMM OPEN inside ``pycharmm_workdir`` (copied seed)."""
+    return f"psf/{name}"
