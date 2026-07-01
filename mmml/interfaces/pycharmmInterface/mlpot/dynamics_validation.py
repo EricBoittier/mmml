@@ -305,18 +305,23 @@ def _restart_section_values(path: Path, section_marker: str) -> list[float]:
 
 
 def read_restart_velocities(path: Path) -> np.ndarray | None:
-    """Return ``(N, 3)`` velocities from ``!VELOCITIES`` when present."""
+    """Return ``(N, 3)`` velocities from a CHARMM restart when present.
+
+    CHARMM ``WRIDYN`` uses ``!VX, VY, VZ``; mmml-written restarts may use ``!VELOCITIES``.
+    """
     p = Path(path)
     natom = read_restart_natom(p)
     if natom is None or natom <= 0:
         return None
-    flat = _restart_section_values(p, "!VELOCITIES")
-    if len(flat) < 3 * natom:
-        return None
-    vel = np.asarray(flat[: 3 * natom], dtype=float).reshape(natom, 3)
-    if not np.all(np.isfinite(vel)):
-        return None
-    return vel
+    for marker in ("!VELOCITIES", "!VX, VY, VZ", "!VX,VY,VZ"):
+        flat = _restart_section_values(p, marker)
+        if len(flat) < 3 * natom:
+            continue
+        vel = np.asarray(flat[: 3 * natom], dtype=float).reshape(natom, 3)
+        if not np.all(np.isfinite(vel)):
+            continue
+        return vel
+    return None
 
 
 def read_restart_coordinates(path: Path) -> np.ndarray | None:

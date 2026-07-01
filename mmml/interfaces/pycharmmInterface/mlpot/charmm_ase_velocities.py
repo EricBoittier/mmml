@@ -388,6 +388,17 @@ def assign_maxwell_boltzmann_velocities_via_ase(
     sync_charmm_velocities_akma(v_akma)
 
     measured = estimate_kinetic_temperature_k(v_akma, masses)
+    if measured is None or float(measured) < MIN_VELOCITY_ASSIGNMENT_TEMP_K:
+        rng = np.random.default_rng(seed)
+        v_akma = _maxwell_boltzmann_akma_numpy(masses, temp, rng=rng)
+        sync_charmm_velocities_akma(v_akma)
+        measured = estimate_kinetic_temperature_k(v_akma, masses)
+        if not quiet:
+            print(
+                f"ASE Maxwell-Boltzmann readback cold; "
+                f"in-memory draw at {temp:.2f} K",
+                flush=True,
+            )
     if not quiet:
         txt = f"{measured:.2f}" if measured is not None else "?"
         print(

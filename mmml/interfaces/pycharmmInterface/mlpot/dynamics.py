@@ -3355,6 +3355,7 @@ def _resolve_dynamics_init_velocities(
     from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         _resolve_bussi_rescale_velocities,
         resolve_assignment_temperature_k,
+        velocities_are_cold,
     )
 
     temp = resolve_assignment_temperature_k(kw, default_K=300.0)
@@ -3363,6 +3364,20 @@ def _resolve_dynamics_init_velocities(
         temperature_K=temp,
         quiet=bool(kw.get("_quiet_bussi_rescale", False)),
     )
+    v = np.asarray(v, dtype=np.float64).reshape(-1, 3)
+    if v.size == 0 or float(np.max(np.abs(v))) < 1.0e-8 or velocities_are_cold(v):
+        kw["iasvel"] = 1
+        kw["start"] = False
+        kw["firstt"] = temp
+        kw["tbath"] = temp
+        kw["tstruct"] = temp
+        if not bool(kw.get("_quiet_bussi_rescale", False)):
+            print(
+                f"run_dynamics: warm init unavailable; Boltzmann at {temp:.2f} K "
+                "(iasvel=1 continuation)",
+                flush=True,
+            )
+        return None
     return _init_velocities_dict_from_akma(v)
 
 
@@ -5091,6 +5106,20 @@ def _run_dynamics_chunk(
                 alias.finalize()
             except Exception:
                 pass
+        if _bussi_heat_ramp_active(kw):
+            from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+                capture_charmm_velocities_for_bussi,
+            )
+
+            write_target = kw.get("_post_dyna_restart_write_target")
+            restart_path = (
+                _post_dyna_restart_write_path(write_target, io_aliases)
+                if write_target is not None
+                else None
+            )
+            if restart_path is None and io is not None and io.restart_write is not None:
+                restart_path = Path(io.restart_write)
+            capture_charmm_velocities_for_bussi(restart_path=restart_path)
 
 
 def _cpt_stability_chunk_nstep(kw: dict[str, Any], total_nstep: int) -> int | None:
