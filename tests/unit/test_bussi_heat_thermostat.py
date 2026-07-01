@@ -518,6 +518,36 @@ def test_apply_bussi_velocity_rescale_rejects_pathological():
     assign.assert_called_once()
 
 
+def test_apply_bussi_velocity_rescale_rejects_pathological_after_alpha():
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        apply_bussi_velocity_rescale,
+    )
+
+    masses = np.array([12.0], dtype=float)
+    warm = np.array([[1.0e8, 0.0, 0.0]], dtype=float)
+    good = np.array([[100.0, 0.0, 0.0]], dtype=float)
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_masses_amu",
+        return_value=masses,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._resolve_bussi_rescale_velocities",
+        return_value=warm,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.assign_bussi_fallback_velocities",
+        return_value=(28.0, good),
+    ) as assign, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_pathological",
+        side_effect=[False, True],
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.calculate_bussi_rescale_alpha",
+        return_value=0.6065,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
+    ):
+        apply_bussi_velocity_rescale(28.0, timestep_ps=0.0005, quiet=True)
+    assign.assert_called_once()
+
+
 def test_bussi_overlap_skip_scratch_restart_write():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _bussi_overlap_skip_scratch_restart_write,

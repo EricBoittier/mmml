@@ -3365,10 +3365,6 @@ def _resolve_dynamics_init_velocities(
         raw = last_synced_velocities_akma_raw()
         if raw is not None:
             v = np.asarray(raw, dtype=np.float64).reshape(-1, 3)
-            from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
-                velocities_are_pathological,
-            )
-
             if (
                 v.size > 0
                 and np.all(np.isfinite(v))

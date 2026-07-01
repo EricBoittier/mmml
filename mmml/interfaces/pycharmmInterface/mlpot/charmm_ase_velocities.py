@@ -225,7 +225,11 @@ def last_synced_velocities_akma_raw() -> np.ndarray | None:
 def charmm_synced_velocities_akma() -> np.ndarray | None:
     """Return the last AKMA velocities written by :func:`sync_charmm_velocities_akma`."""
     vel = last_synced_velocities_akma_raw()
-    if vel is None or velocities_are_cold(vel):
+    if (
+        vel is None
+        or velocities_are_cold(vel)
+        or velocities_are_pathological(vel)
+    ):
         return None
     return vel
 
@@ -385,10 +389,14 @@ def bussi_restart_fallback_paths_from_overlap(
 def charmm_velocities_akma_for_thermostat() -> np.ndarray | None:
     """Best-effort AKMA velocities for Bussi / mirror (cache, main, COMP)."""
     synced = charmm_synced_velocities_akma()
-    if synced is not None:
+    if synced is not None and not velocities_are_pathological(synced):
         return synced
     vel = charmm_velocities_akma()
-    if vel is not None and not velocities_are_cold(vel):
+    if (
+        vel is not None
+        and not velocities_are_cold(vel)
+        and not velocities_are_pathological(vel)
+    ):
         return vel
     try:
         from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
@@ -399,13 +407,15 @@ def charmm_velocities_akma_for_thermostat() -> np.ndarray | None:
         comp = comparison_velocities_akma()
         if (
             comp is not None
+            and _velocity_array_matches_psf(comp)
             and not comparison_matches_main_positions()
             and not velocities_are_cold(comp)
+            and not velocities_are_pathological(comp)
         ):
             return comp
     except Exception:
         pass
-    return vel
+    return None
 
 
 def capture_charmm_velocities_for_bussi(
@@ -420,8 +430,8 @@ def capture_charmm_velocities_for_bussi(
     """Load AKMA velocities into main/COMP/cache for Bussi.
 
     Order: warm synced cache, live main-set (post-``dyna``), warm restart ladder
-    (current scratch + paired slot + staging + *fallback_paths*), finite-difference
-    from coordinate deltas, then warm COMP.
+    (current scratch + paired slot + staging + *fallback_paths*), warm COMP,
+    then finite-difference from coordinate deltas.
     """
     raw = last_synced_velocities_akma_raw()
     if raw is not None and not velocities_are_cold(raw) and not velocities_are_pathological(raw):
@@ -445,14 +455,6 @@ def capture_charmm_velocities_for_bussi(
         else:
             return vel
 
-    vel = charmm_velocities_akma_for_thermostat()
-    if vel is not None and not velocities_are_cold(vel):
-        try:
-            sync_charmm_velocities_akma(vel)
-        except ValueError:
-            vel = None
-        else:
-            return vel
     try:
         from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
             comparison_matches_main_positions,
@@ -583,7 +585,8 @@ def velocities_are_pathological(
         return True
     temp = estimate_kinetic_temperature_k(velocities_akma, masses_amu, ndegf=ndegf)
     if temp is None:
-        return float(np.max(np.abs(v))) > 1.0e6
+        # When temperature cannot be computed, reject coordinate-scale COMP reads.
+        return float(np.max(np.abs(v))) > 1.0e4
     return float(temp) > float(max_temperature_K)
 
 
@@ -909,7 +912,11 @@ def _resolve_bussi_rescale_velocities(
         sync_charmm_velocities_akma(vel)
         return vel
     raw = last_synced_velocities_akma_raw()
-    if raw is not None:
+    if (
+        raw is not None
+        and not velocities_are_cold(raw)
+        and not velocities_are_pathological(raw)
+    ):
         return raw
     if not quiet:
         print(
@@ -1078,8 +1085,23 @@ def apply_bussi_velocity_rescale(
                 flush=True,
             )
     v_akma = np.asarray(v_akma, dtype=np.float64) * float(alpha)
-    sync_charmm_velocities_akma(v_akma)
     measured = estimate_kinetic_temperature_k(v_akma, masses, ndegf=dof)
+    if (
+        velocities_are_pathological(v_akma, masses, ndegf=dof)
+        or measured is None
+        or not np.isfinite(measured)
+        or float(measured) > MAX_REASONABLE_VELOCITY_TEMP_K
+    ):
+        if not quiet:
+            txt = f"{measured:.2f}" if measured is not None and np.isfinite(measured) else "?"
+            print(
+                f"ASE Bussi rescale: pathological T_after≈{txt} K; "
+                f"assigning Maxwell-Boltzmann at {temp:.2f} K",
+                flush=True,
+            )
+        _, v_akma = assign_bussi_fallback_velocities(temp, quiet=quiet)
+        measured = estimate_kinetic_temperature_k(v_akma, masses, ndegf=dof)
+    sync_charmm_velocities_akma(v_akma)
     if not quiet:
         txt_meas = f"{measured:.2f}" if measured is not None else "?"
         print(
