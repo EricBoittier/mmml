@@ -214,7 +214,9 @@ def charmm_fshift_elec(r: Array, qq: Array, settings: CharmmNbondSettings) -> Ar
     r_sq = r_safe * r_safe
     r1 = 1.0 / r_safe
     ch = qq * r1
-    return ch * (1.0 + r_sq * (settings.min2of * r1 - settings.ctrof2))
+    ctrof2 = jnp.asarray(settings.ctrof2, dtype=jnp.float64)
+    min2of = jnp.asarray(settings.min2of, dtype=jnp.float64)
+    return ch * (1.0 + r_sq * (min2of * r1 - ctrof2))
 
 
 def charmm_fswitch_elec(
@@ -230,11 +232,14 @@ def charmm_fswitch_elec(
     r_sq = r_safe * r_safe
     r1 = 1.0 / r_safe
     outer = r_sq > settings.c2onnb
-    inner = (1.0 / r_safe) + coeffs.eadd
-    switched = r1 * (
-        coeffs.acoef
-        - r_sq * (coeffs.bcoef + r_sq * (coeffs.cover3 + coeffs.dover5 * r_sq))
-    ) + coeffs.const
+    acoef = jnp.asarray(coeffs.acoef, dtype=jnp.float64)
+    bcoef = jnp.asarray(coeffs.bcoef, dtype=jnp.float64)
+    cover3 = jnp.asarray(coeffs.cover3, dtype=jnp.float64)
+    dover5 = jnp.asarray(coeffs.dover5, dtype=jnp.float64)
+    const = jnp.asarray(coeffs.const, dtype=jnp.float64)
+    eadd = jnp.asarray(coeffs.eadd, dtype=jnp.float64)
+    inner = r1 + eadd
+    switched = r1 * (acoef - r_sq * (bcoef + r_sq * (cover3 + dover5 * r_sq))) + const
     return qq * jnp.where(outer, switched, inner)
 
 
@@ -258,15 +263,21 @@ def charmm_vfswitch_vdw(
     tr2 = r1 * r1
     tr6 = tr2 * tr2 * tr2
     outer = r_sq > settings.c2onnb
+    recof6 = jnp.asarray(coeffs.recof6, dtype=jnp.float64)
+    recof3 = jnp.asarray(coeffs.recof3, dtype=jnp.float64)
+    onoff6 = jnp.asarray(coeffs.onoff6, dtype=jnp.float64)
+    onoff3 = jnp.asarray(coeffs.onoff3, dtype=jnp.float64)
+    ofdif6 = jnp.asarray(coeffs.ofdif6, dtype=jnp.float64)
+    ofdif3 = jnp.asarray(coeffs.ofdif3, dtype=jnp.float64)
     r3 = r1 * tr2
-    rjunk6 = tr6 - coeffs.recof6
-    rjunk3 = r3 - coeffs.recof3
-    cr12 = a_coef * coeffs.ofdif6 * rjunk6
-    cr6 = b_coef * coeffs.ofdif3 * rjunk3
+    rjunk6 = tr6 - recof6
+    rjunk3 = r3 - recof3
+    cr12 = a_coef * ofdif6 * rjunk6
+    cr6 = b_coef * ofdif3 * rjunk3
     switched = cr12 * rjunk6 - cr6 * rjunk3
     ca = a_coef * tr6 * tr6
     enevdw = ca - b_coef * tr6
-    inner = enevdw + b_coef * coeffs.onoff3 - a_coef * coeffs.onoff6
+    inner = enevdw + b_coef * onoff3 - a_coef * onoff6
     return jnp.where(outer, switched, inner)
 
 
