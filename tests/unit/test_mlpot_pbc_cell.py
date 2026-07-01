@@ -22,6 +22,11 @@ from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
 )
 
 
+def _mock_mm_pair_buffers() -> tuple[np.ndarray, np.ndarray]:
+    """Minimal valid neighbor-list buffers for PBC MM mocks."""
+    return np.zeros((1, 2), dtype=np.int32), np.zeros((1,), dtype=bool)
+
+
 def _hybrid_compat_patch():
     return patch(
         "mmml.interfaces.energy_forces.ml.assert_hybrid_ml_compatible",
@@ -563,7 +568,9 @@ def test_warmup_decomposed_mlpot_passes_box_when_cell_set():
 
 def test_warmup_decomposed_mlpot_do_mm_uses_get_update_fn():
     z = np.zeros(8, dtype=int)
-    get_update_fn = MagicMock(return_value=MagicMock(return_value=(None, None)))
+    get_update_fn = MagicMock(
+        return_value=MagicMock(return_value=_mock_mm_pair_buffers())
+    )
     model = DecomposedMlpotModel(
         MagicMock(),
         CutoffParameters(),
@@ -588,6 +595,23 @@ def test_warmup_decomposed_mlpot_do_mm_uses_get_update_fn():
     mock_warmup.assert_called_once()
     assert mock_warmup.call_args.kwargs["doMM"] is True
     mock_vg_warmup.assert_called_once()
+
+
+def test_resolve_mm_pairs_raises_when_pbc_update_returns_empty():
+    z = np.zeros(8, dtype=int)
+    get_update_fn = MagicMock(return_value=MagicMock(return_value=(None, None)))
+    calc = DecomposedMlpotCalculator(
+        MagicMock(),
+        CutoffParameters(),
+        2,
+        z,
+        cell=20.0,
+        do_mm=True,
+        get_update_fn=get_update_fn,
+    )
+    box = jnp.asarray([[20.0, 0.0, 0.0], [0.0, 20.0, 0.0], [0.0, 0.0, 20.0]])
+    with pytest.raises(RuntimeError, match="PBC MM neighbor update returned no pair list"):
+        calc._resolve_mm_pairs(np.zeros((8, 3)), box)
 
 
 def test_decomposed_calculator_initializes_mm_before_spherical_fn():
@@ -774,7 +798,9 @@ def test_mlpot_spherical_forces_loose_pbc_jax_pme_passes_box():
 
 def test_decomposed_calculator_jax_pme_uses_charmm_box_fallback():
     z = np.zeros(8, dtype=int)
-    get_update_fn = MagicMock(return_value=MagicMock(return_value=(None, None)))
+    get_update_fn = MagicMock(
+        return_value=MagicMock(return_value=_mock_mm_pair_buffers())
+    )
     calc = DecomposedMlpotCalculator(
         MagicMock(),
         CutoffParameters(),
@@ -972,7 +998,9 @@ def test_decomposed_calculator_passes_charmm_box_to_spherical_fn():
 
 def test_decomposed_calculator_queries_box_when_jax_pme_active_without_cached_cell():
     z = np.zeros(8, dtype=int)
-    get_update_fn = MagicMock(return_value=MagicMock(return_value=(None, None)))
+    get_update_fn = MagicMock(
+        return_value=MagicMock(return_value=_mock_mm_pair_buffers())
+    )
     calc = DecomposedMlpotCalculator(
         MagicMock(),
         CutoffParameters(),
