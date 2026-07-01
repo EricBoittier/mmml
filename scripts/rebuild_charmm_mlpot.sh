@@ -22,20 +22,102 @@ _platform_tag() {
   esac
 }
 
-_default_openmpi_root() {
-  local candidate
+_openmpi_prefix_from_bindir() {
+  local bindir="$1" prefix
+  bindir="$(cd "$bindir" && pwd)"
+  prefix="$(dirname "$bindir")"
+  if [[ -d "$prefix/lib" || -d "$prefix/lib64" ]]; then
+    echo "$prefix"
+    return 0
+  fi
+  return 1
+}
+
+_openmpi_prefix_from_mpicc() {
+  local mpicc_path bindir ompi_info prefix
+  mpicc_path="$(command -v mpicc 2>/dev/null || true)"
+  [[ -z "$mpicc_path" || ! -x "$mpicc_path" ]] && return 1
+  bindir="$(dirname "$mpicc_path")"
+  ompi_info="$bindir/ompi_info"
+  if [[ -x "$ompi_info" ]]; then
+    prefix="$("$ompi_info" --path prefix 2>/dev/null | awk '{print $NF}' || true)"
+    if [[ -n "$prefix" && -d "$prefix" ]]; then
+      echo "$prefix"
+      return 0
+    fi
+  fi
+  _openmpi_prefix_from_bindir "$bindir"
+}
+
+_auto_find_openmpi_root() {
+  local candidate pattern base
   for candidate in \
+    "${EBROOTOPENMPI:-}" \
     /opt/gcc-14.2.0/openmpi-5.0.5/build \
     /opt/gcc-12.2.0/openmpi-4.1.4/build \
     /opt/homebrew/opt/open-mpi \
     /opt/homebrew \
+    /usr/lib64/openmpi \
+    /usr/lib/openmpi \
+    /usr/local/lib/openmpi \
     /usr; do
+    [[ -z "$candidate" ]] && continue
     if [[ -x "$candidate/bin/mpicc" ]]; then
       echo "$candidate"
       return 0
     fi
   done
-  echo /usr
+  for pattern in \
+    "/srv/opt/gcc-*/openmpi-*/build" \
+    "/opt/gcc-*/openmpi-*/build"; do
+    # shellcheck disable=SC2086
+    for base in $(ls -d $pattern 2>/dev/null | sort -rV 2>/dev/null | head -3); do
+      if [[ -x "$base/bin/mpicc" ]]; then
+        echo "$base"
+        return 0
+      fi
+    done
+  done
+  if prefix="$(_openmpi_prefix_from_mpicc 2>/dev/null)"; then
+    echo "$prefix"
+    return 0
+  fi
+  return 1
+}
+
+_resolve_mpi_wrappers() {
+  local bindir fc_wrapper
+  bindir=""
+  if [[ -n "${OPENMPI_ROOT:-}" && -d "${OPENMPI_ROOT}/bin" ]]; then
+    bindir="${OPENMPI_ROOT}/bin"
+  fi
+  if [[ -n "$bindir" && -x "${bindir}/mpicc" && -x "${bindir}/mpicxx" ]]; then
+    MPI_CC="${MPI_CC:-${bindir}/mpicc}"
+    MPI_CXX="${MPI_CXX:-${bindir}/mpicxx}"
+    if [[ -x "${bindir}/mpifort" ]]; then
+      MPI_FC="${MPI_FC:-${bindir}/mpifort}"
+    elif [[ -x "${bindir}/mpif90" ]]; then
+      MPI_FC="${MPI_FC:-${bindir}/mpif90}"
+    fi
+  fi
+  if [[ -z "${MPI_CC:-}" ]] && command -v mpicc >/dev/null 2>&1; then
+    MPI_CC="$(command -v mpicc)"
+    MPI_CXX="${MPI_CXX:-$(command -v mpicxx 2>/dev/null || command -v mpic++ 2>/dev/null || true)}"
+    MPI_FC="${MPI_FC:-$(command -v mpifort 2>/dev/null || command -v mpif90 2>/dev/null || true)}"
+    if [[ -z "${OPENMPI_ROOT:-}" || ! -x "${OPENMPI_ROOT}/bin/mpicc" ]]; then
+      if prefix="$(_openmpi_prefix_from_mpicc 2>/dev/null)"; then
+        OPENMPI_ROOT="$prefix"
+      elif bindir="$(dirname "$MPI_CC")"; then
+        OPENMPI_ROOT="$(dirname "$bindir")"
+      fi
+    fi
+  fi
+  for fc_wrapper in mpifort mpif90; do
+    if [[ -z "${MPI_FC:-}" ]] && command -v "$fc_wrapper" >/dev/null 2>&1; then
+      MPI_FC="$(command -v "$fc_wrapper")"
+      break
+    fi
+  done
 }
 
 _auto_find_fftw_root() {
@@ -74,7 +156,13 @@ _auto_find_fftw_root() {
 
 PLATFORM_TAG="$(_platform_tag)"
 LOCAL_BUILD="${CHARMM_BUILD_DIR:-${HOME}/.cache/mmml-charmm-build/${PLATFORM_TAG}}"
-OPENMPI_ROOT="${OPENMPI_ROOT:-$(_default_openmpi_root)}"
+OPENMPI_ROOT="${OPENMPI_ROOT:-${EBROOTOPENMPI:-}}"
+if [[ -z "$OPENMPI_ROOT" || ! -x "${OPENMPI_ROOT}/bin/mpicc" ]]; then
+  if _mpi_found="$(_auto_find_openmpi_root 2>/dev/null)"; then
+    OPENMPI_ROOT="$_mpi_found"
+    echo "OPENMPI_ROOT auto-detected: $OPENMPI_ROOT" >&2
+  fi
+fi
 PMIX_LIB="${PMIX_LIB:-/opt/gcc-14.2.0/pmix-5.0.4/lib}"
 # FFTW_ROOT resolution order:
 #  1. Explicit env var FFTW_ROOT
@@ -190,7 +278,8 @@ Environment:
   CHARMM_HOME       CHARMM source tree (default: $ROOT/setup/charmm)
   CHARMM_BUILD_DIR  CMake build directory (default: \$HOME/.cache/mmml-charmm-build/${PLATFORM_TAG})
   CHARMM_BUILD_TYPE CMake build type (default: Release; --debug sets RelWithDebInfo)
-  OPENMPI_ROOT      OpenMPI prefix (default: auto-detect; Linux cluster: /opt/gcc-14.2.0/openmpi-5.0.5/build)
+  OPENMPI_ROOT      OpenMPI prefix (default: auto-detect from EBROOTOPENMPI, /usr/lib64/openmpi, PATH, cluster /opt)
+  MPI_CC/MPI_CXX/MPI_FC  Override MPI compiler wrappers (default: under OPENMPI_ROOT or PATH)
   FFTW_ROOT         Double-precision FFTW prefix (libfftw3); falls back to EBROOTFFTW.
   FFTWF_ROOT        Single-precision FFTW prefix (libfftw3f); defaults to FFTW_ROOT.
   MMML_FFTW_ROOT    User PIC/shared FFTW prefix (default: ~/.local/fftw-3.3.10-pic).
@@ -403,16 +492,25 @@ if [[ -z "$FFTW_ROOT" ]]; then
   fi
 fi
 
-MPI_CC="${MPI_CC:-${OPENMPI_ROOT}/bin/mpicc}"
-MPI_CXX="${MPI_CXX:-${OPENMPI_ROOT}/bin/mpicxx}"
-MPI_FC="${MPI_FC:-${OPENMPI_ROOT}/bin/mpifort}"
-for wrapper in "$MPI_CC" "$MPI_CXX" "$MPI_FC"; do
-  if [[ ! -x "$wrapper" ]]; then
-    echo "rebuild_charmm_mlpot: missing MPI wrapper $wrapper" >&2
-    echo "Set OPENMPI_ROOT or MPI_CC/MPI_CXX/MPI_FC and retry." >&2
-    exit 1
+_resolve_mpi_wrappers
+export OPENMPI_ROOT
+export MPI_CC MPI_CXX MPI_FC
+_mpi_missing=0
+for wrapper in MPI_CC MPI_CXX MPI_FC; do
+  val="${!wrapper:-}"
+  if [[ -z "$val" || ! -x "$val" ]]; then
+    _mpi_missing=1
+    echo "rebuild_charmm_mlpot: missing MPI wrapper ${wrapper}=${val:-<unset>}" >&2
   fi
 done
+if [[ "$_mpi_missing" == 1 ]]; then
+  echo "Install OpenMPI dev packages (e.g. openmpi-devel / libopenmpi-dev) or set:" >&2
+  echo "  OPENMPI_ROOT=/path/to/openmpi" >&2
+  echo "  MPI_CC MPI_CXX MPI_FC" >&2
+  exit 1
+fi
+echo "MPI wrappers: CC=$MPI_CC CXX=$MPI_CXX FC=$MPI_FC" >&2
+unset _mpi_missing
 
 # Large max_Npr tiers allocate multi-GB static arrays in api_func.F90 (.bss). On
 # x86_64 the default small code model cannot link libcharmm.so: R_X86_64_PC32
