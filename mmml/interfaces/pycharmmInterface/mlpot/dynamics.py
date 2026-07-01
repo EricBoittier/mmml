@@ -3467,6 +3467,7 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     init_velocities = _resolve_dynamics_init_velocities(
         kw,
         restart_read_path=restart_read_path,
+        fallback_paths=bussi_restart_fallbacks,
     )
     # Populate COMP before the cold check: ``iasvel=0`` dyna reads COMP, not main.
     mirror_comparison_velocities_for_dynamics(
@@ -3507,6 +3508,8 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
 
         capture_charmm_velocities_for_bussi(
             restart_path=post_dyna_restart_write or restart_read_path,
+            fallback_paths=bussi_restart_fallbacks,
+            quiet=bool(kw.get("_quiet_bussi_rescale", False)),
         )
     elif int(kw.get("iasvel", 0) or 0) == 0:
         from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
@@ -4906,6 +4909,7 @@ def _restore_bussi_velocities_after_overlap_recovery(
         restart_path,
         temperature_K=target_k,
         quiet=bool(chunk_kw.get("_quiet_bussi_rescale", False)),
+        fallback_paths=chunk_kw.get("_bussi_restart_fallback_paths"),
     )
 
 
@@ -5202,6 +5206,7 @@ def _run_dynamics_chunk(
     open_files: list[Any] = []
     io_aliases: list[Any] = []
     kw = dict(dynamics_kwargs)
+    bussi_restart_fallbacks = kw.get("_bussi_restart_fallback_paths")
     iokw: dict[str, Any] = {}
     if io is not None:
         if io.restart_read is not None:
@@ -5248,7 +5253,11 @@ def _run_dynamics_chunk(
             )
             if restart_path is None and io is not None and io.restart_write is not None:
                 restart_path = Path(io.restart_write)
-            capture_charmm_velocities_for_bussi(restart_path=restart_path)
+            capture_charmm_velocities_for_bussi(
+                restart_path=restart_path,
+                fallback_paths=bussi_restart_fallbacks,
+                quiet=bool(kw.get("_quiet_bussi_rescale", False)),
+            )
 
 
 def _cpt_stability_chunk_nstep(kw: dict[str, Any], total_nstep: int) -> int | None:
@@ -5560,6 +5569,7 @@ def _run_bussi_heat_subchunked(
             taut_ps=taut_ps,
             quiet=quiet_bussi,
             restart_path=restart_path,
+            fallback_paths=kw.get("_bussi_restart_fallback_paths"),
         )
         if not quiet_bussi:
             live = estimate_kinetic_temperature_k(
@@ -5911,6 +5921,20 @@ def run_dynamics_with_io(
                 steps_before_chunk = steps_done
                 chunk_kw = dict(kw)
                 chunk_kw["nstep"] = chunk_nstep
+                if _bussi_heat_ramp_active(chunk_kw):
+                    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+                        bussi_restart_fallback_paths_from_overlap,
+                    )
+
+                    chunk_kw["_bussi_restart_fallback_paths"] = (
+                        bussi_restart_fallback_paths_from_overlap(
+                            overlap,
+                            final_restart=final_restart,
+                            restart_read=(
+                                io.restart_read if io is not None else None
+                            ),
+                        )
+                    )
                 if pending_readyn_chunk_io is not None:
                     chunk_io = pending_readyn_chunk_io
                     pending_readyn_chunk_io = None
