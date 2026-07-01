@@ -237,6 +237,242 @@ def plot_heat_segments() -> Path:
     return out
 
 
+def plot_cutoff_radius_ladder() -> Path:
+    """COM-distance ladder: ML handoff, JAX MM pair reach, CHARMM IMAGE, jax-pme SR."""
+    from mmml.interfaces.pycharmmInterface.nbonds_config import PBC_CUTNB
+
+    cp = CutoffParameters()
+    handoff_start = float(cp.mm_switch_on) - float(cp.ml_switch_width)
+    mm_outer = float(cp.mm_switch_on) + float(cp.mm_switch_width)
+    jax_pme_sr = 6.0
+    charmm_cut = float(PBC_CUTNB)
+
+    fig, ax = plt.subplots(figsize=(10, 3.8))
+    ax.set_xlim(0, max(charmm_cut, mm_outer) + 4)
+    ax.set_ylim(0, 1)
+    ax.set_yticks([])
+    ax.set_xlabel("Monomer COM–COM distance r (Å)")
+
+    bands = [
+        (0, handoff_start, "#3b82f6", "ML dimer fully on (PhysNet)"),
+        (handoff_start, cp.mm_switch_on, "#8b5cf6", "Handoff (s_ML + s_MM = 1)"),
+        (cp.mm_switch_on, mm_outer, "#f97316", "Switched JAX MM pairs (LJ + MIC Coulomb)"),
+        (mm_outer, charmm_cut + 2, "#e2e8f0", "No switched two-body MM/ML"),
+    ]
+    for x0, x1, color, label in bands:
+        ax.axvspan(x0, x1, color=color, alpha=0.55, label=label)
+
+    for x, ls, color, txt in (
+        (handoff_start, "--", "#2563eb", f"handoff start {handoff_start:g} Å"),
+        (cp.mm_switch_on, "-.", "#0f172a", f"mm_switch_on {cp.mm_switch_on:g} Å"),
+        (mm_outer, "--", "#ea580c", f"JAX MM outer {mm_outer:g} Å"),
+        (jax_pme_sr, ":", "#059669", f"jax-pme SR {jax_pme_sr:g} Å"),
+        (charmm_cut, ":", "#64748b", f"CHARMM IMAGE cutnb {charmm_cut:g} Å (PBC)"),
+    ):
+        ax.axvline(x, color=color, ls=ls, lw=1.6, alpha=0.9)
+        ax.text(x + 0.15, 0.92, txt, rotation=90, va="top", fontsize=7.5, color=color)
+
+    ax.set_title(
+        "Default cutoffs (8 / 5 / 1.5 Å): COM-distance regions vs CHARMM list radius",
+        fontweight="500",
+        pad=10,
+    )
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.22), ncol=2, fontsize=8)
+    fig.tight_layout()
+    out = OUT_DIR / "cutoff_radius_ladder.png"
+    fig.savefig(out, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    return out
+
+
+def plot_system_monomer_regions() -> Path:
+    """Top-down cluster: monomers colored by residue; highlight one dimer's COM zones."""
+    from matplotlib.patches import Circle
+    from mmml.paths import default_dcm_monomer_pdb
+
+    try:
+        from ase.io import read
+    except ImportError:
+        raise RuntimeError("ASE required for system region figure")
+
+    monomer = read(str(default_dcm_monomer_pdb()))
+    rel = monomer.get_positions() - monomer.get_positions().mean(axis=0)
+    com_xy = [
+        np.array([0.0, 0.0]),
+        np.array([10.5, 2.0]),
+        np.array([5.0, 11.0]),
+    ]
+    colors = ["#2563eb", "#059669", "#d97706"]
+    labels = ["Monomer 1 (DCM)", "Monomer 2 (DCM)", "Monomer 3 (DCM)"]
+
+    cp = CutoffParameters()
+    handoff_start = float(cp.mm_switch_on) - float(cp.ml_switch_width)
+    mm_outer = float(cp.mm_switch_on) + float(cp.mm_switch_width)
+
+    fig, ax = plt.subplots(figsize=(8.5, 7.0))
+    ax.set_aspect("equal")
+    ax.set_facecolor("#f8fafc")
+
+    for idx, (com, color, label) in enumerate(zip(com_xy, colors, labels, strict=True)):
+        pos = rel[:, :2] + com
+        ax.scatter(
+            pos[:, 0],
+            pos[:, 1],
+            s=120,
+            c=color,
+            edgecolors="#1e293b",
+            linewidths=0.6,
+            zorder=3,
+            label=label,
+        )
+        ax.scatter([com[0]], [com[1]], s=40, c="#0f172a", marker="x", zorder=4)
+        ax.text(com[0], com[1] - 1.8, f"COM {idx + 1}", ha="center", fontsize=8, color="#334155")
+
+    # Highlight dimer 1–2 COM distance (~10.7 Å) — in MM tail, ML off
+    c1, c2 = com_xy[0], com_xy[1]
+    mid = 0.5 * (c1 + c2)
+    r12 = float(np.linalg.norm(c2 - c1))
+    for r, alpha, color in (
+        (handoff_start, 0.12, "#3b82f6"),
+        (cp.mm_switch_on, 0.10, "#8b5cf6"),
+        (mm_outer, 0.08, "#f97316"),
+    ):
+        ax.add_patch(
+            Circle(mid, r / 2.0, fill=False, ls="--", lw=1.4, ec=color, alpha=alpha, zorder=1)
+        )
+    ax.annotate(
+        "",
+        xy=c2,
+        xytext=c1,
+        arrowprops=dict(arrowstyle="<->", color="#64748b", lw=1.5),
+        zorder=2,
+    )
+    ax.text(
+        mid[0],
+        mid[1] + 1.2,
+        f"dimer COM distance r ≈ {r12:.1f} Å\n(MM tail, ML off)",
+        ha="center",
+        fontsize=8.5,
+        color="#475569",
+        bbox=dict(boxstyle="round,pad=0.35", fc="white", ec="#cbd5e1", alpha=0.95),
+    )
+
+    ax.set_xlim(-6, 16)
+    ax.set_ylim(-6, 14)
+    ax.set_xlabel("x (Å)")
+    ax.set_ylabel("y (Å)")
+    ax.set_title(
+        "System split by monomer: atoms inherit residue color; switches use COM–COM distance",
+        fontweight="500",
+        pad=10,
+    )
+    ax.legend(loc="upper left", fontsize=8, framealpha=0.95)
+    ax.grid(alpha=0.25, ls=":")
+    fig.tight_layout()
+    out = OUT_DIR / "system_monomer_regions.png"
+    fig.savefig(out, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    return out
+
+
+def plot_dual_stack_responsibilities() -> Path:
+    """Which layer owns which physics on ML-tagged atoms."""
+    fig, ax = plt.subplots(figsize=(9.5, 5.2))
+    ax.axis("off")
+
+    layers = [
+        ("PhysNet ML", "#3b82f6", "Intra-monomer & dimer ML (sparse COM < mm_switch_on)"),
+        ("JAX switched MM", "#f97316", "Cross-monomer LJ r⁻¹² + MIC Coulomb ≤ 13 Å (default)"),
+        ("jax-pme LR", "#059669", "Cross-monomer Coulomb + r⁻⁶ tail (full − intra)"),
+        ("CHARMM IMAGE", "#64748b", "VDW/ELEC on non-ML atoms; BLOCK zeros ELEC/VDW on ML atoms"),
+        ("CHARMM bonded", "#94a3b8", "BOND/ANGL/DIHE (optional scaled internal MM on ML)"),
+    ]
+    y = 0.85
+    for name, color, desc in layers:
+        ax.add_patch(plt.Rectangle((0.05, y - 0.11), 0.22, 0.09, color=color, alpha=0.85))
+        ax.text(0.16, y - 0.065, name, ha="center", va="center", color="white", fontsize=9, fontweight="600")
+        ax.text(0.32, y - 0.065, desc, ha="left", va="center", fontsize=9, color="#334155")
+        y -= 0.17
+
+    ax.text(
+        0.5,
+        0.08,
+        "Atoms are tagged ML in the PSF; monomers are never dropped — switching scales pair energies by COM distance.",
+        ha="center",
+        fontsize=9,
+        color="#475569",
+    )
+    ax.set_title("Hybrid stack: who computes what on ML residues", fontweight="500", y=0.98)
+    fig.tight_layout()
+    out = OUT_DIR / "dual_stack_responsibilities.png"
+    fig.savefig(out, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    return out
+
+
+def plot_lr_solvers_overview() -> Path:
+    """Compare long-range Coulomb backends."""
+    solvers = [
+        ("mic", "Truncated MIC\n(pair loop only)", "jax_mic", "No k-space", "#94a3b8"),
+        ("jax_pme", "jax-pme Ewald/PME/P3M\n(cross-monomer full−intra)", "jax_mic", "JAX k-space", "#059669"),
+        ("nvalchemiops_pme", "nvalchemiops PME\n(full-box Coulomb)", "periodic_external", "JAX k-space", "#2563eb"),
+        ("scafacos", "ScaFaCoS libfcs\n(PME / P³M / P²NFFT …)", "periodic_external", "Fortran k-space", "#7c3aed"),
+    ]
+    fig, ax = plt.subplots(figsize=(10, 4.8))
+    ax.set_xlim(0, 10)
+    ax.set_ylim(0, len(solvers) + 1)
+    ax.axis("off")
+    ax.set_title("Long-range Coulomb solvers (`lr_solver`)", fontweight="500", pad=12)
+
+    for i, (key, desc, mode, kspace, color) in enumerate(solvers):
+        y = len(solvers) - i
+        ax.add_patch(plt.Rectangle((0.4, y - 0.35), 1.6, 0.7, color=color, alpha=0.9))
+        ax.text(1.2, y, key, ha="center", va="center", color="white", fontsize=9, fontweight="600")
+        ax.text(2.3, y, desc, ha="left", va="center", fontsize=9, color="#1e293b")
+        ax.text(7.2, y, f"mm_nonbond_mode:\n{mode}", ha="left", va="center", fontsize=8, color="#475569")
+        ax.text(9.0, y, kspace, ha="right", va="center", fontsize=8, color="#64748b")
+
+    ax.text(
+        5.0,
+        0.35,
+        "Default auto → jax_pme when installed. MIC is pair-loop only beyond 13 Å unless jax-pme is active.",
+        ha="center",
+        fontsize=8.5,
+        color="#475569",
+    )
+    fig.tight_layout()
+    out = OUT_DIR / "lr_solvers_overview.png"
+    fig.savefig(out, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    return out
+
+
+def plot_lr_energy_split() -> Path:
+    """Schematic: short-range vs long-range Coulomb split with jax-pme."""
+    r = np.linspace(0.5, 20, 400)
+    # Illustrative 1/r envelopes (not a real PME split)
+    mic_mask = (r <= 13.0).astype(float)
+    sr = mic_mask / np.maximum(r, 0.5)
+    lr_tail = (1.0 / np.maximum(r, 0.5)) * (1.0 - mic_mask * 0.85)
+
+    fig, ax = plt.subplots(figsize=(9, 4.5))
+    ax.fill_between(r, 0, sr, alpha=0.35, color="#f97316", label="JAX pair loop (MIC, ≤13 Å)")
+    ax.fill_between(r, 0, lr_tail, alpha=0.35, color="#059669", label="jax-pme k-space tail (cross-monomer)")
+    ax.axvline(13.0, color="#64748b", ls="--", lw=1.2, label="JAX MM outer radius (default)")
+    ax.axvline(6.0, color="#059669", ls=":", lw=1.2, label="jax-pme SR cutoff (6 Å)")
+    ax.set_xlabel("Intercharge distance (Å) — schematic")
+    ax.set_ylabel("Relative Coulomb weight (illustrative)")
+    ax.set_title("Coulomb split: switched pairs + jax-pme correction (not quantitative PME)", fontweight="500")
+    ax.legend(loc="upper right", fontsize=8)
+    ax.set_xlim(0, 20)
+    ax.grid(alpha=0.3)
+    fig.tight_layout()
+    out = OUT_DIR / "lr_energy_split_schematic.png"
+    fig.savefig(out, dpi=150)
+    plt.close(fig)
+    return out
+
+
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     paths: list[Path] = []
@@ -245,6 +481,11 @@ def main() -> None:
     paths.append(plot_cutoff_comparison())
     paths.append(plot_legacy_vs_complementary())
     paths.append(plot_heat_segments())
+    paths.append(plot_cutoff_radius_ladder())
+    paths.append(plot_system_monomer_regions())
+    paths.append(plot_dual_stack_responsibilities())
+    paths.append(plot_lr_solvers_overview())
+    paths.append(plot_lr_energy_split())
     print(f"Wrote {len(paths)} plots to {OUT_DIR}")
     for p in paths:
         print(f"  {p.relative_to(REPO_ROOT)}")

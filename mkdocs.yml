@@ -110,6 +110,7 @@ nav:
       - Cross-backend handoff: handoff.md
       - Long-range solver tutorial: long-range-solver-tutorial.md
   - MLpot:
+      - Cutoffs, regions & LR solvers: hybrid-potential-regions.md
       - Settings: mlpot-settings.md
       - Medium PBC (500–2000 monomers): mlpot-medium-pbc.md
       - Long-range electrostatics (ScaFaCoS): mlpot-long-range-electrostatics.md

@@ -1,6 +1,8 @@
 # MLpot switching reference
 
-Visual reference for ML/MM handoff switches and staged heating. Figures are generated locally by:
+Visual reference for ML/MM handoff switches and staged heating. **Start here for the full picture (monomer colors, radius ladder, LR solvers):** [Hybrid potential: cutoffs, regions, and long-range solvers](hybrid-potential-regions.md).
+
+Figures are generated locally by:
 
 ```bash
 uv run python scripts/plot_mlpot_settings.py

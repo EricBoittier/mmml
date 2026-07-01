@@ -4,6 +4,10 @@ This guide shows how to run **MIC**, **jax-pme** (Ewald / PME / P3M),
 **nvalchemiops PME**, and **ScaFaCoS** Coulomb backends in hybrid ML/MM workflows,
 using the DCM liquid box as a concrete example.
 
+![Long-range solver comparison (mm_nonbond_mode and k-space)](images/mlpot-settings/lr_solvers_overview.png)
+
+For COM-distance cutoffs, colored monomer regions, and how the dual stack fits together, see **[Hybrid potential: cutoffs, regions, and long-range solvers](hybrid-potential-regions.md)**.
+
 Related:
 
 - `[scripts/run_dcm_liquid_workflow.sh](../scripts/run_dcm_liquid_workflow.sh)` — baseline DCM liquid pipeline

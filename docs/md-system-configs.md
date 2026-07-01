@@ -812,7 +812,13 @@ JAX-MD legs can add `handoff_quality_gate: true`, `jaxmd_pbc_minimize_steps`, an
 
 ## Cutoffs, MM toggles, and long-range electrostatics
 
-Hybrid ML/MM potentials use three COM-distance knobs (Å) plus optional long-range backends. Put cutoffs in campaign `defaults` so PyCHARMM and JAX-MD legs stay aligned.
+Hybrid ML/MM potentials use **monomer COM–COM distance** (not atom–atom distance) to switch PhysNet, JAX MM, and optional k-space Coulomb. Put cutoffs in campaign `defaults` so PyCHARMM and JAX-MD legs stay aligned.
+
+**Visual guide (figures, colored monomers, solver comparison):** [Hybrid potential: cutoffs, regions, and long-range solvers](hybrid-potential-regions.md).
+
+![COM-distance cutoff ladder (default 8 / 5 / 1.5 Å)](images/mlpot-settings/cutoff_radius_ladder.png)
+
+![ML/MM scale factors at default cutoffs](images/mlpot-settings/cutoffs_code-default.png)
 
 | Key | Meaning | Default |
 |-----|---------|---------|
@@ -830,6 +836,10 @@ Hybrid ML/MM potentials use three COM-distance knobs (Å) plus optional long-ran
 | `jax_pme_cross_kernel` | Fused kernel when `cross`: `auto` (ewald → structure-factor; PME/P3M → masked), `structure_factor`, or `masked` | env / `auto` |
 | `jax_pme_profile` | Log per-call jax-pme timings to stderr (`1`, `per_call`) | off |
 | `periodic_charmm_vdw` | With `periodic_external`: keep CHARMM IMAGE LJ (default true) | true |
+
+Long-range backend comparison and Coulomb split schematic: [hybrid-potential-regions.md §4](hybrid-potential-regions.md#4-long-range-coulomb-solvers).
+
+![Long-range solver overview](images/mlpot-settings/lr_solvers_overview.png)
 
 Legacy YAML aliases still work: `ml_cutoff` → `ml_switch_width`, `mm_cutoff` → `mm_switch_width`.
 
