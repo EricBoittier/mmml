@@ -28,6 +28,8 @@ PLOTS = IMG / "plots"
 _SCALE_MONOMER = 42.0
 _SCALE_BOX = 13.5
 _SCALE_CRYSTAL = 24.0
+_SCALE_TRIALANINE_BOX = 11.5
+_SCALE_TRIALANINE_PEPTIDE = 38.0
 
 _STYLE = {
     "figure_facecolor": "#f8fafc",
@@ -404,8 +406,11 @@ def generate(*, check: bool = False) -> int:
         STRUCT / "make-res-aco.png": "make_res",
         STRUCT / "make-box-acetone.png": "make_box",
         STRUCT / "build-crystal.png": "build_crystal",
+        STRUCT / "trialanine-water-box.png": "trialanine_box",
+        STRUCT / "trialanine-peptide-zoom.png": "trialanine_peptide",
         PLOTS / "liquid-box-density-ladder.png": "liquid_box",
         PLOTS / "structure-builder-sizes.png": "workflow",
+        PLOTS / "trialanine-build-pipeline.png": "trialanine_pipeline",
     }
 
     builders = {
@@ -413,6 +418,9 @@ def generate(*, check: bool = False) -> int:
         "make_box": lambda p: figure_make_box(p),
         "liquid_box": lambda p: figure_liquid_box_schematic(p),
         "workflow": lambda p: figure_compose_workflow(p),
+        "trialanine_box": lambda p: figure_trialanine_water_box(p),
+        "trialanine_peptide": lambda p: figure_trialanine_peptide_zoom(p),
+        "trialanine_pipeline": lambda p: figure_trialanine_build_pipeline(p),
     }
 
     changed = 0
@@ -430,6 +438,9 @@ def generate(*, check: bool = False) -> int:
         after = path.read_bytes()
         if before != after:
             changed += 1
+
+    if not check:
+        _write_bundled_trialanine_reference_extxyz()
 
     if check:
         return 1 if changed else 0

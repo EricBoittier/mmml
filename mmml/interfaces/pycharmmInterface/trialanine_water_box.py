@@ -2,18 +2,25 @@
 
 Grid-placed TIP3 waters avoid Packmol so the fixture runs on CHARMM CI nodes.
 Protein parameters come from ``CHARMM_HOME/toppar``; TIP3 uses bundled CGENFF.
+
+User guide (figures, tests, electrostatic presets):
+``docs/trialanine-water-box.md``.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 
 from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM, CGENFF_RTF
 from mmml.interfaces.pycharmmInterface.nbonds_config import PbcNbondCutoffs
+
+if TYPE_CHECKING:
+    from ase import Atoms
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,6 +134,81 @@ def _grid_oxygen_sites(
             f"L={box_side_A:.1f} Å box (increase box or reduce n_waters)"
         )
     return sites
+
+
+def synthetic_trialanine_water_atoms_for_docs(
+    *,
+    n_waters: int = 10,
+    box_side_A: float = 28.0,
+    water_spacing_A: float = 2.85,
+    min_peptide_water_dist_A: float = 2.4,
+    seed: int = 11,
+) -> Atoms:
+    """Illustrative ASE periodic system for MkDocs (no PyCHARMM).
+
+    Backbone geometry is a schematic extended tri-alanine at the cell centre;
+  water oxygens use the same grid placement as
+  :func:`build_trialanine_water_box_in_charmm`.  Regenerate figures with
+  ``uv run python scripts/generate_docs_figures.py``.
+    """
+    from ase import Atoms
+
+    centre = np.array([box_side_A / 2, box_side_A / 2, box_side_A / 2], dtype=np.float64)
+    # Extended N→CA→C trace (Å) along +x with light +y CB offsets (schematic only).
+    backbone_offsets = np.array(
+        [
+            [-4.2, -0.3, -0.8],
+            [-3.5, 0.1, 0.2],
+            [-2.6, -0.2, -0.5],
+            [-1.8, 0.4, 0.6],
+            [-0.9, -0.1, -0.4],
+            [-0.1, 0.3, 0.5],
+            [0.7, -0.2, -0.6],
+            [1.5, 0.5, 0.7],
+            [2.4, -0.1, -0.3],
+            [3.2, 0.2, 0.4],
+            [4.0, -0.4, -0.7],
+            [4.8, 0.3, 0.5],
+        ],
+        dtype=np.float64,
+    )
+    peptide_symbols = list("CNCOCNCOCNCO")
+    peptide = centre + backbone_offsets
+
+    rng = np.random.default_rng(seed)
+    tip3 = _tip3_template()
+    tip3_com = tip3.mean(axis=0)
+    oxygen_sites = _grid_oxygen_sites(
+        n_waters=n_waters,
+        box_side_A=box_side_A,
+        spacing_A=water_spacing_A,
+        margin_A=3.0,
+        existing=peptide,
+        min_dist_A=min_peptide_water_dist_A,
+        rng=rng,
+        water_template=tip3,
+    )
+    water_blocks = [site + (tip3 - tip3_com) for site in oxygen_sites]
+    water_symbols = ["O", "H", "H"] * len(oxygen_sites)
+    water_positions = np.vstack(water_blocks)
+
+    symbols = peptide_symbols + water_symbols
+    positions = np.vstack([peptide, water_positions])
+    cell = np.diag([float(box_side_A)] * 3)
+    return Atoms(symbols=symbols, positions=positions, cell=cell, pbc=True)
+
+
+def peptide_only_atoms_from_box(atoms: Atoms, *, n_peptide_atoms: int = 12) -> Atoms:
+    """First *n_peptide_atoms* from :func:`synthetic_trialanine_water_atoms_for_docs`."""
+    from ase import Atoms
+
+    n = min(int(n_peptide_atoms), len(atoms))
+    return Atoms(
+        symbols=atoms.get_chemical_symbols()[:n],
+        positions=atoms.get_positions()[:n],
+        cell=atoms.cell,
+        pbc=atoms.pbc,
+    )
 
 
 def build_trialanine_water_box_in_charmm(

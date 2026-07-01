@@ -42,3 +42,8 @@ def default_dcm_crystal_cif() -> Path:
 def default_benzene_crystal_cif() -> Path:
     """Experimental benzene crystal (P2₁/c, COD 4501704)."""
     return bundled_file("data", "structures", "benzene_p21c_cod4501704.cif")
+
+
+def default_trialanine_water_smoke_extxyz() -> Path:
+    """Bundled illustrative tri-alanine + TIP3 grid (docs / figure CI)."""
+    return bundled_file("data", "charmm", "trialanine-water-smoke.extxyz")
