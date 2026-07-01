@@ -23,6 +23,8 @@ from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
     prepare_comp_for_iasvel0,
     set_comparison_array,
     sync_comparison_velocities_akma,
+    sync_comparison_velocities_from_comparison,
+    sync_comparison_velocities_from_restart,
     zero_comparison_scalars,
 )
 
@@ -105,17 +107,61 @@ def test_mirror_comparison_velocities_for_dynamics_syncs_when_iasvel_zero(mock_s
 
 
 @patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_restart",
+    return_value=False,
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_comparison",
+    return_value=False,
+)
+@patch(
     "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_main",
     return_value=False,
 )
 @patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.clear_comparison_coordinates")
-def test_mirror_comparison_velocities_for_dynamics_clears_when_no_main_vel(
-    mock_clear, mock_sync
+def test_mirror_comparison_velocities_for_dynamics_leaves_comp_when_no_source(
+    mock_clear, mock_main, mock_comp, mock_restart
 ):
     kw = {"iasvel": 0, "start": False}
-    mirror_comparison_velocities_for_dynamics(kw)
-    mock_sync.assert_called_once()
-    mock_clear.assert_called_once()
+    mirror_comparison_velocities_for_dynamics(kw, restart_read_path="/tmp/fake.res")
+    mock_main.assert_called_once()
+    mock_comp.assert_called_once()
+    mock_restart.assert_called_once()
+    mock_clear.assert_not_called()
+
+
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_main",
+    return_value=False,
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_comparison",
+    return_value=True,
+)
+def test_mirror_comparison_velocities_for_dynamics_uses_warm_comp(mock_comp, mock_main):
+    mirror_comparison_velocities_for_dynamics({"iasvel": 0, "start": False})
+    mock_main.assert_called_once()
+    mock_comp.assert_called_once()
+
+
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_main",
+    return_value=False,
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_comparison",
+    return_value=False,
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_restart",
+    return_value=True,
+)
+def test_mirror_comparison_velocities_for_dynamics_uses_restart(mock_restart, mock_comp, mock_main):
+    mirror_comparison_velocities_for_dynamics(
+        {"iasvel": 0, "start": False},
+        restart_read_path="/tmp/handoff.res",
+    )
+    mock_restart.assert_called_once_with("/tmp/handoff.res")
 
 
 @patch(
@@ -182,15 +228,56 @@ def test_sync_comparison_velocities_from_main_warm(mock_cold, mock_vel, mock_syn
 
 
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_velocities_akma",
+    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
+    return_value=False,
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.coor_get_comparison_capi",
+)
+def test_sync_comparison_velocities_from_comparison_warm(mock_get, mock_cold):
+    masses = np.ones(2)
+    mock_get.return_value = np.array([[10.0, 0.0, 0.0, 0.0], [0.0, 20.0, 0.0, 0.0]])
+    assert sync_comparison_velocities_from_comparison() is True
+    mock_get.assert_called_once()
+
+
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
+    return_value=True,
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.coor_get_comparison_capi",
+)
+def test_sync_comparison_velocities_from_comparison_cold(mock_get, mock_cold):
+    mock_get.return_value = np.zeros((2, 4))
+    assert sync_comparison_velocities_from_comparison() is False
+
+
+@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_akma")
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_velocities",
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
+    return_value=False,
+)
+def test_sync_comparison_velocities_from_restart_warm(mock_cold, mock_read, mock_sync, tmp_path):
+    res = tmp_path / "handoff.res"
+    res.write_text("REST\n", encoding="ascii")
+    vel = np.array([[1.0, 0.0, 0.0], [0.0, 2.0, 0.0]])
+    mock_read.return_value = vel
+    assert sync_comparison_velocities_from_restart(res) is True
+    mock_sync.assert_called_once()
+    np.testing.assert_allclose(mock_sync.call_args[0][0], vel)
+
+
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_velocities",
     return_value=None,
 )
-def test_sync_comparison_velocities_from_main_missing(mock_vel):
-    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
-        sync_comparison_velocities_from_main,
-    )
-
-    assert sync_comparison_velocities_from_main() is False
+def test_sync_comparison_velocities_from_restart_missing(mock_read):
+    assert sync_comparison_velocities_from_restart(None) is False
+    assert sync_comparison_velocities_from_restart("/no/such/file.res") is False
 
 
 @patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.coor_set_comparison_capi")
