@@ -654,22 +654,17 @@ def plot_dimer_forces_cutoff_panels(residue: str) -> Path:
 
     sm = plt.cm.ScalarMappable(cmap="magma", norm=force_norm)
     sm.set_array([])
-    cbar = fig.colorbar(
-        sm,
-        ax=axes.ravel().tolist(),
-        orientation="horizontal",
-        fraction=0.05,
-        pad=0.10,
-        aspect=40,
-        shrink=0.95,
-    )
+    fig.tight_layout(rect=(0, 0.06, 1, 0.78))
+    # Dedicated axes at top so the colorbar never steals space from the 2×2 panels.
+    cbar_ax = fig.add_axes([0.12, 0.90, 0.76, 0.022])
+    cbar = fig.colorbar(sm, cax=cbar_ax, orientation="horizontal")
     cbar.set_label("|F| (kcal/mol/Å)", fontsize=9)
     fig.suptitle(
         f"{res_label} dimer — illustrative switched hybrid forces at cutoff distances "
         f"(default {DEFAULT_MM_SWITCH_ON:g} / {DEFAULT_MM_SWITCH_WIDTH:g} / {DEFAULT_ML_SWITCH_WIDTH:g} Å)",
         fontsize=10,
         fontweight="600",
-        y=0.98,
+        y=0.84,
     )
     fig.text(
         0.5,
@@ -680,7 +675,6 @@ def plot_dimer_forces_cutoff_panels(residue: str) -> Path:
         fontsize=7.5,
         color="#475569",
     )
-    fig.tight_layout(rect=(0, 0.08, 1, 0.93))
     slug = res_label.lower()
     out = OUT_DIR / f"{slug}_dimer_forces_cutoffs.png"
     fig.savefig(out, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
