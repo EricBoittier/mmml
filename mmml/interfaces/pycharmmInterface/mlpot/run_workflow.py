@@ -13,6 +13,7 @@ PathLike = str | Path
 
 from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     apply_charmm_output_from_args,
+    apply_dynamics_print_kwargs,
     build_cluster_from_args_with_tag,
     dynamics_nstep_from_ps,
     format_resid_constraint_message,
@@ -281,9 +282,7 @@ def _run_charmm_mm_pretreat_cpt_stage(
             )
 
     kw["nstep"] = nstep
-    kw["nprint"] = dyn_print["nprint"]
-    kw["iprfrq"] = dyn_print["iprfrq"]
-    kw["isvfrq"] = dyn_print["isvfrq"]
+    apply_dynamics_print_kwargs(kw, dyn_print)
     apply_pretreat_dyn_freq_kwargs(
         kw,
         args,
@@ -481,9 +480,7 @@ def run_charmm_mm_pretreat_before_mlpot(
             )
             dyn_print = resolve_pretreat_dynamics_print_kwargs(nstep=n_heat_run)
             kw["nstep"] = n_heat_run
-            kw["nprint"] = dyn_print["nprint"]
-            kw["iprfrq"] = dyn_print["iprfrq"]
-            kw["isvfrq"] = dyn_print["isvfrq"]
+            apply_dynamics_print_kwargs(kw, dyn_print)
             kw["iasors"] = 0
             kw["iasvel"] = 1
             apply_heat_ramp_frequencies(
@@ -1210,9 +1207,7 @@ def run_dynamics_workflow(
                 echeck=echeck,
                 use_pbc=charmm_pbc,
             )
-            kw["nprint"] = dyn_print["nprint"]
-            kw["iprfrq"] = dyn_print["iprfrq"]
-            kw["isvfrq"] = dyn_print["isvfrq"]
+            apply_dynamics_print_kwargs(kw, dyn_print)
             apply_heat_ramp_frequencies(
                 kw,
                 nstep=nstep,

@@ -439,11 +439,10 @@ def _build_stage_dynamics_kw(
             )
     else:
         raise ValueError(stage)
-    kw["nprint"] = dyn_print["nprint"]
-    kw["iprfrq"] = dyn_print["iprfrq"]
-    kw["isvfrq"] = dyn_print["isvfrq"]
+    apply_dynamics_print_kwargs(kw, dyn_print)
     kw["nstep"] = nstep
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        apply_dynamics_print_kwargs,
         resolve_dynamics_freq_cadence,
     )
 

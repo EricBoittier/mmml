@@ -578,7 +578,39 @@ def resolve_charmm_mm_pretreat_heat_nstep(
 def resolve_pretreat_dynamics_print_kwargs(*, nstep: int) -> dict[str, int]:
     """Suppress CHARMM dynamics status lines during pretreat (single summary at end)."""
     n = max(1, int(nstep))
-    return {"nprint": n, "iprfrq": n, "isvfrq": n}
+    return _dynamics_print_kwargs_with_nsavv(nprint=n, iprfrq=n, isvfrq=n)
+
+
+def _dynamics_print_kwargs_with_nsavv(
+    *,
+    nprint: int,
+    iprfrq: int,
+    isvfrq: int,
+) -> dict[str, int]:
+    """Return print/restart cadence keys including ``nsavv`` (velocity save freq).
+
+    CHARMM defaults ``nsavv`` to 10 when unset; align with ``isvfrq`` so restart
+    internals and velocity blocks match ``--dyn-freq-cadence`` / ``--dyn-iprfrq``.
+    """
+    nprint_i = max(1, int(nprint))
+    iprfrq_i = max(1, int(iprfrq))
+    isvfrq_i = max(1, int(isvfrq))
+    return {
+        "nprint": nprint_i,
+        "iprfrq": iprfrq_i,
+        "isvfrq": isvfrq_i,
+        "nsavv": isvfrq_i,
+    }
+
+
+def apply_dynamics_print_kwargs(kw: dict[str, Any], dyn_print: dict[str, int]) -> None:
+    """Write resolved print / restart / velocity-save cadence into ``kw``."""
+    merged = _dynamics_print_kwargs_with_nsavv(
+        nprint=int(dyn_print["nprint"]),
+        iprfrq=int(dyn_print["iprfrq"]),
+        isvfrq=int(dyn_print["isvfrq"]),
+    )
+    kw.update(merged)
 
 
 REF_MLPOT_DYN_DT_FS = 0.25
@@ -832,11 +864,13 @@ def resolve_dynamics_print_kwargs(
     if nsavc is not None:
         if cadence is not None:
             c = min(cadence, nstep)
-            return {"nprint": c, "iprfrq": c, "isvfrq": c}
+            return _dynamics_print_kwargs_with_nsavv(nprint=c, iprfrq=c, isvfrq=c)
         ns = max(1, int(nsavc))
-        return {"nprint": ns, "iprfrq": ns, "isvfrq": ns}
+        return _dynamics_print_kwargs_with_nsavv(nprint=ns, iprfrq=ns, isvfrq=ns)
     if getattr(args, "quiet", False):
-        return {"nprint": nstep, "iprfrq": nstep, "isvfrq": nstep}
+        return _dynamics_print_kwargs_with_nsavv(
+            nprint=nstep, iprfrq=nstep, isvfrq=nstep
+        )
     nprint = max(1, int(getattr(args, "dyn_nprint", 500)))
     iprfrq = max(nprint, int(getattr(args, "dyn_iprfrq", 2000)))
     isvfrq = max(iprfrq, int(getattr(args, "dyn_iprfrq", 2000)))
@@ -848,7 +882,9 @@ def resolve_dynamics_print_kwargs(
         nprint = min(nprint, nstep)
         iprfrq = min(iprfrq, nstep)
         isvfrq = min(isvfrq, nstep)
-    return {"nprint": nprint, "iprfrq": iprfrq, "isvfrq": isvfrq}
+    return _dynamics_print_kwargs_with_nsavv(
+        nprint=nprint, iprfrq=iprfrq, isvfrq=isvfrq
+    )
 
 
 

@@ -1567,6 +1567,7 @@ def _base_dyn_kwargs(
     ntrfrq: int = 0,
     echeck: float = 100.0,
 ) -> dict[str, Any]:
+    isvfrq_i = max(1, int(isvfrq))
     return {
         "timestep": timestep,
         "nstep": nstep,
@@ -1578,7 +1579,8 @@ def _base_dyn_kwargs(
         "ixtfrq": ixtfrq,
         "nprint": nprint,
         "iprfrq": iprfrq,
-        "isvfrq": isvfrq,
+        "isvfrq": isvfrq_i,
+        "nsavv": isvfrq_i,
         "ntrfrq": ntrfrq,
         "echeck": echeck,
     }
@@ -1820,7 +1822,7 @@ def apply_heat_ramp_overlap_chunk(
     chunk_kw["start"] = False
 
 
-_HEAT_FIN_FREQ_KEYS = ("ihtfrq", "iprfrq", "nprint", "isvfrq")
+_HEAT_FIN_FREQ_KEYS = ("ihtfrq", "iprfrq", "nprint", "isvfrq", "nsavv")
 
 
 def apply_heat_segment_ramp_kwargs(
@@ -1878,7 +1880,7 @@ def finalize_heat_dynamics_frequencies(kw: dict[str, Any]) -> dict[str, tuple[in
     cadence = kw.get("_dyn_freq_cadence")
     if cadence is not None and int(cadence) > 0:
         c = _harmonize_dynamics_frequency(int(cadence), nstep)
-        for key in ("nprint", "iprfrq", "isvfrq"):
+        for key in ("nprint", "iprfrq", "isvfrq", "nsavv"):
             if key not in kw:
                 continue
             old = int(kw[key])
@@ -1887,7 +1889,7 @@ def finalize_heat_dynamics_frequencies(kw: dict[str, Any]) -> dict[str, tuple[in
             kw[key] = c
     elif "nsavc" in kw:
         ns = int(kw["nsavc"])
-        for key in ("nprint", "iprfrq", "isvfrq"):
+        for key in ("nprint", "iprfrq", "isvfrq", "nsavv"):
             if key in kw and int(kw[key]) != ns:
                 changes[key] = (int(kw[key]), ns)
                 kw[key] = ns
@@ -3743,11 +3745,12 @@ _OVERLAP_CHUNK_FREQ_KEYS = (
     "iprfrq",
     "nprint",
     "isvfrq",
+    "nsavv",
     "nsavc",
 )
 
 
-_OVERLAP_CHUNK_PRINT_CADENCE_KEYS = ("iprfrq", "nprint", "isvfrq")
+_OVERLAP_CHUNK_PRINT_CADENCE_KEYS = ("iprfrq", "nprint", "isvfrq", "nsavv")
 
 
 def _harmonize_overlap_chunk_frequencies(
@@ -3780,7 +3783,7 @@ def _harmonize_overlap_chunk_frequencies(
                     pass
                 else:
                     chunk_kw["_suppress_trajectory"] = True
-                    for k in ("nprint", "iprfrq", "isvfrq"):
+                    for k in ("nprint", "iprfrq", "isvfrq", "nsavv"):
                         chunk_kw.pop(k, None)
                     _emit_overlap_log(
                         f"chunk: skip DCD (target nsavc={old} >= nstep={n}; "
@@ -3794,7 +3797,7 @@ def _harmonize_overlap_chunk_frequencies(
                     )
                 if cadence_active:
                     c = _harmonize_dynamics_frequency(int(cadence), n)
-                    for k in ("nprint", "iprfrq", "isvfrq"):
+                    for k in ("nprint", "iprfrq", "isvfrq", "nsavv"):
                         chunk_kw[k] = c
             elif cadence_active:
                 c = _harmonize_dynamics_frequency(int(cadence), n)

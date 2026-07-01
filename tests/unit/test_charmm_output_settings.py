@@ -63,7 +63,7 @@ def test_resolve_dynamics_print_kwargs_uses_cadence_not_nsavc():
         dyn_nprint=500, dyn_iprfrq=2000, quiet=False, dyn_freq_cadence=50
     )
     dyn_print = resolve_dynamics_print_kwargs(args, nstep=500, nsavc=499)
-    assert dyn_print == {"nprint": 50, "iprfrq": 50, "isvfrq": 50}
+    assert dyn_print == {"nprint": 50, "iprfrq": 50, "isvfrq": 50, "nsavv": 50}
 
 
 def test_resolve_dynamics_freq_cadence_zero_disables():
