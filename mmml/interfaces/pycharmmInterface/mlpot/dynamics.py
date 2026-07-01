@@ -1253,22 +1253,21 @@ def _run_minimize_in_chunks(
             from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
                 materialize_deferred_mlpot_jax_before_sd,
             )
-
-            materialize_deferred_mlpot_jax_before_sd(
-                config.mlpot_ctx,
-                verbose=config.verbose,
-            )
-            from mmml.interfaces.pycharmmInterface.charmm_mpi import (
-                recover_mpi_for_charmm_after_jax,
-            )
-
-            recover_mpi_for_charmm_after_jax(phase="before MLpot SD chunk")
             from mmml.interfaces.pycharmmInterface.mlpot.setup import (
                 mlpot_skip_charmm_ener_force_before_first_sd,
                 rebind_mlpot_calculator_from_pycmodel,
             )
 
             if mlpot_skip_charmm_ener_force_before_first_sd(config.mlpot_ctx):
+                materialize_deferred_mlpot_jax_before_sd(
+                    config.mlpot_ctx,
+                    verbose=config.verbose,
+                )
+                from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+                    recover_mpi_for_charmm_after_jax,
+                )
+
+                recover_mpi_for_charmm_after_jax(phase="before MLpot SD chunk")
                 rebind_mlpot_calculator_from_pycmodel(
                     config.mlpot_ctx,
                     verbose=False,

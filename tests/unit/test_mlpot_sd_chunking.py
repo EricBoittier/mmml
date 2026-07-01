@@ -21,6 +21,22 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
 )
 
 
+_DEFER_PATH_TEST_MARKERS = ("materialize", "prime_charmm")
+
+
+@pytest.fixture(autouse=True)
+def _disable_mlpot_mpi_defer_in_generic_chunk_tests(request):
+    """Generic chunk tests use ``MagicMock(use_pbc=True)``; avoid real MPI defer path."""
+    if any(marker in request.node.name for marker in _DEFER_PATH_TEST_MARKERS):
+        yield
+        return
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
+        return_value=False,
+    ):
+        yield
+
+
 def test_mlpot_sd_chunk_nstep_smaller_for_pbc():
     ctx = MagicMock(use_pbc=True)
     cfg = MinimizeWithMlpotConfig(mlpot_ctx=ctx)
@@ -734,11 +750,8 @@ def test_materialize_deferred_mlpot_jax_before_sd_skips_charmm_ener_after_fresh_
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot._warmup_value_and_grad_for_model",
     ) as warmup, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
-    ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
-        return_value=12.3,
-    ) as probe, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.prime_charmm_hybrid_energy_before_mlpot_sd",
+    ) as prime, patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ) as recover, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
@@ -756,7 +769,7 @@ def test_materialize_deferred_mlpot_jax_before_sd_skips_charmm_ener_after_fresh_
     ):
         assert materialize_deferred_mlpot_jax_before_sd(ctx) is True
 
-    probe.assert_not_called()
+    prime.assert_called_once()
     warmup.assert_called_once()
     assert recover.call_count == 3
     sync_lists.assert_not_called()
@@ -800,6 +813,8 @@ def test_materialize_deferred_mlpot_jax_before_sd_warms_callback_after_calculato
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot._warmup_value_and_grad_for_model",
     ) as warmup, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.prime_charmm_hybrid_energy_before_mlpot_sd",
+    ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ) as recover, patch.object(
         model,
