@@ -22,13 +22,19 @@ from mmml.interfaces.pycharmmInterface.cgenff_topology import (
     load_cgenff_bonded_from_psf,
     parse_psf_ext,
 )
-from tests.conftest import can_import_pycharmm
+from tests.conftest import bonded_block_hangs_under_mpi_mpirun, can_import_pycharmm
 from tests.functionality.pycharmmETC._paths import PYCHARMMETC_DIR, workdir_pdb, workdir_psf
 
-pytestmark = pytest.mark.skipif(
-    not can_import_pycharmm(),
-    reason="pycharmm / libcharmm not available",
-)
+pytestmark = [
+    pytest.mark.skipif(
+        not can_import_pycharmm(),
+        reason="pycharmm / libcharmm not available",
+    ),
+    pytest.mark.skipif(
+        bonded_block_hangs_under_mpi_mpirun(),
+        reason="bonded-only BLOCK hangs on MPI-linked libcharmm under mpirun",
+    ),
+]
 
 ACO_PSF = PYCHARMMETC_DIR / "psf" / "aco-1.psf"
 ACO_PDB = PYCHARMMETC_DIR / "pdb" / "aco.pdb"

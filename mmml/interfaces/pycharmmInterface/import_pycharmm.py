@@ -528,6 +528,44 @@ def init_vacuum_charmm_state_mpi() -> None:
     _vacuum_charmm_synced = True
 
 
+def ensure_pycharmm_loaded() -> bool:
+    """Load libcharmm into module globals when collection used ``MMML_WARMUP_MLPOT_JAX_ONLY``.
+
+    Live tests under ``mmml-charmm-mpirun.sh`` need ``import_pycharmm.pycharmm`` and
+    ``reset_block`` wired even though unit-test collection defers the import.
+    """
+    global PYCHARMM_AVAILABLE, pycharmm, coor, energy, read, settings, psf, minimize
+    if pycharmm is not None:
+        return True
+    if not charmm_lib_available():
+        return False
+    prepare_serial_charmm_mpi_env()
+    import pycharmm as _pycharmm
+    import pycharmm.coor as _coor
+    import pycharmm.energy as _energy
+    import pycharmm.minimize as _minimize
+    import pycharmm.psf as _psf
+    import pycharmm.read as _read
+    import pycharmm.settings as _settings
+
+    pycharmm = _pycharmm
+    coor = _coor
+    energy = _energy
+    read = _read
+    settings = _settings
+    psf = _psf
+    minimize = _minimize
+    PYCHARMM_AVAILABLE = True
+    if charmm_lib_links_mpi():
+        from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+            ensure_mpi4py_after_charmm_init,
+        )
+
+        ensure_mpi4py_after_charmm_init(phase="ensure_pycharmm_loaded")
+    _init_charmm_default_levels()
+    return True
+
+
 _init_charmm_default_levels()
 
 

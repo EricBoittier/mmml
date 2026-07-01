@@ -118,6 +118,19 @@ def jax_gpu_available() -> bool:
         return False
 
 
+def bonded_block_hangs_under_mpi_mpirun() -> bool:
+    """``apply_bonded_mm_only_block`` (ELEC/VDW-off BLOCK) stalls on MPI-linked CHARMM."""
+    try:
+        from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+            _under_mpirun,
+            charmm_lib_links_mpi,
+        )
+
+        return bool(charmm_lib_links_mpi() and _under_mpirun())
+    except Exception:
+        return False
+
+
 @pytest.fixture
 def pycharmm_workdir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Temporary cwd with seed PDBs; PyCHARMM outputs stay out of the git tree."""
@@ -147,6 +160,18 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
         if _matches_any(rel, _MLPOT_PATH_PREFIXES):
             item.add_marker(pytest.mark.mlpot)
 
+    if any(item.get_closest_marker("pycharmm") is not None for item in items):
+        try:
+            from mmml.interfaces.pycharmmInterface.charmm_mpi import _under_mpirun
+            from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+                ensure_pycharmm_loaded,
+            )
+
+            if _under_mpirun():
+                ensure_pycharmm_loaded()
+        except Exception:
+            pass
+
 
 @pytest.fixture(autouse=True)
 def _jax_enable_x64_for_pycharmm_tests(request: pytest.FixtureRequest) -> None:
@@ -167,8 +192,11 @@ def _charmm_default_levels_for_pycharmm_tests(request: pytest.FixtureRequest) ->
     if request.node.get_closest_marker("pycharmm") is None:
         return
     try:
-        import pycharmm  # noqa: F401 — initialize libcharmm if not already loaded
+        from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+            ensure_pycharmm_loaded,
+        )
 
+        ensure_pycharmm_loaded()
         from mmml.interfaces.pycharmmInterface.mlpot.setup import apply_charmm_verbosity
 
         apply_charmm_verbosity(prnlev=5, warnlev=5, bomlev=-2)

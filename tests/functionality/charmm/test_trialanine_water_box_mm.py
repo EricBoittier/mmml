@@ -29,7 +29,7 @@ from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
     build_trialanine_water_box_in_charmm,
     have_protein_toppar,
 )
-from tests.conftest import can_import_pycharmm
+from tests.conftest import bonded_block_hangs_under_mpi_mpirun, can_import_pycharmm
 
 pytestmark = [
     pytest.mark.skipif(
@@ -69,6 +69,8 @@ def trialanine_water_box(tmp_path_factory):
 
 
 def test_trialanine_water_bonded_matches_pycharmm(trialanine_water_box) -> None:
+    if bonded_block_hangs_under_mpi_mpirun():
+        pytest.skip("bonded-only BLOCK hangs on MPI-linked libcharmm under mpirun")
     box = trialanine_water_box
     positions = _perturb_positions(box.positions, seed=23)
     set_charmm_positions(positions)
