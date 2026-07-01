@@ -20,7 +20,9 @@ def test_crystal_free_for_param_append_bypasses_vacuum_skip():
     )
     fn = source.split("def crystal_free_charmm_for_param_append")[1].split("\ndef ")[0]
     assert "if should_skip_vacuum_charmm_init()" not in fn
-    assert "mpi_charmm_script" in fn
+    assert "_run_crystal_free" in fn
+    run_fn = source.split("def _run_crystal_free")[1].split("\ndef ")[0]
+    assert "mpi_charmm_script" in run_fn
 
 
 def test_reset_block_skips_under_mpi_linked_mpirun():

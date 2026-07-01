@@ -83,6 +83,16 @@ def test_read_cgenff_prm_append_suspends_pbc_before_read():
     assert "crystal_free_charmm(" not in suspend_src
 
 
+def test_crystal_free_prefers_c_api():
+    source = Path("mmml/interfaces/pycharmmInterface/import_pycharmm.py").read_text(
+        encoding="utf-8"
+    )
+    fn = source.split("def _run_crystal_free")[1].split("\ndef ")[0]
+    assert "crystal_free_available" in fn
+    assert "free_crystal" in fn
+    assert "crystal free" in fn
+
+
 def test_read_cgenff_prm_replace_skips_pbc_suspend():
     import inspect
 

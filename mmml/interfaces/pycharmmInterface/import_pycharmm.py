@@ -431,27 +431,17 @@ def ensure_domdec_off_for_mlpot_energy(*, context: str = "MLpot energy") -> bool
     return ok
 
 
-def crystal_free_charmm() -> None:
-    """Clear periodic image state (safe to repeat outside MPI vacuum bootstrap)."""
-    if not PYCHARMM_AVAILABLE:
-        return
-    if should_skip_vacuum_charmm_init():
-        return
-    try:
-        pycharmm.lingo.charmm_script("crystal free")
-    except Exception:
-        pass
-
-
-def crystal_free_charmm_for_param_append() -> bool:
-    """MPI-safe ``crystal free`` before ``READ PARAM APPEND``.
-
-    Unlike :func:`crystal_free_charmm`, this bypasses
-    :func:`should_skip_vacuum_charmm_init` (import-time vacuum bootstrap only).
-    Under ``mpirun``, uses cooperative :func:`~charmm_mpi.mpi_charmm_script`.
-    """
+def _run_crystal_free(*, mpi_safe: bool = False) -> bool:
+    """Clear crystal/image state via C API when available, else ``crystal free`` script."""
     if not PYCHARMM_AVAILABLE:
         return False
+    try:
+        from pycharmm.crystal import crystal_free_available, free_crystal
+
+        if crystal_free_available():
+            return free_crystal()
+    except Exception:
+        pass
     try:
         from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
         from mmml.interfaces.pycharmmInterface.charmm_mpi import (
@@ -459,13 +449,33 @@ def crystal_free_charmm_for_param_append() -> bool:
             mpi_charmm_script,
         )
 
-        if _under_mpirun():
+        if mpi_safe and _under_mpirun():
             mpi_charmm_script("crystal free\n", quiet=True)
         else:
             run_charmm_script_quiet("crystal free")
         return True
     except Exception:
         return False
+
+
+def crystal_free_charmm() -> None:
+    """Clear periodic image state (safe to repeat outside MPI vacuum bootstrap)."""
+    if not PYCHARMM_AVAILABLE:
+        return
+    if should_skip_vacuum_charmm_init():
+        return
+    _run_crystal_free(mpi_safe=False)
+
+
+def crystal_free_charmm_for_param_append() -> bool:
+    """MPI-safe ``crystal free`` before ``READ PARAM APPEND``.
+
+    Unlike :func:`crystal_free_charmm`, this bypasses
+    :func:`should_skip_vacuum_charmm_init` (import-time vacuum bootstrap only).
+    Uses the KEY_LIBRARY C API when ``crystal_free`` is exported; otherwise falls
+    back to cooperative :func:`~charmm_mpi.mpi_charmm_script` under ``mpirun``.
+    """
+    return _run_crystal_free(mpi_safe=True)
 
 
 def force_charmm_vacuum_mode() -> None:

@@ -361,7 +361,7 @@ elif [[ "$SYNC_PATCHES" == 1 && -f "$PATCH_EVAL_F90" ]]; then
   echo "rebuild_charmm_mlpot: warning: missing $EVAL_F90 (api_eval patch not applied)" >&2
 fi
 
-for _extra_patch in api_minimize.F90 api_dynamics.F90; do
+for _extra_patch in api_minimize.F90 api_dynamics.F90 api_crystal.F90; do
   _patch="$ROOT/setup/api/$_extra_patch"
   _dest="$CHARMM_HOME/source/api/$_extra_patch"
   if [[ -f "$_patch" && -f "$_dest" && "$SYNC_PATCHES" == 1 ]] && ! cmp -s "$_patch" "$_dest"; then

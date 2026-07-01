@@ -303,3 +303,16 @@ def build(cutoff, sym_ops=None):
                                        ctypes.byref(str_array),
                                        ctypes.byref(nops))
     return success
+
+
+def crystal_free_available() -> bool:
+    """True when ``libcharmm`` exports ``crystal_free`` (KEY_LIBRARY rebuild)."""
+    return callable(getattr(lib.charmm, "crystal_free", None))
+
+
+def free_crystal() -> bool:
+    """Clear crystal and periodic image state (``CRYSTAL FREE``)."""
+    fn = getattr(lib.charmm, "crystal_free", None)
+    if not callable(fn):
+        return False
+    return bool(fn())

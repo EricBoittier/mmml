@@ -466,5 +466,29 @@ contains
     call xtlmsr(xucell)
   end function crystal_build
 
+  !> @brief clear crystal and periodic image state (``CRYSTAL FREE``).
+  integer(c_int) function crystal_free() bind(c) result(success)
+    use bases_fcm, only: bimag
+    use image, only: nfreqx, nkpts, nphons, xdim, xnsymm, xnnnb, &
+         xtlabc, xtltyp, xucell
+    use image_routines_module, only: inimag, reimag
+    use number, only: zero
+    implicit none
+
+    success = 0
+    xdim = 0
+    xnsymm = 0
+    xtltyp = '    '
+    xucell(1:6) = zero
+    xtlabc(1:6) = zero
+    nfreqx = 0
+    nkpts = 0
+    nphons = 0
+    xnnnb = 0
+    call inimag(bimag, .true.)
+    call reimag(bimag, 0, 0)
+    success = 1
+  end function crystal_free
+
 #endif /* KEY_LIBRARY */
 end module api_crystal
