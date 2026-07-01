@@ -1009,6 +1009,55 @@ def _effective_mlpot_sd_chunk_nstep(
 
 # Post-calculator-mini GRMS is often <1 kcal/mol/Å; SD chunk noise to ~2–3 is normal.
 _SD_WATCHDOG_LOW_BASELINE_GRMS = 5.0
+# CHARMM SD is ineffective above this; do not burn chunks at plateaued geometry_stress.
+_SD_STRESS_GRMS_ABORT_CEILING_DEFAULT = 500.0
+
+
+def _resolved_sd_stress_abort_ceiling(config: MinimizeWithMlpotConfig) -> float:
+    """Hybrid GRMS above which chunked SD/ABNR should stop immediately."""
+    threshold = config.pre_sd_bonded_recovery_grms_kcalmol_A
+    if threshold is not None and float(threshold) > 0.0:
+        return float(threshold)
+    return _SD_STRESS_GRMS_ABORT_CEILING_DEFAULT
+
+
+def _maybe_abort_sd_on_stress_grms(
+    config: MinimizeWithMlpotConfig,
+    *,
+    current_grms: float,
+    pass_label: str,
+    step_label: str,
+) -> bool:
+    """Return True when hybrid GRMS is far above any useful SD/ABNR range."""
+    ceiling = _resolved_sd_stress_abort_ceiling(config)
+    if float(current_grms) <= float(ceiling):
+        return False
+    if config.verbose:
+        from mmml.utils.prep_ladder_report import PrepMetrics, emit_sd_event
+
+        emit_sd_event(
+            "stress_abort",
+            pass_label,
+            metrics=PrepMetrics.from_mlpot(config.mlpot_ctx, hybrid_grms=current_grms),
+            detail=(
+                f"hybrid GRMS {float(current_grms):.4f} > {float(ceiling):.4f} "
+                f"kcal/mol/Å ({step_label}); CHARMM SD ineffective on geometry_stress"
+            ),
+            quiet=False,
+        )
+    return True
+
+
+def _effective_sd_stall_patience_chunks(
+    config: MinimizeWithMlpotConfig,
+    *,
+    current_grms: float,
+) -> int:
+    """Use a single stagnant chunk when GRMS is already in geometry_stress."""
+    base = int(config.sd_stall_patience_chunks)
+    if float(current_grms) > _resolved_sd_stress_abort_ceiling(config):
+        return 1
+    return base
 
 
 _DEFAULT_SD_CONVERGED_GRMS_KCALMOL_A = 1.0
@@ -1048,7 +1097,11 @@ def _maybe_abort_sd_on_grms_stall(
     step_label: str,
 ) -> bool:
     """Return True when hybrid GRMS has plateaued and SD is making no progress."""
-    if stagnant_chunks < int(config.sd_stall_patience_chunks):
+    patience = _effective_sd_stall_patience_chunks(
+        config,
+        current_grms=float(current_grms),
+    )
+    if stagnant_chunks < patience:
         return False
     target = _resolved_sd_converged_grms(config)
     if current_grms <= float(target):
@@ -1095,6 +1148,11 @@ def _maybe_abort_sd_on_grms(
     if initial_grms is not None and np.isfinite(initial_grms) and not low_baseline:
         cap = float(initial_grms) * factor
         max_allowed = cap if max_allowed is None else min(max_allowed, cap)
+    stress_ceiling = _resolved_sd_stress_abort_ceiling(config)
+    if max_allowed is None:
+        max_allowed = stress_ceiling
+    else:
+        max_allowed = min(float(max_allowed), stress_ceiling)
     if max_allowed is not None and current_grms > max_allowed:
         if config.verbose:
             print(
@@ -1264,6 +1322,21 @@ def _run_minimize_in_chunks(
     if (
         initial_grms is not None
         and np.isfinite(initial_grms)
+        and _maybe_abort_sd_on_stress_grms(
+            config,
+            current_grms=float(initial_grms),
+            pass_label=pass_label,
+            step_label=f"before {method}",
+        )
+    ):
+        return MlpotSdChunkResult(
+            completed=False,
+            stalled=True,
+            last_grms=float(initial_grms),
+        )
+    if (
+        initial_grms is not None
+        and np.isfinite(initial_grms)
         and _should_stop_sd_on_converged_grms(
             config,
             initial_grms=initial_grms,
@@ -1376,6 +1449,17 @@ def _run_minimize_in_chunks(
                     flush=True,
                 )
             return MlpotSdChunkResult(completed=True, last_grms=grms)
+        if grms is not None and _maybe_abort_sd_on_stress_grms(
+            config,
+            current_grms=grms,
+            pass_label=pass_label,
+            step_label=f"after chunk {chunk_index}",
+        ):
+            return MlpotSdChunkResult(
+                completed=False,
+                stalled=True,
+                last_grms=grms,
+            )
         if grms is not None and previous_grms is not None:
             if abs(float(grms) - float(previous_grms)) <= float(config.sd_stall_grms_abs_tol):
                 stagnant_chunks += 1
@@ -3801,11 +3885,11 @@ def _harmonize_overlap_chunk_frequencies(
                         chunk_kw[k] = c
             elif cadence_active:
                 c = _harmonize_dynamics_frequency(int(cadence), n)
-                for k in ("nprint", "iprfrq", "isvfrq"):
+                for k in ("nprint", "iprfrq", "isvfrq", "nsavv"):
                     if k in chunk_kw:
                         chunk_kw[k] = c
             else:
-                for k in ("nprint", "iprfrq", "isvfrq"):
+                for k in ("nprint", "iprfrq", "isvfrq", "nsavv"):
                     if k in chunk_kw:
                         chunk_kw[k] = old
         elif cadence_active and key in _OVERLAP_CHUNK_PRINT_CADENCE_KEYS:

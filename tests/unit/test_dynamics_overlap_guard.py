@@ -3343,8 +3343,8 @@ def test_harmonize_dynamics_frequency_for_remainder_chunk():
 
     kw = {"nstep": 40, "ihbfrq": 50, "imgfrq": 50, "isvfrq": 500, "nsavc": 10, "inbfrq": -1}
     _harmonize_overlap_chunk_frequencies(kw, 40)
-    assert kw["ihbfrq"] == 40
-    assert kw["imgfrq"] == 40
+    assert kw["ihbfrq"] == 41
+    assert kw["imgfrq"] == 41
     assert kw["isvfrq"] == 10
     assert kw["nsavc"] == 10
     assert kw["inbfrq"] == -1
@@ -3373,14 +3373,14 @@ def test_harmonize_dynamics_frequency_for_remainder_chunk():
         "isvfrq": 80,
     }
     _harmonize_overlap_chunk_frequencies(kw_pretreat, 250)
-    assert kw_pretreat["inbfrq"] == 125
-    assert kw_pretreat["imgfrq"] == 125
+    assert kw_pretreat["inbfrq"] == 251
+    assert kw_pretreat["imgfrq"] == 251
     assert kw_pretreat["imgfrq"] % kw_pretreat["inbfrq"] == 0
 
     kw_mismatch = {"inbfrq": 300, "imgfrq": 100, "ihbfrq": 100, "ilbfrq": 100}
     _harmonize_overlap_chunk_frequencies(kw_mismatch, 300)
-    assert kw_mismatch["imgfrq"] == 100
-    assert kw_mismatch["inbfrq"] == 100
+    assert kw_mismatch["imgfrq"] == 301
+    assert kw_mismatch["inbfrq"] == 301
     assert kw_mismatch["imgfrq"] % kw_mismatch["inbfrq"] == 0
 
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
@@ -3591,6 +3591,8 @@ def test_harmonize_overlap_chunk_cadence_sets_print_not_interior_lists():
     assert kw["imgfrq"] == 501
     assert kw["nprint"] == 50
     assert kw["iprfrq"] == 50
+    assert kw["isvfrq"] == 50
+    assert kw["nsavv"] == 50
     assert kw["nsavc"] == 499
 
 

@@ -11,6 +11,7 @@ import numpy as np
 
 from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     apply_charmm_output_from_args,
+    apply_dynamics_print_kwargs,
     apply_flat_bottom_from_args,
     assert_dynamics_ready,
     build_cluster_from_args_with_tag,
@@ -24,6 +25,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_checkpoint,
     resolve_constrain_resids,
     resolve_dcd_nsavc_for_args,
+    resolve_dynamics_freq_cadence,
     resolve_dynamics_print_kwargs,
     resolve_heat_firstt_finalt,
     resolve_heat_hoover_tmass,
@@ -441,11 +443,6 @@ def _build_stage_dynamics_kw(
         raise ValueError(stage)
     apply_dynamics_print_kwargs(kw, dyn_print)
     kw["nstep"] = nstep
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
-        apply_dynamics_print_kwargs,
-        resolve_dynamics_freq_cadence,
-    )
-
     cadence = resolve_dynamics_freq_cadence(args)
     if cadence is not None:
         kw["_dyn_freq_cadence"] = cadence

@@ -20,9 +20,9 @@ CLI flags live in `cli_common.add_charmm_output_args()`; stage builders in `dyna
 | SD / mini energy line | `nprint` | `--nprint` | **50** | Every N SD steps (MLpot mini + CHARMM MM pre-min) |
 | Dynamics energy summary | `nprint` | `--dyn-nprint` | **500** | `DYNA>` block every N integration steps |
 | Detailed dynamics props | `iprfrq` | `--dyn-iprfrq` | **2000** | Extra `DYNA PROP>` / extended rows |
-| Restart / velocity save | `isvfrq` | *(same as iprfrq)* | **2000** | Restart file timing |
+| Restart / velocity save | `isvfrq` / `nsavv` | *(same as iprfrq)* | **2000** / **50** | Restart file timing; `nsavv` = velocity block in restart (CHARMM default 10 if unset) |
 | **Heating velocity rescale** | **`ihtfrq`** | **`--heat-ihtfrq`** | **0 → use `--dyn-nprint`** | **COM + “VELOCITIES ASSIGNED” banners** (often mistaken for `nprint`) |
-| Quiet dynamics | — | `--quiet` | `nprint = iprfrq = isvfrq = nstep` | One summary per stage |
+| Quiet dynamics | — | `--quiet` | `nprint = iprfrq = isvfrq = nsavv = nstep` | One summary per stage |
 
 **Heating spam:** If you still see output every ~10 steps during `heat`, check `ihtfrq` (not only `dyn-nprint`). Legacy code used `ihtfrq=10` hardcoded. Current staged workflow sets `ihtfrq = resolve_heat_ihtfrq()` (default: match `--dyn-nprint`, e.g. 500).
 
@@ -53,7 +53,7 @@ mmml md-system ... --heat-ihtfrq 40
 | **equi** | Velocity scaling (restart: off) | CPT + Hoover NPT | vacuum: like heat; PBC: `hoover reft`, `cpt` | vacuum restart: **0**; vacuum cold start: ramp |
 | **prod** | Hoover NVT | CPT Hoover NPT | `hoover reft`, `tmass` | 0 |
 
-Staged workflow **always overwrites** `nprint`, `iprfrq`, `isvfrq` from `resolve_dynamics_print_kwargs()` after each builder runs.
+Staged workflow **always overwrites** `nprint`, `iprfrq`, `isvfrq`, `nsavv` from `resolve_dynamics_print_kwargs()` after each builder runs.
 
 ## Stage → lists, trajectory, stability
 

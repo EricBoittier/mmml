@@ -74,7 +74,7 @@ def test_resolve_charmm_mm_pretreat_heat_nstep_uses_pretreat_dt():
 
 def test_resolve_pretreat_dynamics_print_kwargs_suppresses_status():
     kw = resolve_pretreat_dynamics_print_kwargs(nstep=5000)
-    assert kw == {"nprint": 5000, "iprfrq": 5000, "isvfrq": 5000}
+    assert kw == {"nprint": 5000, "iprfrq": 5000, "isvfrq": 5000, "nsavv": 5000}
 
 
 def test_build_pretreat_handoff_includes_thermodynamics_section():

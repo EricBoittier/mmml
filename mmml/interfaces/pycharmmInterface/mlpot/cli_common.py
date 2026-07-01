@@ -2686,6 +2686,20 @@ def prepare_mlpot_hybrid_state_for_sd(
     def _run_mlpot_sd_recovery(*, note: str) -> None:
         """Short MLpot SD pass for all-ML / geometry_stress (bonded-MM ineffective)."""
         nonlocal hybrid_grms, user, diag, grms_hot, user_hot, ran_bonded_recovery
+        stress_ceiling = 500.0
+        if grms_limit is not None:
+            stress_ceiling = max(stress_ceiling, float(grms_limit))
+        if intervention_grms is not None:
+            stress_ceiling = max(stress_ceiling, 5.0 * float(intervention_grms))
+        if float(hybrid_grms) > stress_ceiling:
+            if verbose:
+                print(
+                    f"{context_prefix}: skip MLpot SD recovery ({note}; "
+                    f"hybrid GRMS {float(hybrid_grms):.1f} > {stress_ceiling:.1f} "
+                    "kcal/mol/Å — CHARMM SD ineffective on geometry_stress)",
+                    flush=True,
+                )
+            return
         pyCModel = getattr(mlpot_ctx, "pyCModel", None)
         if pyCModel is None:
             if verbose:
@@ -2950,12 +2964,34 @@ def prepare_mlpot_hybrid_state_for_sd(
         _run_calculator_mini("pre-recovery")
 
     if (grms_hot or user_hot):
-        if diag.kind == "geometry_stress" and not ran_bonded_recovery:
-            _run_mlpot_sd_recovery(
-                note="geometry_stress (ML clash; bonded-MM ineffective)",
+        if (
+            diag.kind == "desync_suspected"
+            and float(diag.charmm) > 0.0
+            and float(hybrid_grms) < 0.5 * float(diag.charmm)
+        ):
+            hybrid_grms = light_resync_mlpot_state(
+                mlpot_ctx,
+                context=f"{context_prefix} pre-recovery light resync" if verbose else "",
+                verbose=verbose,
+                restart_path=restart_path,
             )
-        elif diag.kind != "geometry_stress" and not ran_geometry_packing:
-            _run_bonded_recovery()
+            diag = measure_hybrid_charmm_grms(mlpot_ctx)
+            _print_hybrid_charmm_grms_diag(
+                f"{context_prefix} post-resync hybrid GRMS" if verbose else "",
+                diag,
+                mlpot_ctx=mlpot_ctx,
+                quiet=not verbose,
+            )
+            hybrid_grms = float(diag.hybrid)
+            grms_hot = grms_limit is not None and hybrid_grms > float(grms_limit)
+            user_hot = energy_limit is not None and user > float(energy_limit)
+        if grms_hot or user_hot:
+            if diag.kind == "geometry_stress" and not ran_bonded_recovery:
+                _run_mlpot_sd_recovery(
+                    note="geometry_stress (ML clash; bonded-MM ineffective)",
+                )
+            elif diag.kind != "geometry_stress" and not ran_geometry_packing:
+                _run_bonded_recovery()
 
     still_hot = grms_limit is not None and hybrid_grms > float(grms_limit)
     if calculator_minimize and not ran_calculator_mini and not ran_geometry_packing and (
