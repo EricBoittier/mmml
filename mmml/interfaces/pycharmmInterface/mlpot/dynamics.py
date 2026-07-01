@@ -1968,6 +1968,8 @@ def _apply_bussi_in_memory_continuation_kw(kw: dict[str, Any]) -> None:
     kw.pop("TEMINC", None)
     kw.pop("teminc", None)
     kw["_skip_ase_cold_velocity_assign"] = True
+    kw.pop("iunrea", None)
+    kw["iunrea"] = -1
     _strip_stale_heat_ramp_keywords(kw)
 
 

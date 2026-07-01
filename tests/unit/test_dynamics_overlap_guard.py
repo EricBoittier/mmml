@@ -2086,6 +2086,77 @@ def test_mlpot_overlap_memory_handoff_flag_does_not_skip_readyn_between_chunks(t
     assert calls[2]["restart"] is True
 
 
+def test_mlpot_bussi_overlap_chunks_use_in_memory_handoff(tmp_path, monkeypatch):
+    """Bussi heat overlap stays in RAM between chunks (no scratch READYN)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        CharmmTrajectoryFiles,
+        prepare_bussi_heat_dynamics_kw,
+    )
+
+    monkeypatch.delenv("MMML_BUSSI_READYN_OVERLAP", raising=False)
+    cfg = DynamicsOverlapConfig(
+        action="error",
+        min_distance_A=0.5,
+        check_interval=2,
+        n_monomers=2,
+        use_pbc=False,
+        memory_handoff=True,
+        max_monomer_extent_A=0.0,
+    )
+    res_path = tmp_path / "heat.res"
+    io = CharmmTrajectoryFiles(restart_write=res_path)
+    calls: list[dict] = []
+    mlpot_ctx = mock.Mock()
+    base_kw = {"nstep": 6, "new": False, "start": False, "restart": False}
+    prepare_bussi_heat_dynamics_kw(
+        base_kw, nstep=6, ihtfrq=2, timestep_ps=0.0001
+    )
+
+    def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
+        calls.append(dict(kw))
+        if _io is not None and _io.restart_write is not None:
+            _write_test_restart(Path(_io.restart_write), 2 * len(calls))
+        return mock.Mock()
+
+    def fake_bussi_sub(chunk_kw, chunk_io, **kwargs):
+        fake_chunk(chunk_kw, chunk_io, extra_iokw=kwargs.get("extra_iokw"))
+        return mock.Mock()
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        side_effect=fake_chunk,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_bussi_heat_subchunked",
+        side_effect=fake_bussi_sub,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+        return_value=(5.0, False),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
+        side_effect=lambda p: Path(p).resolve(),
+    ):
+        run_dynamics_with_io(
+            base_kw,
+            io,
+            overlap=cfg,
+            overlap_context="HEAT",
+            mlpot_ctx=mlpot_ctx,
+        )
+
+    assert [c["nstep"] for c in calls] == [2, 2, 2]
+    assert calls[0]["restart"] is False
+    assert calls[0].get("iunrea") == -1
+    assert calls[1]["restart"] is False
+    assert calls[1]["iasvel"] == 0
+    assert calls[1].get("iunrea") == -1
+    assert calls[2]["restart"] is False
+    assert calls[2]["iasvel"] == 0
+
+
 def test_mlpot_overlap_chunks_use_scratch_restart_handoff(tmp_path, monkeypatch):
     """Default MLpot overlap uses dyna restart on alternating scratch .res files."""
     monkeypatch.setenv("MMML_NO_OVERLAP_MEMORY_HANDOFF", "1")

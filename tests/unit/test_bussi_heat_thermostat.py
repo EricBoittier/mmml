@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest import mock
 
 import numpy as np
@@ -416,6 +417,7 @@ def test_apply_bussi_in_memory_continuation_keeps_iasvel_zero():
     _apply_bussi_in_memory_continuation_kw(kw)
     assert kw["iasvel"] == 0
     assert kw["start"] is False
+    assert kw["iunrea"] == -1
     assert kw["_skip_ase_cold_velocity_assign"] is True
 
 
@@ -438,6 +440,91 @@ def test_ensure_bussi_heat_continuation_iasvel_for_overlap_chunk():
     assert kw["start"] is False
     _ensure_bussi_heat_continuation_iasvel(kw)
     assert kw["iasvel"] == 0
+
+
+def test_overlap_chunk_uses_memory_handoff_for_bussi(monkeypatch):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _overlap_chunk_uses_memory_handoff,
+        prepare_bussi_heat_dynamics_kw,
+    )
+
+    kw = {"firstt": 10.0, "finalt": 50.0, "timestep": 0.0001, "nstep": 50}
+    prepare_bussi_heat_dynamics_kw(kw, nstep=50, ihtfrq=50, timestep_ps=0.0001)
+    monkeypatch.delenv("MMML_BUSSI_READYN_OVERLAP", raising=False)
+    assert _overlap_chunk_uses_memory_handoff(
+        mock.Mock(),
+        chunk_index=1,
+        n_chunks=4,
+        bussi_heat=True,
+    )
+    monkeypatch.setenv("MMML_BUSSI_READYN_OVERLAP", "1")
+    assert not _overlap_chunk_uses_memory_handoff(
+        mock.Mock(),
+        chunk_index=1,
+        n_chunks=4,
+        bussi_heat=True,
+    )
+
+
+def test_prepare_post_rescue_overlap_handoff_bussi_uses_in_memory_kw():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _prepare_post_rescue_overlap_handoff,
+        prepare_bussi_heat_dynamics_kw,
+    )
+
+    chunk_kw = {
+        "firstt": 10.0,
+        "finalt": 50.0,
+        "timestep": 0.0001,
+        "nstep": 50,
+        "restart": True,
+        "iunrea": 3,
+    }
+    prepare_bussi_heat_dynamics_kw(
+        chunk_kw, nstep=50, ihtfrq=50, timestep_ps=0.0001
+    )
+    ctx = mock.Mock(
+        use_pbc=True,
+        charmm_cubic_box_side_A=180.0,
+        _overlap_post_rescue_cold_start=False,
+    )
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
+    ):
+        _prepare_post_rescue_overlap_handoff(chunk_kw, mlpot_ctx=ctx)
+
+    assert chunk_kw["restart"] is False
+    assert chunk_kw["iasvel"] == 0
+    assert chunk_kw["start"] is False
+    assert chunk_kw["iunrea"] == -1
+    assert chunk_kw["_skip_ase_cold_velocity_assign"] is True
+
+
+def test_apply_post_rescue_overlap_handoff_bussi_returns_in_memory():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        CharmmTrajectoryFiles,
+        _apply_post_rescue_overlap_handoff,
+        prepare_bussi_heat_dynamics_kw,
+    )
+
+    chunk_kw = {"firstt": 10.0, "finalt": 50.0, "timestep": 0.0001, "nstep": 50}
+    prepare_bussi_heat_dynamics_kw(
+        chunk_kw, nstep=50, ihtfrq=50, timestep_ps=0.0001
+    )
+    chunk_io = CharmmTrajectoryFiles(
+        restart_read=Path("/tmp/heat.a.res"),
+        restart_write=Path("/tmp/heat.b.res"),
+    )
+    out_io, in_memory = _apply_post_rescue_overlap_handoff(
+        chunk_io,
+        chunk_kw,
+        steps_done=500,
+        mlpot_ctx=mock.Mock(),
+        overlap=None,
+        overlap_context="HEAT",
+    )
+    assert in_memory is True
+    assert out_io is chunk_io
 
 
 def test_harmonize_overlap_chunk_preserves_nsavv_when_suppressing_dcd():
