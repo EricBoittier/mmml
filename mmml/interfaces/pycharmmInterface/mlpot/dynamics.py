@@ -3469,8 +3469,7 @@ def _overlap_refresh_or_validate_scratch_restart(
     memory_handoff: bool = False,
 ) -> None:
     """Refresh scratch restart; validate only when the next chunk will ``READYN`` it."""
-    if memory_handoff and mlpot_ctx is not None and n_chunks > 1:
-        return
+    del memory_handoff, mlpot_ctx
     _ensure_valid_overlap_scratch_restart(
         write_path,
         final_restart=final_restart,
@@ -3556,20 +3555,19 @@ def _overlap_chunk_uses_memory_handoff(
     overlap: Optional["DynamicsOverlapConfig"] = None,
     cpt: bool = False,
 ) -> bool:
-    """Continue overlap segments in-process when MLpot is active.
+    """Whether overlap chunk boundaries skip ``READYN`` (in-process continuation).
 
-    Hoover CPT barostat piston state is **not** restored by plain
-    ``write restart`` / ``READYN`` on scratch ``.overlap_*.res`` files.
-    Default is in-memory handoff (same as CPT stability sub-chunks); set
-    ``MMML_CPT_READYN_SUBCHUNK=1`` to opt into scratch READYN between overlap
-    chunks (legacy / debugging only).
+    Overlap segments always ``READYN`` alternating scratch ``.overlap_*.res``
+    files with patched ``JHSTRT`` so CHARMM time/step counters continue across
+    chunks.  In-memory handoff is reserved for CPT stability *sub-chunks* within
+    one overlap chunk (``_run_cpt_stability_subchunked``) and for one-shot
+    early-abort / post-rescue retries (explicit flags in the overlap loop).
+
+    ``DynamicsOverlapConfig.memory_handoff`` still controls stage-level handoff
+    (e.g. post-mini seed restart) via ``overlap_first_chunk_skips_readyn``; it
+    does not disable scratch ``READYN`` between overlap chunks.
     """
-    if mlpot_ctx is None or n_chunks <= 1:
-        return False
-    if cpt and not _cpt_subchunk_use_in_memory_handoff():
-        return False
-    if overlap is not None and overlap.memory_handoff:
-        return True
+    del mlpot_ctx, chunk_index, n_chunks, overlap, cpt
     return False
 
 
@@ -4358,6 +4356,36 @@ def _apply_cpt_restart_continuation_kw(kw: dict[str, Any]) -> None:
         kw["ihtfrq"] = 0
 
 
+def _materialize_dynamics_restart_handoff(
+    write_path: Path,
+    *,
+    global_step: int,
+    overlap_context: str,
+    label: str = "restart",
+) -> Path:
+    """Write a validated READYN restart from in-memory state with global ``JHSTRT``."""
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        rewrite_dynamics_restart_validated,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        patch_restart_global_step,
+    )
+
+    if not rewrite_dynamics_restart_validated(write_path):
+        raise RuntimeError(
+            f"{overlap_context}: {label} handoff failed writing "
+            f"{write_path.name} from in-memory CHARMM state"
+        )
+    patch_restart_global_step(write_path, global_step)
+    valid = _valid_restart_file(write_path)
+    if valid is None:
+        raise RuntimeError(
+            f"{overlap_context}: {label} handoff wrote "
+            f"{write_path.name} but it does not validate as READYN"
+        )
+    return valid
+
+
 def _materialize_cpt_subchunk_restart_handoff(
     write_path: Path,
     *,
@@ -4373,26 +4401,30 @@ def _materialize_cpt_subchunk_restart_handoff(
     garbage ``PIXX`` / ``PRESSI`` on the next ``READYN`` (same failure mode as a
     separate assign before the first CPT ``dyna``).
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
-        rewrite_dynamics_restart_validated,
-    )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
-        patch_restart_global_step,
+    del mlpot_ctx, chunk_kw
+    return _materialize_dynamics_restart_handoff(
+        write_path,
+        global_step=global_step,
+        overlap_context=overlap_context,
+        label="CPT sub-chunk restart",
     )
 
-    if not rewrite_dynamics_restart_validated(write_path):
-        raise RuntimeError(
-            f"{overlap_context}: CPT sub-chunk restart handoff failed writing "
-            f"{write_path.name} from in-memory CHARMM state"
-        )
-    patch_restart_global_step(write_path, global_step)
-    valid = _valid_restart_file(write_path)
-    if valid is None:
-        raise RuntimeError(
-            f"{overlap_context}: CPT sub-chunk restart handoff wrote "
-            f"{write_path.name} but it does not validate as READYN"
-        )
-    return valid
+
+def _materialize_overlap_chunk_restart_handoff(
+    write_path: Path,
+    *,
+    global_step: int,
+    overlap_context: str,
+    mlpot_ctx: Optional["MlpotContext"] = None,
+) -> Path:
+    """Materialize scratch overlap restart with correct global step for ``READYN``."""
+    del mlpot_ctx
+    return _materialize_dynamics_restart_handoff(
+        write_path,
+        global_step=global_step,
+        overlap_context=overlap_context,
+        label="overlap chunk restart",
+    )
 
 
 def _scale_heat_ramp_active(kw: dict[str, Any]) -> bool:
@@ -4954,30 +4986,6 @@ def run_dynamics_with_io(
         and isinstance(overlap, DynamicsOverlapConfig)
         and (overlap.enabled or overlap.intra_enabled or overlap.extent_enabled)
     )
-    if (
-        guard_active
-        and overlap is not None
-        and mlpot_ctx is not None
-        and total_nstep > 0
-        and not overlap.memory_handoff
-    ):
-        from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import _truthy_env
-
-        if not _truthy_env("MMML_NO_OVERLAP_MEMORY_HANDOFF"):
-            from dataclasses import replace
-
-            overlap = replace(overlap, memory_handoff=True)
-            if total_nstep > int(overlap.check_interval):
-                cpt_note = (
-                    " (Hoover CPT barostat kept in RAM between chunks)"
-                    if bool(kw.get("cpt"))
-                    else ""
-                )
-                print(
-                    f"overlap ({overlap_context}): MLpot in-memory chunk handoff"
-                    f"{cpt_note}",
-                    flush=True,
-                )
     if guard_active and overlap is not None:
         from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
             attach_prior_segment_restart,
@@ -5346,6 +5354,7 @@ def run_dynamics_with_io(
                     mem_handoff
                     and bool(chunk_kw.get("cpt"))
                     and chunk_index > 0
+                    and not has_restart_read
                 ):
                     _apply_cpt_in_memory_continuation_kw(chunk_kw)
                 if early_abort_memory_handoff:
@@ -5532,6 +5541,24 @@ def run_dynamics_with_io(
                         header_step = read_restart_last_step(restart_path)
                         if header_step is None or header_step < expected_after - 1:
                             patch_restart_global_step(restart_path, steps_done)
+                        if (
+                            n_chunks > 1
+                            and final_restart is not None
+                            and _is_overlap_scratch_restart(restart_path, final_restart)
+                            and chunk_index < n_chunks - 1
+                        ):
+                            header_step = read_restart_last_step(restart_path)
+                            if (
+                                _valid_restart_file(restart_path) is None
+                                or header_step is None
+                                or header_step < expected_after - 1
+                            ):
+                                _materialize_overlap_chunk_restart_handoff(
+                                    restart_path,
+                                    global_step=steps_done,
+                                    overlap_context=overlap_context,
+                                    mlpot_ctx=mlpot_ctx,
+                                )
                 if final_restart is not None and chunk_io is not None:
                     _overlap_refresh_or_validate_scratch_restart(
                         chunk_io.restart_write,
