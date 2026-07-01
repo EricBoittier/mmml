@@ -3174,9 +3174,8 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
         maybe_assign_velocities_via_ase_if_cold(kw, quiet=quiet_ase)
     # PyCHARMM omits ``start`` from the script when start=False, so CHARMM may keep
     # START active after a prior Boltzmann assign. With iasvel=0 that reads COMP
-    # coordinates as velocities — zero COMP defensively.
-    if not kw.get("start") and int(kw.get("iasvel", 1)) == 0:
-        clear_comparison_coordinates()
+    # as velocities — mirror main velocities into COMP via C API (not zero COMP).
+    mirror_comparison_velocities_for_dynamics(kw)
     if "echeck" in kw:
         apply_charmm_dynamics_echeck_kw(kw, float(kw["echeck"]))
     apply_charmm_dynamics_timestep_kw(kw)
@@ -4024,12 +4023,8 @@ def _prepare_post_rescue_cold_start_overlap_handoff(
         assign_maxwell_boltzmann_velocities_via_ase,
         resolve_assignment_temperature_k,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
-        clear_comparison_coordinates,
-    )
 
     _prepare_post_rescue_bath_and_crystal(chunk_kw, mlpot_ctx=mlpot_ctx)
-    clear_comparison_coordinates()
     target = resolve_assignment_temperature_k(chunk_kw)
     assign_maxwell_boltzmann_velocities_via_ase(target, quiet=False)
     chunk_kw["restart"] = False

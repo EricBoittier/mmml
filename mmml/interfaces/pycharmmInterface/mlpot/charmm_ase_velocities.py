@@ -159,9 +159,9 @@ def clamp_velocity_assignment_dynamics_kw(kw: dict[str, Any]) -> None:
 
 
 def sync_charmm_velocities_akma(velocities_akma: np.ndarray) -> None:
-    """Write AKMA velocities into CHARMM main or comparison sets."""
+    """Write AKMA velocities into CHARMM main and COMP sets."""
     from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
-        set_comparison_array,
+        sync_comparison_velocities_akma,
     )
 
     v = np.asarray(velocities_akma, dtype=np.float64).reshape(-1, 3)
@@ -169,10 +169,7 @@ def sync_charmm_velocities_akma(velocities_akma: np.ndarray) -> None:
 
     if hasattr(coor, "set_velocity"):
         coor.set_velocity(v[:, 0], v[:, 1], v[:, 2])
-        return
-
-    w = np.zeros(v.shape[0], dtype=np.float64)
-    set_comparison_array(np.column_stack([v, w]))
+    sync_comparison_velocities_akma(v)
 
 
 def assign_maxwell_boltzmann_velocities_via_ase(

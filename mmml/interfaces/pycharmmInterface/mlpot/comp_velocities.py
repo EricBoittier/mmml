@@ -8,6 +8,7 @@ these helpers do not affect ``dyna`` unless explicitly enabled.
 from __future__ import annotations
 
 import argparse
+import ctypes
 from typing import Any
 
 import numpy as np
@@ -51,17 +52,78 @@ def _comparison_dataframe(arr: np.ndarray) -> pd.DataFrame:
     )
 
 
+def coor_set_comparison_capi(arr: np.ndarray) -> int:
+    """Write COMP via ``coor_set_comparison`` (ctypes C API; no pandas)."""
+    import pycharmm.lib as lib
+
+    if not hasattr(lib.charmm, "coor_set_comparison"):
+        raise RuntimeError("libcharmm missing coor_set_comparison C API")
+
+    data = np.asarray(arr, dtype=np.float64)
+    if data.ndim != 2 or data.shape[1] not in (3, 4):
+        raise ValueError(
+            f"comparison array must be (N, 3) or (N, 4), got {data.shape}"
+        )
+    n_atoms = int(data.shape[0])
+    if n_atoms <= 0:
+        return 0
+
+    x = np.ascontiguousarray(data[:, 0], dtype=np.float64)
+    y = np.ascontiguousarray(data[:, 1], dtype=np.float64)
+    z = np.ascontiguousarray(data[:, 2], dtype=np.float64)
+    if data.shape[1] == 3:
+        w = np.zeros(n_atoms, dtype=np.float64)
+    else:
+        w = np.ascontiguousarray(data[:, 3], dtype=np.float64)
+
+    cx = (ctypes.c_double * n_atoms).from_buffer(x)
+    cy = (ctypes.c_double * n_atoms).from_buffer(y)
+    cz = (ctypes.c_double * n_atoms).from_buffer(z)
+    cw = (ctypes.c_double * n_atoms).from_buffer(w)
+    return int(lib.charmm.coor_set_comparison(cx, cy, cz, cw))
+
+
+def coor_get_comparison_capi(n_atoms: int | None = None) -> np.ndarray:
+    """Read COMP as ``(N, 4)`` via ``coor_get_comparison`` (ctypes C API)."""
+    import pycharmm.lib as lib
+
+    if not hasattr(lib.charmm, "coor_get_comparison"):
+        raise RuntimeError("libcharmm missing coor_get_comparison C API")
+
+    if n_atoms is None:
+        n_atoms = int(_import_pycharmm().psf.get_natom())
+    n_atoms = int(n_atoms)
+    if n_atoms <= 0:
+        return np.zeros((0, 4), dtype=np.float64)
+
+    x = (ctypes.c_double * n_atoms)()
+    y = (ctypes.c_double * n_atoms)()
+    z = (ctypes.c_double * n_atoms)()
+    w = (ctypes.c_double * n_atoms)()
+    lib.charmm.coor_get_comparison(x, y, z, w)
+    return np.column_stack(
+        [
+            np.fromiter(x, dtype=np.float64, count=n_atoms),
+            np.fromiter(y, dtype=np.float64, count=n_atoms),
+            np.fromiter(z, dtype=np.float64, count=n_atoms),
+            np.fromiter(w, dtype=np.float64, count=n_atoms),
+        ]
+    )
+
+
 def set_comparison_array(arr: np.ndarray) -> None:
-    """Write COMP via ``coor.set_comparison`` (bulk array path)."""
-    pycharmm = _import_pycharmm()
-    pycharmm.coor.set_comparison(_comparison_dataframe(arr))
+    """Write COMP via :func:`coor_set_comparison_capi`."""
+    coor_set_comparison_capi(arr)
 
 
 def get_comparison_array() -> np.ndarray:
     """Read COMP as ``(N, 4)`` with columns x, y, z, w."""
-    pycharmm = _import_pycharmm()
-    df = pycharmm.coor.get_comparison()
-    return df[["x", "y", "z", "w"]].to_numpy(dtype=float)
+    try:
+        return coor_get_comparison_capi()
+    except RuntimeError:
+        pycharmm = _import_pycharmm()
+        df = pycharmm.coor.get_comparison()
+        return df[["x", "y", "z", "w"]].to_numpy(dtype=float)
 
 
 def run_charmm_script(script: str, *, quiet: bool = False) -> None:
@@ -90,6 +152,41 @@ def clear_comparison_coordinates() -> None:
         return
     zeros = np.zeros((n_atoms, 4), dtype=float)
     set_comparison_array(zeros)
+
+
+def sync_comparison_velocities_akma(velocities_akma: np.ndarray) -> None:
+    """Mirror AKMA velocity components into the COMP coordinate set (C API)."""
+    v = np.asarray(velocities_akma, dtype=np.float64).reshape(-1, 3)
+    w = np.zeros(v.shape[0], dtype=np.float64)
+    coor_set_comparison_capi(np.column_stack([v, w]))
+
+
+def sync_comparison_velocities_from_main() -> bool:
+    """Copy readable main-set velocities into COMP; return False when unavailable."""
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        charmm_velocities_akma,
+        velocities_are_cold,
+    )
+
+    vel = charmm_velocities_akma()
+    if vel is None or velocities_are_cold(vel):
+        return False
+    sync_comparison_velocities_akma(vel)
+    return True
+
+
+def mirror_comparison_velocities_for_dynamics(kw: dict[str, Any]) -> None:
+    """When ``iasvel=0``, mirror main velocities into COMP instead of zeroing COMP.
+
+    PyCHARMM may omit ``start=False`` so CHARMM keeps START and reads COMP as
+    velocities. Zero COMP yields T≈0 and spurious ASE reassignment at chunk
+    boundaries; mirroring assigned/main velocities keeps ``dyna`` consistent.
+    """
+    if bool(kw.get("start")) or int(kw.get("iasvel", 1) or 0) != 0:
+        return
+    if sync_comparison_velocities_from_main():
+        return
+    clear_comparison_coordinates()
 
 
 def force_magnitudes_kcalmol_A() -> np.ndarray:
