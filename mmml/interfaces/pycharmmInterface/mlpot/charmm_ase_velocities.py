@@ -436,8 +436,8 @@ def velocities_are_cold(
 
 def velocities_are_pathological(
     velocities_akma: np.ndarray | None = None,
-    *,
     masses_amu: np.ndarray | None = None,
+    *,
     ndegf: int | None = None,
     max_temperature_K: float = MAX_REASONABLE_VELOCITY_TEMP_K,
 ) -> bool:
