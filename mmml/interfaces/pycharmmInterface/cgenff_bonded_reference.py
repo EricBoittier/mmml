@@ -76,13 +76,8 @@ def read_pdb_file(path: str | Path, **kwargs: Any) -> None:
 
     import pycharmm.read as read
 
-    p = Path(path)
-    fortran_path, alias = charmm_fortran_path(p)
-    try:
-        read.pdb(fortran_path, **kwargs)
-    finally:
-        if alias is not None:
-            alias.cleanup()
+    fortran_path, _alias = charmm_fortran_path(Path(path))
+    read.pdb(fortran_path, **kwargs)
 
 
 def setup_bonded_only_charmm() -> None:
