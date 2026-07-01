@@ -1108,7 +1108,81 @@ def test_integrated_step_from_restart_negative_aborted_step(tmp_path):
     )
 
 
+def test_patch_restart_readyn_handoff_harmonizes_nsavv_on_wridyn_stub(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        patch_restart_readyn_handoff,
+        read_restart_last_step,
+        read_restart_nsavc,
+        read_restart_nsavv,
+    )
+
+    stub = (
+        Path(__file__).resolve().parents[1]
+        / "functionality/mlpot/output/dynamics/nve_stub.res"
+    )
+    assert stub.is_file()
+    scratch = tmp_path / "heat.a.res"
+    scratch.write_text(stub.read_text(encoding="utf-8"), encoding="utf-8")
+    natom_line_before = scratch.read_text(encoding="utf-8").splitlines()[7]
+    tail_before = natom_line_before[60:]
+
+    assert patch_restart_readyn_handoff(
+        scratch,
+        global_step=500,
+        nsavc=49,
+        nsavv=50,
+    )
+
+    lines = scratch.read_text(encoding="utf-8").splitlines()
+    assert lines[0][10:20] == "       500"
+    natom_line = lines[7]
+    assert natom_line[30:40] == "        49"
+    assert natom_line[40:50] == "        50"
+    assert natom_line[50:60] == "       500"
+    assert natom_line[60:] == tail_before
+    assert read_restart_last_step(scratch) == 500
+    assert read_restart_nsavc(scratch) == 49
+    assert read_restart_nsavv(scratch) == 50
+
+
+def test_harmonize_overlap_readyn_restart_patches_valid_wridyn(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _harmonize_overlap_chunk_frequencies,
+        _harmonize_overlap_readyn_restart_before_readyn,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_restart_nsavv,
+    )
+
+    stub = (
+        Path(__file__).resolve().parents[1]
+        / "functionality/mlpot/output/dynamics/nve_stub.res"
+    )
+    assert stub.is_file()
+    scratch = tmp_path / "heat.a.res"
+    scratch.write_text(stub.read_text(encoding="utf-8"), encoding="utf-8")
+
+    chunk_kw = {
+        "nstep": 50,
+        "nsavc": 320,
+        "isvfrq": 500,
+        "nsavv": 500,
+        "iprfrq": 500,
+    }
+    _harmonize_overlap_chunk_frequencies(chunk_kw, 50, global_step_start=450)
+    _harmonize_overlap_readyn_restart_before_readyn(
+        scratch,
+        chunk_kw,
+        chunk_nstep=50,
+        global_step=500,
+        overlap_context="HEAT",
+    )
+    assert read_restart_nsavv(scratch) == 50
+    assert " !ENERGIES and STATISTICS" in scratch.read_text(encoding="utf-8")
+
+
 def test_rewrite_overlap_readyn_restart_harmonizes_nsavv(tmp_path, monkeypatch):
+    """Fallback rewrite path when scratch restart is not WRIDYN-valid."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _harmonize_overlap_chunk_frequencies,
         _rewrite_overlap_readyn_restart_from_memory,
@@ -1118,12 +1192,7 @@ def test_rewrite_overlap_readyn_restart_harmonizes_nsavv(tmp_path, monkeypatch):
     )
 
     scratch = tmp_path / "heat.a.res"
-    scratch.write_text(
-        "REST     1        50\n"
-        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
-        "       400         0        50        49       500        50\n",
-        encoding="ascii",
-    )
+    scratch.write_text("coordinate-history stub\n", encoding="ascii")
     captured: dict[str, int] = {}
 
     def fake_rewrite(path, *, write_unit=92, global_step=None, nsavc=None, nsavv=None):
@@ -1141,6 +1210,10 @@ def test_rewrite_overlap_readyn_restart_harmonizes_nsavv(tmp_path, monkeypatch):
         )
         return True
 
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._valid_restart_file",
+        lambda _path: None,
+    )
     monkeypatch.setattr(
         "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.rewrite_dynamics_restart_validated",
         fake_rewrite,

@@ -4245,6 +4245,56 @@ def _overlap_readyn_restart_frequencies(
     return nsavc, nsavv
 
 
+def _harmonize_overlap_readyn_restart_before_readyn(
+    restart_path: PathLike | None,
+    chunk_kw: dict[str, Any],
+    *,
+    chunk_nstep: int,
+    global_step: int,
+    overlap_context: str,
+) -> None:
+    """Harmonize scratch restart counters before ``READYN`` (``NSAVV`` / ``NSAVC``).
+
+    WRIDYN snapshots from in-memory overlap legs can retain stale ``NSAVV`` (e.g. 500
+    from stage ``isvfrq``) while the upcoming chunk uses ``nstep=50``.  Patch the
+    existing dynamics restart in place; do not replace it with a minimal coord-only
+    snapshot (``READYN`` then fails parsing titles/coords).
+    """
+    if restart_path is None:
+        return
+    path = Path(restart_path)
+    nsavc, nsavv = _overlap_readyn_restart_frequencies(chunk_kw, chunk_nstep)
+    step = max(0, int(global_step))
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        patch_restart_readyn_handoff,
+    )
+
+    if _valid_restart_file(path) is not None:
+        if patch_restart_readyn_handoff(
+            path,
+            global_step=step,
+            nsavc=nsavc,
+            nsavv=nsavv,
+        ):
+            return
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        rewrite_dynamics_restart_validated,
+    )
+
+    if rewrite_dynamics_restart_validated(
+        path,
+        global_step=step,
+        nsavc=nsavc,
+        nsavv=nsavv,
+    ):
+        return
+    raise RuntimeError(
+        f"overlap ({overlap_context}): failed to harmonize scratch restart "
+        f"{path.name} before READYN (nsavc={nsavc}, nsavv={nsavv}, "
+        f"global step={step})"
+    )
+
+
 def _rewrite_overlap_readyn_restart_from_memory(
     restart_path: PathLike | None,
     chunk_kw: dict[str, Any],
@@ -4253,31 +4303,14 @@ def _rewrite_overlap_readyn_restart_from_memory(
     global_step: int,
     overlap_context: str,
 ) -> None:
-    """Rewrite scratch restart before ``READYN`` with harmonized ``NSAVV`` / ``NSAVC``.
-
-    WRIDYN snapshots from in-memory overlap legs can retain stale ``NSAVV`` (e.g. 500
-    from stage ``isvfrq``) while the upcoming chunk uses ``nstep=50``.  ``READYN`` then
-    restores mismatched averaging buffers and blows up kinetic energy.
-    """
-    if restart_path is None:
-        return
-    path = Path(restart_path)
-    nsavc, nsavv = _overlap_readyn_restart_frequencies(chunk_kw, chunk_nstep)
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
-        rewrite_dynamics_restart_validated,
+    """Backward-compatible alias for :func:`_harmonize_overlap_readyn_restart_before_readyn`."""
+    _harmonize_overlap_readyn_restart_before_readyn(
+        restart_path,
+        chunk_kw,
+        chunk_nstep=chunk_nstep,
+        global_step=global_step,
+        overlap_context=overlap_context,
     )
-
-    if not rewrite_dynamics_restart_validated(
-        path,
-        global_step=max(0, int(global_step)),
-        nsavc=nsavc,
-        nsavv=nsavv,
-    ):
-        raise RuntimeError(
-            f"overlap ({overlap_context}): failed to rewrite scratch restart "
-            f"{path.name} before READYN (nsavc={nsavc}, nsavv={nsavv}, "
-            f"global step={int(global_step)})"
-        )
 
 
 def _mlpot_ctx_cubic_box_side_A(mlpot_ctx: Optional["MlpotContext"]) -> float | None:
@@ -6086,7 +6119,7 @@ def run_dynamics_with_io(
                     split_trajectory=split_trajectory,
                 )
                 if has_restart_read and chunk_io is not None:
-                    _rewrite_overlap_readyn_restart_from_memory(
+                    _harmonize_overlap_readyn_restart_before_readyn(
                         chunk_io.restart_read,
                         chunk_kw,
                         chunk_nstep=chunk_nstep,

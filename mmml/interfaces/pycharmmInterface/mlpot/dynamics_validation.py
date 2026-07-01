@@ -625,6 +625,36 @@ def assert_charmm_dynamics_chunk_safe(
     )
 
 
+def read_restart_nsavc(path: Path) -> int | None:
+    """Return ``NSAVC`` (4th integer) from the ``!NATOM`` counter line."""
+    p = Path(path)
+    if not p.is_file():
+        return None
+    try:
+        lines = p.read_text(errors="ignore").splitlines()
+    except OSError:
+        return None
+    for i, raw in enumerate(lines):
+        tag = raw.strip().split()[0] if raw.strip() else ""
+        if not (tag.startswith("!NATOM") or tag.startswith("NATOM")):
+            continue
+        if i + 1 >= len(lines):
+            break
+        fields = lines[i + 1].split()
+        if len(fields) >= 4:
+            try:
+                return int(fields[3])
+            except ValueError:
+                pass
+        if len(lines[i + 1]) >= 40:
+            try:
+                return int(lines[i + 1][30:40].strip())
+            except ValueError:
+                return None
+        break
+    return None
+
+
 def read_restart_nsavv(path: Path) -> int | None:
     """Return ``NSAVV`` (5th integer) from the ``!NATOM`` counter line."""
     p = Path(path)
@@ -644,6 +674,11 @@ def read_restart_nsavv(path: Path) -> int | None:
         if len(fields) >= 5:
             try:
                 return int(fields[4])
+            except ValueError:
+                pass
+        if len(lines[i + 1]) >= 50:
+            try:
+                return int(lines[i + 1][40:50].strip())
             except ValueError:
                 return None
         break
@@ -820,6 +855,61 @@ def patch_restart_global_step(path: Path, global_step: int) -> bool:
         if i + 1 >= len(lines):
             break
         lines[i + 1] = _replace_i10_field(lines[i + 1], 5, step)
+        patched = True
+        break
+
+    if not patched:
+        return False
+    p.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return True
+
+
+def patch_restart_readyn_handoff(
+    path: Path,
+    *,
+    global_step: int,
+    nsavc: int,
+    nsavv: int,
+) -> bool:
+    """Harmonize ``NSAVC``/``NSAVV``/``JHSTRT`` on a WRIDYN scratch before ``READYN``.
+
+    Preserves the full dynamics restart body (energies, barostat internals, etc.).
+    Replacing the file with :func:`write_charmm_restart_from_memory` drops those
+    sections and ``READYN`` fails with "Bad value during integer read".
+    """
+    p = Path(path)
+    step = max(0, int(global_step))
+    nsavc_i = max(1, int(nsavc))
+    nsavv_i = max(0, int(nsavv))
+    if not p.is_file():
+        return False
+    try:
+        lines = p.read_text(errors="ignore").splitlines()
+    except OSError:
+        return False
+    if not lines:
+        return False
+
+    patched = False
+    if lines[0].strip().upper().startswith("REST"):
+        rest = lines[0]
+        if len(rest) >= 20:
+            lines[0] = _replace_i10_field(rest, 1, step)
+        else:
+            lines[0] = _replace_field_preserve_width(rest, 2, step, min_width=10)
+        patched = True
+
+    for i, raw in enumerate(lines):
+        tag = raw.strip().split()[0] if raw.strip() else ""
+        if not (tag.startswith("!NATOM") or tag.startswith("NATOM")):
+            continue
+        if i + 1 >= len(lines):
+            break
+        counter = lines[i + 1]
+        counter = _replace_i10_field(counter, 3, nsavc_i)
+        counter = _replace_i10_field(counter, 4, nsavv_i)
+        counter = _replace_i10_field(counter, 5, step)
+        lines[i + 1] = counter
         patched = True
         break
 
