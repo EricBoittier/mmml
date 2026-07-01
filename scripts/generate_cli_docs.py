@@ -231,6 +231,9 @@ mmml build-crystal -m benzene --spg 14 --z 2 --target-density-g-cm3 1.202 -o ben
 ```
 
 Liquid DCM boxes use **1.326 g/cm³** (`liquid-box`, `md-system`).
+
+Literature vs PyXtal comparison tables (DCM + benzene) are in the
+[structure building guide](../structure-building.md#literature-cross-check-auto-generated).
 """,
 }
 

@@ -6,8 +6,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import numpy as np
-
 from mmml.interfaces.pyxtal_placement import (
     MolecularCrystalBuildRequest,
     build_molecular_crystal_random,

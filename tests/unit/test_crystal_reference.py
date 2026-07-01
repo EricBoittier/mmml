@@ -65,10 +65,11 @@ def test_comparison_table_markdown_with_built():
 def test_literature_comparison_markdown_runs():
     from mmml.interfaces.crystal_reference import literature_comparison_markdown
 
-    md = literature_comparison_markdown(include_pyxtal=False)
+    md = literature_comparison_markdown()
     assert "COD 2100015" in md
     assert "COD 4501704" in md
     assert "Literature cross-check" in md
+    assert "| PyXtal build |" in md
 
 
 def test_generate_crystal_lit_compare_script():

@@ -183,6 +183,49 @@ mmml build-crystal -m benzene --spg 14 --z 2 \\
 ```
 
 <!-- CRYSTAL_LIT_COMPARE_START -->
+### Literature cross-check (auto-generated)
+
+Side-by-side metrics for bundled experimental CIFs vs a **single** PyXtal `from_random` trial (fixed seeds) with `--target-density-g-cm3` matched to the literature ρ. Unit-cell axes can differ in setting/orientation even when space group and density agree.
+
+Regenerate: `uv run python scripts/generate_crystal_lit_compare.py`
+
+#### DCM (CH₂Cl₂) — [COD 2100015](https://www.crystallography.net/2100015.html)
+
+Podsiadło *et al.*, *Acta Cryst.* B **2005**, 61, 595 ([CCDC doi:10.5517/cc9lyjb](https://www.ccdc.cam.ac.uk/structures/search?id=doi:10.5517/cc9lyjb&sid=DataCite)); Pbcn, Z=4, 1.63 GPa / 293 K.
+
+| Quantity | Literature | PyXtal build | Δ (build − lit) |
+|----------|------------|--------------|-----------------|
+| Space group | 60 | 60 | — |
+| N atoms | 20 | 20 | +0.0% |
+| *a* (Å) | 3.924 | 7.773 | +98.1% |
+| *b* (Å) | 7.793 | 6.651 | -14.7% |
+| *c* (Å) | 9.335 | 5.521 | -40.9% |
+| α (°) | 90.0 | 90.0 | +0.0% |
+| β (°) | 90.0 | 90.0 | +0.0% |
+| γ (°) | 90.0 | 90.0 | +0.0% |
+| Volume (Å³) | 285.5 | 285.5 | +0.0% |
+| ρ (g/cm³) | 1.976 | 1.976 | -0.0% |
+
+_PyXtal: `-m default_dcm_molecule_xyz()`, `--spg 60 --z 4 --seed 42`, ρ scaled to literature._
+
+#### Benzene (C₆H₆) — [COD 4501704](https://www.crystallography.net/cod/4501704.html)
+
+Katrusiak *et al.*, *Cryst. Growth Des.* **2010**, 10, 3461 ([doi:10.1021/cg1002594](https://doi.org/10.1021/cg1002594)); P2₁/c, Z=2, ~0.97 GPa / 295 K.
+
+| Quantity | Literature | PyXtal build | Δ (build − lit) |
+|----------|------------|--------------|-----------------|
+| Space group | 14 | 14 | — |
+| N atoms | 24 | 24 | +0.0% |
+| *a* (Å) | 5.522 | 5.175 | -6.3% |
+| *b* (Å) | 5.440 | 11.337 | +108.4% |
+| *c* (Å) | 7.673 | 3.813 | -50.3% |
+| α (°) | 90.0 | 90.0 | +0.0% |
+| β (°) | 110.6 | 74.7 | -32.4% |
+| γ (°) | 90.0 | 90.0 | +0.0% |
+| Volume (Å³) | 215.8 | 215.8 | -0.0% |
+| ρ (g/cm³) | 1.202 | 1.202 | -0.0% |
+
+_PyXtal: `-m benzene` (not `c1ccccc1`), `--spg 14 --z 2 --seed 7`, ρ scaled to literature._
 <!-- CRYSTAL_LIT_COMPARE_END -->
 
 ### Other examples

@@ -27,11 +27,11 @@ def _patch(text: str, body: str) -> str:
     return pattern.sub(block, text)
 
 
-def generate(*, check: bool = False, no_pyxtal: bool = False) -> int:
+def generate(*, check: bool = False, use_live_pyxtal: bool = False) -> int:
     sys.path.insert(0, str(REPO))
     from mmml.interfaces.crystal_reference import literature_comparison_markdown
 
-    body = literature_comparison_markdown(include_pyxtal=not no_pyxtal)
+    body = literature_comparison_markdown(use_live_pyxtal=use_live_pyxtal)
     if not DOC.is_file():
         raise SystemExit(f"missing {DOC}")
 
@@ -60,12 +60,12 @@ def main() -> int:
         help="Exit 1 if structure-building.md comparison block is stale.",
     )
     parser.add_argument(
-        "--no-pyxtal",
+        "--live-pyxtal",
         action="store_true",
-        help="Omit PyXtal build column (literature-only tables).",
+        help="Use live PyXtal builds (default: frozen reference metrics for reproducible docs).",
     )
     args = parser.parse_args()
-    return generate(check=args.check, no_pyxtal=args.no_pyxtal)
+    return generate(check=args.check, use_live_pyxtal=args.live_pyxtal)
 
 
 if __name__ == "__main__":

@@ -26,8 +26,8 @@ mmml build-crystal \
   --target-density-g-cm3 1.972 \
   -o dcm_pyxtal.extxyz
 
-# Benzene (SMILES in PyXtal DB)
-mmml build-crystal -m c1ccccc1 --spg 14 --z 2 -o benzene.extxyz
+# Benzene (PyXtal molecule name `benzene`, not SMILES)
+mmml build-crystal -m benzene --spg 14 --z 2 --target-density-g-cm3 1.202 -o benzene.extxyz
 ```
 
 Liquid DCM boxes use **1.326 g/cm³** (`liquid-box`, `md-system`).
