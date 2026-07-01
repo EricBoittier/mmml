@@ -323,6 +323,25 @@ def charmm_crystal_lattice_ready(*, rel_tol: float = 1e-3) -> bool:
         return False
 
 
+def _ucell_side_matches_expected(
+    expected_side_A: float | None,
+    *,
+    rel_tol: float = 1e-3,
+) -> bool:
+    """True when ``image_get_ucell`` reports a cubic cell at ``expected_side_A``."""
+    if expected_side_A is None:
+        return True
+    try:
+        ux, uy, uz = _read_charmm_ucell_lengths_A()
+        if not _is_cubic_box_sides(ux, uy, uz, rel_tol=rel_tol) or min(ux, uy, uz) <= 1.0:
+            return False
+        mean = (ux + uy + uz) / 3.0
+        tol = max(1e-3, rel_tol * float(expected_side_A))
+        return abs(mean - float(expected_side_A)) <= tol
+    except Exception:
+        return False
+
+
 def charmm_crystal_abnr_ready(
     expected_side_A: float | None = None,
     *,
@@ -335,37 +354,38 @@ def charmm_crystal_abnr_ready(
     MPI builds, ``pbound_get_size`` can stay zero in Python while ``XUCELL`` and
     IMAGE transforms are valid — accept that post-reinstall state when
     ``expected_side_A`` matches ``image_get_ucell``.
-    """
-    try:
-        if _charmm_image_ntrans() <= 1:
-            return False
-    except Exception:
-        return False
 
+    ``image_get_ntrans`` can fail or report vacuum (``NTRANS+1 == 1``) even after
+    a successful ``crystal build``; do not treat those probe failures as hard
+    vacuum when ``XUCELL`` matches the workflow box.
+    """
     if charmm_crystal_lattice_ready(rel_tol=rel_tol):
         if expected_side_A is None:
             return True
         try:
             live, _ = resolve_charmm_cubic_box_side_A(
                 fallback_side_A=float(expected_side_A),
+                rel_tol=rel_tol,
             )
             tol = max(1e-3, rel_tol * float(expected_side_A))
             return abs(float(live) - float(expected_side_A)) <= tol
         except Exception:
             return True
 
-    try:
-        ux, uy, uz = _read_charmm_ucell_lengths_A()
-        if not _is_cubic_box_sides(ux, uy, uz, rel_tol=rel_tol) or min(ux, uy, uz) <= 1.0:
-            return False
-        mean = (ux + uy + uz) / 3.0
-        if expected_side_A is not None:
-            tol = max(1e-3, rel_tol * float(expected_side_A))
-            if abs(mean - float(expected_side_A)) > tol:
-                return False
-        return True
-    except Exception:
+    if not _ucell_side_matches_expected(expected_side_A, rel_tol=rel_tol):
         return False
+
+    ntrans: int | None = None
+    try:
+        ntrans = _charmm_image_ntrans()
+    except Exception:
+        ntrans = None
+
+    if ntrans is None or ntrans > 1:
+        return True
+    # ``get_ntrans()`` returns 1 for vacuum; after prepare_charmm_pbc the Fortran
+    # log can show many transforms while the Python probe still reads vacuum.
+    return charmm_crystal_is_active(rel_tol=rel_tol)
 
 
 def restore_charmm_cubic_crystal_lattice(

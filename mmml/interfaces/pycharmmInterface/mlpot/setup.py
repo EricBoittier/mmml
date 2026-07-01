@@ -1443,6 +1443,8 @@ def register_mlpot(
                 verbose=verbose,
             )
             skip_iblo_inb_update = True
+        else:
+            box_side = None
         mlpot = pycharmm.MLpot(
             ml_model=pyCModel,
             ml_Z=z_ml,
@@ -1466,9 +1468,13 @@ def register_mlpot(
             pycharmm.UpdateNonBondedScript(**vacuum_nbond_kwargs(nbxmod=5)).run()
     ml_z = np.asarray(ml_Z, dtype=int)
     reg_box = (
-        float(cubic_box_side_A)
-        if use_pbc and cubic_box_side_A is not None
-        else (float(budget_box) if use_pbc and budget_box is not None else None)
+        float(box_side)
+        if use_pbc and box_side is not None
+        else (
+            float(cubic_box_side_A)
+            if use_pbc and cubic_box_side_A is not None
+            else (float(budget_box) if use_pbc and budget_box is not None else None)
+        )
     )
     if use_pbc:
         from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (

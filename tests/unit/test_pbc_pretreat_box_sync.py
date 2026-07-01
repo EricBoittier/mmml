@@ -295,6 +295,45 @@ def test_charmm_crystal_abnr_ready_accepts_ucell_when_pbound_inactive() -> None:
         assert charmm_crystal_abnr_ready(50.0) is True
 
 
+def test_charmm_crystal_abnr_ready_accepts_ucell_when_ntrans_probe_fails() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        charmm_crystal_abnr_ready,
+    )
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._charmm_image_ntrans",
+        side_effect=RuntimeError("NTRANS unavailable"),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_lattice_ready",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_ucell_lengths_A",
+        return_value=(46.864, 46.864, 46.864),
+    ):
+        assert charmm_crystal_abnr_ready(46.864) is True
+
+
+def test_charmm_crystal_abnr_ready_accepts_ucell_when_ntrans_reports_vacuum() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        charmm_crystal_abnr_ready,
+    )
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._charmm_image_ntrans",
+        return_value=1,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_lattice_ready",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_ucell_lengths_A",
+        return_value=(46.864, 46.864, 46.864),
+    ):
+        assert charmm_crystal_abnr_ready(46.864) is True
+
+
 def test_reinstall_charmm_crystal_for_lattice_abnr_uses_prepare_when_allowed() -> None:
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         reinstall_charmm_crystal_for_lattice_abnr,
