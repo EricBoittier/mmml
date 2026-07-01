@@ -311,7 +311,10 @@ def is_geometry_recovery_crd_path(path: Path | str) -> bool:
 
 def first_valid_restart_path(candidates: list[Path] | tuple[Path, ...]) -> Path | None:
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import restart_has_nonfinite_coordinates
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        restart_coordinates_are_unsafe,
+        restart_has_nonfinite_coordinates,
+    )
     import sys
 
     for cand in candidates:
@@ -322,6 +325,14 @@ def first_valid_restart_path(candidates: list[Path] | tuple[Path, ...]) -> Path 
             if restart_has_nonfinite_coordinates(valid):
                 print(f"WARN: Invalidating corrupt restart file {valid} (non-finite or all zero coords)", file=sys.stderr, flush=True)
                 valid.rename(valid.with_suffix(".res.corrupt"))
+                continue
+            if restart_coordinates_are_unsafe(valid):
+                print(
+                    f"WARN: Skipping restart {valid.name} with unphysical coordinates "
+                    f"(>|2000| Å) in geometry ladder",
+                    file=sys.stderr,
+                    flush=True,
+                )
                 continue
             return valid
     return None
@@ -717,6 +728,100 @@ def attempt_overlap_early_abort_recovery(
         return GeometryRecoveryResult(True, "memory")
 
     return GeometryRecoveryResult(False)
+
+
+def attempt_overlap_blowup_geometry_rescue(
+    overlap: Any,
+    *,
+    mlpot_ctx: Any | None,
+    steps_before_chunk: int,
+    overlap_context: str,
+    overlap_restart_read: Path | str | None = None,
+    segment_restart_read: Path | str | None = None,
+) -> GeometryRecoveryResult:
+    """Reload pre-blowup geometry and run overlap/extent rescue after MLpot/CPT blow-up.
+
+    Called when :func:`attempt_overlap_early_abort_recovery` cannot use the
+    corrupted in-memory state or the restart written at blow-up.
+    """
+    if overlap is None or getattr(overlap, "action", None) != "rescue":
+        return GeometryRecoveryResult(False)
+    if mlpot_ctx is None:
+        return GeometryRecoveryResult(False)
+
+    label = f"blow-up recovery ({overlap_context})"
+    candidates = build_early_abort_recovery_candidates(
+        overlap,
+        overlap_restart_read=overlap_restart_read,
+        segment_restart_read=segment_restart_read,
+    )
+    try:
+        path = restore_geometry_from_ladder(
+            candidates,
+            label=label,
+            allow_in_memory=False,
+        )
+    except RuntimeError:
+        tried = ", ".join(p.name for p in candidates) or "(none)"
+        print(f"{label}: no valid restart/CRD among {len(candidates)} candidate(s): {tried}", flush=True)
+        return GeometryRecoveryResult(False)
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        invalidate_mlpot_calculator_caches,
+        sync_charmm_lists_after_mini,
+    )
+
+    sync_charmm_lists_after_mini(quiet=True)
+    mlpot_ctx.reregister_mlpot(verbose=False, reregister_params=False)
+    invalidate_mlpot_calculator_caches(mlpot_ctx)
+
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        check_dynamics_overlap,
+        probe_dynamics_geometry_violation,
+    )
+
+    if not probe_dynamics_geometry_violation(
+        overlap,
+        context=overlap_context,
+        step=int(steps_before_chunk),
+    ):
+        print(
+            f"{label}: restored from {path.name}; geometry OK at step "
+            f"{steps_before_chunk}",
+            flush=True,
+        )
+        return GeometryRecoveryResult(
+            True,
+            _geometry_recovery_source_from_path(path),
+        )
+
+    try:
+        _, rescued = check_dynamics_overlap(
+            overlap,
+            context=f"{overlap_context} blow-up recovery",
+            step=int(steps_before_chunk),
+            mlpot_ctx=mlpot_ctx,
+        )
+    except RuntimeError as exc:
+        print(f"{label}: geometry rescue failed ({exc})", flush=True)
+        return GeometryRecoveryResult(False)
+
+    if rescued:
+        from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+            finalize_overlap_rescue_for_dynamics,
+        )
+
+        finalize_overlap_rescue_for_dynamics(
+            mlpot_ctx,
+            overlap,
+            context=f"{overlap_context} blow-up recovery at step {steps_before_chunk}",
+        )
+    print(
+        f"{label}: restored from {path.name}; overlap rescue "
+        f"{'ran' if rescued else 'not required'}",
+        flush=True,
+    )
+    return GeometryRecoveryResult(True, _geometry_recovery_source_from_path(path))
 
 
 def ensure_restartable_before_overlap_chunk(

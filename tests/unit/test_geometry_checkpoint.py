@@ -448,6 +448,40 @@ def test_attempt_overlap_early_abort_recovery_reports_memory_source(tmp_path):
     assert recovery.source == "memory"
 
 
+def test_attempt_overlap_blowup_geometry_rescue_restores_and_retries():
+    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+        attempt_overlap_blowup_geometry_rescue,
+    )
+
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        n_monomers=2,
+        geometry_fallback_restarts=(),
+    )
+    ctx = mock.Mock()
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.restore_geometry_from_ladder",
+        return_value=Path("02_mini.crd"),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.probe_dynamics_geometry_violation",
+        return_value=False,
+    ):
+        recovery = attempt_overlap_blowup_geometry_rescue(
+            cfg,
+            mlpot_ctx=ctx,
+            steps_before_chunk=2000,
+            overlap_context="EQUI",
+            segment_restart_read=Path("equi.res"),
+        )
+    assert recovery.ok is True
+    assert recovery.source == "crd"
+    ctx.reregister_mlpot.assert_called_once_with(verbose=False, reregister_params=False)
+
+
 def test_build_early_abort_recovery_candidates_prefers_overlap_read(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
         build_early_abort_recovery_candidates,

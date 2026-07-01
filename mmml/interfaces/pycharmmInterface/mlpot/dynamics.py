@@ -3982,7 +3982,7 @@ def _assign_post_rescue_velocities_and_crystal(
     _prepare_post_rescue_bath_and_crystal(chunk_kw, mlpot_ctx=mlpot_ctx)
     target = resolve_assignment_temperature_k(chunk_kw)
     assign_maxwell_boltzmann_velocities_via_ase(target, quiet=True)
-    chunk_kw["iasvel"] = 0
+    chunk_kw["iasvel"] = 1
     chunk_kw["start"] = False
     chunk_kw["iasors"] = 0
 
@@ -4033,7 +4033,7 @@ def _prepare_post_rescue_cold_start_overlap_handoff(
     chunk_kw["restart"] = False
     chunk_kw["new"] = False
     chunk_kw["start"] = False
-    chunk_kw["iasvel"] = 0
+    chunk_kw["iasvel"] = 1
     chunk_kw["iasors"] = 0
     chunk_kw.pop("iunrea", None)
     chunk_kw["iunrea"] = -1
@@ -4041,7 +4041,7 @@ def _prepare_post_rescue_cold_start_overlap_handoff(
         setattr(mlpot_ctx, "_overlap_post_rescue_cold_start", False)
     print(
         "overlap: post-rescue ASE velocity assign "
-        f"(target {target:.1f} K; iasvel=0 continuation)",
+        f"(target {target:.1f} K; iasvel=1 continuation)",
         flush=True,
     )
 
@@ -4130,7 +4130,7 @@ def _materialize_post_rescue_restart_handoff(
     chunk_kw["new"] = False
     if cold_start:
         chunk_kw["start"] = False
-        chunk_kw["iasvel"] = 0
+        chunk_kw["iasvel"] = 1
         chunk_kw["iasors"] = 0
         if mlpot_ctx is not None:
             setattr(mlpot_ctx, "_overlap_post_rescue_cold_start", False)
@@ -4142,7 +4142,7 @@ def _materialize_post_rescue_restart_handoff(
             chunk_kw["ihtfrq"] = 0
     chunk_kw.pop("iunrea", None)
 
-    handoff_mode = "cold restart (iasvel=0)" if cold_start else "READYN; MLpot stabilized"
+    handoff_mode = "cold restart (iasvel=1)" if cold_start else "READYN; MLpot stabilized"
     print(
         f"overlap ({overlap_context}): post-rescue restart handoff from "
         f"{valid_read.name if valid_read is not None else targets[0].name} "
@@ -4395,6 +4395,15 @@ def _materialize_cpt_subchunk_restart_handoff(
     return valid
 
 
+def _scale_heat_ramp_active(kw: dict[str, Any]) -> bool:
+    """True for velocity-scaling heat (``ihtfrq`` > 0), not Hoover CPT."""
+    return (
+        int(kw.get("ihtfrq", 0) or 0) > 0
+        and "hoover reft" not in kw
+        and not bool(kw.get("cpt"))
+    )
+
+
 def _strip_stale_heat_ramp_keywords(kw: dict[str, Any]) -> None:
     """Remove HEAT ramp keywords that confuse Hoover CPT on later overlap chunks."""
     for key in ("finalt", "TEMINC", "teminc"):
@@ -4451,10 +4460,15 @@ def _apply_overlap_chunk_dynamics_kw(
         )
     )
     if not preserve_cold_start:
-        # Chunk > 0 in-process continuation keeps velocities; HEAT ramp apply may
-        # override iasvel=1 afterward when a stage ramp is active.
-        chunk_kw["iasvel"] = 0 if chunk_index > 0 else 1
-        chunk_kw["start"] = False
+        # Chunk > 0 in-process continuation keeps velocities; scale-heat overlap
+        # needs iasvel=1 when START lingers (COMP_AND_HEATING.md).
+        if _scale_heat_ramp_active(chunk_kw) and int(chunk_index) > 0:
+            chunk_kw["iasvel"] = 1
+            chunk_kw["start"] = False
+            chunk_kw["iasors"] = 0
+        else:
+            chunk_kw["iasvel"] = 0 if chunk_index > 0 else 1
+            chunk_kw["start"] = False
         if chunk_index > 0:
             chunk_kw.pop("firstt", None)
             _strip_stale_heat_ramp_keywords(chunk_kw)
@@ -4831,18 +4845,12 @@ def _run_cpt_stability_subchunked(
                 else None
             )
         )
-        _dynamics_chunk_state_corrupt(
+        chunk_state_corrupt = _dynamics_chunk_state_corrupt(
             overlap_context=f"{overlap_context} CPT sub-chunk ending step {steps_done + n}",
             restart_path=restart_path,
         )
-        from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
-            assert_charmm_dynamics_chunk_safe,
-        )
-
-        assert_charmm_dynamics_chunk_safe(
-            context=f"{overlap_context} CPT sub-chunk ending step {steps_done + n}",
-            restart_path=restart_path,
-        )
+        if chunk_state_corrupt:
+            break
         chunk_end = steps_done + n
         if restart_path is not None:
             from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
@@ -5473,22 +5481,11 @@ def run_dynamics_with_io(
                             retry_count=chunk_retry_count,
                         ),
                     )
-                from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
-                    assert_charmm_dynamics_chunk_safe,
-                )
-
                 chunk_restart_path = (
                     Path(chunk_io.restart_write)
                     if chunk_io is not None
                     and getattr(chunk_io, "restart_write", None) is not None
                     else None
-                )
-                assert_charmm_dynamics_chunk_safe(
-                    context=(
-                        f"overlap ({overlap_context}) chunk "
-                        f"{chunk_index + 1}/{n_chunks}"
-                    ),
-                    restart_path=chunk_restart_path,
                 )
                 chunk_state_corrupt = _dynamics_chunk_state_corrupt(
                     overlap_context=(
@@ -5556,19 +5553,13 @@ def run_dynamics_with_io(
                         if header_step is None or header_step < expected_after - 1:
                             patch_restart_global_step(restart_path, steps_done)
                 if chunk_outcome.charmm_aborted:
-                    assert_charmm_dynamics_chunk_safe(
-                        context=(
-                            f"overlap ({overlap_context}) chunk "
-                            f"{chunk_index + 1}/{n_chunks} CHARMM abort"
-                        ),
-                        restart_path=chunk_restart_path,
-                    )
                     print(
                         f"overlap ({overlap_context}): CHARMM abort at step "
                         f"{steps_done}/{total_nstep}",
                         flush=True,
                     )
                     from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+                        attempt_overlap_blowup_geometry_rescue,
                         attempt_overlap_early_abort_recovery,
                     )
 
@@ -5585,6 +5576,15 @@ def run_dynamics_with_io(
                         cpt=bool(chunk_kw.get("cpt")),
                         chunk_index=chunk_index,
                     )
+                    if not recovery.ok:
+                        recovery = attempt_overlap_blowup_geometry_rescue(
+                            overlap,
+                            mlpot_ctx=mlpot_ctx,
+                            steps_before_chunk=steps_before_chunk,
+                            overlap_context=overlap_context,
+                            overlap_restart_read=overlap_restart_read_for_chunk,
+                            segment_restart_read=segment_restart_read,
+                        )
                     if (
                         recovery.ok
                         and chunk_retry_count < _MAX_EARLY_ABORT_CHUNK_RETRIES

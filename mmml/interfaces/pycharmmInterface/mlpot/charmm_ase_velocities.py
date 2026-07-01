@@ -257,8 +257,9 @@ def maybe_assign_velocities_via_ase_if_cold(
         quiet=quiet,
     )
 
-    # Continue with in-memory velocities; do not let CHARMM read zero COMP coords.
-    kw["iasvel"] = 0
+    # Continue with in-memory velocities. Use iasvel=1 so lingering START (PyCHARMM
+    # omits start=False) does not read zero COMP coordinates as velocities.
+    kw["iasvel"] = 1
     kw["start"] = False
     kw["iasors"] = int(kw.get("iasors", 0) or 0)
     if dynamics_kw is not None:

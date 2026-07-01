@@ -2836,6 +2836,24 @@ def test_apply_overlap_chunk_hoover_cpt_preserves_cold_start_on_chunk_zero():
     assert kw["iunrea"] == -1
 
 
+def test_apply_overlap_chunk_scale_heat_chunk_one_keeps_iasvel_one():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
+
+    kw = {
+        "start": False,
+        "firstt": 48.0,
+        "finalt": 240.0,
+        "iasors": 0,
+        "iasvel": 1,
+        "ihtfrq": 250,
+        "TEMINC": 1.0,
+    }
+    _apply_overlap_chunk_dynamics_kw(kw, chunk_index=1, has_restart_read=False)
+    assert kw["iasvel"] == 1
+    assert kw["start"] is False
+    assert kw["ihtfrq"] == 250
+
+
 def test_apply_overlap_chunk_hoover_cpt_continuation_zeros_iasvel_after_chunk_zero():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
 

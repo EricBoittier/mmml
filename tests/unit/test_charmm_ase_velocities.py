@@ -87,7 +87,7 @@ def test_maybe_assign_velocities_via_ase_if_cold_assigns_and_clears_start():
     ) as assign:
         assert maybe_assign_velocities_via_ase_if_cold(kw) is True
     assign.assert_called_once()
-    assert kw["iasvel"] == 0
+    assert kw["iasvel"] == 1
     assert kw["start"] is False
 
 
