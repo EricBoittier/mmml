@@ -690,7 +690,15 @@ def run_density_prep_ladder(
             break
 
         if charmm_pbc and lattice_steps > 0:
-            if float(grms) > _LATTICE_ABNR_GRMS_STRESS_CEILING:
+            if mlpot_ctx is not None:
+                journal.skip_step(
+                    f"round{round_idx + 1}:lattice_skipped",
+                    (
+                        "lattice ABNR disabled with MLpot registered "
+                        "(IMAGE reimag/upinb unsafe with ML exclusions)"
+                    ),
+                )
+            elif float(grms) > _LATTICE_ABNR_GRMS_STRESS_CEILING:
                 journal.skip_step(
                     f"round{round_idx + 1}:lattice_skipped",
                     (
