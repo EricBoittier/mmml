@@ -23,8 +23,8 @@ mmml build-crystal \
   -m "$(python -c 'from mmml.paths import default_dcm_molecule_xyz; print(default_dcm_molecule_xyz())')" \
   --spg 60 --z 4 --target-density-g-cm3 1.972 -o dcm_pyxtal.extxyz
 
-# Random molecular crystal (space group 14, Z=2 for one species)
-mmml build-crystal -m benzene.xyz --spg 14 --z 2 -o crystal.extxyz
+# Random molecular crystal (benzene — PyXtal molecule name, not SMILES)
+mmml build-crystal -m benzene --spg 14 --z 2 --target-density-g-cm3 1.202 -o crystal.extxyz
 
 # Co-crystal (two molecule types)
 mmml build-crystal -m donor.xyz -m acceptor.xyz --stoichiometry 1 1 --spg 1 -o cocrystal.cif
@@ -40,7 +40,10 @@ mmml build-crystal -m monomer.xyz --spg 4 --z 2 -o seed.npz
 **DCM note:** SMILES `C(Cl)Cl` is not in PyXtal's molecule DB — use
 `default_dcm_molecule_xyz()` or an XYZ from `mmml make-res --res DCM`.
 Experimental crystal: **Pbcn**, ρ≈**1.972 g/cm³** (COD 2100015); liquid DCM is
-**1.326 g/cm³**.
+**1.326 g/cm³**. Benzene: **P2₁/c**, ρ≈**1.202 g/cm³** (COD 4501704).
+
+Literature vs PyXtal comparison tables are auto-generated in
+[structure-building.md](../../../docs/cli/structure-building.md) (`scripts/generate_crystal_lit_compare.py`).
 
 ## Python API
 

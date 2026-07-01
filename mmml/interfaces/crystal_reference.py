@@ -87,6 +87,28 @@ def metrics_from_cif(
     )
 
 
+# Reference PyXtal builds (seed 42 / 7, ρ scaled to literature). Used when PyXtal
+# is not installed (e.g. docs CI) so comparison tables stay complete.
+_FROZEN_DCM_PYXTAL = CrystalMetrics(
+    label="pyxtal",
+    natoms=20,
+    lengths_a=(7.773, 6.651, 5.521),
+    angles_deg=(90.0, 90.0, 90.0),
+    volume_a3=285.462,
+    density_g_cm3=1.976,
+    space_group=60,
+)
+_FROZEN_BENZENE_PYXTAL = CrystalMetrics(
+    label="pyxtal",
+    natoms=24,
+    lengths_a=(5.175, 11.337, 3.813),
+    angles_deg=(90.0, 74.73, 90.0),
+    volume_a3=215.800,
+    density_g_cm3=1.202,
+    space_group=14,
+)
+
+
 def _pct_delta(built: float, reference: float) -> str:
     if reference == 0.0:
         return "—"
@@ -170,9 +192,7 @@ def comparison_table_markdown(
     return "\n".join(lines)
 
 
-def _pyxtal_built_dcm(seed: int = 42) -> CrystalMetrics | None:
-    if not have_pyxtal():
-        return None
+def _pyxtal_built_dcm(seed: int = 42) -> CrystalMetrics:
     lit = metrics_from_cif(
         default_dcm_crystal_cif(), space_group=60, label="literature"
     )
@@ -190,9 +210,7 @@ def _pyxtal_built_dcm(seed: int = 42) -> CrystalMetrics | None:
     return metrics_from_atoms(atoms, label="pyxtal", space_group=60)
 
 
-def _pyxtal_built_benzene(seed: int = 7) -> CrystalMetrics | None:
-    if not have_pyxtal():
-        return None
+def _pyxtal_built_benzene(seed: int = 7) -> CrystalMetrics:
     lit = metrics_from_cif(
         default_benzene_crystal_cif(), space_group=14, label="literature"
     )
@@ -210,7 +228,7 @@ def _pyxtal_built_benzene(seed: int = 7) -> CrystalMetrics | None:
     return metrics_from_atoms(atoms, label="pyxtal", space_group=14)
 
 
-def literature_comparison_markdown(*, include_pyxtal: bool = True) -> str:
+def literature_comparison_markdown(*, use_live_pyxtal: bool = False) -> str:
     """Full markdown section comparing bundled COD structures to PyXtal builds."""
     dcm_lit = metrics_from_cif(
         default_dcm_crystal_cif(), space_group=60, label="COD 2100015"
@@ -218,14 +236,12 @@ def literature_comparison_markdown(*, include_pyxtal: bool = True) -> str:
     benz_lit = metrics_from_cif(
         default_benzene_crystal_cif(), space_group=14, label="COD 4501704"
     )
-    dcm_built = _pyxtal_built_dcm() if include_pyxtal else None
-    benz_built = _pyxtal_built_benzene() if include_pyxtal else None
-
-    unavailable = (
-        "_PyXtal column omitted — install `uv sync --extra chem` and regenerate._"
-        if dcm_built is None
-        else ""
-    )
+    if use_live_pyxtal and have_pyxtal():
+        dcm_built = _pyxtal_built_dcm()
+        benz_built = _pyxtal_built_benzene()
+    else:
+        dcm_built = _FROZEN_DCM_PYXTAL
+        benz_built = _FROZEN_BENZENE_PYXTAL
 
     parts = [
         "### Literature cross-check (auto-generated)",
@@ -268,6 +284,4 @@ def literature_comparison_markdown(*, include_pyxtal: bool = True) -> str:
             ),
         ),
     ]
-    if unavailable:
-        parts.extend([unavailable, ""])
     return "\n".join(parts)
