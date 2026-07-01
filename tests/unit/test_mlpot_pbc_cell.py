@@ -1302,7 +1302,11 @@ def test_apply_nbonds_kwargs_can_defer_rebuild():
         "pycharmm.nbonds.update_bnbnd"
     ) as rebuild:
         apply_nbonds_kwargs({"cutnb": 12.0, "ctonnb": 10.0, "ctofnb": 11.0}, rebuild=False)
-    configure.assert_called_once()
+    assert [list(c.kwargs.keys()) for c in configure.call_args_list] == [
+        ["cutnb"],
+        ["ctofnb"],
+        ["ctonnb"],
+    ]
     rebuild.assert_not_called()
 
 

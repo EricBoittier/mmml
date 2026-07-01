@@ -536,7 +536,19 @@ def _commit_hybrid_calculator_mini_result(
         invalidate_mlpot_calculator_caches,
         sync_charmm_lists_after_mini,
     )
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms_after_ener_force
     from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+
+    def _prime_or_ener_force(*, context_suffix: str) -> None:
+        if defer_pre_sd_ener:
+            # Defer path: skip UPDATE (upinb) here; materialize will prime USER+enbond.
+            prime_charmm_hybrid_energy_before_mlpot_sd(
+                mlpot_ctx,
+                verbose=verbose,
+                context=f"{context_prefix} {context_suffix}",
+            )
+        else:
+            charmm_grms_after_ener_force()
 
     sync_charmm_positions(np.asarray(atoms.get_positions(), dtype=np.float64))
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
@@ -549,17 +561,7 @@ def _commit_hybrid_calculator_mini_result(
         sync_charmm_lists_after_mini(quiet=True)
     invalidate_mlpot_calculator_caches(mlpot_ctx)
     mlpot_ctx.reregister_mlpot(verbose=False, reregister_params=False)
-    if defer_pre_sd_ener:
-        # Defer path: skip UPDATE (upinb) here; materialize will prime USER+enbond.
-        prime_charmm_hybrid_energy_before_mlpot_sd(
-            mlpot_ctx,
-            verbose=verbose,
-            context=f"{context_prefix} post-calculator mini",
-        )
-    else:
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms_after_ener_force
-
-        charmm_grms_after_ener_force()
+    _prime_or_ener_force(context_suffix="post-calculator mini")
     grms1 = mlpot_hybrid_grms_from_calculator(mlpot_ctx)
     if grms1 is None or not np.isfinite(grms1):
         raise RuntimeError("hybrid GRMS unavailable after calculator minimize")
@@ -593,10 +595,11 @@ def _commit_hybrid_calculator_mini_result(
     )
     if restored_hist:
         sync_charmm_positions(np.asarray(atoms.get_positions(), dtype=np.float64))
-        sync_charmm_lists_after_mini(quiet=True)
+        if not defer_pre_sd_ener:
+            sync_charmm_lists_after_mini(quiet=True)
         invalidate_mlpot_calculator_caches(mlpot_ctx)
         mlpot_ctx.reregister_mlpot(verbose=False, reregister_params=False)
-        charmm_grms_after_ener_force()
+        _prime_or_ener_force(context_suffix="post-historical restore")
         grms1 = mlpot_hybrid_grms_from_calculator(mlpot_ctx)
         if grms1 is None or not np.isfinite(grms1):
             raise RuntimeError("hybrid GRMS unavailable after historical restore")

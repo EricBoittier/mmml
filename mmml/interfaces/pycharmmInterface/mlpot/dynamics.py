@@ -1449,17 +1449,6 @@ def _run_minimize_in_chunks(
                     flush=True,
                 )
             return MlpotSdChunkResult(completed=True, last_grms=grms)
-        if grms is not None and _maybe_abort_sd_on_stress_grms(
-            config,
-            current_grms=grms,
-            pass_label=pass_label,
-            step_label=f"after chunk {chunk_index}",
-        ):
-            return MlpotSdChunkResult(
-                completed=False,
-                stalled=True,
-                last_grms=grms,
-            )
         if grms is not None and previous_grms is not None:
             if abs(float(grms) - float(previous_grms)) <= float(config.sd_stall_grms_abs_tol):
                 stagnant_chunks += 1

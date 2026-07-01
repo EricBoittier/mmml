@@ -350,7 +350,14 @@ def apply_nbonds_kwargs(kw: dict[str, Any], *, rebuild: bool = True) -> None:
     imgfrq = cfg.pop("imgfrq", None)
     cfg.pop("ctexnb", None)  # CHARMM bumps ctexnb internally when cutnb/cutim change
 
-    nbonds.configure(**cfg)
+    # Apply switched cutoffs in descending order (cutnb > ctofnb > ctonnb).  The C
+    # API checks ordering after each setter; vacuum presets set ctonnb before ctofnb
+    # in the dict and CGENFF prm may still have ctofnb=12 when ctonnb→13 is applied.
+    for key in ("cutnb", "ctofnb", "ctonnb"):
+        if key in cfg:
+            nbonds.configure(**{key: cfg.pop(key)})
+    if cfg:
+        nbonds.configure(**cfg)
     if cutim is not None:
         nbonds.set_cutim(float(cutim))
     if inbfrq is not None:
