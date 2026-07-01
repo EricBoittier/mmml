@@ -725,7 +725,6 @@ def build_mm_energy_forces_fn(
     jax_md_update_interval: int = 1,
     jax_md_skin_distance: float = DEFAULT_JAX_MD_SKIN_DISTANCE_A,
     mm_nl_backend: str = "auto",
-    force_static_mm_eval: bool = False,
     debug: bool = False,
     ml_compute_dtype: str | None = None,
     defer_xla_gpu_warmup: bool = False,
@@ -752,8 +751,6 @@ def build_mm_energy_forces_fn(
         ``mm_fn(positions, pair_idx, pair_mask) -> (energy, forces)`` and
         ``update_fn(positions, box=None) -> (pair_idx, pair_mask)``.
         Otherwise: ``mm_fn(positions) -> (energy, forces)`` (single callable).
-        With ``force_static_mm_eval=True``, PBC rebuild still uses a positions-only
-        ``mm_fn`` backed by the initial static pair buffer (JIT fallback path).
     """
     from mmml.utils.jax_gpu_warmup import maybe_sanitize_process_env_for_ptxas
 
