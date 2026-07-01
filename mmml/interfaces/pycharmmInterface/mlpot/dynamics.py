@@ -1015,9 +1015,9 @@ _SD_STRESS_GRMS_ABORT_CEILING_DEFAULT = 500.0
 
 def _resolved_sd_stress_abort_ceiling(config: MinimizeWithMlpotConfig) -> float:
     """Hybrid GRMS above which chunked SD/ABNR should stop immediately."""
-    threshold = config.pre_sd_bonded_recovery_grms_kcalmol_A
-    if threshold is not None and float(threshold) > 0.0:
-        return float(threshold)
+    explicit = getattr(config, "sd_stress_abort_grms_kcalmol_A", None)
+    if explicit is not None and float(explicit) > 0.0:
+        return float(explicit)
     return _SD_STRESS_GRMS_ABORT_CEILING_DEFAULT
 
 
