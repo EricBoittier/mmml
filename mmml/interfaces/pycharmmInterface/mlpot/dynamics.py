@@ -3858,6 +3858,7 @@ def _overlap_chunk_uses_memory_handoff(
     n_chunks: int,
     overlap: Optional["DynamicsOverlapConfig"] = None,
     cpt: bool = False,
+    bussi_heat: bool = False,
 ) -> bool:
     """Whether overlap chunk boundaries skip ``READYN`` (in-process continuation).
 
@@ -3865,9 +3866,15 @@ def _overlap_chunk_uses_memory_handoff(
     ``write restart`` / ``READYN`` on scratch ``.overlap_*.res`` files does not
     restore barostat piston internals and yields garbage ``PIXX`` / ``PRESSI``.
 
-    Non-CPT MLpot overlap uses alternating scratch ``READYN`` with patched
-    ``JHSTRT`` so global step/time counters continue (``overlap.memory_handoff``
-    on the config affects chunk-0 ``start``/READYN only, not between-chunk I/O).
+    ASE Bussi heat overlap also stays in RAM: scratch ``WRIDYN`` snapshots retain
+    segment-local ``!ENERGIES`` / ``JHSTRT`` counters that desync from the global
+    step after many micro-chunks, and ``READYN`` loses the COMP velocity mirror
+    Bussi sub-chunks rely on.  Set ``MMML_BUSSI_READYN_OVERLAP=1`` to opt into
+    legacy scratch ``READYN`` (debug only).
+
+    Other non-CPT overlap uses alternating scratch ``READYN`` with patched
+    ``JHSTRT``.  ``overlap.memory_handoff`` on the config affects chunk-0
+    ``start``/READYN only, not between-chunk I/O for scale-heat / NVE.
     CPT stability *sub-chunks* within one overlap chunk also stay in-memory
     (``_run_cpt_stability_subchunked``) unless ``MMML_CPT_READYN_SUBCHUNK=1``.
     """
@@ -3876,6 +3883,12 @@ def _overlap_chunk_uses_memory_handoff(
         return False
     if cpt:
         return _cpt_subchunk_use_in_memory_handoff()
+    if bussi_heat:
+        from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import _truthy_env
+
+        if _truthy_env("MMML_BUSSI_READYN_OVERLAP"):
+            return False
+        return True
     return False
 
 
@@ -4276,6 +4289,12 @@ def _harmonize_overlap_readyn_restart_before_readyn(
             nsavc=nsavc,
             nsavv=nsavv,
         ):
+            from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_io_alias
+
+            try:
+                charmm_io_alias(path, for_write=False)
+            except FileNotFoundError:
+                pass
             return
     from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         rewrite_dynamics_restart_validated,
@@ -4387,9 +4406,15 @@ def _prepare_post_rescue_overlap_handoff(
 
     Required for Hoover CPT: static ``write restart`` lacks barostat piston
     internals, so ``READYN`` on scratch ``.overlap_*.res`` files fails with EOF.
+    Also used for ASE Bussi heat so COMP-mirrored velocities and dynamics buffers
+    stay in RAM instead of reloading stale scratch ``WRIDYN`` state.
     """
     if mlpot_ctx is not None and getattr(mlpot_ctx, "_overlap_post_rescue_cold_start", False):
         _prepare_post_rescue_cold_start_overlap_handoff(chunk_kw, mlpot_ctx=mlpot_ctx)
+        return
+    if _bussi_heat_ramp_active(chunk_kw):
+        _prepare_post_rescue_bath_and_crystal(chunk_kw, mlpot_ctx=mlpot_ctx)
+        _apply_bussi_in_memory_continuation_kw(chunk_kw)
         return
     _prepare_post_rescue_bath_and_crystal(chunk_kw, mlpot_ctx=mlpot_ctx)
     chunk_kw["restart"] = False
@@ -4560,11 +4585,16 @@ def _apply_post_rescue_overlap_handoff(
 
     Returns ``(chunk_io, in_memory_handoff)``.
     """
-    if bool(chunk_kw.get("cpt")):
+    if bool(chunk_kw.get("cpt")) or _bussi_heat_ramp_active(chunk_kw):
+        reason = (
+            "CPT; no READYN on scratch restart — barostat state stays in RAM"
+            if bool(chunk_kw.get("cpt"))
+            else "Bussi heat; no READYN on scratch restart — velocities stay in RAM"
+        )
         print(
             f"overlap ({overlap_context}): post-rescue in-memory handoff "
             f"scheduled at global step {max(0, int(steps_done))} for next overlap "
-            f"chunk (CPT; no READYN on scratch restart — barostat state stays in RAM)",
+            f"chunk ({reason})",
             flush=True,
         )
         return chunk_io, True
@@ -4997,7 +5027,9 @@ def _apply_overlap_chunk_dynamics_kw(
         chunk_kw["restart"] = False
         chunk_kw.pop("iunrea", None)
         chunk_kw["iunrea"] = -1
-    if int(chunk_index) > 0:
+    if int(chunk_index) > 0 and _bussi_heat_ramp_active(chunk_kw) and not has_restart_read:
+        _apply_bussi_in_memory_continuation_kw(chunk_kw)
+    elif int(chunk_index) > 0:
         _ensure_bussi_heat_continuation_iasvel(chunk_kw)
 
 
@@ -5905,6 +5937,7 @@ def run_dynamics_with_io(
                                 n_chunks=n_chunks,
                                 overlap=overlap,
                                 cpt=bool(chunk_kw.get("cpt")),
+                                bussi_heat=_bussi_heat_ramp_active(chunk_kw),
                             )
                         ),
                     )
@@ -5945,6 +5978,7 @@ def run_dynamics_with_io(
                             n_chunks=n_chunks,
                             overlap=overlap,
                             cpt=bool(chunk_kw.get("cpt")),
+                            bussi_heat=_bussi_heat_ramp_active(chunk_kw),
                         )
                     )
                 )
@@ -6279,14 +6313,15 @@ def run_dynamics_with_io(
                             header_step is None
                             or header_step < expected_after - 1
                         )
-                        cpt_overlap_memory = bool(chunk_kw.get("cpt")) and (
+                        cpt_overlap_memory = (
                             mem_handoff
                             or _overlap_chunk_uses_memory_handoff(
                                 mlpot_ctx,
                                 chunk_index=chunk_index,
                                 n_chunks=n_chunks,
                                 overlap=overlap,
-                                cpt=True,
+                                cpt=bool(chunk_kw.get("cpt")),
+                                bussi_heat=_bussi_heat_ramp_active(chunk_kw),
                             )
                         )
                         if needs_step_fix or cpt_overlap_memory:
@@ -6481,6 +6516,7 @@ def run_dynamics_with_io(
                             chunk_io is not None
                             and n_chunks > 1
                             and not bool(chunk_kw.get("cpt"))
+                            and not _bussi_heat_ramp_active(chunk_kw)
                             and rescued_overlap
                         )
                         if use_readyn_handoff:
