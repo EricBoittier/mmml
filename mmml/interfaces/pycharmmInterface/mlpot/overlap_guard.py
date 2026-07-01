@@ -1210,6 +1210,8 @@ def _handle_extent_cleanup_rescue(
         template_positions=ref_pos,
         max_monomer_radius_A=extent_cap if extent_cap > 0.0 else None,
     )
+    setattr(mlpot_ctx, "_mlpot_pbc_exclusions_upinb_done", False)
+    setattr(mlpot_ctx, "_overlap_extent_polish_mlpot_sd_done", False)
     print(
         f"{exc}\nCleanup extent rescue: rebuild monomer {violation.monomer + 1} "
         f"from {ref_path.name}, minimize, cold restart...",

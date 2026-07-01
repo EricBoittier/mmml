@@ -189,6 +189,7 @@ def polish_after_extent_repack(
             context=f"{label} bonded+MLpot",
             config=config,
         )
+        setattr(mlpot_ctx, "_overlap_extent_polish_mlpot_sd_done", True)
         grms = float(refresh_mlpot_energy_and_grms(mlpot_ctx, context=""))
     elif int(getattr(config, "mlpot_rescue_mini_nstep", 0) or 0) > 0:
         from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
@@ -203,6 +204,7 @@ def polish_after_extent_repack(
             nstep=_resolve_mlpot_recovery_nstep(bonded_cfg, config),
             calculator_pre_minimize=False,
         )
+        setattr(mlpot_ctx, "_overlap_extent_polish_mlpot_sd_done", True)
         grms = float(refresh_mlpot_energy_and_grms(mlpot_ctx, context=""))
 
     return grms

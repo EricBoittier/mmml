@@ -839,20 +839,28 @@ def finalize_overlap_rescue_for_dynamics(
 
     mini_n = int(getattr(config, "mlpot_rescue_mini_nstep", 0) or 0)
     if mini_n > 0:
-        bonded_cfg = _bonded_cfg_from_overlap_config(config)
-        _run_mlpot_recovery_mini(
-            ctx,
-            bonded_cfg,
-            pyCModel=_resolve_pyCModel(ctx, config),
-            context=context,
-            nstep=mini_n,
-        )
-        grms = refresh_mlpot_energy_and_grms(
-            ctx,
-            context=f"{context} (after MLpot mini)",
-            reregister=False,
-            verbose=verbose,
-        )
+        if bool(getattr(ctx, "_overlap_extent_polish_mlpot_sd_done", False)):
+            if verbose:
+                print(
+                    f"{context}: skip duplicate MLpot SD mini "
+                    "(extent polish already ran bonded+MLpot recovery)",
+                    flush=True,
+                )
+        else:
+            bonded_cfg = _bonded_cfg_from_overlap_config(config)
+            _run_mlpot_recovery_mini(
+                ctx,
+                bonded_cfg,
+                pyCModel=_resolve_pyCModel(ctx, config),
+                context=context,
+                nstep=mini_n,
+            )
+            grms = refresh_mlpot_energy_and_grms(
+                ctx,
+                context=f"{context} (after MLpot mini)",
+                reregister=False,
+                verbose=verbose,
+            )
 
     assert_mlpot_user_active(
         ctx,

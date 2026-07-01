@@ -1322,6 +1322,13 @@ def ensure_ml_exclusions_before_mlpot_charmm_energy(
     needs_install = nnb < min_nnb
     if not needs_install and not force_rebuild:
         return nnb
+    # One ``prepare_charmm_pbc`` + ``upinb`` per coordinate/box regime is enough;
+    # a second pass after extent polish + finalize overlap rescue segfaults on MPI
+    # builds when IMAGE lists were already rebuilt (see ``_prepare_overlap_chunk``).
+    if not needs_install and bool(
+        getattr(mlpot_ctx, "_mlpot_pbc_exclusions_upinb_done", False) is True
+    ):
+        return nnb
 
     side = _resolve_mlpot_ctx_pbc_box_side(mlpot_ctx)
     if side is None:
@@ -1369,6 +1376,7 @@ def ensure_ml_exclusions_before_mlpot_charmm_energy(
             pycharmm.nbonds.update_bnbnd()
     pycharmm.image.update_bimag()
     recover_mpi_for_charmm_after_jax(phase=f"after {context} PBC upinb")
+    setattr(mlpot_ctx, "_mlpot_pbc_exclusions_upinb_done", True)
     return nnb
 
 
