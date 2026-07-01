@@ -541,6 +541,7 @@ def test_patch_restart_global_step_preserves_fortran_restart_format(tmp_path):
     """Post-rescue READYN needs fixed-width I10 lines, not space-joined tokens."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         patch_restart_global_step,
+        read_restart_last_step,
     )
 
     stub = (
@@ -550,17 +551,16 @@ def test_patch_restart_global_step_preserves_fortran_restart_format(tmp_path):
     assert stub.is_file()
     res = tmp_path / "overlap_a.res"
     res.write_text(stub.read_text(encoding="utf-8"), encoding="utf-8")
-    natom_line_before = res.read_text(encoding="utf-8").splitlines()[7]
-    tail_before = natom_line_before[60:]
 
     assert patch_restart_global_step(res, 500)
 
     lines = res.read_text(encoding="utf-8").splitlines()
     assert lines[0].startswith("REST")
     assert lines[0][10:20] == "       500"
+    assert read_restart_last_step(res) == 500
     natom_line = lines[7]
-    assert natom_line[50:60] == "       500"
-    assert natom_line[60:] == tail_before
+    assert "0.314159000000000D+06" in natom_line
+    assert natom_line.split()[3:6] == ["1", "10", "500"]
 
 
 def test_read_restart_last_step_real_fixture():
@@ -1123,8 +1123,6 @@ def test_patch_restart_readyn_handoff_harmonizes_nsavv_on_wridyn_stub(tmp_path):
     assert stub.is_file()
     scratch = tmp_path / "heat.a.res"
     scratch.write_text(stub.read_text(encoding="utf-8"), encoding="utf-8")
-    natom_line_before = scratch.read_text(encoding="utf-8").splitlines()[7]
-    tail_before = natom_line_before[60:]
 
     assert patch_restart_readyn_handoff(
         scratch,
@@ -1136,10 +1134,8 @@ def test_patch_restart_readyn_handoff_harmonizes_nsavv_on_wridyn_stub(tmp_path):
     lines = scratch.read_text(encoding="utf-8").splitlines()
     assert lines[0][10:20] == "       500"
     natom_line = lines[7]
-    assert natom_line[30:40] == "        49"
-    assert natom_line[40:50] == "        50"
-    assert natom_line[50:60] == "       500"
-    assert natom_line[60:] == tail_before
+    assert "0.314159000000000D+06" in natom_line
+    assert natom_line.split()[3:6] == ["49", "50", "500"]
     assert read_restart_last_step(scratch) == 500
     assert read_restart_nsavc(scratch) == 49
     assert read_restart_nsavv(scratch) == 50

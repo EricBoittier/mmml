@@ -816,6 +816,51 @@ def _replace_i10_field(line: str, index: int, value: int) -> str:
     return line[:start] + f"{int(value):>10d}" + line[end:]
 
 
+def _leading_integer_fields(line: str) -> tuple[list[int], str]:
+    """Parse leading integer tokens and return the remainder of ``line`` unchanged."""
+    ints: list[int] = []
+    i = 0
+    n = len(line)
+    while i < n:
+        while i < n and line[i].isspace():
+            i += 1
+        if i >= n:
+            break
+        start = i
+        while i < n and not line[i].isspace():
+            i += 1
+        token = line[start:i]
+        try:
+            ints.append(int(token))
+        except ValueError:
+            return ints, line[start:]
+    return ints, ""
+
+
+def _rebuild_natom_counter_line(
+    line: str,
+    *,
+    updates: dict[int, int],
+) -> str:
+    """Rebuild the ``!NATOM`` counter line with I10 integer prefix + original tail.
+
+    WRIDYN restarts often pad the first field and append thermostat floats on the
+    same line; blind ``index * 10`` slicing then patches the wrong columns.
+    """
+    ints, tail = _leading_integer_fields(line)
+    if not ints:
+        return line
+    for idx, value in sorted(updates.items()):
+        i = int(idx)
+        while len(ints) <= i:
+            ints.append(0)
+        ints[i] = int(value)
+    prefix = "".join(f"{v:>10d}" for v in ints)
+    if tail and not tail.startswith((" ", "\t")):
+        tail = " " + tail
+    return prefix + tail
+
+
 def patch_restart_global_step(path: Path, global_step: int) -> bool:
     """Set ``JHSTRT`` (and legacy ``REST`` header) to the integrated dynamics step.
 
@@ -854,7 +899,10 @@ def patch_restart_global_step(path: Path, global_step: int) -> bool:
             continue
         if i + 1 >= len(lines):
             break
-        lines[i + 1] = _replace_i10_field(lines[i + 1], 5, step)
+        lines[i + 1] = _rebuild_natom_counter_line(
+            lines[i + 1],
+            updates={5: step},
+        )
         patched = True
         break
 
@@ -905,11 +953,10 @@ def patch_restart_readyn_handoff(
             continue
         if i + 1 >= len(lines):
             break
-        counter = lines[i + 1]
-        counter = _replace_i10_field(counter, 3, nsavc_i)
-        counter = _replace_i10_field(counter, 4, nsavv_i)
-        counter = _replace_i10_field(counter, 5, step)
-        lines[i + 1] = counter
+        lines[i + 1] = _rebuild_natom_counter_line(
+            lines[i + 1],
+            updates={3: nsavc_i, 4: nsavv_i, 5: step},
+        )
         patched = True
         break
 
