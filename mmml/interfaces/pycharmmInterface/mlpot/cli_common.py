@@ -428,7 +428,10 @@ def resolve_heat_firstt_finalt(
     finalt = getattr(args, "heat_finalt", None)
     firstt = getattr(args, "heat_firstt", None)
     t_end = float(finalt if finalt is not None else default_temp)
-    t_start = float(firstt if firstt is not None else t_end * 0.2)
+    if firstt is None or float(firstt) <= 0.0:
+        t_start = t_end * 0.2
+    else:
+        t_start = float(firstt)
     return clamp_velocity_assignment_temp_k(t_start), t_end
 
 
