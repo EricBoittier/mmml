@@ -480,10 +480,14 @@ def assert_charmm_pbc_lattice_ready_for_mlpot(
     """Fail fast before ``mlpot_update`` when PBC crystal/IMAGE lists are unusable.
 
     ``mlpot_update`` (first MLpot ``ENER`` during SD) dereferences CHARMM neighbor
-    and IMAGE arrays. After lattice prep or ``READ PARAM``, ``XUCELL`` alone is not
-    enough: ``pbound_get_size`` must be active or ``mlpot_update`` can segfault.
+    and IMAGE arrays. Prefer live ``pbound_get_size`` when available; after
+    registration-time crystal rebuild on KEY_LIBRARY/MPI builds, ``XUCELL`` +
+    ``NTRANS`` can be valid while ``pbound_get_size`` stays zero in Python —
+    :func:`charmm_crystal_abnr_ready` accepts that post-reinstall state.
     """
     if charmm_crystal_lattice_ready():
+        return
+    if charmm_crystal_abnr_ready(cubic_box_side_A):
         return
     side_hint = ""
     if cubic_box_side_A is not None and float(cubic_box_side_A) > 0.0:

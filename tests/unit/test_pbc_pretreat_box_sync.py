@@ -376,10 +376,31 @@ def test_assert_charmm_pbc_lattice_ready_for_mlpot_raises_when_inactive() -> Non
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_lattice_ready",
         return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_abnr_ready",
+        return_value=False,
     ), pytest.raises(RuntimeError, match="lattice-ready"):
         assert_charmm_pbc_lattice_ready_for_mlpot(
             context="MLpot registration",
             cubic_box_side_A=43.616,
+        )
+
+
+def test_assert_charmm_pbc_lattice_ready_for_mlpot_accepts_ucell_post_reinstall() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        assert_charmm_pbc_lattice_ready_for_mlpot,
+    )
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_lattice_ready",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_abnr_ready",
+        return_value=True,
+    ):
+        assert_charmm_pbc_lattice_ready_for_mlpot(
+            context="MLpot registration",
+            cubic_box_side_A=46.864,
         )
 
 
