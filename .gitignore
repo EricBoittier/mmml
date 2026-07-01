@@ -99,13 +99,27 @@ coverage.xml
 *.mo
 *.pot
 
-# CHARMM (extracted tree may be tracked; ignore local build artifacts)
+# CHARMM (extracted tree may be tracked; ignore local build/install artifacts)
 setup/charmm/lib/
 setup/charmm/libcharmm.so
+setup/charmm/libcharmm.dylib
+setup/charmm/libcharmm_c.a
+setup/charmm/libcharmm_cxx.a
 setup/charmm/build/
 setup/charmm/bin/
 setup/charmm/exec
 setup/charmm/charmm
+setup/charmm/CMakeFiles/
+setup/charmm/Makefile
+setup/charmm/cmake_install.cmake
+setup/charmm/CMakeLists.txt_
+setup/charmm/c_files.cmake
+setup/charmm/cxx_files.cmake
+setup/charmm/fortran_files.cmake
+setup/charmm/keywords.inc
+setup/charmm/pref.dat
+setup/charmm/revid.h
+setup/charmm/qchem
 
 # Django stuff:
 *.log
