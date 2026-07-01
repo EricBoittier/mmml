@@ -510,6 +510,7 @@ def test_register_mlpot_context_forwards_cell():
         periodic_charmm_vdw=True,
         cubic_box_side_A=20.0,
         verbose=False,
+        use_block_registration=None,
     )
     mock_warmup.assert_called_once()
     assert mock_warmup.call_args.kwargs["cell"] == 20.0
