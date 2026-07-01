@@ -1263,6 +1263,16 @@ def _run_minimize_in_chunks(
             )
 
             recover_mpi_for_charmm_after_jax(phase="before MLpot SD chunk")
+            from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+                mlpot_skip_charmm_ener_force_before_first_sd,
+                rebind_mlpot_calculator_from_pycmodel,
+            )
+
+            if mlpot_skip_charmm_ener_force_before_first_sd(config.mlpot_ctx):
+                rebind_mlpot_calculator_from_pycmodel(
+                    config.mlpot_ctx,
+                    verbose=False,
+                )
         step = min(_effective_mlpot_sd_chunk_nstep(config, previous_grms=previous_grms), remaining)
         kw = {**base_kw, "nstep": step}
         _prepare_mlpot_sd_list_frequencies(pycharmm, sd_kw=kw)

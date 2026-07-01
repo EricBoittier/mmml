@@ -1262,7 +1262,9 @@ def materialize_deferred_mlpot_jax_before_sd(
     )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
+        mlpot_sd_charmm_ener_already_primed,
         mlpot_skip_charmm_ener_force_before_first_sd,
+        rebind_mlpot_calculator_from_pycmodel,
     )
 
     recover_mpi_for_charmm_after_jax(phase="before pre-MLpot SD JAX materialize")
@@ -1275,6 +1277,9 @@ def materialize_deferred_mlpot_jax_before_sd(
         return False
     if not getattr(pyCModel, "_defer_jax_until_after_sd", False):
         return False
+
+    rebind_mlpot_calculator_from_pycmodel(mlpot_ctx, verbose=False)
+    charmm_primed = mlpot_sd_charmm_ener_already_primed(mlpot_ctx)
 
     pos = get_charmm_positions_array()
     use_pbc = bool(getattr(mlpot_ctx, "use_pbc", False))
@@ -1318,19 +1323,22 @@ def materialize_deferred_mlpot_jax_before_sd(
     calc = pyCModel.get_pycharmm_calculator()
     if isinstance(calc, _DeferredDecomposedMlpotCalculator):
         calc = calc._ensure_real()
-    if isinstance(calc, DecomposedMlpotCalculator) and calc.spherical_fn is not None:
+    if (
+        isinstance(calc, DecomposedMlpotCalculator)
+        and calc.spherical_fn is not None
+        and not charmm_primed
+    ):
         box, mm_pair_idx, mm_pair_mask, use_mm_pairs = _resolve_mlpot_warmup_box_pairs(
             pyCModel,
             pos,
             use_pbc=use_pbc,
             box_A=float(box_A) if box_A is not None else None,
         )
-        if verbose:
-            print(
-                "Pre-MLpot SD: warming CHARMM callback spherical_forward JIT "
-                "(same path as steepd gete)",
-                flush=True,
-            )
+        print(
+            "Pre-MLpot SD: warming CHARMM callback spherical_forward JIT "
+            "(same path as steepd gete)",
+            flush=True,
+        )
         _warmup_value_and_grad_for_model(
             pyCModel,
             pos,
@@ -1343,10 +1351,18 @@ def materialize_deferred_mlpot_jax_before_sd(
             phase="after pre-MLpot SD callback forward warmup",
         )
         did_work = True
+        print(
+            "Pre-MLpot SD: callback forward JIT ready",
+            flush=True,
+        )
+    elif charmm_primed:
+        recover_mpi_for_charmm_after_jax(
+            phase="after pre-MLpot SD (CHARMM ENER already primed)",
+        )
         if verbose:
             print(
-                "Pre-MLpot SD: callback forward JIT ready "
-                "(deferring CHARMM ENER until MLpot SD step 1)",
+                "Pre-MLpot SD: skipping callback JIT warmup "
+                "(calculator prep already ran CHARMM ENER FORCE)",
                 flush=True,
             )
 

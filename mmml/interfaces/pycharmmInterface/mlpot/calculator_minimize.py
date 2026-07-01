@@ -550,6 +550,13 @@ def _commit_hybrid_calculator_mini_result(
     charmm_grms_after_ener_force()
     if mlpot_skip_charmm_ener_force_before_first_sd(mlpot_ctx):
         setattr(mlpot_ctx, "_mlpot_pre_sd_ener_probed", True)
+        from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+            recover_mpi_for_charmm_after_jax,
+        )
+
+        recover_mpi_for_charmm_after_jax(
+            phase="after calculator mini CHARMM ENER (pre-MLpot SD)",
+        )
     grms1 = mlpot_hybrid_grms_from_calculator(mlpot_ctx)
     if grms1 is None or not np.isfinite(grms1):
         raise RuntimeError("hybrid GRMS unavailable after calculator minimize")
