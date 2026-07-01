@@ -1699,7 +1699,16 @@ def _apply_overlap_chunk_heat_ramp(
     steps_done: int,
     ramp_spec: dict[str, float | int],
 ) -> None:
-    """Recompute ``ihtfrq`` / ``TEMINC`` for one overlap chunk (stage cadence ≠ chunk ``nstep``)."""
+    """Recompute heat-ramp cadence for one overlap chunk (scale or Bussi)."""
+    if str(ramp_spec.get("thermostat", "scale")).lower() == "bussi":
+        _apply_overlap_chunk_bussi_heat_ramp(
+            chunk_kw,
+            chunk_index=chunk_index,
+            chunk_nstep=chunk_nstep,
+            steps_done=steps_done,
+            ramp_spec=ramp_spec,
+        )
+        return
     apply_heat_ramp_frequencies(
         chunk_kw,
         nstep=int(chunk_nstep),
@@ -1849,7 +1858,10 @@ def apply_hoover_cpt_heat_ramp_overlap_chunk(
 
 
 def heat_ramp_spec_from_kw(kw: dict[str, Any]) -> dict[str, float | int] | None:
-    """Return stage-level velocity-scaling ramp parameters, or ``None`` if inactive."""
+    """Return stage-level heat-ramp parameters (scale or Bussi), or ``None``."""
+    bussi = bussi_heat_ramp_spec_from_kw(kw)
+    if bussi is not None:
+        return bussi
     ihtfrq = int(kw.get("ihtfrq", 0) or 0)
     if ihtfrq <= 0 or "hoover reft" in kw or bool(kw.get("cpt")):
         return None
@@ -1861,7 +1873,160 @@ def heat_ramp_spec_from_kw(kw: dict[str, Any]) -> dict[str, float | int] | None:
         "finalt": float(kw.get("finalt", 300.0)),
         "teminc": teminc,
         "ihtfrq": ihtfrq,
+        "thermostat": "scale",
     }
+
+
+def bussi_heat_ramp_spec_from_kw(kw: dict[str, Any]) -> dict[str, float | int] | None:
+    """Return ASE Bussi heat-ramp metadata stored on dynamics kwargs."""
+    if str(kw.get("_heat_thermostat", "")).lower() == "bussi":
+        ramp = kw.get("_bussi_ramp")
+        if isinstance(ramp, dict):
+            interval = int(kw.get("_bussi_rescale_interval", ramp.get("ihtfrq", 0)) or 0)
+            if interval > 0:
+                return {
+                    "firstt": float(ramp.get("firstt", kw.get("finalt", 300.0))),
+                    "finalt": float(ramp.get("finalt", 300.0)),
+                    "teminc": float(ramp.get("teminc", 0.0)),
+                    "ihtfrq": interval,
+                    "thermostat": "bussi",
+                }
+    ramp = kw.get("_bussi_ramp")
+    if not isinstance(ramp, dict):
+        return None
+    interval = int(kw.get("_bussi_rescale_interval", ramp.get("ihtfrq", 0)) or 0)
+    if interval <= 0:
+        return None
+    teminc = float(ramp.get("teminc", 0.0))
+    if teminc <= 0.0:
+        return None
+    return {
+        "firstt": float(ramp.get("firstt", kw.get("finalt", 300.0))),
+        "finalt": float(ramp.get("finalt", 300.0)),
+        "teminc": teminc,
+        "ihtfrq": interval,
+        "thermostat": "bussi",
+    }
+
+
+def prepare_bussi_heat_dynamics_kw(
+    kw: dict[str, Any],
+    *,
+    nstep: int,
+    ihtfrq: int,
+    timestep_ps: float,
+    bussi_taut_ps: float | None = None,
+) -> None:
+    """Configure Verlet heat with ASE Bussi rescales (CHARMM ``ihtfrq=0``)."""
+    apply_heat_ramp_frequencies(kw, nstep=max(1, int(nstep)), ihtfrq=int(ihtfrq))
+    interval = int(kw["ihtfrq"])
+    teminc = float(kw["TEMINC"])
+    firstt = float(kw.get("firstt", kw.get("finalt", 300.0)))
+    finalt = float(kw.get("finalt", 300.0))
+    dt_ps = max(1.0e-12, float(timestep_ps))
+    taut_ps = (
+        float(bussi_taut_ps)
+        if bussi_taut_ps is not None
+        else max(dt_ps, interval * dt_ps)
+    )
+    kw["_heat_thermostat"] = "bussi"
+    kw["_bussi_rescale_interval"] = interval
+    kw["_bussi_ramp"] = {
+        "firstt": firstt,
+        "finalt": finalt,
+        "teminc": teminc,
+        "ihtfrq": interval,
+    }
+    kw["_bussi_taut_ps"] = taut_ps
+    kw["ihtfrq"] = 0
+    kw.pop("TEMINC", None)
+    kw.pop("teminc", None)
+    kw["iasors"] = 0
+
+
+def _bussi_heat_chunk_nstep(kw: dict[str, Any], total_nstep: int) -> int | None:
+    """Micro-chunk size for Bussi heat when ramp metadata is active."""
+    spec = bussi_heat_ramp_spec_from_kw(kw)
+    if spec is None or total_nstep <= 0:
+        return None
+    interval = int(spec["ihtfrq"])
+    if interval <= 0:
+        return None
+    return min(interval, max(1, int(total_nstep)))
+
+
+def _apply_bussi_in_memory_continuation_kw(kw: dict[str, Any]) -> None:
+    """In-process ``dyna`` continuation between Bussi micro-chunks."""
+    kw["restart"] = False
+    kw["new"] = False
+    kw["start"] = False
+    kw["iasvel"] = 0
+    kw["iasors"] = 0
+    kw["ihtfrq"] = 0
+    kw.pop("TEMINC", None)
+    kw.pop("teminc", None)
+    kw["_skip_ase_cold_velocity_assign"] = True
+    _strip_stale_heat_ramp_keywords(kw)
+
+
+def apply_bussi_heat_ramp_overlap_chunk(
+    chunk_kw: dict[str, Any],
+    *,
+    chunk_index: int,
+    steps_done: int,
+    ramp_spec: dict[str, float | int],
+) -> None:
+    """Continue a Bussi heat ramp on overlap chunk ``chunk_index`` > 0."""
+    if chunk_index <= 0:
+        return
+    chunk_kw["firstt"] = heat_ramp_bath_target_K(
+        firstt=float(ramp_spec["firstt"]),
+        finalt=float(ramp_spec["finalt"]),
+        teminc=float(ramp_spec["teminc"]),
+        ihtfrq=int(ramp_spec["ihtfrq"]),
+        step=int(steps_done),
+    )
+    chunk_kw["finalt"] = float(ramp_spec["finalt"])
+    chunk_kw["tstruct"] = float(chunk_kw["firstt"])
+    chunk_kw["iasvel"] = 1
+    chunk_kw["iasors"] = 0
+    chunk_kw["start"] = False
+    chunk_kw["ihtfrq"] = 0
+    chunk_kw.pop("TEMINC", None)
+
+
+def _apply_overlap_chunk_bussi_heat_ramp(
+    chunk_kw: dict[str, Any],
+    *,
+    chunk_index: int,
+    chunk_nstep: int,
+    steps_done: int,
+    ramp_spec: dict[str, float | int],
+) -> None:
+    """Recompute Bussi ramp metadata for one overlap chunk."""
+    tmp = dict(chunk_kw)
+    apply_heat_ramp_frequencies(
+        tmp,
+        nstep=int(chunk_nstep),
+        ihtfrq=int(ramp_spec["ihtfrq"]),
+    )
+    interval = int(tmp["ihtfrq"])
+    chunk_kw["_bussi_rescale_interval"] = interval
+    chunk_kw["_bussi_ramp"] = {
+        "firstt": float(ramp_spec["firstt"]),
+        "finalt": float(ramp_spec["finalt"]),
+        "teminc": float(tmp["TEMINC"]),
+        "ihtfrq": interval,
+    }
+    chunk_kw["ihtfrq"] = 0
+    chunk_kw.pop("TEMINC", None)
+    if int(chunk_index) > 0:
+        apply_bussi_heat_ramp_overlap_chunk(
+            chunk_kw,
+            chunk_index=int(chunk_index),
+            steps_done=int(steps_done),
+            ramp_spec=ramp_spec,
+        )
 
 
 def apply_heat_ramp_overlap_chunk(
@@ -4430,12 +4595,21 @@ def _materialize_overlap_chunk_restart_handoff(
 
 
 def _scale_heat_ramp_active(kw: dict[str, Any]) -> bool:
-    """True for velocity-scaling heat (``ihtfrq`` > 0), not Hoover CPT."""
+    """True for CHARMM velocity-scaling heat (``ihtfrq`` > 0), not Bussi/Hoover."""
     return (
         int(kw.get("ihtfrq", 0) or 0) > 0
         and "hoover reft" not in kw
         and not bool(kw.get("cpt"))
     )
+
+
+def _bussi_heat_ramp_active(kw: dict[str, Any]) -> bool:
+    """True when ASE Bussi rescaling drives the heat ramp."""
+    return bussi_heat_ramp_spec_from_kw(kw) is not None
+
+
+def _python_heat_ramp_active(kw: dict[str, Any]) -> bool:
+    return _scale_heat_ramp_active(kw) or _bussi_heat_ramp_active(kw)
 
 
 def _strip_stale_heat_ramp_keywords(kw: dict[str, Any]) -> None:
@@ -4470,6 +4644,11 @@ def _apply_overlap_chunk_dynamics_kw(
             chunk_kw["iasvel"] = 1
             chunk_kw["iasors"] = 0
             return
+        if int(chunk_index) > 0 and _bussi_heat_ramp_active(chunk_kw):
+            chunk_kw["start"] = False
+            chunk_kw["iasvel"] = 1
+            chunk_kw["iasors"] = 0
+            return
         chunk_kw["start"] = False
         chunk_kw["iasvel"] = 0
         if chunk_index > 0:
@@ -4479,7 +4658,10 @@ def _apply_overlap_chunk_dynamics_kw(
     preserve_ihtfrq_heat_ramp = (
         chunk_index == 0
         and not has_restart_read
-        and int(chunk_kw.get("ihtfrq", 0) or 0) > 0
+        and (
+            int(chunk_kw.get("ihtfrq", 0) or 0) > 0
+            or _bussi_heat_ramp_active(chunk_kw)
+        )
         and "hoover reft" not in chunk_kw
         and not bool(chunk_kw.get("cpt"))
     )
@@ -4497,6 +4679,10 @@ def _apply_overlap_chunk_dynamics_kw(
         # Chunk > 0 in-process continuation keeps velocities; scale-heat overlap
         # needs iasvel=1 when START lingers (COMP_AND_HEATING.md).
         if _scale_heat_ramp_active(chunk_kw) and int(chunk_index) > 0:
+            chunk_kw["iasvel"] = 1
+            chunk_kw["start"] = False
+            chunk_kw["iasors"] = 0
+        elif _bussi_heat_ramp_active(chunk_kw) and int(chunk_index) > 0:
             chunk_kw["iasvel"] = 1
             chunk_kw["start"] = False
             chunk_kw["iasors"] = 0

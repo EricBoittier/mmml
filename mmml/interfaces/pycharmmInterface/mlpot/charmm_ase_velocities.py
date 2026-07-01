@@ -1,7 +1,8 @@
-"""Maxwell-Boltzmann velocity assignment via ASE for CHARMM dynamics."""
+"""Maxwell-Boltzmann and Bussi velocity control via ASE for CHARMM dynamics."""
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import numpy as np
@@ -246,6 +247,131 @@ def _dynamics_would_start_cold(kw: dict[str, Any]) -> bool:
     if iasvel == 0 and not start:
         return velocities_are_cold()
     return False
+
+
+def estimate_kinetic_energy_kcalmol(
+    velocities_akma: np.ndarray | None,
+    masses_amu: np.ndarray | None = None,
+) -> float | None:
+    """Kinetic energy (kcal/mol) from CHARMM AKMA velocities."""
+    if velocities_akma is None:
+        return None
+    v = np.asarray(velocities_akma, dtype=np.float64).reshape(-1, 3)
+    if not np.all(np.isfinite(v)):
+        return None
+    if masses_amu is None:
+        masses_amu = charmm_masses_amu()
+    m = np.asarray(masses_amu, dtype=np.float64).reshape(-1)
+    if v.shape[0] != m.shape[0] or v.shape[0] == 0:
+        return None
+    v_ang_ps = v / (np.sqrt(np.maximum(m, 1.0e-12))[:, None] * 1000.0)
+    return float(
+        0.5 * np.sum(m[:, None] * v_ang_ps * v_ang_ps) * _AMU_ANG_PS2_TO_KCALMOL
+    )
+
+
+def target_kinetic_energy_kcalmol(temperature_K: float, ndof: int) -> float:
+    """Canonical target kinetic energy (kcal/mol) at ``temperature_K``."""
+    dof = max(1, int(ndof))
+    return 0.5 * dof * _KCALMOL_PER_K * float(temperature_K)
+
+
+def calculate_bussi_rescale_alpha(
+    kinetic_energy: float,
+    *,
+    target_kinetic_energy: float,
+    ndof: int,
+    coupling_time_ps: float,
+    elapsed_time_ps: float,
+    rng: np.random.Generator | None = None,
+) -> float:
+    """Stochastic velocity scaling factor (Bussi et al., JCP 126, 014101).
+
+    ``coupling_time_ps`` is the Bussi ``taut``; ``elapsed_time_ps`` is the time
+    since the last rescale (typically ``rescale_interval * timestep``).
+    """
+    ke = float(kinetic_energy)
+    target_ke = float(target_kinetic_energy)
+    dof = max(1, int(ndof))
+    if ke <= 0.0 or not np.isfinite(ke):
+        return 1.0
+    taut = max(1.0e-12, float(coupling_time_ps))
+    dt = max(1.0e-12, float(elapsed_time_ps))
+    exp_term = math.exp(-dt / taut)
+    energy_scaling_term = (1.0 - exp_term) * target_ke / ke / dof
+    gen = rng if rng is not None else np.random.default_rng()
+    normal_noise = float(gen.standard_normal())
+    sum_of_noises = float(2.0 * gen.standard_gamma(0.5 * (dof - 1)))
+    return math.sqrt(
+        exp_term
+        + energy_scaling_term * (sum_of_noises + normal_noise**2)
+        + 2.0 * normal_noise * math.sqrt(max(0.0, exp_term * energy_scaling_term))
+    )
+
+
+def resolve_bussi_degrees_of_freedom(ndegf: int | None = None) -> int:
+    """Degrees of freedom for Bussi rescaling (CHARMM ``NDEGF`` when known)."""
+    if ndegf is not None:
+        val = int(ndegf)
+        if val > 0:
+            return val
+    return max(1, 3 * int(charmm_masses_amu().shape[0]))
+
+
+def apply_bussi_velocity_rescale(
+    temperature_K: float,
+    *,
+    timestep_ps: float,
+    rescale_interval_steps: int = 1,
+    taut_ps: float | None = None,
+    ndegf: int | None = None,
+    quiet: bool = False,
+    rng: np.random.Generator | None = None,
+) -> tuple[float, float]:
+    """Rescale CHARMM velocities toward ``temperature_K`` using Bussi dynamics.
+
+    Returns ``(measured_T_after, alpha)``.
+    """
+    temp = clamp_velocity_assignment_temp_k(temperature_K)
+    interval = max(1, int(rescale_interval_steps))
+    dt_ps = max(1.0e-12, float(timestep_ps))
+    elapsed_ps = interval * dt_ps
+    taut = float(taut_ps) if taut_ps is not None else elapsed_ps
+    masses = charmm_masses_amu()
+    v_akma = charmm_velocities_akma()
+    if v_akma is None:
+        raise RuntimeError("apply_bussi_velocity_rescale: CHARMM velocities unavailable")
+    dof = resolve_bussi_degrees_of_freedom(ndegf)
+    ke = estimate_kinetic_energy_kcalmol(v_akma, masses)
+    if ke is None or ke <= 0.0:
+        assign_maxwell_boltzmann_velocities_via_ase(temp, quiet=quiet)
+        v_akma = charmm_velocities_akma()
+        ke = estimate_kinetic_energy_kcalmol(v_akma, masses)
+        if ke is None:
+            raise RuntimeError("apply_bussi_velocity_rescale: kinetic energy still zero")
+    target_ke = target_kinetic_energy_kcalmol(temp, dof)
+    alpha = calculate_bussi_rescale_alpha(
+        ke,
+        target_kinetic_energy=target_ke,
+        ndof=dof,
+        coupling_time_ps=taut,
+        elapsed_time_ps=elapsed_ps,
+        rng=rng,
+    )
+    v_akma = np.asarray(v_akma, dtype=np.float64) * float(alpha)
+    sync_charmm_velocities_akma(v_akma)
+    measured = estimate_kinetic_temperature_k(v_akma, masses, ndegf=dof)
+    if not quiet:
+        txt_meas = f"{measured:.2f}" if measured is not None else "?"
+        print(
+            f"ASE Bussi rescale toward {temp:.2f} K "
+            f"(T_after≈{txt_meas} K, α={alpha:.4f})",
+            flush=True,
+        )
+    return (
+        float(measured if measured is not None else temp),
+        float(alpha),
+    )
 
 
 def maybe_assign_velocities_via_ase_if_cold(
