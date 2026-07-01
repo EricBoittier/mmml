@@ -5841,13 +5841,14 @@ def minimize_with_mlpot(
                         note="post calculator pre-minimize",
                         quiet=False,
                     )
-        sd_result = _run_mlpot_sd_then_abnr(
-            minimize,
-            pycharmm,
-            config,
-            sd_kw,
-            pass_label="pass 1 (free, all atoms)",
-        )
+        with charmm_mlpot_sd_jax_cpu_guard(pyC_model):
+            sd_result = _run_mlpot_sd_then_abnr(
+                minimize,
+                pycharmm,
+                config,
+                sd_kw,
+                pass_label="pass 1 (free, all atoms)",
+            )
         if not sd_result.completed:
             if sd_result.stalled:
                 grms_txt = (
