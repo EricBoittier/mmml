@@ -87,6 +87,7 @@ def run_charmm_lattice_abnr(
         probe_charmm_cubic_box_side_A,
         resolve_charmm_cubic_box_side_A,
     )
+    restore_side = fallback_side_A
     if restore_side is None or float(restore_side) <= 0.0:
         probed, _ = probe_charmm_cubic_box_side_A()
         restore_side = probed
