@@ -5849,99 +5849,55 @@ def minimize_with_mlpot(
                 sd_kw,
                 pass_label="pass 1 (free, all atoms)",
             )
-        if not sd_result.completed:
-            if sd_result.stalled:
-                grms_txt = (
-                    f"{sd_result.last_grms:.4f}"
-                    if sd_result.last_grms is not None
-                    else "?"
-                )
-                print(
-                    "MLpot SD pass 1 stalled: hybrid GRMS plateaued "
-                    f"(GRMS≈{grms_txt} kcal/mol/Å); CHARMM SD ineffective on "
-                    "geometry_stress — skipping remaining SD chunks",
-                    flush=True,
-                )
-                if (
-                    config.mlpot_ctx is not None
-                    and config.pre_sd_bonded_recovery_grms_kcalmol_A is not None
-                ):
-                    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
-                        maybe_run_density_prep_ladder_for_mlpot,
-                    )
-
-                    ladder_grms, ran_ladder = maybe_run_density_prep_ladder_for_mlpot(
-                        config.mlpot_ctx,
-                        max_grms=float(config.pre_sd_bonded_recovery_grms_kcalmol_A),
-                        context="Post-SD-stall density prep ladder",
-                        quiet=not config.verbose,
-                    )
-                    if ran_ladder and config.verbose:
-                        print(
-                            f"Post-SD-stall density prep ladder: GRMS→{ladder_grms:.4f} "
-                            f"kcal/mol/Å (limit "
-                            f"{float(config.pre_sd_bonded_recovery_grms_kcalmol_A):.4f})",
-                            flush=True,
-                        )
-            elif sd_result.rolled_back:
-                grms_txt = (
-                    f"{sd_result.last_grms:.4f}"
-                    if sd_result.last_grms is not None
-                    else "?"
-                )
-                print(
-                    "MLpot SD pass 1 partial: watchdog stopped further chunks; "
-                    f"geometry restored (GRMS≈{grms_txt} kcal/mol/Å)",
-                    flush=True,
-                )
-            else:
-                raise RuntimeError(
-                    "MLpot SD pass 1 stopped early: hybrid GRMS watchdog triggered "
-                    "(lists/forces diverged during inbfrq=0 minimization)"
-                )
-        sync_charmm_lists_after_mini(quiet=not config.verbose)
-        invalidate_mlpot_calculator_caches(config.mlpot_ctx)
-        if config.verbose and config.mlpot_ctx is not None:
-            from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
-                refresh_mlpot_energy_and_grms,
-            )
-
-            refresh_mlpot_energy_and_grms(
-                config.mlpot_ctx,
-                context="Post MLpot SD pass 1",
-                reregister=False,
-            )
-        if config.verbose and config.show_energy:
-            print("CHARMM energy after SD pass 1 (free):")
-            _maybe_show_energy(True)
-
-        if config.fixed_ml_selection is not None:
-            n_fix = len(config.fixed_ml_selection.get_atom_indexes())
-            cons_fix.setup(config.fixed_ml_selection)
-            sd_result = _run_mlpot_sd_then_abnr(
-                minimize,
-                pycharmm,
-                config,
-                sd_kw,
-                pass_label=f"pass 2 (cons_fix, {n_fix} atoms)",
-            )
             if not sd_result.completed:
-                if sd_result.rolled_back:
+                if sd_result.stalled:
                     grms_txt = (
                         f"{sd_result.last_grms:.4f}"
                         if sd_result.last_grms is not None
                         else "?"
                     )
                     print(
-                        f"MLpot SD pass 2 partial (cons_fix, {n_fix} atoms): "
-                        "watchdog stopped further chunks; "
+                        "MLpot SD pass 1 stalled: hybrid GRMS plateaued "
+                        f"(GRMS≈{grms_txt} kcal/mol/Å); CHARMM SD ineffective on "
+                        "geometry_stress — skipping remaining SD chunks",
+                        flush=True,
+                    )
+                    if (
+                        config.mlpot_ctx is not None
+                        and config.pre_sd_bonded_recovery_grms_kcalmol_A is not None
+                    ):
+                        from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+                            maybe_run_density_prep_ladder_for_mlpot,
+                        )
+
+                        ladder_grms, ran_ladder = maybe_run_density_prep_ladder_for_mlpot(
+                            config.mlpot_ctx,
+                            max_grms=float(config.pre_sd_bonded_recovery_grms_kcalmol_A),
+                            context="Post-SD-stall density prep ladder",
+                            quiet=not config.verbose,
+                        )
+                        if ran_ladder and config.verbose:
+                            print(
+                                f"Post-SD-stall density prep ladder: GRMS→{ladder_grms:.4f} "
+                                f"kcal/mol/Å (limit "
+                                f"{float(config.pre_sd_bonded_recovery_grms_kcalmol_A):.4f})",
+                                flush=True,
+                            )
+                elif sd_result.rolled_back:
+                    grms_txt = (
+                        f"{sd_result.last_grms:.4f}"
+                        if sd_result.last_grms is not None
+                        else "?"
+                    )
+                    print(
+                        "MLpot SD pass 1 partial: watchdog stopped further chunks; "
                         f"geometry restored (GRMS≈{grms_txt} kcal/mol/Å)",
                         flush=True,
                     )
                 else:
                     raise RuntimeError(
-                        f"MLpot SD pass 2 (cons_fix, {n_fix} atoms) stopped early: "
-                        "hybrid GRMS watchdog triggered"
+                        "MLpot SD pass 1 stopped early: hybrid GRMS watchdog triggered "
+                        "(lists/forces diverged during inbfrq=0 minimization)"
                     )
             sync_charmm_lists_after_mini(quiet=not config.verbose)
             invalidate_mlpot_calculator_caches(config.mlpot_ctx)
@@ -5952,13 +5908,57 @@ def minimize_with_mlpot(
 
                 refresh_mlpot_energy_and_grms(
                     config.mlpot_ctx,
-                    context="Post MLpot SD pass 2",
+                    context="Post MLpot SD pass 1",
                     reregister=False,
                 )
             if config.verbose and config.show_energy:
-                print("CHARMM energy after SD pass 2 (constrained):")
+                print("CHARMM energy after SD pass 1 (free):")
                 _maybe_show_energy(True)
-            cons_fix.turn_off()
+
+            if config.fixed_ml_selection is not None:
+                n_fix = len(config.fixed_ml_selection.get_atom_indexes())
+                cons_fix.setup(config.fixed_ml_selection)
+                sd_result = _run_mlpot_sd_then_abnr(
+                    minimize,
+                    pycharmm,
+                    config,
+                    sd_kw,
+                    pass_label=f"pass 2 (cons_fix, {n_fix} atoms)",
+                )
+                if not sd_result.completed:
+                    if sd_result.rolled_back:
+                        grms_txt = (
+                            f"{sd_result.last_grms:.4f}"
+                            if sd_result.last_grms is not None
+                            else "?"
+                        )
+                        print(
+                            f"MLpot SD pass 2 partial (cons_fix, {n_fix} atoms): "
+                            "watchdog stopped further chunks; "
+                            f"geometry restored (GRMS≈{grms_txt} kcal/mol/Å)",
+                            flush=True,
+                        )
+                    else:
+                        raise RuntimeError(
+                            f"MLpot SD pass 2 (cons_fix, {n_fix} atoms) stopped early: "
+                            "hybrid GRMS watchdog triggered"
+                        )
+                sync_charmm_lists_after_mini(quiet=not config.verbose)
+                invalidate_mlpot_calculator_caches(config.mlpot_ctx)
+                if config.verbose and config.mlpot_ctx is not None:
+                    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+                        refresh_mlpot_energy_and_grms,
+                    )
+
+                    refresh_mlpot_energy_and_grms(
+                        config.mlpot_ctx,
+                        context="Post MLpot SD pass 2",
+                        reregister=False,
+                    )
+                if config.verbose and config.show_energy:
+                    print("CHARMM energy after SD pass 2 (constrained):")
+                    _maybe_show_energy(True)
+                cons_fix.turn_off()
 
         if config.mlpot_ctx is not None:
             invalidate_mlpot_calculator_caches(config.mlpot_ctx)

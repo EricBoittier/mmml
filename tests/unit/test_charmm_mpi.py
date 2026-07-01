@@ -788,6 +788,19 @@ def test_defer_jax_warmup_until_after_mlpot_sd_serial(monkeypatch):
         assert charmm_mpi.defer_jax_warmup_until_after_mlpot_sd() is False
 
 
+def test_defer_jax_warmup_until_after_mlpot_sd_mpi_without_mpirun(monkeypatch):
+    monkeypatch.delenv("MMML_NO_DEFER_JAX_WARMUP", raising=False)
+    monkeypatch.delenv("MMML_DEFER_JAX_WARMUP_UNTIL_AFTER_SD", raising=False)
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
+        return_value=False,
+    ):
+        assert charmm_mpi.defer_jax_warmup_until_after_mlpot_sd() is True
+
+
 def test_parse_otool_mpi_library_dirs():
     otool_out = (
         "/tmp/libcharmm.dylib:\n"

@@ -262,6 +262,27 @@ def test_maybe_promote_deferred_jax_on_hybrid_eval_with_jax_pme_mesh():
     assert calc._forward_cache_key is None
 
 
+def test_promote_jax_factory_to_gpu_blocked_during_charmm_sd():
+    z = np.array([6, 1, 1, 6, 1, 1], dtype=int)
+    model = DecomposedMlpotModel(
+        MagicMock(),
+        CutoffParameters(),
+        2,
+        z,
+        defer_jax_until_after_sd=True,
+    )
+    model._jax_on_gpu = False
+    model._charmm_mlpot_sd_active = 1
+
+    with patch.object(model, "_finalize_jax_factory") as mock_finalize:
+        model.promote_jax_factory_to_gpu()
+        mock_finalize.assert_not_called()
+
+    with patch.object(model, "_finalize_jax_factory") as mock_finalize:
+        model.promote_jax_factory_to_gpu(force_after_sd=True)
+        mock_finalize.assert_called_once_with(gpu=True)
+
+
 def test_maybe_warmup_deferred_decomposed_mlpot_skips_when_already_on_gpu():
     z = np.zeros(8, dtype=int)
     model = DecomposedMlpotModel(
