@@ -65,7 +65,9 @@ minimum-image convention (MIC) for displacements. This matches the default MLpot
 From `nbonds_config.pbc_nbond_cutoffs` for cubic `L`:
 
 - `cutnb`, `cutim` capped below `L/2 − 1 Å`
-- `ctonnb`, `ctofnb` scaled with `fswitch` / `vfswitch`
+- `ctonnb`, `ctofnb` scaled with switching region
+- CGENFF PRM defaults: **`fshift`** (elec) + **`vfswitch`** (VDW); `apply_pbc_nbonds` also sets **`fswitch`** via PyCHARMM C API
+- JAX ``mm_system_energy`` uses one Brooks-style switch for both terms — see [trialanine-water-box.md](../../../docs/trialanine-water-box.md#jax-vs-pycharmm-total-mm-cross-check)
 - `NBXMOD 5` — exclude 1–2/1–3; scale 1–4 electrostatics via `e14fac`
 
 ### Future: mixed ML/MM on tri-alanine

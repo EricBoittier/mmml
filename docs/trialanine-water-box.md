@@ -56,22 +56,67 @@ Pass criteria: finite coordinates, PSF written, position std ≫ 0 (not collapse
 
 ---
 
+## JAX vs PyCHARMM total-MM cross-check
+
+The functionality test ``test_trialanine_water_total_mm_matches_pycharmm`` compares
+``mm_system_energy.py`` (MIC pair loop) to CHARMM ``ENER FORCE``. As of this writing it
+**does not pass** at tight tolerance (~10–15 kcal/mol on a 72-atom box). The box build
+and **bonded** cross-check are fine; the gap is in **nonbonded** implementation parity.
+
+Run the diagnostic locally::
+
+    ./scripts/mmml-charmm-mpirun.sh python scripts/diagnose_trialanine_nb_mismatch.py
+
+### What we ruled out
+
+- **Toggling ``vfswitch`` alone** does not explain the gap (CHARMM VDW changes by ≲1 kcal
+  on a 2× acetone dimer; tri-alanine is similar).
+- **Bonded terms match** (bond/angle/dihedral; Urey–Bradley ≈0.2 kcal is omitted in JAX).
+
+### Main contributors (tri-alanine + 10 TIP3, seed 31)
+
+| Term | PyCHARMM | JAX (MIC) | Notes |
+|------|----------|-----------|--------|
+| VDW | ≈ −2 kcal/mol | ≈ +12–32 kcal/mol | JAX **pep–pep** pairs dominate (+≈10 kcal); CHARMM net VDW ≈ 0 |
+| Elec | ≈ −12 kcal/mol | ≈ −15 kcal/mol | Smaller gap when ``MMML_LR_SOLVER=mic`` |
+
+On a simpler **2× ACO** PBC dimer (MIC, ``lr_solver=mic``): VDW Δ ≈ +2 kcal/mol, elec Δ ≈ −14 kcal/mol.
+
+### Root causes (implementation gaps)
+
+1. **Switching models** — Bundled CGENFF declares ``fshift`` (elec) + ``vfswitch`` (VDW) in
+   ``par_all36_cgenff.prm``; ``apply_pbc_nbonds`` turns on ``fswitch`` + ``vfswitch`` via the
+   PyCHARMM C API. JAX uses a **single Brooks-style potential switch** (``charmm_switch_factor``)
+   for **both** VDW and elec. That is not the same as CHARMM ``fshift`` + ``vfswitch``.
+2. **Pair list / IMAGE** — JAX builds an O(N²) MIC list from PSF bond exclusions (PyCHARMM
+   ``get_iblo_inb()`` returns ``nnb=0`` here, so bond-graph 1–2/1–3 exclusions are used).
+   CHARMM uses IMAGE neighbor lists; small residual differences remain even when exclusions look correct.
+3. **Single ``RESI TRIA`` (42 atoms)** — All peptide atoms share one residue; CHARMM and JAX
+   agree on graph-distance ≥3 pairs, but CHARMM net intra-peptide VDW is much smaller than JAX.
+4. **Long-range backend** — ``nonbonded_energy_and_forces`` defaults to ``MMML_LR_SOLVER=auto``,
+   which picks **jax-pme** when installed. The test **must** set ``MMML_LR_SOLVER=mic`` (or pass
+   ``lr_solver='mic'``); otherwise Coulomb is not comparable to truncated CHARMM ``cdie``.
+
+### Practical guidance
+
+- Treat the tri-alanine box as validated for **CHARMM build + bonded JAX**; use the total-MM
+  test as a **regression target**, not a pass/fail gate, until ``mm_system_energy`` implements
+  CHARMM ``fshift``/``vfswitch`` and tighter IMAGE parity.
+- For production MLpot paths, prefer ``mm_nonbond_mode=periodic_external`` or documented LR solvers
+  (see [long-range-solver-tutorial.md](long-range-solver-tutorial.md)), not raw ``mm_system_energy`` MIC.
+
+---
+
 ## Tests
 
-Fast unit tests (no CHARMM):
-
 ```bash
-uv run pytest tests/unit/test_cgenff_cmap.py tests/unit/test_mm_system_energy.py -q
-```
-
-Live JAX vs PyCHARMM (CHARMM node):
-
-```bash
+# Bonded + total-MM (total-MM may fail; see above)
 ./scripts/mmml-charmm-mpirun.sh python -m pytest \
   tests/functionality/charmm/test_trialanine_water_box_mm.py -m pycharmm -v
-```
 
-Covers bonded-only, nonbonded-only, and full MM (`lr_solver=mic`) against `ENER FORCE`.
+# Unit tests (no CHARMM)
+uv run pytest tests/unit/test_mm_system_energy.py -q
+```
 
 See also: [`tests/functionality/charmm/README_trialanine_water_box.md`](../tests/functionality/charmm/README_trialanine_water_box.md).
 
