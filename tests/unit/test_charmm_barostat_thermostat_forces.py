@@ -184,7 +184,12 @@ def test_run_dynamics_passes_cpt_keywords_to_dynamics_script():
         "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.clear_comparison_coordinates",
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
-    ), mock.patch.dict(
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._execute_dynamics_script",
+    ) as exec_dyn, mock.patch.dict(
         __import__("sys").modules,
         {"pycharmm": fake_pycharmm},
         clear=False,
@@ -195,7 +200,7 @@ def test_run_dynamics_passes_cpt_keywords_to_dynamics_script():
     assert passed["cpt"] is True
     assert passed["pmass"] == 16
     assert passed["hoover reft"] == 300.0
-    fake_dyn.run.assert_called_once()
+    exec_dyn.assert_called_once()
 
 
 def test_run_dynamics_strips_mmml_dcd_metadata_keywords():
@@ -213,6 +218,11 @@ def test_run_dynamics_strips_mmml_dcd_metadata_keywords():
     }
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._execute_dynamics_script",
     ), mock.patch.dict(
         __import__("sys").modules,
         {"pycharmm": fake_pycharmm},
@@ -230,15 +240,20 @@ def test_run_dynamics_clears_comp_when_iasvel_zero_without_start():
     fake_dyn = mock.MagicMock()
     fake_pycharmm = mock.MagicMock()
     fake_pycharmm.DynamicsScript.return_value = fake_dyn
-    with mock.patch(
+    with patch(
         "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.clear_comparison_coordinates",
-    ) as clear_comp, mock.patch(
+    ) as clear_comp, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
-    ), mock.patch.dict(
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+        return_value=False,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._execute_dynamics_script",
+    ), patch.dict(
         __import__("sys").modules,
         {"pycharmm": fake_pycharmm},
         clear=False,
     ):
         run_dynamics({"nstep": 5, "iasvel": 0, "start": False})
     clear_comp.assert_called_once()
-    fake_dyn.run.assert_called_once()
+    fake_pycharmm.DynamicsScript.assert_called_once()

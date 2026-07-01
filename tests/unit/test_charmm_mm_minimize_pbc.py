@@ -67,6 +67,11 @@ def test_minimize_charmm_mm_only_prepares_pbc_list_frequencies_before_sd() -> No
         "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=__import__("numpy").zeros((10, 3)),
     ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
+        return_value=(32.0, "pbound"),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.restore_charmm_cubic_crystal_lattice",
+    ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_charmm_mm_minimize_list_frequencies",
         return_value=50,
     ) as prepare_freq:

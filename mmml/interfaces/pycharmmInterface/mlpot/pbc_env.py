@@ -288,6 +288,13 @@ def cubic_box_matrix_from_side(side_A: float) -> np.ndarray:
     return np.array([[L, 0.0, 0.0], [0.0, L, 0.0], [0.0, 0.0, L]], dtype=np.float64)
 
 
+def _charmm_image_ntrans() -> int:
+    """IMAGE transform count (0/1 = vacuum)."""
+    import pycharmm.image as image
+
+    return int(image.get_ntrans())
+
+
 def charmm_crystal_is_active(*, rel_tol: float = 1e-3) -> bool:
     """True when CHARMM reports a positive cubic periodic box (crystal + IMAGE)."""
     try:
@@ -308,9 +315,7 @@ def charmm_crystal_lattice_ready(*, rel_tol: float = 1e-3) -> bool:
     while ``XTLABC`` is zero (singular metric matrix in ``MBUILD``).
     """
     try:
-        import pycharmm.image as image
-
-        if int(image.get_ntrans()) <= 1:
+        if _charmm_image_ntrans() <= 1:
             return False
         lx, ly, lz = _read_charmm_box_sides_A()
         return _is_cubic_box_sides(lx, ly, lz, rel_tol=rel_tol) and min(lx, ly, lz) > 1.0
@@ -332,9 +337,7 @@ def charmm_crystal_abnr_ready(
     ``expected_side_A`` matches ``image_get_ucell``.
     """
     try:
-        import pycharmm.image as image
-
-        if int(image.get_ntrans()) <= 1:
+        if _charmm_image_ntrans() <= 1:
             return False
     except Exception:
         return False
