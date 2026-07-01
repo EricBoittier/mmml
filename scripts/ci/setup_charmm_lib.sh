@@ -14,6 +14,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CHARMM_TAR="$ROOT/setup/charmm.tar.xz"
 CHARMM_HOME="$ROOT/setup/charmm"
 CHARMMSETUP="$ROOT/CHARMMSETUP"
+API_FUNC="$CHARMM_HOME/source/api/api_func.F90"
 
 if [[ ! -f "$CHARMM_TAR" ]]; then
   echo "ci/setup_charmm_lib: missing $CHARMM_TAR" >&2
@@ -42,19 +43,21 @@ else
   exit 1
 fi
 
-# Rebuild when patches or tarball change; skip when lib already present and fresh.
-PATCH_STAMP="$ROOT/setup/api/.ci-charmm-patch-stamp"
+# Rebuild when hosted source or build script changes; skip when lib already present and fresh.
+BUILD_STAMP="$ROOT/setup/charmm/.ci-charmm-build-stamp"
 CURRENT_STAMP="$(
-  sha256sum "$CHARMM_TAR" "$ROOT/setup/api/api_func.F90" "$ROOT/setup/api/api_psf.F90" \
-    "$ROOT/scripts/rebuild_charmm_mlpot.sh" 2>/dev/null | sha256sum | awk '{print $1}'
+  {
+    [[ -f "$CHARMM_TAR" ]] && sha256sum "$CHARMM_TAR"
+    [[ -f "$API_FUNC" ]] && sha256sum "$API_FUNC"
+    sha256sum "$ROOT/scripts/rebuild_charmm_mlpot.sh"
+  } 2>/dev/null | sha256sum | awk '{print $1}'
 )"
-if [[ -f "$CHARMM_HOME/libcharmm.so" && -f "$PATCH_STAMP" && "$(cat "$PATCH_STAMP")" == "$CURRENT_STAMP" ]]; then
-  echo "Reusing $CHARMM_HOME/libcharmm.so (patches unchanged)"
+if [[ -f "$CHARMM_HOME/libcharmm.so" && -f "$BUILD_STAMP" && "$(cat "$BUILD_STAMP")" == "$CURRENT_STAMP" ]]; then
+  echo "Reusing $CHARMM_HOME/libcharmm.so (hosted source unchanged)"
 else
   echo "Building libcharmm.so (OpenMPI: $OPENMPI_ROOT)"
   bash "$ROOT/scripts/rebuild_charmm_mlpot.sh" --no-domdec
-  mkdir -p "$(dirname "$PATCH_STAMP")"
-  echo "$CURRENT_STAMP" >"$PATCH_STAMP"
+  echo "$CURRENT_STAMP" >"$BUILD_STAMP"
 fi
 
 {

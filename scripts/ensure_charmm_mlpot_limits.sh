@@ -25,7 +25,7 @@ Pre-build all matrix tiers once:
   bash workflows/pbc_solvent_burst/scripts/prebuild_charmm_tiers.sh
 
 Jobs only rebuild when that tier's lib is missing or stale — not when another tier
-patches the repo api_func.F90.
+patches the hosted ``api_func.F90``.
 
 Use --pbc for periodic systems (``mlpot_update`` image ML pairs).
 
@@ -70,7 +70,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import (
 tier = select_npr_tier_for_build(n_ml, pbc=pbc, box_side_A=box)
 target = tier_max_npr(tier)
 parsed = charmm_mlpot_limits_from_source()
-template = parsed[2] if parsed else root / "setup" / "api" / "api_func.F90"
+template = parsed[2] if parsed else root / "setup" / "charmm" / "source" / "api" / "api_func.F90"
 print(tier, target, template)
 PY
 )"
@@ -83,7 +83,7 @@ fi
 echo "ML atoms=${N_ML} pbc=${PBC} box=${BOX_SIZE:-<unset>} -> tier=${TIER} max_Npr=${TARGET}"
 
 if [[ ! -f "$TEMPLATE_F90" ]]; then
-  TEMPLATE_F90="$ROOT/setup/api/api_func.F90"
+  TEMPLATE_F90="$ROOT/setup/charmm/source/api/api_func.F90"
 fi
 if [[ ! -f "$TEMPLATE_F90" ]]; then
   echo "ERROR: api_func.F90 template not found (tried ${TEMPLATE_F90})" >&2

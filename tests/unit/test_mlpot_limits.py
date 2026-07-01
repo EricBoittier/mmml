@@ -107,14 +107,14 @@ def test_ensure_mlpot_limits_for_system_raises_with_tier(monkeypatch):
 
 def test_limits_status_reads_charmmsetup_and_repo_api_func(tmp_path, monkeypatch):
     repo = tmp_path / "repo"
-    f90 = repo / "setup" / "api" / "api_func.F90"
+    charmm_home = repo / "setup" / "charmm"
+    f90 = charmm_home / "source" / "api" / "api_func.F90"
     f90.parent.mkdir(parents=True)
     f90.write_text(
         "integer, parameter :: max_Nml = 50000\n"
         "integer, parameter :: max_Npr = 3998000\n",
         encoding="utf-8",
     )
-    charmm_home = repo / "setup" / "charmm"
     lib_dir = charmm_home / "lib"
     lib_dir.mkdir(parents=True)
     lib = lib_dir / "libcharmm.so"
@@ -199,6 +199,10 @@ def test_register_mlpot_validates_pbc_pair_budget(monkeypatch):
     monkeypatch.setattr(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.physnet_ml_atomic_numbers",
         lambda z: z,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup._registration_pbc_box_side_A",
+        lambda *_a, **_k: 32.0,
     )
     sel = mock.MagicMock()
     sel.get_atom_indexes.return_value = list(range(1650))

@@ -120,6 +120,7 @@ setup/charmm/keywords.inc
 setup/charmm/pref.dat
 setup/charmm/revid.h
 setup/charmm/qchem
+setup/charmm/.ci-charmm-build-stamp
 
 # Django stuff:
 *.log

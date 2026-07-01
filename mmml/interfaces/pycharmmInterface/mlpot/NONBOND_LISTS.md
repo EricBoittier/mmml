@@ -44,7 +44,7 @@ flowchart TB
 | 2 | [`pycharmm/energy_mlpot.py`](../../../../pycharmm/energy_mlpot.py) | ML–ML pairs added to PSF `iblo/inb` exclusions |
 | 3 | `nbonds.update_bnbnd()` → `UPINB` | Full CHARMM nonbond list build from PSF topology |
 | 4 | `image.update_bimag()` | Image nonbond lists (PBC) |
-| 5 | [`setup/api/api_func.F90`](../../../setup/api/api_func.F90) | `mlpot_set_func` + `mlpot_set_properties` register callback and ML atom map |
+| 5 | [`setup/api/api_func.F90`](../../../setup/charmm/source/api/api_func.F90) | `mlpot_set_func` + `mlpot_set_properties` register callback and ML atom map |
 
 Registration is orchestrated by [`setup.py`](setup.py) (`register_mlpot`).
 
@@ -65,7 +65,7 @@ CHARMM ENER → mlpot_call → Python calculate_charmm
 | Layer | Owner | What it lists | Outer cutoff | When it updates |
 |-------|-------|---------------|--------------|-----------------|
 | CHARMM `JNB` / `INBLO` | Fortran `NBONDS` | MM atom pairs for Fortran ELEC/VDW (zero on ML via BLOCK) | Vacuum: `cutnb=18`, `ctonnb=13`, `ctofnb=17` Å ([`nbonds_config.py`](../nbonds_config.py)); PBC legacy: 14/10/12 Å | `inbfrq`, `imgfrq`, displacement heuristic |
-| `mlpot_update` derived lists | [`api_func.F90`](../../../setup/api/api_func.F90) | `idxi/idxj` (ML–ML), `idxu/idxv` (ML–MM) scraped from CHARMM lists | Same as CHARMM list radius | Only when `QDONB.or.QDOIM.or.QDOXT` in [`heurist.F90`](../../../setup/nbonds/heurist.F90) |
+| `mlpot_update` derived lists | [`api_func.F90`](../../../setup/charmm/source/api/api_func.F90) | `idxi/idxj` (ML–ML), `idxu/idxv` (ML–MM) scraped from CHARMM lists | Same as CHARMM list radius | Only when `QDONB.or.QDOIM.or.QDOXT` in [`heurist.F90`](../../../setup/nbonds/heurist.F90) |
 | Python MM pairs | [`mm_energy_forces.py`](../mm_energy_forces.py) | Cross-monomer atom pairs for switched LJ + Coulomb in JAX | `mm_switch_on + mm_switch_width` = **13.0 Å** default (8 + 5) | **Every** `calculate_charmm` call via `get_update_fn` |
 | Python ML dimers | [`hybrid_mlpot.py`](hybrid_mlpot.py) | Monomer permutations (vacuum: all; PBC: sparse cap) | PhysNet model cutoff + COM handoff ([`cutoffs.py`](../cutoffs.py)) | Every callback; no CHARMM list input |
 
@@ -97,7 +97,7 @@ At `MLpot.__init__`, all ML atom pairs are inserted into the PSF exclusion list 
 
 ### `mlpot_update`: deriving ML pair indices from CHARMM lists
 
-After `NBONDS` rebuilds `JNB`/`INBLO` (and image lists when PBC is active), `mlpot_update` in [`api_func.F90`](../../../setup/api/api_func.F90) derives index arrays passed into the Python callback:
+After `NBONDS` rebuilds `JNB`/`INBLO` (and image lists when PBC is active), `mlpot_update` in [`api_func.F90`](../../../setup/charmm/source/api/api_func.F90) derives index arrays passed into the Python callback:
 
 - **ML–ML (`idxi`, `idxj`)**: precomputed upper-triangle over ML atom indices. With PBC, adds image-cell replicas via `IMATTR`/`IMJNB`.
 - **ML–MM (`idxu`, `idxv`)**: for each ML atom `u`, walks CHARMM nonbond entries involving `u` and collects MM partners still present in `JNB` after ML–ML exclusions.
@@ -114,7 +114,7 @@ endif
 
 ### `inbfrq` and the displacement heuristic
 
-Controlled via `nbonds.set_inbfrq()` ([`api_nbonds.F90`](../../../setup/api/api_nbonds.F90)):
+Controlled via `nbonds.set_inbfrq()` ([`api_nbonds.F90`](../../../setup/charmm/source/api/api_nbonds.F90)):
 
 | Value | Behavior |
 |-------|----------|
@@ -391,8 +391,8 @@ Patches are applied when building CHARMM via [`setup/install.sh`](../../../setup
 
 | File | Key symbols | Role |
 |------|-------------|------|
-| [`setup/api/api_func.F90`](../../../setup/api/api_func.F90) | `mlpot_set_func`, `mlpot_set_properties`, `mlpot_update`, `mlpot_call`, `mlpot_is_set` | MLpot callback registration and pair-index derivation |
-| [`setup/api/api_nbonds.F90`](../../../setup/api/api_nbonds.F90) | `nbonds_set_inbfrq`, `nbonds_update_bnbnd` | Python-facing `inbfrq` control and `UPINB` |
+| [`setup/api/api_func.F90`](../../../setup/charmm/source/api/api_func.F90) | `mlpot_set_func`, `mlpot_set_properties`, `mlpot_update`, `mlpot_call`, `mlpot_is_set` | MLpot callback registration and pair-index derivation |
+| [`setup/api/api_nbonds.F90`](../../../setup/charmm/source/api/api_nbonds.F90) | `nbonds_set_inbfrq`, `nbonds_update_bnbnd` | Python-facing `inbfrq` control and `UPINB` |
 | [`setup/nbonds/nbexcl.F90`](../../../setup/nbonds/nbexcl.F90) | `UPINB` | Front-end for `MKINB`; rebuilds `JNB`/`INBLO` |
 | [`setup/nbonds/heurist.F90`](../../../setup/nbonds/heurist.F90) | `heuristic_check`, `UPDECI` | Displacement heuristic; triggers `NBONDS` + `mlpot_update` |
 | [`setup/image/upimag_util.F90`](../../../setup/image/upimag_util.F90) | `UPIMNB`, `MKIMNB_MLPOT` | PBC image nonbond lists with ML exclusions |

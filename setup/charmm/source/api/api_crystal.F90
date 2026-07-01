@@ -468,6 +468,7 @@ contains
 
   !> @brief clear crystal and periodic image state (``CRYSTAL FREE``).
   integer(c_int) function crystal_free() bind(c) result(success)
+    use, intrinsic :: iso_c_binding, only: c_int
     use bases_fcm, only: bimag
     use image, only: nfreqx, nkpts, nphons, xdim, xnsymm, xnnnb, &
          xtlabc, xtltyp, xucell

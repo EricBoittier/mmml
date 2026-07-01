@@ -250,7 +250,6 @@ LIB_OUT="$CHARMM_HOME/$LIB_BASENAME"
 CLEAN=0
 USE_NFS_BUILD=0
 DEBUG=0
-SYNC_PATCHES=1
 NO_DOMDEC=0
 SKIP_PACKMOL=0
 NATIVE_EXEC=0
@@ -258,12 +257,11 @@ CHARMM_BUILD_TYPE="${CHARMM_BUILD_TYPE:-Release}"
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") [--clean] [--use-nfs-build] [--debug] [--no-sync-patches] [--no-domdec] [--skip-packmol] [--native-exec]
+Usage: $(basename "$0") [--clean] [--use-nfs-build] [--debug] [--no-domdec] [--skip-packmol] [--native-exec]
 
   --clean             Remove the cmake build directory and reconfigure from scratch.
   --use-nfs-build     Build in setup/charmm/build/cmake (default: \$HOME/.cache/mmml-charmm-build/<platform>).
   --debug             RelWithDebInfo + -g -fbacktrace (readable gdb/addr2line on segfaults).
-  --no-sync-patches   Skip copying setup/api/api_*.F90 into the CHARMM tree.
   --no-domdec         CMake -Ddomdec=OFF (no DOMDEC send_coord_to_recip path; MPI MLpot SD).
   --skip-packmol      Skip rebuilding mmml/generate/packmol/packmol for this platform.
   --native-exec       Build charmm executable (as_library=OFF) for DOMDEC tier3 smoke; skips Packmol.
@@ -295,7 +293,6 @@ while [[ $# -gt 0 ]]; do
     --clean) CLEAN=1; shift ;;
     --use-nfs-build) USE_NFS_BUILD=1; shift ;;
     --debug) DEBUG=1; CHARMM_BUILD_TYPE=RelWithDebInfo; shift ;;
-    --no-sync-patches) SYNC_PATCHES=0; shift ;;
     --no-domdec) NO_DOMDEC=1; shift ;;
     --skip-packmol) SKIP_PACKMOL=1; shift ;;
     --native-exec) NATIVE_EXEC=1; SKIP_PACKMOL=1; shift ;;
@@ -320,55 +317,21 @@ ensure_charmm_cmake_source() {
 ensure_charmm_cmake_source
 
 F90="$CHARMM_HOME/source/api/api_func.F90"
-PATCH_F90="${MMML_PATCH_SOURCE:-$ROOT/setup/api/api_func.F90}"
 if [[ ! -f "$F90" ]]; then
   echo "rebuild_charmm_mlpot: missing $F90" >&2
   exit 1
 fi
 
-if [[ "$SYNC_PATCHES" == 1 && -f "$PATCH_F90" ]]; then
-  if ! cmp -s "$PATCH_F90" "$F90"; then
-    echo "Syncing MLpot limits from $PATCH_F90"
-    cp -f "$PATCH_F90" "$F90"
+if [[ -n "${MMML_PATCH_SOURCE:-}" ]]; then
+  if [[ ! -f "$MMML_PATCH_SOURCE" ]]; then
+    echo "rebuild_charmm_mlpot: MMML_PATCH_SOURCE not found: $MMML_PATCH_SOURCE" >&2
+    exit 1
   fi
-elif [[ "$SYNC_PATCHES" == 1 ]]; then
-  echo "rebuild_charmm_mlpot: patch source not found: $PATCH_F90" >&2
-  exit 1
-fi
-
-PSF_F90="$CHARMM_HOME/source/api/api_psf.F90"
-PATCH_PSF_F90="$ROOT/setup/api/api_psf.F90"
-if [[ ! -f "$PSF_F90" ]]; then
-  echo "rebuild_charmm_mlpot: missing $PSF_F90" >&2
-  exit 1
-fi
-
-if [[ "$SYNC_PATCHES" == 1 && -f "$PATCH_PSF_F90" ]]; then
-  if ! cmp -s "$PATCH_PSF_F90" "$PSF_F90"; then
-    echo "Syncing api_psf.F90 from $PATCH_PSF_F90"
-    cp -f "$PATCH_PSF_F90" "$PSF_F90"
+  if ! cmp -s "$MMML_PATCH_SOURCE" "$F90"; then
+    echo "Applying tier api_func.F90 from $MMML_PATCH_SOURCE"
+    cp -f "$MMML_PATCH_SOURCE" "$F90"
   fi
 fi
-
-EVAL_F90="$CHARMM_HOME/source/api/api_eval.F90"
-PATCH_EVAL_F90="$ROOT/setup/api/api_eval.F90"
-if [[ -f "$EVAL_F90" && -f "$PATCH_EVAL_F90" ]]; then
-  if [[ "$SYNC_PATCHES" == 1 ]] && ! cmp -s "$PATCH_EVAL_F90" "$EVAL_F90"; then
-    echo "Syncing api_eval.F90 from $PATCH_EVAL_F90 (direct maincomx for MPI READ)"
-    cp -f "$PATCH_EVAL_F90" "$EVAL_F90"
-  fi
-elif [[ "$SYNC_PATCHES" == 1 && -f "$PATCH_EVAL_F90" ]]; then
-  echo "rebuild_charmm_mlpot: warning: missing $EVAL_F90 (api_eval patch not applied)" >&2
-fi
-
-for _extra_patch in api_minimize.F90 api_dynamics.F90 api_crystal.F90; do
-  _patch="$ROOT/setup/api/$_extra_patch"
-  _dest="$CHARMM_HOME/source/api/$_extra_patch"
-  if [[ -f "$_patch" && -f "$_dest" && "$SYNC_PATCHES" == 1 ]] && ! cmp -s "$_patch" "$_dest"; then
-    echo "Syncing $_extra_patch from setup/api"
-    cp -f "$_patch" "$_dest"
-  fi
-done
 
 echo "MLpot limits in source:"
 grep -E 'max_Nml|max_Npr' "$F90" || true

@@ -61,7 +61,7 @@ hangs. At ``np=1`` the read gate uses plain Python, not ``mpirun``.
 
 **node09 bisect (June 2026):** `np=1` passes; `np=2` hangs on the first `read_rtf` step in
 `psf-crd` mode. Root cause: per-rank SCRATCH units inside `eval_charmm_script`
-(`setup/api/api_eval.F90`) desync cooperative MPI READ. Fix: restore direct
+(`setup/charmm/source/api/api_eval.F90`) desync cooperative MPI READ. Fix: restore direct
 `maincomx` evaluation + line-splitting in vendored `pycharmm/lingo.py`, then
 **rebuild** `libcharmm.so` (rebuild script must sync `api_eval.F90` into the tree):
 
@@ -156,7 +156,7 @@ Bisect: ``MMML_MPI_BOOTSTRAP_EVAL_LINES=1`` (v4.8).
 ### Prerequisite: ``eval_charmm_inp_file`` in ``libcharmm.so``
 
 ```bash
-grep -c "eval_charmm_inp_file" setup/api/api_eval.F90   # expect >=1
+grep -c "eval_charmm_inp_file" setup/charmm/source/api/api_eval.F90   # expect >=1
 grep -c "call maincomx" setup/charmm/source/api/api_eval.F90   # expect >=1
 bash scripts/rebuild_charmm_mlpot.sh --clean
 

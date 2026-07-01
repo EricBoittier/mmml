@@ -23,7 +23,7 @@ Related:
 | Dynamics | `dynamics_run_kw` + keyword tail | bare `dynamics` script |
 | Instantaneous pressure | `eval_get_energy_value('PIXX')` … | `pressure instantaneous` script |
 
-After changing `setup/api/*.F90`, sync and rebuild:
+After changing `setup/charmm/source/api/*.F90`, rebuild:
 
 ```bash
 cd ~/mmml && bash scripts/rebuild_charmm_mlpot.sh

@@ -61,7 +61,6 @@ def _api_func_f90_candidates() -> list[Path]:
         paths.append(home / "source" / "api" / "api_func.F90")
     paths.extend(
         [
-            repo / "setup" / "api" / "api_func.F90",
             repo / "setup" / "charmm" / "source" / "api" / "api_func.F90",
         ]
     )
