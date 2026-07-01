@@ -251,7 +251,7 @@ def test_maybe_promote_deferred_jax_on_hybrid_eval_with_jax_pme_mesh():
     calc._get_update_fn = None
     calc._cached_update_fn = "cached_update"
 
-    def _fake_promote() -> None:
+    def _fake_promote(**_kwargs: object) -> None:
         model._jax_on_gpu = True
 
     with patch.object(model, "promote_jax_factory_to_gpu", side_effect=_fake_promote) as mock_promote:
