@@ -3353,26 +3353,16 @@ def _resolve_dynamics_init_velocities(
     if not _requires_init_velocities_handoff(kw):
         return None
     from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
-        capture_charmm_velocities_for_bussi,
-        ensure_bussi_velocities_after_overlap_recovery,
+        _resolve_bussi_rescale_velocities,
         resolve_assignment_temperature_k,
     )
 
-    restart = restart_read_path
-    v = capture_charmm_velocities_for_bussi(restart_path=restart)
-    if v is None:
-        temp = resolve_assignment_temperature_k(kw, default_K=300.0)
-        ensure_bussi_velocities_after_overlap_recovery(
-            restart,
-            temperature_K=temp,
-            quiet=bool(kw.get("_quiet_bussi_rescale", False)),
-        )
-        v = capture_charmm_velocities_for_bussi(restart_path=restart)
-    if v is None:
-        raise RuntimeError(
-            "run_dynamics: iasvel=0 continuation requires warm init velocities "
-            "(COMP may hold coordinates; pass init_velocities via C API)"
-        )
+    temp = resolve_assignment_temperature_k(kw, default_K=300.0)
+    v = _resolve_bussi_rescale_velocities(
+        restart_path=restart_read_path,
+        temperature_K=temp,
+        quiet=bool(kw.get("_quiet_bussi_rescale", False)),
+    )
     return _init_velocities_dict_from_akma(v)
 
 
@@ -3439,12 +3429,14 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
 
     import pycharmm
     clamp_velocity_assignment_dynamics_kw(kw)
-    # Populate COMP before the cold check: ``iasvel=0`` dyna reads COMP, not main.
-    mirror_comparison_velocities_for_dynamics(
+    # Resolve / assign warm AKMA velocities before COMP mirror (post-rescue CGENFF
+    # reregister clears CHARMM memory; MB fallback must run before mirror can raise).
+    init_velocities = _resolve_dynamics_init_velocities(
         kw,
         restart_read_path=restart_read_path,
     )
-    init_velocities = _resolve_dynamics_init_velocities(
+    # Populate COMP before the cold check: ``iasvel=0`` dyna reads COMP, not main.
+    mirror_comparison_velocities_for_dynamics(
         kw,
         restart_read_path=restart_read_path,
     )

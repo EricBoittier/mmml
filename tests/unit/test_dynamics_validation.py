@@ -302,6 +302,13 @@ def test_run_dynamics_clears_comparison_coords_when_iasvel_zero_no_start():
     dyn = MagicMock()
     fake_pycharmm.DynamicsScript.return_value = dyn
     with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._resolve_dynamics_init_velocities",
+        return_value={
+            "vx": np.array([1.0]),
+            "vy": np.array([0.0]),
+            "vz": np.array([0.0]),
+        },
+    ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.mirror_comparison_velocities_for_dynamics",
     ) as mirror_comp, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.maybe_assign_velocities_via_ase_if_cold",

@@ -54,6 +54,30 @@ def test_configure_known_only_skips_integer_io_units():
     assert '("iunwri", "iuncrd", "iunrea")' in block
 
 
+def test_resolve_dynamics_init_velocities_uses_bussi_rescale_ladder():
+    from unittest.mock import patch
+
+    import numpy as np
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _resolve_dynamics_init_velocities,
+    )
+
+    v = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], dtype=float)
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._resolve_bussi_rescale_velocities",
+        return_value=v,
+    ) as rescale:
+        out = _resolve_dynamics_init_velocities(
+            {"start": False, "iasvel": 0, "firstt": 12.0},
+            restart_read_path="/tmp/heat.a.res",
+        )
+    rescale.assert_called_once()
+    assert out is not None
+    assert list(out.keys()) == ["vx", "vy", "vz"]
+    assert out["vx"].shape == (2,)
+
+
 def test_run_dynamics_passes_init_velocities_for_iasvel_zero_continuation():
     import sys
     from unittest.mock import MagicMock, patch

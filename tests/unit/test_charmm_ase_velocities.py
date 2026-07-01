@@ -105,12 +105,25 @@ def test_maybe_assign_velocities_via_ase_if_cold_assigns_and_clears_start():
 
 
 def test_assign_maxwell_boltzmann_velocities_via_ase_syncs_charmm():
+    import sys
+    import types
+
     masses = np.array([12.0, 1.0, 1.0], dtype=float)
     atoms = MagicMock()
     atoms.__len__ = MagicMock(return_value=3)
     atoms.get_velocities.return_value = np.ones((3, 3), dtype=float) * 0.01
 
-    with patch(
+    vd_mod = types.ModuleType("ase.md.velocitydistribution")
+    vd_mod.MaxwellBoltzmannDistribution = MagicMock()
+    vd_mod.Stationary = MagicMock()
+    vd_mod.ZeroRotation = MagicMock()
+    md_mod = types.ModuleType("ase.md")
+    md_mod.velocitydistribution = vd_mod
+
+    with patch.dict(
+        sys.modules,
+        {"ase.md": md_mod, "ase.md.velocitydistribution": vd_mod},
+    ), patch(
         "mmml.interfaces.pycharmmInterface.import_pycharmm.ase_from_pycharmm_state",
         return_value=atoms,
     ), patch(
@@ -118,13 +131,7 @@ def test_assign_maxwell_boltzmann_velocities_via_ase_syncs_charmm():
         return_value=masses,
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
-    ) as sync, patch(
-        "ase.md.velocitydistribution.MaxwellBoltzmannDistribution",
-    ), patch(
-        "ase.md.velocitydistribution.Stationary",
-    ), patch(
-        "ase.md.velocitydistribution.ZeroRotation",
-    ):
+    ) as sync:
         assign_maxwell_boltzmann_velocities_via_ase(300.0, quiet=True)
 
     atoms.set_masses.assert_called_once()
@@ -151,6 +158,11 @@ def test_sync_charmm_velocities_akma_always_mirrors_comp():
 
 
 def test_run_dynamics_ensures_bussi_iasvel_zero():
+    import sys
+    from unittest.mock import MagicMock, patch
+
+    import numpy as np
+
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics
 
     kw = {
@@ -162,16 +174,27 @@ def test_run_dynamics_ensures_bussi_iasvel_zero():
         "_bussi_rescale_interval": 50,
         "_skip_ase_cold_velocity_assign": True,
     }
-    with patch(
+    init = {
+        "vx": np.array([1.0]),
+        "vy": np.array([0.0]),
+        "vz": np.array([0.0]),
+    }
+    fake_pycharmm = MagicMock()
+    with patch.dict(sys.modules, {"pycharmm": fake_pycharmm}), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_via_c_api",
         return_value=MagicMock(),
     ) as run_capi, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
         return_value=True,
     ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._resolve_dynamics_init_velocities",
+        return_value=init,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._apply_dynamics_io_setters",
+    ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.mirror_comparison_velocities_for_dynamics",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_main",
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.capture_charmm_velocities_for_bussi",
     ):
