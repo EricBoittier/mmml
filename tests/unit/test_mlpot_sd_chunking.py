@@ -1029,7 +1029,11 @@ def test_prime_charmm_hybrid_energy_before_mlpot_sd_under_mpirun():
     ):
         grms = prime_charmm_hybrid_energy_before_mlpot_sd(ctx, verbose=False)
 
-    ensure_excl.assert_called_once()
+    ensure_excl.assert_called_once_with(
+        ctx,
+        context="Pre-MLpot SD ENER prime",
+        force_rebuild=True,
+    )
     assert grms == pytest.approx(4.2)
     assert ctx._mlpot_pre_sd_ener_probed is True
 
