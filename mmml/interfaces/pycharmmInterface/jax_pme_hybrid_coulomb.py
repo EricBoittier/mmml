@@ -373,6 +373,47 @@ def mic_cross_coulomb_unswitched(
     return energy, forces
 
 
+def _cross_monomer_power_law_correction(
+    positions_A: np.ndarray,
+    coefficients: np.ndarray,
+    monomer_offsets: np.ndarray,
+    *,
+    box_length_A: float,
+    method: str,
+    sr_cutoff_A: float,
+    exponent: int,
+    prefactor: float,
+    profile_label: str,
+) -> HybridJaxPmeCorrectionResult:
+    """Fused cross-monomer jax-pme (one prepare; ``ewald`` only)."""
+    from mmml.interfaces.pycharmmInterface.jax_pme_cross_monomer import (
+        compute_jax_pme_cross_monomer_power_law,
+    )
+
+    pos = np.asarray(positions_A, dtype=np.float64)
+    coef = np.asarray(coefficients, dtype=np.float64)
+    offsets = np.asarray(monomer_offsets, dtype=np.int64)
+    t0 = _profile_start()
+    cross = compute_jax_pme_cross_monomer_power_law(
+        pos,
+        coef,
+        offsets,
+        box_length_A=float(box_length_A),
+        method=method,
+        sr_cutoff_A=sr_cutoff_A,
+        exponent=int(exponent),
+        prefactor=float(prefactor),
+    )
+    _record_profile(profile_label, t0)
+    return HybridJaxPmeCorrectionResult(
+        energy_kcalmol=float(cross.energy_kcalmol),
+        forces_kcalmol_A=np.asarray(cross.forces_kcalmol_A, dtype=np.float64),
+        energy_intra_kcalmol=0.0,
+        energy_mic_cross_kcalmol=0.0,
+        switch_scale=1.0,
+    )
+
+
 def _hybrid_jax_pme_power_law_correction(
     positions_A: np.ndarray,
     coefficients: np.ndarray,
@@ -442,25 +483,51 @@ def hybrid_jax_pme_coulomb_correction(
     if _coefficients_are_zero(chg):
         return _zero_correction(pos, switch_scale=switch_scale)
 
-    t0 = _profile_start()
-    full = compute_jax_pme_coulomb(
-        pos,
-        chg,
-        box_length_A=float(box_length_A),
-        method=method,
-        sr_cutoff_A=sr_cutoff_A,
+    from mmml.interfaces.pycharmmInterface.jax_pme_cross_monomer import (
+        resolve_jax_pme_intra_mode,
     )
-    _record_profile("coulomb_full", t0)
-    t0 = _profile_start()
-    intra = intra_monomer_jax_pme_coulomb(
-        pos,
-        chg,
-        offsets,
-        box_length_A=float(box_length_A),
-        method=method,
-        sr_cutoff_A=sr_cutoff_A,
-    )
-    _record_profile("coulomb_intra", t0)
+    from jaxpme import prefactors as jpref
+
+    intra_energy_kcalmol = 0.0
+    if resolve_jax_pme_intra_mode(method) == "cross":
+        t0 = _profile_start()
+        cross = _cross_monomer_power_law_correction(
+            pos,
+            chg,
+            offsets,
+            box_length_A=float(box_length_A),
+            method=method,
+            sr_cutoff_A=sr_cutoff_A,
+            exponent=1,
+            prefactor=float(jpref.kcalmol_A),
+            profile_label="coulomb_cross",
+        )
+        _record_profile("coulomb_cross_total", t0)
+        lr_e = float(cross.energy_kcalmol)
+        lr_f = np.asarray(cross.forces_kcalmol_A, dtype=np.float64)
+    else:
+        t0 = _profile_start()
+        full = compute_jax_pme_coulomb(
+            pos,
+            chg,
+            box_length_A=float(box_length_A),
+            method=method,
+            sr_cutoff_A=sr_cutoff_A,
+        )
+        _record_profile("coulomb_full", t0)
+        t0 = _profile_start()
+        intra = intra_monomer_jax_pme_coulomb(
+            pos,
+            chg,
+            offsets,
+            box_length_A=float(box_length_A),
+            method=method,
+            sr_cutoff_A=sr_cutoff_A,
+        )
+        _record_profile("coulomb_intra", t0)
+        intra_energy_kcalmol = intra.energy_kcalmol
+        lr_e = float(full.energy_kcalmol) - intra_energy_kcalmol
+        lr_f = np.asarray(full.forces_kcalmol_A - intra.forces_kcalmol_A, dtype=np.float64)
     mic_e = 0.0
     mic_f = np.zeros_like(pos)
     if subtract_pair_mic_sr and (
@@ -481,13 +548,13 @@ def hybrid_jax_pme_coulomb_correction(
             lambda_monomer=lambda_monomer,
         )
 
-    lr_e = float(full.energy_kcalmol) - intra.energy_kcalmol - mic_e
-    lr_f = np.asarray(full.forces_kcalmol_A - intra.forces_kcalmol_A - mic_f, dtype=np.float64)
+    lr_e = lr_e - mic_e
+    lr_f = np.asarray(lr_f - mic_f, dtype=np.float64)
 
     return HybridJaxPmeCorrectionResult(
         energy_kcalmol=switch_scale * lr_e,
         forces_kcalmol_A=switch_scale * lr_f,
-        energy_intra_kcalmol=intra.energy_kcalmol,
+        energy_intra_kcalmol=intra_energy_kcalmol,
         energy_mic_cross_kcalmol=mic_e,
         switch_scale=switch_scale,
     )
@@ -510,31 +577,57 @@ def hybrid_jax_pme_lj_dispersion_correction(
     if _coefficients_are_zero(coef):
         return _zero_correction(pos, switch_scale=switch_scale)
 
-    t0 = _profile_start()
-    full = compute_jax_pme_lj_dispersion(
-        pos,
-        coef,
-        box_length_A=float(box_length_A),
-        method=method,
-        sr_cutoff_A=sr_cutoff_A,
+    from mmml.interfaces.pycharmmInterface.jax_pme_cross_monomer import (
+        resolve_jax_pme_intra_mode,
     )
-    _record_profile("dispersion_full", t0)
-    t0 = _profile_start()
-    intra = intra_monomer_jax_pme_lj_dispersion(
-        pos,
-        coef,
-        offsets,
-        box_length_A=float(box_length_A),
-        method=method,
-        sr_cutoff_A=sr_cutoff_A,
+    from mmml.interfaces.pycharmmInterface.long_range_backend import (
+        DEFAULT_JAX_PME_LJ_PREFACTOR,
     )
-    _record_profile("dispersion_intra", t0)
-    lr_e = float(full.energy_kcalmol) - intra.energy_kcalmol
-    lr_f = np.asarray(full.forces_kcalmol_A - intra.forces_kcalmol_A, dtype=np.float64)
+
+    intra_energy_kcalmol = 0.0
+    if resolve_jax_pme_intra_mode(method) == "cross":
+        t0 = _profile_start()
+        cross = _cross_monomer_power_law_correction(
+            pos,
+            coef,
+            offsets,
+            box_length_A=float(box_length_A),
+            method=method,
+            sr_cutoff_A=sr_cutoff_A,
+            exponent=6,
+            prefactor=DEFAULT_JAX_PME_LJ_PREFACTOR,
+            profile_label="dispersion_cross",
+        )
+        _record_profile("dispersion_cross_total", t0)
+        lr_e = float(cross.energy_kcalmol)
+        lr_f = np.asarray(cross.forces_kcalmol_A, dtype=np.float64)
+    else:
+        t0 = _profile_start()
+        full = compute_jax_pme_lj_dispersion(
+            pos,
+            coef,
+            box_length_A=float(box_length_A),
+            method=method,
+            sr_cutoff_A=sr_cutoff_A,
+        )
+        _record_profile("dispersion_full", t0)
+        t0 = _profile_start()
+        intra = intra_monomer_jax_pme_lj_dispersion(
+            pos,
+            coef,
+            offsets,
+            box_length_A=float(box_length_A),
+            method=method,
+            sr_cutoff_A=sr_cutoff_A,
+        )
+        _record_profile("dispersion_intra", t0)
+        intra_energy_kcalmol = intra.energy_kcalmol
+        lr_e = float(full.energy_kcalmol) - intra_energy_kcalmol
+        lr_f = np.asarray(full.forces_kcalmol_A - intra.forces_kcalmol_A, dtype=np.float64)
     return HybridJaxPmeCorrectionResult(
         energy_kcalmol=switch_scale * lr_e,
         forces_kcalmol_A=switch_scale * lr_f,
-        energy_intra_kcalmol=intra.energy_kcalmol,
+        energy_intra_kcalmol=intra_energy_kcalmol,
         energy_mic_cross_kcalmol=0.0,
         switch_scale=switch_scale,
     )
