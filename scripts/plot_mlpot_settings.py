@@ -546,6 +546,7 @@ def _draw_dimer_forces_panel(
     zone: str,
     subtitle: str,
     rotation: str = "25x,18y,0z",
+    force_norm=None,
 ) -> None:
     from ase import Atoms
     from ase.data import chemical_symbols
@@ -591,49 +592,56 @@ def _draw_dimer_forces_panel(
         )
     f2d = _forces_in_image_plane(pos, forces, writer)
     fmag = np.linalg.norm(forces, axis=1)
-    fmax = float(fmag.max()) if fmag.size else 1.0
+    fmax = float(force_norm.vmax) if force_norm is not None else float(fmag.max() or 1.0)
     quiver_scale = max(0.25 * fmax, 0.05)
-    q = ax.quiver(
+    ax.quiver(
         im_pos[:, 0],
         im_pos[:, 1],
         f2d[:, 0],
         f2d[:, 1],
         fmag,
         cmap="magma",
+        norm=force_norm,
         angles="xy",
         scale_units="xy",
         scale=quiver_scale,
         width=0.0045,
         zorder=4,
-        alpha=0.9,
-        clim=(0.0, fmax),
+        alpha=0.92,
     )
     ax.set_xlim(0, writer.w)
     ax.set_ylim(0, writer.h)
     ax.set_aspect("equal", adjustable="box")
     ax.set_axis_off()
     ax.set_title(f"{zone}\n{subtitle}", fontsize=8.5, fontweight="500", pad=4)
-    return q
 
 
 def plot_dimer_forces_cutoff_panels(residue: str) -> Path:
     """ASE orthographic dimer views with force quivers at key COM distances."""
+    import matplotlib.colors as mcolors
+
     cp = CutoffParameters()
     mono_rel, z, charges = _load_monomer_template(residue)
     specs = _panel_distance_specs(cp)
     res_label = residue.strip().upper()
 
-    fig, axes = plt.subplots(2, 2, figsize=(11.5, 9.0), facecolor=_ILLUSTRATION_STYLE["figure_facecolor"])
-    q_last = None
+    fig, axes = plt.subplots(2, 2, figsize=(11.5, 9.2), facecolor=_ILLUSTRATION_STYLE["figure_facecolor"])
+    panel_rows: list[tuple] = []
+    global_fmax = 0.0
     for ax, (zone, dist, subtitle) in zip(axes.ravel(), specs, strict=True):
         ax.set_facecolor(_ILLUSTRATION_STYLE["axes_facecolor"])
         pos, z_full, q_full, n_per = _dimer_positions(mono_rel, z, charges, dist)
         forces = _hybrid_forces_fd(pos, z_full, q_full, n_per, cp)
+        global_fmax = max(global_fmax, float(np.linalg.norm(forces, axis=1).max()))
+        panel_rows.append((ax, zone, dist, subtitle, pos, z_full, forces, n_per))
+
+    force_norm = mcolors.Normalize(vmin=0.0, vmax=max(global_fmax, 1e-6))
+    for ax, zone, dist, subtitle, pos, z_full, forces, n_per in panel_rows:
         r_com = _com_distance(pos, n_per)
         s_ml = float(cp.ml_scale(r_com, gamma_ml=GAMMA_ON))
         s_mm = float(cp.mm_scale_complementary(r_com, gamma_ml=GAMMA_ON, gamma_mm_off=GAMMA_OFF))
         ann = f"s_ML={s_ml:.2f}  s_MM={s_mm:.2f}  |F|_max={np.linalg.norm(forces, axis=1).max():.2f} kcal/mol/Å"
-        q_last = _draw_dimer_forces_panel(
+        _draw_dimer_forces_panel(
             ax,
             pos,
             z_full,
@@ -641,10 +649,21 @@ def plot_dimer_forces_cutoff_panels(residue: str) -> Path:
             n_per,
             zone=zone,
             subtitle=f"{subtitle}\n{ann}",
+            force_norm=force_norm,
         )
-    if q_last is not None:
-        cbar = fig.colorbar(q_last, ax=axes.ravel().tolist(), shrink=0.72, pad=0.02)
-        cbar.set_label("|F| (kcal/mol/Å)", fontsize=9)
+
+    sm = plt.cm.ScalarMappable(cmap="magma", norm=force_norm)
+    sm.set_array([])
+    cbar = fig.colorbar(
+        sm,
+        ax=axes.ravel().tolist(),
+        orientation="horizontal",
+        fraction=0.05,
+        pad=0.10,
+        aspect=40,
+        shrink=0.95,
+    )
+    cbar.set_label("|F| (kcal/mol/Å)", fontsize=9)
     fig.suptitle(
         f"{res_label} dimer — illustrative switched hybrid forces at cutoff distances "
         f"(default {DEFAULT_MM_SWITCH_ON:g} / {DEFAULT_MM_SWITCH_WIDTH:g} / {DEFAULT_ML_SWITCH_WIDTH:g} Å)",
@@ -661,7 +680,7 @@ def plot_dimer_forces_cutoff_panels(residue: str) -> Path:
         fontsize=7.5,
         color="#475569",
     )
-    fig.tight_layout(rect=(0, 0.03, 1, 0.95))
+    fig.tight_layout(rect=(0, 0.08, 1, 0.93))
     slug = res_label.lower()
     out = OUT_DIR / f"{slug}_dimer_forces_cutoffs.png"
     fig.savefig(out, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
