@@ -97,12 +97,41 @@ def test_push_charmm_cubic_box_side_A_skips_when_already_matched() -> None:
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
         return_value=(30.0, "pbound"),
     ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_lattice_ready",
+        return_value=True,
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.prepare_charmm_pbc",
     ) as mock_prepare:
         side, source = push_charmm_cubic_box_side_A(30.0, quiet=True)
     assert side == pytest.approx(30.0)
     assert source == "pbound"
     mock_prepare.assert_not_called()
+
+
+def test_push_charmm_cubic_box_side_A_restores_when_xucell_only() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        push_charmm_cubic_box_side_A,
+    )
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
+        return_value=(43.616, "xucell"),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_lattice_ready",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.restore_charmm_cubic_crystal_lattice",
+    ) as mock_restore, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.prepare_charmm_pbc",
+    ) as mock_prepare, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
+        return_value=(43.616, "pbound"),
+    ):
+        side, source = push_charmm_cubic_box_side_A(43.616, quiet=True)
+    mock_restore.assert_called_once_with(43.616, nbxmod=5, quiet=True)
+    mock_prepare.assert_not_called()
+    assert side == pytest.approx(43.616)
+    assert source == "pbound"
 
 
 def test_push_charmm_cubic_box_side_A_calls_prepare_when_mismatch() -> None:
@@ -231,6 +260,24 @@ def test_pretreat_handoff_panel_tolerates_inactive_pbound(tmp_path: Path) -> Non
     pbc = dict(next(s for title, s in sections if title == "PBC → MLpot handoff"))
     assert pbc["pbound_cubic_L_Å"] == "inactive"
     assert "28.000 (restart)" in pbc["workflow_box_L_Å"]
+
+
+def test_charmm_crystal_lattice_ready_requires_pbound_not_xucell_only() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        charmm_crystal_lattice_ready,
+    )
+
+    mock_image = mock.MagicMock()
+    mock_image.get_ntrans.return_value = 8
+    with mock.patch(
+        "pycharmm.image",
+        mock_image,
+        create=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_box_sides_A",
+        return_value=(0.0, 0.0, 0.0),
+    ):
+        assert charmm_crystal_lattice_ready() is False
 
 
 def test_sync_charmm_crystal_after_mm_pretreat_refreshes_image_without_redef() -> None:

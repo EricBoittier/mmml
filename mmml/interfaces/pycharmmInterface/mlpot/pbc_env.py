@@ -243,7 +243,8 @@ def push_charmm_cubic_box_side_A(
     """Set CHARMM cubic box via C API (``crystal_define_cubic`` + ``build``).
 
     Safe before MLpot registration. Rebuilds IMAGE centering and PBC nbonds.
-    Skips work when the live CHARMM box already matches ``target_side_A``.
+    Skips work when the live CHARMM box already matches ``target_side_A`` and
+    the crystal metric is lattice-ready (``pbound`` active, not ``xucell``-only).
     """
     target = float(target_side_A)
     if target <= 0.0:
@@ -251,7 +252,11 @@ def push_charmm_cubic_box_side_A(
     tol = max(1e-3, 1e-4 * target)
     live, source = probe_charmm_cubic_box_side_A(fallback_side_A=target)
     if live is not None and abs(live - target) <= tol:
-        return float(live), source or "pbound"
+        if charmm_crystal_lattice_ready():
+            return float(live), source or "pbound"
+        restore_charmm_cubic_crystal_lattice(target, nbxmod=nbxmod, quiet=quiet)
+        side, out_source = resolve_charmm_cubic_box_side_A(fallback_side_A=target)
+        return float(side), out_source
     prepare_charmm_pbc(target)
     apply_pbc_nbonds(nbxmod=int(nbxmod), cubic_box_side_A=target)
     side, out_source = resolve_charmm_cubic_box_side_A(fallback_side_A=target)
@@ -296,19 +301,19 @@ def charmm_crystal_is_active(*, rel_tol: float = 1e-3) -> bool:
 
 
 def charmm_crystal_lattice_ready(*, rel_tol: float = 1e-3) -> bool:
-    """True when CRYSTAL ``xtltyp``/IMAGE state can run lattice minimization or CPT.
+    """True when CRYSTAL/IMAGE can run lattice minimization or CPT.
 
-    ``crystal free`` before CGENFF ``READ PARAM APPEND`` clears ``xtltyp`` but
-    ``pbound_get_size`` can still return the old box edge — do not use
-    :func:`charmm_crystal_is_active` alone before lattice ABNR.
+    Requires live ``pbound_get_size`` and IMAGE transforms. ``image_get_ucell``
+    alone is insufficient: restart/MC handoffs can leave ``XUCELL`` populated
+    while ``XTLABC`` is zero (singular metric matrix in ``MBUILD``).
     """
     try:
         import pycharmm.image as image
 
         if int(image.get_ntrans()) <= 1:
             return False
-        ux, uy, uz = _read_charmm_ucell_lengths_A()
-        return _is_cubic_box_sides(ux, uy, uz, rel_tol=rel_tol) and min(ux, uy, uz) > 1.0
+        lx, ly, lz = _read_charmm_box_sides_A()
+        return _is_cubic_box_sides(lx, ly, lz, rel_tol=rel_tol) and min(lx, ly, lz) > 1.0
     except Exception:
         return False
 

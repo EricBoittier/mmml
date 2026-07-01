@@ -72,7 +72,7 @@ def test_run_charmm_lattice_abnr_uses_minimize_c_api():
             return_value=(None, None),
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
+            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.restore_charmm_cubic_crystal_lattice",
         ),
         patch(
             "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
@@ -120,8 +120,8 @@ def test_run_charmm_lattice_abnr_uses_fallback_when_pbound_inactive():
     with (
         _fake_pycharmm_minimize_module(run_abnr),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
-        ) as ensure_crystal,
+            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.restore_charmm_cubic_crystal_lattice",
+        ) as restore_lattice,
         patch(
             "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
             return_value=(35.0, "restart"),
@@ -142,7 +142,7 @@ def test_run_charmm_lattice_abnr_uses_fallback_when_pbound_inactive():
             verbose=False,
         )
     assert side == pytest.approx(35.0)
-    ensure_crystal.assert_called_once_with(35.0, quiet=True)
+    restore_lattice.assert_called_once_with(35.0, quiet=True)
     resolve_side.assert_called_once_with(
         fallback_side_A=35.0,
         restart_path="/tmp/prod.res",
@@ -159,8 +159,8 @@ def test_run_charmm_lattice_abnr_skips_restart_when_crystal_active():
     with (
         _fake_pycharmm_minimize_module(run_abnr),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
-        ) as ensure_crystal,
+            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.restore_charmm_cubic_crystal_lattice",
+        ) as restore_lattice,
         patch(
             "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
             return_value=True,
@@ -185,7 +185,7 @@ def test_run_charmm_lattice_abnr_skips_restart_when_crystal_active():
             verbose=False,
         )
     assert side == pytest.approx(36.0)
-    ensure_crystal.assert_called_once_with(35.0, quiet=True)
+    restore_lattice.assert_called_once_with(35.0, quiet=True)
     resolve_side.assert_called_once_with(
         fallback_side_A=35.0,
         restart_path=None,
