@@ -324,7 +324,13 @@ def restore_charmm_cubic_crystal_lattice(
     nbxmod: int = 5,
     quiet: bool = False,
 ) -> float:
-    """Reinstall CUBI crystal after ``crystal free`` without BYRES re-centering."""
+    """Reinstall CUBI crystal after ``crystal free`` or ``READ PARAM`` IMAGE clear.
+
+    ``read_param_file`` (append) and ``crystal free`` drop IMAGE atom tables while
+    lattice transforms may still be active.  After ``crystal build``, run
+    ``image byres`` (via :func:`_image_setup_byres_all`) before ``upinb`` /
+    ``UPIMNB`` — otherwise ``MAKGRP`` can segfault with NTRANS>0 and NATIM=0.
+    """
     import pycharmm.crystal as crystal
 
     side = float(cubic_box_side_A)
@@ -332,6 +338,7 @@ def restore_charmm_cubic_crystal_lattice(
         raise ValueError(f"cubic box side must be > 0, got {side}")
     if not crystal.set_cubic_side(side):
         raise RuntimeError(f"crystal.set_cubic_side failed for L={side} Å")
+    _image_setup_byres_all(0.0, 0.0, 0.0)
     apply_pbc_nbonds(nbxmod=nbxmod, cubic_box_side_A=side)
     if not quiet:
         print(

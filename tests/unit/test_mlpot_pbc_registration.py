@@ -192,7 +192,7 @@ def test_register_mlpot_pbc_requires_skip_iblo_parameter():
         )
 
 
-def test_finalize_pbc_exclusions_restores_lattice_without_byres():
+def test_finalize_pbc_exclusions_restores_lattice_with_image_byres():
     from mmml.interfaces.pycharmmInterface.mlpot import setup as mlpot_setup
 
     fake_sel = MagicMock()
