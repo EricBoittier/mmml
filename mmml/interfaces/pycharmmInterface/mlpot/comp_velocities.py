@@ -145,6 +145,38 @@ def sync_comparison_velocities_akma(velocities_akma: np.ndarray) -> None:
     coor_set_comparison_capi(np.column_stack([v, w]))
 
 
+def assert_comparison_holds_velocities_not_positions(*, context: str = "") -> None:
+    """Raise when COMP x/y/z match main positions (would be read as AKMA velocities)."""
+    if not comparison_matches_main_positions():
+        return
+    prefix = f"{context}: " if context else ""
+    raise RuntimeError(
+        f"{prefix}COMP holds main coordinates, not AKMA velocities "
+        "(iasvel=0 continuation would yield T≫target)"
+    )
+
+
+def refresh_bussi_comp_velocity_handoff(
+    velocities_akma: np.ndarray,
+    *,
+    context: str = "",
+) -> None:
+    """Re-mirror warm AKMA velocities into main + COMP immediately before ``dyna``.
+
+    Bussi in-memory legs avoid ``init_velocities`` CFI on some gfortran builds and
+    rely on COMP instead (lingering START + ``iasvel=0``).  Fortran prep /
+    ``velos_del`` between the first sync and ``dynopt`` can restore COMP from main
+    coordinates — refresh here so CHARMM does not integrate at T≈10^12 K.
+    """
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        sync_charmm_velocities_akma,
+    )
+
+    v = np.asarray(velocities_akma, dtype=np.float64).reshape(-1, 3)
+    sync_charmm_velocities_akma(v)
+    assert_comparison_holds_velocities_not_positions(context=context)
+
+
 def comparison_velocities_akma() -> np.ndarray | None:
     """COMP x/y/z as AKMA velocity components when CHARMM uses the COMP path."""
     try:

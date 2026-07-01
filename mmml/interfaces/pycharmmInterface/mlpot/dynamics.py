@@ -3538,6 +3538,7 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     )
     _strip_non_charmm_dynamics_keywords(kw)
     comp_handoff_via_sync = False
+    bussi_comp_handoff_vel: np.ndarray | None = None
     if init_velocities is not None:
         from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
             sync_charmm_velocities_akma,
@@ -3558,6 +3559,8 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
 
             sync_comparison_velocities_akma(v)
             comp_handoff_via_sync = True
+            if bussi_active:
+                bussi_comp_handoff_vel = np.asarray(v, dtype=np.float64).copy()
     else:
         # Populate COMP before the cold check: ``iasvel=0`` dyna reads COMP, not main.
         mirror_comparison_velocities_for_dynamics(
@@ -3580,7 +3583,30 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     _release_charmm_dynamics_api_buffers()
     if comp_handoff_via_sync and bussi_active:
         # ``dynamics_run_kw`` optional velocity CFI descriptors crash on some
-        # gfortran builds during in-memory Bussi legs; COMP already mirrors AKMA.
+        # gfortran builds during in-memory Bussi legs; use COMP instead of
+        # ``init_velocities``.  Refresh COMP after ``velos_del`` / Fortran prep —
+        # otherwise lingering START + ``iasvel=0`` reads main Å coords as AKMA v.
+        from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+            refresh_bussi_comp_velocity_handoff,
+        )
+
+        if bussi_comp_handoff_vel is None:
+            from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+                last_synced_velocities_akma_raw,
+            )
+
+            cached = last_synced_velocities_akma_raw()
+            if cached is not None:
+                bussi_comp_handoff_vel = np.asarray(cached, dtype=np.float64).copy()
+        if bussi_comp_handoff_vel is None:
+            raise RuntimeError(
+                "run_dynamics: Bussi COMP handoff missing warm AKMA velocities "
+                f"(start={kw.get('start')}, iasvel={kw.get('iasvel')})"
+            )
+        refresh_bussi_comp_velocity_handoff(
+            bussi_comp_handoff_vel,
+            context="run_dynamics Bussi overlap continuation",
+        )
         init_velocities = None
     if _dynamics_c_api_available():
         dyn = _run_dynamics_via_c_api(
