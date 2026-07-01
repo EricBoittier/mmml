@@ -100,6 +100,20 @@ def _emit_profile_summary() -> None:
         )
 
 
+def consume_hybrid_jax_pme_profile() -> dict[str, dict[str, float]]:
+    """Return and clear accumulated hybrid jax-pme profile samples (ms)."""
+    out: dict[str, dict[str, float]] = {}
+    for label, samples in sorted(_PROFILE_STATS.items()):
+        arr = np.asarray(samples, dtype=np.float64)
+        out[label] = {
+            "n": float(arr.size),
+            "total_ms": float(np.sum(arr)),
+            "mean_ms": float(np.mean(arr)),
+        }
+    _PROFILE_STATS.clear()
+    return out
+
+
 def _coefficients_are_zero(coefficients: np.ndarray) -> bool:
     coef = np.asarray(coefficients, dtype=np.float64)
     return coef.size == 0 or not bool(np.any(coef != 0.0))

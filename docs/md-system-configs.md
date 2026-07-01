@@ -224,6 +224,8 @@ mmml md-system \
 4. **Lattice ABNR** — `mini_lattice_abnr_steps: 200` optimizes the cubic cell (and optionally coordinates) under PBC.
 5. **Mini box equil** — `mini_box_equil_ps: 2.0` short CPT NPT before MLpot registration (`mini_box_equil_allow_fixed_box: true` when `box_size` is set).
 
+See [PyCHARMM C API: PBC box & pressure](pycharmm-c-api-pbc-box-pressure.md) for how MMML sets/gets the cubic cell and CPT pressure tensor on KEY_LIBRARY builds (`crystal` / `dynamics` C API vs script commands).
+
 ### CHARMM MLpot compile limits (`max_Npr`)
 
 PyCHARMM MLpot stores ML atom-pair lists in fixed Fortran buffers sized at **compile time** (`api_func.F90` → `max_Npr`). PBC MIC systems multiply pair count by periodic image copies (~6–8× for dense boxes).

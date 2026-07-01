@@ -288,14 +288,14 @@ def plot_cutoff_radius_ladder() -> Path:
 def plot_system_monomer_regions() -> Path:
     """Top-down cluster: monomers colored by residue; highlight one dimer's COM zones."""
     from matplotlib.patches import Circle
-    from mmml.paths import default_dcm_monomer_pdb
+    from mmml.interfaces.crystal_charmm import default_make_res_monomer_pdb
 
     try:
         from ase.io import read
     except ImportError:
         raise RuntimeError("ASE required for system region figure")
 
-    monomer = read(str(default_dcm_monomer_pdb()))
+    monomer = read(str(default_make_res_monomer_pdb("DCM")))
     rel = monomer.get_positions() - monomer.get_positions().mean(axis=0)
     com_xy = [
         np.array([0.0, 0.0]),

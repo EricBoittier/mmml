@@ -8,6 +8,7 @@ Related:
 - [`docs/pycharmm-threading.md`](pycharmm-threading.md) — CPU threads, JAX/XLA pools, and `htop` interpretation
 - [`tests/functionality/mlpot/SPATIAL_MPI_DOMDEC.md`](https://github.com/EricBoittier/mmml/blob/main/tests/functionality/mlpot/SPATIAL_MPI_DOMDEC.md) — Tier 3 DOMDEC spike (out of scope here)
 - [`mmml/interfaces/pycharmmInterface/charmm_mpi.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/charmm_mpi.py) — runtime bootstrap
+- [PyCHARMM C API: PBC box & pressure](pycharmm-c-api-pbc-box-pressure.md) — `crystal_*`, `dynamics_run_kw`, `PIXX` / `PR**` on KEY_LIBRARY builds
 
 ---
 

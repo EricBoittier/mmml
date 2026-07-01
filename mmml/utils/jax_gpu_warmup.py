@@ -156,8 +156,44 @@ class JAXCompileTimerSession:
         )
         return [header, *lines]
 
+    def summary_records(self) -> list[dict[str, float | str | None]]:
+        """Per-label compile/run estimates (same logic as :meth:`summary_lines`)."""
+        if not self.entries:
+            return []
+        by_label: dict[str, list[JAXCompileTiming]] = {}
+        for entry in self.entries:
+            by_label.setdefault(entry.label, []).append(entry)
+        records: list[dict[str, float | str | None]] = []
+        for label, passes in sorted(by_label.items()):
+            passes = sorted(passes, key=lambda e: e.pass_index)
+            if len(passes) >= 2:
+                run_s = passes[-1].wall_seconds
+                compile_s = max(0.0, passes[0].wall_seconds - run_s)
+                records.append(
+                    {
+                        "label": label,
+                        "compile_s": compile_s,
+                        "run_s": run_s,
+                        "pass1_s": passes[0].wall_seconds,
+                        "n_passes": float(len(passes)),
+                    }
+                )
+            else:
+                records.append(
+                    {
+                        "label": label,
+                        "compile_s": None,
+                        "run_s": passes[0].wall_seconds,
+                        "pass1_s": passes[0].wall_seconds,
+                        "n_passes": 1.0,
+                    }
+                )
+        return records
 
-_COMPILE_TIMER_SESSION = JAXCompileTimerSession()
+
+def summarize_jax_compile_timers() -> list[dict[str, float | str | None]]:
+    """Return per-label compile/run records from the active timer session."""
+    return get_jax_compile_timer_session().summary_records()
 
 
 def jax_compile_timers_enabled() -> bool:
