@@ -936,3 +936,4 @@ RESI SM239          0.000 ! (2R)-1-acetyl-2-hydroxy-N-methylpyrrolidine-2-carbox
 RESI SM240          0.000 ! N-[(methylcarbamothioyl)methyl]acetamide                    
 RESI SM241          0.000 ! (2S,4S)-1-acetyl-4-fluoro-N-methylpyrrolidine-2-carboxamide 
 RESI SM242             0.000 ! N-[(2Z)-4-(methylsulfanyl)butan-2-ylidene]acetamide         
+RESI TRIALANINE     0.00 ! ACE–ALA×3–CT3 capped tri-alanine (mmml bundle)

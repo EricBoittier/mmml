@@ -1,4 +1,12 @@
-"""Export RESI TRIALANINE from a minimized ACE–ALA×3–CT3 build (one-time maintainer script)."""
+"""Build ``RESI TRIALANINE`` for the bundled CGENFF RTF (ACE–ALA×3–CT3).
+
+Run under PyCHARMM::
+
+    ./scripts/mmml-charmm-mpirun.sh python scripts/export_trialanine_cgenff_rtf.py
+
+Writes ``mmml/data/charmm/top_trialanine_cgenff.rtf`` and appends a line to
+``CGENFF.RES``.
+"""
 
 from __future__ import annotations
 
@@ -8,10 +16,60 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 OUT_RTF = REPO / "mmml" / "data" / "charmm" / "top_trialanine_cgenff.rtf"
-OUT_RES_LINE = REPO / "mmml" / "data" / "charmm" / "CGENFF.RES"
+OUT_RES = REPO / "mmml" / "data" / "charmm" / "CGENFF.RES"
+
+# Protein → CGENFF atom-type map (bonded params live in ``par_all36_cgenff.prm``).
+_PROTEIN_TO_CGENFF = {
+    "H": "HGP1",
+    "HC": "HGA3",
+    "HA": "HGA1",
+    "HP": "HGP1",
+    "HB1": "HGA1",
+    "HB2": "HGA2",
+    "HB3": "HGA3",
+    "HN": "HGP1",
+    "HNT": "HGP1",
+    "HT1": "HGA3",
+    "HT2": "HGA3",
+    "HT3": "HGA3",
+    "HY1": "HGA3",
+    "HY2": "HGA3",
+    "HY3": "HGA3",
+    "HA1": "HGA1",
+    "HA2": "HGA2",
+    "HA3": "HGA3",
+    "C": "CG2O1",
+    "CA": "CG311",
+    "CAT": "CG331",
+    "CAY": "CG331",
+    "CB": "CG331",
+    "CY": "CG2O1",
+    "CT": "CG331",
+    "CT1": "CG311",
+    "CT2": "CG321",
+    "CT3": "CG331",
+    "CC": "CG2O1",
+    "CD": "CG2O1",
+    "N": "NG2S1",
+    "NT": "NG2S1",
+    "NH1": "NG2S1",
+    "NH2": "NG2S1",
+    "NH3": "NG3P3",
+    "O": "OG2D1",
+    "OY": "OG2D1",
+    "OC": "OG2D2",
+    "OH1": "OG301",
+}
 
 
-def _export_trialanine_rtf(workdir: Path) -> Path:
+def _map_atype(protein_type: str) -> str:
+    key = protein_type.strip().upper()
+    if key in _PROTEIN_TO_CGENFF:
+        return _PROTEIN_TO_CGENFF[key]
+    raise KeyError(f"No CGENFF mapping for protein atom type {protein_type!r}")
+
+
+def _build_minimized_trialanine() -> None:
     from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
 
     ensure_pycharmm_loaded()
@@ -20,13 +78,9 @@ def _export_trialanine_rtf(workdir: Path) -> Path:
     import pycharmm.generate as generate
     import pycharmm.lingo as lingo
     from mmml.interfaces.pycharmmInterface.import_pycharmm import reset_block
-    from mmml.interfaces.pycharmmInterface.charmm_levels import (
-        charmm_relaxed_bomlev,
-        run_charmm_script_quiet,
-    )
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
     from mmml.interfaces.pycharmmInterface.trialanine_water_box import protein_toppar_paths
 
-    os.chdir(workdir)
     rtf, prm = protein_toppar_paths()
     lingo.charmm_script("DELETE ATOM SELE ALL END")
     reset_block()
@@ -41,41 +95,79 @@ def _export_trialanine_rtf(workdir: Path) -> Path:
         setup_ic=True,
     )
     setupRes.generate_coordinates(skip_energy_show=True, validate=True)
-    run_charmm_script_quiet("WRIT RTF CARD NAME TRIALANINE SELE ALL END")
-    candidates = sorted(workdir.glob("*.rtf"), key=lambda p: p.stat().st_mtime, reverse=True)
-    if not candidates:
-        raise RuntimeError(f"No RTF written under {workdir}")
-    return candidates[0]
 
 
-def _normalize_exported_rtf(src: Path) -> str:
-    lines = src.read_text(encoding="utf-8", errors="replace").splitlines()
-    out: list[str] = [
-        "* TRIALANINE — ACE–ALA×3–CT3 capped tri-alanine (exported for CGENFF bundle)",
+def _atom_names_in_psf_order() -> list[str]:
+    from pathlib import Path
+
+    pdb_path = Path("pdb/initial.pdb")
+    if not pdb_path.is_file():
+        raise FileNotFoundError(f"Expected {pdb_path} after setupRes.generate_coordinates")
+    names: list[str] = []
+    for line in pdb_path.read_text(encoding="utf-8", errors="replace").splitlines():
+        if not line.startswith("ATOM"):
+            continue
+        names.append(line[12:16].strip())
+    if not names:
+        raise RuntimeError(f"No ATOM records in {pdb_path}")
+    return names
+
+
+def _format_rtf_block() -> str:
+    import pycharmm.psf as psf
+
+    n = int(psf.get_natom())
+    atypes = psf.get_atype()
+    charges = psf.get_charges()
+    names = _atom_names_in_psf_order()
+    if len(names) != n:
+        raise RuntimeError(f"Atom name count {len(names)} != PSF natom {n}")
+
+    ib, jb = psf.get_ib_jb()
+    bonds: list[tuple[int, int]] = []
+    for i, j in zip(ib, jb):
+        a, b = int(i), int(j)
+        if a > b:
+            a, b = b, a
+        bonds.append((a, b))
+    bonds = sorted(set(bonds))
+
+    lines: list[str] = [
+        "* TRIALANINE — ACE–ALA×3–CT3 capped tri-alanine (CGENFF atom types)",
         "* Regenerate: ./scripts/mmml-charmm-mpirun.sh python scripts/export_trialanine_cgenff_rtf.py",
         "",
+        "RESI TRIALANINE     0.00 ! C12H22N4O5, ACE–ALA×3–CT3 capped tri-alanine",
     ]
-    in_resi = False
-    for line in lines:
-        stripped = line.strip()
-        if stripped.startswith("RESI"):
-            in_resi = stripped.startswith("RESI TRIALANINE") or stripped.startswith("RESI TRIA")
-            if in_resi and stripped.startswith("RESI TRIA"):
-                line = line.replace("RESI TRIA", "RESI TRIALANINE", 1)
-        if in_resi:
-            out.append(line.rstrip())
-        if in_resi and stripped == "END" and "READ" not in stripped:
-            break
-    if not any(l.startswith("RESI TRIALANINE") for l in out):
-        raise RuntimeError(f"RESI TRIALANINE not found in {src}")
-    if not out[-1].strip().endswith("END"):
-        out.append("END")
-    return "\n".join(out) + "\n"
+
+    for idx in range(n):
+        name = str(names[idx]).strip()
+        cg_type = _map_atype(str(atypes[idx]))
+        charge = float(charges[idx])
+        group = "GROUP" if idx == 0 or idx % 8 == 0 else ""
+        if group:
+            lines.append(group)
+        lines.append(f"ATOM {name:<4} {cg_type:<6} {charge:7.2f}")
+
+    bond_chunks: list[str] = []
+    for a, b in bonds:
+        bond_chunks.extend([names[a - 1], names[b - 1]])
+    for i in range(0, len(bond_chunks), 8):
+        chunk = bond_chunks[i : i + 8]
+        lines.append("BOND " + " ".join(f"{tok:<4}" for tok in chunk))
+
+    # Placeholder ICs — ``ic_prm_fill`` supplies equilibrium values at build time.
+    for a, b in bonds:
+        i, j = names[a - 1], names[b - 1]
+        lines.append(f"IC {i:<4} {j:<4} {i:<4} {j:<4} 0.0 0.0 0.0 0.0 0.0")
+
+    lines.append("PATC FIRS NONE LAST NONE")
+    lines.append("")
+    return "\n".join(lines) + "\n"
 
 
 def _ensure_cgenff_res_entry() -> None:
-    text = OUT_RES_LINE.read_text(encoding="utf-8")
     entry = "RESI TRIALANINE     0.00 ! ACE–ALA×3–CT3 capped tri-alanine (mmml bundle)"
+    text = OUT_RES.read_text(encoding="utf-8")
     if "RESI TRIALANINE" in text:
         return
     lines = text.splitlines()
@@ -84,7 +176,7 @@ def _ensure_cgenff_res_entry() -> None:
         len(lines),
     )
     lines.insert(insert_at, entry)
-    OUT_RES_LINE.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    OUT_RES.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def main() -> int:
@@ -92,9 +184,10 @@ def main() -> int:
 
     workdir = Path(tempfile.mkdtemp(prefix="trialanine_rtf_"))
     try:
-        exported = _export_trialanine_rtf(workdir)
+        os.chdir(workdir)
+        _build_minimized_trialanine()
         OUT_RTF.parent.mkdir(parents=True, exist_ok=True)
-        OUT_RTF.write_text(_normalize_exported_rtf(exported), encoding="utf-8")
+        OUT_RTF.write_text(_format_rtf_block(), encoding="utf-8")
         _ensure_cgenff_res_entry()
         print(f"wrote {OUT_RTF.relative_to(REPO)} ({OUT_RTF.stat().st_size} bytes)")
         return 0
