@@ -84,3 +84,35 @@ def test_resolve_extent_reference_prefers_disk_over_memory(tmp_path):
         arr, path = resolve_extent_reference_positions([crd], ctx)
     assert path == crd.resolve()
     assert float(arr[1, 0]) == pytest.approx(2.0)
+
+
+def test_resolve_extent_reference_falls_back_to_same_residue_cluster():
+    pos = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [10.0, 0.0, 0.0],
+            [20.0, 0.0, 0.0],
+            [30.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    ctx = MlpotContext(
+        mlpot=mock.MagicMock(),
+        pyCModel=mock.MagicMock(_atoms_per_monomer=[3, 3]),
+        params=None,
+        model=None,
+        workflow_args=mock.MagicMock(residue="DCM", _cluster_residue_labels=None),
+    )
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        return_value=pos,
+    ):
+        arr, path = resolve_extent_reference_positions([], ctx)
+    assert path.name == "<same-residue-cluster>"
+    np.testing.assert_allclose(
+        arr[3:6] - arr[3:6].mean(axis=0),
+        arr[:3] - arr[:3].mean(axis=0),
+        atol=1e-12,
+    )
