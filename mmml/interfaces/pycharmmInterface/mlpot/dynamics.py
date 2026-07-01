@@ -2108,6 +2108,21 @@ def finalize_heat_dynamics_frequencies(kw: dict[str, Any]) -> dict[str, tuple[in
     changes: dict[str, tuple[int, int]] = {}
     if nstep <= 0:
         return changes
+    bussi_spec = bussi_heat_ramp_spec_from_kw(kw)
+    if bussi_spec is not None:
+        old_interval = int(kw.get("_bussi_rescale_interval", bussi_spec["ihtfrq"]))
+        new_interval = _harmonize_dynamics_frequency(old_interval, nstep)
+        if new_interval != old_interval:
+            changes["_bussi_rescale_interval"] = (old_interval, new_interval)
+        kw["_bussi_rescale_interval"] = new_interval
+        ramp = dict(kw.get("_bussi_ramp") or {})
+        ramp["ihtfrq"] = new_interval
+        heat_updates = max(1, int(nstep) // new_interval)
+        firstt = float(ramp.get("firstt", kw.get("firstt", 300.0)))
+        finalt = float(ramp.get("finalt", kw.get("finalt", 300.0)))
+        ramp["teminc"] = max(0.0, (finalt - firstt) / heat_updates)
+        kw["_bussi_ramp"] = ramp
+        return changes
     if heat_ramp_spec_from_kw(kw) is None:
         return changes
     for key in _HEAT_FIN_FREQ_KEYS:
@@ -2155,6 +2170,11 @@ def _infer_heat_velocity_init_label(
                 "single dyna (start=True, restart=False, iasvel=1): Boltzmann at "
                 "FIRSTT + Hoover CPT barostat init in one call (no separate nstep=0)"
             )
+        if heat_thermostat == "bussi" or _bussi_heat_ramp_active(kw):
+            return (
+                "single dyna (start=True, restart=False, iasvel=1): Boltzmann at "
+                "FIRSTT, then ASE Bussi rescale ramp (CHARMM ihtfrq=0)"
+            )
         return (
             "single dyna (start=True, restart=False, iasvel=1): Boltzmann at "
             "FIRSTT, then ihtfrq velocity scaling (iasors=0)"
@@ -2164,6 +2184,11 @@ def _infer_heat_velocity_init_label(
             return (
                 "single dyna (restart+start, iasvel=1): READYN coordinates + Boltzmann "
                 "+ CPT barostat init (no separate nstep=0)"
+            )
+        if heat_thermostat == "bussi" or _bussi_heat_ramp_active(kw):
+            return (
+                "single dyna (restart+start, iasvel=1): READYN coordinates + Boltzmann "
+                "at FIRSTT, then ASE Bussi rescale ramp (CHARMM ihtfrq=0)"
             )
         return (
             "single dyna (restart+start, iasvel=1): READYN coordinates + Boltzmann "
@@ -2193,8 +2218,10 @@ def _infer_iasors_meaning(
     if heat_thermostat == "hoover" and bool(kw.get("cpt")):
         if int(kw.get("ihtfrq", 0) or 0) == 0:
             return "Hoover CPT bath (ihtfrq=0; iasors unused)"
+    if heat_thermostat == "bussi" or _bussi_heat_ramp_active(kw):
+        return "ASE Bussi stochastic rescale (CHARMM ihtfrq=0; iasors inactive)"
     if int(kw.get("ihtfrq", 0) or 0) > 0:
-        return "velocity scaling at ihtfrq (preferred for ML heat)"
+        return "velocity scaling at ihtfrq (CHARMM IHTFRQ/TEMINC ramp)"
     return "iasors inactive (ihtfrq=0)"
 
 
@@ -2210,6 +2237,12 @@ def _classify_heat_thermostat_mode(
         return (
             "Hoover requested but vacuum/no PBC → scale fallback "
             "(ihtfrq/TEMINC, iasors=0; CPT requires CRYSTal)"
+        )
+    if heat_thermostat == "bussi" or _bussi_heat_ramp_active(kw):
+        interval = int(kw.get("_bussi_rescale_interval", 0) or 0)
+        return (
+            f"ASE Bussi heat ramp (rescales every {interval} steps; "
+            "CHARMM ihtfrq=0, canonical NVT fluctuations)"
         )
     if int(kw.get("ihtfrq", 0) or 0) > 0:
         return "velocity scaling heat (ihtfrq + TEMINC ramp, iasors=0)"
@@ -5853,6 +5886,29 @@ def run_dynamics_with_io(
                         log_banner=False,
                         global_step_offset=steps_before_chunk,
                         mlpot_ctx=mlpot_ctx,
+                    )
+                elif bussi_sub_chunk is not None:
+                    last_dyn = _run_bussi_heat_subchunked(
+                        chunk_kw,
+                        chunk_io,
+                        overlap_context=(
+                            f"overlap ({overlap_context}) chunk "
+                            f"{chunk_index + 1}/{n_chunks}"
+                        ),
+                        rng_base=rng_base,
+                        chunk_nstep=bussi_sub_chunk,
+                        total_nstep=chunk_nstep,
+                        extra_iokw=chunk_traj_iokw,
+                        rng_salt_base=_rng_salt_for_dynamics(
+                            overlap_context=overlap_context,
+                            chunk_index=chunk_index,
+                            steps_done=steps_done,
+                            retry_count=chunk_retry_count,
+                        ),
+                        loose_pbc=loose_pbc,
+                        log_banner=False,
+                        global_step_offset=steps_before_chunk,
+                        quiet_bussi=bool(chunk_kw.get("_quiet_bussi_rescale", False)),
                     )
                 else:
                     last_dyn = _run_dynamics_chunk(
