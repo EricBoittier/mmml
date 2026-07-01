@@ -566,3 +566,60 @@ def test_run_minimize_in_chunks_exits_early_when_converged():
     assert result.completed is True
     assert result.last_grms == pytest.approx(9.5)
     assert minimize.run_sd.call_count == 1
+
+
+def test_run_minimize_in_chunks_materializes_deferred_jax_before_first_sd():
+    ctx = MagicMock(use_pbc=True)
+    minimize = MagicMock()
+    pycharmm = MagicMock()
+    config = MinimizeWithMlpotConfig(
+        nstep=25,
+        mlpot_ctx=ctx,
+        sd_abort_on_grms_increase=False,
+        verbose=False,
+    )
+    base_kw = {"inbfrq": 0, "ihbfrq": 0}
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._sync_mlpot_lists_after_sd_chunk",
+        return_value=1.0,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_mlpot_sd_list_frequencies",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        return_value=np.zeros((1, 3)),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
+        return_value=1.0,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.materialize_deferred_mlpot_jax_before_sd",
+    ) as materialize:
+        _run_minimize_in_chunks(
+            minimize,
+            pycharmm,
+            config,
+            base_kw,
+            total_nstep=25,
+            pass_label="pass 1",
+            method="SD",
+            run_attr="run_sd",
+        )
+
+    materialize.assert_called_once_with(ctx, verbose=False)
+
+
+def test_materialize_deferred_mlpot_jax_before_sd_skips_without_mpi_defer():
+    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+        materialize_deferred_mlpot_jax_before_sd,
+    )
+
+    ctx = MagicMock()
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
+        return_value=False,
+    ):
+        assert materialize_deferred_mlpot_jax_before_sd(ctx) is False

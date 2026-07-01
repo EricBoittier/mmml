@@ -27,7 +27,14 @@ from mmml.interfaces.pycharmmInterface.jax_device_policy import (
 )
 from mmml.utils.jax_gpu_warmup import ensure_xla_gpu_warmed
 
-__all__ = ["resolve_ml_batch_size", "DecomposedMlpotCalculator", "DecomposedMlpotModel", "build_decomposed_mlpot_model", "warmup_decomposed_mlpot"]
+__all__ = [
+    "resolve_ml_batch_size",
+    "DecomposedMlpotCalculator",
+    "DecomposedMlpotModel",
+    "build_decomposed_mlpot_model",
+    "materialize_deferred_mlpot_jax_before_sd",
+    "warmup_decomposed_mlpot",
+]
 
 _DUMMY_MM_PAIR_IDX = jnp.zeros((1, 2), dtype=jnp.int32)
 _DUMMY_MM_PAIR_MASK = jnp.zeros((1,), dtype=jnp.bool_)
@@ -590,6 +597,7 @@ class DecomposedMlpotModel:
         self._spatial_mpi = bool(spatial_mpi)
         self._defer_jax_until_after_sd = bool(defer_jax_until_after_sd)
         self._defer_jax_until_mlpot_registered = bool(defer_jax_until_mlpot_registered)
+        self._charmm_mlpot_sd_active = 0
         self._jax_on_gpu = spherical_fn is not None
         self._registered_calculator: DecomposedMlpotCalculator | None = None
         if atoms_per_monomer is None:
@@ -705,17 +713,16 @@ class DecomposedMlpotModel:
     ) -> None:
         """Promote deferred JAX to GPU after the first hybrid ENER (jax-pme mesh only).
 
-        MIC / ScaFaCoS defer paths keep JAX on CPU for the entire MLpot SD minimization;
-        ``maybe_warmup_deferred_decomposed_mlpot`` promotes after SD completes. Mid-SD GPU
-        compile on MPI-linked CHARMM can corrupt OpenMPI pools and segfault the next
-        Fortran ``enbond`` step.
+        Blocked while CHARMM MLpot SD is active; ``maybe_warmup_deferred_decomposed_mlpot``
+        promotes after SD completes. Mid-SD GPU compile on MPI-linked CHARMM can corrupt
+        OpenMPI pools and segfault the next Fortran ``enbond`` step.
         """
         if not self._defer_jax_until_after_sd or self._jax_on_gpu:
             return
         if not self._defer_jax_pme_gpu_promote():
             return
         self._jax_pme_hybrid_first_ener_done = True
-        self.promote_jax_factory_to_gpu()
+        self.promote_jax_factory_to_gpu(force_after_sd=False)
         if not self._jax_on_gpu:
             return
         calc._spherical_forward_fn = None
@@ -726,9 +733,14 @@ class DecomposedMlpotModel:
             calc._get_update_fn = self._get_update_fn
             calc._cached_update_fn = None
 
-    def promote_jax_factory_to_gpu(self) -> None:
+    def promote_jax_factory_to_gpu(self, *, force_after_sd: bool = False) -> None:
         """Rebuild ``spherical_fn`` on GPU after MLpot SD (MPI defer path)."""
         if not self._defer_jax_until_after_sd or self._jax_on_gpu:
+            return
+        if (
+            not force_after_sd
+            and int(getattr(self, "_charmm_mlpot_sd_active", 0)) > 0
+        ):
             return
         if self._defer_jax_pme_gpu_promote():
             if self._verbose:
@@ -1139,6 +1151,103 @@ def _warmup_value_and_grad_for_model(
         )
 
 
+def materialize_deferred_mlpot_jax_before_sd(
+    mlpot_ctx: Any,
+    *,
+    verbose: bool = False,
+    probe_charmm_ener: bool = True,
+) -> bool:
+    """Build deferred JAX on CPU and probe CHARMM ``ENER`` before MLpot SD.
+
+    MPI-linked CHARMM defers JAX until SD. Lazy materialization inside the first
+    ``steepd`` ``gete`` can corrupt OpenMPI pools so the next ``enbond`` step
+    segfaults. Materialize the callback and run one ``ENER FORCE`` outside SD
+    first (with ``recover_mpi_for_charmm_after_jax`` between JAX and Fortran).
+    """
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        get_charmm_positions_array,
+        mlpot_skip_charmm_ener_force_before_first_sd,
+    )
+
+    if not mlpot_skip_charmm_ener_force_before_first_sd(mlpot_ctx):
+        return False
+
+    pyCModel = getattr(mlpot_ctx, "pyCModel", None)
+    if not isinstance(pyCModel, DecomposedMlpotModel):
+        return False
+    if not getattr(pyCModel, "_defer_jax_until_after_sd", False):
+        return False
+
+    did_work = False
+    if getattr(pyCModel, "_spherical_fn", None) is None:
+        calc = pyCModel.get_pycharmm_calculator()
+        if isinstance(calc, _DeferredDecomposedMlpotCalculator):
+            calc._ensure_real()
+        elif not isinstance(calc, DecomposedMlpotCalculator):
+            return False
+
+        pos = get_charmm_positions_array()
+        use_pbc = bool(getattr(mlpot_ctx, "use_pbc", False))
+        box_A = getattr(mlpot_ctx, "cubic_box_side_A", None)
+        if box_A is None:
+            box_A = getattr(mlpot_ctx, "charmm_cubic_box_side_A", None)
+        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+            mlpot_spherical_forces_ev_angstrom,
+        )
+
+        forces = mlpot_spherical_forces_ev_angstrom(
+            pyCModel,
+            positions=pos,
+            use_pbc=use_pbc,
+            box_A=float(box_A) if box_A is not None else None,
+        )
+        if forces is None:
+            raise RuntimeError(
+                "Pre-MLpot SD: failed to materialize deferred JAX hybrid calculator"
+            )
+
+        from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+            recover_mpi_for_charmm_after_jax,
+        )
+
+        recover_mpi_for_charmm_after_jax(
+            phase="after deferred MLpot JAX CPU materialize",
+        )
+        did_work = True
+        if verbose:
+            print(
+                "Pre-MLpot SD: materialized deferred JAX factory on CPU",
+                flush=True,
+            )
+
+    if probe_charmm_ener and not bool(
+        getattr(mlpot_ctx, "_mlpot_pre_sd_ener_probed", False)
+    ):
+        from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+            _ensure_domdec_off_for_mlpot_energy,
+        )
+        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+            charmm_grms_after_ener_force,
+        )
+        from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+            recover_mpi_for_charmm_after_jax,
+        )
+
+        _ensure_domdec_off_for_mlpot_energy(context="pre-MLpot SD ENER probe")
+        grms = charmm_grms_after_ener_force(silent=True)
+        recover_mpi_for_charmm_after_jax(phase="after pre-MLpot SD ENER probe")
+        setattr(mlpot_ctx, "_mlpot_pre_sd_ener_probed", True)
+        did_work = True
+        if verbose:
+            print(
+                f"Pre-MLpot SD: CHARMM ENER probe OK "
+                f"(GRMS={float(grms):.4f} kcal/mol/Å)",
+                flush=True,
+            )
+
+    return did_work
+
+
 def maybe_warmup_deferred_decomposed_mlpot(
     model: DecomposedMlpotModel,
     positions: np.ndarray,
@@ -1177,7 +1286,7 @@ def warmup_decomposed_mlpot(
     if getattr(model, "_jax_warmup_done", False) and model._spherical_fn is not None:
         return
     if model._defer_jax_until_after_sd and not model._jax_on_gpu:
-        model.promote_jax_factory_to_gpu()
+        model.promote_jax_factory_to_gpu(force_after_sd=True)
     else:
         model._finalize_jax_factory()
     from mmml.utils.jax_gpu_warmup import warmup_hybrid_spherical_cutoff

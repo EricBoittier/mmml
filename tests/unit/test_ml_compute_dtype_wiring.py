@@ -241,3 +241,27 @@ def test_decomposed_mlpot_defers_gpu_promote_until_first_ener_for_jax_pme_mesh()
     with patch.object(model, "_finalize_jax_factory") as mock_finalize:
         model.promote_jax_factory_to_gpu()
     mock_finalize.assert_called_once()
+
+
+def test_promote_mlpot_jax_for_calculator_mini_skips_gpu_when_mpi_defers_sd():
+    from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+        _promote_mlpot_jax_for_calculator_mini,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotModel
+
+    z = np.zeros(8, dtype=int)
+    model = DecomposedMlpotModel(
+        None,
+        CutoffParameters(),
+        2,
+        z,
+        defer_jax_until_after_sd=True,
+        lr_solver="jax_mic",
+    )
+    ctx = MagicMock(pyCModel=model)
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.materialize_deferred_mlpot_jax_before_sd",
+    ) as materialize, patch.object(model, "promote_jax_factory_to_gpu") as promote:
+        _promote_mlpot_jax_for_calculator_mini(ctx, verbose=False)
+    materialize.assert_called_once_with(ctx, verbose=False, probe_charmm_ener=False)
+    promote.assert_not_called()

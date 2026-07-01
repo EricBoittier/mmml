@@ -2505,7 +2505,9 @@ def defer_jax_warmup_until_after_mlpot_sd() -> bool:
         return False
     if _truthy("MMML_DEFER_JAX_WARMUP_UNTIL_AFTER_SD"):
         return True
-    return charmm_lib_links_mpi() and _under_mpirun()
+    # Defer on any MPI-linked libcharmm build, not only when launched under mpirun.
+    # Serial ``python`` + MPI-linked CHARMM is a common segfault path during MLpot SD.
+    return charmm_lib_links_mpi()
 
 
 def maybe_rerun_mmml_under_mpirun(

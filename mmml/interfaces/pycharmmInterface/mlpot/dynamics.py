@@ -1248,6 +1248,15 @@ def _run_minimize_in_chunks(
                 context=f"MLpot {method} {pass_label}",
                 cubic_box_side_A=float(box_side) if box_side is not None else None,
             )
+        if chunk_index == 1 and config.mlpot_ctx is not None:
+            from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+                materialize_deferred_mlpot_jax_before_sd,
+            )
+
+            materialize_deferred_mlpot_jax_before_sd(
+                config.mlpot_ctx,
+                verbose=config.verbose,
+            )
         step = min(_effective_mlpot_sd_chunk_nstep(config, previous_grms=previous_grms), remaining)
         kw = {**base_kw, "nstep": step}
         _prepare_mlpot_sd_list_frequencies(pycharmm, sd_kw=kw)

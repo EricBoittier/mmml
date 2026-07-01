@@ -249,7 +249,7 @@ def test_hybrid_warmup_com_switch_jit_when_pbc_cell(monkeypatch):
         return 0.5, np.zeros_like(np.asarray(pos, dtype=np.float64))
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.jax_pme_cross_monomer.compute_jax_pme_cross_monomer_power_law",
+        "mmml.interfaces.pycharmmInterface.long_range_backend.compute_jax_pme_cross_monomer_power_law",
         lambda *args, **kwargs: None,
     )
     monkeypatch.setattr(

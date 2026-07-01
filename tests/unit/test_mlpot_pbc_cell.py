@@ -475,6 +475,10 @@ def test_register_mlpot_context_forwards_cell():
         "mmml.interfaces.pycharmmInterface.mlpot.run_workflow.get_charmm_positions_array",
         return_value=r,
     ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.run_workflow.attach_topology_recovery_state",
+    ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.assert_mlpot_user_active",
         return_value=-1.0,
     ), patch(
