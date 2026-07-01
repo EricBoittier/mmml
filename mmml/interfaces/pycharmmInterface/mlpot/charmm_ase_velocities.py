@@ -158,6 +158,12 @@ def clamp_velocity_assignment_dynamics_kw(kw: dict[str, Any]) -> None:
             kw[key] = clamp_velocity_assignment_temp_k(float(kw[key]))
 
 
+def _pycharmm_coor_module():
+    import pycharmm.coor as coor
+
+    return coor
+
+
 def sync_charmm_velocities_akma(velocities_akma: np.ndarray) -> None:
     """Write AKMA velocities into CHARMM main and COMP sets."""
     from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
@@ -165,7 +171,7 @@ def sync_charmm_velocities_akma(velocities_akma: np.ndarray) -> None:
     )
 
     v = np.asarray(velocities_akma, dtype=np.float64).reshape(-1, 3)
-    import pycharmm.coor as coor
+    coor = _pycharmm_coor_module()
 
     if hasattr(coor, "set_velocity"):
         coor.set_velocity(v[:, 0], v[:, 1], v[:, 2])

@@ -29,9 +29,15 @@ def _import_pycharmm():
     return pycharmm
 
 
+def _charmm_lib():
+    import pycharmm.lib as lib
+
+    return lib
+
+
 def coor_set_comparison_capi(arr: np.ndarray) -> int:
     """Write COMP via ``coor_set_comparison`` (ctypes C API; no pandas)."""
-    import pycharmm.lib as lib
+    lib = _charmm_lib()
 
     if not hasattr(lib.charmm, "coor_set_comparison"):
         raise RuntimeError("libcharmm missing coor_set_comparison C API")
@@ -62,7 +68,7 @@ def coor_set_comparison_capi(arr: np.ndarray) -> int:
 
 def coor_get_comparison_capi(n_atoms: int | None = None) -> np.ndarray:
     """Read COMP as ``(N, 4)`` via ``coor_get_comparison`` (ctypes C API)."""
-    import pycharmm.lib as lib
+    lib = _charmm_lib()
 
     if not hasattr(lib.charmm, "coor_get_comparison"):
         raise RuntimeError("libcharmm missing coor_get_comparison C API")

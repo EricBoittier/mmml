@@ -121,16 +121,19 @@ def test_assign_maxwell_boltzmann_velocities_via_ase_syncs_charmm():
 
 
 def test_sync_charmm_velocities_akma_always_mirrors_comp():
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
-        sync_charmm_velocities_akma,
-    )
+    from mmml.interfaces.pycharmmInterface.mlpot import charmm_ase_velocities as cav
 
     vel = np.array([[10.0, 0.0, 0.0], [0.0, 20.0, 0.0]], dtype=float)
     fake_coor = types.ModuleType("pycharmm.coor")
     fake_coor.set_velocity = MagicMock()
-    with patch.dict(sys.modules, {"pycharmm.coor": fake_coor}), patch(
+    with patch.object(
+        cav,
+        "_pycharmm_coor_module",
+        return_value=fake_coor,
+    ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_akma",
     ) as sync_comp:
-        sync_charmm_velocities_akma(vel)
+        cav.sync_charmm_velocities_akma(vel)
     fake_coor.set_velocity.assert_called_once()
-    sync_comp.assert_called_once_with(vel)
+    sync_comp.assert_called_once()
+    np.testing.assert_allclose(sync_comp.call_args[0][0], vel)

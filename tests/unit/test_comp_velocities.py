@@ -76,7 +76,10 @@ def test_coor_set_comparison_capi():
     fake_charmm = MagicMock()
     fake_charmm.coor_set_comparison.return_value = 2
     fake_lib = types.SimpleNamespace(charmm=fake_charmm)
-    with patch.dict(sys.modules, {"pycharmm.lib": fake_lib}):
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities._charmm_lib",
+        return_value=fake_lib,
+    ):
         out = coor_set_comparison_capi(np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]))
     assert out == 2
     fake_charmm.coor_set_comparison.assert_called_once()
