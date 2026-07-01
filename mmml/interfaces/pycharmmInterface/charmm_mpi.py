@@ -2493,6 +2493,34 @@ def mpirun_launch_hint(argv0: str = "mmml md-system") -> str:
     return "\n".join(lines)
 
 
+def assert_mpi_launcher_for_mlpot_sd(*, context: str = "MLpot SD") -> None:
+    """Refuse serial ``python`` for MPI-linked CHARMM MLpot SD / minimize.
+
+    JAX inside the MLpot Fortran callback during ``steepd`` can corrupt OpenMPI
+    registered-memory pools when MPI was not initialized by ``mpirun`` before
+    CHARMM loaded; the next Fortran ``enbond`` step then segfaults.
+    """
+    if _truthy("MMML_ALLOW_SERIAL_MPI_CHARMM"):
+        return
+    if not charmm_lib_links_mpi():
+        return
+    if _under_mpirun():
+        return
+    raise RuntimeError(
+        f"{context} requires OpenMPI launch for MPI-linked libcharmm.so. "
+        "Serial python often segfaults in Fortran enbond during the first "
+        "MLpot SD step. Re-run under:\n"
+        f"  {_repo_root_hint() / 'scripts/mmml-charmm-mpirun.sh'} md-system ...\n"
+        "or:\n  "
+        + mpirun_launch_hint("mmml md-system")
+        + "\nSet MMML_ALLOW_SERIAL_MPI_CHARMM=1 only for deliberate A/B debugging."
+    )
+
+
+def _repo_root_hint() -> Path:
+    return Path(__file__).resolve().parents[3]
+
+
 def defer_jax_warmup_until_after_mlpot_sd() -> bool:
     """Defer JAX GPU warmup until after CHARMM MLpot SD on MPI-linked builds.
 

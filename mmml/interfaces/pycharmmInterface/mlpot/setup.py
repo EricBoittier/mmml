@@ -314,14 +314,7 @@ def mlpot_skip_charmm_ener_force_before_first_sd(mlpot_ctx: Any) -> bool:
 
 
 def mlpot_sd_charmm_ener_already_primed(mlpot_ctx: Any) -> bool:
-    """True when calculator prep or an earlier probe already ran ``ENER FORCE``."""
-    baseline = getattr(mlpot_ctx, "sd_watchdog_baseline_grms", None)
-    if baseline is not None:
-        try:
-            if np.isfinite(float(baseline)):
-                return True
-        except (TypeError, ValueError):
-            pass
+    """True when a prior ``ENER FORCE`` primed CHARMM after calculator prep."""
     return bool(getattr(mlpot_ctx, "_mlpot_pre_sd_ener_probed", False))
 
 

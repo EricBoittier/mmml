@@ -1451,6 +1451,31 @@ def _maybe_disable_ixtfrq_for_fixed_volume_chunk(
     _ensure_ixtfrq_above_nstep(chunk_kw, chunk_nstep)
 
 
+def _maybe_disable_interior_list_updates_for_fixed_volume_chunk(
+    chunk_kw: dict[str, Any],
+    chunk_nstep: int,
+) -> None:
+    """Skip in-segment ``UPDECI`` / ``mlpot_update`` on fixed-volume overlap chunks.
+
+    Hoover CPT heat with ``pmass=0`` does not resize the cell; interior NB/IMAGE
+    rebuilds every ``inbfrq`` steps call ``mlpot_update`` on MPI-linked MLpot PBC
+    and can segfault (especially after fly-off coordinates). Lists are refreshed at
+    overlap chunk handoffs via READYN restart + prep ``sync_charmm_lists_after_mini``.
+    """
+    pmass = chunk_kw.get("pmass")
+    is_npt = bool(chunk_kw.get("cpt")) and pmass is not None and int(pmass) > 0
+    if is_npt:
+        return
+    n = max(1, int(chunk_nstep))
+    disabled = n + 1
+    for key in ("inbfrq", "imgfrq", "ihbfrq", "ilbfrq"):
+        if key not in chunk_kw:
+            continue
+        val = int(chunk_kw[key])
+        if val > 0 and val <= n:
+            chunk_kw[key] = disabled
+
+
 def apply_loose_pbc_dyn_freq_kwargs(kw: dict[str, Any], *, nstep: int) -> None:
     """Set crystal/image list rebuild freqs above ``nstep`` so they never fire.
 
@@ -3658,6 +3683,7 @@ def _harmonize_overlap_chunk_frequencies(
     else:
         _ensure_ntrfrq_above_nstep(chunk_kw, n)
         _maybe_disable_ixtfrq_for_fixed_volume_chunk(chunk_kw, n)
+        _maybe_disable_interior_list_updates_for_fixed_volume_chunk(chunk_kw, n)
 
 
 def _mlpot_ctx_cubic_box_side_A(mlpot_ctx: Optional["MlpotContext"]) -> float | None:
@@ -5782,6 +5808,17 @@ def minimize_with_mlpot(
         sync_charmm_positions(config.reference_positions)
 
     _ensure_domdec_off_for_mlpot_energy(context="MLpot SD minimize")
+
+    if config.mlpot_ctx is not None:
+        from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+            assert_mpi_launcher_for_mlpot_sd,
+        )
+        from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+            mlpot_skip_charmm_ener_force_before_first_sd,
+        )
+
+        if mlpot_skip_charmm_ener_force_before_first_sd(config.mlpot_ctx):
+            assert_mpi_launcher_for_mlpot_sd(context="MLpot SD minimize")
 
     dcd_file = None
     if config.save and config.dcd_path is not None and config.dcd_nsavc > 0:

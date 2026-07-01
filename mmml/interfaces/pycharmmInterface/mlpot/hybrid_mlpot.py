@@ -1258,11 +1258,13 @@ def materialize_deferred_mlpot_jax_before_sd(
     """
     del probe_charmm_ener, force_ener_probe, sync_lists
     from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+        assert_mpi_launcher_for_mlpot_sd,
+        charmm_lib_links_mpi,
         recover_mpi_for_charmm_after_jax,
+        _under_mpirun,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
-        mlpot_sd_charmm_ener_already_primed,
         mlpot_skip_charmm_ener_force_before_first_sd,
         rebind_mlpot_calculator_from_pycmodel,
     )
@@ -1272,6 +1274,13 @@ def materialize_deferred_mlpot_jax_before_sd(
     if not mlpot_skip_charmm_ener_force_before_first_sd(mlpot_ctx):
         return False
 
+    assert_mpi_launcher_for_mlpot_sd(context="Pre-MLpot SD materialize")
+    if charmm_lib_links_mpi() and not _under_mpirun() and verbose:
+        print(
+            "WARN: serial python with MPI-linked CHARMM (MMML_ALLOW_SERIAL_MPI_CHARMM=1?)",
+            flush=True,
+        )
+
     pyCModel = getattr(mlpot_ctx, "pyCModel", None)
     if not isinstance(pyCModel, DecomposedMlpotModel):
         return False
@@ -1279,7 +1288,6 @@ def materialize_deferred_mlpot_jax_before_sd(
         return False
 
     rebind_mlpot_calculator_from_pycmodel(mlpot_ctx, verbose=False)
-    charmm_primed = mlpot_sd_charmm_ener_already_primed(mlpot_ctx)
 
     pos = get_charmm_positions_array()
     use_pbc = bool(getattr(mlpot_ctx, "use_pbc", False))
@@ -1323,11 +1331,7 @@ def materialize_deferred_mlpot_jax_before_sd(
     calc = pyCModel.get_pycharmm_calculator()
     if isinstance(calc, _DeferredDecomposedMlpotCalculator):
         calc = calc._ensure_real()
-    if (
-        isinstance(calc, DecomposedMlpotCalculator)
-        and calc.spherical_fn is not None
-        and not charmm_primed
-    ):
+    if isinstance(calc, DecomposedMlpotCalculator) and calc.spherical_fn is not None:
         box, mm_pair_idx, mm_pair_mask, use_mm_pairs = _resolve_mlpot_warmup_box_pairs(
             pyCModel,
             pos,
@@ -1355,16 +1359,6 @@ def materialize_deferred_mlpot_jax_before_sd(
             "Pre-MLpot SD: callback forward JIT ready",
             flush=True,
         )
-    elif charmm_primed:
-        recover_mpi_for_charmm_after_jax(
-            phase="after pre-MLpot SD (CHARMM ENER already primed)",
-        )
-        if verbose:
-            print(
-                "Pre-MLpot SD: skipping callback JIT warmup "
-                "(calculator prep already ran CHARMM ENER FORCE)",
-                flush=True,
-            )
 
     return did_work
 
