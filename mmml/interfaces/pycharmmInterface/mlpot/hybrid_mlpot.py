@@ -1194,10 +1194,15 @@ def materialize_deferred_mlpot_jax_before_sd(
     (especially right after deferred JAX materialize). Post-chunk SD sync uses
     :func:`sync_charmm_lists_after_mini` separately after coordinates move.
     """
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+        recover_mpi_for_charmm_after_jax,
+    )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
         mlpot_skip_charmm_ener_force_before_first_sd,
     )
+
+    recover_mpi_for_charmm_after_jax(phase="before pre-MLpot SD JAX materialize")
 
     if not mlpot_skip_charmm_ener_force_before_first_sd(mlpot_ctx):
         return False

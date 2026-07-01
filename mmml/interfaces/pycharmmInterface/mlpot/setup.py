@@ -1310,17 +1310,29 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
         prepare_charmm_pbc,
     )
 
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+        recover_mpi_for_charmm_after_jax,
+    )
+
     side = float(cubic_box_side_A)
     prepare_charmm_pbc(side)
+    recover_mpi_for_charmm_after_jax(
+        phase="after MLpot PBC crystal/IMAGE build",
+    )
     print(
         f"MLpot PBC: crystal/IMAGE ready (L={side:.3f} Å); installing ML exclusions…",
         flush=True,
     )
     _install_ml_exclusions(ml_selection, update=False)
     print("MLpot PBC: rebuilding nonbond lists (upinb)…", flush=True)
-    apply_pbc_nbonds(nbxmod=5, cubic_box_side_A=side)
+    with charmm_relaxed_bomlev():
+        apply_pbc_nbonds(nbxmod=5, cubic_box_side_A=side)
     pycharmm = _import_pycharmm()
     pycharmm.image.update_bimag()
+    recover_mpi_for_charmm_after_jax(
+        phase="after MLpot PBC upinb during registration",
+    )
     if verbose:
         print(
             "MLpot PBC: rebuilt crystal/nb lists after CGENFF param read "

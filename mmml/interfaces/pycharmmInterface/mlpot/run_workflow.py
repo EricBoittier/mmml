@@ -715,6 +715,8 @@ def _register_mlpot_context(
     # Register MLpot in CHARMM *before* JAX GPU warmup. Long XLA compile/autodiff
     # before the first ``upinb`` (MLpot exclusion rebuild) can segfault on MPI
     # CHARMM builds (DCM clusters, PBC NpT).
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import recover_mpi_for_charmm_after_jax
+
     ctx = register_mlpot(
         pyCModel,
         z,
@@ -739,6 +741,7 @@ def _register_mlpot_context(
             else None
         ),
     )
+    recover_mpi_for_charmm_after_jax(phase="after MLpot registration")
     from mmml.interfaces.pycharmmInterface.jax_device_policy import apply_mlpot_jax_platform_env
 
     apply_mlpot_jax_platform_env(quiet=not verbose)

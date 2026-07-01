@@ -676,5 +676,5 @@ def test_materialize_deferred_mlpot_jax_before_sd_skips_update_sync_by_default()
         )
 
     probe.assert_called_once()
-    assert recover.call_count == 1
+    assert recover.call_count == 2
     sync_lists.assert_not_called()
