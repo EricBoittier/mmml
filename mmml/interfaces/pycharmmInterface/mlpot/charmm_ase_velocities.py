@@ -366,6 +366,15 @@ def apply_bussi_velocity_rescale(
     masses = charmm_masses_amu()
     v_akma = charmm_velocities_akma_for_thermostat()
     if v_akma is None:
+        if not quiet:
+            print(
+                f"ASE Bussi rescale: no readable velocities; "
+                f"assigning Maxwell-Boltzmann at {temp:.2f} K",
+                flush=True,
+            )
+        assign_maxwell_boltzmann_velocities_via_ase(temp, quiet=quiet)
+        v_akma = charmm_velocities_akma_for_thermostat()
+    if v_akma is None:
         raise RuntimeError("apply_bussi_velocity_rescale: CHARMM velocities unavailable")
     dof = resolve_bussi_degrees_of_freedom(ndegf)
     ke = estimate_kinetic_energy_kcalmol(v_akma, masses)

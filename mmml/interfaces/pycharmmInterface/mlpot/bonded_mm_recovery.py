@@ -217,6 +217,16 @@ def restore_charmm_state_from_restart(
             f"(live rows={None if live is None else live.shape[0]}). "
             "PSF and restart atom counts must match."
         )
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_restart_velocities,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        sync_charmm_velocities_akma,
+    )
+
+    vel = read_restart_velocities(path)
+    if vel is not None and vel.shape[0] == n:
+        sync_charmm_velocities_akma(vel)
 
 
 def restore_charmm_state_from_crd(crd_path: PathLike) -> None:
