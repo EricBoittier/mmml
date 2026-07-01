@@ -132,6 +132,65 @@ def test_run_dynamics_passes_init_velocities_for_iasvel_zero_continuation():
     assert run_capi.call_args.kwargs.get("init_velocities") is init
 
 
+def test_run_dynamics_bussi_uses_comp_not_c_api_init_velocities():
+    import sys
+    from unittest.mock import MagicMock, patch
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics
+
+    v = np.ones((4, 3), dtype=float) * 42.0
+    init = {"vx": v[:, 0], "vy": v[:, 1], "vz": v[:, 2]}
+    fake_dyn = MagicMock()
+    fake_pycharmm = MagicMock()
+    fake_pycharmm.DynamicsScript = MagicMock(return_value=fake_dyn)
+    with (
+        patch.dict(sys.modules, {"pycharmm": fake_pycharmm}),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+            return_value=True,
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._resolve_dynamics_init_velocities",
+            return_value=init,
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_via_c_api",
+            return_value=fake_dyn,
+        ) as run_capi,
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._apply_dynamics_io_setters",
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.mirror_comparison_velocities_for_dynamics",
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_akma",
+        ) as sync_comp,
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
+        ),
+    ):
+        run_dynamics(
+            {
+                "nstep": 50,
+                "start": False,
+                "iasvel": 0,
+                "_skip_ase_cold_velocity_assign": True,
+                "_bussi_ramp": {
+                    "firstt": 20.0,
+                    "finalt": 100.0,
+                    "teminc": 0.08,
+                    "ihtfrq": 50,
+                },
+            }
+        )
+    sync_comp.assert_called_once()
+    assert run_capi.call_args.kwargs.get("init_velocities") is None
+
+
 def test_run_dynamics_c_api_path_invoked():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics
 
