@@ -815,11 +815,12 @@ def _register_mlpot_context(
     attach_topology_recovery_state(ctx, topology_psf)
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         assert_mlpot_user_active,
+        mlpot_skip_charmm_ener_force_before_first_sd,
         rebind_mlpot_calculator_from_pycmodel,
     )
 
     rebind_mlpot_calculator_from_pycmodel(ctx, verbose=verbose)
-    if not defer_jax_warmup:
+    if not defer_jax_warmup and not mlpot_skip_charmm_ener_force_before_first_sd(ctx):
         assert_mlpot_user_active(
             ctx,
             context="MLpot registration",

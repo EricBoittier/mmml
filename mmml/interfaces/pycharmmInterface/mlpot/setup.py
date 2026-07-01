@@ -284,6 +284,35 @@ def rebind_mlpot_calculator_from_pycmodel(
     return True
 
 
+def mlpot_skip_charmm_ener_force_before_first_sd(mlpot_ctx: Any) -> bool:
+    """Skip CHARMM ``ENER FORCE`` between MLpot registration and the first SD step.
+
+    ``MLpot.__init__`` already runs ``upinb`` once for PBC exclusions. A second
+    ``ENER FORCE`` → ``update`` → ``upinb`` on MPI-linked ``libcharmm.so`` (deferred
+    JAX path) can segfault before the first MLpot SD step materializes the callback.
+    """
+    if not bool(getattr(mlpot_ctx, "use_pbc", False)):
+        return False
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+        charmm_lib_links_mpi,
+        defer_jax_warmup_until_after_mlpot_sd,
+    )
+
+    if not charmm_lib_links_mpi():
+        return False
+    if defer_jax_warmup_until_after_mlpot_sd():
+        return True
+    pyCModel = getattr(mlpot_ctx, "pyCModel", None)
+    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotModel
+
+    if isinstance(pyCModel, DecomposedMlpotModel):
+        if getattr(pyCModel, "_defer_jax_until_after_sd", False) and not getattr(
+            pyCModel, "_jax_on_gpu", False
+        ):
+            return True
+    return False
+
+
 def assert_mlpot_user_active(
     ctx: MlpotContext,
     *,

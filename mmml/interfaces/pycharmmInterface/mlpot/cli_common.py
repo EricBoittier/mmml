@@ -2276,6 +2276,27 @@ def probe_and_light_resync_if_desync(
     restart_path: Path | str | None = None,
 ) -> float:
     """Run light resync when hybrid/CHARMM GRMS look desynced; else refresh in place."""
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        mlpot_skip_charmm_ener_force_before_first_sd,
+    )
+
+    if mlpot_skip_charmm_ener_force_before_first_sd(mlpot_ctx):
+        if verbose and context:
+            print(
+                f"{context}: skipping CHARMM ENER FORCE until MLpot SD "
+                "(PBC + MPI-linked CHARMM deferred JAX)",
+                flush=True,
+            )
+        diag = measure_hybrid_charmm_grms(mlpot_ctx, prefer_calculator=False)
+        _print_hybrid_charmm_grms_diag(
+            context,
+            diag,
+            mlpot_ctx=mlpot_ctx,
+            quiet=not verbose,
+        )
+        hybrid = float(diag.hybrid)
+        return hybrid if np.isfinite(hybrid) else 0.0
+
     if verbose and context:
         print(
             f"{context}: first hybrid ENER FORCE "
@@ -2344,18 +2365,34 @@ def prepare_mlpot_hybrid_state_for_sd(
 
     Returns ``(hybrid_grms, user_kcal)`` when MLpot SD may proceed.
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import assert_mlpot_user_active
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        assert_mlpot_user_active,
+        mlpot_skip_charmm_ener_force_before_first_sd,
+    )
 
     if allow_high_grms is None:
         allow_high_grms = bool(os.environ.get("MMML_MLPOT_ALLOW_HIGH_GRMS"))
 
-    user = assert_mlpot_user_active(
+    skip_pre_sd_ener = mlpot_skip_charmm_ener_force_before_first_sd(mlpot_ctx)
+    if skip_pre_sd_ener:
+        user = 0.0
+        if verbose:
+            print(
+                f"{context_prefix}: deferring USER/ENER check until MLpot SD starts "
+                "(PBC + MPI-linked CHARMM deferred JAX)",
+                flush=True,
+            )
+    else:
+        user = assert_mlpot_user_active(
+            mlpot_ctx,
+            context=f"{context_prefix} MLpot SD minimize",
+            quiet=not verbose,
+        )
+        charmm_grms_after_ener_force()
+    diag = measure_hybrid_charmm_grms(
         mlpot_ctx,
-        context=f"{context_prefix} MLpot SD minimize",
-        quiet=not verbose,
+        prefer_calculator=not skip_pre_sd_ener,
     )
-    charmm_grms_after_ener_force()
-    diag = measure_hybrid_charmm_grms(mlpot_ctx)
     _print_hybrid_charmm_grms_diag(
         f"{context_prefix} hybrid GRMS check" if verbose else "",
         diag,
@@ -2373,7 +2410,7 @@ def prepare_mlpot_hybrid_state_for_sd(
             "(Packmol at lower density, then compress with MC/NPT)."
         )
 
-    if diag.kind == "desync_suspected":
+    if diag.kind == "desync_suspected" and not skip_pre_sd_ener:
         hybrid_grms = light_resync_mlpot_state(
             mlpot_ctx,
             context=f"{context_prefix} light resync" if verbose else "",
