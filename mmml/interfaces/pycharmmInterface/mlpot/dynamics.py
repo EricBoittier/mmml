@@ -3358,6 +3358,7 @@ def _resolve_dynamics_init_velocities(
         last_synced_velocities_akma_raw,
         resolve_assignment_temperature_k,
         velocities_are_cold,
+        velocities_are_pathological,
     )
 
     if bool(kw.get("_bussi_comp_only_handoff")):

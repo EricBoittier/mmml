@@ -324,6 +324,22 @@ def read_restart_velocities(path: Path) -> np.ndarray | None:
     return None
 
 
+def restart_velocities_match_coordinates(
+    path: Path,
+    velocities: np.ndarray,
+    *,
+    atol: float = 1.0e-5,
+) -> bool:
+    """True when restart ``!VX`` values duplicate ``!X, Y, Z`` (COMP-as-velocity bug)."""
+    pos = read_restart_coordinates(path)
+    if pos is None:
+        return False
+    vel = np.asarray(velocities, dtype=np.float64).reshape(-1, 3)
+    if pos.shape != vel.shape:
+        return False
+    return bool(np.allclose(pos, vel, rtol=0.0, atol=float(atol)))
+
+
 def read_restart_coordinates(path: Path) -> np.ndarray | None:
     """Return ``(N, 3)`` Cartesian coordinates from a CHARMM restart file."""
     p = Path(path)
