@@ -4524,9 +4524,6 @@ def _run_cpt_stability_subchunked(
     mlpot_ctx: Optional["MlpotContext"] = None,
 ) -> Any:
     """Integrate CPT dynamics in short ``dyn.run()`` segments with state checks."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
-        validate_charmm_dynamics_state_after_chunk,
-    )
 
     total = int(total_nstep if total_nstep is not None else kw.get("nstep", 0))
     steps_done = 0

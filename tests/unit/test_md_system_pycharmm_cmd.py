@@ -38,7 +38,6 @@ def _pycharmm_args(**overrides) -> argparse.Namespace:
         no_fix=False,
         dyn_nprint=100,
         dyn_iprfrq=500,
-        dyn_freq_cadence=50,
         dcd_nsavc=100,
         echeck=100.0,
         ps_heat=2.0,
@@ -124,17 +123,6 @@ def _pycharmm_args(**overrides) -> argparse.Namespace:
     )
     base.update(overrides)
     return argparse.Namespace(**base)
-
-
-def test_build_pycharmm_command_forwards_dyn_freq_cadence():
-    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
-
-    cmd = build_pycharmm_command(_pycharmm_args(dyn_freq_cadence=50))
-    assert "--dyn-freq-cadence" in cmd
-    idx = cmd.index("--dyn-freq-cadence")
-    assert cmd[idx + 1] == "50"
-    parsed = pycharmm_mlpot.parse_args(cmd)
-    assert parsed.dyn_freq_cadence == 50
 
 
 def test_build_pycharmm_command_forwards_include_mm_false():
