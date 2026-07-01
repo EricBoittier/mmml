@@ -146,7 +146,11 @@ def build_trialanine_water_box_in_charmm(
     import pycharmm.settings as settings
     import pycharmm.write as write
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm, reset_block
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+        crystal_free_charmm_for_param_append,
+        pycharmm,
+        reset_block,
+    )
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         apply_pbc_nbonds,
         prepare_charmm_pbc,
@@ -155,6 +159,8 @@ def build_trialanine_water_box_in_charmm(
     protein_rtf, protein_prm = protein_toppar_paths()
     rng = np.random.default_rng(seed)
 
+    # Prior CPT/barostat tests may leave IMAGE/crystal state; MPI-safe free before rebuild.
+    crystal_free_charmm_for_param_append()
     pycharmm.lingo.charmm_script("DELETE ATOM SELE ALL END")
     reset_block()
 
