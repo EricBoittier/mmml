@@ -7,7 +7,6 @@ import argparse
 import pytest
 
 from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
-    resolve_dynamics_freq_cadence,
     resolve_dynamics_print_kwargs,
     resolve_heat_ihtfrq,
 )
@@ -22,53 +21,25 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
 from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import _build_stage_dynamics_kw
 
 
-def test_resolve_heat_ihtfrq_defaults_to_freq_cadence():
-    args = argparse.Namespace(
-        heat_ihtfrq=0, dyn_nprint=500, quiet=False, dyn_freq_cadence=50
-    )
-    assert resolve_heat_ihtfrq(args, nstep=2000) == 50
-
-
-def test_resolve_heat_ihtfrq_legacy_defaults_to_dyn_nprint():
-    args = argparse.Namespace(
-        heat_ihtfrq=0, dyn_nprint=500, quiet=False, dyn_freq_cadence=0
-    )
+def test_resolve_heat_ihtfrq_defaults_to_dyn_nprint():
+    args = argparse.Namespace(heat_ihtfrq=0, dyn_nprint=500, quiet=False)
     assert resolve_heat_ihtfrq(args, nstep=2000) == 500
 
 
 def test_resolve_heat_ihtfrq_short_stage_ensures_multiple_rescales():
-    args = argparse.Namespace(
-        heat_ihtfrq=0, dyn_nprint=500, quiet=False, dyn_freq_cadence=0
-    )
+    args = argparse.Namespace(heat_ihtfrq=0, dyn_nprint=500, quiet=False)
     assert resolve_heat_ihtfrq(args, nstep=200) == 25
     assert 200 // resolve_heat_ihtfrq(args, nstep=200) >= 8
 
 
 def test_resolve_heat_ihtfrq_explicit_override():
-    args = argparse.Namespace(
-        heat_ihtfrq=40, dyn_nprint=500, quiet=False, dyn_freq_cadence=50
-    )
+    args = argparse.Namespace(heat_ihtfrq=40, dyn_nprint=500, quiet=False)
     assert resolve_heat_ihtfrq(args, nstep=2000) == 40
 
 
 def test_resolve_heat_ihtfrq_quiet_uses_full_stage():
-    args = argparse.Namespace(
-        heat_ihtfrq=0, dyn_nprint=500, quiet=True, dyn_freq_cadence=50
-    )
+    args = argparse.Namespace(heat_ihtfrq=0, dyn_nprint=500, quiet=True)
     assert resolve_heat_ihtfrq(args, nstep=123) == 123
-
-
-def test_resolve_dynamics_print_kwargs_uses_cadence_not_nsavc():
-    args = argparse.Namespace(
-        dyn_nprint=500, dyn_iprfrq=2000, quiet=False, dyn_freq_cadence=50
-    )
-    dyn_print = resolve_dynamics_print_kwargs(args, nstep=500, nsavc=499)
-    assert dyn_print == {"nprint": 50, "iprfrq": 50, "isvfrq": 50}
-
-
-def test_resolve_dynamics_freq_cadence_zero_disables():
-    args = argparse.Namespace(dyn_freq_cadence=0)
-    assert resolve_dynamics_freq_cadence(args) is None
 
 
 def test_build_stage_heat_echeck_scales_for_large_cluster():
@@ -79,7 +50,6 @@ def test_build_stage_heat_echeck_scales_for_large_cluster():
         heat_thermostat="scale",
         no_echeck=False,
         no_echeck_heat=False,
-        dyn_freq_cadence=0,
     )
     dyn_print = resolve_dynamics_print_kwargs(args, nstep=200)
     kw = _build_stage_dynamics_kw(
@@ -101,9 +71,7 @@ def test_build_stage_heat_echeck_scales_for_large_cluster():
 
 
 def test_build_stage_heat_ihtfrq_matches_dyn_nprint():
-    args = argparse.Namespace(
-        heat_ihtfrq=0, dyn_nprint=250, quiet=False, dyn_freq_cadence=0
-    )
+    args = argparse.Namespace(heat_ihtfrq=0, dyn_nprint=250, quiet=False)
     dyn_print = resolve_dynamics_print_kwargs(args, nstep=5000)
     kw = _build_stage_dynamics_kw(
         "heat",
@@ -118,7 +86,7 @@ def test_build_stage_heat_ihtfrq_matches_dyn_nprint():
         use_pbc=False,
     )
     assert kw["ihtfrq"] == 250
-    assert kw["nprint"] == 250
+    assert kw["nprint"] == 200
 
 
 def test_apply_heat_ramp_frequencies_recomputes_teminc():
@@ -381,9 +349,7 @@ def test_finalize_heat_dynamics_frequencies_harmonizes_ihtfrq_and_teminc():
 
 
 def test_free_space_equi_restart_disables_ihtfrq():
-    args = argparse.Namespace(
-        heat_ihtfrq=0, dyn_nprint=500, quiet=False, dyn_freq_cadence=0
-    )
+    args = argparse.Namespace(heat_ihtfrq=0, dyn_nprint=500, quiet=False)
     dyn_print = resolve_dynamics_print_kwargs(args, nstep=500)
     kw = _build_stage_dynamics_kw(
         "equi",
