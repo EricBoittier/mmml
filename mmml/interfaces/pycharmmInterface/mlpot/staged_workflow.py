@@ -1910,6 +1910,11 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 ctx,
                 context="Post MLpot mini" if not args.quiet else "Post MLpot mini GRMS",
             )
+            from mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery import (
+                stash_geometry_reference_on_ctx,
+            )
+
+            stash_geometry_reference_on_ctx(ctx, kind="mini")
             mini_trajectories = _trajectory_outputs(paths["mini_charmm_dcd"])
             mini_trajectories.extend(_trajectory_outputs(paths["mlpot_mmml_dcd"]))
             last_traj = mini_trajectories[-1] if mini_trajectories else None
@@ -2003,6 +2008,11 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     f"Geometry baseline restart -> {baseline_path.name}",
                     flush=True,
                 )
+        from mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery import (
+            stash_geometry_reference_on_ctx,
+        )
+
+        stash_geometry_reference_on_ctx(ctx, kind="baseline")
 
         overlap_cfg = attach_geometry_checkpoints_to_overlap(
             overlap_cfg,

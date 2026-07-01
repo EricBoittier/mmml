@@ -1194,6 +1194,9 @@ def test_check_extent_cleanup_rescue_rebuilds_monomer_from_reference(tmp_path):
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
     ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery.polish_after_extent_repack",
+        return_value=1.0,
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.run_extent_recovery_from_prior_restart",
     ) as flyoff:
         extent, rescued = check_dynamics_overlap(
@@ -1265,6 +1268,9 @@ def test_check_extent_rescue_falls_back_to_repack_when_bonded_sd_leaves_extent(t
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
     ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery.polish_after_extent_repack",
+        return_value=1.0,
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.run_extent_recovery_from_prior_restart",
     ) as flyoff:
         extent, rescued = check_dynamics_overlap(
@@ -1274,6 +1280,80 @@ def test_check_extent_rescue_falls_back_to_repack_when_bonded_sd_leaves_extent(t
     assert rescued is True
     assert extent < 12.0
     assert ctx._overlap_post_rescue_cold_start is True
+
+
+def test_check_extent_rescue_repack_from_memory_only():
+    """Repack works with in-memory mini snapshot when disk ladder is empty."""
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        DynamicsOverlapConfig,
+        OverlapRescueConfig,
+        check_dynamics_overlap,
+    )
+
+    ref = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [5.0, 0.0, 0.0],
+            [5.0, 1.0, 0.0],
+            [5.5, 0.5, 0.0],
+        ],
+        dtype=float,
+    )
+    bad_pos = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [30.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+        ],
+        dtype=float,
+    )
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        min_distance_A=0.0,
+        intra_min_distance_A=0.0,
+        max_monomer_extent_A=12.0,
+        n_monomers=2,
+        use_pbc=False,
+        cleanup_mode=False,
+        rescue=OverlapRescueConfig(nstep_sd=10, nstep_abnr=0, verbose=False),
+    )
+    ctx = mock.MagicMock()
+    ctx.geometry_mini_positions = ref.copy()
+    positions = {"current": bad_pos.copy()}
+
+    def _get_pos():
+        return positions["current"]
+
+    def _sync_pos(new_pos):
+        positions["current"] = np.asarray(new_pos, dtype=float)
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        side_effect=_get_pos,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        side_effect=_sync_pos,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery.polish_after_extent_repack",
+        return_value=1.0,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.run_extent_recovery_from_prior_restart",
+    ) as flyoff:
+        extent, rescued = check_dynamics_overlap(
+            cfg, context="HEAT", step=3000, mlpot_ctx=ctx
+        )
+    flyoff.assert_not_called()
+    assert rescued is True
+    assert extent < 12.0
 
 
 def test_check_intra_monomer_raises_on_close_contact():

@@ -1180,13 +1180,19 @@ def _handle_extent_cleanup_rescue(
         raise exc
 
     candidates = build_extent_recovery_candidates(config)
-    if not candidates:
+    from mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery import (
+        polish_after_extent_repack,
+        resolve_extent_reference_positions,
+    )
+
+    try:
+        ref_pos, ref_path = resolve_extent_reference_positions(candidates, mlpot_ctx)
+    except RuntimeError as ref_exc:
         raise RuntimeError(
             f"{exc}; cleanup extent rescue requires a geometry baseline / checkpoint "
-            f"ladder (prior_segment_restart={config.prior_segment_restart!r})"
-        ) from exc
-
-    ref_pos, ref_path = _load_extent_reference_positions(candidates)
+            f"ladder (prior_segment_restart={config.prior_segment_restart!r}) or "
+            f"in-memory mini/baseline coordinates on MlpotContext"
+        ) from ref_exc
     if ref_pos.shape != pos.shape:
         raise RuntimeError(
             f"{exc}; cleanup extent rescue: reference {ref_path.name} has "
@@ -1233,6 +1239,11 @@ def _handle_extent_cleanup_rescue(
     sync_charmm_lists_after_mini(quiet=True)
     invalidate_mlpot_calculator_caches(mlpot_ctx)
     mlpot_ctx.reregister_mlpot(verbose=False, reregister_params=False)
+    polish_after_extent_repack(
+        mlpot_ctx,
+        config,
+        label=f"{label} after monomer repack",
+    )
     setattr(mlpot_ctx, "_overlap_post_rescue_cold_start", True)
     return _extent_check(config, context=f"{label} after cleanup extent rescue")
 
@@ -1247,10 +1258,6 @@ def _escalate_extent_rescue(
     sd_steps: int | None = None,
 ) -> float:
     """Try density prep ladder, then monomer repack, before aborting extent rescue."""
-    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
-        build_extent_recovery_candidates,
-    )
-
     exc: RuntimeError = still_bad
     if config.density_prep_ladder_fallback:
         try:
@@ -1265,17 +1272,15 @@ def _escalate_extent_rescue(
                 raise
             exc = ladder_exc
 
-    candidates = build_extent_recovery_candidates(config)
-    if candidates:
-        try:
-            return _handle_extent_cleanup_rescue(
-                config,
-                label=label,
-                exc=exc,
-                mlpot_ctx=mlpot_ctx,
-            )
-        except RuntimeError as repack_exc:
-            exc = repack_exc
+    try:
+        return _handle_extent_cleanup_rescue(
+            config,
+            label=label,
+            exc=exc,
+            mlpot_ctx=mlpot_ctx,
+        )
+    except RuntimeError as repack_exc:
+        exc = repack_exc
 
     if recovery_path is not None:
         sd_txt = f" (SD={sd_steps})" if sd_steps is not None else ""
@@ -1307,13 +1312,26 @@ def _handle_extent_rescue(
         build_extent_recovery_candidates,
         resolve_extent_recovery_source,
     )
+    from mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery import (
+        in_memory_extent_reference_available,
+    )
 
     candidates = build_extent_recovery_candidates(config)
-    if not candidates:
+    if not candidates and not in_memory_extent_reference_available(mlpot_ctx):
         raise RuntimeError(
             f"{exc}; extent recovery requires a geometry baseline / checkpoint ladder "
-            f"(prior_segment_restart={config.prior_segment_restart!r})"
+            f"(prior_segment_restart={config.prior_segment_restart!r}) or in-memory "
+            f"mini/baseline coordinates on MlpotContext"
         ) from exc
+    if not candidates:
+        print(
+            f"{exc}\nNo disk geometry checkpoint; repacking from in-memory "
+            "mini/baseline snapshot...",
+            flush=True,
+        )
+        return _handle_extent_cleanup_rescue(
+            config, label=label, exc=exc, mlpot_ctx=mlpot_ctx
+        )
     recovery_path = resolve_extent_recovery_source(candidates) or candidates[0]
     sd_steps = config.intra_rescue_sd_steps
     if sd_steps is None:

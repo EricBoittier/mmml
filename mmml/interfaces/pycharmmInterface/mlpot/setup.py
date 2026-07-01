@@ -144,6 +144,10 @@ class MlpotContext:
     pre_mlpot_iblo: list[int] | None = None
     pre_mlpot_inb: list[int] | None = None
     sd_watchdog_baseline_grms: float | None = None
+    # In-memory templates for extent fly-off repack (no disk CRD/restart required).
+    geometry_baseline_positions: np.ndarray | None = None
+    geometry_mini_positions: np.ndarray | None = None
+    workflow_args: Any = None
 
     def unset(self) -> None:
         self.mlpot.unset_mlpot()
