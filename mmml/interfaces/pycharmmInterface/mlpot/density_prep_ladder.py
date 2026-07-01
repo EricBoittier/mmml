@@ -417,7 +417,7 @@ def _sync_pbc_after_box_change(
 ) -> float | None:
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import light_resync_mlpot_state
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
-        prepare_charmm_pbc,
+        push_charmm_cubic_box_side_A,
         sync_workflow_pbc_box_side_after_mm_pretreat,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import (
@@ -466,14 +466,17 @@ def _sync_pbc_after_box_change(
         )
         return float(synced) if synced is not None else float(box_side)
 
-    prepare_charmm_pbc(float(box_side))
-    synced = sync_workflow_pbc_box_side_after_mm_pretreat(
+    pushed, _ = push_charmm_cubic_box_side_A(
         float(box_side),
+        quiet=quiet,
+    )
+    synced = sync_workflow_pbc_box_side_after_mm_pretreat(
+        float(pushed),
         pretreat_restart=pretreat_restart,
         args=args,
         quiet=quiet,
     )
-    return float(synced) if synced is not None else float(box_side)
+    return float(synced) if synced is not None else float(pushed)
 
 
 def run_density_prep_ladder(

@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest import mock
 
 import numpy as np
+import pytest
 
 from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
     find_latest_pretreat_mm_restart,
@@ -70,7 +71,60 @@ def test_find_latest_pretreat_mm_restart_equi_when_no_prod(tmp_path: Path) -> No
     assert find_latest_pretreat_mm_restart(paths) == paths["charmm_mm_equi_res"]
 
 
-def test_probe_charmm_cubic_box_side_A_returns_none_when_unavailable() -> None:
+def test_resolve_charmm_cubic_box_side_A_uses_xucell_when_pbound_zero() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        resolve_charmm_cubic_box_side_A,
+    )
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_box_sides_A",
+        return_value=(0.0, 0.0, 0.0),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_ucell_lengths_A",
+        return_value=(32.0, 32.0, 32.0),
+    ):
+        side, source = resolve_charmm_cubic_box_side_A()
+    assert side == pytest.approx(32.0)
+    assert source == "xucell"
+
+
+def test_push_charmm_cubic_box_side_A_skips_when_already_matched() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        push_charmm_cubic_box_side_A,
+    )
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
+        return_value=(30.0, "pbound"),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.prepare_charmm_pbc",
+    ) as mock_prepare:
+        side, source = push_charmm_cubic_box_side_A(30.0, quiet=True)
+    assert side == pytest.approx(30.0)
+    assert source == "pbound"
+    mock_prepare.assert_not_called()
+
+
+def test_push_charmm_cubic_box_side_A_calls_prepare_when_mismatch() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        push_charmm_cubic_box_side_A,
+    )
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
+        return_value=(28.0, "pbound"),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.prepare_charmm_pbc",
+    ) as mock_prepare, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.apply_pbc_nbonds",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
+        return_value=(32.0, "pbound"),
+    ):
+        side, source = push_charmm_cubic_box_side_A(32.0, quiet=True)
+    mock_prepare.assert_called_once_with(32.0)
+    assert side == pytest.approx(32.0)
+    assert source == "pbound"
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import probe_charmm_cubic_box_side_A
 
     with mock.patch(

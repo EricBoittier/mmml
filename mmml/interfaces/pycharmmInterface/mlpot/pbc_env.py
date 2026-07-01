@@ -9,7 +9,7 @@ from typing import Any, Literal, Union
 import numpy as np
 
 PathLike = Union[str, Path]
-BoxSideSource = Literal["pbound", "restart", "fallback"]
+BoxSideSource = Literal["pbound", "xucell", "restart", "fallback"]
 
 
 def _parse_fortran_float(token: str) -> float:
@@ -117,6 +117,14 @@ def _read_charmm_box_sides_A() -> tuple[float, float, float]:
     )
 
 
+def _read_charmm_ucell_lengths_A() -> tuple[float, float, float]:
+    """Read unit-cell edge lengths (Å) from ``image_get_ucell`` (``XUCELL``)."""
+    import pycharmm.image as image
+
+    ucell = image.get_ucell()
+    return float(ucell[0]), float(ucell[1]), float(ucell[2])
+
+
 def _is_cubic_box_sides(
     lx: float,
     ly: float,
@@ -141,12 +149,20 @@ def resolve_charmm_cubic_box_side_A(
     Resolution order:
 
     1. Live ``pbound_get_size`` (during/after CPT when crystal is active)
-    2. ``!CRYSTAL PARAMETERS`` in a CHARMM restart file (before CPT read restores PBC)
-    3. ``fallback_side_A`` (last known ML MIC cell or CLI ``--box-size``)
+    2. ``image_get_ucell`` edge lengths (``XUCELL``; often valid when pbound is zero)
+    3. ``!CRYSTAL PARAMETERS`` in a CHARMM restart file (before CPT read restores PBC)
+    4. ``fallback_side_A`` (last known ML MIC cell or CLI ``--box-size``)
     """
     lx, ly, lz = _read_charmm_box_sides_A()
     if _is_cubic_box_sides(lx, ly, lz, rel_tol=rel_tol):
         return (lx + ly + lz) / 3.0, "pbound"
+
+    try:
+        ux, uy, uz = _read_charmm_ucell_lengths_A()
+        if _is_cubic_box_sides(ux, uy, uz, rel_tol=rel_tol):
+            return (ux + uy + uz) / 3.0, "xucell"
+    except Exception:
+        pass
 
     if restart_path is not None:
         from_restart = parse_cubic_box_side_from_charmm_restart(restart_path)
@@ -218,6 +234,49 @@ def get_charmm_cubic_box_side_A(
     return side
 
 
+def push_charmm_cubic_box_side_A(
+    target_side_A: float,
+    *,
+    nbxmod: int = 5,
+    quiet: bool = False,
+) -> tuple[float, BoxSideSource]:
+    """Set CHARMM cubic box via C API (``crystal_define_cubic`` + ``build``).
+
+    Safe before MLpot registration. Rebuilds IMAGE centering and PBC nbonds.
+    Skips work when the live CHARMM box already matches ``target_side_A``.
+    """
+    target = float(target_side_A)
+    if target <= 0.0:
+        raise ValueError(f"target box side must be > 0, got {target}")
+    tol = max(1e-3, 1e-4 * target)
+    live, source = probe_charmm_cubic_box_side_A(fallback_side_A=target)
+    if live is not None and abs(live - target) <= tol:
+        return float(live), source or "pbound"
+    prepare_charmm_pbc(target)
+    apply_pbc_nbonds(nbxmod=int(nbxmod), cubic_box_side_A=target)
+    side, out_source = resolve_charmm_cubic_box_side_A(fallback_side_A=target)
+    if not quiet:
+        print(
+            f"CHARMM box set via crystal C API: L={side:.3f} Å (source={out_source})",
+            flush=True,
+        )
+    return float(side), out_source
+
+
+def sync_charmm_box_from_workflow_side(
+    workflow_side_A: float,
+    *,
+    nbxmod: int = 5,
+    quiet: bool = False,
+) -> tuple[float, BoxSideSource]:
+    """Push workflow box side into CHARMM when it differs from the live cell."""
+    return push_charmm_cubic_box_side_A(
+        float(workflow_side_A),
+        nbxmod=nbxmod,
+        quiet=quiet,
+    )
+
+
 def cubic_box_matrix_from_side(side_A: float) -> np.ndarray:
     """Return orthorhombic 3×3 cell matrix for a cubic box side (Å)."""
     L = float(side_A)
@@ -253,13 +312,7 @@ def ensure_charmm_crystal_for_cpt(
                 return
         except Exception:
             pass
-    prepare_charmm_pbc(side)
-    apply_pbc_nbonds(cubic_box_side_A=side)
-    if not quiet:
-        print(
-            f"CHARMM crystal ready for CPT (cubic L={side:.3f} Å)",
-            flush=True,
-        )
+    push_charmm_cubic_box_side_A(side, quiet=quiet)
 
 
 def _ensure_crystal_image_str() -> None:
@@ -523,9 +576,12 @@ __all__ = [
     "cubic_box_length_from_geometry",
     "cubic_box_matrix_from_side",
     "ensure_charmm_crystal_for_cpt",
+    "get_charmm_cubic_box_side_A",
+    "push_charmm_cubic_box_side_A",
     "pbc_nbond_cutoffs",
     "prepare_charmm_pbc",
     "setup_charmm_environment",
+    "sync_charmm_box_from_workflow_side",
     "sync_workflow_pbc_box_side_after_mm_pretreat",
     "sync_charmm_crystal_after_mm_pretreat",
     "find_latest_pretreat_mm_restart",

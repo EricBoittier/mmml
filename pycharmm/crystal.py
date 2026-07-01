@@ -316,3 +316,28 @@ def free_crystal() -> bool:
     if not callable(fn):
         return False
     return bool(fn())
+
+
+def get_unit_cell() -> list[float]:
+    """Unit cell edge lengths and angles (Å, degrees) from ``image_get_ucell``."""
+    import pycharmm.image as image
+
+    return image.get_ucell()
+
+
+def get_cubic_side() -> float:
+    """Cubic box edge length (Å) from ``XUCELL`` (assumes ``CUBI``)."""
+    return float(get_unit_cell()[0])
+
+
+def set_cubic_side(length: float, *, cutoff: float | None = None) -> bool:
+    """Define a cubic crystal of ``length`` Å via ``crystal_define_cubic``.
+
+    For full PBC setup (build + IMAGE), use
+    ``mmml...pbc_env.prepare_charmm_pbc`` instead.
+    """
+    if not define_cubic(length):
+        return False
+    if cutoff is None:
+        cutoff = min(18.0, max(float(length) / 2.0 - 2.0, 6.0))
+    return bool(build(float(cutoff)))
