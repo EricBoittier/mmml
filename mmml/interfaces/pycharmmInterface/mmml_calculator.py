@@ -1119,7 +1119,10 @@ def setup_calculator(
                 jax_pme_method=jax_pme_method,
                 jax_pme_sr_cutoff_A=jax_pme_sr_cutoff_A,
                 jax_pme_dispersion=jax_pme_dispersion,
+                force_static_mm_eval=True,
             )
+            if isinstance(mm_fn_cell, tuple):
+                mm_fn_cell = mm_fn_cell[0]
             return (mm_fn_jaxmd, mm_fn_cell), update_fn
         return result_jaxmd, None
 
@@ -1918,6 +1921,8 @@ def setup_calculator(
         mm_fn_val = _cached_mm_fn[0]
         if isinstance(mm_fn_val, tuple):
             mm_fn_jaxmd, mm_fn_cell = mm_fn_val
+            if isinstance(mm_fn_cell, tuple):
+                mm_fn_cell = mm_fn_cell[0]
             if mm_pair_idx is not None and mm_pair_mask is not None:
                 mm_E, mm_grad = mm_fn_jaxmd(positions, mm_pair_idx, mm_pair_mask, box_override=box)
             else:

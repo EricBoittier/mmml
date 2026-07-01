@@ -156,6 +156,11 @@ def warmup_jax_pme_hybrid_host(
     c6_sqrt: np.ndarray | None = None,
     include_dispersion: bool | None = None,
     pbc_cell: np.ndarray | None = None,
+    ml_switch_width: float = 1.0,
+    mm_switch_on: float = 12.0,
+    mm_switch_width: float = 1.0,
+    complementary_handoff: bool = True,
+    mm_r_min: float | None = None,
 ) -> dict[str, int]:
     """Pre-warm jax-pme hybrid shapes (cross-monomer fused or legacy intra loop)."""
     from jaxpme import prefactors as jpref
@@ -282,11 +287,11 @@ def warmup_jax_pme_hybrid_host(
             pos,
             offsets,
             np.asarray(pbc_cell, dtype=np.float64),
-            ml_switch_width=6.0,
-            mm_switch_on=12.0,
-            mm_switch_width=1.0,
-            complementary_handoff=True,
-            mm_r_min=None,
+            ml_switch_width=float(ml_switch_width),
+            mm_switch_on=float(mm_switch_on),
+            mm_switch_width=float(mm_switch_width),
+            complementary_handoff=bool(complementary_handoff),
+            mm_r_min=mm_r_min,
         )
         counts["com_switch_jit"] = 1
     return counts
