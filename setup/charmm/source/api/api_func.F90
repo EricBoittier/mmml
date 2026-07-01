@@ -219,8 +219,11 @@ contains
       write(104,*) "Out of space - Nmlp"
     endif
 
-    ! Identify ML(u)-MM(v) pair indices
+    ! Identify ML(u)-MM(v) pair indices.  Skip when every atom is ML (bulk PBC
+    ! solvents): JAX/PhysNet owns all nonbonded ML terms; walking CHARMM image
+    ! neighbor lists here can exceed max_Npr and segfault before the check below.
     c = 1
+    if (Nml < natom) then
     ! Iterate over ML atoms
     do u = 1, Nml
       ! INBLO: Number of non-bond atom pairs
@@ -293,6 +296,7 @@ contains
       endif
 
     enddo
+    endif
     Nmlmmp = c - 1
 
     if(Nmlmmp .gt. max_Npr) then

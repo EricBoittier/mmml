@@ -286,3 +286,10 @@ def test_limits_status_stale_lib_uses_conservative_fallback(tmp_path, monkeypatc
     assert status.max_nml == 100
     assert status.max_npr == 100_000
     assert "older than api_func.F90" in status.source
+
+
+def test_api_func_skips_mlmmp_when_all_atoms_are_ml():
+    f90 = Path("setup/charmm/source/api/api_func.F90").read_text(encoding="utf-8")
+    body = f90.split("subroutine mlpot_update")[1].split("end subroutine mlpot_update")[0]
+    assert "if (Nml < natom) then" in body
+    assert "Identify ML(u)-MM(v) pair indices" in body

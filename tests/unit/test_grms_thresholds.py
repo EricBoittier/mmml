@@ -28,6 +28,30 @@ def test_per_monomer_grms_from_forces():
     assert per[1] == pytest.approx(float(np.sqrt(3.0 / 6.0)))
 
 
+def test_resolve_grms_thresholds_ignores_nonfinite_charmm_tail():
+    from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+        MonomerGrmsStats,
+        resolve_grms_thresholds_from_stats,
+    )
+
+    stats = MonomerGrmsStats(
+        charmm_per_monomer=np.array([1.0, 1.2, 1.35, np.nan, 1.78e9]),
+        hybrid_per_monomer=None,
+        charmm_total=1.35,
+        hybrid_total=None,
+    )
+    thresholds = resolve_grms_thresholds_from_stats(
+        stats,
+        n_monomers=5,
+        n_atoms=5,
+        pbc=True,
+        base_max_grms=50.0,
+    )
+    assert thresholds.charmm_p90 == pytest.approx(1.35)
+    assert thresholds.intervention_grms < 100.0
+    assert thresholds.max_grms_before_dyn < 1000.0
+
+
 def test_resolve_grms_thresholds_from_stats_scales_with_hybrid_tail():
     from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
         MonomerGrmsStats,

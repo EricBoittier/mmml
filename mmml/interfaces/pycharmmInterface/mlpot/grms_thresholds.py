@@ -132,13 +132,23 @@ def resolve_grms_thresholds_from_stats(
     n_at = max(1, int(n_atoms))
 
     charmm_p90 = _percentile_safe(stats.charmm_per_monomer, 90.0, charmm_bonded_ok_max)
-    charmm_max = float(np.max(stats.charmm_per_monomer)) if stats.charmm_per_monomer.size else charmm_bonded_ok_max
+    charmm_finite = stats.charmm_per_monomer[np.isfinite(stats.charmm_per_monomer)]
+    charmm_max = (
+        float(np.max(charmm_finite))
+        if charmm_finite.size
+        else charmm_bonded_ok_max
+    )
 
     hybrid_p90: float | None = None
     hybrid_max: float | None = None
     if stats.hybrid_per_monomer is not None and stats.hybrid_per_monomer.size:
         hybrid_p90 = _percentile_safe(stats.hybrid_per_monomer, 90.0, charmm_p90)
-        hybrid_max = float(np.max(stats.hybrid_per_monomer))
+        hybrid_finite = stats.hybrid_per_monomer[np.isfinite(stats.hybrid_per_monomer)]
+        hybrid_max = (
+            float(np.max(hybrid_finite))
+            if hybrid_finite.size
+            else hybrid_p90
+        )
 
     intervention = max(
         5.0,
