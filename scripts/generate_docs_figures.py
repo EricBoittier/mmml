@@ -6,7 +6,8 @@ Run from repo root::
     uv run python scripts/generate_docs_figures.py
 
 Writes PNGs under ``docs/images/`` for use in Markdown (MkDocs does not execute
-inline Python). The generating code is quoted in ``docs/cli/structure-building.md``.
+inline Python). Structures use **orthographic** ASE projection (fixed scale per
+view), Jmol colors, covalent bonds, and a light styled background.
 """
 
 from __future__ import annotations
@@ -14,11 +15,34 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+import numpy as np
 
 REPO = Path(__file__).resolve().parents[1]
 IMG = REPO / "docs" / "images"
 STRUCT = IMG / "structures"
 PLOTS = IMG / "plots"
+
+# Orthographic paper-space scale (ASE Angstroms/cm). Tuned per view so structures fill the frame.
+_SCALE_MONOMER = 42.0
+_SCALE_BOX = 13.5
+_SCALE_CRYSTAL = 24.0
+
+_STYLE = {
+    "figure_facecolor": "#f8fafc",
+    "axes_facecolor": "#f8fafc",
+    "bond_color": "#64748b",
+    "bond_width": 1.35,
+    "atom_edge": "#1e293b",
+    "atom_edge_width": 0.65,
+    "title_color": "#0f172a",
+    "unit_cell_alpha": 0.55,
+}
+
+if TYPE_CHECKING:
+    from ase import Atoms
+    from matplotlib.axes import Axes
 
 
 def _use_agg() -> None:
@@ -27,23 +51,130 @@ def _use_agg() -> None:
     matplotlib.use("Agg")
 
 
-def _save_plot_atoms(atoms, path: Path, *, title: str, rotation: str = "10x,10y,90z") -> None:
-    import matplotlib.pyplot as plt
-    from ase.visualize.plot import plot_atoms
+def _bond_segments_2d(atoms: Atoms, writer) -> np.ndarray:
+    """Covalent bond segments in image-plane coordinates (with MIC for PBC)."""
+    from ase.geometry import find_mic
+    from ase.neighborlist import natural_cutoffs, neighbor_list
 
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fig, ax = plt.subplots(figsize=(6.4, 4.8), dpi=120)
-    plot_atoms(
+    if len(atoms) == 0:
+        return np.empty((0, 2, 2))
+
+    cutoffs = natural_cutoffs(atoms, mult=1.08)
+    i, j = neighbor_list("ij", atoms, cutoffs, self_interaction=False)
+    if len(i) == 0:
+        return np.empty((0, 2, 2))
+
+    pos = atoms.get_positions()
+    pos_i = pos[i]
+    pos_j = pos[j]
+    if atoms.pbc.any():
+        vecs = pos_j - pos_i
+        vecs, _ = find_mic(vecs, atoms.cell, atoms.pbc)
+        pos_j = pos_i + vecs
+
+    im_i = writer.to_image_plane_positions(pos_i)[:, :2]
+    im_j = writer.to_image_plane_positions(pos_j)[:, :2]
+    return np.stack([im_i, im_j], axis=1)
+
+
+def _draw_orthographic_structure(
+    atoms: Atoms,
+    ax: Axes,
+    *,
+    rotation: str,
+    scale: float,
+    show_unit_cell: int,
+) -> None:
+    """Orthographic ASE view: bonds under atoms, equal aspect, styled patches."""
+    from ase.io.utils import make_patch_list
+    from ase.visualize.plot import Matplotlib
+    from matplotlib.collections import LineCollection
+    from matplotlib.patches import Circle, PathPatch
+
+    writer = Matplotlib(
         atoms,
         ax,
-        radii=0.35,
         rotation=rotation,
-        show_unit_cell=bool(getattr(atoms, "pbc", None) is not None and any(atoms.pbc)),
+        radii=0.88,
+        scale=scale,
+        show_unit_cell=show_unit_cell,
+        auto_bbox_size=1.1,
     )
-    ax.set_title(title, fontsize=11)
+
+    segments = _bond_segments_2d(atoms, writer)
+    if len(segments):
+        ax.add_collection(
+            LineCollection(
+                segments,
+                colors=_STYLE["bond_color"],
+                linewidths=_STYLE["bond_width"],
+                capstyle="round",
+                zorder=1,
+            )
+        )
+
+    for patch in make_patch_list(writer):
+        patch.set_zorder(3)
+        if isinstance(patch, Circle):
+            patch.set_edgecolor(_STYLE["atom_edge"])
+            patch.set_linewidth(_STYLE["atom_edge_width"])
+            patch.set_alpha(0.97)
+        elif isinstance(patch, PathPatch):
+            # unit cell edges
+            patch.set_edgecolor("#3b82f6")
+            patch.set_facecolor("none")
+            patch.set_linewidth(1.0)
+            patch.set_linestyle((0, (4, 3)))
+            patch.set_alpha(_STYLE["unit_cell_alpha"])
+        ax.add_patch(patch)
+
+    ax.set_xlim(0, writer.w)
+    ax.set_ylim(0, writer.h)
+    ax.set_aspect("equal", adjustable="box")
     ax.set_axis_off()
+
+
+def _save_structure_figure(
+    atoms: Atoms,
+    path: Path,
+    *,
+    title: str,
+    rotation: str,
+    scale: float,
+) -> None:
+    import matplotlib.pyplot as plt
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pbc = bool(getattr(atoms, "pbc", None) is not None and any(atoms.pbc))
+    show_cell = 2 if pbc else 0
+
+    fig, ax = plt.subplots(
+        figsize=(6.5, 5.0),
+        dpi=150,
+        facecolor=_STYLE["figure_facecolor"],
+    )
+    ax.set_facecolor(_STYLE["axes_facecolor"])
+    _draw_orthographic_structure(
+        atoms,
+        ax,
+        rotation=rotation,
+        scale=scale,
+        show_unit_cell=show_cell,
+    )
+    ax.set_title(
+        title,
+        fontsize=11.5,
+        fontweight="500",
+        color=_STYLE["title_color"],
+        pad=10,
+    )
     fig.tight_layout()
-    fig.savefig(path, bbox_inches="tight", facecolor="white")
+    fig.savefig(
+        path,
+        bbox_inches="tight",
+        facecolor=fig.get_facecolor(),
+        edgecolor="none",
+    )
     plt.close(fig)
 
 
@@ -52,19 +183,18 @@ def figure_make_res(out: Path) -> None:
 
     from mmml.paths import default_aco_template_pdb
 
-    pdb = default_aco_template_pdb()
-    atoms = ase.io.read(pdb)
-    _save_plot_atoms(
+    atoms = ase.io.read(default_aco_template_pdb())
+    _save_structure_figure(
         atoms,
         out,
         title="make-res: acetone monomer (ACO, CGENFF)",
-        rotation="20x,30y,0z",
+        rotation="25x,15y,0z",
+        scale=_SCALE_MONOMER,
     )
 
 
 def figure_make_box(out: Path) -> None:
     """Periodic box of acetone monomers (illustrates make-box / Packmol output)."""
-    import numpy as np
     from ase import Atoms
     from ase.build import molecule
 
@@ -90,15 +220,16 @@ def figure_make_box(out: Path) -> None:
             positions.append(pos + np.array([dx, dy, dz]))
 
     box = Atoms(symbols=symbols, positions=positions, cell=[side, side, side], pbc=True)
-    _save_plot_atoms(
+    _save_structure_figure(
         box,
         out,
         title=f"make-box: 8× acetone in {side:.0f} Å cube (illustrative)",
-        rotation="65x,35y,0z",
+        rotation="55x,25y,0z",
+        scale=_SCALE_BOX,
     )
 
 
-def _fallback_crystal_atoms():
+def _fallback_crystal_atoms() -> Atoms:
     """Orthorhombic benzene dimer when PyXtal is not installed."""
     from ase import Atoms
     from ase.build import molecule
@@ -139,39 +270,74 @@ def figure_build_crystal(out: Path) -> bool:
                 )
             )
             title = "build-crystal: benzene (Z=2, space group 14)"
-            rotation = "10x,80y,0z"
+            rotation = "15x,70y,0z"
         else:
             raise ImportError("pyxtal not installed")
     except Exception as exc:
         print(f"build-crystal figure: using ASE fallback ({exc})", file=sys.stderr)
         atoms = _fallback_crystal_atoms()
         title = "build-crystal: benzene dimer in periodic cell (illustrative)"
-        rotation = "25x,60y,0z"
+        rotation = "30x,55y,0z"
 
-    _save_plot_atoms(atoms, out, title=title, rotation=rotation)
+    _save_structure_figure(
+        atoms,
+        out,
+        title=title,
+        rotation=rotation,
+        scale=_SCALE_CRYSTAL,
+    )
     return True
+
+
+def _style_matplotlib_rc() -> None:
+    import matplotlib.pyplot as plt
+
+    plt.rcParams.update(
+        {
+            "font.family": "sans-serif",
+            "font.sans-serif": ["DejaVu Sans", "Helvetica", "Arial"],
+            "axes.edgecolor": "#cbd5e1",
+            "axes.labelcolor": "#334155",
+            "xtick.color": "#64748b",
+            "ytick.color": "#64748b",
+            "grid.color": "#e2e8f0",
+        }
+    )
 
 
 def figure_liquid_box_schematic(out: Path) -> None:
     """Schematic density-prep ladder (matplotlib only)."""
     import matplotlib.pyplot as plt
 
+    _style_matplotlib_rc()
     stages = ["Packmol", "MC staged", "MC target", "Lattice", "Certified"]
     density = [0.55, 0.78, 0.95, 0.99, 1.00]
-    target = 1.0
 
-    fig, ax = plt.subplots(figsize=(6.4, 3.6), dpi=120)
-    ax.plot(stages, density, "o-", color="#2563eb", linewidth=2, markersize=7, label="ρ / ρ_target")
-    ax.axhline(target, color="#64748b", linestyle="--", linewidth=1, label="target density")
+    fig, ax = plt.subplots(figsize=(6.5, 3.6), dpi=150, facecolor=_STYLE["figure_facecolor"])
+    ax.set_facecolor(_STYLE["axes_facecolor"])
+    ax.plot(
+        stages,
+        density,
+        "o-",
+        color="#2563eb",
+        linewidth=2.2,
+        markersize=8,
+        markerfacecolor="white",
+        markeredgewidth=2,
+        label="ρ / ρ_target",
+    )
+    ax.axhline(1.0, color="#94a3b8", linestyle="--", linewidth=1.2, label="target density")
     ax.set_ylim(0.4, 1.05)
     ax.set_ylabel("Relative density")
-    ax.set_title("liquid-box: density prep ladder (schematic)")
-    ax.legend(loc="lower right", fontsize=9)
-    ax.grid(True, alpha=0.25)
-    fig.autofmt_xdate(rotation=20, ha="right")
+    ax.set_title("liquid-box: density prep ladder (schematic)", fontweight="500", pad=8)
+    ax.legend(loc="lower right", fontsize=9, framealpha=0.9)
+    ax.grid(True, alpha=0.35, linestyle="-")
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    fig.autofmt_xdate(rotation=18, ha="right")
     fig.tight_layout()
     out.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out, bbox_inches="tight", facecolor="white")
+    fig.savefig(out, bbox_inches="tight", facecolor=fig.get_facecolor())
     plt.close(fig)
 
 
@@ -179,25 +345,45 @@ def figure_compose_workflow(out: Path) -> None:
     """Bar chart: typical atom counts for structure builders."""
     import matplotlib.pyplot as plt
 
+    _style_matplotlib_rc()
     labels = ["make-res\n(1 monomer)", "make-box\n(8× ACO)", "build-crystal\n(supercell)"]
     counts = [10, 80, 48]
     colors = ["#059669", "#2563eb", "#7c3aed"]
 
-    fig, ax = plt.subplots(figsize=(6.0, 3.4), dpi=120)
-    bars = ax.bar(labels, counts, color=colors, edgecolor="white", linewidth=0.8)
+    fig, ax = plt.subplots(figsize=(6.2, 3.5), dpi=150, facecolor=_STYLE["figure_facecolor"])
+    ax.set_facecolor(_STYLE["axes_facecolor"])
+    bars = ax.bar(
+        labels,
+        counts,
+        color=colors,
+        edgecolor="white",
+        linewidth=1.2,
+        width=0.62,
+    )
     ax.set_ylabel("Atoms (examples)")
-    ax.set_title("Structure builders — example system sizes")
+    ax.set_title("Structure builders — example system sizes", fontweight="500", pad=8)
     for bar, n in zip(bars, counts):
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1, str(n), ha="center", fontsize=9)
-    ax.set_ylim(0, max(counts) * 1.15)
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + 1.5,
+            str(n),
+            ha="center",
+            fontsize=9,
+            color=_STYLE["title_color"],
+        )
+    ax.set_ylim(0, max(counts) * 1.18)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.grid(axis="y", alpha=0.35)
     fig.tight_layout()
     out.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out, bbox_inches="tight", facecolor="white")
+    fig.savefig(out, bbox_inches="tight", facecolor=fig.get_facecolor())
     plt.close(fig)
 
 
 def generate(*, check: bool = False) -> int:
     _use_agg()
+    _style_matplotlib_rc()
     targets: dict[Path, str] = {
         STRUCT / "make-res-aco.png": "make_res",
         STRUCT / "make-box-acetone.png": "make_box",
