@@ -163,7 +163,7 @@ JAX_PLATFORMS=cpu uv run python tests/functionality/long_range/10_hybrid_jax_pro
 tensorboard --logdir /tmp/jax_trace_hybrid
 ```
 
-On GPU production runs, wrap steady-state dynamics steps the same way (`jax.profiler.start_trace` / `stop_trace`). See also [`mlpot/README.md`](../mmml/interfaces/pycharmmInterface/mlpot/README.md).
+On GPU production runs, wrap steady-state dynamics steps the same way (`jax.profiler.start_trace` / `stop_trace`). See also [`mlpot/README.md`](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/mlpot/README.md).
 
 ## Pre-warm without CHARMM
 

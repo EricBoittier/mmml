@@ -45,7 +45,7 @@ blue / orange = monomer 1 / 2.
 | Beyond switched MM | ~14.3 Å | both two-body switches ≈ 0 |
 
 These are **schematic** (LJ+Coulomb cross + r⁻⁶ ML well), not checkpoint energies.
-For quantitative curves from PyCHARMM, run the [dimer LR scans](../tests/functionality/dimer_scans/README.md).
+For quantitative curves from PyCHARMM, run the [dimer LR scans](functionality/dimer_scans/README.md).
 
 ---
 
