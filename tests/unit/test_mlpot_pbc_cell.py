@@ -1153,7 +1153,7 @@ def test_ensure_ml_exclusions_before_mlpot_charmm_energy_reinstalls_when_short()
 
     fake_sel = MagicMock()
     fake_sel.get_atom_indexes.return_value = list(range(4))
-    ctx = MagicMock(use_pbc=True, ml_selection=fake_sel)
+    ctx = MagicMock(use_pbc=True, ml_selection=fake_sel, cubic_box_side_A=40.0)
     fake_psf = MagicMock()
     fake_psf.get_nnb.side_effect = [5, 6]
 
@@ -1164,7 +1164,19 @@ def test_ensure_ml_exclusions_before_mlpot_charmm_energy_reinstalls_when_short()
         mlpot_setup,
         "_verify_ml_exclusion_lists_installed",
         return_value=6,
-    ) as verify:
+    ) as verify, patch.object(
+        mlpot_setup,
+        "_resolve_mlpot_ctx_pbc_box_side",
+        return_value=40.0,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.prepare_charmm_pbc",
+    ) as prep_pbc, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.apply_pbc_nbonds",
+    ) as apply_nb, patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+    ):
         fake_pycharmm = MagicMock()
         fake_pycharmm.psf = fake_psf
         import_py.return_value = fake_pycharmm
@@ -1176,7 +1188,54 @@ def test_ensure_ml_exclusions_before_mlpot_charmm_energy_reinstalls_when_short()
     assert nnb == 6
     install.assert_called_once_with(fake_sel, update=False)
     verify.assert_called_once()
+    prep_pbc.assert_called_once_with(40.0)
+    apply_nb.assert_called_once()
+    fake_pycharmm.nbonds.update_bnbnd.assert_called_once()
     fake_pycharmm.image.update_bimag.assert_called_once()
+
+
+def test_ensure_ml_exclusions_before_mlpot_charmm_energy_force_rebuild_when_nnb_ok():
+    from mmml.interfaces.pycharmmInterface.mlpot import setup as mlpot_setup
+
+    fake_sel = MagicMock()
+    fake_sel.get_atom_indexes.return_value = list(range(4))
+    ctx = MagicMock(use_pbc=True, ml_selection=fake_sel, cubic_box_side_A=42.0)
+    fake_psf = MagicMock()
+    fake_psf.get_nnb.return_value = 6
+
+    with patch.object(mlpot_setup, "_import_pycharmm") as import_py, patch.object(
+        mlpot_setup,
+        "_install_ml_exclusions",
+    ) as install, patch.object(
+        mlpot_setup,
+        "_verify_ml_exclusion_lists_installed",
+        return_value=6,
+    ), patch.object(
+        mlpot_setup,
+        "_resolve_mlpot_ctx_pbc_box_side",
+        return_value=42.0,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.prepare_charmm_pbc",
+    ) as prep_pbc, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.apply_pbc_nbonds",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+    ):
+        fake_pycharmm = MagicMock()
+        fake_pycharmm.psf = fake_psf
+        import_py.return_value = fake_pycharmm
+        nnb = mlpot_setup.ensure_ml_exclusions_before_mlpot_charmm_energy(
+            ctx,
+            context="test",
+            force_rebuild=True,
+        )
+
+    assert nnb == 6
+    install.assert_not_called()
+    prep_pbc.assert_called_once_with(42.0)
+    fake_pycharmm.nbonds.update_bnbnd.assert_called_once()
 
 
 def test_apply_nbonds_kwargs_can_defer_rebuild():
