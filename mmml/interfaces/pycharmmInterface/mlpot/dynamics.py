@@ -1276,6 +1276,9 @@ def _run_minimize_in_chunks(
             ensure_ml_exclusions_before_mlpot_charmm_energy(
                 config.mlpot_ctx,
                 context=f"MLpot {method} {pass_label} chunk 1",
+                force_rebuild=bool(
+                    mlpot_skip_charmm_ener_force_before_first_sd(config.mlpot_ctx)
+                ),
             )
         step = min(_effective_mlpot_sd_chunk_nstep(config, previous_grms=previous_grms), remaining)
         kw = {**base_kw, "nstep": step}

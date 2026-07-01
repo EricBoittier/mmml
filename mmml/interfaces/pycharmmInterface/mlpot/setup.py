@@ -343,9 +343,6 @@ def prime_charmm_hybrid_energy_before_mlpot_sd(
         recover_mpi_for_charmm_after_jax,
     )
 
-    if not _under_mpirun():
-        return None
-
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
         charmm_grms_after_ener_force,
     )
@@ -359,6 +356,8 @@ def prime_charmm_hybrid_energy_before_mlpot_sd(
         context=f"{context} ENER prime",
         force_rebuild=True,
     )
+    if not _under_mpirun():
+        return None
     _ensure_domdec_off_for_mlpot_energy(context=f"{context} CHARMM ENER prime")
     grms = float(charmm_grms_after_ener_force(silent=not verbose))
     recover_mpi_for_charmm_after_jax(phase=f"after {context} CHARMM ENER prime")
@@ -1337,11 +1336,17 @@ def ensure_ml_exclusions_before_mlpot_charmm_energy(
     )
     with charmm_relaxed_bomlev():
         apply_pbc_nbonds(nbxmod=5, cubic_box_side_A=float(side), rebuild=False)
-    if needs_install:
-        _install_ml_exclusions(ml_selection, update=False)
+    # Always reinstall ML iblo/inb before upinb (same as registration finalize).
+    # prepare_charmm_pbc / READ PARAM can leave PSF-only ~1k bonded exclusions while
+    # psf_get_nnb() still reports the pre-clear count.
+    _install_ml_exclusions(ml_selection, update=False)
     nnb = _verify_ml_exclusion_lists_installed(
         ml_selection,
         context=context,
+    )
+    print(
+        f"{context}: rebuilding PBC nonbond lists (upinb, nnb={nnb}, L={side:.3f} Å)…",
+        flush=True,
     )
     with charmm_relaxed_bomlev():
         pycharmm.nbonds.update_bnbnd()

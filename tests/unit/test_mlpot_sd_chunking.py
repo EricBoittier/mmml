@@ -1051,10 +1051,15 @@ def test_prime_charmm_hybrid_energy_before_mlpot_sd_skips_serial():
         "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
         return_value=False,
     ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.ensure_ml_exclusions_before_mlpot_charmm_energy",
+    ) as ensure_excl, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
     ) as probe:
         assert prime_charmm_hybrid_energy_before_mlpot_sd(ctx) is None
 
+    ensure_excl.assert_called_once()
     probe.assert_not_called()
 
 

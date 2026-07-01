@@ -1233,7 +1233,7 @@ def test_ensure_ml_exclusions_before_mlpot_charmm_energy_force_rebuild_when_nnb_
         )
 
     assert nnb == 6
-    install.assert_not_called()
+    install.assert_called_once_with(fake_sel, update=False)
     prep_pbc.assert_called_once_with(42.0)
     fake_pycharmm.nbonds.update_bnbnd.assert_called_once()
 
