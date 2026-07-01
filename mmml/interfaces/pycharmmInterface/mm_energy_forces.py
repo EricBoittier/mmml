@@ -1065,6 +1065,7 @@ def build_mm_energy_forces_fn(
                 sr_cutoff_A=_jax_pme_sr_cutoff,
                 c6_sqrt=_jax_pme_c6_sqrt_np,
                 include_dispersion=_jax_pme_include_dispersion,
+                pbc_cell=np.asarray(pbc_cell, dtype=np.float64),
             )
         except Exception as exc:
             if debug:

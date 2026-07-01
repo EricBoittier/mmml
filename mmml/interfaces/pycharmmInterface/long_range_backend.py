@@ -155,6 +155,7 @@ def warmup_jax_pme_hybrid_host(
     sr_cutoff_A: float = DEFAULT_JAX_PME_SR_CUTOFF_A,
     c6_sqrt: np.ndarray | None = None,
     include_dispersion: bool | None = None,
+    pbc_cell: np.ndarray | None = None,
 ) -> dict[str, int]:
     """Pre-warm jax-pme hybrid shapes (cross-monomer fused or legacy intra loop)."""
     from jaxpme import prefactors as jpref

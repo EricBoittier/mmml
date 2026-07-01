@@ -860,6 +860,8 @@ export MMML_JAX_PME_PROFILE=1        # optional timing to stderr
 
 When `lr_solver: jax_pme`, the hybrid calculator evaluates periodic Coulomb (and optional r⁻⁶ dispersion) on **cross-monomer** pairs only: ML owns intra-monomer electrostatics. The default **`cross`** path uses one jax-pme `prepare` plus a fused kernel instead of `E_full − Σ_m E_intra` with one host solve per monomer.
 
+Profiling graph and CPU reference timings (hybrid LR ~216 ms steady): [calculator-profiling.md](calculator-profiling.md).
+
 | Piece | Role |
 |-------|------|
 | `mmml/.../jax_pme_cross_monomer.py` | Fused cross-monomer energy/forces (`structure_factor` or `masked` kernel) |

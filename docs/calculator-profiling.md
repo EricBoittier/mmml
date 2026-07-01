@@ -4,23 +4,190 @@ Guide to measuring **JAX compile time** vs **steady-state run time** for the MMM
 
 No PyCHARMM is required for the jax-pme benchmarks. Full `md-system` mini/SD profiling needs a CHARMM-ready machine.
 
-## Primitive map
+## Current state (2026-07)
 
-The hybrid energy evaluated on each MLpot `ENER` callback decomposes roughly as:
+Three layers of work landed; profiling numbers below are from
+`tests/functionality/long_range/11_calculator_primitive_benchmark.py` on **CPU**,
+**18 monomers × 3 atoms**, **Ewald**, `MMML_JAX_PME_INTRA_MODE=cross`, after COM-switch JIT fix.
+
+### What is fast now (steady-state, per hybrid LR eval)
+
+| Component | steady (ms) | Notes |
+|-----------|-------------|-------|
+| `cross_monomer_coulomb` | ~110 | Fused jax-pme cross kernel (Ewald SF path) |
+| `cross_monomer_dispersion` | ~110 | Same kernel, exponent 6 |
+| `switch_scale` (COM `value_and_grad`) | **~1** | JIT-cached; one call shared by Coulomb + dispersion |
+| `hybrid_mm_lr_total_cross` | **~216** | ≈ 103 + 102 + 1 ms profile components |
+| `cross_monomer_sf` (inner host slice) | ~0.5 | Sub-step of cross kernel; not a separate cost |
+
+### What is slow once (first-call compile)
+
+| Component | first compile (s) | Notes |
+|-----------|-------------------|-------|
+| COM switch `value_and_grad` | ~4.5 | `@lru_cache` + `jax.jit`; amortize via `warmup_jax_pme_hybrid_host` |
+| `cross_monomer_*` kernels | ~0.5–0.8 each | Per exponent / JIT key |
+| `hybrid_mm_lr_total_cross` (cold) | ~4.5 | Dominated by COM switch compile on first hybrid call |
+| `spherical_cutoff` (full MLpot) | minutes on CPU | Pre-warm with `mmml warmup-mlpot-jax` on GPU box |
+
+### Regressions fixed
+
+| Issue | Before | After |
+|-------|--------|-------|
+| Uncached `jax.grad(mean_switch)` per LR eval | ~1.2 s × 2 ≈ **2.4 s** switch overhead | **~1 ms** |
+| `float('nan')` in COM-switch `@lru_cache` key | Recompiled every call (~4.5 s each) | Cache hit after first call |
+| Legacy `full_minus_intra` hybrid path | ~1.5–2× slower than fused `cross` at 18 mers | Use `cross` (default) |
+| Duplicate `warmup_decomposed_mlpot` | Extra `spherical_cutoff` compile | `_jax_warmup_done` guard |
+
+### Full primitive table (latest CPU benchmark)
+
+Columns: `compile_s` and `run_s` from two-pass `run_jax_warmup_passes`; `steady_ms` mean of extra reps.
+
+| name | category | compile_s | run_s | steady_ms |
+|------|----------|-----------|-------|-----------|
+| `jax_pme_coulomb_full` | jax_pme_host | 3.58 | 0.27 | 265 |
+| `jax_pme_dispersion_full` | jax_pme_host | 1.11 | 0.26 | 304 |
+| `jax_pme_coulomb_intra_m0` | jax_pme_host | 1.48 | 0.03 | 33 |
+| `cross_monomer_coulomb` | jax_pme_cross | 0.83 | 0.11 | 111 |
+| `cross_monomer_dispersion` | jax_pme_cross | 0.53 | 0.10 | 114 |
+| `hybrid_mm_lr_total_cross` | hybrid_lr | 4.55 | 0.22 | **216** |
+| `switch_scale` | hybrid_component | — | — | **0.8** |
+| `coulomb_cross_total` | hybrid_component | — | — | 103 |
+| `dispersion_cross_total` | hybrid_component | — | — | 102 |
+| `hybrid_coulomb_total` | hybrid_component | — | — | 103 |
+| `hybrid_dispersion_total` | hybrid_component | — | — | 102 |
+
+Profile rows are **nested** (e.g. `hybrid_coulomb_total` ⊃ `coulomb_cross_total` ⊃ `cross_monomer_sf`). Do not sum hybrid component rows to get the total.
+
+Reproduce:
+
+```bash
+JAX_PLATFORMS=cpu MMML_JAX_COMPILE_TIMERS=1 \
+  uv run python tests/functionality/long_range/11_calculator_primitive_benchmark.py --steady-reps 3
+```
+
+---
+
+## Computational graph
+
+### End-to-end MLpot energy (production path)
+
+Each MLpot `ENER` invokes a cached JAX forward that evaluates the full hybrid potential inside `spherical_cutoff_calculator`.
 
 ```mermaid
 flowchart TB
-  ENER[MLpot ENER callback] --> FWD[mlpot_spherical_forward]
-  FWD --> SPH[spherical_cutoff]
-  SPH --> ML[PhysNet ML + dimer]
-  SPH --> MM[switched MM pairs]
-  SPH --> LR[hybrid jax-pme LR correction]
-  LR --> COUL[hybrid_coulomb_total]
-  LR --> DISP[hybrid_dispersion_total]
-  COUL --> XC[coulomb_cross_total or full/intra loop]
-  DISP --> XD[dispersion_cross_total or full/intra loop]
-  XC --> SF[cross_monomer_sf / cross_monomer_masked]
+  subgraph host["Host / CHARMM"]
+    ENER["MLpot ENER callback"]
+    CHARMM["PyCHARMM MM tables, NB lists"]
+  end
+
+  subgraph jax_forward["JAX — mlpot_spherical_forward (jit, cached)"]
+    SPH["spherical_cutoff_calculator"]
+    ML["calculate_ml_contributions<br/>PhysNet monomer + dimer"]
+    MM["calculate_mm_contributions<br/>switched LJ/Coulomb pairs"]
+    MM_BUILD["build_mm_energy_forces_fn<br/>neighbor list + switching"]
+    REST["flat bottom, COM wall, PBC map"]
+  end
+
+  subgraph lr_host["Host — hybrid jax-pme LR (pure_callback from MM JIT)"]
+    HYBRID["hybrid_jax_pme_mm_lr_correction"]
+    COM["COM switch value_and_grad<br/>~1 ms steady"]
+    COUL["coulomb_cross_total<br/>~103 ms"]
+    DISP["dispersion_cross_total<br/>~102 ms"]
+    APPLY["E = s·E_lr, F = s·F_lr − E_lr·∇s"]
+  end
+
+  subgraph jax_pme["jax-pme cross kernel (host JIT)"]
+    SF["cross_monomer_sf<br/>structure-factor k-space"]
+    RS["masked real-space subtraction"]
+    PME["PME/P3M: masked path"]
+  end
+
+  ENER --> FWD["get_spherical_forward_fn"]
+  FWD --> SPH
+  CHARMM -.-> MM_BUILD
+  SPH --> ML
+  SPH --> MM
+  MM --> MM_BUILD
+  MM_BUILD -->|"lr_solver=jax_pme"| HYBRID
+  SPH --> REST
+  HYBRID --> COM
+  COM --> APPLY
+  HYBRID --> COUL
+  HYBRID --> DISP
+  COUL --> SF
+  COUL --> RS
+  DISP --> SF
+  SF -->|"ewald + auto"| SF
+  SF -->|"pme/p3m"| PME
 ```
+
+### Hybrid LR correction detail (cross mode, steady timings)
+
+```mermaid
+flowchart LR
+  subgraph once["Compile once per process / key"]
+    C1["jit COM value_and_grad<br/>~4.5 s first call"]
+    C2["jit cross_monomer_coulomb<br/>~0.8 s"]
+    C3["jit cross_monomer_dispersion<br/>~0.5 s"]
+  end
+
+  subgraph steady["Every hybrid_jax_pme_mm_lr_correction (~216 ms)"]
+    direction TB
+    S["switch_scale<br/>~1 ms"]
+    Q["coulomb cross jax-pme<br/>~103 ms"]
+    D["dispersion cross jax-pme<br/>~102 ms"]
+    S --> Q
+    S --> D
+  end
+
+  once -.->|"warmup_jax_pme_hybrid_host<br/>warmup-mlpot-jax"| steady
+```
+
+### Compile vs steady: what runs when
+
+```mermaid
+flowchart TB
+  subgraph cold["Cold start (first hybrid eval in process)"]
+    direction LR
+    A["COM JIT compile ~4.5 s"] --> B["cross Coulomb compile ~0.8 s"]
+    B --> C["cross dispersion compile ~0.5 s"]
+    C --> D["first steady eval ~1.5 s"]
+  end
+
+  subgraph hot["Warm steady state (MD / mini after warmup)"]
+    direction LR
+    E["COM ~1 ms"] --> F["Coulomb cross ~103 ms"]
+    F --> G["Dispersion cross ~102 ms"]
+    G --> H["total ~216 ms"]
+  end
+
+  cold -->|"same JIT keys reused"| hot
+```
+
+### Spherical cutoff (separate compile island)
+
+`spherical_cutoff` wraps ML + MM + LR callback in one large `@jax.jit`. It is **not** recompiled each MD step if shapes, `CutoffParameters`, and device stay fixed.
+
+```mermaid
+flowchart TB
+  WU["warmup_decomposed_mlpot"]
+  XLA1["xla_gpu_delay_kernel<br/>GPU only"]
+  XLA2["spherical_cutoff<br/>2 warmup passes"]
+  XLA3["mlpot_spherical_forward<br/>2 warmup passes"]
+  MD["SD / dynamics ENER loop<br/>steady — no recompile"]
+
+  WU --> XLA1
+  WU --> XLA2
+  WU --> XLA3
+  XLA2 --> MD
+  XLA3 --> MD
+```
+
+Guards: `_jax_warmup_done`, `_forward_cache_key`, deferred GPU promote (`defer_jax_until_after_sd`).
+
+---
+
+## Primitive map (reference)
 
 ### JAX warmup labels (`MMML_JAX_COMPILE_TIMERS`)
 
@@ -98,21 +265,7 @@ Do not pipe through `tail` — output is buffered and long CPU compiles look hun
 
 Output columns: `compile_s`, `run_s` (from two-pass warmup), `steady_ms` (mean of extra reps).
 
-### Example snapshot (CPU, 18×3 cluster, Ewald, cross mode)
-
-Run locally; numbers vary by CPU/GPU and jax-pme version.
-
-**After COM-switch JIT fix (2026-07):** steady `hybrid_mm_lr_total_cross` ~**200 ms** on CPU (18×3), down from ~2.5 s. `switch_scale` ~**1 ms** after warmup (was ~1.2 s × 2 per call).
-
-| Primitive | compile (s) | run (s) | steady (ms) |
-|-----------|-------------|---------|-------------|
-| `cross_monomer_coulomb` | ~0.8 | ~0.10 | ~110 |
-| `switch_scale` | ~4.5 (first only) | — | **~1** |
-| `hybrid_mm_lr_total_cross` | ~4.5 (first) | ~0.22 | **~216** |
-| `coulomb_cross_total` | — | — | ~103 |
-| `dispersion_cross_total` | — | — | ~102 |
-
-Legacy `full_minus_intra` hybrid totals are typically **~1.5–2×** slower steady-state than fused `cross` at 18 monomers.
+See [Current state](#current-state-2026-07) for the latest benchmark table and graphs.
 
 ### COM switch compile footgun (fixed)
 
