@@ -938,7 +938,7 @@ def test_rewrite_dynamics_restart_validated_detects_nan(tmp_path, monkeypatch):
         encoding="utf-8",
     )
 
-    def fake_rewrite(path, *, write_unit=92):
+    def fake_rewrite(path, *, write_unit=92, global_step=None, nsavc=None, nsavv=None):
         Path(path).write_text(bad.read_text(encoding="utf-8"), encoding="utf-8")
 
     monkeypatch.setattr(
@@ -956,7 +956,7 @@ def test_rewrite_dynamics_restart_validated_detects_missing(tmp_path, monkeypatc
     bad = tmp_path / "missing.res"
     bad.write_text("uninitialized restart file text", encoding="utf-8")
 
-    def fake_rewrite(path, *, write_unit=92):
+    def fake_rewrite(path, *, write_unit=92, global_step=None, nsavc=None, nsavv=None):
         Path(path).write_text("uninitialized restart file text", encoding="utf-8")
 
     monkeypatch.setattr(
