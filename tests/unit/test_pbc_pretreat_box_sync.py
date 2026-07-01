@@ -263,37 +263,35 @@ def test_pretreat_handoff_panel_tolerates_inactive_pbound(tmp_path: Path) -> Non
 
 
 def test_charmm_crystal_lattice_ready_requires_pbound_not_xucell_only() -> None:
-    import sys
-
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         charmm_crystal_lattice_ready,
     )
 
-    mock_image = mock.MagicMock()
-    mock_image.get_ntrans.return_value = 8
     with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._charmm_image_ntrans",
+        return_value=8,
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_box_sides_A",
         return_value=(0.0, 0.0, 0.0),
-    ), mock.patch.dict(sys.modules, {"pycharmm.image": mock_image}):
+    ):
         assert charmm_crystal_lattice_ready() is False
 
 
 def test_charmm_crystal_abnr_ready_accepts_ucell_when_pbound_inactive() -> None:
-    import sys
-
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         charmm_crystal_abnr_ready,
     )
 
-    mock_image = mock.MagicMock()
-    mock_image.get_ntrans.return_value = 8
     with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._charmm_image_ntrans",
+        return_value=8,
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_lattice_ready",
         return_value=False,
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_ucell_lengths_A",
         return_value=(50.0, 50.0, 50.0),
-    ), mock.patch.dict(sys.modules, {"pycharmm.image": mock_image}):
+    ):
         assert charmm_crystal_abnr_ready(50.0) is True
 
 

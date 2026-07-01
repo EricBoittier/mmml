@@ -231,9 +231,9 @@ options:
                         category. (default: None)
   --use-repo-physnet-params
                         Initialize the PhysNet part of joint DCMNet training
-                        from the bundled repo PhysNet parameters (/Users/ericb
-                        oittier/mmml/mmml/models/physnetjax/defaults/meoh_dime
-                        r_portable.json). (default: False)
+                        from the bundled repo PhysNet parameters (mmml/models/
+                        physnetjax/defaults/meoh_dimer_portable.json).
+                        (default: False)
   --print-freq PRINT_FREQ
                         Print frequency (epochs) (default: 1)
   --plot-results        Create validation plots after training (default:
