@@ -176,7 +176,9 @@ in the synced cache and COMP for the next rescale / sub-chunk.
 
 Overlap heat alternates scratch restarts (`heat.a.res` / `heat.b.res`) and may stage
 writes under `/tmp/mmml-charmm-io/<hash>/` when the real path has capitals (Fortran
-`OPEN` limits). CHARMM writes `!VELOCITIES` to the **staging** file first; the alias is
+`OPEN` limits). CHARMM ``WRIDYN`` writes ``!VX, VY, VZ`` (not ``!VELOCITIES``). mmml reads both.
+Post-``dyna`` capture runs after I/O alias ``finalize()`` so staging restarts are
+on disk before ASE Bussi rescale.
 copied back to the user path only when the I/O handle closes (`CharmmIoAlias.finalize()`).
 
 **Failure mode (fixed):** reading `heat.res` immediately after `dyna`, before finalize,

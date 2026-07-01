@@ -145,6 +145,52 @@ def test_capture_charmm_velocities_for_bussi_from_restart(tmp_path):
     sync.assert_called_once()
 
 
+def test_read_restart_velocities_charmm_vx_vy_vz(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_restart_velocities,
+    )
+
+    restart = tmp_path / "charmm.res"
+    restart.write_text(
+        "REST     0    50\n"
+        "       1 !NTITLE followed by title\n"
+        "* t\n"
+        "\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        "         1           0          50          49          50           0           3\n"
+        " !X, Y, Z\n"
+        " 0.000000000000000D+00 0.000000000000000D+00 0.000000000000000D+00\n"
+        " !VX, VY, VZ\n"
+        " 1.000000000000000D+02 0.000000000000000D+00 0.000000000000000D+00\n",
+        encoding="ascii",
+    )
+    vel = read_restart_velocities(restart)
+    assert vel is not None
+    assert vel.shape == (1, 3)
+    assert vel[0, 0] == pytest.approx(100.0)
+
+
+def test_resolve_dynamics_init_velocities_falls_back_to_iasvel_one_when_cold():
+    from unittest.mock import patch
+
+    import numpy as np
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _resolve_dynamics_init_velocities,
+    )
+
+    kw = {"start": False, "iasvel": 0, "firstt": 12.0}
+    cold = np.zeros((4, 3), dtype=float)
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._resolve_bussi_rescale_velocities",
+        return_value=cold,
+    ):
+        out = _resolve_dynamics_init_velocities(kw, restart_read_path="/tmp/x.res")
+    assert out is None
+    assert kw["iasvel"] == 1
+    assert kw["firstt"] == pytest.approx(12.0)
+
+
 def test_run_dynamics_captures_bussi_velocities_before_velos_del():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics
 
