@@ -12,6 +12,8 @@ from mmml.interfaces.pycharmmInterface.cgenff_bonded import bonded_energy_and_fo
 from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
     charmm_positions_xyz_array,
     compare_bonded_to_charmm,
+    read_pdb_file,
+    read_psf_card_file,
     run_charmm_bonded_ener_force,
     set_charmm_positions,
     setup_bonded_only_charmm,
@@ -94,8 +96,8 @@ def test_committed_aco_psf_matches_pycharmm_after_charmm_load(pycharmm_workdir) 
     with charmm_relaxed_bomlev():
         read.rtf(CGENFF_RTF)
         read.prm(CGENFF_PRM)
-        read.psf_card(str(aco_psf))
-        read.pdb(str(aco_pdb), resid=True)
+        read_psf_card_file(aco_psf)
+        read_pdb_file(aco_pdb, resid=True)
 
     positions = charmm_positions_xyz_array()
     positions = _perturb_positions(positions, seed=23)

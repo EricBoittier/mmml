@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -25,6 +26,63 @@ def set_charmm_positions(positions: np.ndarray) -> None:
     if arr.ndim != 2 or arr.shape[1] != 3:
         raise ValueError(f"positions must be (N, 3), got {arr.shape}")
     coor.set_positions(pd.DataFrame(arr, columns=["x", "y", "z"]))
+
+
+def _psf_needs_xplor_reader(path: Path) -> bool:
+    try:
+        head = path.read_text(encoding="utf-8", errors="replace").splitlines()[:1]
+    except OSError:
+        return False
+    return bool(head) and "XPLOR" in head[0].upper()
+
+
+def read_psf_card_file(
+    path: str | Path,
+    *,
+    append: bool = False,
+    xplor: bool | None = None,
+) -> None:
+    """Read a PSF via the Fortran C API (EXT/XPLOR-safe).
+
+    ``pycharmm.read.psf_card`` (CommandScript) can leave ``nbond=0`` for committed
+  EXT PSF fixtures under MPI-linked CHARMM; use this helper in live tests.
+    """
+    import ctypes
+
+    import pycharmm.lib as lib
+    from pycharmm.charmm_file import c_api_path_buffer
+
+    from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
+
+    p = Path(path)
+    use_xplor = _psf_needs_xplor_reader(p) if xplor is None else bool(xplor)
+    fortran_path, _alias = charmm_fortran_path(p)
+    buf, fn_len = c_api_path_buffer(fortran_path)
+    c_append = ctypes.c_int(int(append))
+    c_xplor = ctypes.c_int(int(use_xplor))
+    status = lib.charmm.read_psf_card(
+        buf,
+        ctypes.byref(fn_len),
+        ctypes.byref(c_append),
+        ctypes.byref(c_xplor),
+    )
+    if int(status) != 1:
+        raise RuntimeError(f"read_psf_card failed for {p} (status={status})")
+
+
+def read_pdb_file(path: str | Path, **kwargs: Any) -> None:
+    """Read PDB coordinates with lowercase Fortran-safe staging when needed."""
+    from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
+
+    import pycharmm.read as read
+
+    p = Path(path)
+    fortran_path, alias = charmm_fortran_path(p)
+    try:
+        read.pdb(fortran_path, **kwargs)
+    finally:
+        if alias is not None:
+            alias.cleanup()
 
 
 def setup_bonded_only_charmm() -> None:
