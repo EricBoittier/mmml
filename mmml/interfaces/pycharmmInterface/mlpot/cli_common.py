@@ -2570,6 +2570,7 @@ def prepare_mlpot_hybrid_state_for_sd(
     ran_calculator_fire = False
     ran_bonded_recovery = False
     ran_geometry_packing = False
+    ran_monomer_physnet_mini = False
 
     def _effective_max_start(*, force: bool) -> float:
         if force:
@@ -2631,6 +2632,47 @@ def prepare_mlpot_hybrid_state_for_sd(
         user = assert_mlpot_user_active(
             mlpot_ctx,
             context=f"{context_prefix} MLpot SD (post calculator mini)",
+            quiet=not verbose,
+        )
+        user_hot = energy_limit is not None and user > float(energy_limit)
+
+    def _run_monomer_physnet_mini(phase: str) -> None:
+        nonlocal hybrid_grms, user, diag, grms_hot, user_hot, ran_monomer_physnet_mini
+        from mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini import (
+            monomer_physnet_mini_enabled,
+            run_selective_monomer_physnet_mini,
+            selective_monomer_physnet_mini_config_from_args,
+        )
+
+        if not monomer_physnet_mini_enabled(workflow_args):
+            return
+        if str(diag.kind) != "geometry_stress":
+            return
+        result = run_selective_monomer_physnet_mini(
+            mlpot_ctx,
+            config=selective_monomer_physnet_mini_config_from_args(
+                workflow_args,
+                verbose=verbose,
+                quiet_bfgs=quiet_bfgs,
+            ),
+            context_prefix=f"{context_prefix} ({phase} monomer PhysNet)",
+        )
+        if not result.ran:
+            return
+        ran_monomer_physnet_mini = True
+        hybrid_grms = float(result.grms)
+        diag = measure_hybrid_charmm_grms(mlpot_ctx)
+        hybrid_grms = float(diag.hybrid)
+        _print_hybrid_charmm_grms_diag(
+            f"{context_prefix} post-monomer PhysNet hybrid GRMS" if verbose else "",
+            diag,
+            mlpot_ctx=mlpot_ctx,
+            quiet=not verbose,
+        )
+        grms_hot = grms_limit is not None and hybrid_grms > float(grms_limit)
+        user = assert_mlpot_user_active(
+            mlpot_ctx,
+            context=f"{context_prefix} MLpot SD (post monomer PhysNet)",
             quiet=not verbose,
         )
         user_hot = energy_limit is not None and user > float(energy_limit)
@@ -2940,6 +2982,7 @@ def prepare_mlpot_hybrid_state_for_sd(
                 quiet=False,
             )
         _run_calculator_fire("ASE-first", force=True)
+        _run_monomer_physnet_mini("ASE-first")
         _run_calculator_mini("ASE-first", force=True)
         verify_hybrid_ase_charmm_consistency(
             mlpot_ctx,
@@ -3005,6 +3048,7 @@ def prepare_mlpot_hybrid_state_for_sd(
             still_hot = grms_limit is not None and hybrid_grms > float(grms_limit)
         if still_hot:
             _run_calculator_fire("post-recovery", force=True)
+            _run_monomer_physnet_mini("post-recovery")
             still_hot = grms_limit is not None and hybrid_grms > float(grms_limit)
 
     if (grms_hot or user_hot) and not ran_bonded_recovery and diag.kind != "geometry_stress":
@@ -3015,6 +3059,7 @@ def prepare_mlpot_hybrid_state_for_sd(
             still_hot = grms_limit is not None and hybrid_grms > float(grms_limit)
             if still_hot:
                 _run_calculator_fire("post-recovery", force=True)
+                _run_monomer_physnet_mini("post-recovery")
                 still_hot = grms_limit is not None and hybrid_grms > float(grms_limit)
 
     if grms_limit is not None and hybrid_grms > float(grms_limit):
@@ -3024,6 +3069,8 @@ def prepare_mlpot_hybrid_state_for_sd(
         )
         if ran_calculator_mini or ran_calculator_fire or ran_bonded_recovery:
             msg += ", recovery, and hybrid calculator BFGS/FIRE"
+        if ran_monomer_physnet_mini:
+            msg += " and selective monomer PhysNet BFGS"
         if diag.kind == "geometry_stress":
             msg += "; proceeding with MLpot SD (geometry_stress — SD is the recovery path)"
             if verbose:
@@ -3040,7 +3087,7 @@ def prepare_mlpot_hybrid_state_for_sd(
 
     if (
         not skip_pre_sd_ener
-        and (ran_calculator_mini or ran_calculator_fire or ran_bonded_recovery or ran_geometry_packing)
+        and (ran_calculator_mini or ran_calculator_fire or ran_bonded_recovery or ran_geometry_packing or ran_monomer_physnet_mini)
     ):
         setattr(mlpot_ctx, "_mlpot_pre_sd_ener_probed", False)
 
@@ -4011,6 +4058,67 @@ def add_calculator_pre_minimize_args(parser: argparse.ArgumentParser) -> None:
         help=(
             "Hybrid GRMS (kcal/mol/Å) to stop geometry-packing FIRE/BFGS early "
             "(default: inherit calculator-safe-grms or 30; 0 disables)."
+        ),
+    )
+    group.add_argument(
+        "--monomer-physnet-mini",
+        dest="monomer_physnet_mini",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "After repack or ASE FIRE, BFGS 1–2 flagged monomers with an isolated "
+            "PhysNet calculator (default: on)."
+        ),
+    )
+    group.add_argument(
+        "--monomer-physnet-mini-max-select",
+        type=int,
+        default=2,
+        help="Max monomers to relax with monomer PhysNet BFGS (default: 2).",
+    )
+    group.add_argument(
+        "--monomer-physnet-mini-min-grms",
+        type=float,
+        default=25.0,
+        metavar="KCAL",
+        help=(
+            "Per-monomer hybrid GRMS (kcal/mol/Å) to flag a monomer for PhysNet BFGS "
+            "(default: 25)."
+        ),
+    )
+    group.add_argument(
+        "--monomer-physnet-mini-min-ratio",
+        type=float,
+        default=2.5,
+        help="Per-monomer GRMS must exceed this × median to flag (default: 2.5).",
+    )
+    group.add_argument(
+        "--monomer-physnet-mini-steps",
+        type=int,
+        default=60,
+        help="Max ASE BFGS steps per flagged monomer (default: 60).",
+    )
+    group.add_argument(
+        "--monomer-physnet-mini-fmax",
+        type=float,
+        default=None,
+        metavar="EV_A",
+        help="Monomer BFGS fmax in eV/Å (default: inherit --pre-min-fmax).",
+    )
+    group.add_argument(
+        "--monomer-physnet-mini-maxstep",
+        type=float,
+        default=None,
+        help="Monomer BFGS maxstep in Å (default: inherit --bfgs-maxstep).",
+    )
+    group.add_argument(
+        "--no-monomer-physnet-mini-restore-template",
+        dest="monomer_physnet_mini_restore_template",
+        action="store_false",
+        default=True,
+        help=(
+            "Do not reset flagged monomer internals from geometry_mini_positions "
+            "before monomer PhysNet BFGS."
         ),
     )
 

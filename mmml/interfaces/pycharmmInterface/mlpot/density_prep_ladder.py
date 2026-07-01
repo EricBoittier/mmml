@@ -1341,6 +1341,31 @@ def run_geometry_packing_recovery(
     except Exception as exc:
         journal.skip_step(step_label, str(exc))
 
+    from mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini import (
+        monomer_physnet_mini_enabled,
+        run_selective_monomer_physnet_mini,
+        selective_monomer_physnet_mini_config_from_args,
+    )
+
+    if monomer_physnet_mini_enabled(args):
+        step_label = f"{context_prefix}:monomer_physnet_mini"
+        try:
+            result = run_selective_monomer_physnet_mini(
+                mlpot_ctx,
+                config=selective_monomer_physnet_mini_config_from_args(
+                    args,
+                    verbose=verbose,
+                    quiet_bfgs=quiet_bfgs,
+                ),
+                context_prefix=f"{context_prefix} (monomer PhysNet)",
+            )
+            if result.ran:
+                grms = float(result.grms)
+                journal.record_step(step_label, _metrics(grms))
+                _record_cleanup_step(step_label, grms)
+        except Exception as exc:
+            journal.skip_step(step_label, str(exc))
+
     if charmm_pbc and composition is not None:
         step_label = f"{context_prefix}:mc_density"
         try:
