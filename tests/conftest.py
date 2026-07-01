@@ -119,7 +119,12 @@ def jax_gpu_available() -> bool:
 
 
 def bonded_block_hangs_under_mpi_mpirun() -> bool:
-    """``apply_bonded_mm_only_block`` (ELEC/VDW-off BLOCK) stalls on MPI-linked CHARMM."""
+    """Selective COEFF BLOCK scripts stall on MPI-linked libcharmm under mpirun.
+
+    Affects ``apply_bonded_mm_only_block`` (ELEC/VDW off) and
+    ``setup_nonbonded_only_charmm`` (bonded terms off). Full ``reset_block`` /
+    ``apply_charmm_mm_block`` are fine.
+    """
     try:
         from mmml.interfaces.pycharmmInterface.charmm_mpi import (
             _under_mpirun,

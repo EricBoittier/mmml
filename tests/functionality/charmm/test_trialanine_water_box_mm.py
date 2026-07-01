@@ -99,6 +99,8 @@ def test_trialanine_water_bonded_matches_pycharmm(trialanine_water_box) -> None:
 
 
 def test_trialanine_water_nonbonded_matches_pycharmm(trialanine_water_box) -> None:
+    if bonded_block_hangs_under_mpi_mpirun():
+        pytest.skip("selective COEFF BLOCK hangs on MPI-linked libcharmm under mpirun")
     box = trialanine_water_box
     positions = _perturb_positions(box.positions, seed=29)
     set_charmm_positions(positions)

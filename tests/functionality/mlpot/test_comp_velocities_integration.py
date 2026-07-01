@@ -26,6 +26,9 @@ def _can_import(name: str) -> bool:
 
 @pytest.fixture(scope="module")
 def charmm_aco_dimer():
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+
+    ensure_pycharmm_loaded()
     if not _can_import("pycharmm"):
         pytest.skip("pycharmm not available")
 
