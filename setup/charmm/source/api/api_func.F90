@@ -5,7 +5,7 @@ module api_func
   
   ! MLpot atom indices list
   integer, parameter :: max_Nml = 50000
-  integer, parameter :: max_Npr = 3998000
+  integer, parameter :: max_Npr = 8000000
   logical :: mlpot_is_init
   integer :: Nml, Nmlp, Nmlmmp, Nmlpcc
   integer, dimension(*) :: mlidx(max_Nml)

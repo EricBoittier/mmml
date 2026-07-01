@@ -321,7 +321,7 @@ def mlpot_limits_message() -> str:
 
 
 NPR_TIERS: dict[str, int] = {
-    "default": 4_000_000,
+    "default": 8_000_000,
     "large": 8_000_000,
     "xlarge": 12_000_000,
     "xxlarge": 36_000_000,

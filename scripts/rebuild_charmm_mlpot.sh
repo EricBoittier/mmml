@@ -733,7 +733,7 @@ fi
 cat <<EOF
 Verify:
   uv run python -c "from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import mlpot_limits_message; print(mlpot_limits_message())"
-Expect: max_Nml=50000, max_Npr=3998000, source=api_func.F90 ($LIB_BASENAME is up to date)
+Expect: max_Nml=50000, max_Npr=8000000, source=api_func.F90 ($LIB_BASENAME is up to date)
   uv run python -c "from mmml.interfaces.pycharmmInterface.packmol_placement import packmol_executable; print(packmol_executable())"
 If you see max_Nml=100: rebuild with scripts/rebuild_charmm_mlpot.sh (paths auto-discover from setup/charmm).
 

@@ -12,7 +12,7 @@
 #
 #   Practical compromise (default): DCM:60 in a fixed L=32 Å cube.
 #     • MIC-safe (L/2 = 16 Å > typical cutnb)
-#     • 300 ML atoms — fits default CHARMM tier (max_Npr≈4M)
+#     • 300 ML atoms — fits default CHARMM tier (max_Npr≈8M)
 #     • Initial placement is sub-bulk ρ; MC + NPT equi (dense profile / ps_equi) densify toward liquid
 #   Documented in docs/md-system-configs.md (DCM:60 @ box_size 32).
 #

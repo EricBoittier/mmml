@@ -56,8 +56,8 @@ def test_select_npr_tier_aco_200_pbc_l32():
 
 def test_select_npr_tier():
     assert mlpot_limits.select_npr_tier(89) == "default"
-    assert mlpot_limits.select_npr_tier(2195) == "large"
-    assert mlpot_limits.select_npr_tier(2200) == "large"
+    assert mlpot_limits.select_npr_tier(2195) == "default"
+    assert mlpot_limits.select_npr_tier(2200) == "default"
     assert mlpot_limits.select_npr_tier(3000) == "xlarge"
     assert mlpot_limits.select_npr_tier(4390) == "xxlarge"
     assert mlpot_limits.select_npr_tier(6000) == "xxxlarge"
@@ -66,7 +66,7 @@ def test_select_npr_tier():
 
 
 def test_select_npr_tier_pbc():
-    assert mlpot_limits.select_npr_tier(825, pbc=True) == "large"
+    assert mlpot_limits.select_npr_tier(825, pbc=True) == "default"
     assert mlpot_limits.select_npr_tier(2200, pbc=True) == "xxlarge"
 
 
@@ -112,7 +112,7 @@ def test_limits_status_reads_charmmsetup_and_repo_api_func(tmp_path, monkeypatch
     f90.parent.mkdir(parents=True)
     f90.write_text(
         "integer, parameter :: max_Nml = 50000\n"
-        "integer, parameter :: max_Npr = 3998000\n",
+        "integer, parameter :: max_Npr = 8000000\n",
         encoding="utf-8",
     )
     lib_dir = charmm_home / "lib"
@@ -131,7 +131,7 @@ def test_limits_status_reads_charmmsetup_and_repo_api_func(tmp_path, monkeypatch
 
     status = mlpot_limits.mlpot_limits_status()
     assert status.max_nml == 50000
-    assert status.max_npr == 3998000
+    assert status.max_npr == 8_000_000
     assert status.api_func_f90 == f90.resolve()
     assert status.libcharmm == lib.resolve()
     assert "up to date" in status.source
@@ -267,7 +267,7 @@ def test_limits_status_stale_lib_uses_conservative_fallback(tmp_path, monkeypatc
     f90.parent.mkdir(parents=True)
     f90.write_text(
         "integer, parameter :: max_Nml = 50000\n"
-        "integer, parameter :: max_Npr = 3998000\n",
+        "integer, parameter :: max_Npr = 8000000\n",
         encoding="utf-8",
     )
     lib = repo / "setup" / "charmm" / "libcharmm.so"

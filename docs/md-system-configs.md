@@ -232,8 +232,8 @@ PyCHARMM MLpot stores ML atom-pair lists in fixed Fortran buffers sized at **com
 
 | System | ML atoms | Box (Å) | Pairs (approx) | Tier | `max_Npr` |
 |--------|----------|---------|----------------|------|-----------|
-| DCM:90 | 450 | — | 0.2M | default | 4M |
-| DCM:165 | 825 | — | 4M+ | large | 8M |
+| DCM:90 | 450 | — | 0.2M | default | 8M |
+| DCM:200 @ L=50 | 1000 | 50 | 6M | default | 8M |
 | **DCM:206** | **1030** | **35** | **8.3M** | **xlarge** | **12M** |
 | ACO:266 @ L=32 | 2660 | 32 | 36M+ | xxlarge | 36M |
 
