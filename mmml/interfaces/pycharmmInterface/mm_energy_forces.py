@@ -865,6 +865,7 @@ def build_mm_energy_forces_fn(
     _use_dynamic_nbrs = _use_jax_md_nbrs or _use_rebuild_nbrs
     _pair_idx_cell = [None]
     _pair_mask_cell = [None]
+    pair_lambda_mm = None
 
     def _create_jax_md_bundle(capacity_multiplier: float):
         return create_jax_md_neighbor_list(
@@ -1094,6 +1095,14 @@ def build_mm_energy_forces_fn(
         rm_b = jnp.take(rmins_per_system, pair_idx_atom_atom[:, 1])
         ep_a = jnp.take(epsilons_per_system, pair_idx_atom_atom[:, 0])
         ep_b = jnp.take(epsilons_per_system, pair_idx_atom_atom[:, 1])
+
+        if pair_lambda_mm is None:
+            _lambda_monomer_jnp = jnp.asarray(lambda_monomer)
+            _pair_i = pair_idx_atom_atom[:, 0]
+            _pair_j = pair_idx_atom_atom[:, 1]
+            _lam_a = jnp.take(_lambda_monomer_jnp, _monomer_id_jnp[_pair_i])
+            _lam_b = jnp.take(_lambda_monomer_jnp, _monomer_id_jnp[_pair_j])
+            pair_lambda_mm = _lam_a * _lam_b
 
         pair_qq = q_a * q_b * pair_lambda_mm
         pair_rm = rm_a + rm_b

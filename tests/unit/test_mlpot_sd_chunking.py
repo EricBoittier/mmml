@@ -356,6 +356,8 @@ def test_minimize_with_mlpot_refreshes_grms_after_sync():
     ) as sync_lists, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
     ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.materialize_deferred_mlpot_jax_before_sd",
+    ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_mlpot_sd_then_abnr",
         return_value=MlpotSdChunkResult(completed=True),
     ), patch(
@@ -395,6 +397,8 @@ def test_minimize_with_mlpot_raises_when_sd_watchdog_aborts():
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.prepare_mlpot_hybrid_state_for_sd",
         return_value=(12.0, -100.0),
     ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.materialize_deferred_mlpot_jax_before_sd",
+    ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_mlpot_sd_then_abnr",
         return_value=MlpotSdChunkResult(completed=False),
     ):
@@ -425,6 +429,8 @@ def test_minimize_with_mlpot_continues_after_rollback():
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.prepare_mlpot_hybrid_state_for_sd",
         return_value=(12.0, -100.0),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.materialize_deferred_mlpot_jax_before_sd",
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_mlpot_sd_then_abnr",
         return_value=MlpotSdChunkResult(
@@ -596,6 +602,8 @@ def test_run_minimize_in_chunks_materializes_deferred_jax_before_first_sd():
     ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
     ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+    ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.materialize_deferred_mlpot_jax_before_sd",
     ) as materialize:
         _run_minimize_in_chunks(
@@ -628,3 +636,47 @@ def test_materialize_deferred_mlpot_jax_before_sd_skips_without_mpi_defer():
         return_value=False,
     ):
         assert materialize_deferred_mlpot_jax_before_sd(ctx) is False
+
+
+def test_materialize_deferred_mlpot_jax_before_sd_force_probe_syncs_lists():
+    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+        DecomposedMlpotModel,
+        materialize_deferred_mlpot_jax_before_sd,
+    )
+
+    z = np.array([6, 1, 1, 6, 1, 1], dtype=int)
+    model = DecomposedMlpotModel(
+        MagicMock(),
+        CutoffParameters(),
+        2,
+        z,
+        defer_jax_until_after_sd=True,
+    )
+    ctx = MagicMock(pyCModel=model, use_pbc=True, _mlpot_pre_sd_ener_probed=True)
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
+        return_value=True,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
+        return_value=12.3,
+    ) as probe, patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+    ) as recover, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+    ) as sync_lists:
+        assert (
+            materialize_deferred_mlpot_jax_before_sd(
+                ctx,
+                force_ener_probe=True,
+                sync_lists=True,
+            )
+            is True
+        )
+
+    probe.assert_called_once()
+    assert recover.call_count == 2
+    sync_lists.assert_called_once_with(quiet=True)
