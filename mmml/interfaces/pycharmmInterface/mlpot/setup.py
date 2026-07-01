@@ -357,6 +357,7 @@ def prime_charmm_hybrid_energy_before_mlpot_sd(
     ensure_ml_exclusions_before_mlpot_charmm_energy(
         mlpot_ctx,
         context=f"{context} ENER prime",
+        force_rebuild=True,
     )
     _ensure_domdec_off_for_mlpot_energy(context=f"{context} CHARMM ENER prime")
     grms = float(charmm_grms_after_ener_force(silent=not verbose))
@@ -1281,12 +1282,18 @@ def ensure_ml_exclusions_before_mlpot_charmm_energy(
     mlpot_ctx: Any,
     *,
     context: str = "MLpot CHARMM energy",
+    force_rebuild: bool = False,
 ) -> int:
-    """Reinstall ML ``iblo/inb`` when PSF-only exclusions precede ``ENER``/``upinb``.
+    """Reinstall ML ``iblo/inb`` and safely rebuild PBC lists before hybrid ``ENER``.
 
     ``update_bnbnd`` before ML exclusions are visible to PSF leaves ~O(n) bonded
     exclusions (e.g. 1000 for DCM:100) and ``MAKINB`` rebuilds huge pair lists
     for all-ML PBC clusters → resize segfault in ``upinb``.
+
+    When exclusions were dropped back to PSF-only (~1000) or coords/box changed
+    since registration, run the same order as
+    :func:`_finalize_pbc_mlpot_exclusions_after_param_read`: crystal/IMAGE,
+    cutoffs (no rebuild), ML ``iblo/inb``, then one ``update_bnbnd``/``upinb``.
     """
     if not bool(getattr(mlpot_ctx, "use_pbc", False)):
         return 0
@@ -1300,13 +1307,46 @@ def ensure_ml_exclusions_before_mlpot_charmm_energy(
         return 0
     pycharmm = _import_pycharmm()
     nnb = int(pycharmm.psf.get_nnb())
-    if nnb < min_nnb:
+    needs_install = nnb < min_nnb
+    if not needs_install and not force_rebuild:
+        return nnb
+
+    side = _resolve_mlpot_ctx_pbc_box_side(mlpot_ctx)
+    if side is None:
+        if needs_install:
+            _install_ml_exclusions(ml_selection, update=False)
+            nnb = _verify_ml_exclusion_lists_installed(
+                ml_selection,
+                context=context,
+            )
+            pycharmm.image.update_bimag()
+        return nnb
+
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+        recover_mpi_for_charmm_after_jax,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        apply_pbc_nbonds,
+        prepare_charmm_pbc,
+    )
+
+    prepare_charmm_pbc(float(side))
+    recover_mpi_for_charmm_after_jax(
+        phase=f"after {context} PBC crystal/IMAGE build",
+    )
+    with charmm_relaxed_bomlev():
+        apply_pbc_nbonds(nbxmod=5, cubic_box_side_A=float(side), rebuild=False)
+    if needs_install:
         _install_ml_exclusions(ml_selection, update=False)
-        nnb = _verify_ml_exclusion_lists_installed(
-            ml_selection,
-            context=context,
-        )
-        pycharmm.image.update_bimag()
+    nnb = _verify_ml_exclusion_lists_installed(
+        ml_selection,
+        context=context,
+    )
+    with charmm_relaxed_bomlev():
+        pycharmm.nbonds.update_bnbnd()
+    pycharmm.image.update_bimag()
+    recover_mpi_for_charmm_after_jax(phase=f"after {context} PBC upinb")
     return nnb
 
 

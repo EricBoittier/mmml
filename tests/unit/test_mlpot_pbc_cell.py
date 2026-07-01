@@ -1155,7 +1155,7 @@ def test_ensure_ml_exclusions_before_mlpot_charmm_energy_reinstalls_when_short()
     fake_sel.get_atom_indexes.return_value = list(range(4))
     ctx = MagicMock(use_pbc=True, ml_selection=fake_sel)
     fake_psf = MagicMock()
-    fake_psf.get_nnb.side_effect = [1000, 6]
+    fake_psf.get_nnb.side_effect = [5, 6]
 
     with patch.object(mlpot_setup, "_import_pycharmm") as import_py, patch.object(
         mlpot_setup,
