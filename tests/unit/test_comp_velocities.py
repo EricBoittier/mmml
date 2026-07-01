@@ -186,6 +186,40 @@ def test_mirror_comparison_velocities_for_dynamics_skips_when_start_true(mock_sy
     mock_sync.assert_not_called()
 
 
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.assert_comparison_holds_velocities_not_positions",
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
+)
+def test_refresh_bussi_comp_velocity_handoff_syncs_and_validates(
+    mock_sync_main, mock_assert
+):
+    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+        refresh_bussi_comp_velocity_handoff,
+    )
+
+    vel = np.array([[1.0, 0.0, 0.0], [0.0, 2.0, 0.0]], dtype=float)
+    refresh_bussi_comp_velocity_handoff(vel, context="test")
+    mock_sync_main.assert_called_once()
+    mock_assert.assert_called_once_with(context="test")
+
+
+def test_assert_comparison_holds_velocities_not_positions_raises_when_comp_is_main(
+    monkeypatch,
+):
+    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+        assert_comparison_holds_velocities_not_positions,
+    )
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_matches_main_positions",
+        lambda **_: True,
+    )
+    with pytest.raises(RuntimeError, match="COMP holds main coordinates"):
+        assert_comparison_holds_velocities_not_positions(context="chunk 2")
+
+
 def test_coor_get_comparison_capi():
     fake_charmm = MagicMock()
 

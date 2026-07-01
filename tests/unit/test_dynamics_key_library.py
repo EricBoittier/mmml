@@ -167,6 +167,9 @@ def test_run_dynamics_bussi_uses_comp_not_c_api_init_velocities():
             "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_akma",
         ) as sync_comp,
         patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.refresh_bussi_comp_velocity_handoff",
+        ) as refresh_comp,
+        patch(
             "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
         ),
         patch(
@@ -188,6 +191,7 @@ def test_run_dynamics_bussi_uses_comp_not_c_api_init_velocities():
             }
         )
     sync_comp.assert_called_once()
+    refresh_comp.assert_called_once()
     assert run_capi.call_args.kwargs.get("init_velocities") is None
 
 
