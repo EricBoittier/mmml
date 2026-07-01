@@ -4675,6 +4675,36 @@ def _bussi_heat_ramp_active(kw: dict[str, Any]) -> bool:
     return bussi_heat_ramp_spec_from_kw(kw) is not None
 
 
+def _restore_bussi_velocities_after_overlap_recovery(
+    chunk_kw: dict[str, Any],
+    *,
+    restart_path: Path | str | None,
+    global_step: int,
+) -> None:
+    """Rehydrate AKMA velocities after overlap rescue / MLpot reregister."""
+    if not _bussi_heat_ramp_active(chunk_kw):
+        return
+    spec = bussi_heat_ramp_spec_from_kw(chunk_kw)
+    if spec is None:
+        return
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        ensure_bussi_velocities_after_overlap_recovery,
+    )
+
+    target_k = heat_ramp_bath_target_K(
+        firstt=float(spec["firstt"]),
+        finalt=float(spec["finalt"]),
+        teminc=float(spec["teminc"]),
+        ihtfrq=int(spec["ihtfrq"]),
+        step=int(global_step),
+    )
+    ensure_bussi_velocities_after_overlap_recovery(
+        restart_path,
+        temperature_K=target_k,
+        quiet=bool(chunk_kw.get("_quiet_bussi_rescale", False)),
+    )
+
+
 def _ensure_bussi_heat_continuation_iasvel(chunk_kw: dict[str, Any]) -> None:
     """Bussi continuation: ``iasvel=0`` + COMP mirror (not re-Boltzmann each chunk)."""
     if not _bussi_heat_ramp_active(chunk_kw):
@@ -6228,6 +6258,15 @@ def run_dynamics_with_io(
                                     f"(step {steps_before_chunk})"
                                 ),
                             )
+                            _restore_bussi_velocities_after_overlap_recovery(
+                                chunk_kw,
+                                restart_path=(
+                                    chunk_io.restart_read
+                                    if chunk_io is not None
+                                    else overlap_restart_read_for_chunk
+                                ),
+                                global_step=steps_before_chunk,
+                            )
                             from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
                                 save_stabilized_overlap_rescue_snapshot,
                             )
@@ -6251,6 +6290,15 @@ def run_dynamics_with_io(
                                 )
                         elif mlpot_ctx is not None:
                             mlpot_ctx.reregister_mlpot(verbose=False)
+                            _restore_bussi_velocities_after_overlap_recovery(
+                                chunk_kw,
+                                restart_path=(
+                                    chunk_io.restart_read
+                                    if chunk_io is not None
+                                    else overlap_restart_read_for_chunk
+                                ),
+                                global_step=steps_before_chunk,
+                            )
                         use_readyn_handoff = (
                             chunk_io is not None
                             and n_chunks > 1
@@ -6369,6 +6417,11 @@ def run_dynamics_with_io(
                                 mlpot_ctx,
                                 overlap,
                                 context=f"{overlap_context} at step {steps_done}",
+                            )
+                            _restore_bussi_velocities_after_overlap_recovery(
+                                chunk_kw,
+                                restart_path=chunk_io.restart_write,
+                                global_step=steps_done,
                             )
                             from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
                                 save_stabilized_overlap_rescue_snapshot,

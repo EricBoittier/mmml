@@ -268,12 +268,9 @@ def test_apply_bussi_velocity_rescale_assigns_when_velocities_missing():
         "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_masses_amu",
         return_value=masses,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.capture_charmm_velocities_for_bussi",
-        side_effect=[None, v_akma, v_akma],
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._resolve_bussi_rescale_velocities",
+        return_value=v_akma,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.assign_maxwell_boltzmann_velocities_via_ase",
-        return_value=10.0,
-    ) as assign, mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
     ) as sync, mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.calculate_bussi_rescale_alpha",
