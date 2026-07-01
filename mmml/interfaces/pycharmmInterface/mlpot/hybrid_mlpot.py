@@ -703,11 +703,18 @@ class DecomposedMlpotModel:
         self,
         calc: DecomposedMlpotCalculator,
     ) -> None:
-        """Promote deferred JAX to GPU after the first hybrid ENER (MPI defer path)."""
+        """Promote deferred JAX to GPU after the first hybrid ENER (jax-pme mesh only).
+
+        MIC / ScaFaCoS defer paths keep JAX on CPU for the entire MLpot SD minimization;
+        ``maybe_warmup_deferred_decomposed_mlpot`` promotes after SD completes. Mid-SD GPU
+        compile on MPI-linked CHARMM can corrupt OpenMPI pools and segfault the next
+        Fortran ``enbond`` step.
+        """
         if not self._defer_jax_until_after_sd or self._jax_on_gpu:
             return
-        if self._defer_jax_pme_gpu_promote():
-            self._jax_pme_hybrid_first_ener_done = True
+        if not self._defer_jax_pme_gpu_promote():
+            return
+        self._jax_pme_hybrid_first_ener_done = True
         self.promote_jax_factory_to_gpu()
         if not self._jax_on_gpu:
             return
@@ -745,6 +752,22 @@ class DecomposedMlpotModel:
                 real._get_update_fn = self._get_update_fn
                 real._spherical_forward_fn = None
                 real._forward_cache_key = None
+        try:
+            from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+                charmm_lib_links_mpi,
+                recover_mpi_for_charmm_after_jax,
+            )
+            from mmml.interfaces.pycharmmInterface.jax_device_policy import (
+                mlpot_jax_device_name,
+            )
+
+            if charmm_lib_links_mpi() and mlpot_jax_device_name() == "gpu":
+                from mmml.utils.jax_gpu_warmup import sync_jax_gpu_before_charmm
+
+                sync_jax_gpu_before_charmm(phase="after MLpot JAX GPU promote")
+                recover_mpi_for_charmm_after_jax(phase="after MLpot JAX GPU promote")
+        except Exception:
+            pass
 
     def _build_registered_calculator(
         self,

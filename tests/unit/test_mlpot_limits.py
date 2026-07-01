@@ -204,6 +204,22 @@ def test_register_mlpot_validates_pbc_pair_budget(monkeypatch):
         "mmml.interfaces.pycharmmInterface.mlpot.setup._registration_pbc_box_side_A",
         lambda *_a, **_k: 32.0,
     )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits.mlpot_limits_status",
+        lambda: mock.MagicMock(max_npr=100_000, source="test"),
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup._suspend_pbc_for_cgenff_param_read",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup._finalize_pbc_mlpot_exclusions_after_param_read",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup._require_mlpot_skip_iblo_support",
+        lambda *_a, **_k: None,
+    )
     sel = mock.MagicMock()
     sel.get_atom_indexes.return_value = list(range(1650))
     with mock.patch(

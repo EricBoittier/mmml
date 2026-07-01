@@ -5656,6 +5656,37 @@ def _resolved_abnr_nstep(config: MinimizeWithMlpotConfig) -> int:
     return max(0, int(config.nstep))
 
 
+def _maybe_promote_mlpot_jax_after_sd(config: MinimizeWithMlpotConfig) -> None:
+    """Promote deferred JAX to GPU after MLpot SD (MPI-linked CHARMM defer path)."""
+    if config.mlpot_ctx is None:
+        return
+    pyCModel = getattr(config.mlpot_ctx, "pyCModel", None)
+    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+        DecomposedMlpotModel,
+        maybe_warmup_deferred_decomposed_mlpot,
+    )
+
+    if not isinstance(pyCModel, DecomposedMlpotModel):
+        return
+    n_mono = int(
+        getattr(pyCModel, "_n_monomers", 0)
+        or getattr(config.mlpot_ctx, "n_monomers", 0)
+        or 0
+    )
+    if n_mono <= 1:
+        return
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+
+    cell = getattr(config.mlpot_ctx, "cubic_box_side_A", None)
+    maybe_warmup_deferred_decomposed_mlpot(
+        pyCModel,
+        get_charmm_positions_array(),
+        cell=float(cell) if cell is not None else None,
+        n_monomers=n_mono,
+        verbose=config.verbose,
+    )
+
+
 def _run_mlpot_sd_then_abnr(
     minimize: Any,
     pycharmm: Any,
@@ -5907,6 +5938,8 @@ def minimize_with_mlpot(
 
         if config.mlpot_ctx is not None:
             invalidate_mlpot_calculator_caches(config.mlpot_ctx)
+
+        _maybe_promote_mlpot_jax_after_sd(config)
 
         if config.save:
             from mmml.interfaces.pycharmmInterface.mlpot.setup import (

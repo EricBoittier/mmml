@@ -189,6 +189,9 @@ def test_calculate_charmm_uses_cpu_context_while_jax_deferred():
         return_value=False,
     ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+    ), patch.object(
+        model,
+        "_maybe_promote_deferred_jax_on_hybrid_eval",
     ):
         calc.calculate_charmm(
             n, 0, 0, None, x, y, zc, dx, dy, dz, 0, 0, None, None, None, None, None, None, None

@@ -205,7 +205,7 @@ def test_decomposed_mlpot_sd_defer_uses_cpu_until_promote():
 
 
 def test_maybe_promote_deferred_jax_on_hybrid_eval_without_jax_pme():
-    """periodic_external / ScaFaCoS (no jax-pme mesh) must promote on first hybrid ENER."""
+    """MIC / ScaFaCoS (no jax-pme mesh) must not promote mid-SD on hybrid ENER."""
     z = np.array([6, 1, 1, 6, 1, 1], dtype=int)
     model = DecomposedMlpotModel(
         MagicMock(),
@@ -215,6 +215,33 @@ def test_maybe_promote_deferred_jax_on_hybrid_eval_without_jax_pme():
         cell=40.0,
         do_mm=False,
         defer_jax_until_after_sd=True,
+    )
+    model._jax_on_gpu = False
+    calc = MagicMock(spec=DecomposedMlpotCalculator)
+    calc._spherical_forward_fn = "cached"
+    calc._forward_cache_key = ("k",)
+
+    with patch.object(model, "promote_jax_factory_to_gpu") as mock_promote:
+        model._maybe_promote_deferred_jax_on_hybrid_eval(calc)
+
+    mock_promote.assert_not_called()
+    assert calc._spherical_forward_fn == "cached"
+    assert calc._forward_cache_key == ("k",)
+
+
+def test_maybe_promote_deferred_jax_on_hybrid_eval_with_jax_pme_mesh():
+    """jax-pme mesh defer still promotes on first hybrid ENER."""
+    z = np.array([6, 1, 1, 6, 1, 1], dtype=int)
+    model = DecomposedMlpotModel(
+        MagicMock(),
+        CutoffParameters(),
+        2,
+        z,
+        cell=40.0,
+        do_mm=True,
+        defer_jax_until_after_sd=True,
+        lr_solver="jax_pme",
+        jax_pme_method="pme",
     )
     model._jax_on_gpu = False
     calc = MagicMock(spec=DecomposedMlpotCalculator)
@@ -450,6 +477,8 @@ def test_register_mlpot_context_forwards_cell():
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.assert_mlpot_user_active",
         return_value=-1.0,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
     ):
         ctx, model = run_workflow._register_mlpot_context(
             z,
