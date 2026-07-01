@@ -379,7 +379,7 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="N",
         help=(
             "pycharmm: heating velocity rescale every N steps when --heat-thermostat "
-            "scale (0 = match --dyn-nprint). Ignored for hoover."
+            "scale (0 = match --dyn-freq-cadence, else --dyn-nprint). Ignored for hoover."
         ),
     )
     parser.add_argument(
@@ -930,6 +930,17 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="N",
         help="pycharmm PBC: image/HB list rebuild every N steps (default 50; larger=faster)",
+    )
+    parser.add_argument(
+        "--dyn-freq-cadence",
+        type=int,
+        default=50,
+        metavar="N",
+        help=(
+            "pycharmm: align heat/list/print cadence (ihtfrq, inbfrq, imgfrq, nprint, …) "
+            "to N steps; decoupled from DCD nsavc (default: 50). Use 0 for legacy "
+            "(ihtfrq≈--dyn-nprint, overlap chunks disable interior list updates)."
+        ),
     )
     parser.add_argument(
         "--pre-nve-charmm-update",
@@ -2328,6 +2339,7 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd.append("--mlpot-pbc")
     _append_optional(cmd, "--dyn-inbfrq", getattr(args, "dyn_inbfrq", None))
     _append_optional(cmd, "--dyn-imgfrq", getattr(args, "dyn_imgfrq", None))
+    _append_optional(cmd, "--dyn-freq-cadence", getattr(args, "dyn_freq_cadence", None))
     if getattr(args, "pre_nve_charmm_update", None) is False:
         cmd.append("--no-pre-nve-charmm-update")
     elif getattr(args, "pre_nve_charmm_update", None) is True:

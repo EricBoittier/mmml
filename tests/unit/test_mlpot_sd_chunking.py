@@ -15,6 +15,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     _maybe_abort_sd_on_grms_stall,
     _mlpot_sd_chunk_nstep,
     _resolved_sd_converged_grms,
+    _should_stop_sd_on_converged_grms,
     _run_minimize_in_chunks,
     invalidate_mlpot_calculator_caches,
     minimize_with_mlpot,
@@ -243,6 +244,7 @@ def test_run_minimize_in_chunks_watchdog_uses_sd_watchdog_initial_grms():
         mlpot_ctx=ctx,
         sd_chunk_nstep=200,
         pre_sd_bonded_recovery_grms_kcalmol_A=50.0,
+        sd_converged_grms_kcalmol_A=0.25,
         sd_grms_watchdog_factor=2.5,
         sd_watchdog_initial_grms=0.4,
         verbose=False,
@@ -543,6 +545,11 @@ def test_run_minimize_in_chunks_stops_on_grms_plateau():
     assert minimize.run_sd.call_count == 3
 
 
+def test_resolved_sd_converged_grms_defaults_to_one():
+    config = MinimizeWithMlpotConfig()
+    assert _resolved_sd_converged_grms(config) == pytest.approx(1.0)
+
+
 def test_run_minimize_in_chunks_exits_early_when_converged():
     ctx = MagicMock(use_pbc=True)
     minimize = MagicMock()
@@ -552,6 +559,7 @@ def test_run_minimize_in_chunks_exits_early_when_converged():
         mlpot_ctx=ctx,
         sd_chunk_nstep=200,
         pre_sd_bonded_recovery_grms_kcalmol_A=50.0,
+        sd_converged_grms_kcalmol_A=50.0,
         sd_abort_on_grms_increase=False,
         verbose=False,
     )
@@ -590,6 +598,43 @@ def test_run_minimize_in_chunks_exits_early_when_converged():
     assert minimize.run_sd.call_count == 1
 
 
+def test_run_minimize_in_chunks_skips_when_initial_grms_already_converged():
+    ctx = MagicMock(use_pbc=True)
+    minimize = MagicMock()
+    pycharmm = MagicMock()
+    config = MinimizeWithMlpotConfig(
+        nstep=500,
+        mlpot_ctx=ctx,
+        sd_chunk_nstep=10,
+        sd_abort_on_grms_increase=False,
+        verbose=False,
+    )
+    base_kw = {"inbfrq": 0, "ihbfrq": 0}
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
+        return_value=0.52,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
+    ):
+        result = _run_minimize_in_chunks(
+            minimize,
+            pycharmm,
+            config,
+            base_kw,
+            total_nstep=500,
+            pass_label="pass 1",
+            method="ABNR",
+            run_attr="run_abnr",
+        )
+
+    assert result.completed is True
+    assert result.last_grms == pytest.approx(0.52)
+    minimize.run_abnr.assert_not_called()
+
+
 def test_run_minimize_in_chunks_materializes_deferred_jax_before_first_sd():
     ctx = MagicMock(use_pbc=True)
     minimize = MagicMock()
@@ -612,7 +657,7 @@ def test_run_minimize_in_chunks_materializes_deferred_jax_before_first_sd():
         return_value=np.zeros((1, 3)),
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
-        return_value=1.0,
+        return_value=2.0,
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
     ), patch(

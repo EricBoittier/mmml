@@ -848,8 +848,8 @@ class MinimizeWithMlpotConfig:
     # Abort when hybrid GRMS plateaus (CHARMM SD ineffective on geometry_stress).
     sd_stall_patience_chunks: int = 3
     sd_stall_grms_abs_tol: float = 0.1
-    # Skip remaining SD chunks when hybrid GRMS is already at/below this ceiling.
-    sd_converged_grms_kcalmol_A: Optional[float] = None
+    # Skip remaining SD/ABNR chunks when hybrid GRMS is at/below this ceiling.
+    sd_converged_grms_kcalmol_A: Optional[float] = 1.0
     # ASE BFGS on hybrid calculator before MLpot SD (geometry_stress / high GRMS).
     calculator_pre_minimize: bool = True
     calculator_minimize_steps: int = 200
@@ -1004,13 +1004,31 @@ def _effective_mlpot_sd_chunk_nstep(
 _SD_WATCHDOG_LOW_BASELINE_GRMS = 5.0
 
 
-def _resolved_sd_converged_grms(config: MinimizeWithMlpotConfig) -> float | None:
-    """GRMS ceiling below which chunked SD is treated as already converged."""
+_DEFAULT_SD_CONVERGED_GRMS_KCALMOL_A = 1.0
+
+
+def _resolved_sd_converged_grms(config: MinimizeWithMlpotConfig) -> float:
+    """GRMS ceiling below which chunked SD/ABNR is treated as converged."""
     if config.sd_converged_grms_kcalmol_A is not None:
         return float(config.sd_converged_grms_kcalmol_A)
-    if config.pre_sd_bonded_recovery_grms_kcalmol_A is not None:
-        return float(config.pre_sd_bonded_recovery_grms_kcalmol_A)
-    return None
+    return _DEFAULT_SD_CONVERGED_GRMS_KCALMOL_A
+
+
+def _should_stop_sd_on_converged_grms(
+    config: MinimizeWithMlpotConfig,
+    *,
+    initial_grms: float | None,
+    current_grms: float,
+    converged_grms: float,
+) -> bool:
+    """True when hybrid GRMS is at/below the convergence ceiling."""
+    if float(current_grms) > float(converged_grms):
+        return False
+    if initial_grms is None or not np.isfinite(initial_grms):
+        return True
+    if float(initial_grms) <= float(converged_grms):
+        return True
+    return float(current_grms) < float(initial_grms) - float(config.sd_stall_grms_abs_tol)
 
 
 def _maybe_abort_sd_on_grms_stall(
@@ -1026,7 +1044,7 @@ def _maybe_abort_sd_on_grms_stall(
     if stagnant_chunks < int(config.sd_stall_patience_chunks):
         return False
     target = _resolved_sd_converged_grms(config)
-    if target is not None and current_grms <= float(target):
+    if current_grms <= float(target):
         return False
     if config.verbose:
         from mmml.utils.prep_ladder_report import PrepMetrics, emit_sd_event
@@ -1236,6 +1254,24 @@ def _run_minimize_in_chunks(
     chunk_index = 0
     stagnant_chunks = 0
     converged_grms = _resolved_sd_converged_grms(config)
+    if (
+        initial_grms is not None
+        and np.isfinite(initial_grms)
+        and _should_stop_sd_on_converged_grms(
+            config,
+            initial_grms=initial_grms,
+            current_grms=float(initial_grms),
+            converged_grms=converged_grms,
+        )
+    ):
+        if config.verbose:
+            print(
+                f"MLpot SD converged ({pass_label}, before {method}): "
+                f"hybrid GRMS {float(initial_grms):.4f} <= "
+                f"{float(converged_grms):.4f} kcal/mol/Å",
+                flush=True,
+            )
+        return MlpotSdChunkResult(completed=True, last_grms=float(initial_grms))
     pbc_sd = bool(getattr(config.mlpot_ctx, "use_pbc", False)) if config.mlpot_ctx else False
     while remaining > 0:
         chunk_index += 1
@@ -1320,20 +1356,19 @@ def _run_minimize_in_chunks(
             method=method,
             nstep=step,
         )
-        if grms is not None and converged_grms is not None and grms <= float(converged_grms):
-            improved = (
-                initial_grms is None
-                or not np.isfinite(initial_grms)
-                or float(grms) < float(initial_grms) - float(config.sd_stall_grms_abs_tol)
-            )
-            if improved:
-                if config.verbose:
-                    print(
-                        f"MLpot SD converged ({pass_label}, after chunk {chunk_index}): "
-                        f"hybrid GRMS {grms:.4f} <= {float(converged_grms):.4f} kcal/mol/Å",
-                        flush=True,
-                    )
-                return MlpotSdChunkResult(completed=True, last_grms=grms)
+        if grms is not None and _should_stop_sd_on_converged_grms(
+            config,
+            initial_grms=initial_grms,
+            current_grms=grms,
+            converged_grms=converged_grms,
+        ):
+            if config.verbose:
+                print(
+                    f"MLpot SD converged ({pass_label}, after chunk {chunk_index}): "
+                    f"hybrid GRMS {grms:.4f} <= {float(converged_grms):.4f} kcal/mol/Å",
+                    flush=True,
+                )
+            return MlpotSdChunkResult(completed=True, last_grms=grms)
         if grms is not None and previous_grms is not None:
             if abs(float(grms) - float(previous_grms)) <= float(config.sd_stall_grms_abs_tol):
                 stagnant_chunks += 1
@@ -1833,7 +1868,17 @@ def finalize_heat_dynamics_frequencies(kw: dict[str, Any]) -> dict[str, tuple[in
         if new != old:
             changes[key] = (old, new)
         kw[key] = new
-    if "nsavc" in kw:
+    cadence = kw.get("_dyn_freq_cadence")
+    if cadence is not None and int(cadence) > 0:
+        c = _harmonize_dynamics_frequency(int(cadence), nstep)
+        for key in ("nprint", "iprfrq", "isvfrq"):
+            if key not in kw:
+                continue
+            old = int(kw[key])
+            if old != c:
+                changes[key] = (old, c)
+            kw[key] = c
+    elif "nsavc" in kw:
         ns = int(kw["nsavc"])
         for key in ("nprint", "iprfrq", "isvfrq"):
             if key in kw and int(kw[key]) != ns:
@@ -3650,6 +3695,17 @@ _OVERLAP_CHUNK_FREQ_KEYS = (
 )
 
 
+_OVERLAP_CHUNK_CADENCE_FREQ_KEYS = (
+    "inbfrq",
+    "ihbfrq",
+    "ilbfrq",
+    "imgfrq",
+    "iprfrq",
+    "nprint",
+    "isvfrq",
+)
+
+
 def _harmonize_overlap_chunk_frequencies(
     chunk_kw: dict[str, Any],
     chunk_nstep: int,
@@ -3661,6 +3717,8 @@ def _harmonize_overlap_chunk_frequencies(
     """Align list/image/HB update freqs with this chunk's ``nstep`` (avoids FINCYC retune)."""
 
     n = max(1, int(chunk_nstep))
+    cadence = chunk_kw.get("_dyn_freq_cadence")
+    cadence_active = cadence is not None and int(cadence) > 0
     for key in _OVERLAP_CHUNK_FREQ_KEYS:
         if key not in chunk_kw:
             continue
@@ -3690,10 +3748,17 @@ def _harmonize_overlap_chunk_frequencies(
                         f"chunk: per-chunk DCD nsavc={chunk_kw['nsavc']} "
                         f"(global step {int(global_step_start)}–{int(global_step_start) + n})",
                     )
+            elif cadence_active:
+                c = _harmonize_dynamics_frequency(int(cadence), n)
+                for k in ("nprint", "iprfrq", "isvfrq"):
+                    if k in chunk_kw:
+                        chunk_kw[k] = c
             else:
                 for k in ("nprint", "iprfrq", "isvfrq"):
                     if k in chunk_kw:
                         chunk_kw[k] = old
+        elif cadence_active and key in _OVERLAP_CHUNK_CADENCE_FREQ_KEYS:
+            chunk_kw[key] = _harmonize_dynamics_frequency(int(cadence), n)
         else:
             chunk_kw[key] = _harmonize_dynamics_frequency(int(chunk_kw[key]), n)
     _align_inbfrq_with_imgfrq(chunk_kw)
@@ -3702,7 +3767,8 @@ def _harmonize_overlap_chunk_frequencies(
     else:
         _ensure_ntrfrq_above_nstep(chunk_kw, n)
         _maybe_disable_ixtfrq_for_fixed_volume_chunk(chunk_kw, n)
-        _maybe_disable_interior_list_updates_for_fixed_volume_chunk(chunk_kw, n)
+        if not cadence_active:
+            _maybe_disable_interior_list_updates_for_fixed_volume_chunk(chunk_kw, n)
 
 
 def _mlpot_ctx_cubic_box_side_A(mlpot_ctx: Optional["MlpotContext"]) -> float | None:

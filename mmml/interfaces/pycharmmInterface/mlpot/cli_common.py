@@ -755,6 +755,22 @@ def resolve_heat_comp_damp_kwargs(args: argparse.Namespace) -> dict[str, float |
     return kw
 
 
+DEFAULT_DYN_FREQ_CADENCE = 50
+
+
+def resolve_dynamics_freq_cadence(args: argparse.Namespace) -> int | None:
+    """Shared dynamics list/print/heat cadence (PBC ``imgfrq`` default: 50).
+
+    When active, heat ``ihtfrq``, ``inbfrq`` / ``imgfrq``, and console print
+    frequencies align to this value instead of ``--dyn-nprint`` or DCD ``nsavc``.
+    Pass ``--dyn-freq-cadence 0`` for legacy production behavior.
+    """
+    raw = getattr(args, "dyn_freq_cadence", DEFAULT_DYN_FREQ_CADENCE)
+    if raw is None or int(raw) <= 0:
+        return None
+    return max(1, int(raw))
+
+
 def resolve_heat_ihtfrq(args: argparse.Namespace, *, nstep: int) -> int:
     """Heating velocity-rescale cadence (CHARMM ``ihtfrq``).
 
@@ -771,7 +787,11 @@ def resolve_heat_ihtfrq(args: argparse.Namespace, *, nstep: int) -> int:
         return min(explicit, nstep)
     if getattr(args, "quiet", False):
         return nstep
-    ihtfrq = min(max(1, int(getattr(args, "dyn_nprint", 500))), nstep)
+    cadence = resolve_dynamics_freq_cadence(args)
+    if cadence is not None:
+        ihtfrq = min(cadence, nstep)
+    else:
+        ihtfrq = min(max(1, int(getattr(args, "dyn_nprint", 500))), nstep)
     min_rescales = max(4, int(getattr(args, "heat_min_rescales", 8) or 8))
     if nstep // ihtfrq < 2:
         ihtfrq = max(1, nstep // min_rescales)
@@ -785,7 +805,11 @@ def resolve_dynamics_print_kwargs(
     nsavc: int | None = None,
 ) -> dict[str, int]:
     nstep = max(1, int(nstep))
+    cadence = resolve_dynamics_freq_cadence(args)
     if nsavc is not None:
+        if cadence is not None:
+            c = min(cadence, nstep)
+            return {"nprint": c, "iprfrq": c, "isvfrq": c}
         ns = max(1, int(nsavc))
         return {"nprint": ns, "iprfrq": ns, "isvfrq": ns}
     if getattr(args, "quiet", False):
@@ -793,9 +817,14 @@ def resolve_dynamics_print_kwargs(
     nprint = max(1, int(getattr(args, "dyn_nprint", 500)))
     iprfrq = max(nprint, int(getattr(args, "dyn_iprfrq", 2000)))
     isvfrq = max(iprfrq, int(getattr(args, "dyn_iprfrq", 2000)))
-    nprint = min(nprint, nstep)
-    iprfrq = min(iprfrq, nstep)
-    isvfrq = min(isvfrq, nstep)
+    if cadence is not None:
+        nprint = min(cadence, nstep)
+        iprfrq = min(cadence, nstep)
+        isvfrq = min(cadence, nstep)
+    else:
+        nprint = min(nprint, nstep)
+        iprfrq = min(iprfrq, nstep)
+        isvfrq = min(isvfrq, nstep)
     return {"nprint": nprint, "iprfrq": iprfrq, "isvfrq": isvfrq}
 
 
