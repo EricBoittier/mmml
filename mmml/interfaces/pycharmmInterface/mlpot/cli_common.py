@@ -3557,6 +3557,12 @@ def add_staged_md_args(parser: argparse.ArgumentParser) -> None:
             "Does not call update_bnbnd/upinb."
         ),
     )
+    add_mlpot_lr_nonbond_args(parser)
+
+
+def add_mlpot_lr_nonbond_args(parser: argparse.ArgumentParser) -> None:
+    """MM nonbond mode, long-range Coulomb solvers, and jax-pme / ScaFaCoS knobs."""
+    group = parser.add_argument_group("MM nonbond and long-range Coulomb")
     group.add_argument(
         "--mm-nonbond-mode",
         type=str,

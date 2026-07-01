@@ -920,9 +920,10 @@ export JAX_COMPILATION_CACHE_DIR=$HOME/.cache/mmml/jax_compile
 mmml warmup-mlpot-jax --checkpoint /path/to/ckpt --composition DCM:60 --box-side 32
 
 # Profile hybrid jax-pme LR only (no PyCHARMM): see tests/functionality/long_range/10_hybrid_jax_profile.py
+# Full primitive compile/run table: docs/calculator-profiling.md + 11_calculator_primitive_benchmark.py
 ```
 
-**Profile mini / SD / dynamics on your machine:**
+**Profile mini / SD / dynamics on your machine:** see [calculator-profiling.md](calculator-profiling.md).
 
 | Layer | Tool | Command |
 |-------|------|---------|

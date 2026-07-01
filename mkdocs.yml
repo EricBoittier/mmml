@@ -112,6 +112,7 @@ nav:
   - MLpot:
       - Cutoffs, regions & LR solvers: hybrid-potential-regions.md
       - Settings: mlpot-settings.md
+      - Calculator profiling: calculator-profiling.md
       - Medium PBC (500–2000 monomers): mlpot-medium-pbc.md
       - Long-range electrostatics (ScaFaCoS): mlpot-long-range-electrostatics.md
       - Spatial ML MPI: mlpot-spatial-mpi.md

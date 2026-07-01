@@ -29,6 +29,7 @@ Examples
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -121,6 +122,21 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=60.0,
         help="Angle (deg) of monomer-2 COM from +x in the 2D scan",
     )
+    p.add_argument(
+        "--scan-tag",
+        type=str,
+        default="",
+        help="Output subfolder tag (e.g. lr_jax_pme_ewald) when sweeping solvers",
+    )
+    p.add_argument(
+        "--scan-1d",
+        action="store_true",
+        help="For dimers (N=2): scan COM distance along d01 only (faster 1D sweep)",
+    )
+    p.add_argument("--mlpot-pbc", action="store_true", default=False)
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import add_mlpot_lr_nonbond_args
+
+    add_mlpot_lr_nonbond_args(p)
     p.add_argument("--no-mm", action="store_true", help="Skip MM terms in decomposed eval")
     # p.add_argument("--quiet", action="store_true")
     args = p.parse_args(argv)
@@ -158,8 +174,12 @@ def _resolve_output_path(
         return Path(args.output).expanduser().resolve()
     ckpt_tag = ckpt.name.replace(" ", "_")
     out_dir = Path(args.output_dir).expanduser().resolve() / ckpt_tag / tag
+    scan_tag = str(getattr(args, "scan_tag", "") or "").strip()
+    if scan_tag:
+        out_dir = out_dir / scan_tag.replace("/", "_")
     out_dir.mkdir(parents=True, exist_ok=True)
-    return out_dir / "scan_2d.npz"
+    fname = "scan_1d.npz" if getattr(args, "scan_1d", False) else "scan_2d.npz"
+    return out_dir / fname
 
 
 def _empty_int() -> np.ndarray:
@@ -384,7 +404,10 @@ def _run_one_scan(args: argparse.Namespace, composition: str) -> Path:
             )
 
         d1 = np.linspace(float(args.scan_2d_min), float(args.scan_2d_max), int(args.scan_2d_steps))
-        d2 = np.linspace(float(args.scan_2d_min), float(args.scan_2d_max), int(args.scan_2d_steps))
+        if getattr(args, "scan_1d", False) and n_mol == 2:
+            d2 = d1[:1]
+        else:
+            d2 = np.linspace(float(args.scan_2d_min), float(args.scan_2d_max), int(args.scan_2d_steps))
         metric_keys = default_scan_2d_metric_keys(include_mm=not args.no_mm)
         eval_fn = _make_evaluator(
             pyCModel, cutoff, z, n_mol, do_mm=not args.no_mm
@@ -408,10 +431,27 @@ def _run_one_scan(args: argparse.Namespace, composition: str) -> Path:
         ctx.unset()
 
     out_path = _resolve_output_path(args, tag=tag, ckpt=ckpt, batch=bool(args.batch_compositions))
+    from mmml.interfaces.pycharmmInterface.long_range_backend import pick_lr_solver
+
+    lr_requested = getattr(args, "lr_solver", None)
+    lr_active = pick_lr_solver(lr_requested)
     save: dict[str, Any] = {
         "composition": np.array(composition),
         "checkpoint": np.array(str(ckpt)),
         "backend": np.array("pycharmm"),
+        "scan_tag": np.array(str(getattr(args, "scan_tag", "") or "")),
+        "mm_nonbond_mode": np.array(str(getattr(args, "mm_nonbond_mode", "jax_mic") or "jax_mic")),
+        "lr_solver_requested": np.array("" if lr_requested is None else str(lr_requested)),
+        "lr_solver_active": np.array(str(lr_active)),
+        "jax_pme_method": np.array(
+            str(getattr(args, "jax_pme_method", None) or os.environ.get("JAX_PME_METHOD", "ewald"))
+        ),
+        "jax_pme_sr_cutoff": np.float64(getattr(args, "jax_pme_sr_cutoff", None) or 6.0),
+        "mlpot_pbc": np.bool_(bool(getattr(args, "mlpot_pbc", False))),
+        "box_size_A": np.float64(
+            np.nan if getattr(args, "box_size", None) is None else float(args.box_size)
+        ),
+        "scan_1d": np.bool_(bool(getattr(args, "scan_1d", False))),
         "atoms_per_monomer": np.array(atoms_per, dtype=np.int32),
         "reference_positions_A": ref_pos.astype(np.float64),
         "atomic_numbers": z.astype(np.int32),

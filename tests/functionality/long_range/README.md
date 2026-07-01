@@ -96,7 +96,18 @@ JAX_PLATFORMS=cpu uv run python tests/functionality/long_range/10_hybrid_jax_pro
 tensorboard --logdir /tmp/jax_trace_hybrid
 ```
 
-Full `md-system` mini/SD (PyCHARMM): see [mlpot/README.md](../../mmml/interfaces/pycharmmInterface/mlpot/README.md) (`MMML_MLPOT_PROFILE`, `cProfile -m mmml.cli md-system`, `jax.profiler`). MPI CPU sweep: `tests/functionality/mlpot/10_spatial_mpi_cpu_profile.py`.
+Full `md-system` mini/SD (PyCHARMM): see [mlpot/README.md](../../mmml/interfaces/pycharmmInterface/mlpot/README.md) (`MMML_MLPOT_PROFILE`, `cProfile -m mmml.cli md-system`, `jax.profiler`). MPI CPU sweep: `tests/functionality/mlpot/10_spatial_mpi_cpu_profile.py`. Full primitive map: [calculator-profiling.md](../../docs/calculator-profiling.md).
+
+### Primitive benchmark (compile vs run)
+
+```bash
+JAX_PLATFORMS=cpu MMML_JAX_COMPILE_TIMERS=1 \\
+  uv run python tests/functionality/long_range/11_calculator_primitive_benchmark.py
+
+# Optional MLpot spherical warmup (checkpoint required)
+JAX_PLATFORMS=cpu uv run python tests/functionality/long_range/11_calculator_primitive_benchmark.py \\
+  --checkpoint examples/ckpts_json/DESdimers_params.json --n-monomers 12 --json artifacts/calculator_primitive_benchmark.json
+```
 
 ## Test systems
 
