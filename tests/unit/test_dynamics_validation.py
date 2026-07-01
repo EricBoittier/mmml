@@ -688,6 +688,23 @@ def test_restart_has_nonfinite_coordinates_false_for_finite_restart(tmp_path):
     assert restart_has_nonfinite_coordinates(path) is False
 
 
+def test_restart_coordinates_are_unsafe_detects_flyoff(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        restart_coordinates_are_unsafe,
+    )
+
+    path = tmp_path / "flyoff.res"
+    path.write_text(
+        _minimal_restart_text(
+            natom=1,
+            coord_lines=[
+                " 0.130231826800000D+08 0.200000000000000D+00 0.300000000000000D+00"
+            ],
+        )
+    )
+    assert restart_coordinates_are_unsafe(path) is True
+
+
 def test_assert_stage_dynamics_completed_accepts_single_step_heat(tmp_path):
     """nstep=1 heat (instant velocity scaling) writes one DCD frame, not two."""
     dcd = tmp_path / "heat.dcd"
