@@ -102,6 +102,31 @@ def test_resolve_grms_thresholds_caps_intervention_for_geometry_stress():
     assert thresholds.intervention_grms < 144.0367
 
 
+def test_resolve_grms_thresholds_ignores_stale_hybrid_total_with_healthy_tails():
+    """Stale global hybrid RMS must not inflate intervention when per-monomer GRMS is OK."""
+    from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+        MonomerGrmsStats,
+        resolve_grms_thresholds_from_stats,
+    )
+
+    stats = MonomerGrmsStats(
+        charmm_per_monomer=np.array([1.0, 1.2, 1.23, 1.1]),
+        hybrid_per_monomer=np.array([1.2, 1.23, 1.22, 1.21]),
+        charmm_total=1.23,
+        hybrid_total=244_072.0,
+    )
+    thresholds = resolve_grms_thresholds_from_stats(
+        stats,
+        n_monomers=4,
+        n_atoms=20,
+        pbc=True,
+        base_max_grms=50.0,
+    )
+    assert thresholds.intervention_grms < 100.0
+    assert thresholds.max_grms_before_dyn < 250.0
+    assert thresholds.max_grms_before_dyn == pytest.approx(50.0)
+
+
 def test_resilient_defaults_use_conservative_bulk_fraction_for_large_clusters():
     from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         apply_density_prep_resilient_defaults,

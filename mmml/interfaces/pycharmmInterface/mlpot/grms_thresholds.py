@@ -11,7 +11,6 @@ import numpy as np
 from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     charmm_total_forces_kcalmol_A,
     forces_grms_kcalmol_A,
-    mlpot_hybrid_grms_from_calculator,
 )
 
 
@@ -77,42 +76,45 @@ def measure_monomer_grms_stats(
         hybrid_per = per_monomer_grms_from_forces(hybrid_forces_kcal, atoms_per_list)
         hybrid_total = forces_grms_kcalmol_A(hybrid_forces_kcal)
     elif mlpot_ctx is not None:
-        hybrid_total = mlpot_hybrid_grms_from_calculator(mlpot_ctx)
-        if hybrid_total is not None and np.isfinite(hybrid_total):
-            from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
-                charmm_positions_angstrom,
-                mlpot_spherical_forces_ev_angstrom,
-            )
-            from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
+        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+            charmm_positions_angstrom,
+            mlpot_spherical_forces_ev_angstrom,
+        )
+        from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
 
-            pyCModel = getattr(mlpot_ctx, "pyCModel", None)
-            if pyCModel is not None:
-                pos = charmm_positions_angstrom()
-                box = getattr(mlpot_ctx, "cubic_box_side_A", None)
-                if box is None:
-                    box = getattr(mlpot_ctx, "charmm_cubic_box_side_A", None)
-                forces_ev = mlpot_spherical_forces_ev_angstrom(
-                    pyCModel,
-                    positions=pos,
-                    use_pbc=bool(getattr(mlpot_ctx, "use_pbc", False)),
-                    box_A=float(box) if box is not None else None,
+        pyCModel = getattr(mlpot_ctx, "pyCModel", None)
+        if pyCModel is not None:
+            pos = charmm_positions_angstrom()
+            box = getattr(mlpot_ctx, "cubic_box_side_A", None)
+            if box is None:
+                box = getattr(mlpot_ctx, "charmm_cubic_box_side_A", None)
+            forces_ev = mlpot_spherical_forces_ev_angstrom(
+                pyCModel,
+                positions=pos,
+                use_pbc=bool(getattr(mlpot_ctx, "use_pbc", False)),
+                box_A=float(box) if box is not None else None,
+            )
+            if forces_ev is not None:
+                hybrid_f = np.asarray(forces_ev, dtype=np.float64) * float(ev2kcalmol)
+                hybrid_per = per_monomer_grms_from_forces(hybrid_f, atoms_per_list)
+                hybrid_total = forces_grms_kcalmol_A(hybrid_f)
+                from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+                    mlpot_skip_charmm_ener_force_before_first_sd,
                 )
-                if forces_ev is not None:
-                    hybrid_f = np.asarray(forces_ev, dtype=np.float64) * float(ev2kcalmol)
-                    hybrid_per = per_monomer_grms_from_forces(hybrid_f, atoms_per_list)
-                    hybrid_total = forces_grms_kcalmol_A(hybrid_f)
-                    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
-                        mlpot_skip_charmm_ener_force_before_first_sd,
+
+                if mlpot_skip_charmm_ener_force_before_first_sd(mlpot_ctx):
+                    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+                        recover_mpi_for_charmm_after_jax,
                     )
 
-                    if mlpot_skip_charmm_ener_force_before_first_sd(mlpot_ctx):
-                        from mmml.interfaces.pycharmmInterface.charmm_mpi import (
-                            recover_mpi_for_charmm_after_jax,
-                        )
-
-                        recover_mpi_for_charmm_after_jax(
-                            phase="after pre-SD hybrid GRMS JAX eval",
-                        )
+                    recover_mpi_for_charmm_after_jax(
+                        phase="after pre-SD hybrid GRMS JAX eval",
+                    )
+            else:
+                # Do not fall back to ``mlpot_hybrid_grms_from_calculator`` /
+                # ``_last_ml_forces`` here: pre-SD registration often leaves stale
+                # CHARMM buffers that disagree with per-monomer JAX eval.
+                hybrid_total = None
 
     return MonomerGrmsStats(
         charmm_per_monomer=charmm_per,
@@ -125,6 +127,9 @@ def measure_monomer_grms_stats(
 # Ignore stale CHARMM force-buffer slots when deriving thresholds (pre-SD may skip
 # ENER FORCE under deferred JAX / MPI).
 _MONOMER_GRMS_CEILING_KCALMOL_A = 1000.0
+# Global RMS can read garbage from an unfilled CHARMM/JAX buffer while robust
+# per-monomer samples (capped at _MONOMER_GRMS_CEILING) still look healthy.
+_STALE_TOTAL_VS_TAIL_RATIO = 10.0
 
 
 def _robust_monomer_grms(values: np.ndarray, *, default: float) -> np.ndarray:
@@ -143,6 +148,27 @@ def _percentile_safe(values: np.ndarray, q: float, default: float) -> float:
     if arr.size == 0:
         return float(default)
     return float(np.percentile(arr, q))
+
+
+def _effective_total_grms_for_thresholds(
+    raw_total: float | None,
+    *,
+    robust_tail: float | None,
+) -> float | None:
+    """Drop stale global GRMS when robust per-monomer tails look healthy."""
+    if raw_total is None or not np.isfinite(raw_total):
+        return None
+    raw_f = float(raw_total)
+    if robust_tail is None or not np.isfinite(robust_tail):
+        return raw_f
+    tail = float(robust_tail)
+    if (
+        raw_f > _MONOMER_GRMS_CEILING_KCALMOL_A
+        and tail <= _MONOMER_GRMS_CEILING_KCALMOL_A
+        and raw_f > _STALE_TOTAL_VS_TAIL_RATIO * max(tail, 1.0e-6)
+    ):
+        return tail
+    return raw_f
 
 
 def resolve_grms_thresholds_from_stats(
@@ -187,12 +213,20 @@ def resolve_grms_thresholds_from_stats(
             3.0 * charmm_p90,
         )
 
-    hybrid_total = stats.hybrid_total
+    charmm_total = _effective_total_grms_for_thresholds(
+        float(stats.charmm_total),
+        robust_tail=charmm_max,
+    )
+    hybrid_total = _effective_total_grms_for_thresholds(
+        stats.hybrid_total,
+        robust_tail=hybrid_max,
+    )
     if (
         hybrid_total is not None
         and np.isfinite(hybrid_total)
         and float(hybrid_total) > charmm_bonded_ok_max
-        and float(hybrid_total) > 5.0 * max(float(stats.charmm_total), 1.0e-3)
+        and charmm_total is not None
+        and float(hybrid_total) > 5.0 * max(float(charmm_total), 1.0e-3)
     ):
         # ML geometry stress: cap intervention near the live hybrid total so
         # density-prep / calculator mini run before dynamics (per-monomer tails
