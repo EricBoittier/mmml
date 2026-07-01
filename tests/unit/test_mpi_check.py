@@ -420,3 +420,32 @@ def test_maybe_rerun_liquid_box_subcommand(monkeypatch, tmp_path):
     cmd = mock_run.call_args.args[0]
     assert "liquid-box" in cmd
     assert cmd[cmd.index("liquid-box") + 1] == "--composition"
+
+
+def test_assert_mpi_launcher_for_mlpot_sd_raises_serial(monkeypatch):
+    from mmml.interfaces.pycharmmInterface import charmm_mpi
+
+    monkeypatch.delenv("MMML_ALLOW_SERIAL_MPI_CHARMM", raising=False)
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
+        return_value=False,
+    ):
+        with pytest.raises(RuntimeError, match="OpenMPI launch"):
+            charmm_mpi.assert_mpi_launcher_for_mlpot_sd(context="MLpot SD minimize")
+
+
+def test_assert_mpi_launcher_for_mlpot_sd_allows_mpirun(monkeypatch):
+    from mmml.interfaces.pycharmmInterface import charmm_mpi
+
+    monkeypatch.delenv("MMML_ALLOW_SERIAL_MPI_CHARMM", raising=False)
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
+        return_value=True,
+    ):
+        charmm_mpi.assert_mpi_launcher_for_mlpot_sd(context="MLpot SD minimize")
