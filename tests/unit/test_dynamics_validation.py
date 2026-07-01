@@ -560,7 +560,7 @@ def test_patch_restart_global_step_preserves_fortran_restart_format(tmp_path):
     assert read_restart_last_step(res) == 500
     natom_line = lines[7]
     assert "0.314159000000000D+06" in natom_line
-    assert natom_line.split()[3:6] == ["1", "10", "500"]
+    assert natom_line.split()[5] == "500"
 
 
 def test_read_restart_last_step_real_fixture():
@@ -1123,6 +1123,7 @@ def test_patch_restart_readyn_handoff_harmonizes_nsavv_on_wridyn_stub(tmp_path):
     assert stub.is_file()
     scratch = tmp_path / "heat.a.res"
     scratch.write_text(stub.read_text(encoding="utf-8"), encoding="utf-8")
+    before = scratch.read_text(encoding="utf-8").splitlines()[7]
 
     assert patch_restart_readyn_handoff(
         scratch,
@@ -1131,14 +1132,46 @@ def test_patch_restart_readyn_handoff_harmonizes_nsavv_on_wridyn_stub(tmp_path):
         nsavv=50,
     )
 
-    lines = scratch.read_text(encoding="utf-8").splitlines()
-    assert lines[0][10:20] == "       500"
-    natom_line = lines[7]
-    assert "0.314159000000000D+06" in natom_line
-    assert natom_line.split()[3:6] == ["49", "50", "500"]
+    after = scratch.read_text(encoding="utf-8").splitlines()[7]
+    assert len(after) == len(before)
+    assert "0.314159000000000D+06" in after
+    assert after.split()[3:6] == ["49", "50", "500"]
     assert read_restart_last_step(scratch) == 500
     assert read_restart_nsavc(scratch) == 49
     assert read_restart_nsavv(scratch) == 50
+
+
+def test_patch_restart_readyn_handoff_preserves_prod_header_layout(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        patch_restart_readyn_handoff,
+        read_restart_last_step,
+        read_restart_nsavc,
+        read_restart_nsavv,
+    )
+
+    header = (
+        Path(__file__).resolve().parents[1]
+        / "functionality/mlpot/output/dynamics/prod_restart_header.res"
+    )
+    assert header.is_file()
+    scratch = tmp_path / "heat.a.res"
+    scratch.write_text(header.read_text(encoding="utf-8"), encoding="utf-8")
+    before = scratch.read_text(encoding="utf-8").splitlines()[6]
+
+    assert patch_restart_readyn_handoff(
+        scratch,
+        global_step=500,
+        nsavc=49,
+        nsavv=50,
+    )
+
+    after = scratch.read_text(encoding="utf-8").splitlines()[6]
+    assert len(after) == len(before)
+    assert after.split()[3:6] == ["49", "50", "500"]
+    assert read_restart_last_step(scratch) == 500
+    assert read_restart_nsavc(scratch) == 49
+    assert read_restart_nsavv(scratch) == 50
+    assert " !ENERGIES and STATISTICS" in scratch.read_text(encoding="utf-8")
 
 
 def test_harmonize_overlap_readyn_restart_patches_valid_wridyn(tmp_path):

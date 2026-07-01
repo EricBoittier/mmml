@@ -837,28 +837,78 @@ def _leading_integer_fields(line: str) -> tuple[list[int], str]:
     return ints, ""
 
 
-def _rebuild_natom_counter_line(
+def _integer_field_spans_with_gap(line: str) -> list[tuple[int, int]]:
+    """Character spans for leading integer tokens, including trailing field padding."""
+    spans: list[tuple[int, int]] = []
+    i = 0
+    n = len(line)
+    while i < n:
+        while i < n and line[i].isspace():
+            i += 1
+        if i >= n:
+            break
+        start = i
+        while i < n and not line[i].isspace():
+            i += 1
+        token = line[start:i]
+        try:
+            int(token)
+        except ValueError:
+            break
+        gap_end = i
+        while gap_end < n and line[gap_end].isspace():
+            gap_end += 1
+        if gap_end < n:
+            next_start = gap_end
+            while next_start < n and line[next_start].isspace():
+                next_start += 1
+            next_end = next_start
+            while next_end < n and not line[next_end].isspace():
+                next_end += 1
+            try:
+                int(line[next_start:next_end])
+                spans.append((start, gap_end))
+                i = gap_end
+                continue
+            except ValueError:
+                pass
+        spans.append((start, i))
+    return spans
+
+
+def _patch_natom_counter_fields(
     line: str,
     *,
     updates: dict[int, int],
 ) -> str:
-    """Rebuild the ``!NATOM`` counter line with I10 integer prefix + original tail.
+    """Patch selected integer fields on a WRIDYN ``!NATOM`` counter line in place.
 
-    WRIDYN restarts often pad the first field and append thermostat floats on the
-    same line; blind ``index * 10`` slicing then patches the wrong columns.
+    CHARMM restart counter lines (see ``pretreat/prod.res``) use padded integer
+    columns followed by thermostat floats on the same record.  Replacing the whole
+    prefix with strict I10 columns shifts columns and breaks ``READYN``.
     """
-    ints, tail = _leading_integer_fields(line)
-    if not ints:
+    spans = _integer_field_spans_with_gap(line)
+    if not spans:
         return line
-    for idx, value in sorted(updates.items()):
+    need = max(int(k) for k in updates) + 1
+    if len(spans) < need:
+        lead = len(line) - len(line.lstrip())
+        body = line[lead:]
+        for idx, value in sorted(updates.items(), reverse=True):
+            body = _replace_i10_field(body, int(idx), int(value))
+        return line[:lead] + body
+    out = line
+    for idx, value in sorted(updates.items(), reverse=True):
         i = int(idx)
-        while len(ints) <= i:
-            ints.append(0)
-        ints[i] = int(value)
-    prefix = "".join(f"{v:>10d}" for v in ints)
-    if tail and not tail.startswith((" ", "\t")):
-        tail = " " + tail
-    return prefix + tail
+        if i >= len(spans):
+            continue
+        start, end = spans[i]
+        width = end - start
+        new = f"{int(value):<{width}d}"
+        if len(new) > width:
+            new = new[:width]
+        out = out[:start] + new + out[end:]
+    return out
 
 
 def patch_restart_global_step(path: Path, global_step: int) -> bool:
@@ -899,7 +949,7 @@ def patch_restart_global_step(path: Path, global_step: int) -> bool:
             continue
         if i + 1 >= len(lines):
             break
-        lines[i + 1] = _rebuild_natom_counter_line(
+        lines[i + 1] = _patch_natom_counter_fields(
             lines[i + 1],
             updates={5: step},
         )
@@ -953,7 +1003,7 @@ def patch_restart_readyn_handoff(
             continue
         if i + 1 >= len(lines):
             break
-        lines[i + 1] = _rebuild_natom_counter_line(
+        lines[i + 1] = _patch_natom_counter_fields(
             lines[i + 1],
             updates={3: nsavc_i, 4: nsavv_i, 5: step},
         )
