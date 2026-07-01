@@ -160,10 +160,35 @@ mmml build-crystal \\
 PyXtal does not resolve `C(Cl)Cl` SMILES — use the bundled monomer XYZ or
 `mmml make-res --res DCM` export.
 
+### Benzene (C₆H₆) — experimental crystal
+
+High-pressure benzene I is monoclinic **P2₁/c** (SG 14), Z=2
+([COD 4501704](https://www.crystallography.net/cod/4501704.html);
+Katrusiak *et al.*, *Cryst. Growth Des.* **2010**, 10, 3461).
+MMML ships `default_benzene_crystal_cif()`.
+
+PyXtal accepts the molecule name **`benzene`** (not SMILES `c1ccccc1`).
+
+```bash
+# Experimental unit cell
+python -c "
+from ase.io import read, write
+from mmml.paths import default_benzene_crystal_cif
+write('benzene_expt.extxyz', read(default_benzene_crystal_cif()))
+"
+
+# PyXtal placement in P2₁/c, density matched to literature
+mmml build-crystal -m benzene --spg 14 --z 2 \\
+  --target-density-g-cm3 1.202 --seed 7 -o benzene_pyxtal.extxyz
+```
+
+<!-- CRYSTAL_LIT_COMPARE_START -->
+<!-- CRYSTAL_LIT_COMPARE_END -->
+
 ### Other examples
 
 ```bash
-mmml build-crystal -m c1ccccc1 --spg 14 --z 2 -o benzene.extxyz
+mmml build-crystal -m benzene --spg 14 --z 2 -o benzene.extxyz
 mmml build-crystal -m monomer.xyz --spg 4 --supercell 2,2,2 -o super.cif
 ```
 
