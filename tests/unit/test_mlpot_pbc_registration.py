@@ -49,6 +49,9 @@ def test_register_mlpot_pbc_rebuilds_after_param_swap():
         "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
         return_value=MagicMock(__enter__=MagicMock(return_value=None), __exit__=MagicMock(return_value=False)),
     ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        return_value=False,
+    ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
     ):
         fake_pycharmm.MLpot = _FakeMLpot
@@ -113,6 +116,9 @@ def test_register_mlpot_pbc_block_skips_crystal_free_before_prm():
     ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
         return_value=MagicMock(__enter__=MagicMock(return_value=None), __exit__=MagicMock(return_value=False)),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        return_value=False,
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
     ):
@@ -194,6 +200,9 @@ def test_register_mlpot_pbc_requires_skip_iblo_parameter():
     ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
         return_value=MagicMock(__enter__=MagicMock(return_value=None), __exit__=MagicMock(return_value=False)),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        return_value=False,
     ), pytest.raises(RuntimeError, match="skip_iblo_inb_update"):
         mlpot_setup.register_mlpot(
             MagicMock(),
