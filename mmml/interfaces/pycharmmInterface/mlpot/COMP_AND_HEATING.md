@@ -220,9 +220,10 @@ ASE Bussi rescale: no readable velocities          # OK if followed by MB / in-m
 apply_bussi_velocity_rescale: CHARMM velocities unavailable   # should not appear
 ```
 
-After overlap rescue or CGENFF ``reregister_mlpot``, mmml calls
-``ensure_bussi_velocities_after_overlap_recovery`` (restart ladder → in-memory MB)
-before retrying Bussi sub-chunks.
+After overlap rescue or CGENFF ``reregister_mlpot``, mmml rehydrates velocities
+(restart ladder → in-memory Maxwell–Boltzmann) before ``iasvel=0`` sub-chunks.
+``run_dynamics`` passes them via ``init_velocities`` on the C API path (never
+hard-fails with empty CHARMM memory after CGENFF).
 
 Ensure overlap micro-chunks keep `nsavv=nstep` so scratch restarts include
 `!VELOCITIES` (see `_harmonize_overlap_chunk_frequencies` in `dynamics.py`).
