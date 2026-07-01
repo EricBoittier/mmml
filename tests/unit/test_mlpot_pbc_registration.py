@@ -203,6 +203,34 @@ def test_register_mlpot_pbc_requires_skip_iblo_parameter():
         )
 
 
+def test_register_mlpot_pbc_requires_mpirun_for_mpi_lib():
+    from mmml.interfaces.pycharmmInterface.mlpot import setup as mlpot_setup
+
+    fake_pycharmm = MagicMock()
+    fake_sel = MagicMock()
+    fake_sel.get_atom_indexes.return_value = [0, 1]
+
+    with patch.object(mlpot_setup, "_import_pycharmm", return_value=fake_pycharmm), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits.validate_mlpot_system_size",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        return_value=True,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
+        return_value=False,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        return_value=MagicMock(__enter__=MagicMock(return_value=None), __exit__=MagicMock(return_value=False)),
+    ), pytest.raises(RuntimeError, match="MLpot PBC registration"):
+        mlpot_setup.register_mlpot(
+            MagicMock(),
+            [1, 1],
+            fake_sel,
+            use_pbc=True,
+            cubic_box_side_A=40.0,
+        )
+
+
 def test_finalize_pbc_exclusions_uses_prepare_charmm_pbc():
     from mmml.interfaces.pycharmmInterface.mlpot import setup as mlpot_setup
 

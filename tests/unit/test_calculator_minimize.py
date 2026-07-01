@@ -515,13 +515,7 @@ def test_commit_hybrid_calculator_mini_defer_path_skips_update_and_calls_prime()
     atoms.get_potential_energy.return_value = -1.0
 
     mlpot_ctx = MagicMock()
-    best = _BestMinimizationFrame(
-        positions=np.zeros((6, 3)),
-        fmax_ev_a=0.1,
-        energy_ev=-1.0,
-        grms_kcalmol_A=0.5,
-        step=1,
-    )
+    best = _BestMinimizationFrame(atoms)
 
     with patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",

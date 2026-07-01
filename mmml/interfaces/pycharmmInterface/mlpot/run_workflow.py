@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 from typing import Any, Literal
 
@@ -667,6 +668,11 @@ def _register_mlpot_context(
     if defer_jax_warmup is None:
         defer_jax_warmup = defer_jax_warmup_until_after_mlpot_sd()
 
+    if defer_jax_warmup and charmm_lib_links_mpi():
+        # Keep JAX off GPU until after MLpot registration upinb (MPI-linked CHARMM).
+        os.environ["JAX_PLATFORMS"] = "cpu"
+        os.environ.setdefault("MMML_MLPOT_DEVICE", "cpu")
+
     if verbose and charmm_lib_links_mpi() and not _under_mpirun():
         print(
             "mmml: MPI-linked libcharmm.so without mpirun (serial MLpot). "
@@ -681,7 +687,6 @@ def _register_mlpot_context(
         if atoms_per_monomer is not None
         else _atoms_per_monomer_list(z, n_monomers)
     )
-    import os
     import sys
 
     if "jax" not in sys.modules:
