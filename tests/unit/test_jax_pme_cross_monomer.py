@@ -9,6 +9,7 @@ import pytest
 
 from mmml.interfaces.pycharmmInterface.jax_pme_cross_monomer import (
     compute_jax_pme_cross_monomer_power_law,
+    resolve_jax_pme_cross_kernel,
     resolve_jax_pme_intra_mode,
 )
 from mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
@@ -174,6 +175,78 @@ def test_hybrid_correction_uses_cross_mode_by_default(monkeypatch: pytest.Monkey
         rtol=0,
         atol=1e-8,
     )
+
+
+def test_structure_factor_kernel_matches_masked(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jaxpme import prefactors as jpref
+
+    rng = np.random.default_rng(7)
+    n_mono = 6
+    size = 3
+    n = n_mono * size
+    pos = rng.random((n, 3)) * 20.0
+    chg = rng.normal(0.0, 0.1, n)
+    offsets = np.arange(0, n + 1, size, dtype=np.int64)
+    box_L = 28.0
+    monkeypatch.setenv("MMML_JAX_PME_CROSS_KERNEL", "masked")
+    masked = compute_jax_pme_cross_monomer_power_law(
+        pos,
+        chg,
+        offsets,
+        box_length_A=box_L,
+        method="ewald",
+        sr_cutoff_A=6.0,
+        exponent=1,
+        prefactor=float(jpref.kcalmol_A),
+    )
+    monkeypatch.setenv("MMML_JAX_PME_CROSS_KERNEL", "structure_factor")
+    sf = compute_jax_pme_cross_monomer_power_law(
+        pos,
+        chg,
+        offsets,
+        box_length_A=box_L,
+        method="ewald",
+        sr_cutoff_A=6.0,
+        exponent=1,
+        prefactor=float(jpref.kcalmol_A),
+    )
+    assert sf.energy_kcalmol == pytest.approx(masked.energy_kcalmol, rel=0, abs=1e-6)
+    np.testing.assert_allclose(
+        sf.forces_kcalmol_A,
+        masked.forces_kcalmol_A,
+        rtol=0,
+        atol=1e-6,
+    )
+
+
+def test_com_switch_chain_rule_differs_from_naive_scale() -> None:
+    from mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
+        _scale_lr_with_com_switch,
+    )
+
+    rng = np.random.default_rng(11)
+    pos = rng.random((6, 3)) * 10.0
+    offsets = np.array([0, 3, 6], dtype=np.int64)
+    cell = np.eye(3) * 30.0
+    lr_e = 12.5
+    lr_f = rng.normal(0.0, 0.1, pos.shape)
+    scaled_e, scaled_f, s = _scale_lr_with_com_switch(
+        pos,
+        offsets,
+        lr_e,
+        lr_f,
+        pbc_cell=cell,
+        ml_switch_width=1.0,
+        mm_switch_on=8.0,
+        mm_switch_width=2.0,
+        complementary_handoff=True,
+        mm_r_min=None,
+    )
+    assert scaled_e == pytest.approx(s * lr_e, rel=0, abs=1e-12)
+    naive_f = s * lr_f
+    assert not np.allclose(scaled_f, naive_f, rtol=0, atol=1e-6)
 
 
 @pytest.mark.slow

@@ -147,7 +147,6 @@ def test_hybrid_lj_dispersion_is_full_minus_intra_scaled():
         method="ewald",
         sr_cutoff_A=6.0,
     )
-    switch_scale = 1.0
     corr = hybrid_jax_pme_lj_dispersion_correction(
         pos,
         c6_sqrt,
@@ -155,18 +154,17 @@ def test_hybrid_lj_dispersion_is_full_minus_intra_scaled():
         box_length_A=L,
         method="ewald",
         sr_cutoff_A=6.0,
-        switch_scale=switch_scale,
     )
     expected_unscaled = full.energy_kcalmol - intra.energy_kcalmol
     np.testing.assert_allclose(
         corr.energy_kcalmol,
-        switch_scale * expected_unscaled,
+        expected_unscaled,
         rtol=1e-10,
     )
     expected_f = full.forces_kcalmol_A - intra.forces_kcalmol_A
     np.testing.assert_allclose(
         corr.forces_kcalmol_A,
-        switch_scale * expected_f,
+        expected_f,
         rtol=1e-8,
     )
 
@@ -194,7 +192,6 @@ def test_zero_c6_skips_lj_jax_pme_calls(monkeypatch):
         box_length_A=40.0,
         method="ewald",
         sr_cutoff_A=6.0,
-        switch_scale=0.5,
     )
     assert corr.energy_kcalmol == pytest.approx(0.0)
     assert corr.switch_scale == pytest.approx(0.5)

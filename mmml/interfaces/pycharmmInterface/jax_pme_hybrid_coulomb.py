@@ -235,6 +235,122 @@ def _mean_switch_scale(
     return float(np.mean(scales)) if scales.size else 0.0
 
 
+def _mic_displacement_jax(ri, rj, cell):
+    import jax.numpy as jnp
+
+    inv = jnp.linalg.inv(cell)
+    dr = rj - ri
+    frac = dr @ inv.T
+    frac = frac - jnp.round(frac)
+    return frac @ cell
+
+
+def _mean_switch_scale_jax(
+    positions,
+    monomer_offsets: np.ndarray,
+    pbc_cell,
+    *,
+    ml_switch_width: float,
+    mm_switch_on: float,
+    mm_switch_width: float,
+    complementary_handoff: bool,
+    mm_r_min: float | None,
+):
+    """Mean COM switch factor (scalar), differentiable in ``positions``."""
+    import jax.numpy as jnp
+
+    from mmml.interfaces.pycharmmInterface.calculator_utils import _sharpstep
+    from mmml.interfaces.pycharmmInterface.cutoffs import GAMMA_OFF, GAMMA_ON
+
+    offsets = np.asarray(monomer_offsets, dtype=np.int64).reshape(-1)
+    n_monomers = int(len(offsets) - 1)
+    scales = []
+    for mi in range(n_monomers):
+        for mj in range(mi + 1, n_monomers):
+            com_i = jnp.mean(positions[int(offsets[mi]) : int(offsets[mi + 1])], axis=0)
+            com_j = jnp.mean(positions[int(offsets[mj]) : int(offsets[mj + 1])], axis=0)
+            d_vec = _mic_displacement_jax(com_i, com_j, pbc_cell)
+            r = jnp.linalg.norm(d_vec)
+            if complementary_handoff:
+                handoff = _sharpstep(
+                    r,
+                    mm_switch_on - ml_switch_width,
+                    mm_switch_on,
+                    gamma=GAMMA_ON,
+                )
+                taper = 1.0 - _sharpstep(
+                    r,
+                    mm_switch_on,
+                    mm_switch_on + mm_switch_width,
+                    gamma=GAMMA_OFF,
+                )
+                pair_scale = handoff * taper
+            else:
+                mm_on = _sharpstep(
+                    r,
+                    mm_switch_on,
+                    mm_switch_on + mm_switch_width,
+                    gamma=GAMMA_ON,
+                )
+                mm_off = _sharpstep(
+                    r,
+                    mm_switch_on + mm_switch_width,
+                    mm_switch_on + 2.0 * mm_switch_width,
+                    gamma=GAMMA_OFF,
+                )
+                pair_scale = mm_on * (1.0 - mm_off)
+            if mm_r_min is not None:
+                pair_scale = jnp.where(r < float(mm_r_min), 0.0, pair_scale)
+            scales.append(pair_scale)
+    if not scales:
+        return jnp.asarray(0.0, dtype=positions.dtype)
+    return jnp.mean(jnp.stack(scales))
+
+
+def _scale_lr_with_com_switch(
+    positions_A: np.ndarray,
+    monomer_offsets: np.ndarray,
+    lr_energy_kcalmol: float,
+    lr_forces_kcalmol_A: np.ndarray,
+    *,
+    pbc_cell: np.ndarray | None,
+    ml_switch_width: float,
+    mm_switch_on: float,
+    mm_switch_width: float,
+    complementary_handoff: bool,
+    mm_r_min: float | None,
+) -> tuple[float, np.ndarray, float]:
+    """Apply ``E = s·E_lr``, ``F = s·F_lr − E_lr·∇s`` (COM mean switch)."""
+    pos = np.asarray(positions_A, dtype=np.float64)
+    lr_f = np.asarray(lr_forces_kcalmol_A, dtype=np.float64)
+    if pbc_cell is None:
+        return float(lr_energy_kcalmol), lr_f, 1.0
+
+    import jax
+    import jax.numpy as jnp
+
+    cell = jnp.asarray(pbc_cell, dtype=jnp.float64)
+    pos_j = jnp.asarray(pos, dtype=jnp.float64)
+
+    def mean_switch(p):
+        return _mean_switch_scale_jax(
+            p,
+            monomer_offsets,
+            cell,
+            ml_switch_width=ml_switch_width,
+            mm_switch_on=mm_switch_on,
+            mm_switch_width=mm_switch_width,
+            complementary_handoff=complementary_handoff,
+            mm_r_min=mm_r_min,
+        )
+
+    switch_scale = float(mean_switch(pos_j))
+    grad_s = np.asarray(jax.grad(mean_switch)(pos_j), dtype=np.float64)
+    scaled_e = switch_scale * float(lr_energy_kcalmol)
+    scaled_f = switch_scale * lr_f - float(lr_energy_kcalmol) * grad_s
+    return scaled_e, scaled_f, switch_scale
+
+
 def _intra_monomer_jax_pme_power_law(
     positions_A: np.ndarray,
     coefficients: np.ndarray,
@@ -385,7 +501,7 @@ def _cross_monomer_power_law_correction(
     prefactor: float,
     profile_label: str,
 ) -> HybridJaxPmeCorrectionResult:
-    """Fused cross-monomer jax-pme (one prepare; ``ewald`` only)."""
+    """Fused cross-monomer jax-pme (one prepare; structure-factor or masked kernel)."""
     from mmml.interfaces.pycharmmInterface.jax_pme_cross_monomer import (
         compute_jax_pme_cross_monomer_power_law,
     )
@@ -468,19 +584,17 @@ def hybrid_jax_pme_coulomb_correction(
     pos = np.asarray(positions_A, dtype=np.float64)
     chg = np.asarray(charges_e, dtype=np.float64)
     offsets = np.asarray(monomer_offsets, dtype=np.int64)
-    t0 = _profile_start()
-    switch_scale = _mean_switch_scale(
-        pos,
-        offsets,
-        pbc_cell=pbc_cell,
-        ml_switch_width=ml_switch_width,
-        mm_switch_on=mm_switch_on,
-        mm_switch_width=mm_switch_width,
-        complementary_handoff=complementary_handoff,
-        mm_r_min=mm_r_min,
-    )
-    _record_profile("switch_scale", t0)
     if _coefficients_are_zero(chg):
+        switch_scale = _mean_switch_scale(
+            pos,
+            offsets,
+            pbc_cell=pbc_cell,
+            ml_switch_width=ml_switch_width,
+            mm_switch_on=mm_switch_on,
+            mm_switch_width=mm_switch_width,
+            complementary_handoff=complementary_handoff,
+            mm_r_min=mm_r_min,
+        )
         return _zero_correction(pos, switch_scale=switch_scale)
 
     from mmml.interfaces.pycharmmInterface.jax_pme_cross_monomer import (
@@ -551,9 +665,24 @@ def hybrid_jax_pme_coulomb_correction(
     lr_e = lr_e - mic_e
     lr_f = np.asarray(lr_f - mic_f, dtype=np.float64)
 
+    t0 = _profile_start()
+    scaled_e, scaled_f, switch_scale = _scale_lr_with_com_switch(
+        pos,
+        offsets,
+        lr_e,
+        lr_f,
+        pbc_cell=pbc_cell,
+        ml_switch_width=ml_switch_width,
+        mm_switch_on=mm_switch_on,
+        mm_switch_width=mm_switch_width,
+        complementary_handoff=complementary_handoff,
+        mm_r_min=mm_r_min,
+    )
+    _record_profile("switch_scale", t0)
+
     return HybridJaxPmeCorrectionResult(
-        energy_kcalmol=switch_scale * lr_e,
-        forces_kcalmol_A=switch_scale * lr_f,
+        energy_kcalmol=scaled_e,
+        forces_kcalmol_A=scaled_f,
         energy_intra_kcalmol=intra_energy_kcalmol,
         energy_mic_cross_kcalmol=mic_e,
         switch_scale=switch_scale,
@@ -568,13 +697,28 @@ def hybrid_jax_pme_lj_dispersion_correction(
     box_length_A: float,
     method: str,
     sr_cutoff_A: float,
-    switch_scale: float,
+    pbc_cell: np.ndarray | None = None,
+    ml_switch_width: float = 1.0,
+    mm_switch_on: float = 12.0,
+    mm_switch_width: float = 1.0,
+    complementary_handoff: bool = True,
+    mm_r_min: float | None = None,
 ) -> HybridJaxPmeCorrectionResult:
     """Periodic r⁻⁶ LJ tail: jax-pme full box minus intra-monomer dispersion."""
     pos = np.asarray(positions_A, dtype=np.float64)
     coef = np.asarray(c6_sqrt, dtype=np.float64).reshape(-1)
     offsets = np.asarray(monomer_offsets, dtype=np.int64)
     if _coefficients_are_zero(coef):
+        switch_scale = _mean_switch_scale(
+            pos,
+            offsets,
+            pbc_cell=pbc_cell,
+            ml_switch_width=ml_switch_width,
+            mm_switch_on=mm_switch_on,
+            mm_switch_width=mm_switch_width,
+            complementary_handoff=complementary_handoff,
+            mm_r_min=mm_r_min,
+        )
         return _zero_correction(pos, switch_scale=switch_scale)
 
     from mmml.interfaces.pycharmmInterface.jax_pme_cross_monomer import (
@@ -624,9 +768,21 @@ def hybrid_jax_pme_lj_dispersion_correction(
         intra_energy_kcalmol = intra.energy_kcalmol
         lr_e = float(full.energy_kcalmol) - intra_energy_kcalmol
         lr_f = np.asarray(full.forces_kcalmol_A - intra.forces_kcalmol_A, dtype=np.float64)
+    scaled_e, scaled_f, switch_scale = _scale_lr_with_com_switch(
+        pos,
+        offsets,
+        lr_e,
+        lr_f,
+        pbc_cell=pbc_cell,
+        ml_switch_width=ml_switch_width,
+        mm_switch_on=mm_switch_on,
+        mm_switch_width=mm_switch_width,
+        complementary_handoff=complementary_handoff,
+        mm_r_min=mm_r_min,
+    )
     return HybridJaxPmeCorrectionResult(
-        energy_kcalmol=switch_scale * lr_e,
-        forces_kcalmol_A=switch_scale * lr_f,
+        energy_kcalmol=scaled_e,
+        forces_kcalmol_A=scaled_f,
         energy_intra_kcalmol=intra_energy_kcalmol,
         energy_mic_cross_kcalmol=0.0,
         switch_scale=switch_scale,
@@ -693,7 +849,12 @@ def hybrid_jax_pme_mm_lr_correction(
             box_length_A=box_length_A,
             method=method,
             sr_cutoff_A=sr_cutoff_A,
-            switch_scale=coulomb.switch_scale,
+            pbc_cell=pbc_cell,
+            ml_switch_width=ml_switch_width,
+            mm_switch_on=mm_switch_on,
+            mm_switch_width=mm_switch_width,
+            complementary_handoff=complementary_handoff,
+            mm_r_min=mm_r_min,
         )
         _record_profile("hybrid_dispersion_total", t0)
     e = coulomb.energy_kcalmol
