@@ -155,13 +155,24 @@ def capture_charmm_velocities_for_bussi(
     *,
     restart_path: Path | str | None = None,
 ) -> np.ndarray | None:
-    """Load AKMA velocities into main/COMP/cache for Bussi (cache, restart, then memory)."""
+    """Load AKMA velocities into main/COMP/cache for Bussi.
+
+    Order: warm synced cache, live main-set (post-``dyna``), warm restart
+    ``!VELOCITIES`` / ``!VX,VY,VZ``, then warm COMP.  Stale or cold restart
+    snapshots must not overwrite live CHARMM velocities (WRIDYN can omit ``!VX``
+    or carry segment-local zeros while integrated ``dyna`` still holds warm KE).
+    """
     raw = last_synced_velocities_akma_raw()
     if raw is not None and not velocities_are_cold(raw):
         return raw
 
+    vel = charmm_velocities_akma()
+    if vel is not None and not velocities_are_cold(vel):
+        sync_charmm_velocities_akma(vel)
+        return vel
+
     vel = _read_restart_velocities_akma(restart_path)
-    if vel is not None:
+    if vel is not None and not velocities_are_cold(vel):
         sync_charmm_velocities_akma(vel)
         return vel
 

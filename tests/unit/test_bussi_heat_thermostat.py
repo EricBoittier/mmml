@@ -82,11 +82,12 @@ def test_prepare_bussi_heat_dynamics_kw_disables_charmm_ihtfrq():
     assert ramp["thermostat"] == "bussi"
 
 
-def test_capture_charmm_velocities_for_bussi_prefers_restart_before_memory(tmp_path):
+def test_capture_charmm_velocities_for_bussi_prefers_live_memory_over_restart(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         capture_charmm_velocities_for_bussi,
     )
 
+    warm = np.array([[100.0, 0.0, 0.0]], dtype=float)
     restart = tmp_path / "dyn.res"
     restart.write_text(
         "REST     0     1\n"
@@ -102,16 +103,57 @@ def test_capture_charmm_velocities_for_bussi_prefers_restart_before_memory(tmp_p
         encoding="ascii",
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_velocities_akma_for_thermostat",
-    ) as mem, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_velocities_akma",
+        return_value=warm,
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
     ) as sync, mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
         return_value=False,
     ):
         out = capture_charmm_velocities_for_bussi(restart_path=restart)
-    mem.assert_not_called()
     assert out is not None
+    np.testing.assert_allclose(out, warm)
+    sync.assert_called_once()
+
+
+def test_capture_charmm_velocities_for_bussi_skips_cold_restart(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        capture_charmm_velocities_for_bussi,
+    )
+
+    warm = np.array([[50.0, 0.0, 0.0]], dtype=float)
+    restart = tmp_path / "dyn.res"
+    restart.write_text(
+        "REST     0     1\n"
+        "       1 !NTITLE followed by title\n"
+        "* t\n"
+        "\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        "         1           0           0           0           0           0           0\n"
+        " !X, Y, Z\n"
+        " 0.000000000000000D+00 0.000000000000000D+00 0.000000000000000D+00\n"
+        " !VELOCITIES\n"
+        " 1.000000000000000D-08 0.000000000000000D+00 0.000000000000000D+00\n",
+        encoding="ascii",
+    )
+
+    def _cold(vel, **_kwargs):
+        arr = np.asarray(vel, dtype=float).reshape(-1, 3)
+        return float(np.max(np.abs(arr))) < 1.0
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_velocities_akma",
+        return_value=warm,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
+    ) as sync, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
+        side_effect=_cold,
+    ):
+        out = capture_charmm_velocities_for_bussi(restart_path=restart)
+    assert out is not None
+    np.testing.assert_allclose(out, warm)
     sync.assert_called_once()
 
 
@@ -135,6 +177,9 @@ def test_capture_charmm_velocities_for_bussi_from_restart(tmp_path):
         encoding="ascii",
     )
     with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_velocities_akma",
+        return_value=None,
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
     ) as sync, mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
@@ -190,6 +235,39 @@ def test_resolve_dynamics_init_velocities_falls_back_to_iasvel_one_when_cold():
     assert out is None
     assert kw["iasvel"] == 1
     assert kw["firstt"] == pytest.approx(12.0)
+
+
+def test_resolve_dynamics_init_velocities_bussi_uses_mb_fallback_not_iasvel_one():
+    from unittest.mock import patch
+
+    import numpy as np
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _resolve_dynamics_init_velocities,
+    )
+
+    cold = np.zeros((3, 3), dtype=float)
+    warm = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], dtype=float)
+    kw = {
+        "start": False,
+        "iasvel": 0,
+        "firstt": 10.0,
+        "_heat_thermostat": "bussi",
+        "_bussi_ramp": {"firstt": 10.0, "finalt": 50.0, "teminc": 0.8, "ihtfrq": 50},
+        "_skip_ase_cold_velocity_assign": True,
+    }
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._resolve_bussi_rescale_velocities",
+        return_value=cold,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.assign_bussi_fallback_velocities",
+        return_value=(10.0, warm),
+    ) as assign:
+        out = _resolve_dynamics_init_velocities(kw, restart_read_path=None)
+    assign.assert_called_once()
+    assert out is not None
+    assert kw["iasvel"] == 0
+    assert out["vx"].shape == (3,)
 
 
 def test_run_dynamics_captures_bussi_velocities_before_velos_del():

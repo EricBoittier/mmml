@@ -3368,6 +3368,19 @@ def _resolve_dynamics_init_velocities(
     )
     v = np.asarray(v, dtype=np.float64).reshape(-1, 3)
     if v.size == 0 or float(np.max(np.abs(v))) < 1.0e-8 or velocities_are_cold(v):
+        if _bussi_heat_ramp_active(kw) or bool(kw.get("_skip_ase_cold_velocity_assign")):
+            from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+                assign_bussi_fallback_velocities,
+            )
+
+            _, v = assign_bussi_fallback_velocities(
+                temp,
+                quiet=bool(kw.get("_quiet_bussi_rescale", False)),
+            )
+            kw["iasvel"] = 0
+            kw["start"] = False
+            kw["iasors"] = 0
+            return _init_velocities_dict_from_akma(v)
         kw["iasvel"] = 1
         kw["start"] = False
         kw["firstt"] = temp
