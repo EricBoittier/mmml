@@ -267,6 +267,63 @@ def test_maybe_promote_deferred_jax_on_hybrid_eval_with_jax_pme_mesh():
     assert calc._forward_cache_key is None
 
 
+def test_finalize_jax_factory_gpu_promote_ignores_defer_cpu_env(monkeypatch):
+    """After MLpot SD, explicit ``gpu=True`` must not stay on CPU from defer registration."""
+    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotModel
+
+    monkeypatch.setenv("MMML_MLPOT_DEVICE", "cpu")
+    z = np.array([6, 1, 1, 6, 1, 1], dtype=int)
+    model = DecomposedMlpotModel(
+        None,
+        CutoffParameters(),
+        2,
+        z,
+        defer_jax_until_after_sd=True,
+        pending_factory=MagicMock(return_value=(0.0, MagicMock(), None)),
+        pending_factory_z=z,
+    )
+    model._verbose = False
+
+    ctx_calls: list[str] = []
+
+    class _GpuCtx:
+        def __enter__(self):
+            ctx_calls.append("gpu")
+            return object()
+
+        def __exit__(self, *_a):
+            return False
+
+    class _CpuCtx:
+        def __enter__(self):
+            ctx_calls.append("cpu")
+            return object()
+
+        def __exit__(self, *_a):
+            return False
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
+        return_value=_GpuCtx(),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.jax_device_policy.jax_cpu_until_mlpot_registered",
+        return_value=_CpuCtx(),
+    ), patch(
+        "mmml.utils.jax_gpu_warmup.ensure_xla_gpu_warmed",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.jax_compile_threads.jax_compile_threads_context",
+        new=lambda: __import__("contextlib").nullcontext(),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.unpack_factory_result",
+        return_value=(0.0, MagicMock(), None),
+    ):
+        model._finalize_jax_factory(gpu=True)
+
+    assert ctx_calls == ["gpu"]
+    assert model._jax_on_gpu is True
+
+
 def test_promote_jax_factory_to_gpu_blocked_during_charmm_sd():
     z = np.array([6, 1, 1, 6, 1, 1], dtype=int)
     model = DecomposedMlpotModel(

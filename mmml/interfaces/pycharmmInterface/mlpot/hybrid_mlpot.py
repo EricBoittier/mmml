@@ -661,9 +661,8 @@ class DecomposedMlpotModel:
             mlpot_jax_device_name,
         )
 
-        cpu_only = (
-            (self._defer_jax_until_after_sd and not gpu)
-            or mlpot_jax_device_name() == "cpu"
+        cpu_only = not gpu and (
+            self._defer_jax_until_after_sd or mlpot_jax_device_name() == "cpu"
         )
 
         with jax_compile_threads_context():
@@ -679,6 +678,12 @@ class DecomposedMlpotModel:
                 print(
                     "Decomposed MLpot: compiling JAX factory on CPU before MLpot SD "
                     "(MPI-linked CHARMM deferred backend promotion)",
+                    flush=True,
+                )
+            elif gpu and self._verbose:
+                print(
+                    "Decomposed MLpot: compiling JAX factory on GPU after MLpot SD "
+                    "(MPI defer path; ignoring registration-time CPU env)",
                     flush=True,
                 )
             with device_ctx():
