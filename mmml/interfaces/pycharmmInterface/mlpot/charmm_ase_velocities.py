@@ -10,6 +10,17 @@ import numpy as np
 _AMU_ANG_PS2_TO_KCALMOL = 0.001036427219371
 _KCALMOL_PER_K = 0.0019872041
 
+# Hard floor for every Maxwell-Boltzmann / CHARMM ASSVEL draw (K).
+MIN_VELOCITY_ASSIGNMENT_TEMP_K = 50.0
+
+
+def clamp_velocity_assignment_temp_k(temperature_K: float) -> float:
+    """Return ``temperature_K`` clamped to :data:`MIN_VELOCITY_ASSIGNMENT_TEMP_K`."""
+    temp = float(temperature_K)
+    if not np.isfinite(temp) or temp <= 0.0:
+        raise ValueError(f"temperature_K must be positive and finite, got {temperature_K!r}")
+    return max(temp, MIN_VELOCITY_ASSIGNMENT_TEMP_K)
+
 
 def _import_pycharmm():
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
@@ -109,11 +120,10 @@ def resolve_assignment_temperature_k(
     dynamics_kw: dict[str, Any] | None,
     *,
     default_K: float = 300.0,
-    heat_floor_K: float = 60.0,
 ) -> float:
     """Target Kelvin for ASE velocity assignment from dynamics keywords."""
     if not dynamics_kw:
-        return float(default_K)
+        return clamp_velocity_assignment_temp_k(default_K)
     candidates: list[float] = []
     for key in (
         "hoover reft",
@@ -133,11 +143,19 @@ def resolve_assignment_temperature_k(
         if np.isfinite(val) and val > 0.0:
             candidates.append(val)
     if not candidates:
-        return float(default_K)
-    target = max(candidates)
-    if target < 5.0:
-        return float(heat_floor_K)
-    return target
+        return clamp_velocity_assignment_temp_k(default_K)
+    return clamp_velocity_assignment_temp_k(max(candidates))
+
+
+def clamp_velocity_assignment_dynamics_kw(kw: dict[str, Any]) -> None:
+    """Clamp CHARMM ``FIRSTT`` / bath keys when a dyna call assigns velocities."""
+    if not bool(kw.get("start")):
+        return
+    if int(kw.get("iasvel", 0) or 0) != 1:
+        return
+    for key in ("firstt", "tbath", "tstruct"):
+        if key in kw:
+            kw[key] = clamp_velocity_assignment_temp_k(float(kw[key]))
 
 
 def sync_charmm_velocities_akma(velocities_akma: np.ndarray) -> None:
@@ -174,9 +192,7 @@ def assign_maxwell_boltzmann_velocities_via_ase(
 
     from mmml.interfaces.pycharmmInterface.import_pycharmm import ase_from_pycharmm_state
 
-    temp = float(temperature_K)
-    if temp <= 0.0:
-        raise ValueError(f"temperature_K must be positive, got {temp}")
+    temp = clamp_velocity_assignment_temp_k(temperature_K)
 
     atoms = ase_from_pycharmm_state()
     masses = charmm_masses_amu()
@@ -224,7 +240,6 @@ def maybe_assign_velocities_via_ase_if_cold(
     temperature_K: float | None = None,
     min_temperature_K: float = 1.0,
     default_K: float = 300.0,
-    heat_floor_K: float = 60.0,
     quiet: bool = False,
 ) -> bool:
     """Assign ASE velocities when the current state is colder than ``min_temperature_K``."""
@@ -233,13 +248,9 @@ def maybe_assign_velocities_via_ase_if_cold(
         return False
 
     target = (
-        float(temperature_K)
+        clamp_velocity_assignment_temp_k(temperature_K)
         if temperature_K is not None
-        else resolve_assignment_temperature_k(
-            kw,
-            default_K=default_K,
-            heat_floor_K=heat_floor_K,
-        )
+        else resolve_assignment_temperature_k(kw, default_K=default_K)
     )
     assign_maxwell_boltzmann_velocities_via_ase(
         target,

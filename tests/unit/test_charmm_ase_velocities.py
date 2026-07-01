@@ -11,10 +11,12 @@ from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
     ase_to_charmm_akma_velocities,
     assign_maxwell_boltzmann_velocities_via_ase,
     charmm_akma_to_ang_fs_velocities,
+    clamp_velocity_assignment_temp_k,
     estimate_kinetic_temperature_k,
     maybe_assign_velocities_via_ase_if_cold,
     resolve_assignment_temperature_k,
     velocities_are_cold,
+    MIN_VELOCITY_ASSIGNMENT_TEMP_K,
 )
 
 
@@ -42,11 +44,27 @@ def test_estimate_kinetic_temperature_k_zero_for_zero_vel():
 
 def test_resolve_assignment_temperature_k_uses_heat_floor_for_corrupt_kw():
     assert resolve_assignment_temperature_k({"firstt": 0.207, "finalt": 1.0}) == pytest.approx(
-        60.0
+        MIN_VELOCITY_ASSIGNMENT_TEMP_K
     )
     assert resolve_assignment_temperature_k({"finalt": 240.0, "firstt": 48.0}) == pytest.approx(
         240.0
     )
+
+
+def test_clamp_velocity_assignment_temp_k_enforces_floor():
+    assert clamp_velocity_assignment_temp_k(8.0) == pytest.approx(50.0)
+    assert clamp_velocity_assignment_temp_k(300.0) == pytest.approx(300.0)
+
+
+def test_clamp_velocity_assignment_dynamics_kw_clamps_firstt_on_start():
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        clamp_velocity_assignment_dynamics_kw,
+    )
+
+    kw = {"start": True, "iasvel": 1, "firstt": 8.0, "tbath": 40.0}
+    clamp_velocity_assignment_dynamics_kw(kw)
+    assert kw["firstt"] == pytest.approx(50.0)
+    assert kw["tbath"] == pytest.approx(50.0)
 
 
 def test_maybe_assign_velocities_via_ase_if_cold_skips_when_warm():

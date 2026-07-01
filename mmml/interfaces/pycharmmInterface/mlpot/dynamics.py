@@ -3056,6 +3056,7 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
         )
 
     from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        clamp_velocity_assignment_dynamics_kw,
         maybe_assign_velocities_via_ase_if_cold,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
@@ -3063,6 +3064,7 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     )
 
     import pycharmm
+    clamp_velocity_assignment_dynamics_kw(kw)
     maybe_assign_velocities_via_ase_if_cold(
         kw,
         quiet=bool(kw.pop("_quiet_ase_velocity_assign", False)),

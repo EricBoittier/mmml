@@ -1060,7 +1060,12 @@ def main(argv: list[str] | None = None) -> int:
                 f"Re-initializing velocities (Maxwell–Boltzmann); {reason}.",
                 flush=True,
             )
-        MaxwellBoltzmannDistribution(atoms, temperature_K=args.temperature, rng=rng)
+        from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+            clamp_velocity_assignment_temp_k,
+        )
+
+        mb_temp = clamp_velocity_assignment_temp_k(float(args.temperature))
+        MaxwellBoltzmannDistribution(atoms, temperature_K=mb_temp, rng=rng)
         Stationary(atoms)
         ZeroRotation(atoms)
 

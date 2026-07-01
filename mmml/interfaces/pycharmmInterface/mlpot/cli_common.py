@@ -401,13 +401,18 @@ def resolve_nve_boltzmann_temp(
     """Kelvin for the one-shot velocity draw before NVE (``iasvel=0``).
 
     Defaults to ``0.2 × --temperature`` (same as heat FIRSTT) when
-    ``--nve-boltzmann-temp`` is unset. Use a low value (e.g. 50 K) after mini
-    to avoid large initial forces on stiff ML clusters.
+    ``--nve-boltzmann-temp`` is unset. Never below
+    :data:`~mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.MIN_VELOCITY_ASSIGNMENT_TEMP_K`
+    (50 K).
     """
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        clamp_velocity_assignment_temp_k,
+    )
+
     explicit = getattr(args, "nve_boltzmann_temp", None)
     if explicit is not None:
-        return float(explicit)
-    return float(default_temp) * 0.2
+        return clamp_velocity_assignment_temp_k(float(explicit))
+    return clamp_velocity_assignment_temp_k(float(default_temp) * 0.2)
 
 
 def resolve_heat_firstt_finalt(
@@ -416,11 +421,15 @@ def resolve_heat_firstt_finalt(
     default_temp: float,
 ) -> tuple[float, float]:
     """Return ``(firstt, finalt)`` for the heat stage (Kelvin)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        clamp_velocity_assignment_temp_k,
+    )
+
     finalt = getattr(args, "heat_finalt", None)
     firstt = getattr(args, "heat_firstt", None)
     t_end = float(finalt if finalt is not None else default_temp)
     t_start = float(firstt if firstt is not None else t_end * 0.2)
-    return t_start, t_end
+    return clamp_velocity_assignment_temp_k(t_start), t_end
 
 
 def opt_attr(args: argparse.Namespace, name: str, default: Any = None) -> Any:
